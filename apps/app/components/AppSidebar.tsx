@@ -13,7 +13,8 @@ import {
 
 import type { BinderTab } from "../binderShell";
 import type { DocumentRefView } from "../documentRefs";
-import type { AppRoute, OrganizationTab } from "../routes";
+import { followInApp } from "../appLink";
+import { routeToPath, type AppRoute, type OrganizationTab } from "../routes";
 import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
 import { useCollapsedSidebar } from "../useCollapsedSidebar";
 
@@ -44,11 +45,22 @@ import { useCollapsedSidebar } from "../useCollapsedSidebar";
  * the way pressing a folder opens the folder.
  *
  * **Below 768px this is not rendered at all** (`.app-sidebar` is
- * `display: none`), so the top bar keeps its links for small screens and they
- * are hidden where the sidebar takes over. Neither is duplicated at any width.
- * Mobile navigation is still thin — that is a known gap in the review, not
- * something this fixes.
+ * `display: none`); the bottom bar carries the places people move between
+ * there. Neither is duplicated at any width.
  */
+
+/**
+ * Whether the organization's People tab is the page.
+ *
+ * The route carries the tab only when the app navigated there itself; an
+ * address that was typed, reloaded or opened in a new tab says it in the query.
+ */
+function isOrganizationPeople(route: AppRoute): boolean {
+  if (route.kind !== "organization") return false;
+  const tab =
+    route.tab ?? new URLSearchParams(window.location.search).get("tab");
+  return tab === "people";
+}
 
 /** The binder on screen, as its own section of the map. */
 export interface SidebarBinder {
@@ -195,7 +207,7 @@ export function AppSidebar({
       // A binder and a document inside it are both "in" the binders section —
       // you got there through it, and the sidebar should not lose your place.
       isActive: (r) =>
-        r.kind === "organization" ||
+        (r.kind === "organization" && !isOrganizationPeople(r)) ||
         r.kind === "binder" ||
         r.kind === "binderDocument",
     },
@@ -259,7 +271,7 @@ export function AppSidebar({
       label: "People & access",
       icon: Users,
       route: orgRoute("people"),
-      isActive: () => false,
+      isActive: isOrganizationPeople,
     },
   ];
 
@@ -291,11 +303,15 @@ export function AppSidebar({
     const active = entry.isActive(route);
     const disabled = entry.route === null;
 
+    // **A link, not a button**, so it can be opened in a new tab, middle-
+    // clicked, and shows its address on hover — everything a reader expects
+    // of a place they can go. A plain click still navigates in-app. An entry
+    // with nowhere to go yet has no `href`, which is how a link says so.
     return (
-      <button
+      <a
         key={entry.key}
-        type="button"
-        disabled={disabled}
+        href={entry.route ? routeToPath(entry.route) : undefined}
+        aria-disabled={disabled || undefined}
         className={`app-sidebar-item${active ? " app-sidebar-item--active" : ""}${
           disabled ? " app-sidebar-item--muted" : ""
         }`}
@@ -306,14 +322,17 @@ export function AppSidebar({
         // navigation whichever width it is at — and the title puts it back for
         // a pointer.
         title={collapsed ? entry.label : undefined}
-        onClick={() => entry.route && onNavigate(entry.route)}
+        onClick={(event) => {
+          const to = entry.route;
+          if (to) followInApp(event, () => onNavigate(to));
+        }}
       >
         <Icon size={15} strokeWidth={1.75} aria-hidden="true" />
         <span className="app-sidebar-item-label">{entry.label}</span>
         {typeof entry.count === "number" && entry.count > 0 ? (
           <span className="app-sidebar-item-count">{entry.count}</span>
         ) : null}
-      </button>
+      </a>
     );
   };
 
@@ -338,27 +357,33 @@ export function AppSidebar({
           className="app-sidebar-section app-sidebar-section--binder"
           aria-label={binder.name}
         >
-          <button
-            type="button"
+          <a
+            href={routeToPath({
+              kind: "binder",
+              org: binder.org,
+              binder: binder.binder,
+            })}
             className={`app-sidebar-binder${
               binder.section === "documents"
                 ? " app-sidebar-binder--active"
                 : ""
             }`}
             aria-current={binder.section === "documents" ? "page" : undefined}
-            onClick={() =>
-              onNavigate({
-                kind: "binder",
-                org: binder.org,
-                binder: binder.binder,
-              })
+            onClick={(event) =>
+              followInApp(event, () =>
+                onNavigate({
+                  kind: "binder",
+                  org: binder.org,
+                  binder: binder.binder,
+                }),
+              )
             }
           >
             <span className="app-sidebar-binder-mark" aria-hidden="true">
               <Library size={14} strokeWidth={1.75} />
             </span>
             <span className="app-sidebar-binder-name">{binder.name}</span>
-          </button>
+          </a>
 
           {binderEntries.map(renderEntry)}
         </nav>

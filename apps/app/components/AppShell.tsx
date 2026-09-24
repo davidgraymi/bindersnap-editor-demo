@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
-import { Bell, FileText, LogOut, Moon, Shield } from "lucide-react";
+import { CreditCard, LogOut, Moon, Shield } from "lucide-react";
 import type { SessionUser } from "../api";
 import { buildDocumentsUrl, parseDocumentsViewState } from "../documentsView";
-import type { AppRoute } from "../routes";
+import { followInApp } from "../appLink";
+import { routeToPath, type AppRoute } from "../routes";
 import { BinderShell } from "./BinderShell";
 import { OrganizationPage } from "./OrganizationPage";
-import { OrganizationSwitcher } from "./OrganizationSwitcher";
+import { LocationTrail } from "./LocationTrail";
 import { AdminSubscriptionManagementPage } from "./AdminSubscriptionManagementPage";
 import { AppIcon } from "./AppIcon";
 import { BindersnapLogoMark } from "./BindersnapLogoMark";
@@ -67,8 +68,8 @@ function getInitials(name: string): string {
 
 function renderProfileMenuIcon(icon: string) {
   switch (icon) {
-    case "documents":
-      return <AppIcon icon={FileText} size="md" />;
+    case "billing":
+      return <AppIcon icon={CreditCard} size="md" />;
     case "appearance":
       return <AppIcon icon={Moon} size="md" />;
     case "admin":
@@ -88,8 +89,7 @@ export function AppShell({
 }: AppShellProps) {
   const isReadOnly = useIsReadOnly();
   const isWorkspace = route.kind === "workspace";
-  const isDocuments = route.kind === "documents";
-  const isChanges = route.kind === "changes";
+  const isBilling = route.kind === "billing";
 
   // The organization the sidebar's org-scoped entries point at: the one on
   // screen, or the one the switcher settled on. Null on a page that belongs to
@@ -154,66 +154,27 @@ export function AppShell({
     <div className="app-shell">
       {/* ── TOP NAV ── */}
       <header className="app-topnav">
-        {/* Brand — always the way back to Home */}
-        <button
-          type="button"
+        {/* Brand — always the way back to Home, and a real link to it. */}
+        <a
           className="app-topnav-brand"
-          onClick={() => onNavigate({ kind: "workspace" })}
+          href={routeToPath({ kind: "workspace" })}
+          onClick={(event) =>
+            followInApp(event, () => onNavigate({ kind: "workspace" }))
+          }
           aria-label="Bindersnap home"
         >
           <span className="app-topnav-logo-mark" aria-hidden="true">
             <BindersnapLogoMark width={14} height={14} aria-hidden="true" />
           </span>
           <span className="app-topnav-wordmark">Bindersnap</span>
-        </button>
+        </a>
 
-        {/* Small screens only — the sidebar carries these above 768px. */}
-        <nav className="app-topnav-nav" aria-label="Workspace">
-          <button
-            type="button"
-            className={`app-topnav-link${isWorkspace ? " app-topnav-link--active" : ""}`}
-            onClick={() => onNavigate({ kind: "workspace" })}
-            aria-current={isWorkspace ? "page" : undefined}
-          >
-            Home
-          </button>
-          <button
-            type="button"
-            className={`app-topnav-link${isChanges ? " app-topnav-link--active" : ""}`}
-            onClick={() => onNavigate({ kind: "changes" })}
-            aria-current={isChanges ? "page" : undefined}
-          >
-            Change requests
-          </button>
-          <button
-            type="button"
-            className={`app-topnav-link${isDocuments ? " app-topnav-link--active" : ""}`}
-            onClick={() => onNavigate({ kind: "documents" })}
-            aria-current={isDocuments ? "page" : undefined}
-          >
-            Documents
-          </button>
-        </nav>
-
-        {/* Outside the nav above, and deliberately so: that nav is hidden once
-            the sidebar takes over the same destinations, and this is a control
-            rather than a link — which organization you are looking at is worth
-            answering at every width.
-
-            Absent for somebody in one organization, because a switcher
-            offering a single choice is furniture. */}
-        <div className="app-topnav-org">
-          <OrganizationSwitcher
-            currentOrg={
-              route.kind === "organization" ||
-              route.kind === "binder" ||
-              route.kind === "binderDocument"
-                ? route.org
-                : undefined
-            }
-            onSelect={(org) => onNavigate({ kind: "organization", org })}
-          />
-        </div>
+        {/* **Where you are, in the same place on every page.** The
+            organization, then the binder, then whatever inside it is on
+            screen — the line GitHub and GitLab keep above every page. The
+            organization is the switcher it always was, so choosing another is
+            still one click at every width. */}
+        <LocationTrail route={route} org={sidebarOrg} onNavigate={onNavigate} />
 
         <div className="app-topnav-spacer" />
 
@@ -235,15 +196,6 @@ export function AppShell({
           {isReadOnly ? null : (
             <NewDocumentButton onClick={openCreateDocumentModal} />
           )}
-
-          {/* Notifications */}
-          <button
-            className="app-topnav-icon-btn"
-            type="button"
-            aria-label="Notifications"
-          >
-            <AppIcon icon={Bell} size="md" />
-          </button>
 
           {/* User profile: avatar with dropdown */}
           <div className="app-topnav-profile">
@@ -290,19 +242,24 @@ export function AppShell({
                     role="group"
                     aria-label="Navigation"
                   >
+                    {/* Billing, not a second way to Documents. The sidebar
+                        already goes to Documents; on a phone the sidebar is
+                        not drawn and the bottom bar carries only the four
+                        places people move between, so this menu is the one
+                        way to reach Billing there. */}
                     <button
                       type="button"
-                      className={`app-profile-menu-item${isDocuments ? " app-profile-menu-item--active" : ""}`}
+                      className={`app-profile-menu-item${isBilling ? " app-profile-menu-item--active" : ""}`}
                       role="menuitem"
                       onClick={() => {
                         setProfileOpen(false);
-                        onNavigate({ kind: "documents" });
+                        onNavigate({ kind: "billing" });
                       }}
                     >
                       <span className="app-profile-menu-icon">
-                        {renderProfileMenuIcon("documents")}
+                        {renderProfileMenuIcon("billing")}
                       </span>
-                      <span className="app-profile-menu-label">Documents</span>
+                      <span className="app-profile-menu-label">Billing</span>
                     </button>
                     <button
                       type="button"

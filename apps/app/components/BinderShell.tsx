@@ -24,6 +24,7 @@ import {
   type BinderTab,
 } from "../binderShell";
 import type { DocumentChangeView } from "../routes";
+import { followInApp } from "../appLink";
 import { parseRequestedChange } from "../binderChange";
 import { buildDocumentUrl, parseRequestedRef } from "../binderDocument";
 import { formatDocumentName } from "../documentDisplay";
@@ -647,20 +648,20 @@ export function BinderShell({
           that width. Above 768px it is not drawn at all. */}
       <nav className="binder-strip" aria-label="This binder">
         {sections.map((entry) => (
-          <button
+          <a
             key={entry.id}
+            href={buildBinderUrl({ org, binder, tab: entry.id })}
             className={`binder-strip-item${
               activeTab === entry.id ? " binder-strip-item--active" : ""
             }`}
-            type="button"
             aria-current={activeTab === entry.id ? "page" : undefined}
-            onClick={() => goTo(entry.id)}
+            onClick={(event) => followInApp(event, () => goTo(entry.id))}
           >
             {entry.label}
             {entry.count !== undefined && entry.count > 0 ? (
               <span className="binder-strip-count">{entry.count}</span>
             ) : null}
-          </button>
+          </a>
         ))}
       </nav>
 

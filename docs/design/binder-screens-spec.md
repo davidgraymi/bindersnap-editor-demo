@@ -306,6 +306,17 @@ The rules that make it hold:
   A change request keeps one, because "Change 4" is not a name and the way
   back to the list is worth a row.
 
+  **Amended, Sep 2026: the crumbs moved to the top bar, on every page.** In
+  practice "the sidebar already says which binder" held only until a policy
+  was opened, because the sidebar collapses to icons there and the binder's
+  name goes with it. So a policy named neither its binder nor its folder, a
+  change request named its list but not its binder, and moving between them
+  felt like moving between different sites. The trail is now one line in the
+  top bar (`LocationTrail.tsx`, decided in `locationTrail.ts`) — organization,
+  binder, folders, page — the way GitHub and GitLab show where you are. The
+  in-page `.bs-crumbs` rows are gone; the page's own `h1` is still its only
+  title, and the trail never repeats it at a larger size.
+
 Monospace survives in three places in the binder and nowhere else: a filename,
 a version number (`v2`), and the `⌘K` hint. Those are machine text.
 

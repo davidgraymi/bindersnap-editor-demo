@@ -40,7 +40,7 @@ test("a phone gets a bottom bar instead of the sidebar", async ({ page }) => {
   await expect(page.locator(".app-sidebar")).toBeHidden();
 
   for (const label of ["Home", "Changes", "Documents", "Binders"] as const) {
-    await expect(bottom.getByRole("button", { name: label })).toBeVisible();
+    await expect(bottom.getByRole("link", { name: label })).toBeVisible();
   }
 });
 
@@ -49,10 +49,10 @@ test("the bottom bar navigates and marks where you are", async ({ page }) => {
   await page.goto(APP_BASE_URL);
 
   const bottom = page.locator(".app-bottom-nav");
-  await bottom.getByRole("button", { name: "Changes" }).click();
+  await bottom.getByRole("link", { name: "Changes" }).click();
 
   await expect(page).toHaveURL(/\/changes$/, { timeout: 30_000 });
-  await expect(bottom.getByRole("button", { name: "Changes" })).toHaveAttribute(
+  await expect(bottom.getByRole("link", { name: "Changes" })).toHaveAttribute(
     "aria-current",
     "page",
   );
@@ -90,7 +90,7 @@ test("every one of the binder's screens is reachable on a phone", async ({
 
   // Settings is the last one and was the least reachable. Scrolling to it and
   // pressing it has to work, whether or not the strip needs to scroll at all.
-  const settings = strip.getByRole("button", { name: "Settings" });
+  const settings = strip.getByRole("link", { name: "Settings" });
   await settings.scrollIntoViewIfNeeded();
   await settings.click();
 

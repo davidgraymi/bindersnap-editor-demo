@@ -45,7 +45,7 @@ test("the sidebar is the map, grouped into work, manage and settings", async ({
     "People & access",
     "Billing",
   ] as const) {
-    await expect(sidebar.getByRole("button", { name: label })).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: label })).toBeVisible();
   }
 
   // The grouping is the teaching — a flat list of seven would answer "where is
@@ -60,9 +60,9 @@ test("the sidebar is the map, grouped into work, manage and settings", async ({
   // gone rather than repointed — "Binders" is the organization's home and
   // "People & access" is the rest of it, so there was nothing left for a
   // third entry to mean.
-  await expect(
-    sidebar.getByRole("button", { name: "Organization" }),
-  ).toHaveCount(0);
+  await expect(sidebar.getByRole("link", { name: "Organization" })).toHaveCount(
+    0,
+  );
 });
 
 test("the sidebar navigates, and marks where you are", async ({ page }) => {
@@ -70,26 +70,26 @@ test("the sidebar navigates, and marks where you are", async ({ page }) => {
   await page.goto(APP_BASE_URL);
 
   const sidebar = page.locator(".app-sidebar");
-  await sidebar.getByRole("button", { name: "Change requests" }).click();
+  await sidebar.getByRole("link", { name: "Change requests" }).click();
 
   await expect(
     page.getByRole("heading", { name: "Change requests" }),
   ).toBeVisible({ timeout: 30_000 });
   expect(new URL(page.url()).pathname).toBe("/changes");
   await expect(
-    sidebar.getByRole("button", { name: "Change requests" }),
+    sidebar.getByRole("link", { name: "Change requests" }),
   ).toHaveAttribute("aria-current", "page");
 
-  await sidebar.getByRole("button", { name: "Documents" }).click();
+  await sidebar.getByRole("link", { name: "Documents" }).click();
   await expect(page).toHaveURL(/\/documents$/, { timeout: 30_000 });
   await expect(
-    sidebar.getByRole("button", { name: "Documents" }),
+    sidebar.getByRole("link", { name: "Documents" }),
   ).toHaveAttribute("aria-current", "page");
 
   // **No entry for a page that does not exist yet.** Activity was a "coming
   // soon" placeholder in the map, which a reader who has never used GitHub
   // reads as broken.
-  await expect(sidebar.getByRole("button", { name: "Activity" })).toHaveCount(
+  await expect(sidebar.getByRole("link", { name: "Activity" })).toHaveCount(
     0,
   );
 });
@@ -110,7 +110,7 @@ test("the sidebar took the binder, and gives it a section of its own", async ({
   );
   for (const entry of ["Changes", "History", "Settings"] as const) {
     await expect(
-      sidebar.getByRole("button", { name: new RegExp(`^${entry}`) }).last(),
+      sidebar.getByRole("link", { name: new RegExp(`^${entry}`) }).last(),
     ).toBeVisible();
   }
 
@@ -119,7 +119,7 @@ test("the sidebar took the binder, and gives it a section of its own", async ({
   await expect(page.locator("h1.bs-title")).toHaveText("Clinical");
 
   // It goes when you leave.
-  await sidebar.getByRole("button", { name: "Home" }).click();
+  await sidebar.getByRole("link", { name: "Home" }).click();
   await expect(sidebar.locator(".app-sidebar-binder")).toHaveCount(0, {
     timeout: 30_000,
   });
@@ -128,9 +128,10 @@ test("the sidebar took the binder, and gives it a section of its own", async ({
 
   // And the sidebar keeps your place rather than losing it: a binder, and a
   // document inside one, are both "in" Binders.
-  await expect(
-    sidebar.getByRole("button", { name: "Binders" }),
-  ).toHaveAttribute("aria-current", "page");
+  await expect(sidebar.getByRole("link", { name: "Binders" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
 });
 
 test("exactly one navigation exists at any width", async ({ page }) => {
@@ -158,4 +159,78 @@ test("exactly one navigation exists at any width", async ({ page }) => {
   // they pushed search and the account control off the edge of a bar with
   // overflow:hidden.
   await expect(page.locator(".app-topnav-nav")).toBeHidden();
+});
+
+test("the top bar says where you are, and every step above it is a link", async ({
+  page,
+}) => {
+  await signInAsAlice(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  // A policy used to name neither its binder nor its folder: the sidebar
+  // collapses to icons while one is open, so the binder's name went with it.
+  await page.goto(
+    `${APP_BASE_URL}/riverside-health/clinical/nursing/wards/handover-standard`,
+  );
+  const trail = page.locator(".app-trail");
+  await expect(trail.locator("[aria-current='page']")).toHaveText(
+    "Handover Standard",
+    { timeout: 30_000 },
+  );
+  await expect(trail).toContainText("Clinical");
+  await expect(trail).toContainText("Nursing");
+  await expect(trail).toContainText("Wards");
+
+  // A step is a real link — it opens in a new tab like any other — and a
+  // plain click still moves inside the app.
+  const binderStep = trail.getByRole("link", { name: "Clinical" });
+  await expect(binderStep).toHaveAttribute(
+    "href",
+    "/riverside-health/clinical",
+  );
+  await binderStep.click();
+  await expect(page).toHaveURL(/\/riverside-health\/clinical$/, {
+    timeout: 30_000,
+  });
+  await expect(trail.locator("[aria-current='page']")).toHaveText("Clinical");
+
+  // A change request is under its binder's list, and the way back is the same
+  // line every page has rather than a second trail inside the page.
+  await page.goto(`${APP_BASE_URL}/riverside-health/clinical?tab=changes`);
+  await page.locator(".change-row-open").first().click();
+  await expect(page).toHaveURL(/change=\d+/, { timeout: 30_000 });
+  await expect(trail.locator("[aria-current='page']")).toHaveText(
+    /^Change \d+$/,
+  );
+  await expect(page.locator(".app-main .bs-crumbs")).toHaveCount(0);
+
+  await trail.getByRole("link", { name: "Change requests" }).click();
+  await expect(page).toHaveURL(/tab=changes$/, { timeout: 30_000 });
+});
+
+test("sidebar entries are links, so they open in a new tab", async ({
+  page,
+}) => {
+  await signInAsAlice(page);
+  await page.goto(`${APP_BASE_URL}/riverside-health/clinical`);
+
+  const sidebar = page.locator(".app-sidebar");
+  await expect(sidebar.getByRole("link", { name: "Home" })).toHaveAttribute(
+    "href",
+    "/",
+  );
+  await expect(sidebar.getByRole("link", { name: /^History/ })).toHaveAttribute(
+    "href",
+    "/riverside-health/clinical?tab=history",
+  );
+
+  // The organization's People tab is the sidebar's People & access — it used
+  // to light up Binders instead.
+  await page.goto(`${APP_BASE_URL}/riverside-health?tab=people`);
+  await expect(
+    sidebar.getByRole("link", { name: "People & access" }),
+  ).toHaveAttribute("aria-current", "page", { timeout: 30_000 });
+  await expect(
+    sidebar.getByRole("link", { name: "Binders" }),
+  ).not.toHaveAttribute("aria-current", "page");
 });
