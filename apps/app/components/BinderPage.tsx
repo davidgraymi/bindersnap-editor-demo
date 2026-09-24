@@ -467,7 +467,7 @@ export function BinderDocuments({
       // move it, not only this one.
       await runAct(
         () => restoreBinderDocument(org, binder, uid, { draft }),
-        "Unable to restore that policy.",
+        "Unable to restore that document.",
       );
     } finally {
       setRestoring(null);
@@ -672,7 +672,7 @@ export function BinderDocuments({
                 onClick={onAddPolicy}
                 disabled={committing || !onAddPolicy}
               >
-                Add a policy
+                Add a document
               </button>
               <span className="bs-panel-bar-spacer" />
               {/* Continuous save, said where the eye already is. */}
@@ -703,7 +703,9 @@ export function BinderDocuments({
               <span className="bs-panel-bar-spacer" />
               {documents === null ? null : (
                 <span className="binder-count">
-                  {policyCount === 1 ? "1 policy" : `${policyCount} policies`}
+                  {policyCount === 1
+                    ? "1 document"
+                    : `${policyCount} documents`}
                   {folderCount === 0
                     ? ""
                     : folderCount === 1
@@ -737,8 +739,8 @@ export function BinderDocuments({
             {isReadOnly ? null : (
               <p>
                 {draft
-                  ? "Make a folder or add a policy — it goes into your draft."
-                  : "A policy joins this binder once its change request is published."}
+                  ? "Make a folder or add a document — it goes into your draft."
+                  : "A document joins this binder once its change request is published."}
               </p>
             )}
           </div>
@@ -904,8 +906,8 @@ export function BinderDocuments({
               )}
               <Archive size={14} strokeWidth={1.5} aria-hidden="true" />
               {archivedCount === 1
-                ? "Archived · 1 policy"
-                : `Archived · ${archivedCount} policies`}
+                ? "Archived · 1 document"
+                : `Archived · ${archivedCount} documents`}
             </button>
 
             {archiveOpen && archived === null ? (
@@ -962,8 +964,8 @@ export function BinderDocuments({
             >
               <Archive size={14} strokeWidth={1.5} aria-hidden="true" />
               {archivedCount === 1
-                ? "1 archived policy"
-                : `${archivedCount} archived policies`}
+                ? "1 archived document"
+                : `${archivedCount} archived documents`}
             </button>
           </div>
         ) : null}

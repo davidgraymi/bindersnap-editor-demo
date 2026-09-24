@@ -148,7 +148,7 @@ export function BinderHistory({
             className="bs-input bs-input--sm bs-history-pick"
             value={policy}
             disabled={versions === null || policies.length === 0}
-            aria-label="Which policy"
+            aria-label="Which document"
             onChange={(event) => setPolicy(event.target.value)}
           >
             <option value="">The whole binder</option>

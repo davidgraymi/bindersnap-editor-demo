@@ -96,8 +96,8 @@ export function MoveToFolderModal({
           {options.length === 0 ? null : (
             <p className="add-policy-note">
               {subject.kind === "folder"
-                ? "Everything in the folder moves with it, and every version stays with every policy."
-                : "Every version stays with it. A policy that moves carries on from the version it is on."}
+                ? "Everything in the folder moves with it, and every version stays with every document."
+                : "Every version stays with it. A document that moves carries on from the version it is on."}
             </p>
           )}
 

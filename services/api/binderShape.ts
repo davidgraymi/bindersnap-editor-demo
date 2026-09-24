@@ -172,7 +172,7 @@ export function planFolderRename(params: {
     const address = addressOf(moved);
     if (address !== null && takenAddresses.has(address)) {
       return {
-        error: `“${to}” already holds a policy that would answer to “${address}”. Two documents cannot share one address.`,
+        error: `“${to}” already holds a document that would answer to “${address}”. Two documents cannot share one address.`,
       };
     }
 
@@ -383,7 +383,7 @@ export function planDocumentRestore(params: {
   }
 
   if (tree.documents.some((entry) => entry.uid === document.uid)) {
-    return { error: "That policy is already in this binder." };
+    return { error: "That document is already in this binder." };
   }
 
   // Its folder, if the binder still has one. Inferred from the paths rather
@@ -405,7 +405,7 @@ export function planDocumentRestore(params: {
   const collision = tree.paths.find((path) => addressOf(path) === address);
   if (collision) {
     return {
-      error: `“${address}” is already taken by “${collision}”. Rename that one first, or this policy would come back to an address it has to share.`,
+      error: `“${address}” is already taken by “${collision}”. Rename that one first, or this document would come back to an address it has to share.`,
     };
   }
 

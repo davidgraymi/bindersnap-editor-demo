@@ -153,8 +153,9 @@ export function ReviseDocumentModal({
           {/* The question somebody dragging a different format in will have,
               answered before they ask it. */}
           <p className="add-policy-note">
-            It can be a different format from the one on record — a Word policy
-            replaced by a PDF is the same policy, on its next version.
+            It can be a different format from the one on record — a Word
+            document replaced by a PDF is the same document, on its next
+            version.
           </p>
 
           {error ? (

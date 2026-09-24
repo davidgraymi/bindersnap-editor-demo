@@ -43,7 +43,6 @@ test("the sidebar is the map, grouped into work, manage and settings", async ({
     "Documents",
     "Binders",
     "People & access",
-    "Activity",
     "Billing",
   ] as const) {
     await expect(sidebar.getByRole("button", { name: label })).toBeVisible();
@@ -81,11 +80,18 @@ test("the sidebar navigates, and marks where you are", async ({ page }) => {
     sidebar.getByRole("button", { name: "Change requests" }),
   ).toHaveAttribute("aria-current", "page");
 
-  await sidebar.getByRole("button", { name: "Activity" }).click();
-  await expect(page).toHaveURL(/\/activity$/, { timeout: 30_000 });
+  await sidebar.getByRole("button", { name: "Documents" }).click();
+  await expect(page).toHaveURL(/\/documents$/, { timeout: 30_000 });
   await expect(
-    sidebar.getByRole("button", { name: "Activity" }),
+    sidebar.getByRole("button", { name: "Documents" }),
   ).toHaveAttribute("aria-current", "page");
+
+  // **No entry for a page that does not exist yet.** Activity was a "coming
+  // soon" placeholder in the map, which a reader who has never used GitHub
+  // reads as broken.
+  await expect(sidebar.getByRole("button", { name: "Activity" })).toHaveCount(
+    0,
+  );
 });
 
 test("the sidebar took the binder, and gives it a section of its own", async ({

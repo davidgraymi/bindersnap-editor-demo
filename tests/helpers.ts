@@ -736,6 +736,6 @@ export async function openTopnavNewDocumentModal(page: Page): Promise<void> {
   await page.locator(".docs-list-item").first().click();
 
   await expect(
-    page.getByRole("heading", { name: "Add a policy" }),
+    page.getByRole("heading", { name: "Add a document" }),
   ).toBeVisible();
 }

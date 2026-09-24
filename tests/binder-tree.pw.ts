@@ -333,7 +333,7 @@ test("an empty folder is in the binder, because somebody made it", async ({
     .locator(".binder-tree-row")
     .filter({ hasText: "Estates" });
   await expect(estates).toBeVisible({ timeout: 30_000 });
-  await expect(estates).toContainText("0 policies");
+  await expect(estates).toContainText("0 documents");
 });
 
 test("a folder opens, and stays open when you come back", async ({ page }) => {
@@ -347,7 +347,7 @@ test("a folder opens, and stays open when you come back", async ({ page }) => {
   // Shut to begin with, and saying what it is holding — a shut folder that
   // says nothing is a folder nobody opens. Counted all the way down.
   await expect(nursing).toHaveAttribute("aria-expanded", "false");
-  await expect(nursing).toContainText("2 policies");
+  await expect(nursing).toContainText("2 documents");
   await expect(page.getByText("Hand Hygiene")).toBeHidden();
 
   await nursing.click();

@@ -72,7 +72,7 @@ export function RenameDocumentModal({
       setError(
         err instanceof Error && err.message.trim() !== ""
           ? err.message
-          : "Unable to rename this policy.",
+          : "Unable to rename this document.",
       );
       setSubmitting(false);
     }
@@ -157,7 +157,7 @@ export function RenameDocumentModal({
           {/* The reassurance that matters, because it is the thing somebody
               hesitating over this button is actually worried about. */}
           <p className="add-policy-note">
-            Every version stays with it. A renamed policy carries on from the
+            Every version stays with it. A renamed document carries on from the
             version it is on rather than starting again.
           </p>
 

@@ -28,7 +28,7 @@ async function ask(page: import("@playwright/test").Page, query: string) {
   await page.locator(".app-nav-search-trigger").click();
   // A combobox, not a textbox — it drives the result listbox below it.
   const field = page.getByRole("combobox", {
-    name: "Search binders, policies, or people",
+    name: "Search binders, documents, or people",
   });
   await expect(field).toBeVisible({ timeout: 30_000 });
   await field.fill(query);
@@ -55,7 +55,7 @@ test("one query reaches policies, binders and people at once", async ({
 
   const dialog = page.locator(".quick-find-dialog");
   await expect(dialog.locator(".quick-find-group")).toContainText(
-    ["Policies", "Binders"],
+    ["Documents", "Binders"],
     { timeout: 30_000 },
   );
   await expect(
@@ -132,7 +132,7 @@ test("the shortcut the panel advertises is the one this audience knows", async (
   await page.keyboard.press("/");
   await expect(
     page.getByRole("combobox", {
-      name: "Search binders, policies, or people",
+      name: "Search binders, documents, or people",
     }),
   ).toBeVisible({ timeout: 30_000 });
 });

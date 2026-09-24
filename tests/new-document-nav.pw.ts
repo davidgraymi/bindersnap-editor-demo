@@ -26,7 +26,7 @@ test.describe("top nav new policy button", () => {
     // name, not a coral button competing with the page's own primary action.
     const newDocButton = page.locator("#topnav-new-doc-btn");
     await expect(newDocButton).toBeVisible();
-    await expect(newDocButton).toHaveAccessibleName("New policy");
+    await expect(newDocButton).toHaveAccessibleName("New document");
     await expect(newDocButton).toHaveText("");
     await newDocButton.click();
 
@@ -39,7 +39,7 @@ test.describe("top nav new policy button", () => {
     await page.locator(".docs-list-item").first().click();
 
     await expect(
-      page.getByRole("heading", { name: "Add a policy" }),
+      page.getByRole("heading", { name: "Add a document" }),
     ).toBeVisible();
     await expect(page.locator("#add-policy-file")).toBeVisible();
   });

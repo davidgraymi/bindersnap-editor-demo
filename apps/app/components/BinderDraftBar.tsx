@@ -91,7 +91,7 @@ export function BinderDraftBar({
           <p className="bs-draftbar-note">
             {acts.length > 0
               ? acts.map((act) => act.summary).join(" · ")
-              : "Rename something, make a folder, or add a policy. Nobody is asked to look until you propose it."}
+              : "Rename something, make a folder, or add a document. Nobody is asked to look until you propose it."}
           </p>
 
           {/* Other people's drafts: that they exist, and nothing more. Knowing
