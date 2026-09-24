@@ -6,6 +6,7 @@ import {
   Undo2,
 } from "lucide-react";
 
+import { followInApp } from "../appLink";
 import type { ChangeRowInput, ChangeStandingTone } from "../changeRow";
 import { describeChangeRow } from "../changeRow";
 
@@ -30,6 +31,8 @@ import { describeChangeRow } from "../changeRow";
 
 interface ChangeRowProps {
   change: ChangeRowInput & { title: string; commentCount?: number };
+  /** The change's own address, so the row is a link that opens in a tab. */
+  href: string;
   onOpen: () => void;
 }
 
@@ -74,7 +77,7 @@ function ChangeIcon({ outcome }: { outcome: ChangeRowInput["outcome"] }) {
   );
 }
 
-export function ChangeRow({ change, onOpen }: ChangeRowProps) {
+export function ChangeRow({ change, href, onOpen }: ChangeRowProps) {
   const facts = describeChangeRow(change);
   return (
     <ChangeRowView
@@ -84,6 +87,7 @@ export function ChangeRow({ change, onOpen }: ChangeRowProps) {
       standing={facts.standing}
       outcome={change.outcome}
       commentCount={change.commentCount ?? 0}
+      href={href}
       onOpen={onOpen}
     />
   );
@@ -102,6 +106,15 @@ interface ChangeRowViewProps {
   standing: string;
   outcome?: ChangeRowInput["outcome"];
   commentCount?: number;
+  /**
+   * Where the row goes.
+   *
+   * **A row is a link, the way every list on GitHub and GitLab is.** It was a
+   * button that moved the address bar in script, so a reviewer working down a
+   * queue could not open three changes in three tabs, see where a row went
+   * before clicking it, or copy one to paste into an email.
+   */
+  href: string;
   onOpen: () => void;
 }
 
@@ -114,6 +127,7 @@ export function ChangeRowView({
   standing,
   outcome,
   commentCount = 0,
+  href,
   onOpen,
 }: ChangeRowViewProps) {
   return (
@@ -121,10 +135,10 @@ export function ChangeRowView({
       <span className="bs-row-icon">
         <ChangeIcon outcome={outcome} />
       </span>
-      <button
-        type="button"
+      <a
         className="bs-row-body change-row-open"
-        onClick={onOpen}
+        href={href}
+        onClick={(event) => followInApp(event, onOpen)}
       >
         <span className="bs-row-name change-row-title">{title}</span>
         <span className="bs-row-meta">
@@ -133,7 +147,7 @@ export function ChangeRowView({
           ) : null}
           {meta}
         </span>
-      </button>
+      </a>
 
       <span className="bs-row-right change-row-right">
         {/* A dot carries the colour and the word carries the meaning. A pill

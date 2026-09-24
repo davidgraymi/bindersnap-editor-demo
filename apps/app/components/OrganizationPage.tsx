@@ -5,6 +5,8 @@ import { BookOpen, Plus } from "lucide-react";
 
 import { createBinder, fetchOrganizationBinders } from "../api";
 import type { WorkspaceSummary } from "../../../packages/api-schema/schemas/workspaces";
+import { followInApp } from "../appLink";
+import { buildBinderUrl } from "../binderShell";
 import { formatDocumentName } from "../documentDisplay";
 import { OrganizationPeople } from "./OrganizationPeople";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
@@ -286,11 +288,13 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
       ) : (
         <div className="docs-list">
           {binders.map((binder) => (
-            <button
-              type="button"
+            <a
               className="docs-list-item"
               key={binder.id}
-              onClick={() => onOpenBinder(binder.name)}
+              href={buildBinderUrl({ org, binder: binder.name })}
+              onClick={(event) =>
+                followInApp(event, () => onOpenBinder(binder.name))
+              }
             >
               <span className="docs-list-item-icon" aria-hidden="true">
                 <BookOpen size={16} strokeWidth={1.4} />
@@ -303,7 +307,7 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
                   {binder.description || "No description"}
                 </span>
               </span>
-            </button>
+            </a>
           ))}
         </div>
       )}

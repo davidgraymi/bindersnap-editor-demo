@@ -211,6 +211,23 @@ export function BinderShell({
     onOpenDocument(documentPath, version);
   };
 
+  /** Where {@link openDocument} goes, for the rows that are links to it. */
+  const documentHref = (documentPath: string) =>
+    editMode === "editing" && draft?.draft
+      ? `/${org}/${binder}/${documentPath}?edit=1`
+      : buildDocumentUrl({ org, binder, documentPath, version: null });
+
+  /** A document on the branch the address names, with the way back. */
+  const branchDocumentHref = (documentPath: string) =>
+    buildDocumentUrl({
+      org,
+      binder,
+      documentPath,
+      version: null,
+      change: openChange,
+      ref: documentRefFromSearch,
+    });
+
   const loadOverview = useCallback(() => {
     let cancelled = false;
     fetchBinder(org, binder)
@@ -725,18 +742,8 @@ export function BinderShell({
           onChange={{ number: openChange, branch: documentRefFromSearch }}
           onBackToChange={openChangeNumber}
           onOpenChange={openChangeNumber}
-          onOpenDocument={(slugPath) =>
-            moveTo(
-              buildDocumentUrl({
-                org,
-                binder,
-                documentPath: slugPath,
-                version: null,
-                change: openChange,
-                ref: documentRefFromSearch,
-              }),
-            )
-          }
+          onOpenDocument={(slugPath) => moveTo(branchDocumentHref(slugPath))}
+          documentHref={branchDocumentHref}
         />
       ) : openChange !== null ? (
         <BinderChangePage
@@ -847,6 +854,7 @@ export function BinderShell({
           org={org}
           binder={binder}
           onOpenDocument={openDocument}
+          documentHref={documentHref}
           activeDocument={documentPath ?? null}
           draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
           draftPicker={

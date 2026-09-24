@@ -12,6 +12,7 @@ import {
   type HomeChangeRow,
   type HomeDecidedRow,
 } from "../homeChanges";
+import { buildBinderUrl } from "../binderShell";
 import { ChangeRowView } from "./ChangeRow";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
@@ -255,6 +256,16 @@ function HomeSkeletonRows({ count }: { count: number }) {
  * the change is about and whose turn it is; the first leads the meta line, the
  * second is the section the row is in.
  */
+/** Where a row on Home goes: the change, on its binder. */
+function changeHref(row: { owner: string; repo: string; number: number }) {
+  return buildBinderUrl({
+    org: row.owner,
+    binder: row.repo,
+    tab: "changes",
+    change: row.number,
+  });
+}
+
 function HomeChangeRowItem({
   row,
   onOpen,
@@ -270,6 +281,7 @@ function HomeChangeRowItem({
       tone={row.tone}
       standing={row.standing}
       commentCount={row.commentCount}
+      href={changeHref(row)}
       onOpen={() => onOpen(row.owner, row.repo, row.number)}
     />
   );
@@ -290,6 +302,7 @@ function HomeDecidedRowItem({
       tone={row.tone}
       standing={row.standing}
       outcome={row.outcome === "published" ? "published" : "declined"}
+      href={changeHref(row)}
       onOpen={() => onOpen(row.owner, row.repo, row.number)}
     />
   );

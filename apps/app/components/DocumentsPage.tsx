@@ -12,6 +12,8 @@ import {
   parseDocumentsViewState,
   type DocumentsViewState,
 } from "../documentsView";
+import { followInApp } from "../appLink";
+import { buildDocumentUrl } from "../binderDocument";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 interface DocumentsPageProps {
@@ -187,12 +189,23 @@ export function DocumentsPage({ onSelectDocument }: DocumentsPageProps) {
 
             <div className="docs-list">
               {binderRows.map((row) => (
-                <button
+                <a
                   className="docs-list-item"
-                  type="button"
                   key={row.key}
-                  onClick={() =>
-                    onSelectDocument(row.organization, row.binder, row.slugPath)
+                  href={buildDocumentUrl({
+                    org: row.organization,
+                    binder: row.binder,
+                    documentPath: row.slugPath,
+                    version: null,
+                  })}
+                  onClick={(event) =>
+                    followInApp(event, () =>
+                      onSelectDocument(
+                        row.organization,
+                        row.binder,
+                        row.slugPath,
+                      ),
+                    )
                   }
                 >
                   <FileText size={16} strokeWidth={1.5} aria-hidden="true" />
@@ -208,7 +221,7 @@ export function DocumentsPage({ onSelectDocument }: DocumentsPageProps) {
                         .join(" · ")}
                     </span>
                   </span>
-                </button>
+                </a>
               ))}
             </div>
           </section>

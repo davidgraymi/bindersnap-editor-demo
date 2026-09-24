@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronRight, FileText, Folder } from "lucide-react";
 
+import { followInApp } from "../appLink";
 import type { BinderTreeFolder, BinderTreeNode } from "../binderTree";
 import { formatDocumentName } from "../documentDisplay";
 
@@ -37,6 +38,14 @@ export interface BinderTreeViewProps {
   isFolderOpen: (path: string) => boolean;
   onToggleFolder: (path: string) => void;
   onOpenDocument: (slugPath: string) => void;
+  /**
+   * A document's address, so its row is a link.
+   *
+   * Optional only so a tree drawn somewhere that has no address to give still
+   * draws. Every tree that opens a page passes one: a policy manager comparing
+   * two policies opens the second in a tab.
+   */
+  documentHref?: (slugPath: string) => string;
   /** Marked as where you are — the document open under this binder. */
   activeDocument?: string | null;
   /** Drawn on every row, to the right of the name. Edit mode fills this in. */
@@ -101,6 +110,7 @@ export function BinderTreeView({
   isFolderOpen,
   onToggleFolder,
   onOpenDocument,
+  documentHref,
   activeDocument = null,
   renderRowActions,
   renderRowLabel,
@@ -117,6 +127,7 @@ export function BinderTreeView({
           isFolderOpen={isFolderOpen}
           onToggleFolder={onToggleFolder}
           onOpenDocument={onOpenDocument}
+          documentHref={documentHref}
           activeDocument={activeDocument}
           renderRowActions={renderRowActions}
           renderRowLabel={renderRowLabel}
@@ -246,6 +257,7 @@ function DocumentRow({
   node,
   depth,
   onOpenDocument,
+  documentHref,
   activeDocument,
   renderRowActions,
   renderRowLabel,
@@ -283,6 +295,24 @@ function DocumentRow({
           {lead}
           {instead}
         </div>
+      ) : documentHref ? (
+        <a
+          className="binder-tree-main"
+          href={documentHref(document.slugPath)}
+          onClick={(event) =>
+            followInApp(event, () => onOpenDocument(document.slugPath))
+          }
+          aria-current={isActive ? "page" : undefined}
+          // **The row drags, not the link.** In edit mode the row is what is
+          // picked up and dropped on a folder; a link left draggable would
+          // start a drag of its own URL instead.
+          draggable={dragProps.draggable ? false : undefined}
+        >
+          {lead}
+          <span className="binder-tree-label">
+            {formatDocumentName(document.name)}
+          </span>
+        </a>
       ) : (
         <button
           type="button"
