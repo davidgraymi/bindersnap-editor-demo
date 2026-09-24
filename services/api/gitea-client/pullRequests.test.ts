@@ -935,3 +935,19 @@ test("a stale request for changes still blocks the change", async () => {
 
   expect(pullRequest?.approvalState).toBe("changes_requested");
 });
+
+test("describeMergeRefusal speaks the publisher's language", async () => {
+  const { describeMergeRefusal } = await import("./pullRequests");
+
+  const outdated = describeMergeRefusal(
+    "The head branch is behind the base branch",
+  );
+  expect(outdated).toBe(
+    "The binder has moved on since this change was made. Bring the change up to date, then publish it.",
+  );
+
+  const fallback = describeMergeRefusal("something nobody has mapped");
+  for (const sentence of [outdated, fallback]) {
+    expect(sentence).not.toMatch(/branch|merge|head|base/i);
+  }
+});

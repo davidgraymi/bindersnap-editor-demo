@@ -4138,6 +4138,7 @@ async function handlePublishWorkspaceChange(
       workspace: workspaceName,
       pullNumber,
       error: err instanceof Error ? err.message : String(err),
+      cause: err instanceof Error ? err.cause : undefined,
     });
     return responseFromError(err, baseHeaders, "Unable to publish the change.");
   }
