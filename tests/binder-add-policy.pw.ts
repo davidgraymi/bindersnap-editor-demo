@@ -136,7 +136,7 @@ async function fileAPolicy(page: Page, name: string, folder: string) {
     await page.locator("#add-policy-new-folder").fill(folder);
   }
 
-  await page.getByRole("button", { name: "Add policy", exact: true }).click();
+  await page.getByRole("button", { name: "Add document", exact: true }).click();
 }
 
 test("a member files a policy from the binder's own page", async ({ page }) => {
@@ -154,9 +154,9 @@ test("a member files a policy from the binder's own page", async ({ page }) => {
   // An empty binder says so rather than showing a blank list.
   await expect(page.getByText("Nothing filed here yet.")).toBeVisible();
 
-  await page.getByRole("button", { name: "Add a policy" }).click();
+  await page.getByRole("button", { name: "Add a document" }).click();
   await expect(
-    page.getByRole("heading", { name: "Add a policy" }),
+    page.getByRole("heading", { name: "Add a document" }),
   ).toBeVisible();
 
   await fileAPolicy(page, "Infection Control Policy", "nursing");
@@ -212,7 +212,7 @@ test("the nav's New policy asks which binder, then files into it", async ({
     .getByRole("button", { name: second, exact: false })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Add a policy" }),
+    page.getByRole("heading", { name: "Add a document" }),
   ).toBeVisible();
 
   await fileAPolicy(page, "Expenses Policy", "");
@@ -337,7 +337,7 @@ test("the library lists a policy across every binder it can reach", async ({
     [corporate, "Expenses Policy"],
   ] as const) {
     await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-    await page.getByRole("button", { name: "Add a policy" }).click();
+    await page.getByRole("button", { name: "Add a document" }).click();
     await fileAPolicy(page, name, "");
     // Filing opens a change request, which is where it lands.
     await expect(page).toHaveURL(/tab=changes&change=\d+/, {
@@ -368,7 +368,7 @@ test("the library lists a policy across every binder it can reach", async ({
 
   // Searching narrows it to one, which is the question the page exists for.
   await page
-    .getByRole("searchbox", { name: "Search policies" })
+    .getByRole("searchbox", { name: "Search documents" })
     .fill("expenses");
   await expect(
     page.getByRole("heading", { name: clinical, exact: false }),
@@ -397,7 +397,7 @@ test("the binder's tabs still work once a document is open", async ({
 
   await signInBrowser(page, sessionCookie);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-  await page.getByRole("button", { name: "Add a policy" }).click();
+  await page.getByRole("button", { name: "Add a document" }).click();
   await fileAPolicy(page, "Hand Hygiene Policy", "nursing");
   await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
 
@@ -472,7 +472,7 @@ test("the header's one filled button belongs to the tab it sits above", async ({
   await signInBrowser(page, sessionCookie);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
-  const addAPolicy = page.getByRole("button", { name: "Add a policy" });
+  const addAPolicy = page.getByRole("button", { name: "Add a document" });
   await expect(addAPolicy).toBeVisible();
 
   for (const section of ["Changes", "History", "Settings"] as const) {
@@ -486,5 +486,7 @@ test("the header's one filled button belongs to the tab it sits above", async ({
 
   // Filing a policy is never more than one click away regardless — the top
   // nav carries it on every page in the app.
-  await expect(page.getByRole("button", { name: "New policy" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "New document" }),
+  ).toBeVisible();
 });

@@ -139,9 +139,9 @@ describe("narrowing to one binder", () => {
 });
 
 describe("counting", () => {
-  test("says policies, in the customer's words", () => {
-    expect(describeDocumentCount(0)).toBe("No policies");
-    expect(describeDocumentCount(1)).toBe("1 policy");
-    expect(describeDocumentCount(12)).toBe("12 policies");
+  test("says documents: the word a Word-and-PDF reader already uses", () => {
+    expect(describeDocumentCount(0)).toBe("No documents");
+    expect(describeDocumentCount(1)).toBe("1 document");
+    expect(describeDocumentCount(12)).toBe("12 documents");
   });
 });

@@ -233,7 +233,7 @@ export function BinderExplorer({ binder, onNavigate }: BinderExplorerProps) {
           type="search"
           value={filter}
           placeholder="Go to file"
-          aria-label={`Find a policy in ${binder.name}`}
+          aria-label={`Find a document in ${binder.name}`}
           onChange={(event) => {
             setFilter(event.target.value);
             // Opening the folders a match is in survives clearing the filter,
@@ -246,7 +246,7 @@ export function BinderExplorer({ binder, onNavigate }: BinderExplorerProps) {
       <div className="app-explorer-tree">
         {shown.length === 0 ? (
           <p className="app-explorer-empty">
-            {needle === "" ? "Nothing filed yet." : "No policy matches that."}
+            {needle === "" ? "Nothing filed yet." : "No document matches that."}
           </p>
         ) : (
           shown.map((node) => renderNode(node, 0))

@@ -78,7 +78,7 @@ export function NewPolicyModal({ onClose, onAdded }: NewPolicyModalProps) {
         className="modal-panel"
         role="dialog"
         aria-modal="true"
-        aria-label="Add a policy"
+        aria-label="Add a document"
         onClick={(event) => event.stopPropagation()}
       >
         <h2 className="doc-rail-title">Which binder?</h2>
@@ -93,7 +93,7 @@ export function NewPolicyModal({ onClose, onAdded }: NewPolicyModalProps) {
           // Not an error, and not a dead end worth a stack trace: a person with
           // no binder has not gone wrong, they have not started yet.
           <p className="doc-rail-note">
-            You are not in a binder yet. A policy is filed in one, so somebody
+            You are not in a binder yet. A document is filed in one, so somebody
             has to create a binder before there is anywhere to put this.
           </p>
         ) : null}

@@ -206,8 +206,8 @@ function FolderRow({
                 collapsed folder saying nothing is a folder nobody opens. */}
             <span className="binder-tree-count">
               {folder.documentCount === 1
-                ? "1 policy"
-                : `${folder.documentCount} policies`}
+                ? "1 document"
+                : `${folder.documentCount} documents`}
             </span>
           </button>
         )}

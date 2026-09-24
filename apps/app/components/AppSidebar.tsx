@@ -1,5 +1,4 @@
 import {
-  Activity,
   CreditCard,
   FileText,
   FilePen,
@@ -22,7 +21,7 @@ import { useCollapsedSidebar } from "../useCollapsedSidebar";
  * The map of the product, always on screen.
  *
  * Before this, the whole of global navigation was "Home · Documents · [org
- * switcher]". Everything else — people, activity, billing, an organization's
+ * switcher]". Everything else — people, billing, an organization's
  * own page — was reachable only by first entering a binder or by typing a URL,
  * so a new reader had no way to learn what the product contained.
  *
@@ -261,13 +260,6 @@ export function AppSidebar({
       icon: Users,
       route: orgRoute("people"),
       isActive: () => false,
-    },
-    {
-      key: "activity",
-      label: "Activity",
-      icon: Activity,
-      route: { kind: "activity" },
-      isActive: (r) => r.kind === "activity",
     },
   ];
 

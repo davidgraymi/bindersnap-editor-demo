@@ -280,7 +280,7 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
         </SkeletonGroup>
       ) : binders.length === 0 ? (
         <p style={{ color: "var(--bs-text-muted)" }}>
-          No binders yet. A binder is a set of policies governed together — by
+          No binders yet. A binder is a set of documents governed together — by
           the same people, under the same rules.
         </p>
       ) : (

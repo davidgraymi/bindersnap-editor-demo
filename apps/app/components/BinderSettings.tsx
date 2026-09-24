@@ -1065,7 +1065,7 @@ function RulePickers({
           </optgroup>
         ) : null}
         {documents.length > 0 ? (
-          <optgroup label="One policy">
+          <optgroup label="One document">
             {documents.map((entry) => (
               <option key={entry.uid} value={`document:${entry.uid}`}>
                 {formatDocumentName(entry.name)}
@@ -1225,8 +1225,8 @@ function SignOffSection({
                 the infection control group signs off on anything filed in
                 nursing
               </em>{" "}
-              — so a policy cannot be published without the people who own that
-              subject.
+              — so a document cannot be published without the people who own
+              that subject.
             </p>
             <p>
               A rule can cover this whole binder, one folder, a single document,
@@ -1361,15 +1361,15 @@ function SignOffSection({
             signOff.unnameableDocuments > 0 ? (
               <div className="bs-panel-foot">
                 {signOff.unnameableDocuments === 1
-                  ? "The policy in this binder was filed before Bindersnap tracked policies individually, so a rule can only cover its folder."
-                  : `The ${signOff.unnameableDocuments} policies in this binder were filed before Bindersnap tracked policies individually, so a rule can only cover their folders.`}
+                  ? "The document in this binder was filed before Bindersnap tracked documents individually, so a rule can only cover its folder."
+                  : `The ${signOff.unnameableDocuments} documents in this binder were filed before Bindersnap tracked documents individually, so a rule can only cover their folders.`}
               </div>
             ) : null}
 
             <div className="bs-panel-foot">
               <span className="bs-panel-foot-note">
                 Changing these rules is itself a change to the binder, so it
-                goes through the same approval your policies do.
+                goes through the same approval your documents do.
               </span>
               {changed ? (
                 <button
@@ -1504,8 +1504,8 @@ function ApprovalSection({
           product's one promise. */}
       {rules.pushBlocked ? null : (
         <p className="bs-note bs-note--danger" role="alert">
-          This binder&rsquo;s main branch is not protected, so a policy could be
-          changed without a review.
+          This binder&rsquo;s main branch is not protected, so a document could
+          be changed without a review.
         </p>
       )}
 

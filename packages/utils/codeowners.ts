@@ -313,7 +313,7 @@ function checkPatternAim(
     // The near miss: another document whose identity merely starts the same.
     if (compiled.test(`nursing/other.${rule.target}XYZ.md`)) {
       problems.push(
-        `${where} produced a rule that also matches other documents. It would demand sign-off on policies nobody chose.`,
+        `${where} produced a rule that also matches other documents. It would demand sign-off on documents nobody chose.`,
       );
     }
 

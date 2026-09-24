@@ -617,7 +617,7 @@ export function BinderShell({
                     type="button"
                     onClick={() => setAdding(true)}
                   >
-                    Add a policy
+                    Add a document
                   </button>
                   <button
                     className="bs-btn bs-btn-primary"

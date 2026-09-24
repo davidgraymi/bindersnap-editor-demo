@@ -39,7 +39,7 @@ test("a phone gets a bottom bar instead of the sidebar", async ({ page }) => {
   await expect(bottom).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(".app-sidebar")).toBeHidden();
 
-  for (const label of ["Home", "Changes", "Policies", "Binders"] as const) {
+  for (const label of ["Home", "Changes", "Documents", "Binders"] as const) {
     await expect(bottom.getByRole("button", { name: label })).toBeVisible();
   }
 });
@@ -71,7 +71,7 @@ test("search and the account are reachable on a phone", async ({ page }) => {
   await trigger.click();
   await expect(
     page.getByRole("combobox", {
-      name: "Search binders, policies, or people",
+      name: "Search binders, documents, or people",
     }),
   ).toBeVisible({ timeout: 30_000 });
 });

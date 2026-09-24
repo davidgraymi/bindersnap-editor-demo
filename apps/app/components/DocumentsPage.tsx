@@ -71,7 +71,7 @@ export function DocumentsPage({ onSelectDocument }: DocumentsPageProps) {
         setError(
           err instanceof Error && err.message.trim() !== ""
             ? err.message
-            : "Unable to load your policies.",
+            : "Unable to load your documents.",
         );
       });
 
@@ -125,8 +125,8 @@ export function DocumentsPage({ onSelectDocument }: DocumentsPageProps) {
           className="bs-input docs-search"
           type="search"
           value={state.freeText}
-          placeholder="Search policies"
-          aria-label="Search policies"
+          placeholder="Search documents"
+          aria-label="Search documents"
           onChange={(event) => {
             const next = { ...state, freeText: event.target.value };
             setState(next);
@@ -165,7 +165,7 @@ export function DocumentsPage({ onSelectDocument }: DocumentsPageProps) {
       </div>
 
       {library === null ? (
-        <SkeletonGroup label="Reading your policies">
+        <SkeletonGroup label="Reading your documents">
           <SkeletonLine width="medium" />
           <SkeletonLine width="short" />
         </SkeletonGroup>
@@ -174,8 +174,8 @@ export function DocumentsPage({ onSelectDocument }: DocumentsPageProps) {
           {state.freeText
             ? `Nothing matches “${state.freeText}”.`
             : library.binders.length === 0
-              ? "You are not in a binder yet. A policy is filed in one, so a binder comes first."
-              : "None of your binders holds a policy yet."}
+              ? "You are not in a binder yet. A document is filed in one, so a binder comes first."
+              : "None of your binders holds a document yet."}
         </p>
       ) : (
         grouped.map(([key, binderRows]) => (

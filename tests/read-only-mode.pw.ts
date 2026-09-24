@@ -169,9 +169,11 @@ test("a delinquent organization keeps its record and loses its controls", async 
   // Before: a member in good standing is offered the way to write.
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
   await expect(
-    page.getByRole("button", { name: "Add a policy" }),
+    page.getByRole("button", { name: "Add a document" }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "New policy" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "New document" }),
+  ).toBeVisible();
   await expect(page.getByTestId("read-only-banner")).toHaveCount(0);
 
   const adminSession = await signIn(GITEA_ADMIN_USER, GITEA_ADMIN_PASS);
@@ -186,17 +188,19 @@ test("a delinquent organization keeps its record and loses its controls", async 
   // The heading shows the name they typed, not the slug the repository is
   // addressed by — "Clinical Policies", not "clinical-policies".
   await expect(page.getByRole("heading", { name: binderTitle })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Add a policy" })).toHaveCount(
-    0,
-  );
+  await expect(
+    page.getByRole("button", { name: "Add a document" }),
+  ).toHaveCount(0);
   // The top nav's create button sits on every page, so leaving it would put
   // the one unusable affordance in front of them everywhere they went. It was
   // missed on the first pass and found by looking at a screenshot.
-  await expect(page.getByRole("button", { name: "New policy" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "New document" })).toHaveCount(
+    0,
+  );
   expect(new URL(page.url()).pathname).toBe(`/${org}/${binder}`);
   // The empty state must not instruct an action whose control is gone.
   await expect(page.getByText("Nothing filed here yet.")).toBeVisible();
-  await expect(page.getByText("Add a policy and it joins")).toHaveCount(0);
+  await expect(page.getByText("Add a document and it joins")).toHaveCount(0);
 
   // The API half of the same promise, asserted directly rather than through
   // the screen: reads are open, writes are refused, and the refusal is typed

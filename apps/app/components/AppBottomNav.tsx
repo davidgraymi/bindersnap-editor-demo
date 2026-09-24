@@ -55,7 +55,7 @@ export function AppBottomNav({ route, org, onNavigate }: AppBottomNavProps) {
     },
     {
       key: "documents",
-      label: "Policies",
+      label: "Documents",
       icon: FileText,
       to: { kind: "documents" },
       isActive: route.kind === "documents",

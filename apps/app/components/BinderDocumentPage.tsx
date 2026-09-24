@@ -396,8 +396,8 @@ export function BinderDocumentPage({
 
       {state === "proposed" ? (
         <p className="vault-pr-notice" role="status">
-          This policy is not in the binder yet. What you are reading is the file
-          as submitted, waiting on a decision.
+          This document is not in the binder yet. What you are reading is the
+          file as submitted, waiting on a decision.
         </p>
       ) : null}
 
