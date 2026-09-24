@@ -286,10 +286,33 @@ test("archiving proposes a change and takes nothing off the record yet", async (
   const proposed = await archive(session, org, binder, "nursing/hand-hygiene");
   const body = await proposed.text();
   expect(proposed.status, body).toBe(201);
-  expect(JSON.parse(body).changeNumber).toEqual(expect.any(Number));
+  const { changeNumber } = JSON.parse(body) as { changeNumber: number };
+  expect(changeNumber).toEqual(expect.any(Number));
 
   // Still there, still on its version.
   expect(await readArchive(session, org, binder)).toEqual([]);
+
+  // **And the change says what it would take off.** The comparison screen
+  // shows everything a change does, and a screen that listed only what the
+  // change *versions* would show a reviewer nothing at all for an archiving —
+  // the one act whose whole content is a removal. Gitea's own `deleted` file
+  // status is what this reads, which is why it is asserted against a running
+  // server rather than a mock.
+  const detail = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes/${changeNumber}`,
+    { headers: { Cookie: `bindersnap_session=${session}` } },
+  );
+  const change = (await detail.json()) as {
+    documents: unknown[];
+    removedDocuments: {
+      slugPath: string;
+      lastVersion: { version: number } | null;
+    }[];
+  };
+  expect(change.documents).toEqual([]);
+  expect(change.removedDocuments).toHaveLength(1);
+  expect(change.removedDocuments[0]!.slugPath).toBe("nursing/hand-hygiene");
+  expect(change.removedDocuments[0]!.lastVersion?.version).toBe(1);
 });
 
 test("a published archiving takes it off the record and into the archive", async () => {

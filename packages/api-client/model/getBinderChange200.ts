@@ -6,6 +6,7 @@
  */
 import type { GetBinderChange200Change } from './getBinderChange200Change.ts';
 import type { GetBinderChange200DocumentsItem } from './getBinderChange200DocumentsItem.ts';
+import type { GetBinderChange200RemovedDocumentsItem } from './getBinderChange200RemovedDocumentsItem.ts';
 import type { GetBinderChange200RequiredReviewers } from './getBinderChange200RequiredReviewers.ts';
 
 export type GetBinderChange200 = {
@@ -13,6 +14,7 @@ export type GetBinderChange200 = {
   workspace: string;
   change: GetBinderChange200Change;
   documents: GetBinderChange200DocumentsItem[];
+  removedDocuments: GetBinderChange200RemovedDocumentsItem[];
   isBehind: boolean;
   blockOnUnresolvedThreads: boolean;
   unresolvedThreadCount: number;

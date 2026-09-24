@@ -15,7 +15,6 @@ import {
   resolveReviewDecision,
 } from "../changeReview";
 import type { ChangeScope } from "../changeScope";
-import type { ComparisonBase } from "../documentComparison";
 import type { ChangeRecord } from "../documentDisplay";
 import {
   describeChangeOutcome,
@@ -24,7 +23,6 @@ import {
 } from "../documentDisplay";
 import type { DocumentChangeView } from "../routes";
 import { ChangeReviewers } from "./ChangeReviewers";
-import { DocumentComparison } from "./DocumentComparison";
 import { ReviewTimeline } from "./ReviewTimeline";
 
 interface DocumentChangeDetailProps {
@@ -96,11 +94,6 @@ interface DocumentChangeDetailProps {
   documentName: string;
   /** Canonical file name, so the proposed version can be previewed and saved. */
   fileName: string | null;
-  /**
-   * The published version this change is read against, or null when there is
-   * none — the first version of a document replaces nothing.
-   */
-  comparisonBase: ComparisonBase | null;
   /** Set while this change's file is being fetched for download. */
   downloading: boolean;
   onDownload: (gitRef: string, loaded?: Blob | null) => void;
@@ -275,7 +268,6 @@ export function DocumentChangeDetail({
   subject = null,
   documentName,
   fileName,
-  comparisonBase,
   downloading,
   onDownload,
   onChanged,
@@ -436,68 +428,6 @@ export function DocumentChangeDetail({
   // publishing here would be refused by the API anyway, after the customer
   // had typed a comment they are about to lose.
   const reviewDecision = isReadOnly ? "none" : decision;
-
-  if (view === "compare") {
-    return (
-      <article className="change-detail">
-        <button className="rev-back" type="button" onClick={onBackToList}>
-          ← All changes
-        </button>
-        <h1 className="bs-title rev-title">{change.summary}</h1>
-        <section className="rev-file-view">
-          {proposed.ref === null ? (
-            <p className="vault-pr-notice">
-              This change has no branch on record, so there is nothing to
-              compare.
-            </p>
-          ) : comparisonBase === null ? (
-            <p className="vault-pr-notice">
-              Nothing has been published for this document yet, so this change
-              has no earlier version to be read against. Open it instead.
-            </p>
-          ) : (
-            <>
-              {/* **Said before the comparison, because the comparison cannot
-                  say it.** A rename or a refiling changes the document's
-                  address and not a byte of its contents, so the diff below is
-                  entitled to report that nothing changed — and on its own that
-                  reads as a change that did nothing. */}
-              {documentMove ? <p className="bs-note">{documentMove}.</p> : null}
-              <p className="rev-file-note">
-                What this change does to {comparisonBase.label} — added,
-                removed, and rewritten.
-              </p>
-              <DocumentComparison
-                scope={scope}
-                base={comparisonBase}
-                headRef={proposed.ref}
-                headLabel={proposed.updateLabel ?? "This change"}
-                fileName={fileName}
-                onDownload={(gitRef) => onDownload(gitRef, null)}
-              />
-            </>
-          )}
-          <div className="rev-file-actions">
-            <button
-              className="rev-btn rev-btn--ghost"
-              type="button"
-              disabled={!onOpenOnBranch}
-              onClick={() => onOpenOnBranch?.()}
-            >
-              Read the proposed version
-            </button>
-            <button
-              className="rev-btn rev-btn--ghost"
-              type="button"
-              onClick={() => onViewChange("discussion")}
-            >
-              Back to the review
-            </button>
-          </div>
-        </section>
-      </article>
-    );
-  }
 
   // **There is no in-page preview any anymore.** Reading what a change
   // proposes happens at the document's own address on the change's branch —
@@ -730,6 +660,12 @@ export function DocumentChangeDetail({
                 {[proposed.fileName, proposed.updateLabel, proposed.date]
                   .filter(Boolean)
                   .join(" · ")}
+                {/* **A rename is a change even when not a word of the document
+                    changed**, and no comparison can show it: the identity
+                    survives a rename and the address does not, so both refs
+                    read identically. Said here, beside the version it is true
+                    of, rather than only on the screen that draws the diff. */}
+                {documentMove ? <p>{documentMove}.</p> : null}
               </div>
               <div className="bs-panel-foot">
                 <button
@@ -741,16 +677,19 @@ export function DocumentChangeDetail({
                   Open
                 </button>
                 {/* The question a reviewer actually opens a change with is
-                    "what is different?", not "what does it say?". */}
+                    "what is different?", not "what does it say?".
+
+                    **Held open for a document with nothing published yet.** It
+                    used to be disabled, because this screen could only draw a
+                    diff and a first version has no before. What it opens now
+                    is the whole change, where a new document is simply read —
+                    which is what a reviewer wants from a policy nobody has
+                    seen. The only thing that can still make it impossible is
+                    a change with no branch on record. */}
                 <button
                   className="bs-btn bs-btn--sm bs-btn-secondary"
                   type="button"
-                  disabled={!proposed.ref || comparisonBase === null}
-                  title={
-                    comparisonBase === null
-                      ? "This document has no published version yet, so there is nothing to compare against."
-                      : undefined
-                  }
+                  disabled={!proposed.ref}
                   onClick={() => onViewChange("compare")}
                 >
                   Compare
