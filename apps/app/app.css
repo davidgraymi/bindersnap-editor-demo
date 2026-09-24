@@ -9571,3 +9571,22 @@ a.bs-row:focus-visible {
 .docw-page--document {
   max-width: none;
 }
+
+/* ── A change request's header ─────────────────────────────────────────────
+   The badge that says whether it is still open, and Overview · Changes under
+   the title — the same header on both of the change's screens. */
+
+.change-state {
+  gap: var(--brand-space-1);
+  margin-right: var(--brand-space-2);
+  vertical-align: 1px;
+}
+
+.change-tabs {
+  margin: var(--brand-space-4) 0 var(--brand-space-5);
+  border-bottom: 1px solid var(--bs-rule);
+}
+
+.change-tabs .doc-tab {
+  text-decoration: none;
+}

@@ -65,7 +65,7 @@ test("a change's comparison is one step under the change, which becomes a link",
   expect(trail.path.map((step) => step.label)).toEqual([
     "Change requests",
     "Change 4",
-    "Compare",
+    "Changes",
   ]);
   expect(trail.path[1]!.href).toBe(
     "/riverside-health/clinical?tab=changes&change=4",
