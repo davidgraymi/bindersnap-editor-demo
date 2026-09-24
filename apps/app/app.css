@@ -7741,6 +7741,26 @@ a.cmp-file-act {
   gap: var(--brand-space-1);
 }
 
+/* **On a phone the actions go under the title, not beside it.** Side by side,
+   "Rename or move" and "New version" were wider than the screen before the
+   title had a pixel, and the whole page scrolled sideways to make room — the
+   policy, its version and its Download button with it. Under the title they
+   wrap as a row of their own, and the title gets the full width it needs. */
+@media (max-width: 640px) {
+  .bs-pagehead {
+    flex-wrap: wrap;
+  }
+
+  .bs-pagehead-body {
+    flex-basis: 100%;
+  }
+
+  .bs-pagehead-actions {
+    flex-shrink: 1;
+    flex-wrap: wrap;
+  }
+}
+
 /* Where you are, in the words a person would use — Geist, not the monospace
    path that read as a terminal to anybody who has seen one. On a change
    request only: "Change 4" is not a name, and the way back to the list is
