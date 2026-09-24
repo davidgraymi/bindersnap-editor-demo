@@ -56,14 +56,21 @@ export interface ChangedDocumentRow {
   /** "v2 → v3", "New · becomes v1", "Was v4". */
   versionStep: string;
   /**
-   * "Renamed from Hand Hygiene", "Moved from Nursing", or null.
+   * Where it was before this change, when that is somewhere else:
+   * `nursing/hand-hygiene` for a document now at `clinical/hand-hygiene`.
    *
    * **The one thing on this screen the comparison below it cannot say.** The
    * identity survives a rename and the address does not (ADR 0005), so a
-   * renamed policy reads identically at both refs and its diff reports that
-   * nothing changed — under a heading that has plainly changed. The row says
-   * it instead, from the same `describeMove` the change's own document list
-   * uses, so the two screens cannot drift into two wordings.
+   * renamed policy reads identically at both refs. The file's bar draws the
+   * old address struck out beside the new one — the way a diff draws any
+   * other line that moved.
+   */
+  previousSlugPath: string | null;
+  /**
+   * "Renamed from Hand Hygiene", "Moved from Nursing", or null — the same
+   * fact as {@link previousSlugPath}, as a sentence, for a screen reader that
+   * cannot see a strike-through. From the same `describeMove` the change's
+   * own document list uses, so the two screens cannot drift apart.
    */
   move: string | null;
   /**
@@ -123,6 +130,11 @@ export function buildChangedDocumentRows(params: {
       fileName: downloadFileName(document),
       kind: added ? "added" : "revised",
       versionStep: describeStep(document, open),
+      previousSlugPath:
+        document.previousSlugPath &&
+        document.previousSlugPath !== document.slugPath
+          ? document.previousSlugPath
+          : null,
       move: describeMove(document),
       base: resolveComparisonBase({
         open,
@@ -153,6 +165,7 @@ export function buildChangedDocumentRows(params: {
       : "Never published",
     // A removal has no "was filed at": the server has already subtracted the
     // renames, so anything left here left the binder rather than moved in it.
+    previousSlugPath: null,
     move: null,
     base: document.lastVersion
       ? {
@@ -197,11 +210,24 @@ function describeStep(
     : `New · becomes v${document.nextVersion}`;
 }
 
-/** "Updated", "New document", "Taken off the record" — the badge on a row. */
+/** "Revised", "New document", "Taken off the record" — said to a screen reader. */
 export function describeChangedKind(kind: ChangedDocumentKind): string {
   if (kind === "added") return "New document";
   if (kind === "removed") return "Taken off the record";
   return "Revised";
+}
+
+/**
+ * The pill in a file's bar, or null when there is nothing to say.
+ *
+ * **A revision gets no pill.** Revising is what nearly every document in a
+ * change is having done to it, and the bar already shows the proof — the word
+ * counts and the version step. A badge reading "Revised" on every row told a
+ * reviewer nothing they did not know, and trained them to ignore the badge on
+ * the two rows where it mattered: a policy arriving, and one leaving.
+ */
+export function describeChangedBadge(kind: ChangedDocumentKind): string | null {
+  return kind === "revised" ? null : describeChangedKind(kind);
 }
 
 /**
@@ -271,13 +297,11 @@ export function summarizeChangeScale(params: {
     words.push(`${additions} word${additions === 1 ? "" : "s"} added`);
   if (deletions > 0)
     words.push(`${deletions} word${deletions === 1 ? "" : "s"} removed`);
-  parts.push(
-    comparable === 0
-      ? "a browser cannot read inside these files"
-      : words.length > 0
-        ? words.join(", ")
-        : "no wording changed",
-  );
+  // Words that did not move are not announced: a pure rename says what it
+  // did in its own bar, and "no wording changed" was one more sentence to read
+  // on the way to the documents.
+  if (comparable === 0) parts.push("a browser cannot read inside these files");
+  else if (words.length > 0) parts.push(words.join(", "));
 
   // A count still missing a document is a count that will change, and a number
   // that moves under a reader without explanation is worse than one that
@@ -289,12 +313,30 @@ export function summarizeChangeScale(params: {
   return parts.join(" · ");
 }
 
-/** "2 of 3 read" — where a reviewer is in the stack. Null until they start. */
+/** "2 of 3 viewed" — where a reviewer is in the stack. Null until they start. */
 export function describeReadProgress(params: {
   total: number;
   read: number;
 }): string | null {
   const { total, read } = params;
   if (read === 0 || total === 0) return null;
-  return read >= total ? `All ${total} read` : `${read} of ${total} read`;
+  return read >= total ? `All ${total} viewed` : `${read} of ${total} viewed`;
+}
+
+/**
+ * "wants to publish 3 documents" — the middle of the line under the title,
+ * between who proposed the change and the branch it came from.
+ *
+ * Counted in documents, because that is what a reviewer is being asked to put
+ * on the record. A decided change says "proposed", not "published": the same
+ * line serves one that was declined, and it must not claim a publish that
+ * never happened.
+ */
+export function describePublishIntent(params: {
+  open: boolean;
+  documents: number;
+}): string {
+  const { open, documents } = params;
+  const count = `${documents} document${documents === 1 ? "" : "s"}`;
+  return open ? `wants to publish ${count}` : `proposed ${count}`;
 }

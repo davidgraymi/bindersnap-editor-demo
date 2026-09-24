@@ -8,7 +8,7 @@ import {
   updateBinderChange,
 } from "../api";
 import { describeChangedDocument, describeMove } from "../binderChange";
-import { downloadFileName } from "../binderDocument";
+import { buildDocumentUrl, downloadFileName } from "../binderDocument";
 import { buildChangedDocumentRows } from "../changedDocuments";
 import type { ChangeScope } from "../changeScope";
 import { formatDocumentName, toChangeRecord } from "../documentDisplay";
@@ -302,18 +302,30 @@ export function BinderChangePage({
           changeNumber={changeNumber}
           title={record.summary}
           open={isOpen}
+          author={record.submittedBy}
           rows={comparisonRows}
           headRef={detail.change.branchName || null}
           /* Arriving from a particular document's Compare button opens on that
              document rather than at the top of a page of six. */
           focusDocument={shown?.slugPath ?? null}
           onBackToChange={() => onViewChange("discussion")}
+          /* The same address `onOpenOnBranch` goes to, so View is a real link:
+             it opens in a new tab and can be sent to somebody. */
+          fileHref={(slugPath) =>
+            buildDocumentUrl({
+              org,
+              binder,
+              documentPath: slugPath,
+              version: null,
+              change: changeNumber,
+              ref: detail.change.branchName || null,
+            })
+          }
           onReadFile={(slugPath) => {
             if (detail.change.branchName) {
               onOpenOnBranch(slugPath, detail.change.branchName);
             }
           }}
-          onOpenDocument={onOpenDocument}
           onDownload={(row, gitRef) => void handleRowDownload(row, gitRef)}
         />
       </div>

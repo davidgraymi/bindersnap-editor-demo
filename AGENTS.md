@@ -115,32 +115,42 @@ no file on the branch at all — it offers the last version on record instead.
 What is in the list and what each row says lives in
 `apps/app/changedDocuments.ts`, testable without a browser.
 
-**It is drawn in the binder's grammar and owns almost no containers of its
-own.** One document is a `.bs-panel` whose `.bs-panel-bar` says what is
-happening to it and whose `.bs-panel-foot` holds the acts on it; the map beside
-it is a `.bs-panel` of `.bs-row`s in the standard `.bs-rail`. The first draft
-invented its own rail, row, card and head — it looked fine alone and read as a
-different product the moment you arrived from the change request, which is the
-failure the grammar exists to prevent. The rail is on the **right**, matching
-the change request's, so the reading column does not jump across the page as a
-reviewer moves between the two.
+**It is laid out the way a code review is.** Under the title, one line says
+who wants to publish how many documents from which branch, and the branch is
+a link to that branch in the binder. Below it, a tree of only what changed —
+grouped by folder — sits on the **left**, and one panel per document on the
+right, in the same order. **Every fact and control about a document is in
+that panel's single bar**: its path, its word counts (`+12 −3`), its version
+step, a New or Removed badge (a revision gets none — it is what nearly every
+row is), and Viewed, View and Download. View is a real link to the exact file
+on the change's branch. Nothing about a document sits below it.
 
-The rail is the map: every document, its version step, its word counts as each
-comparison finishes, and which one is being read. Comparisons mount a screen
-ahead of the viewport rather than all at once — comparing one Word file or PDF
-means fetching two files and loading a parser, and a change touching eight
+A move or rename is drawn in the path itself — the old path struck out in the
+removed colour, the new one in the added — never as a sentence under the bar.
+Two versions whose words did not move draw nothing at all: the bar already
+says what happened, and the page never announces "nothing changed".
+
+It is still the binder's grammar: one document is a `.bs-panel`, the tree is
+a `.bs-panel` of `.bs-row`s in a `.bs-rail`. The first draft invented its own
+rail, row, card and head, and read as a different product the moment you
+arrived from the change request.
+
+The tree is the map: every document, its word counts as each comparison
+finishes, and which one is being read. Comparisons mount a screen ahead of
+the viewport rather than all at once — comparing one Word file or PDF means
+fetching two files and loading a parser, and a change touching eight
 documents would otherwise spend a reviewer's first ten seconds on documents
-they have not looked at. Ticking a document as read is a bookmark in
-`sessionStorage` and says so on screen: the record of who approved what is in
-Gitea, and nothing in a browser tab may look like part of it.
+they have not looked at. Ticking a document as viewed is a bookmark in
+`sessionStorage`, never a review: the record of who approved what is in
+Gitea, and the tick is drawn so it cannot be mistaken for part of it.
 
 **Every file read on this screen goes by identity, never by address.** A change
 that renames a policy has two different addresses for one document and the base
 ref has never heard of the new one, so a read by `slugPath` 404s at one of the
 two refs — on exactly the change the screen exists to explain. The scope is
 built from `row.path`, which carries the identity (ADR 0005). The rename itself
-is stated above the diff from `describeMove`, because the diff cannot say it:
-both refs read identically, so it would report that nothing changed.
+is drawn in the file's bar from `previousSlugPath`, because the diff cannot
+say it: both refs read identically.
 
 One document's comparison is `apps/app/components/DocumentComparison.tsx`,
 which renders a change against the version it replaces for every file type the

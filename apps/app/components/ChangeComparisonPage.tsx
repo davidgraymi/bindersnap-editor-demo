@@ -1,23 +1,32 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import {
   Check,
   ChevronDown,
+  Columns2,
   Download,
+  Eye,
   FileMinus2,
   FilePlus2,
   FileText,
+  Folder,
+  GitBranch,
+  Layers,
 } from "lucide-react";
 
 import { downloadDocument } from "../api";
 import type { ChangeScope } from "../changeScope";
 import {
+  describeChangedBadge,
   describeChangedKind,
+  describePublishIntent,
   describeReadProgress,
   summarizeChangeScale,
   type ChangedDocumentRow,
 } from "../changedDocuments";
 import type { ComparisonSummary } from "../documentComparison";
-import { DocumentComparison } from "./DocumentComparison";
+import { classifyDocumentFile } from "../documentFile";
+import { DocumentComparison, type ImageMode } from "./DocumentComparison";
 import { DocumentPreview } from "./DocumentPreview";
 
 /**
@@ -31,14 +40,13 @@ import { DocumentPreview } from "./DocumentPreview";
  *
  * So: one page, every document, each read against the version it replaces.
  *
- * **Drawn in the binder's grammar, and the rail is on the right.** GitHub puts
- * its file tree on the left, but this screen is one step sideways from the
- * change request, whose rail — what is proposed, who it waits on, what is in
- * the way — is on the right. Matching it means the reading column does not
- * jump across the page as a reviewer moves between the two. Every container
- * here is a `.bs-panel`, every rail entry a `.bs-row`: one document is one
- * panel, and its bar carries what is happening to it and what can be done
- * about it.
+ * **Laid out the way a code review is.** A file tree of only what changed on
+ * the left, grouped by folder, so any document is one click away; one panel
+ * per document on the right, and every control and fact about a document in
+ * that panel's single bar — its path (old struck out beside new, when it
+ * moved), its word counts, its version step, and View, Download and Viewed.
+ * Nothing about a document sits anywhere but its bar, so a reviewer never
+ * hunts for where this one keeps its buttons.
  *
  * **Each comparison mounts when it comes near.** Comparing one document means
  * fetching two files and, for a PDF or a Word file, loading a parser to read
@@ -55,6 +63,8 @@ interface ChangeComparisonPageProps {
   title: string;
   /** Whether it is still awaiting a decision — the wording differs. */
   open: boolean;
+  /** Who proposed it, for "alice wants to publish 3 documents from …". */
+  author: string;
   rows: readonly ChangedDocumentRow[];
   /**
    * The branch holding the proposed files, or null when the change has none
@@ -68,10 +78,13 @@ interface ChangeComparisonPageProps {
    */
   focusDocument?: string | null;
   onBackToChange: () => void;
+  /**
+   * The address of one document's proposed file, on the change's branch —
+   * what View links to, so it can be opened in a new tab or sent to somebody.
+   */
+  fileHref: (slugPath: string) => string;
   /** Open one document's proposed file on its own screen. */
   onReadFile: (slugPath: string) => void;
-  /** Leave the change entirely and open the document in the binder. */
-  onOpenDocument: (slugPath: string) => void;
   onDownload: (row: ChangedDocumentRow, gitRef: string) => void;
 }
 
@@ -126,12 +139,69 @@ function KindIcon({ kind }: { kind: ChangedDocumentRow["kind"] }) {
   return <FileText size={size} strokeWidth={strokeWidth} aria-hidden="true" />;
 }
 
-/** "+112 −8", or null until that document's comparison has been read. */
-function describeWordCounts(summary: ComparisonSummary | null | undefined) {
-  if (summary === undefined) return null;
-  if (summary === null) return "not comparable";
-  if (summary.identical) return "unchanged";
-  return `+${summary.additions} −${summary.deletions}`;
+/**
+ * `+112 −8`, drawn the way every diff draws it, or nothing.
+ *
+ * Nothing until that document's comparison has been read, and nothing for one
+ * whose words did not move: a rename says what it did in its path, and a
+ * count reading "unchanged" was a word about the absence of anything to count.
+ */
+function WordCounts({
+  summary,
+}: {
+  summary: ComparisonSummary | null | undefined;
+}) {
+  if (!summary || summary.identical) return null;
+  return (
+    <span
+      className="cmp-counts"
+      aria-label={`${summary.additions} words added, ${summary.deletions} removed`}
+    >
+      <span className="cmp-counts-add">+{summary.additions}</span>
+      <span className="cmp-counts-del">−{summary.deletions}</span>
+    </span>
+  );
+}
+
+/**
+ * A link that stays inside the app on an ordinary click, and still behaves as
+ * a link — new tab, copy address — on every other kind.
+ */
+function followInApp(event: MouseEvent<HTMLAnchorElement>, go: () => void) {
+  if (
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey
+  ) {
+    return;
+  }
+  event.preventDefault();
+  go();
+}
+
+/** `clinical/nursing` for `clinical/nursing/hand-hygiene`; "" at the top. */
+function folderOf(slugPath: string): string {
+  const at = slugPath.lastIndexOf("/");
+  return at === -1 ? "" : slugPath.slice(0, at);
+}
+
+/**
+ * The rows, folder by folder, in the order the tree draws them — and so the
+ * order the page does too. A tree that listed a document third and a page
+ * that showed it fifth would make every click on it a jump in the wrong
+ * direction.
+ */
+function groupByFolder(rows: readonly ChangedDocumentRow[]) {
+  const groups = new Map<string, ChangedDocumentRow[]>();
+  for (const row of rows) {
+    const folder = folderOf(row.slugPath);
+    const group = groups.get(folder);
+    if (group) group.push(row);
+    else groups.set(folder, [row]);
+  }
+  return [...groups].map(([folder, members]) => ({ folder, rows: members }));
 }
 
 export function ChangeComparisonPage({
@@ -140,14 +210,17 @@ export function ChangeComparisonPage({
   changeNumber,
   title,
   open,
-  rows,
+  author,
+  rows: listed,
   headRef,
   focusDocument = null,
   onBackToChange,
+  fileHref,
   onReadFile,
-  onOpenDocument,
   onDownload,
 }: ChangeComparisonPageProps) {
+  const groups = useMemo(() => groupByFolder(listed), [listed]);
+  const rows = useMemo(() => groups.flatMap((group) => group.rows), [groups]);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
     () => new Set<string>(),
   );
@@ -158,6 +231,9 @@ export function ChangeComparisonPage({
     () => new Set<string>(),
   );
   const [active, setActive] = useState<string | null>(null);
+  const [imageModes, setImageModes] = useState<ReadonlyMap<string, ImageMode>>(
+    () => new Map(),
+  );
 
   const storageKey = readStorageKey(org, binder, changeNumber);
   const [read, setRead] = useState<ReadonlySet<string>>(() =>
@@ -426,6 +502,14 @@ export function ChangeComparisonPage({
   const allCollapsed =
     rows.length > 0 && rows.every((row) => collapsed.has(row.anchor));
 
+  /**
+   * Where the branch link lands: the first document the change keeps, read on
+   * the branch, which puts the binder's own explorer at that branch beside it.
+   * A change that only removes documents has nothing on its branch to open,
+   * so its branch is named and not linked.
+   */
+  const branchDocument = rows.find((row) => row.kind !== "removed") ?? null;
+
   /* The way back is a crumb, not a button floating above the title — the same
      row the change request itself uses, so the two screens open the same way.
      "Change 4" is not a name, which is why a change keeps its crumbs where a
@@ -444,6 +528,47 @@ export function ChangeComparisonPage({
       <div className="bs-pagehead">
         <div className="bs-pagehead-body">
           <h1 className="bs-title">{title}</h1>
+          {/* Who, what, and from where — the line a code host puts under a
+              pull request's title. The branch is a link to that branch in
+              the binder, because "from where" is a place you can go. */}
+          {rows.length > 0 ? (
+            <p className="cmp-byline">
+              {author ? <strong>{author}</strong> : "Somebody"}{" "}
+              {describePublishIntent({ open, documents: rows.length })}
+              {headRef ? (
+                <>
+                  {" from "}
+                  {branchDocument ? (
+                    <a
+                      className="cmp-branch"
+                      href={fileHref(branchDocument.slugPath)}
+                      onClick={(event) =>
+                        followInApp(event, () =>
+                          onReadFile(branchDocument.slugPath),
+                        )
+                      }
+                    >
+                      <GitBranch
+                        size={12}
+                        strokeWidth={1.75}
+                        aria-hidden="true"
+                      />
+                      {headRef}
+                    </a>
+                  ) : (
+                    <span className="cmp-branch">
+                      <GitBranch
+                        size={12}
+                        strokeWidth={1.75}
+                        aria-hidden="true"
+                      />
+                      {headRef}
+                    </span>
+                  )}
+                </>
+              ) : null}
+            </p>
+          ) : null}
           {/* Nothing to size is not a size. The states below say what this
               change does instead, at length — the scale line above them would
               be the same sentence, shorter and first. */}
@@ -487,11 +612,96 @@ export function ChangeComparisonPage({
   }
 
   return (
-    <article
-      className={`change-compare${rows.length > 1 ? " bs-with-rail" : ""}`}
-    >
-      <div className="change-main">
-        {header}
+    <article className="change-compare">
+      {header}
+
+      <div
+        className={`cmp-layout${rows.length > 1 ? " cmp-layout--tree" : ""}`}
+      >
+        {/* The tree: only what changed, folder by folder, each one a click
+            away. One document is not a list, and a tree pointing at a single
+            entry is furniture — the same rule the grammar states for rails. */}
+        {rows.length > 1 ? (
+          <aside className="bs-rail cmp-tree">
+            <nav className="bs-panel" aria-label="Documents in this change">
+              <div className="bs-panel-bar">
+                <h2 className="bs-panel-bar-title">Files</h2>
+                {progress ? (
+                  <span className="bs-row-meta cmp-tree-progress">
+                    {progress}
+                  </span>
+                ) : null}
+                <span className="bs-panel-bar-spacer" />
+                {/* The control that acts on a list lives in the list's own bar. */}
+                <button
+                  className="bs-linkbtn"
+                  type="button"
+                  onClick={() =>
+                    setCollapsed(
+                      allCollapsed ? new Set<string>() : new Set(anchors),
+                    )
+                  }
+                >
+                  {allCollapsed ? "Expand all" : "Collapse all"}
+                </button>
+              </div>
+
+              <ol className="cmp-tree-list">
+                {groups.map((group) => (
+                  <li key={group.folder || "(top)"}>
+                    {group.folder ? (
+                      <span className="cmp-tree-folder">
+                        <Folder
+                          size={13}
+                          strokeWidth={1.6}
+                          aria-hidden="true"
+                        />
+                        {group.folder}
+                      </span>
+                    ) : null}
+                    <ol className="bs-row-list">
+                      {group.rows.map((row) => {
+                        const isRead = read.has(row.anchor);
+                        const on = active === row.anchor;
+                        return (
+                          <li key={row.anchor}>
+                            <button
+                              className={`bs-row${on ? " bs-row--on" : ""}${
+                                isRead ? " cmp-rail-row--read" : ""
+                              }`}
+                              type="button"
+                              aria-current={on ? "true" : undefined}
+                              title={describeChangedKind(row.kind)}
+                              onClick={() => goTo(row.anchor)}
+                            >
+                              <span
+                                className={`bs-row-icon cmp-rail-icon--${row.kind}`}
+                              >
+                                {isRead ? (
+                                  <Check
+                                    size={14}
+                                    strokeWidth={2}
+                                    aria-hidden="true"
+                                  />
+                                ) : (
+                                  <KindIcon kind={row.kind} />
+                                )}
+                              </span>
+                              <span className="bs-row-body">
+                                <span className="bs-row-name">{row.name}</span>
+                              </span>
+                              <WordCounts summary={counts.get(row.anchor)} />
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  </li>
+                ))}
+              </ol>
+            </nav>
+          </aside>
+        ) : null}
 
         <div className="cmp-stream" ref={streamRef}>
           {rows.map((row) => (
@@ -505,7 +715,8 @@ export function ChangeComparisonPage({
               collapsed={collapsed.has(row.anchor)}
               mounted={near.has(row.anchor)}
               read={read.has(row.anchor)}
-              counts={describeWordCounts(counts.get(row.anchor))}
+              summary={counts.get(row.anchor)}
+              imageMode={imageModes.get(row.anchor) ?? "side-by-side"}
               register={registerSection}
               onSummary={onSummaryFor(row.anchor)}
               onToggle={() =>
@@ -517,83 +728,18 @@ export function ChangeComparisonPage({
                 })
               }
               onToggleRead={() => toggleRead(row.anchor)}
+              onImageMode={(mode) =>
+                setImageModes((previous) =>
+                  new Map(previous).set(row.anchor, mode),
+                )
+              }
+              fileHref={fileHref(row.slugPath)}
               onReadFile={() => onReadFile(row.slugPath)}
-              onOpenDocument={() => onOpenDocument(row.slugPath)}
               onDownload={(gitRef) => onDownload(row, gitRef)}
             />
           ))}
         </div>
       </div>
-
-      {/* One document is not a list, and a rail pointing at a single entry is
-          furniture — the same rule the grammar states for rails generally. */}
-      {rows.length > 1 ? (
-        <aside className="bs-rail">
-          <nav className="bs-panel" aria-label="Documents in this change">
-            <div className="bs-panel-bar">
-              <h2 className="bs-panel-bar-title">In this change</h2>
-              <span className="bs-panel-bar-spacer" />
-              {/* The control that acts on a list lives in the list's own bar. */}
-              <button
-                className="bs-linkbtn"
-                type="button"
-                onClick={() =>
-                  setCollapsed(
-                    allCollapsed ? new Set<string>() : new Set(anchors),
-                  )
-                }
-              >
-                {allCollapsed ? "Expand all" : "Collapse all"}
-              </button>
-            </div>
-
-            <ol className="bs-row-list">
-              {rows.map((row) => {
-                const words = describeWordCounts(counts.get(row.anchor));
-                const isRead = read.has(row.anchor);
-                const on = active === row.anchor;
-                return (
-                  <li key={row.anchor}>
-                    <button
-                      className={`bs-row${on ? " bs-row--on" : ""}${
-                        isRead ? " cmp-rail-row--read" : ""
-                      }`}
-                      type="button"
-                      aria-current={on ? "true" : undefined}
-                      onClick={() => goTo(row.anchor)}
-                    >
-                      <span
-                        className={`bs-row-icon cmp-rail-icon--${row.kind}`}
-                      >
-                        {isRead ? (
-                          <Check size={14} strokeWidth={2} aria-hidden="true" />
-                        ) : (
-                          <KindIcon kind={row.kind} />
-                        )}
-                      </span>
-                      <span className="bs-row-body">
-                        <span className="bs-row-name">{row.name}</span>
-                        <span className="bs-row-meta">
-                          {row.versionStep}
-                          {words ? ` · ${words}` : ""}
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ol>
-          </nav>
-
-          {/* Said once, quietly, where the ticks are — a product whose claim
-              is that the approval trail is the record cannot let a checkbox
-              in a browser be mistaken for part of it. */}
-          <p className="bs-rail-note">
-            {progress ? `${progress} · ` : ""}Ticking a document keeps your
-            place. It records nothing — approving is on the change itself.
-          </p>
-        </aside>
-      ) : null}
     </article>
   );
 }
@@ -608,14 +754,43 @@ interface ChangedDocumentSectionProps {
   /** Whether this one has come near enough for its files to be worth fetching. */
   mounted: boolean;
   read: boolean;
-  counts: string | null;
+  summary: ComparisonSummary | null | undefined;
+  imageMode: ImageMode;
   register: (anchor: string, node: HTMLElement | null) => void;
   onSummary: (summary: ComparisonSummary | null) => void;
   onToggle: () => void;
   onToggleRead: () => void;
+  onImageMode: (mode: ImageMode) => void;
+  /** Where View goes: this document's proposed file, on the change's branch. */
+  fileHref: string;
   onReadFile: () => void;
-  onOpenDocument: () => void;
   onDownload: (gitRef: string) => void;
+}
+
+/**
+ * The document's address, as the bar draws it — and, when the change moves
+ * or renames it, both addresses: the old one struck out in red and the new
+ * one in green, the way a diff draws any other line that changed. A sentence
+ * saying "Moved from Nursing" under the bar was one more line to read to
+ * learn what the path itself can show.
+ */
+function FilePath({ row }: { row: ChangedDocumentRow }): ReactNode {
+  if (!row.previousSlugPath) {
+    return <span className="cmp-file-path">{row.slugPath}</span>;
+  }
+  return (
+    <>
+      <del className="cmp-file-path cmp-file-path--old">
+        {row.previousSlugPath}
+      </del>
+      <span className="cmp-file-path-arrow" aria-hidden="true">
+        →
+      </span>
+      <ins className="cmp-file-path cmp-file-path--new">{row.slugPath}</ins>
+      {/* A strike-through is invisible to a screen reader. */}
+      {row.move ? <span className="sr-only">{row.move}</span> : null}
+    </>
+  );
 }
 
 /**
@@ -637,13 +812,15 @@ function ChangedDocumentSection({
   collapsed,
   mounted,
   read,
-  counts,
+  summary,
+  imageMode,
   register,
   onSummary,
   onToggle,
   onToggleRead,
+  onImageMode,
+  fileHref,
   onReadFile,
-  onOpenDocument,
   onDownload,
 }: ChangedDocumentSectionProps) {
   /**
@@ -669,6 +846,17 @@ function ChangedDocumentSection({
     [scope],
   );
 
+  const badge = describeChangedBadge(row.kind);
+  const comparesImages =
+    row.kind === "revised" &&
+    row.base !== null &&
+    classifyDocumentFile(row.fileName) === "image";
+  // What Download saves: the proposed file, or — for a removal, which has
+  // none — the last version on record. Nothing at all for a removal that
+  // never published one.
+  const downloadRef =
+    row.kind === "removed" ? (row.base?.ref ?? null) : headRef;
+
   return (
     <section
       className={`bs-panel cmp-file${read ? " cmp-file--read" : ""}`}
@@ -677,6 +865,9 @@ function ChangedDocumentSection({
       ref={(node) => register(row.anchor, node)}
       aria-label={`${row.name} — ${describeChangedKind(row.kind)}`}
     >
+      {/* **Everything about this document, in one bar.** What it is, what is
+          happening to it, and every act on it — so the bar that follows the
+          reader down a long diff is also the one with the buttons in it. */}
       <header className="bs-panel-bar cmp-file-head">
         <button
           className="cmp-file-fold"
@@ -691,33 +882,58 @@ function ChangedDocumentSection({
             strokeWidth={1.75}
             aria-hidden="true"
           />
-          <span className="cmp-file-fold-label">
+          <span className="sr-only">
             {collapsed ? `Show ${row.name}` : `Hide ${row.name}`}
           </span>
         </button>
 
-        <span className="cmp-file-main">
-          <h2 className="bs-panel-bar-title">{row.name}</h2>
-          {/* The address, not the file path: the identity segment is a thing
-              the server mints and nobody reads. */}
-          <span className="bs-row-meta cmp-file-path">{row.slugPath}</span>
-        </span>
+        <h2 className="cmp-file-title">
+          <FilePath row={row} />
+        </h2>
+
+        <WordCounts summary={summary} />
+
+        <span className="bs-row-meta cmp-file-step">{row.versionStep}</span>
+
+        {badge ? (
+          <span className={`bs-status bs-status--sm cmp-kind--${row.kind}`}>
+            <KindIcon kind={row.kind} />
+            {badge}
+          </span>
+        ) : null}
 
         <span className="bs-panel-bar-spacer" />
 
-        <span className={`bs-status bs-status--sm cmp-kind--${row.kind}`}>
-          <KindIcon kind={row.kind} />
-          {describeChangedKind(row.kind)}
-        </span>
+        {comparesImages && !collapsed ? (
+          <span
+            className="doc-compare-modes"
+            role="group"
+            aria-label="How to compare"
+          >
+            <button
+              className={`doc-compare-mode${imageMode === "side-by-side" ? " doc-compare-mode--on" : ""}`}
+              type="button"
+              aria-pressed={imageMode === "side-by-side"}
+              onClick={() => onImageMode("side-by-side")}
+            >
+              <Columns2 size={13} strokeWidth={1.75} aria-hidden="true" />
+              Side by side
+            </button>
+            <button
+              className={`doc-compare-mode${imageMode === "difference" ? " doc-compare-mode--on" : ""}`}
+              type="button"
+              aria-pressed={imageMode === "difference"}
+              onClick={() => onImageMode("difference")}
+            >
+              <Layers size={13} strokeWidth={1.75} aria-hidden="true" />
+              Difference
+            </button>
+          </span>
+        ) : null}
 
-        {counts ? <span className="bs-ver">{counts}</span> : null}
-
-        {/* **The tick stays in the bar and the other two do not.** The bar
-            follows the reader down a diff that runs for screens, and the one
-            thing wanted at the bottom of a document is the thing that says
-            you are done with it. Reading the file and downloading it are acts
-            on the whole document, so they sit in the panel's foot, which is
-            where the binder puts an act on a panel's subject. */}
+        {/* A bookmark for this sitting, never a review: the record of who
+            approved what is in Gitea, and the approve button is on the
+            change. */}
         <button
           className={`cmp-file-read${read ? " cmp-file-read--on" : ""}`}
           type="button"
@@ -725,8 +941,32 @@ function ChangedDocumentSection({
           onClick={onToggleRead}
         >
           <Check size={13} strokeWidth={2} aria-hidden="true" />
-          {read ? "Read" : "Mark as read"}
+          Viewed
         </button>
+
+        {/* The exact file on the exact branch — a link, so it opens in a new
+            tab and can be sent. A removal has no file on the branch. */}
+        {row.kind === "removed" ? null : (
+          <a
+            className="bs-btn bs-btn--sm bs-btn-secondary cmp-file-act"
+            href={fileHref}
+            onClick={(event) => followInApp(event, onReadFile)}
+          >
+            <Eye size={14} strokeWidth={1.6} aria-hidden="true" />
+            View
+          </a>
+        )}
+
+        {downloadRef === null ? null : (
+          <button
+            className="bs-btn bs-btn--sm bs-btn-secondary cmp-file-act"
+            type="button"
+            onClick={() => onDownload(downloadRef)}
+          >
+            <Download size={14} strokeWidth={1.6} aria-hidden="true" />
+            Download
+          </button>
+        )}
       </header>
 
       <div
@@ -734,16 +974,6 @@ function ChangedDocumentSection({
         id={`${row.anchor}-body`}
         hidden={collapsed}
       >
-        {/* **Said before the comparison, because the comparison cannot say
-            it.** A rename changes the document's address and not a byte of
-            its contents, so the diff below is entitled to report that nothing
-            changed — and on its own that reads as a change that did nothing.
-            A sentence rather than a pill in the bar: it is the length of a
-            sentence, and a pill that wraps is a pill twice. */}
-        {!collapsed && row.move ? (
-          <p className="bs-note cmp-file-move">{row.move}.</p>
-        ) : null}
-
         {collapsed ? null : !mounted ? (
           // A placeholder with the section's own height, so collapsing and
           // scrolling do not make the page jump under the reader.
@@ -762,19 +992,16 @@ function ChangedDocumentSection({
             </p>
           </div>
         ) : row.base === null ? (
-          <>
-            <p className="cmp-file-note">
-              Nothing has been published for this document yet, so there is no
-              earlier version to read it against. This is all of it.
-            </p>
-            <DocumentPreview
-              loadFile={loadFile}
-              gitRef={headRef}
-              fileName={row.fileName}
-              downloading={false}
-              onDownload={() => onDownload(headRef)}
-            />
-          </>
+          // New: nothing to read it against, so it is read whole. The badge
+          // in the bar already says why there is no diff.
+          <DocumentPreview
+            loadFile={loadFile}
+            gitRef={headRef}
+            fileName={row.fileName}
+            downloading={false}
+            onDownload={() => onDownload(headRef)}
+            bare
+          />
         ) : (
           <DocumentComparison
             scope={scope}
@@ -782,47 +1009,12 @@ function ChangedDocumentSection({
             headRef={headRef}
             headLabel={open ? "This change" : "What it published"}
             fileName={row.fileName}
+            imageMode={imageMode}
             onDownload={onDownload}
             onSummary={onSummary}
           />
         )}
       </div>
-
-      {/* Folded away with the document: acts on something you have collapsed
-          out of sight are acts on something you are not looking at. */}
-      {collapsed ? null : (
-        <div className="bs-panel-foot">
-          {/* A removal has no file on the branch to read. */}
-          {row.kind === "removed" ? null : (
-            <button
-              className="bs-btn bs-btn--sm bs-btn-secondary"
-              type="button"
-              onClick={onReadFile}
-            >
-              <FileText size={14} strokeWidth={1.6} aria-hidden="true" />
-              Read the file
-            </button>
-          )}
-          {/* What a removal offers instead is the last version on record —
-              and a document that never published one has nothing to offer. */}
-          {row.kind === "removed" && row.base === null ? null : (
-            <button
-              className="bs-btn bs-btn--sm bs-btn-secondary"
-              type="button"
-              onClick={() =>
-                onDownload(row.kind === "removed" ? row.base!.ref : headRef)
-              }
-            >
-              <Download size={14} strokeWidth={1.6} aria-hidden="true" />
-              Download
-            </button>
-          )}
-          <span className="bs-panel-bar-spacer" />
-          <button className="bs-linkbtn" type="button" onClick={onOpenDocument}>
-            Open {row.name} in the binder →
-          </button>
-        </div>
-      )}
     </section>
   );
 }

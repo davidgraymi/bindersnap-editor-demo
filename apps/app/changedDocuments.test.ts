@@ -172,7 +172,6 @@ function summary(additions: number, deletions: number): ComparisonSummary {
     additions,
     deletions,
     identical: additions === 0 && deletions === 0,
-    headline: "",
   };
 }
 
@@ -263,6 +262,6 @@ test("a change that versions nothing says so rather than counting to zero", () =
 
 test("read progress stays quiet until somebody starts", () => {
   expect(describeReadProgress({ total: 3, read: 0 })).toBeNull();
-  expect(describeReadProgress({ total: 3, read: 2 })).toBe("2 of 3 read");
-  expect(describeReadProgress({ total: 3, read: 3 })).toBe("All 3 read");
+  expect(describeReadProgress({ total: 3, read: 2 })).toBe("2 of 3 viewed");
+  expect(describeReadProgress({ total: 3, read: 3 })).toBe("All 3 viewed");
 });
