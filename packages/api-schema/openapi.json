@@ -9543,6 +9543,9 @@
                           "previousSlugPath": {
                             "type": "string",
                             "nullable": true
+                          },
+                          "restored": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -9556,7 +9559,8 @@
                           "nextVersion",
                           "currentVersion",
                           "versions",
-                          "previousSlugPath"
+                          "previousSlugPath",
+                          "restored"
                         ]
                       }
                     },

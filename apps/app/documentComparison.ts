@@ -105,12 +105,18 @@ function countWords(value: string): number {
   return trimmed === "" ? 0 : trimmed.split(/\s+/).length;
 }
 
-/** The line above the comparison: how much moved, in words. */
+/**
+ * How much moved, in words.
+ *
+ * Numbers only: the file's bar draws them as `+12 −3`, the way every diff
+ * does, and a document whose words did not move shows no count at all rather
+ * than a sentence announcing it — a pure rename is already told by the path
+ * above it.
+ */
 export interface ComparisonSummary {
   additions: number;
   deletions: number;
   identical: boolean;
-  headline: string;
 }
 
 export function summarizeSegments(
@@ -124,24 +130,10 @@ export function summarizeSegments(
     if (segment.kind === "removed") deletions += countWords(segment.value);
   }
 
-  const identical = additions === 0 && deletions === 0;
-
   return {
     additions,
     deletions,
-    identical,
-    headline: identical
-      ? "Nothing changed — these two versions read the same."
-      : [
-          additions > 0
-            ? `${additions} word${additions === 1 ? "" : "s"} added`
-            : null,
-          deletions > 0
-            ? `${deletions} word${deletions === 1 ? "" : "s"} removed`
-            : null,
-        ]
-          .filter(Boolean)
-          .join(" · "),
+    identical: additions === 0 && deletions === 0,
   };
 }
 

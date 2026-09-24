@@ -68,10 +68,12 @@ test("a renamed policy is read by identity, not by address", async ({
   await signInAsAlice(page);
   await page.goto(comparisonUrl("clinical", 19));
 
-  // The rename itself, said above the diff — because the diff cannot say it.
-  await expect(page.locator(".cmp-file-move")).toContainText(
-    "Renamed from Patient Grievance Policy",
+  // The rename itself, drawn in the file's bar as a diff draws a changed
+  // line: the old path struck out, the new one beside it.
+  await expect(page.locator(".cmp-file-title del").first()).toContainText(
+    "patient-grievance-policy",
   );
+  await expect(page.locator(".cmp-file-title ins").first()).toBeVisible();
 
   /**
    * **The diff actually read.** This is the assertion the bug would have
@@ -89,7 +91,7 @@ test("a renamed policy is read by identity, not by address", async ({
   );
 });
 
-test("a document taken off the record says so, and offers what is coming off", async ({
+test("a document going into the archive says so, and offers what is going", async ({
   page,
 }) => {
   await signInAsAlice(page);
@@ -97,9 +99,7 @@ test("a document taken off the record says so, and offers what is coming off", a
 
   // The change publishes no version at all, so the old screen — which was
   // scoped to one versioned document — had nothing to show for it.
-  await expect(page.locator(".cmp-kind--removed")).toContainText(
-    "Taken off the record",
-  );
+  await expect(page.locator(".cmp-kind--removed")).toContainText("Archiv");
   await expect(page.locator(".cmp-removed-line")).toContainText(
     "Nothing is lost",
   );
@@ -110,7 +110,7 @@ test("a document taken off the record says so, and offers what is coming off", a
     page.locator(".cmp-file").getByRole("button", { name: "Download" }),
   ).toBeVisible();
   await expect(
-    page.locator(".cmp-file").getByRole("button", { name: /Read the file/ }),
+    page.locator(".cmp-file").getByRole("link", { name: "View" }),
   ).toHaveCount(0);
 });
 
@@ -128,7 +128,7 @@ test("a change that versions nothing says what it does instead", async ({
   await expect(page.locator(".cmp-scale")).toHaveCount(0);
 });
 
-test("ticking a document keeps your place, and says it records nothing", async ({
+test("ticking a document as viewed keeps your place, in this tab only", async ({
   page,
 }) => {
   await signInAsAlice(page);
@@ -138,16 +138,7 @@ test("ticking a document keeps your place, and says it records nothing", async (
   await page.locator(".cmp-file .cmp-file-read").first().click();
 
   await expect(page.locator(".cmp-rail-row--read")).toHaveCount(1);
-  await expect(page.locator(".bs-rail-note")).toContainText("1 of 2 read");
-
-  /**
-   * **The sentence is the point of the test.** A product whose claim is that
-   * the approval trail is the record cannot ship a tick that could be mistaken
-   * for part of it — so the disclaimer is asserted, not merely written.
-   */
-  await expect(page.locator(".bs-rail-note")).toContainText(
-    "It records nothing",
-  );
+  await expect(page.locator(".cmp-tree-progress")).toHaveText("1 of 2 viewed");
 
   // A bookmark for this sitting, in this tab, about this change — and never
   // anything the server hears about.
@@ -159,7 +150,9 @@ test("ticking a document keeps your place, and says it records nothing", async (
   expect(stored).toEqual([`bindersnap:compare-read:${OWNER}/facilities#4`]);
 });
 
-test("folding a document takes its acts with it", async ({ page }) => {
+test("folding a document keeps its bar, and every act in it", async ({
+  page,
+}) => {
   await signInAsAlice(page);
   await page.goto(comparisonUrl("facilities", 4));
 
@@ -171,7 +164,49 @@ test("folding a document takes its acts with it", async ({ page }) => {
   // An author rule beats the user agent's `[hidden]`, which is why folding did
   // nothing until the stylesheet said so.
   await expect(first.locator(".cmp-file-body")).toBeHidden();
-  // Acts on something collapsed out of sight are acts on something you are not
-  // looking at.
-  await expect(first.locator(".bs-panel-foot")).toHaveCount(0);
+  // Every act on a document lives in its one bar, so folding it away hides
+  // the document and leaves the way to view or download it.
+  await expect(
+    first.locator(".cmp-file-head").getByRole("link", { name: "View" }),
+  ).toHaveAttribute("href", /\?ref=.*&change=4/);
+  await expect(
+    first.locator(".cmp-file-head").getByRole("button", { name: "Download" }),
+  ).toBeVisible();
+});
+
+test("the branch opens the binder at its root, and View opens the file", async ({
+  page,
+}) => {
+  await signInAsAlice(page);
+  await page.goto(comparisonUrl("clinical", 19));
+
+  // The branch under the title is a place, so it goes somewhere: the whole
+  // binder read at that branch, the way a code host opens a branch.
+  const branch = page.locator("a.cmp-branch");
+  await expect(branch).toBeVisible();
+  const branchName = (await branch.textContent())!.trim();
+  await expect(branch).toHaveAttribute(
+    "href",
+    /^\/[^/]+\/clinical\?ref=.+&change=19$/,
+  );
+
+  // View in the file's bar is that one file on the branch — a real link, so
+  // it can be opened in a new tab or sent to somebody.
+  await expect(
+    page.locator(".cmp-file-head").first().getByRole("link", { name: "View" }),
+  ).toHaveAttribute("href", /\/clinical\/.+\?ref=.+&change=19$/);
+
+  await branch.click();
+  await expect(page).toHaveURL(/\/clinical\?ref=.+&change=19$/);
+  // The tree, named for the branch it is read on, with the way back.
+  await expect(page.locator(".binder-pane .cmp-branch")).toHaveText(branchName);
+  await expect(page.locator(".binder-tree-row").first()).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Back to change 19" }),
+  ).toBeVisible();
+
+  // A policy opened from there is still read on the branch.
+  await page.getByRole("button", { name: "Code Of Conduct" }).click();
+  await expect(page).toHaveURL(/\/clinical\/[^?]+\?ref=.+&change=19$/);
+  await expect(page.locator("h1.bs-title")).toHaveText(/code of conduct/i);
 });

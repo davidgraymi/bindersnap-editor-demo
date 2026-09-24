@@ -6449,44 +6449,6 @@ button.bs-knot {
   overflow: hidden;
 }
 
-.doc-compare-toolbar {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-3);
-  flex-wrap: wrap;
-  padding: var(--brand-space-3) var(--brand-space-5);
-  border-bottom: 1px solid var(--bs-rule-warm);
-}
-
-.doc-compare-versions {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--brand-space-2);
-  font-size: var(--brand-text-xs);
-  color: var(--bs-text-faint);
-}
-
-.doc-compare-chip {
-  padding: var(--brand-space-0-5) var(--brand-space-2);
-  border-radius: var(--brand-radius-sm);
-  font-size: var(--brand-text-xs);
-}
-
-.doc-compare-chip--base {
-  background: var(--bs-surface-2);
-  color: var(--bs-text-secondary);
-}
-
-.doc-compare-chip--head {
-  background: var(--bs-green-dim);
-  color: var(--brand-green);
-}
-
-.doc-compare-summary {
-  font-size: var(--brand-text-xs);
-  color: var(--bs-text-muted);
-}
-
 /* Two ways to look at two pictures. Only one is on at a time, so the pair
    reads as a switch rather than two buttons that both do something. */
 .doc-compare-modes {
@@ -6516,49 +6478,12 @@ button.bs-knot {
   color: var(--bs-text-primary);
 }
 
-.doc-compare-legend {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-3);
-  flex-wrap: wrap;
-  margin: 0;
-  padding: var(--brand-space-3) var(--brand-space-5);
-  border-bottom: 1px solid var(--bs-rule-warm);
-  font-size: var(--brand-text-xs);
-}
-
-.doc-compare-key {
-  padding: var(--brand-space-0-5) var(--brand-space-2);
-  border-radius: var(--brand-radius-sm);
-}
-
-.doc-compare-key--added {
-  background: var(--bs-green-dim);
-  color: var(--brand-green);
-}
-
-.doc-compare-key--removed {
-  background: var(--bs-coral-dim);
-  color: var(--bs-coral-text);
-  text-decoration: line-through;
-}
-
-.doc-compare-key-note {
-  color: var(--bs-text-muted);
-}
-
 .doc-compare-body {
   display: grid;
   align-content: start;
   gap: var(--brand-space-3);
   padding: var(--brand-space-12) 56px;
   min-height: 320px;
-}
-
-.doc-compare-identical {
-  margin: 0;
-  font-size: var(--brand-text-sm);
-  color: var(--bs-text-muted);
 }
 
 /* The marks themselves. Colour alone never carries a difference: the
@@ -6590,8 +6515,7 @@ button.bs-knot {
 /* Coral-dark is a light-background colour; on the dark sheet it sinks into
    the tint behind it. The removals stay coral, one step brighter. */
 [data-theme="dark"] .doc-compare-prose del,
-[data-theme="dark"] .doc-compare-plain del,
-[data-theme="dark"] .doc-compare-key--removed {
+[data-theme="dark"] .doc-compare-plain del {
   color: var(--brand-coral);
 }
 
@@ -6653,30 +6577,6 @@ button.bs-knot {
   position: absolute;
   inset: 0;
   mix-blend-mode: difference;
-}
-
-/* Two ways to read the file itself, under the comparison of what changed in
-   it. It replaced a disclosure holding two `<iframe>`s of the originals, which
-   put two PDF viewers in half a column each — both too small to read. */
-.doc-compare-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--brand-space-2);
-  padding: var(--brand-space-3) var(--brand-space-5);
-  border-top: 1px solid var(--bs-rule-warm);
-}
-
-/* `.bs-btn` sets no gap, so an icon and its word sit flush without one. */
-.doc-compare-actions .bs-btn {
-  gap: var(--brand-space-1);
-}
-
-.doc-compare-actions-note {
-  flex: 1;
-  min-width: 16ch;
-  font-size: var(--brand-text-ui-md);
-  color: var(--bs-text-muted);
 }
 
 .doc-compare-fallback {
@@ -6744,37 +6644,79 @@ button.bs-knot {
 }
 
 /* ── Everything one change does, on one screen ──────────────────────────────
-   Almost nothing, on purpose. The binder's grammar already owns the
-   containers this screen needs — one document is a `.bs-panel` whose bar says
-   what is happening to it, the map beside it is a `.bs-panel` of `.bs-row`s
-   in the standard `.bs-rail` — so what is left here is only what the grammar
-   has no opinion about: a bar that follows you down a long diff, a fold, and
-   the three tints that tell added from revised from removed.
+   Laid out the way a code review is: the title and one line saying who wants
+   to publish what from where, then a tree of only what changed on the left
+   and one panel per document on the right. Every fact and control about a
+   document sits in that panel's single bar.
 
-   The first draft of this screen invented its own rail, its own row, its own
-   card and its own head. It looked fine alone and read as a different product
-   the moment you arrived from the change request, which is the whole failure
-   the grammar exists to prevent. */
+   Still the binder's grammar — each document is a `.bs-panel`, the tree is a
+   `.bs-panel` of `.bs-row`s in a `.bs-rail` — so what is left here is only
+   what the grammar has no opinion about: the two-column layout, the byline, a
+   bar that follows you down a long diff, a fold, and the diff colours on the
+   path and the counts. */
 
 .change-compare {
-  min-width: 0;
-}
-
-/* Only when there is no rail: with one, `.bs-with-rail` is the grid and
-   restating the columns here would fight it. */
-.change-compare:not(.bs-with-rail) {
   display: grid;
   gap: var(--brand-space-4);
   align-content: start;
+  min-width: 0;
 }
 
-/* How big this change is, under its title. Sized as prose rather than as a
-   label: it is a sentence, and it wraps like one. */
-.cmp-scale {
+/* Who, what, from where. The branch is the one link in it. */
+.cmp-byline {
   margin: var(--brand-space-1) 0 0;
-  max-width: var(--brand-measure);
   color: var(--bs-text-muted);
   font-size: var(--brand-text-ui-md);
+}
+
+.cmp-byline strong {
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-semibold);
+}
+
+/* A branch name is machine text, so it is set in the monospace and chipped
+   like one — the same shape a code host gives it, so it reads as a place. */
+.cmp-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px var(--brand-space-1-5);
+  border-radius: var(--brand-radius-sm);
+  background: var(--bs-status-info-bg);
+  color: var(--bs-status-info-fg);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-sm);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+a.cmp-branch:hover {
+  text-decoration: underline;
+}
+
+a.cmp-branch:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 1px;
+}
+
+/* How big this change is, under the byline. */
+.cmp-scale {
+  margin: var(--brand-space-0-5) 0 0;
+  max-width: var(--brand-measure);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+/* The tree on the left, the reading on the right. */
+.cmp-layout {
+  display: grid;
+  gap: var(--brand-space-4);
+  align-items: start;
+  min-width: 0;
+}
+
+.cmp-layout--tree {
+  grid-template-columns: 264px minmax(0, 1fr);
 }
 
 .cmp-stream {
@@ -6782,6 +6724,90 @@ button.bs-knot {
   gap: var(--brand-space-4);
   align-content: start;
   min-width: 0;
+}
+
+/* ── The tree ──────────────────────────────────────────────────────────── */
+
+.cmp-tree {
+  max-height: calc(100vh - var(--brand-space-8));
+  overflow-y: auto;
+}
+
+.cmp-tree-progress {
+  display: inline;
+}
+
+.cmp-tree-list,
+.cmp-tree-list > li {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A folder is a heading in the tree, not a row you can pick. */
+.cmp-tree-folder {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  padding: var(--brand-space-1-5) var(--brand-space-2) var(--brand-space-0-5);
+  border-top: 1px solid var(--bs-rule-warm);
+  color: var(--bs-text-muted);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-sm);
+  overflow-wrap: anywhere;
+}
+
+.cmp-tree-list > li:first-child > .cmp-tree-folder {
+  border-top: none;
+}
+
+/* Files under a folder sit one step in, the way any tree draws them. */
+.cmp-tree-folder + .bs-row-list .bs-row {
+  padding-left: var(--brand-space-5);
+  border-top: none;
+}
+
+.cmp-tree .bs-row {
+  min-height: 36px;
+}
+
+.cmp-rail-icon--added {
+  color: var(--bs-status-ok-fg);
+}
+
+.cmp-rail-icon--revised {
+  color: var(--bs-status-info-fg);
+}
+
+.cmp-rail-icon--removed {
+  color: var(--bs-status-danger-fg);
+}
+
+.cmp-rail-icon--restored {
+  color: var(--bs-status-ok-fg);
+}
+
+.cmp-rail-row--read .bs-row-name {
+  color: var(--bs-text-muted);
+}
+
+/* ── Word counts, drawn the way every diff draws them ─────────────────── */
+
+.cmp-counts {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: var(--brand-space-1);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-sm);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.cmp-counts-add {
+  color: var(--bs-status-ok-fg);
+}
+
+.cmp-counts-del {
+  color: var(--bs-coral-text);
 }
 
 /* ── One document's panel ──────────────────────────────────────────────── */
@@ -6792,12 +6818,12 @@ button.bs-knot {
      same as not being sticky at all. Visible here, and the bar takes the top
      corners itself so the radius still reads. */
   overflow: visible;
-  /* Land the panel's head clear of the bar above it when a link, the rail or
+  /* Land the panel's head clear of the bar above it when a link, the tree or
      `focusDocument` scrolls to this document. */
   scroll-margin-top: var(--brand-space-3);
 }
 
-/* Read is dimmed, not hidden: a reviewer who ticked something and wants it
+/* Viewed is dimmed, not hidden: a reviewer who ticked something and wants it
    back should find it where they left it. */
 .cmp-file--read {
   opacity: 0.72;
@@ -6809,12 +6835,22 @@ button.bs-knot {
 }
 
 /* The one thing that follows you: on a policy that runs for three screens,
-   the name of what you are reading and the acts on it stay put. */
-.cmp-file-head {
+   the path of what you are reading and every act on it stay put. */
+.bs-panel-bar.cmp-file-head {
   position: sticky;
   top: 0;
   z-index: 2;
+  /* One line: a long path wraps inside its own box rather than pushing the
+     buttons onto a second row, so the controls are always where they were. */
+  flex-wrap: nowrap;
+  min-height: 40px;
   border-radius: var(--brand-radius-lg) var(--brand-radius-lg) 0 0;
+}
+
+/* Folded, the bar is the whole panel, so it takes the bottom corners too. */
+.cmp-file-head:has(+ .cmp-file-body[hidden]) {
+  border-bottom: none;
+  border-radius: var(--brand-radius-lg);
 }
 
 .cmp-file-fold {
@@ -6842,46 +6878,74 @@ button.bs-knot {
   outline-offset: 1px;
 }
 
-/* The chevron is the whole label to a sighted reader; a screen reader needs
-   the sentence. */
-.cmp-file-fold-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
 .cmp-file-chevron--shut {
   transform: rotate(-90deg);
 }
 
-.cmp-file-main {
-  min-width: 0;
-}
-
-/* The address, in the only monospace the binder keeps: a path is machine text
+/* The path, in the only monospace the binder keeps: a path is machine text
    and a reader checks it character by character. */
-.cmp-file-path {
+.cmp-file-title {
+  display: inline-flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--brand-space-1);
+  min-width: 0;
+  margin: 0;
+  color: var(--bs-text-primary);
   font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-ui-sm);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-medium);
 }
 
-/* ── Added, revised, removed ────────────────────────────────────────────────
-   Three tints on the grammar's own status pill, because the three are what a
-   reviewer needs told apart at a glance and none of the existing states mean
-   them. Removed is the danger family without the outline: it is an act being
-   proposed, not an outcome already reached. */
+/* Everything after the path keeps its size; only the path gives way. */
+.cmp-file-head > :not(.cmp-file-title, .bs-panel-bar-spacer) {
+  flex-shrink: 0;
+}
+
+.cmp-file-path {
+  overflow-wrap: anywhere;
+}
+
+/* A move or a rename, drawn as a diff draws a line that changed: the old
+   address struck out in the removed colour, the new one in the added. Both
+   carry a line as well as a colour, like the marks in the document below. */
+.cmp-file-path--old,
+.cmp-file-path--new {
+  padding: 0 var(--brand-space-0-5);
+  border-radius: var(--brand-radius-xs);
+}
+
+.cmp-file-path--old {
+  background: var(--bs-coral-dim);
+  color: var(--bs-coral-text);
+  text-decoration: line-through;
+}
+
+.cmp-file-path--new {
+  background: var(--bs-green-dim);
+  color: var(--bs-status-ok-fg);
+  text-decoration: none;
+}
+
+.cmp-file-path-arrow {
+  color: var(--bs-text-muted);
+  font-family: var(--brand-font-sans);
+}
+
+.cmp-file-step {
+  display: inline;
+  flex-shrink: 0;
+}
+
+/* ── New, restored, archived ───────────────────────────────────────────────
+   Only the ones that are news. A revision is what nearly every document in a
+   change is having done to it, and its counts already say so. A restore diffs
+   exactly like a revision, so the pill is the only place it says otherwise. */
 
 .cmp-kind--added {
   background: var(--bs-status-ok-bg);
   color: var(--bs-status-ok-fg);
-}
-
-.cmp-kind--revised {
-  background: var(--bs-status-info-bg);
-  color: var(--bs-status-info-fg);
 }
 
 .cmp-kind--removed {
@@ -6889,9 +6953,14 @@ button.bs-knot {
   color: var(--bs-status-danger-fg);
 }
 
-/* A bookmark, drawn as one. Deliberately not a checkbox and deliberately not
-   green until pressed — the record of who approved what is in Gitea, and
-   nothing in a browser tab may look like part of it. */
+.cmp-kind--restored {
+  background: var(--bs-status-ok-bg);
+  color: var(--bs-status-ok-fg);
+}
+
+/* A bookmark, drawn as one. Not green until pressed — the record of who
+   approved what is in Gitea, and nothing in a browser tab may look like part
+   of it. */
 .cmp-file-read {
   display: inline-flex;
   align-items: center;
@@ -6924,35 +6993,48 @@ button.bs-knot {
   color: var(--bs-status-ok-fg);
 }
 
+/* `.bs-btn` sets no gap, so an icon and its word would sit flush. View is a
+   link that looks like its neighbour, the Download button. */
+.cmp-file-act {
+  gap: var(--brand-space-1);
+}
+
+a.cmp-file-act {
+  text-decoration: none;
+}
+
 .cmp-file-body {
   display: grid;
   gap: var(--brand-space-3);
   padding: var(--brand-space-3);
 }
 
+/* The document sits flush in its panel, the way a diff sits under its file's
+   bar — not as a second bordered card inside the first. */
+.cmp-file-body:has(> .doc-compare, > .doc-preview) {
+  padding: 0;
+}
+
+.cmp-file-body > .doc-compare,
+.cmp-file-body > .doc-preview {
+  border: none;
+  border-radius: 0 0 var(--brand-radius-lg) var(--brand-radius-lg);
+}
+
 /* An author rule beats the user agent's `[hidden] { display: none }`, so
-   folding a document did nothing until this said so. */
-.cmp-file-body[hidden] {
+   folding a document did nothing until this said so. Empty is the same: two
+   versions that read the same draw nothing, and the bar says what moved. */
+.cmp-file-body[hidden],
+.cmp-file-body:empty {
   display: none;
 }
 
-/* **A document whose wording did not change says so in a line.**
-   `.doc-compare-body` holds a 320px floor, which is right when one comparison
-   is the whole screen and wrong when six are stacked: a change that refiles
-   four policies without editing them became four screens of empty box with a
-   sentence at the top of each. */
-.cmp-file-body .doc-compare-body:has(> .doc-compare-identical) {
-  min-height: 0;
-  padding: var(--brand-space-5) 56px;
+.cmp-file-head:has(+ .cmp-file-body:empty) {
+  border-bottom: none;
+  border-radius: var(--brand-radius-lg);
 }
 
-/* The one claim on this page the diff under it cannot make. */
-.cmp-file-move {
-  margin: 0;
-}
-
-.cmp-file-waiting,
-.cmp-file-note {
+.cmp-file-waiting {
   margin: 0;
   max-width: var(--brand-measure);
   color: var(--bs-text-muted);
@@ -6970,28 +7052,19 @@ button.bs-knot {
   font-weight: var(--brand-weight-semibold);
 }
 
-/* ── The map ───────────────────────────────────────────────────────────── */
-
-.cmp-rail-icon--added {
-  color: var(--bs-status-ok-fg);
-}
-
-.cmp-rail-icon--revised {
-  color: var(--bs-status-info-fg);
-}
-
-.cmp-rail-icon--removed {
-  color: var(--bs-status-danger-fg);
-}
-
-.cmp-rail-row--read .bs-row-name {
-  color: var(--bs-text-muted);
-}
-
 @media (max-width: 900px) {
-  /* `.bs-with-rail` has already put the map above the reading and stopped it
-     being sticky. What is left is the bar: two stacked sticky layers on a
-     phone is most of the screen gone before a word of the policy. */
+  /* The tree goes above the reading and stops being sticky, and so does the
+     bar: two stacked sticky layers on a phone is most of the screen gone
+     before a word of the policy. */
+  .cmp-layout--tree {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cmp-tree {
+    position: static;
+    max-height: none;
+  }
+
   .cmp-file-head {
     position: static;
   }

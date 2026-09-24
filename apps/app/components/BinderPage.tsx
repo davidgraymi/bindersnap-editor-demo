@@ -13,6 +13,7 @@ import {
   ChevronRight,
   FileText,
   FolderInput,
+  GitBranch,
   Pencil,
 } from "lucide-react";
 import { useIsReadOnly } from "../readOnlyContext";
@@ -104,6 +105,16 @@ interface BinderDocumentsProps {
   /** Add to the tree. In its own bar, beside the thing it adds to. */
   onAddPolicy?: () => void;
   onNewFolder?: () => void;
+  /**
+   * Read the binder as this change request would leave it, on its branch.
+   *
+   * Where a change's branch link lands: the whole binder at that branch, the
+   * way a code host opens a branch at its root rather than on one file in it.
+   * Read-only — a branch somebody has proposed is theirs, not a draft.
+   */
+  onChange?: { number: number; branch: string } | null;
+  /** The way back to the change, from its branch. */
+  onBackToChange?: (changeNumber: number) => void;
 }
 
 /**
@@ -176,6 +187,8 @@ export function BinderDocuments({
   draftActs = [],
   onAddPolicy,
   onNewFolder,
+  onChange = null,
+  onBackToChange,
 }: BinderDocumentsProps) {
   const isReadOnly = useIsReadOnly();
   const [documents, setDocuments] = useState<
@@ -209,7 +222,12 @@ export function BinderDocuments({
     let cancelled = false;
     setError(null);
 
-    fetchBinderDocuments(org, binder, draft ?? undefined)
+    fetchBinderDocuments(
+      org,
+      binder,
+      draft ?? undefined,
+      onChange?.number ?? undefined,
+    )
       .then((payload) => {
         if (cancelled) return;
         setDocuments(payload.documents);
@@ -239,7 +257,7 @@ export function BinderDocuments({
     return () => {
       cancelled = true;
     };
-  }, [org, binder, draft, reloadKey, onDraftLost]);
+  }, [org, binder, draft, onChange?.number, reloadKey, onDraftLost]);
 
   useEffect(() => {
     setDocuments(null);
@@ -609,6 +627,20 @@ export function BinderDocuments({
 
   return (
     <div className="binder-pane">
+      {/* The same way back a document read on a change's branch offers: the
+          reader came here from the change, and came to decide on it. */}
+      {onChange && onBackToChange ? (
+        <div className="doc-on-change" role="status">
+          <button
+            type="button"
+            className="bs-btn bs-btn--sm bs-btn-secondary"
+            onClick={() => onBackToChange(onChange.number)}
+          >
+            Back to change {onChange.number}
+          </button>
+        </div>
+      ) : null}
+
       {actError ? (
         <p className="bs-note bs-note--danger" role="alert">
           {actError}
@@ -651,6 +683,14 @@ export function BinderDocuments({
             </>
           ) : (
             <>
+              {/* Which branch this is, in the tree's own bar — the list reads
+                  like the record otherwise, and is not it. */}
+              {onChange ? (
+                <span className="cmp-branch" title="The branch being read">
+                  <GitBranch size={12} strokeWidth={1.75} aria-hidden="true" />
+                  {onChange.branch}
+                </span>
+              ) : null}
               <input
                 className="bs-input bs-input--sm binder-filter"
                 type="search"
@@ -913,7 +953,7 @@ export function BinderDocuments({
             an empty page. The panel's own foot rather than the header, because
             it is about what this binder *held* — a question somebody asks
             after failing to find something, not before. */}
-        {archivedCount > 0 && onOpenArchive && !draft ? (
+        {archivedCount > 0 && onOpenArchive && !draft && !onChange ? (
           <div className="bs-panel-foot">
             <button
               type="button"

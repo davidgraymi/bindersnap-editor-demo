@@ -13,6 +13,7 @@ import {
   nextVersionFrom,
   nextVersionTag,
   toDocumentEntry,
+  isRestoredFromArchive,
 } from "./workspaceDocuments";
 
 /** Real identities, so the tests exercise the validation the product does. */
@@ -619,4 +620,84 @@ test("the binder's own configuration is not part of its shape", async () => {
   });
   expect(tree.paths).toEqual([]);
   expect(tree.folders).toEqual([]);
+});
+
+test("a restore is told from a revision by what the tags last recorded", () => {
+  const uid = "01J8XZ4K7MQ9V3B0RN7YHS2E1D";
+  const tag = (name: string, sha: string, created: string) => ({
+    name,
+    commit: { sha, created },
+  });
+  const archivedOnce = [
+    tag(`${uid}/v1`, "m1", "2026-01-01T00:00:00Z"),
+    tag(`${uid}/v2`, "m2", "2026-02-01T00:00:00Z"),
+    tag(`${uid}/archived-1`, "m3", "2026-03-01T00:00:00Z"),
+  ];
+
+  // Open: it is in the archive now, so this change brings it back.
+  expect(
+    isRestoredFromArchive({
+      tags: archivedOnce,
+      uid,
+      open: true,
+      mergeCommitSha: null,
+    }),
+  ).toBe(true);
+  // A policy never archived is only being revised.
+  expect(
+    isRestoredFromArchive({
+      tags: archivedOnce.slice(0, 2),
+      uid,
+      open: true,
+      mergeCommitSha: null,
+    }),
+  ).toBe(false);
+
+  // Published: the version this change wrote came straight after an archiving.
+  const restored = [
+    ...archivedOnce,
+    tag(`${uid}/v3`, "m4", "2026-04-01T00:00:00Z"),
+  ];
+  expect(
+    isRestoredFromArchive({
+      tags: restored,
+      uid,
+      open: false,
+      mergeCommitSha: "m4",
+    }),
+  ).toBe(true);
+  // An earlier change that revised it before it was ever archived was not one.
+  expect(
+    isRestoredFromArchive({
+      tags: restored,
+      uid,
+      open: false,
+      mergeCommitSha: "m2",
+    }),
+  ).toBe(false);
+  // A declined change published nothing and restored nothing.
+  expect(
+    isRestoredFromArchive({
+      tags: restored,
+      uid,
+      open: false,
+      mergeCommitSha: null,
+    }),
+  ).toBe(false);
+  // Another document's archiving says nothing about this one.
+  expect(
+    isRestoredFromArchive({
+      tags: [
+        ...archivedOnce.slice(0, 2),
+        tag(
+          "01J9A0B1C2D3E4F5G6H7J8K9M0/archived-1",
+          "m3",
+          "2026-03-01T00:00:00Z",
+        ),
+      ],
+      uid,
+      open: true,
+      mergeCommitSha: null,
+    }),
+  ).toBe(false);
 });

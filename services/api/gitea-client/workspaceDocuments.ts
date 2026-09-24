@@ -894,6 +894,59 @@ export function readBinderTimeline(
 }
 
 /**
+ * Whether a change brings this document back out of the archive.
+ *
+ * **A restore looks like a revision everywhere else.** It writes the file back
+ * with the identity it always had, so it has versions, a "v3 → v4" step and a
+ * diff against its last version — and the comparison drew it exactly like an
+ * edit to a policy that had never left. The tags know better: the last thing
+ * that happened to this identity before this change was an archiving.
+ *
+ * `mergeCommitSha` is the change's merge commit once it has been published, and
+ * null while it is open. Open, the question is whether it is in the archive
+ * now; published, whether it was in the archive just before the version this
+ * change wrote. A declined change asks neither and answers false.
+ */
+export function isRestoredFromArchive(params: {
+  tags: readonly GitTag[];
+  uid: string | null;
+  open: boolean;
+  mergeCommitSha: string | null;
+}): boolean {
+  const { tags, uid, open, mergeCommitSha } = params;
+  if (uid === null) return false;
+  if (!open && !mergeCommitSha) return false;
+
+  const events = tags
+    .flatMap((tag) => {
+      const name = tag.name ?? "";
+      const kind =
+        documentUidFromVersionTag(name) === uid
+          ? "version"
+          : documentUidFromArchivedTag(name) === uid
+            ? "archived"
+            : null;
+      if (kind === null) return [];
+      return [
+        {
+          kind,
+          sha: tag.commit?.sha ?? "",
+          at: Date.parse(tag.commit?.created ?? "") || 0,
+        },
+      ];
+    })
+    .sort((left, right) => left.at - right.at);
+
+  if (open) return events.at(-1)?.kind === "archived";
+
+  const published = events.findIndex(
+    (event) => event.kind === "version" && event.sha === mergeCommitSha,
+  );
+  if (published <= 0) return false;
+  return events[published - 1]!.kind === "archived";
+}
+
+/**
  * The change that published each document's latest version, and when.
  *
  * Read off the same tags {@link groupVersionsByDocument} reads, so it costs the

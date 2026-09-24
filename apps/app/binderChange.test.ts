@@ -18,6 +18,7 @@ const newDocument = {
   currentVersion: null,
   versions: [],
   previousSlugPath: null,
+  restored: false,
 };
 
 const revision = {

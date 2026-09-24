@@ -33,6 +33,12 @@ interface DocumentPreviewProps {
    */
   onDownload: (loaded: Blob | null) => void;
   downloading: boolean;
+  /**
+   * Draw the document without its own name-and-download bar, for a screen
+   * whose own bar already carries both — the change comparison, where every
+   * control on a file sits in the one header above it.
+   */
+  bare?: boolean;
 }
 
 type PreviewState =
@@ -73,6 +79,7 @@ export function DocumentPreview({
   fileName,
   onDownload,
   downloading,
+  bare = false,
 }: DocumentPreviewProps) {
   const [state, setState] = useState<PreviewState>({ status: "idle" });
   // Kept so the Download button can save what is already on screen.
@@ -212,27 +219,31 @@ export function DocumentPreview({
 
   return (
     <section className="doc-preview" aria-label="Document preview">
-      <header className="doc-preview-toolbar">
-        <span className="doc-preview-filename">
-          <FileText size={14} strokeWidth={1.5} aria-hidden="true" />
-          {fileName ?? "No file"}
-        </span>
-        <span className="doc-preview-toolbar-spacer" />
-        {state.status === "text" ||
-        state.status === "object" ||
-        state.status === "richText" ? (
-          <span className="doc-preview-size">{formatFileSize(state.size)}</span>
-        ) : null}
-        <button
-          className="bs-btn bs-btn-secondary doc-preview-download"
-          type="button"
-          disabled={downloading || !fileName}
-          onClick={() => onDownload(loadedBlob)}
-        >
-          <Download size={14} strokeWidth={1.5} aria-hidden="true" />
-          {downloading ? "Downloading…" : "Download"}
-        </button>
-      </header>
+      {bare ? null : (
+        <header className="doc-preview-toolbar">
+          <span className="doc-preview-filename">
+            <FileText size={14} strokeWidth={1.5} aria-hidden="true" />
+            {fileName ?? "No file"}
+          </span>
+          <span className="doc-preview-toolbar-spacer" />
+          {state.status === "text" ||
+          state.status === "object" ||
+          state.status === "richText" ? (
+            <span className="doc-preview-size">
+              {formatFileSize(state.size)}
+            </span>
+          ) : null}
+          <button
+            className="bs-btn bs-btn-secondary doc-preview-download"
+            type="button"
+            disabled={downloading || !fileName}
+            onClick={() => onDownload(loadedBlob)}
+          >
+            <Download size={14} strokeWidth={1.5} aria-hidden="true" />
+            {downloading ? "Downloading…" : "Download"}
+          </button>
+        </header>
+      )}
 
       <div className="doc-preview-body">
         {state.status === "loading" || state.status === "idle" ? (

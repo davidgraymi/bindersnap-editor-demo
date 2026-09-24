@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Columns2, Download, FileText, Layers } from "lucide-react";
+import { Download, FileText } from "lucide-react";
 
 import { sanitizeHtml } from "../../../packages/utils/sanitizer";
 import { downloadDocument } from "../api";
@@ -34,6 +34,11 @@ interface DocumentComparisonProps {
   /** Save one side of the comparison. */
   onDownload: (gitRef: string) => void;
   /**
+   * How two images are shown. The toggle lives in the file's bar with every
+   * other control on it, so the page owns the choice and this only draws it.
+   */
+  imageMode?: ImageMode;
+  /**
    * How much moved, reported upwards once both sides have been read.
    *
    * The all-documents screen puts these counts beside each document in its
@@ -55,7 +60,7 @@ const MAX_INLINE_TEXT_BYTES = 500_000;
  * everything that moved lights up. It is the only honest highlight for a
  * picture — there are no words in it to mark up.
  */
-type ImageMode = "side-by-side" | "difference";
+export type ImageMode = "side-by-side" | "difference";
 
 type ComparisonState =
   | { status: "loading" }
@@ -106,10 +111,10 @@ export function DocumentComparison({
   headLabel,
   fileName,
   onDownload,
+  imageMode = "side-by-side",
   onSummary,
 }: DocumentComparisonProps) {
   const [state, setState] = useState<ComparisonState>({ status: "loading" });
-  const [imageMode, setImageMode] = useState<ImageMode>("side-by-side");
   const kind = classifyDocumentFile(fileName);
 
   useEffect(() => {
@@ -304,66 +309,22 @@ export function DocumentComparison({
     );
   }
 
+  /**
+   * **Two versions that read the same draw nothing.** The file's bar already
+   * says what happened — a rename shows the old path struck out beside the new
+   * one — and a box announcing that nothing changed was a sentence to read
+   * about the absence of anything to read.
+   */
+  if (summary?.identical) return null;
+
+  /* No toolbar of its own: the versions, the counts and the image toggle all
+     sit in the file's one bar above this, so every control on a comparison is
+     in the same place. */
   return (
     <section
       className="doc-compare"
       aria-label={`${fileName ?? "Document"} compared with ${base.label}`}
     >
-      <header className="doc-compare-toolbar">
-        <span className="doc-compare-versions">
-          <span className="doc-compare-chip doc-compare-chip--base">
-            {base.label}
-          </span>
-          <span aria-hidden="true">→</span>
-          <span className="doc-compare-chip doc-compare-chip--head">
-            {headLabel}
-          </span>
-        </span>
-        <span className="doc-preview-toolbar-spacer" />
-        {summary ? (
-          <span className="doc-compare-summary">{summary.headline}</span>
-        ) : null}
-        {state.status === "image" ? (
-          <span
-            className="doc-compare-modes"
-            role="group"
-            aria-label="How to compare"
-          >
-            <button
-              className={`doc-compare-mode${imageMode === "side-by-side" ? " doc-compare-mode--on" : ""}`}
-              type="button"
-              aria-pressed={imageMode === "side-by-side"}
-              onClick={() => setImageMode("side-by-side")}
-            >
-              <Columns2 size={13} strokeWidth={1.75} aria-hidden="true" />
-              Side by side
-            </button>
-            <button
-              className={`doc-compare-mode${imageMode === "difference" ? " doc-compare-mode--on" : ""}`}
-              type="button"
-              aria-pressed={imageMode === "difference"}
-              onClick={() => setImageMode("difference")}
-            >
-              <Layers size={13} strokeWidth={1.75} aria-hidden="true" />
-              Difference
-            </button>
-          </span>
-        ) : null}
-      </header>
-
-      {summary && !summary.identical ? (
-        <p className="doc-compare-legend">
-          <span className="doc-compare-key doc-compare-key--added">Added</span>
-          <span className="doc-compare-key doc-compare-key--removed">
-            Removed
-          </span>
-          <span className="doc-compare-key-note">
-            A rewritten passage shows as both: the old wording struck through,
-            the new wording beside it.
-          </span>
-        </p>
-      ) : null}
-
       <div className="doc-compare-body">
         {state.status === "loading" ? (
           <SkeletonGroup
@@ -376,8 +337,6 @@ export function DocumentComparison({
             <SkeletonLine width="full" />
             <SkeletonLine width="short" />
           </SkeletonGroup>
-        ) : summary?.identical ? (
-          <p className="doc-compare-identical">{summary.headline}</p>
         ) : state.status === "rendered" && !state.empty ? (
           <article
             className="doc-preview-sheet doc-preview-prose doc-compare-prose"
@@ -438,41 +397,10 @@ export function DocumentComparison({
         {state.status === "text" && state.truncated ? (
           <p className="doc-preview-note">
             These files are long, so the comparison covers their first 500 KB.
-            Download both to check the rest.
+            Download the file to check the rest.
           </p>
         ) : null}
       </div>
-
-      {/* **Saved, rather than squinted at.** This was a disclosure holding two
-          `<iframe>`s of the originals, which put two PDF viewers in half a
-          column each — both far too small to read, which is the opposite of
-          what somebody opens a comparison for. The marked-up text above is the
-          answer to "what changed". The only other question a PDF raises is
-          "let me read the actual pages", and the answer to that is a copy of
-          the file, in the reader that renders it properly. */}
-      {kind === "pdf" ? (
-        <div className="doc-compare-actions">
-          <span className="doc-compare-actions-note">
-            To read the pages themselves rather than what changed in them:
-          </span>
-          <button
-            className="bs-btn bs-btn--sm bs-btn-secondary"
-            type="button"
-            onClick={() => onDownload(base.ref)}
-          >
-            <Download size={14} strokeWidth={1.5} aria-hidden="true" />
-            {base.label}
-          </button>
-          <button
-            className="bs-btn bs-btn--sm bs-btn-secondary"
-            type="button"
-            onClick={() => onDownload(headRef)}
-          >
-            <Download size={14} strokeWidth={1.5} aria-hidden="true" />
-            {headLabel}
-          </button>
-        </div>
-      ) : null}
     </section>
   );
 }

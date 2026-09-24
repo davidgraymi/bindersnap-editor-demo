@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import {
   buildChangedDocumentRows,
+  describeChangedBadge,
   describeChangedKind,
   describeReadProgress,
   summarizeChangeScale,
@@ -44,6 +45,7 @@ function changed(
     currentVersion: version(2),
     versions: [version(2), version(1)],
     previousSlugPath: null,
+    restored: false,
     ...overrides,
   };
 }
@@ -112,7 +114,7 @@ test("a published change is read against the version below the one it became", (
   expect(row?.versionStep).toBe("v3");
 });
 
-test("a removal carries what is coming off the record, and sorts last", () => {
+test("a removal carries what is going into the archive, and sorts last", () => {
   const rows = buildChangedDocumentRows({
     documents: [changed({ path: "zz/late.01JA.md", slugPath: "zz/late" })],
     removedDocuments: [removed()],
@@ -123,7 +125,41 @@ test("a removal carries what is coming off the record, and sorts last", () => {
   const retired = rows[1];
   expect(retired?.versionStep).toBe("Was v4");
   expect(retired?.base).toEqual({ ref: "hand-hygiene-v4", label: "v4" });
-  expect(describeChangedKind("removed")).toBe("Taken off the record");
+  expect(describeChangedKind("removed")).toBe("Being archived");
+  expect(describeChangedKind("removed", false)).toBe("Archived");
+  expect(describeChangedBadge("removed")).toBe("Archiving");
+  expect(describeChangedBadge("removed", false)).toBe("Archived");
+});
+
+test("a policy coming back out of the archive says so, and is still diffed", () => {
+  const [row] = buildChangedDocumentRows({
+    documents: [changed({ restored: true })],
+    removedDocuments: [],
+    open: true,
+  });
+
+  // A restore reads exactly like a revision — same step, same base — so the
+  // kind is the only thing that says the policy was in the archive.
+  expect(row?.kind).toBe("restored");
+  expect(row?.versionStep).toBe("v2 → v3");
+  expect(row?.base).toEqual({ ref: "hand-hygiene-v2", label: "v2" });
+  expect(describeChangedBadge("restored")).toBe("Restoring");
+  expect(describeChangedBadge("restored", false)).toBe("Restored");
+  expect(describeChangedKind("restored")).toBe("Coming out of the archive");
+  expect(describeChangedBadge("revised")).toBeNull();
+});
+
+test("a restore is counted, and its words are measured like a revision's", () => {
+  const rows = buildChangedDocumentRows({
+    documents: [changed({ restored: true })],
+    removedDocuments: [removed()],
+    open: true,
+  });
+  const counts = new Map([[rows[0]!.anchor, summary(2, 1)]]);
+
+  expect(summarizeChangeScale({ rows, counts })).toBe(
+    "2 documents · 1 restored · 1 archived · 2 words added, 1 word removed",
+  );
 });
 
 test("a renamed policy says so, because its comparison cannot", () => {
@@ -172,7 +208,6 @@ function summary(additions: number, deletions: number): ComparisonSummary {
     additions,
     deletions,
     identical: additions === 0 && deletions === 0,
-    headline: "",
   };
 }
 
@@ -211,7 +246,7 @@ test("a removal is counted as a document and named as a removal", () => {
 
   // The removed document is not "compared", so it never holds the count back.
   expect(summarizeChangeScale({ rows, counts })).toBe(
-    "2 documents · 1 taken off the record · 3 words added",
+    "2 documents · 1 archived · 3 words added",
   );
 });
 
@@ -235,7 +270,7 @@ test("a change with nothing to diff never waits on a count that is not coming", 
   // them has an earlier version to be counted against. "Measuring…" here would
   // sit there for the life of the page.
   expect(summarizeChangeScale({ rows, counts: new Map() })).toBe(
-    "3 documents · 2 new · 1 taken off the record",
+    "3 documents · 2 new · 1 archived",
   );
 });
 
@@ -263,6 +298,6 @@ test("a change that versions nothing says so rather than counting to zero", () =
 
 test("read progress stays quiet until somebody starts", () => {
   expect(describeReadProgress({ total: 3, read: 0 })).toBeNull();
-  expect(describeReadProgress({ total: 3, read: 2 })).toBe("2 of 3 read");
-  expect(describeReadProgress({ total: 3, read: 3 })).toBe("All 3 read");
+  expect(describeReadProgress({ total: 3, read: 2 })).toBe("2 of 3 viewed");
+  expect(describeReadProgress({ total: 3, read: 3 })).toBe("All 3 viewed");
 });
