@@ -9,6 +9,7 @@ import {
 } from "../documentFile";
 import { docxToHtml } from "../docxHtml";
 import { markdownToHtml } from "../markdown";
+import { editorDocumentToHtml } from "../editorDocumentHtml";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 interface DocumentPreviewProps {
@@ -127,6 +128,24 @@ export function DocumentPreview({
               : blob;
           const text = await slice.text();
           if (cancelled) return;
+
+          // A policy written in the editor is stored as its JSON. Show the
+          // policy, not the file: headings, paragraphs and lists, the way a
+          // Word file renders. Anything else stays the text it is.
+          const editorHtml =
+            kind === "text" && blob.size <= MAX_INLINE_TEXT_BYTES
+              ? await editorDocumentToHtml(text)
+              : null;
+          if (cancelled) return;
+          if (editorHtml !== null) {
+            setState({
+              status: "richText",
+              html: sanitizeHtml(editorHtml),
+              size: blob.size,
+            });
+            return;
+          }
+
           setState({
             status: "text",
             text,
