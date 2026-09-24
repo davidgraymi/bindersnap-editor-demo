@@ -13,6 +13,7 @@ import {
   type QueueRow,
 } from "../reviewQueue";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
+import { ChangeRowView } from "./ChangeRow";
 
 /**
  * Every change in flight, across every binder.
@@ -149,55 +150,27 @@ export function ReviewQueuePage({
               </p>
             </div>
           ) : (
-            <ul className="queue-list">
-              {visible.map((row) => (
-                <QueueRowItem key={row.key} row={row} onOpen={onOpenChange} />
-              ))}
-            </ul>
+            // The same panel and the same row as a binder's own list: a change
+            // request looks like one wherever it is listed. The binder leads
+            // the line under the title, because this list spans all of them.
+            <section className="bs-panel" aria-label="Change requests">
+              <ul className="bs-row-list">
+                {visible.map((row) => (
+                  <ChangeRowView
+                    key={row.key}
+                    title={row.title}
+                    context={row.binderName}
+                    meta={row.meta}
+                    tone={row.tone}
+                    standing={row.standing}
+                    onOpen={() => onOpenChange(row.owner, row.repo, row.number)}
+                  />
+                ))}
+              </ul>
+            </section>
           )}
         </>
       )}
     </div>
-  );
-}
-
-function QueueRowItem({
-  row,
-  onOpen,
-}: {
-  row: QueueRow;
-  onOpen: (owner: string, repo: string, changeNumber: number) => void;
-}) {
-  return (
-    <li className="queue-row">
-      <button
-        type="button"
-        className="queue-row-btn"
-        onClick={() => onOpen(row.owner, row.repo, row.number)}
-      >
-        <span className="queue-row-main">
-          <span className="queue-row-title">{row.title}</span>
-          {/* The binder, then who and when — the same line every other list
-              of changes carries. The document it touches is not on it: a
-              change can touch three, and naming one of them is a claim about
-              the other two. */}
-          <span className="queue-row-meta">
-            {row.binderName} · {row.meta}
-          </span>
-        </span>
-
-        <span className="queue-row-standing">
-          {/* One word. It was a flag saying "Waiting on you" beside a status
-              holding an approval count and a sentence — and the flag stayed up
-              on a change that was approved and ready, which is the thing the
-              customer caught. Which filter a change is under says who it
-              waits on; the row says what state it is in. */}
-          <span className={`change-standing change-standing--${row.tone}`}>
-            <span className="change-standing-dot" aria-hidden="true" />
-            {row.standing}
-          </span>
-        </span>
-      </button>
-    </li>
   );
 }

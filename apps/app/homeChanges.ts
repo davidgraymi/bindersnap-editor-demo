@@ -48,8 +48,6 @@ export interface HomeChangeRow {
   tone: ChangeStandingTone;
   /** How many comments are on it. */
   commentCount: number;
-  /** The button on the right of a "Waiting on you" row, when there is one. */
-  action: "Review" | "Publish" | null;
 }
 
 export type HomeDecidedOutcome = "published" | "closed";
@@ -273,12 +271,6 @@ export function buildOpenChangeRows(
           isRejected: change.isRejected ?? false,
         }),
         commentCount: (change as { comments?: number }).comments ?? 0,
-        action:
-          kind === "needs_review"
-            ? "Review"
-            : kind === "ready_to_publish"
-              ? "Publish"
-              : null,
         movedAt: toTime(
           change.updated_at ?? change.created_at ?? change.created,
         ),
