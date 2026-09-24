@@ -10,6 +10,15 @@ APP_DIR="${APP_DIR:-/opt/bindersnap}"
 ENV_FILE="${ENV_FILE:-${APP_DIR}/.env.prod}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 STATE_DIR="${STATE_DIR:-/run/bindersnap}"
+DATA_MOUNT="${DATA_MOUNT:-/data}"
+
+# Every volume lives under Docker's data-root on the EBS data volume. If it is
+# not mounted, `up` would start Gitea on an empty database and Litestream would
+# replicate that over the real backup. Stop instead.
+if ! mountpoint -q "${DATA_MOUNT}"; then
+  echo "${DATA_MOUNT} is not mounted — refusing to start the stack" >&2
+  exit 1
+fi
 
 changed=0
 

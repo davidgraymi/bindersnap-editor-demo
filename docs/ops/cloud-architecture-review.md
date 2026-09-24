@@ -29,9 +29,20 @@ Terraform apply, push to `main`, restore from Litestream."_ Following it on a
 fresh host gives you a current `gitea.db` that points at repositories that do
 not exist.
 
-This branch closes the part of the hole that Terraform alone can close (see
-[What this branch changes](#what-this-branch-changes)). The rest is Phase 0 of
-the roadmap below.
+**`deploy/` had a second, worse hole: it could overwrite the backup with an
+empty database.** If `deploy.py` could not find the EBS data volume, it printed
+a warning and carried on with Docker on the root disk. Gitea would start there
+on a new, empty database. Litestream would replicate that empty database to S3
+as a new generation, and `litestream restore` picks the newest generation. The
+root disk is not snapshotted either, and is deleted when the instance is
+replaced. The boot path had the same flaw, because the `/data` mount is `nofail`
+and Docker was not ordered after it. Nothing needed to fail loudly for this to
+happen: a push to `main` while the volume was detached (for example after an
+instance replacement) was enough (C7).
+
+This branch closes the part of the hole that Terraform and `deploy/` can close
+without a live host (see [What this branch changes](#what-this-branch-changes)).
+The rest is Phase 0 of the roadmap below.
 
 ---
 
@@ -128,6 +139,12 @@ Those are the paths _inside the Litestream container_. On the host, Gitea reads
 expects a `litestream` binary on the host, and `deploy.py` never installs one.
 A restore run as documented would report success and change nothing Gitea reads.
 No restore has ever been rehearsed.
+Rebuilding the host is not written down either. `infra/compute` has no
+`snapshot_id` input, and `prevent_destroy` on `aws_ebs_volume.data` blocks
+swapping in a restored volume, so today a restore means hand-editing Terraform
+state. The order also matters: the restored volume must be attached **before**
+the first deploy. The real service token in SSM skips the Gitea bootstrap, so
+the API would otherwise start against a Gitea that has never heard of it.
 _Fix (Phase 0):_ run the restore through the image already in use, for example
 `docker run --rm -v bindersnap_gitea-data:/data/gitea litestream/litestream:0.3 restore -o /data/gitea/gitea.db s3://$BUCKET/gitea`,
 and update `scripts/restore.test.ts` to match. Then run a real drill (Phase 0,
@@ -153,6 +170,29 @@ leaked admin credential, ransomware on an operator laptop, or a billing
 suspension could take production and its backups together.
 _Fix (Phase 1):_ copy to a separate backup account (AWS Backup vault with
 **Vault Lock**, or S3 with **Object Lock** in compliance mode).
+
+**C7. A deploy or reboot without the data volume replaced the backup with an
+empty database.** ✅ _Fixed._
+`deploy.py` detects the data volume with the `DataDevice` fact. When the fact
+came back empty, the old `else:` branch only printed
+`WARNING: EBS data volume not found — Docker will use root volume` and carried
+on. The Gitea service-token bootstrap and `bindersnap-stack-up` then brought the
+stack up on the root disk. Gitea (`INSTALL_LOCK=true`) creates a new empty
+`gitea.db`, and Litestream starts replicating it as the newest generation.
+Litestream's retention then prunes the old generations, leaving the real data
+only in S3 noncurrent versions for 30 days. At boot, `/data` is mounted
+`nofail`, and `docker.service` had no ordering on it. If the volume was late or
+missing, Docker could start with an empty data-root on the root disk.
+Three guards now make this fail closed:
+
+- `deploy.py` **aborts the deploy** when no data volume is found.
+- `docker.service` gets a drop-in with `RequiresMountsFor=/data`, so Docker
+  does not start without the mount.
+- `bindersnap-stack-up` refuses to start anything when `/data` is not a
+  mountpoint, which also covers manual break-glass runs.
+
+A missing volume now means the site is down (loud, and caught by H3's probe)
+instead of quietly forking the data.
 
 ### High
 
@@ -218,14 +258,37 @@ pre-launch and says to revisit before promising an SLA. Today's honest RTO is
 full-host restore runbook.
 _Fix (Phase 0/1):_ write it (§5), then rehearse it (Phase 0, item 4).
 
+**H9. A deploy reports success without checking the app is up.**
+`bindersnap-stack-up` ends with `docker compose ps`. Nothing waits for the API
+or Gitea to become healthy, and nothing calls `/healthz` through Caddy. An
+image that crashes on start still deploys green, and the first sign is a user.
+_Fix (Phase 0):_ after `up`, poll `https://api.bindersnap.com/healthz` (and
+Gitea's `/api/healthz`) for up to about 2 min and fail the workflow if it never
+answers. The rollback is already one `workflow_dispatch` away.
+
+**H10. Any push to `main` can restart the whole stack.**
+`dnf.packages(... ["docker", "awscli", "xfsprogs"], update=True)` upgrades
+Docker whenever a newer package exists. Upgrading the package restarts
+`dockerd` and every container, at whatever time a push lands. A change to
+`Caddyfile.prod`, `litestream.yml` or any other config file also force-recreates
+**all** services (`up -d --build --force-recreate`), including Gitea, though
+only one of them needed it.
+_Fix (Phase 1):_ drop `update=True` and upgrade Docker with the patching
+window (M1). Recreate only the services whose inputs changed, for example with
+a `config` hash label per service, so compose recreates each service only when
+its hash changes.
+
 ### Medium
 
 - **M1. No patching.** The AMI is `ignore_changes`, and nothing runs
   `dnf upgrade`. _Fix:_ an SSM Patch Manager baseline and maintenance window,
   or `dnf-automatic` for security updates from `deploy.py`.
 - **M2. Floating image tags.** `alpine:latest`, `litestream/litestream:0.3`,
-  and the Caddy build pull whatever is current. _Fix:_ pin digests and let
-  Renovate/Dependabot bump them.
+  `caddy:2-builder` / `caddy:2-alpine` (`Dockerfile.caddy`), the unpinned
+  `caddy-ratelimit` module, and `oven/bun:1` in the Gitea bootstrap are pulled
+  fresh on **every** deploy (`bindersnap-stack-up` runs `compose pull`). So a
+  backup-agent or TLS-proxy upgrade can ride along with any push, untested.
+  _Fix:_ pin digests and let Renovate/Dependabot bump them.
 - **M3. Terraform runs by hand only.** `apply-all.sh` applies from a laptop
   with `-auto-approve`, with no CI plan and no drift detection. The monitoring
   module's `instance_id` default is a fake ID. _Fix:_ a scheduled
@@ -238,9 +301,20 @@ _Fix (Phase 0/1):_ write it (§5), then rehearse it (Phase 0, item 4).
 - **M5. The backup bucket is only partly hardened.** No TLS-only bucket policy
   and no explicit SSE. S3's default SSE-S3 applies, which is fine, but make it
   explicit.
-- **M6. Tight memory headroom.** t4g.small has 2 GiB for Gitea + API + Caddy
-  - Litestream, on burstable CPU. Watch the `mem_high` alarm, and move to
-    t4g.medium (+ ~$12/mo) before launch.
+- **M6. Tight memory headroom.** t4g.small has 2 GiB for Gitea, the API,
+  Caddy and Litestream, on burstable CPU. Watch the `mem_high` alarm, and move
+  to t4g.medium (+ ~$12/mo) before launch.
+- **M7. Gitea's SQLite journal mode is implicit.** Litestream needs WAL and
+  switches the database to it on start. Gitea does not set it
+  (`SQLITE_JOURNAL_MODE` is empty). Set `GITEA__database__SQLITE_JOURNAL_MODE=WAL`
+  in `docker-compose.prod.yml` so the requirement is explicit and survives a
+  Gitea upgrade.
+- **M8. The deploy's GHCR login expires with the run.** `deploy.py` logs the
+  host into GHCR with the workflow's `GITHUB_TOKEN`, which dies when the run
+  ends. A break-glass `compose pull api` from the host (break-glass step 3)
+  cannot fetch the private image later. _Fix:_ a read-only `packages:read`
+  token in SSM for the host, or document that break-glass pins only images
+  already on disk.
 
 ### What is already good
 
@@ -249,6 +323,10 @@ inbound SSH, and deploys use SSM with an ephemeral EC2 Instance Connect key. The
 OIDC deploy role is least-privilege and tag-scoped. SSM SecureStrings use a
 customer-managed KMS key with rotation. Terraform state is versioned and locked.
 The API image is pinned to a commit SHA, and the break-glass runbook is real.
+In `deploy/`: configuration is validated before any `up` (compose config and a
+real Caddy build), the stack is recreated only when config or env changed,
+`.env.prod` is rendered in memory and lands at `0600`, the Compose plugin is
+version-pinned, and first-run Gitea bootstrap is idempotent.
 
 ---
 
@@ -329,7 +407,8 @@ Terraform still provisions only, and `deploy/` configures the host.
 ### Phase 0: close the hole (this week)
 
 1. ✅ Hourly + daily DLM, DR-region copy, Terraform-owned DLM role, backup
-   alarms, disk-alarm fix. **(this branch; apply it)**
+   alarms, disk-alarm fix. The stack now refuses to run without the data
+   volume (C7). **(this branch; apply it)**
 2. Fix `scripts/restore.sh` to restore into the Docker volume through the
    Litestream image (C4). Set Litestream `retention: 168h`, pin its digest, and
    add the replica-age metric and alarm (C5).
@@ -343,21 +422,25 @@ Terraform still provisions only, and `deploy/` configures the host.
    wall-clock time as the RTO. Write it up as `docs/ops/restore.md`, including
    the C3 rule.
 5. Docker log rotation (H2). External health checks and a confirmed SNS
-   subscription (H3).
+   subscription (H3). A post-deploy health gate in `deploy-pyinfra.yml` (H9).
+6. A `data_volume_snapshot_id` path in `infra/compute` (or a documented
+   `terraform state rm` + import sequence) so a restore does not need state
+   surgery under pressure (C4).
 
 ### Phase 1: harden (next 2–4 weeks, before paying customers)
 
-6. A separate **backup account**: S3 replication of the Litestream and
+7. A separate **backup account**: S3 replication of the Litestream and
    repository buckets into Object Lock (compliance mode) buckets, and/or AWS
    Backup with Vault Lock, cross-account copy and **AWS Backup restore
    testing**, which runs the drill in item 4 automatically every month.
-7. Cloudflare in front, then Cloudflare Tunnel, then close :80 and :443 (H5).
+8. Cloudflare in front, then Cloudflare Tunnel, then close :80 and :443 (H5).
    Lock Gitea down to avatars only (H4).
-8. Secrets out of Terraform state and the Stripe keys rotated (H6). OIDC
+9. Secrets out of Terraform state and the Stripe keys rotated (H6). OIDC
    trust changed to a protected `production` environment (H7).
-9. An account baseline module: CloudTrail, GuardDuty, Budgets, Access Analyzer
-   (M4). CI drift detection for Terraform (M3).
-10. Patching (M1), pinned digests with Renovate (M2), and t4g.medium (M6).
+10. An account baseline module: CloudTrail, GuardDuty, Budgets, Access Analyzer
+    (M4). CI drift detection for Terraform (M3).
+11. Patching (M1), with Docker upgrades moved out of deploys and per-service
+    recreates (H10). Pinned digests with Renovate (M2), and t4g.medium (M6).
 
 ### Phase 2: operate (ongoing)
 
@@ -405,6 +488,9 @@ increase.
 | `infra/backups/main.tf`                     | Variables for the new retention settings and DR region (`dr_region = null` turns the copy off).                                                                                      |
 | `infra/monitoring/main.tf`                  | Alarms for a failed snapshot, no snapshot in 6 h, and a failed DR copy. They are created only when `dlm_policy_id` is set.                                                           |
 | `infra/apply-all.sh`                        | Passes `dlm_policy_id` from backups into monitoring.                                                                                                                                 |
+| `deploy/deploy.py`                          | Aborts the deploy when the EBS data volume is missing, instead of falling back to the root disk. Installs the Docker drop-in below (C7).                                             |
+| `deploy/files/docker-requires-data.conf`    | New `docker.service` drop-in: `RequiresMountsFor=/data`. Docker is ordered after the data mount and does not start without it (C7).                                                  |
+| `deploy/files/bin/bindersnap-stack-up`      | Refuses to start the stack when `/data` is not a mountpoint (C7). Covered by a new test in `scripts/deploy-pyinfra.test.ts`.                                                         |
 | `deploy/files/cloudwatch-agent-config.json` | `aggregation_dimensions: [["InstanceId"]]`, so the disk alarm has a series to read (H1). Takes effect on the next deploy.                                                            |
 
 **To roll out:** merge, then run `cd infra && ./apply-all.sh plan` and check
@@ -412,4 +498,8 @@ that the plan shows only in-place changes to the DLM policy plus the new
 role and alarms. Then `./apply-all.sh`. After the next top of the hour, confirm
 an hourly snapshot exists, and that the `bindersnap-backup-no-recent-snapshot`
 alarm reads OK once DLM has reported its first metrics.
-The CloudWatch agent change goes out with the normal `main` deploy.
+The `deploy/` changes go out with the normal `main` deploy. On the current host
+they change nothing visible: the volume is present, so the abort branch never
+runs, and adding the drop-in only needs `systemctl daemon-reload`, not a Docker
+restart. A `--dry` run (`deploy/bin/ssm-connect.sh --dry`) before merging should
+show just the drop-in, the reload, and the agent config.
