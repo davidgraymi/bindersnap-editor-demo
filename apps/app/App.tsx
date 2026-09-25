@@ -533,13 +533,13 @@ export function App() {
   );
 
   // Stable, because the billing page restarts its checkout polling whenever
-  // this changes. Dropping `?checkout=success` from the address is what ends
-  // the polling, and the page then shows the subscription it just confirmed.
+  // this changes. A confirmed checkout goes where it always has: into the
+  // workspace it just unlocked.
   const handleSubscriptionConfirmed = useCallback(() => {
     setSubscriptionStatus("active");
     setAccessSource("stripe");
     setHasBillingStatusError(false);
-    navigateTo({ kind: "billing" }, true);
+    navigateTo({ kind: "home" }, true);
   }, []);
 
   const view: AuthView = useMemo(() => {
