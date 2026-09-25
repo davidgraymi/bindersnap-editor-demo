@@ -25,6 +25,8 @@ interface DocumentChangesProps {
   describeSubject?: (changeNumber: number) => string | null;
   onFilterChange: (filter: ChangeFilter) => void;
   onOpenChange: (pullNumber: number) => void;
+  /** The address of one change, so each row is a link. */
+  changeHref: (pullNumber: number) => string;
   onRetryClosed: () => void;
 }
 
@@ -43,9 +45,11 @@ interface DocumentChangesProps {
  */
 function BinderChangeRow({
   change,
+  href,
   onOpenChange,
 }: {
   change: ChangeRecord;
+  href: string;
   onOpenChange: (pullNumber: number) => void;
 }) {
   return (
@@ -62,6 +66,7 @@ function BinderChangeRow({
         requiredApprovals: change.requiredApprovals,
         isRejected: change.isRejected,
       }}
+      href={href}
       onOpen={() => onOpenChange(change.number)}
     />
   );
@@ -85,6 +90,7 @@ export function DocumentChanges({
   describeSubject,
   onFilterChange,
   onOpenChange,
+  changeHref,
   onRetryClosed,
 }: DocumentChangesProps) {
   const rows = filter === "open" ? openChanges : (closedChanges ?? []);
@@ -164,6 +170,7 @@ export function DocumentChanges({
             <BinderChangeRow
               key={change.number}
               change={change}
+              href={changeHref(change.number)}
               onOpenChange={onOpenChange}
             />
           ))}

@@ -206,7 +206,9 @@ test("the branch opens the binder at its root, and View opens the file", async (
   ).toBeVisible();
 
   // A policy opened from there is still read on the branch.
-  await page.getByRole("button", { name: "Code Of Conduct" }).click();
+  await page
+    .getByRole("link", { name: "Code Of Conduct", exact: true })
+    .click();
   await expect(page).toHaveURL(/\/clinical\/[^?]+\?ref=.+&change=19$/);
   await expect(page.locator("h1.bs-title")).toHaveText(/code of conduct/i);
 });

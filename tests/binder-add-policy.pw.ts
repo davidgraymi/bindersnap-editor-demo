@@ -410,8 +410,9 @@ test("the binder's tabs still work once a document is open", async ({
   // It was filed in Nursing, and folders start shut — so the drawer is opened
   // first, the same way a person reaches it.
   await openTreeFolder(page, "Nursing");
+  // A link, the way a file in a code host's tree is: it opens in a tab.
   await page
-    .getByRole("button", { name: "Hand Hygiene Policy" })
+    .getByRole("link", { name: "Hand Hygiene Policy" })
     .click({ timeout: 30_000 });
 
   await expect(page.locator("h1.bs-title").last()).toHaveText(

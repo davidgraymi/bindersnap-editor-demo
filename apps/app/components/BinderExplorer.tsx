@@ -11,7 +11,8 @@ import {
   PanelLeftOpen,
 } from "lucide-react";
 
-import type { AppRoute } from "../routes";
+import { followInApp } from "../appLink";
+import { routeToPath, type AppRoute } from "../routes";
 import {
   buildBinderTree,
   folderPaths,
@@ -120,37 +121,38 @@ export function BinderExplorer({ binder, onNavigate }: BinderExplorerProps) {
     );
   }
 
-  const openDocument = (slugPath: string) =>
-    onNavigate({
-      kind: "binderDocument",
-      org: binder.org,
-      binder: binder.binder,
-      documentPath: slugPath,
-      // Clicking through a branch's tree stays on that branch: these
-      // addresses are the branch's, and following one to `main` would be
-      // following a policy to a name it does not have there.
-      ...(contents.ref ? { ref: contents.ref } : {}),
-      ...(contents.change ? { change: contents.change } : {}),
-    });
+  const documentRoute = (slugPath: string): AppRoute => ({
+    kind: "binderDocument",
+    org: binder.org,
+    binder: binder.binder,
+    documentPath: slugPath,
+    // Clicking through a branch's tree stays on that branch: these
+    // addresses are the branch's, and following one to `main` would be
+    // following a policy to a name it does not have there.
+    ...(contents.ref ? { ref: contents.ref } : {}),
+    ...(contents.change ? { change: contents.change } : {}),
+  });
 
   const renderNode = (node: BinderTreeNode, depth: number) => {
     if (node.kind === "document") {
       const on = node.document.slugPath === contents.active;
       const label = formatDocumentName(node.document.name);
 
+      const to = documentRoute(node.document.slugPath);
+
       return (
-        <button
+        <a
           key={node.document.slugPath}
-          type="button"
           className={`app-explorer-item${on ? " app-explorer-item--active" : ""}`}
           style={{ paddingLeft: `${8 + depth * 14}px` }}
+          href={routeToPath(to)}
           aria-current={on ? "page" : undefined}
           title={label}
-          onClick={() => openDocument(node.document.slugPath)}
+          onClick={(event) => followInApp(event, () => onNavigate(to))}
         >
           <FileText size={14} strokeWidth={1.6} aria-hidden="true" />
           <span className="app-explorer-name">{label}</span>
-        </button>
+        </a>
       );
     }
 

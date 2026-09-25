@@ -59,6 +59,8 @@ interface BinderDocumentsProps {
   org: string;
   binder: string;
   onOpenDocument: (documentPath: string) => void;
+  /** Where {@link onOpenDocument} goes, so each document in the tree is a link. */
+  documentHref: (documentPath: string) => string;
   /** The document open under this binder, so the tree can mark where you are. */
   activeDocument?: string | null;
   /**
@@ -176,6 +178,7 @@ export function BinderDocuments({
   org,
   binder,
   onOpenDocument,
+  documentHref,
   activeDocument = null,
   draft = null,
   draftPicker = null,
@@ -754,6 +757,7 @@ export function BinderDocuments({
             isFolderOpen={needle === "" ? isOpen : EVERYTHING_OPEN}
             onToggleFolder={toggle}
             onOpenDocument={onOpenDocument}
+            documentHref={documentHref}
             activeDocument={activeDocument}
             renderDocumentAside={renderAside}
             {...(draft

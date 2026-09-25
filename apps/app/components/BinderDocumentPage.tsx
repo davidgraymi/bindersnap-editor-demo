@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { WorkspaceDocumentDetailPayload } from "../../../packages/api-schema/schemas/workspaces";
 import { downloadBinderDocument, fetchBinderDocument } from "../api";
+import { followInApp } from "../appLink";
 import {
   buildDocumentCrumbs,
   buildDocumentUrl,
@@ -10,6 +11,7 @@ import {
   parseRequestedVersion,
   resolveDocumentRef,
 } from "../binderDocument";
+import { buildBinderUrl } from "../binderShell";
 import { buildReadableRefs, type DocumentRefView } from "../documentRefs";
 import {
   formatDocumentName,
@@ -450,11 +452,18 @@ export function BinderDocumentPage({
             ) : (
               <div className="doc-rail-card doc-rail-card--rows">
                 {openChanges.map((change) => (
-                  <button
+                  <a
                     className="doc-rail-row"
-                    type="button"
                     key={change.number}
-                    onClick={() => onOpenChange(change.number)}
+                    href={buildBinderUrl({
+                      org,
+                      binder,
+                      tab: "changes",
+                      change: change.number,
+                    })}
+                    onClick={(event) =>
+                      followInApp(event, () => onOpenChange(change.number))
+                    }
                   >
                     <span className="doc-rail-row-date">
                       {parseChangeTitle(change.body, change.user?.login ?? "")}
@@ -462,7 +471,7 @@ export function BinderDocumentPage({
                     <span className="doc-rail-row-note">
                       {getApprovalStateLabel(change.approvalState)}
                     </span>
-                  </button>
+                  </a>
                 ))}
               </div>
             )}
@@ -480,17 +489,23 @@ export function BinderDocumentPage({
                   const isCurrent = version.version === latestVersion?.version;
                   const isViewing =
                     viewing.version?.version === version.version;
+                  const target = isCurrent ? null : version.version;
                   return (
-                    <button
+                    <a
                       className={`doc-rail-row${isViewing && !isViewingRecord ? " doc-rail-row--viewing" : ""}`}
-                      type="button"
                       key={version.tag}
+                      href={buildDocumentUrl({
+                        org,
+                        binder,
+                        documentPath: resolvedPath,
+                        version: target,
+                      })}
                       // The rail says which version is on screen, not only
                       // which one is the record — reading v1 beside a row
                       // marked "Current" is exactly the confusion to avoid.
-                      aria-current={isViewing}
-                      onClick={() =>
-                        selectVersion(isCurrent ? null : version.version)
+                      aria-current={isViewing ? "page" : undefined}
+                      onClick={(event) =>
+                        followInApp(event, () => selectVersion(target))
                       }
                     >
                       <span
@@ -518,7 +533,7 @@ export function BinderDocumentPage({
                       ) : isViewing ? (
                         <span className="doc-rail-row-note">Viewing</span>
                       ) : null}
-                    </button>
+                    </a>
                   );
                 })}
               </div>
