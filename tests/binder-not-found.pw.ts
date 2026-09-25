@@ -2,6 +2,11 @@ import { expect, test } from "@playwright/test";
 
 import { signInAsAlice } from "./helpers";
 
+// Sign-in and four page loads, each one booting the app and reading its
+// session again. That is ~10s on a loaded runner — the suite-wide budget, with
+// nothing spare — so it gets the room the other multi-page files already have.
+test.describe.configure({ timeout: 30_000 });
+
 /**
  * An address with no binder behind it gets a page that says so.
  *
