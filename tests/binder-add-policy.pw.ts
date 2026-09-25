@@ -499,3 +499,58 @@ test("the header's one filled button belongs to the tab it sits above", async ({
     page.getByRole("button", { name: "New document" }),
   ).toBeVisible();
 });
+
+test("a new binder has a page of its own, and lands you in it", async ({
+  page,
+}) => {
+  // GitLab's "Create blank project": an address, a form that says what the
+  // binder's address will be, and the new binder as where you end up.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const displayName = `Riverbend ${randomUUID().slice(0, 6)}`;
+  const org = await createOrganization(sessionCookie, displayName);
+  await createBinder(sessionCookie, org, "Corporate Policies");
+
+  await signInBrowser(page, sessionCookie);
+  await page.goto(`${APP_BASE_URL}/${org}`);
+  await page.getByRole("link", { name: "New binder" }).click();
+
+  await expect(page).toHaveURL(new RegExp(`/${org}\\?new=binder$`));
+  await expect(page.locator("h1.bs-title")).toHaveText("New binder");
+  // Named the way people read it, not by its slug.
+  await expect(page.getByText(`Everyone at ${displayName}`)).toBeVisible();
+
+  const name = page.getByLabel("Binder name");
+  const create = page.getByRole("button", { name: "Create binder" });
+
+  // A name another binder already has is refused before anything is sent.
+  await name.fill("corporate policies");
+  await expect(page.locator("#new-binder-address")).toContainText(
+    `already has a binder at /${org}/corporate-policies`,
+  );
+  await expect(create).toBeDisabled();
+
+  await name.fill("Clinical Policies");
+  await expect(page.locator("#new-binder-address")).toContainText(
+    `/${org}/clinical-policies`,
+  );
+  await page.getByLabel("Description").fill("Nursing and infection control.");
+  await page.getByText("Only people you add").click();
+  await create.click();
+
+  await expect(page).toHaveURL(new RegExp(`/${org}/clinical-policies$`), {
+    timeout: 30_000,
+  });
+  await expect(page.locator("h1.bs-title")).toHaveText("Clinical Policies");
+  await expect(page.locator(".bs-subtitle").first()).toHaveText(
+    "Nursing and infection control.",
+  );
+
+  // Cancel is a way back to the list, not a toggle in the header.
+  await page.goto(`${APP_BASE_URL}/${org}?new=binder`);
+  await page.getByRole("link", { name: "Cancel" }).click();
+  await expect(page).toHaveURL(new RegExp(`/${org}$`));
+  await expect(
+    page.getByRole("link", { name: "Clinical Policies" }),
+  ).toBeVisible();
+});
