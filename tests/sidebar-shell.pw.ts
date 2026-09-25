@@ -27,7 +27,7 @@ test.beforeAll(async () => {
   await seedDevStack();
 });
 
-test("the sidebar is the map, grouped into work, manage and settings", async ({
+test("the sidebar is the map, grouped by scope: yours, then the organization's", async ({
   page,
 }) => {
   await signInAsAlice(page);
@@ -48,10 +48,17 @@ test("the sidebar is the map, grouped into work, manage and settings", async ({
     await expect(sidebar.getByRole("link", { name: label })).toBeVisible();
   }
 
-  // The grouping is the teaching — a flat list of seven would answer "where is
-  // billing" no better than the top bar did.
-  await expect(sidebar.getByText("Manage", { exact: true })).toBeVisible();
-  await expect(sidebar.getByText("Settings", { exact: true })).toBeVisible();
+  // The grouping is the teaching, and each group is a scope with a name: your
+  // work spans every organization; Binders, People and Billing are one
+  // organization's, and the heading says which.
+  await expect(sidebar.getByText("Your work", { exact: true })).toBeVisible();
+  const organization = sidebar.getByRole("navigation", {
+    name: "Riverside Health",
+  });
+  await expect(organization).toContainText("Riverside Health");
+  for (const label of ["Binders", "People & access", "Billing"] as const) {
+    await expect(organization.getByRole("link", { name: label })).toBeVisible();
+  }
 
   // **One destination per entry.** "Organization" opened the organization's
   // page, which is the binder list, which "Binders" above it opens, which the
