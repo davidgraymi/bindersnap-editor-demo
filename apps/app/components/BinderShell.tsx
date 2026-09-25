@@ -654,6 +654,32 @@ export function BinderShell({
     <section
       className={`docw-page${documentPath ? " docw-page--document" : ""}`}
     >
+      {/* A phone has no sidebar, so the binder's screens are a strip — the
+          shape the tab bar had, which already worked at that width. Above
+          768px it is not drawn at all.
+
+          **First on every screen.** It sat under the title on the screens
+          the shell titles and above it on the ones that title themselves, so
+          tapping History moved the row you had just tapped down the page. */}
+      <nav className="binder-strip" aria-label="This binder">
+        {sections.map((entry) => (
+          <a
+            key={entry.id}
+            href={buildBinderUrl({ org, binder, tab: entry.id })}
+            className={`binder-strip-item${
+              activeTab === entry.id ? " binder-strip-item--active" : ""
+            }`}
+            aria-current={activeTab === entry.id ? "page" : undefined}
+            onClick={(event) => followInApp(event, () => goTo(entry.id))}
+          >
+            {entry.label}
+            {entry.count !== undefined && entry.count > 0 ? (
+              <span className="binder-strip-count">{entry.count}</span>
+            ) : null}
+          </a>
+        ))}
+      </nav>
+
       {head ? (
         <div className="bs-pagehead">
           <div className="bs-pagehead-body">
@@ -718,28 +744,6 @@ export function BinderShell({
           )}
         </div>
       ) : null}
-
-      {/* A phone has no sidebar, so the binder's screens are a strip under
-          the page title — the shape the tab bar had, which already worked at
-          that width. Above 768px it is not drawn at all. */}
-      <nav className="binder-strip" aria-label="This binder">
-        {sections.map((entry) => (
-          <a
-            key={entry.id}
-            href={buildBinderUrl({ org, binder, tab: entry.id })}
-            className={`binder-strip-item${
-              activeTab === entry.id ? " binder-strip-item--active" : ""
-            }`}
-            aria-current={activeTab === entry.id ? "page" : undefined}
-            onClick={(event) => followInApp(event, () => goTo(entry.id))}
-          >
-            {entry.label}
-            {entry.count !== undefined && entry.count > 0 ? (
-              <span className="binder-strip-count">{entry.count}</span>
-            ) : null}
-          </a>
-        ))}
-      </nav>
 
       {/* Where in the binder this page is. The binder itself is in the top
           bar; this is the part that changes as you move around inside it.
