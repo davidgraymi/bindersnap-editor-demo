@@ -197,7 +197,7 @@ export function NewBinderPage({
               onChange={() => setOpenToOrganization(true)}
             />
             <Building2
-              className="new-binder-choice-icon"
+              className="bs-choice-icon"
               size={16}
               strokeWidth={1.75}
               aria-hidden="true"
@@ -220,7 +220,7 @@ export function NewBinderPage({
               onChange={() => setOpenToOrganization(false)}
             />
             <Lock
-              className="new-binder-choice-icon"
+              className="bs-choice-icon"
               size={16}
               strokeWidth={1.75}
               aria-hidden="true"
