@@ -911,16 +911,6 @@ input {
   min-width: 0;
 }
 
-/* The create-binder form, behind the header's "New binder". Boxed, because it
-   is a thing being filled in rather than another section of the page. */
-.org-new-binder {
-  margin-top: 0;
-  padding: var(--brand-space-5);
-  border: 1px solid var(--bs-rule-warm);
-  border-radius: var(--brand-radius-md);
-  background: var(--bs-surface-1);
-}
-
 /* The visibility question, above the list it changes the meaning of. Boxed,
    because it is a decision about the binder rather than another row in it. */
 .binder-visibility {
@@ -9700,4 +9690,44 @@ a.binder-latest-title:focus-visible {
     width: 100%;
     justify-content: space-between;
   }
+}
+
+/* ── A new binder ─────────────────────────────────────────────────────────
+   GitLab's create-project form: one column of fields, the choice of who can
+   see it as cards with an icon each, and the act at the foot. */
+
+.new-binder-legend {
+  margin-bottom: var(--brand-space-1);
+}
+
+.new-binder-address code {
+  font-family: var(--brand-font-mono);
+  font-size: 0.95em;
+  color: var(--bs-text-secondary);
+}
+
+.new-binder-address--problem {
+  color: var(--bs-status-danger-fg);
+}
+
+.new-binder-choice-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--bs-text-muted);
+}
+
+.bs-choice:has(input:checked) .new-binder-choice-icon {
+  color: var(--bs-coral-text);
+}
+
+.new-binder-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--brand-space-1);
+  padding-top: var(--brand-space-2);
+  border-top: 1px solid var(--bs-rule-warm);
+}
+
+.new-binder-actions .bs-btn {
+  text-decoration: none;
 }
