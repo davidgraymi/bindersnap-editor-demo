@@ -24,7 +24,11 @@ import {
   slugifyGroupName,
 } from "../../../packages/utils/groupName";
 import { PersonAvatar } from "./PersonAvatar";
-import { SkeletonGroup, SkeletonLine } from "./Skeleton";
+import { ChevronRight, X } from "lucide-react";
+
+import { AppIcon } from "./AppIcon";
+import { SettingsGroup } from "./SettingsGroup";
+import { SkeletonPanel } from "./Skeleton";
 
 /**
  * Who is in the organization, and the groups it has.
@@ -87,10 +91,7 @@ export function OrganizationPeople({ org }: OrganizationPeopleProps) {
   if (payload === null) {
     return (
       <div className="binder-pane">
-        <SkeletonGroup label={`Reading who is in ${org}`}>
-          <SkeletonLine width="medium" />
-          <SkeletonLine width="short" />
-        </SkeletonGroup>
+        <SkeletonPanel label={`Reading who is in ${org}`} rows={4} right />
       </div>
     );
   }
@@ -98,35 +99,50 @@ export function OrganizationPeople({ org }: OrganizationPeopleProps) {
   const ownerCount = payload.people.filter((person) => person.isOwner).length;
 
   return (
-    <div className="binder-pane">
-      <section className="binder-settings-section">
-        <h2 className="doc-rail-title">
-          People
-          <span className="doc-tab-count">{payload.people.length}</span>
-        </h2>
+    <div className="binder-pane bs-settings">
+      {/* Said first, to somebody who cannot act: the page below is theirs to
+          read, and the controls are missing on purpose. */}
+      {payload.canManage ? null : (
+        <p className="bs-note">
+          Only an organization owner can add and remove people, create groups,
+          or change who is in them.
+        </p>
+      )}
 
-        {notice ? <p className="app-inline-error">{notice}</p> : null}
+      <SettingsGroup
+        id="org-people-members"
+        title="Members"
+        count={payload.people.length}
+        note={`Everyone in ${org}. An owner runs the organization; what a member can do is set binder by binder, by the groups they are in.`}
+      >
+        {notice ? (
+          <p className="bs-note bs-note--danger" role="alert">
+            {notice}
+          </p>
+        ) : null}
 
-        <div className="docs-list">
-          {payload.people.map((person) => (
-            <OrgPersonRow
-              key={person.login}
-              org={org}
-              person={person}
-              // The last owner cannot be demoted or removed, and the control
-              // says so in place of a tooltip rather than failing when pressed.
-              lastOwner={person.isOwner && ownerCount === 1}
-              isViewer={
-                person.login.toLowerCase() === payload.viewer.toLowerCase()
-              }
-              canManage={payload.canManage && !isReadOnly}
-              busy={busy}
-              onChanged={setPayload}
-              onFailed={setNotice}
-              onBusy={setBusy}
-            />
-          ))}
-        </div>
+        <section className="bs-panel" aria-label={`Members of ${org}`}>
+          <ul className="bs-row-list">
+            {payload.people.map((person) => (
+              <OrgPersonRow
+                key={person.login}
+                org={org}
+                person={person}
+                // The last owner cannot be demoted or removed, and the control
+                // says so in place of a tooltip rather than failing when pressed.
+                lastOwner={person.isOwner && ownerCount === 1}
+                isViewer={
+                  person.login.toLowerCase() === payload.viewer.toLowerCase()
+                }
+                canManage={payload.canManage && !isReadOnly}
+                busy={busy}
+                onChanged={setPayload}
+                onFailed={setNotice}
+                onBusy={setBusy}
+              />
+            ))}
+          </ul>
+        </section>
 
         {payload.canManage && !isReadOnly ? (
           <AddOrgPersonForm
@@ -138,7 +154,7 @@ export function OrganizationPeople({ org }: OrganizationPeopleProps) {
             onBusy={setBusy}
           />
         ) : null}
-      </section>
+      </SettingsGroup>
 
       <OrganizationGroups
         org={org}
@@ -146,15 +162,23 @@ export function OrganizationPeople({ org }: OrganizationPeopleProps) {
         onChanged={setPayload}
         onError={setError}
       />
-
-      {payload.canManage ? null : (
-        <p className="doc-rail-note">
-          Only an organization owner can add and remove people, create groups,
-          or change who is in them.
-        </p>
-      )}
     </div>
   );
+}
+
+/** How many of a person's groups their row names before counting the rest. */
+const GROUPS_SHOWN = 3;
+
+/**
+ * "Clinical Authors · Legal and 4 more groups" — where a person's access comes
+ * from, short enough to stay on one line of their row.
+ */
+export function describePersonGroups(teams: readonly string[]): string {
+  if (teams.length === 0) return "In no group yet";
+  const named = teams.slice(0, GROUPS_SHOWN).map(describeGroupName).join(" · ");
+  const rest = teams.length - GROUPS_SHOWN;
+  if (rest <= 0) return named;
+  return `${named} and ${rest} more ${rest === 1 ? "group" : "groups"}`;
 }
 
 /**
@@ -215,65 +239,78 @@ function OrgPersonRow({
   }
 
   return (
-    <div className="org-person-block">
-      <div className="org-person">
+    <li className="org-person-block">
+      <div className="bs-row bs-row--tall">
         <PersonAvatar person={person} size="md" />
-        <span className="org-person-body">
-          <span className="docs-list-item-name">{name}</span>
-          <span className="docs-list-item-meta">
-            {/* The groups are where their binder access comes from, so a person
-                with none is worth saying rather than leaving blank — it is the
-                answer to "why can they not see it". */}
-            {person.teams.length > 0
-              ? person.teams.map(describeGroupName).join(" · ")
-              : "In no group yet"}
+        <span className="bs-row-body">
+          <span className="bs-row-name">{name}</span>
+          {/* The groups are where their binder access comes from, so a person
+              with none is worth saying rather than leaving blank — it is the
+              answer to "why can they not see it". Shortened past three, with
+              the whole list on hover: an owner in ten groups made their row
+              three lines tall. */}
+          <span
+            className="bs-row-meta"
+            title={
+              person.teams.length > GROUPS_SHOWN
+                ? person.teams.map(describeGroupName).join(", ")
+                : undefined
+            }
+          >
+            {describePersonGroups(person.teams)}
           </span>
         </span>
 
-        {canManage ? (
-          <select
-            className="bs-input bs-input--sm binder-role-select"
-            value={person.isOwner ? "owner" : "member"}
-            disabled={busy || lastOwner}
-            aria-label={`What ${name} can do in ${org}`}
-            onChange={(event) => {
-              if (event.target.value === "owner") {
-                setConfirming("promote");
-              } else {
-                void run(() =>
-                  setOrganizationPersonRole(org, person.login, false),
-                );
-              }
-            }}
-          >
-            <option value="member">Member</option>
-            <option value="owner">Owner</option>
-          </select>
-        ) : (
-          <span className="doc-rail-row-note">
-            {person.isOwner ? "Owner" : "Member"}
-          </span>
-        )}
+        <span className="bs-row-right">
+          {canManage ? (
+            <select
+              className="bs-input bs-input--sm binder-role-select"
+              value={person.isOwner ? "owner" : "member"}
+              disabled={busy || lastOwner}
+              aria-label={`What ${name} can do in ${org}`}
+              onChange={(event) => {
+                if (event.target.value === "owner") {
+                  setConfirming("promote");
+                } else {
+                  void run(() =>
+                    setOrganizationPersonRole(org, person.login, false),
+                  );
+                }
+              }}
+            >
+              <option value="member">Member</option>
+              <option value="owner">Owner</option>
+            </select>
+          ) : (
+            <span>{person.isOwner ? "Owner" : "Member"}</span>
+          )}
 
-        {/* Not on your own row. Leaving an organization is a different act from
+          {/* Not on your own row. Leaving an organization is a different act from
             removing somebody else, and offering it here as "Remove Alice" reads
-            like an accident waiting to happen. */}
-        {canManage && !isViewer && !lastOwner ? (
-          <button
-            type="button"
-            className="org-group-remove"
-            disabled={busy}
-            aria-label={`Remove ${name} from ${org}`}
-            onClick={() => setConfirming("remove")}
-          >
-            ×
-          </button>
-        ) : null}
+            like an accident waiting to happen. The space is kept, so the role
+            on that row lines up with every other one. */}
+          {canManage ? (
+            !isViewer && !lastOwner ? (
+              <button
+                type="button"
+                className="bs-rowact bs-rowact--danger"
+                disabled={busy}
+                aria-label={`Remove ${name} from ${org}`}
+                title={`Remove ${name} from ${org}`}
+                onClick={() => setConfirming("remove")}
+              >
+                <AppIcon icon={X} size="sm" />
+              </button>
+            ) : (
+              <span className="bs-rowact-slot" aria-hidden="true" />
+            )
+          ) : null}
+        </span>
       </div>
 
       {/* In place of a tooltip, which nobody reads and no keyboard reaches. */}
       {canManage && lastOwner ? (
-        <p className="doc-rail-note org-person-reason">
+        <p className="bs-row-meta org-person-reason">
           {org} needs at least one owner. Make someone else an owner first.
         </p>
       ) : null}
@@ -343,7 +380,7 @@ function OrgPersonRow({
           </div>
         </div>
       ) : null}
-    </div>
+    </li>
   );
 }
 
@@ -413,104 +450,118 @@ function OrganizationGroups({
   }
 
   return (
-    <section className="binder-settings-section">
-      <h2 className="doc-rail-title">
-        Groups
-        <span className="doc-tab-count">{payload.groups.length}</span>
-      </h2>
-
-      {/* The constraint stated once, at the top, rather than discovered on a
-          binder that refuses. A Gitea team carries one unit map, so the level
-          belongs to the group and not to the grant. */}
-      <p className="doc-rail-note">
-        A group is a set of people and one level, used across every binder it is
-        added to. The level belongs to the group, so a group cannot be an editor
-        in one binder and a reviewer in another — that is two groups.
-      </p>
-
-      {notice ? <p className="app-inline-error">{notice}</p> : null}
+    // The constraint stated once, at the top, rather than discovered on a
+    // binder that refuses. A Gitea team carries one unit map, so the level
+    // belongs to the group and not to the grant.
+    <SettingsGroup
+      id="org-people-groups"
+      title="Groups"
+      count={payload.groups.length}
+      note="A group is a set of people and one level, used across every binder it is added to. The level belongs to the group, so a group cannot be an editor in one binder and a reviewer in another — that is two groups."
+    >
+      {notice ? (
+        <p className="bs-note bs-note--danger" role="alert">
+          {notice}
+        </p>
+      ) : null}
 
       {payload.groups.length === 0 ? (
-        <p style={{ color: "var(--bs-text-muted)" }}>
-          No groups, or your access does not let you see them — Gitea shows an
-          organization&rsquo;s teams to its owners.
-        </p>
+        <div className="bs-panel">
+          <div className="bs-empty">
+            <p>
+              No groups, or your access does not let you see them — Gitea shows
+              an organization&rsquo;s teams to its owners.
+            </p>
+          </div>
+        </div>
       ) : (
-        <div className="docs-list">
-          {payload.groups.map((group) => {
-            const expanded = open === group.name;
-            return (
-              <div className="org-group" key={group.id}>
-                <button
-                  type="button"
-                  className="org-group-head"
-                  aria-expanded={expanded}
-                  onClick={() => setOpen(expanded ? null : group.name)}
-                >
-                  <span className="org-person-body">
-                    <span className="docs-list-item-name">
-                      {describeGroupName(group.name)}
-                      <span className="org-group-level">
-                        {groupLevelLabel(group.access)}
+        <section className="bs-panel" aria-label={`Groups in ${org}`}>
+          <ul className="bs-row-list">
+            {payload.groups.map((group) => {
+              const expanded = open === group.name;
+              return (
+                <li className="org-group" key={group.id}>
+                  {/* A chevron, because a row that opens has to say so before
+                    it is pressed — GitLab's expandable rows do, and these
+                    looked exactly like the rows above that open nothing. */}
+                  <button
+                    type="button"
+                    className="bs-row bs-row--tall org-group-head"
+                    aria-expanded={expanded}
+                    onClick={() => setOpen(expanded ? null : group.name)}
+                  >
+                    <span className="bs-row-icon org-group-chevron">
+                      <ChevronRight
+                        size={16}
+                        strokeWidth={1.75}
+                        aria-hidden="true"
+                      />
+                    </span>
+                    <span className="bs-row-body">
+                      <span className="bs-row-name">
+                        {describeGroupName(group.name)}
+                        <span className="org-group-level">
+                          {groupLevelLabel(group.access)}
+                        </span>
+                      </span>
+                      <span className="bs-row-meta">
+                        {group.memberCount === 1
+                          ? "1 person"
+                          : `${group.memberCount} people`}
+                        {` · ${describeGroupReach(group)}`}
+                        {group.description ? ` · ${group.description}` : ""}
                       </span>
                     </span>
-                    <span className="docs-list-item-meta">
-                      {group.memberCount === 1
-                        ? "1 person"
-                        : `${group.memberCount} people`}
-                      {` · ${describeGroupReach(group)}`}
-                      {group.description ? ` · ${group.description}` : ""}
+                    {/* The seat consequence, on the row that decides it. */}
+                    <span className="bs-row-right">
+                      {describeTeamAccess(group.access)}
                     </span>
-                  </span>
-                  {/* The seat consequence, on the row that decides it. */}
-                  <span className="doc-rail-row-note">
-                    {describeTeamAccess(group.access)}
-                  </span>
-                </button>
+                  </button>
 
-                {expanded ? (
-                  <GroupDetail
-                    group={group}
-                    people={payload.people}
-                    binders={payload.binders}
-                    canManage={payload.canManage && !isReadOnly}
-                    busy={busy}
-                    onAdd={(username) =>
-                      run(() =>
-                        addOrganizationGroupMember(org, group.name, username),
-                      )
-                    }
-                    onRemove={(username) =>
-                      run(() =>
-                        removeOrganizationGroupMember(
-                          org,
-                          group.name,
-                          username,
-                        ),
-                      )
-                    }
-                    onAddBinder={(binder) =>
-                      run(async () => {
-                        await grantBinderGroup(org, binder, group.name);
-                        // The grant answers with the *binder's* teams, and this
-                        // page is about the organization. Reading it back is
-                        // what keeps the group's binder list and the whitelist
-                        // that grant just rewrote from being two stories.
-                        return fetchOrganizationPeople(org);
-                      })
-                    }
-                    onRemoveBinder={(binder) =>
-                      run(async () => {
-                        await revokeBinderGroup(org, binder, group.name);
-                        return fetchOrganizationPeople(org);
-                      })
-                    }
-                  />
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
+                  {expanded ? (
+                    <GroupDetail
+                      group={group}
+                      people={payload.people}
+                      binders={payload.binders}
+                      canManage={payload.canManage && !isReadOnly}
+                      busy={busy}
+                      onAdd={(username) =>
+                        run(() =>
+                          addOrganizationGroupMember(org, group.name, username),
+                        )
+                      }
+                      onRemove={(username) =>
+                        run(() =>
+                          removeOrganizationGroupMember(
+                            org,
+                            group.name,
+                            username,
+                          ),
+                        )
+                      }
+                      onAddBinder={(binder) =>
+                        run(async () => {
+                          await grantBinderGroup(org, binder, group.name);
+                          // The grant answers with the *binder's* teams, and this
+                          // page is about the organization. Reading it back is
+                          // what keeps the group's binder list and the whitelist
+                          // that grant just rewrote from being two stories.
+                          return fetchOrganizationPeople(org);
+                        })
+                      }
+                      onRemoveBinder={(binder) =>
+                        run(async () => {
+                          await revokeBinderGroup(org, binder, group.name);
+                          return fetchOrganizationPeople(org);
+                        })
+                      }
+                    />
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
       )}
 
       {payload.canManage ? (
@@ -524,7 +575,7 @@ function OrganizationGroups({
           onFailed={setNotice}
         />
       ) : null}
-    </section>
+    </SettingsGroup>
   );
 }
 
@@ -607,7 +658,7 @@ function GroupDetail({
                     aria-label={`Remove ${member.fullName || member.login} from ${describeGroupName(group.name)}`}
                     onClick={() => onRemove(member.login)}
                   >
-                    ×
+                    <X size={12} strokeWidth={2} aria-hidden="true" />
                   </button>
                 ) : null}
               </span>
@@ -618,7 +669,7 @@ function GroupDetail({
         {canManage ? (
           <div className="org-group-add">
             <select
-              className="bs-input org-group-select"
+              className="bs-input bs-input--sm org-group-select"
               value={adding}
               disabled={busy || candidates.length === 0}
               onChange={(event) => setAdding(event.target.value)}
@@ -679,7 +730,7 @@ function GroupDetail({
                     aria-label={`Take ${describeGroupName(group.name)} off ${binder}`}
                     onClick={() => onRemoveBinder(binder)}
                   >
-                    ×
+                    <X size={12} strokeWidth={2} aria-hidden="true" />
                   </button>
                 ) : null}
               </span>
@@ -690,7 +741,7 @@ function GroupDetail({
         {canManage && !owners ? (
           <div className="org-group-add">
             <select
-              className="bs-input org-group-select"
+              className="bs-input bs-input--sm org-group-select"
               value={addingBinder}
               disabled={busy || binderCandidates.length === 0}
               onChange={(event) => setAddingBinder(event.target.value)}
@@ -736,15 +787,6 @@ function GroupDetail({
   );
 }
 
-/**
- * Naming a group and levelling it, which is one act.
- *
- * The handle is shown as it is typed rather than after the fact: a group's name
- * is written into `.gitea/CODEOWNERS` as `@org/group` when it signs off on a
- * folder, and Gitea parses that by splitting on whitespace — so the name Gitea
- * stores cannot hold a space. Showing the answer before the button is pressed
- * is cheaper than explaining it afterwards.
- */
 const SEARCH_DEBOUNCE_MS = 250;
 const SEARCH_RESULT_LIMIT = 6;
 
@@ -876,118 +918,136 @@ function AddOrgPersonForm({
   const disabled = busy || saving;
 
   return (
-    <form className="org-group-form" onSubmit={submit}>
-      <h3 className="doc-rail-title">Add someone</h3>
-
-      <label className="create-document-field">
-        <span className="bs-field-label">Who</span>
-        <input
-          className="bs-input org-group-select"
-          value={picked ? picked.fullName || picked.login : query}
-          placeholder="Their username"
-          disabled={disabled}
-          onChange={(event) => {
-            setPicked(null);
-            setQuery(event.target.value);
-          }}
-        />
-      </label>
-
-      {picked ? (
-        <p className="doc-rail-note">
-          Adding <code>{picked.login}</code>.{" "}
-          <button
-            type="button"
-            className="bs-btn bs-btn-ghost bs-btn--sm"
+    <section className="bs-section" aria-labelledby="org-people-add">
+      <div className="bs-section-head">
+        <h3 className="bs-section-title" id="org-people-add">
+          Add someone
+        </h3>
+      </div>
+      <form className="bs-fields" onSubmit={submit}>
+        <label className="bs-field">
+          <span className="bs-field-label">Who</span>
+          <input
+            className="bs-input"
+            value={picked ? picked.fullName || picked.login : query}
+            placeholder="Their username"
             disabled={disabled}
-            onClick={() => {
+            onChange={(event) => {
               setPicked(null);
-              setQuery("");
+              setQuery(event.target.value);
             }}
-          >
-            Change
-          </button>
-        </p>
-      ) : suggestions.length > 0 ? (
-        <div className="docs-list">
-          {suggestions.map((user) => (
+          />
+        </label>
+
+        {picked ? (
+          <p className="bs-field-hint">
+            Adding <code>{picked.login}</code>.{" "}
             <button
-              key={user.login}
               type="button"
-              className="docs-list-item org-person-suggestion"
+              className="bs-btn bs-btn-ghost bs-btn--sm"
               disabled={disabled}
               onClick={() => {
-                setPicked(user);
-                setResults([]);
+                setPicked(null);
+                setQuery("");
               }}
             >
-              <PersonAvatar person={user} />
-              <span className="docs-list-item-name">
-                {user.fullName || user.login}
-              </span>
-              <span className="docs-list-item-meta">{user.login}</span>
+              Change
             </button>
-          ))}
+          </p>
+        ) : suggestions.length > 0 ? (
+          <div className="bs-panel">
+            {suggestions.map((user) => (
+              <button
+                key={user.login}
+                type="button"
+                className="bs-row org-person-suggestion"
+                disabled={disabled}
+                onClick={() => {
+                  setPicked(user);
+                  setResults([]);
+                }}
+              >
+                <PersonAvatar person={user} />
+                <span className="bs-row-body">
+                  <span className="bs-row-name">
+                    {user.fullName || user.login}
+                  </span>
+                </span>
+                <span className="bs-row-right">{user.login}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <fieldset className="bs-field">
+          <legend className="bs-field-label">Role</legend>
+          <label className="bs-choice">
+            <input
+              type="radio"
+              name="org-add-role"
+              checked={!owner}
+              disabled={disabled}
+              onChange={() => setOwner(false)}
+            />
+            <span>
+              <span className="bs-choice-name">Member</span>
+              <span className="bs-choice-note">
+                Access is set per binder. Costs nothing until they are made an
+                admin or an editor somewhere.
+              </span>
+            </span>
+          </label>
+          <label className="bs-choice">
+            <input
+              type="radio"
+              name="org-add-role"
+              checked={owner}
+              disabled={disabled}
+              onChange={() => setOwner(true)}
+            />
+            <span>
+              <span className="bs-choice-name">Owner</span>
+              <span className="bs-choice-note">
+                Can add and remove anyone, create binders, and manage billing.
+                Uses a seat.
+              </span>
+            </span>
+          </label>
+        </fieldset>
+
+        <div className="org-people-actions">
+          <button
+            type="submit"
+            className="bs-btn bs-btn-primary"
+            disabled={disabled || username === ""}
+          >
+            {saving ? "Adding…" : `Add to ${org}`}
+          </button>
         </div>
-      ) : null}
 
-      <fieldset className="org-visibility-choice">
-        <legend className="bs-field-label">Role</legend>
-        <label className="org-choice">
-          <input
-            type="radio"
-            name="org-add-role"
-            checked={!owner}
-            disabled={disabled}
-            onChange={() => setOwner(false)}
-          />
-          <span>
-            <span className="docs-list-item-name">Member</span>
-            <span className="docs-list-item-meta">
-              Access is set per binder. Costs nothing until they are made an
-              admin or an editor somewhere.
-            </span>
-          </span>
-        </label>
-        <label className="org-choice">
-          <input
-            type="radio"
-            name="org-add-role"
-            checked={owner}
-            disabled={disabled}
-            onChange={() => setOwner(true)}
-          />
-          <span>
-            <span className="docs-list-item-name">Owner</span>
-            <span className="docs-list-item-meta">
-              Can add and remove anyone, create binders, and manage billing.
-              Uses a seat.
-            </span>
-          </span>
-        </label>
-      </fieldset>
-
-      <button
-        type="submit"
-        className="bs-btn bs-btn-primary"
-        disabled={disabled || username === ""}
-      >
-        {saving ? "Adding…" : `Add to ${org}`}
-      </button>
-
-      {/* The limitation stated on the form rather than met as a refusal. It is
+        {/* The limitation stated on the form rather than met as a refusal. It is
           the visible edge of having no invitation flow, and somebody reaching
           for a colleague who has not signed up deserves to know before they
           type the name. */}
-      <p className="doc-rail-note">
-        They need a Bindersnap account already — we cannot email an invitation
-        yet. Anyone you add joins straight away and can read every binder that
-        is open to the organization.
-      </p>
-    </form>
+        <p className="bs-field-hint">
+          They need a Bindersnap account already — we cannot email an invitation
+          yet. Anyone you add joins straight away and can read every binder that
+          is open to the organization.
+        </p>
+      </form>
+    </section>
   );
 }
 
+/**
+ * Naming a group and levelling it, which is one act.
+ *
+ * The handle is shown as it is typed rather than after the fact: a group's name
+ * is written into `.gitea/CODEOWNERS` as `@org/group` when it signs off on a
+ * folder, and Gitea parses that by splitting on whitespace — so the name Gitea
+ * stores cannot hold a space. Showing the answer before the button is pressed
+ * is cheaper than explaining it afterwards.
+ */
 function NewGroupForm({
   org,
   busy,
@@ -1032,68 +1092,75 @@ function NewGroupForm({
   }
 
   return (
-    <form className="org-group-form" onSubmit={submit}>
-      <h3 className="doc-rail-title">New group</h3>
+    <section className="bs-section" aria-labelledby="org-people-new-group">
+      <div className="bs-section-head">
+        <h3 className="bs-section-title" id="org-people-new-group">
+          New group
+        </h3>
+      </div>
+      <form className="bs-fields" onSubmit={submit}>
+        <label className="bs-field">
+          <span className="bs-field-label">Name</span>
+          <input
+            className="bs-input"
+            value={name}
+            placeholder="Quality Committee"
+            disabled={busy || saving}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </label>
 
-      <label className="create-document-field">
-        <span className="bs-field-label">Name</span>
-        <input
-          className="bs-input org-group-select"
-          value={name}
-          placeholder="Quality Committee"
-          disabled={busy || saving}
-          onChange={(event) => setName(event.target.value)}
-        />
-      </label>
+        {handle === "" ? null : (
+          <p className="bs-field-hint">
+            {taken ? (
+              <>
+                {org} already has a group called <code>{handle}</code>.
+              </>
+            ) : (
+              <>
+                It will be called <code>{handle}</code>.
+              </>
+            )}
+          </p>
+        )}
 
-      {handle === "" ? null : (
-        <p className="doc-rail-note">
-          {taken ? (
-            <>
-              {org} already has a group called <code>{handle}</code>.
-            </>
-          ) : (
-            <>
-              It will be called <code>{handle}</code>.
-            </>
-          )}
-        </p>
-      )}
+        <fieldset className="bs-field">
+          <legend className="bs-field-label">Level</legend>
+          {GROUP_LEVELS.map((option) => (
+            <label className="bs-choice" key={option.value}>
+              <input
+                type="radio"
+                name="group-level"
+                value={option.value}
+                checked={level === option.value}
+                disabled={busy || saving}
+                onChange={() => setLevel(option.value)}
+              />
+              <span>
+                <span className="bs-choice-name">{option.label}</span>
+                <span className="bs-choice-note">{option.note}</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
 
-      <fieldset className="org-visibility-choice">
-        <legend className="bs-field-label">Level</legend>
-        {GROUP_LEVELS.map((option) => (
-          <label className="org-choice" key={option.value}>
-            <input
-              type="radio"
-              name="group-level"
-              value={option.value}
-              checked={level === option.value}
-              disabled={busy || saving}
-              onChange={() => setLevel(option.value)}
-            />
-            <span>
-              <span className="docs-list-item-name">{option.label}</span>
-              <span className="docs-list-item-meta">{option.note}</span>
-            </span>
-          </label>
-        ))}
-      </fieldset>
+        <div className="org-people-actions">
+          <button
+            type="submit"
+            className="bs-btn bs-btn-primary"
+            disabled={busy || saving || handle === "" || taken}
+          >
+            {saving ? "Creating…" : "Create group"}
+          </button>
+        </div>
 
-      <button
-        type="submit"
-        className="bs-btn bs-btn-primary"
-        disabled={busy || saving || handle === "" || taken}
-      >
-        {saving ? "Creating…" : "Create group"}
-      </button>
-
-      {/* Said here because it is the question somebody asks next, and the
+        {/* Said here because it is the question somebody asks next, and the
           answer is a reassurance: naming a group gives nobody access. */}
-      <p className="doc-rail-note">
-        A new group reaches no binder until somebody who runs that binder adds
-        it.
-      </p>
-    </form>
+        <p className="bs-field-hint">
+          A new group reaches no binder until somebody who runs that binder adds
+          it.
+        </p>
+      </form>
+    </section>
   );
 }
