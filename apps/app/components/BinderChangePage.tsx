@@ -14,6 +14,8 @@ import { buildChangedDocumentRows } from "../changedDocuments";
 import type { ChangeScope } from "../changeScope";
 import { formatDocumentName, toChangeRecord } from "../documentDisplay";
 import type { DocumentChangeView } from "../routes";
+import { nameFor, usePeopleNames } from "../usePeopleNames";
+import { ChangeByline } from "./ChangeByline";
 import { ChangeComparisonPage } from "./ChangeComparisonPage";
 import { ChangeStateBadge, ChangeTabs } from "./ChangeTabs";
 import { DocumentChangeDetail } from "./DocumentChangeDetail";
@@ -82,6 +84,7 @@ export function BinderChangePage({
   onOpenOnBranch,
   onOpenBranch,
 }: BinderChangePageProps) {
+  const names = usePeopleNames(org);
   const [detail, setDetail] = useState<WorkspaceChangeDetailPayload | null>(
     null,
   );
@@ -283,6 +286,17 @@ export function BinderChangePage({
   }
 
   const isOpen = detail.change.state === "open";
+  const nameOf = (login: string) => nameFor(names, login);
+  const branchName = detail.change.branchName || null;
+  const branchHref = buildBinderUrl({
+    org,
+    binder,
+    ref: branchName,
+    change: changeNumber,
+  });
+  const openBranch = () => {
+    if (branchName) onOpenBranch(branchName);
+  };
 
   /* **The same header on both screens**: whether the change is open, and the
      two tabs that are its two screens. A code host draws a merge request this
@@ -345,24 +359,17 @@ export function BinderChangePage({
           changeNumber={changeNumber}
           title={record.summary}
           open={isOpen}
-          author={record.submittedBy}
+          author={nameOf(record.submittedBy)}
+          openedAt={record.submittedAt}
+          nameOf={nameOf}
           rows={comparisonRows}
           headRef={detail.change.branchName || null}
           /* Arriving from a particular document's Compare button opens on that
              document rather than at the top of a page of six. */
           focusDocument={shown?.slugPath ?? null}
           /* The branch's root: the binder as this change would leave it. */
-          branchHref={buildBinderUrl({
-            org,
-            binder,
-            ref: detail.change.branchName || null,
-            change: changeNumber,
-          })}
-          onOpenBranch={() => {
-            if (detail.change.branchName) {
-              onOpenBranch(detail.change.branchName);
-            }
-          }}
+          branchHref={branchHref}
+          onOpenBranch={openBranch}
           /* The same address `onOpenOnBranch` goes to, so View is a real link:
              it opens in a new tab and can be sent to somebody. */
           fileHref={(slugPath) =>
@@ -426,6 +433,19 @@ export function BinderChangePage({
       <DocumentChangeDetail
         status={status}
         tabs={tabs}
+        byline={
+          <ChangeByline
+            status={status}
+            author={nameOf(record.submittedBy)}
+            open={isOpen}
+            documents={documents.length}
+            branch={branchName}
+            branchHref={branchHref}
+            onOpenBranch={openBranch}
+            openedAt={record.submittedAt}
+            nameOf={nameOf}
+          />
+        }
         banner={behind}
         documentPicker={
           documents.length > 1 ? (
