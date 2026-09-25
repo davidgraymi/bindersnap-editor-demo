@@ -48,6 +48,7 @@ import type { SidebarBinder } from "./AppSidebar";
 import type { DocumentRefView } from "../documentRefs";
 import { SkeletonLine } from "./Skeleton";
 import { PagePath } from "./LocationTrail";
+import { useWriteAction } from "../paywallContext";
 
 /**
  * The binder, laid out the way a repository is.
@@ -631,6 +632,11 @@ export function BinderShell({
   // the whole binder — its name made up from the address, Add a document and
   // Edit buttons, a subtitle that never loaded — around one red line. GitLab
   // answers a bad address with a page that says so and the way back.
+  // Kept on screen while the organization cannot write, and answered with the
+  // paywall: a missing button explains nothing, an offer does.
+  const addDocument = useWriteAction(() => setAdding(true));
+  const editBinder = useWriteAction(() => void startEditing());
+
   if (missing) {
     const orgHref = routeToPath({ kind: "organization", org });
     return (
@@ -707,7 +713,7 @@ export function BinderShell({
               The contents only. This is the page's one filled button, and on
               the other three screens the answer to "what is this page for" is
               not "add a policy". */}
-          {isReadOnly || activeTab !== "documents" ? null : (
+          {activeTab !== "documents" ? null : (
             <div className="bs-pagehead-actions">
               {/* **The same buttons in the same slots.** Reading, the header
                   offers Add a policy and Edit; editing, it offers the way
@@ -726,14 +732,14 @@ export function BinderShell({
                   <button
                     className="bs-btn bs-btn-secondary"
                     type="button"
-                    onClick={() => setAdding(true)}
+                    onClick={addDocument}
                   >
                     Add a document
                   </button>
                   <button
                     className="bs-btn bs-btn-primary"
                     type="button"
-                    onClick={() => void startEditing()}
+                    onClick={editBinder}
                     disabled={startingEdit}
                   >
                     {startingEdit ? "Opening your draft…" : "Edit"}

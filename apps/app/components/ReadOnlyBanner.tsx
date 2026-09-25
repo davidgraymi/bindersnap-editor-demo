@@ -1,5 +1,6 @@
 import { describeReadOnly } from "../readOnly";
 import { useReadOnly } from "../readOnlyContext";
+import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
 
 /**
  * The one thing that explains a read-only app.
@@ -21,6 +22,8 @@ export function ReadOnlyBanner({
   onManageBilling: () => void;
 }) {
   const state = useReadOnly();
+  // What the organization is called, not the slug in its address.
+  const displayName = useOrganizationDisplayName(state.organizationName ?? "");
 
   if (!state.readOnly) {
     return null;
@@ -32,7 +35,12 @@ export function ReadOnlyBanner({
       role="status"
       data-testid="read-only-banner"
     >
-      <p className="read-only-banner__message">{describeReadOnly(state)}</p>
+      <p className="read-only-banner__message">
+        {describeReadOnly({
+          ...state,
+          organizationName: displayName || state.organizationName,
+        })}
+      </p>
       <button
         type="button"
         className="read-only-banner__action"

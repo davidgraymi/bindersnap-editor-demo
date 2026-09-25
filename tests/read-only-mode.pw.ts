@@ -152,7 +152,7 @@ async function signInBrowser(page: Page, sessionCookie: string): Promise<void> {
   ]);
 }
 
-test("a delinquent organization keeps its record and loses its controls", async ({
+test("a delinquent organization keeps its record, and its controls open the paywall", async ({
   page,
 }) => {
   const credentials = buildCredentials();
@@ -188,15 +188,24 @@ test("a delinquent organization keeps its record and loses its controls", async 
   // The heading shows the name they typed, not the slug the repository is
   // addressed by — "Clinical Policies", not "clinical-policies".
   await expect(page.getByRole("heading", { name: binderTitle })).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Add a document" }),
-  ).toHaveCount(0);
-  // The top nav's create button sits on every page, so leaving it would put
-  // the one unusable affordance in front of them everywhere they went. It was
-  // missed on the first pass and found by looking at a screenshot.
-  await expect(page.getByRole("button", { name: "New document" })).toHaveCount(
-    0,
-  );
+  // The ways to write stay where they were, and each one is answered with
+  // the paywall — what it costs and what it gets you — rather than removed,
+  // because a button that has vanished explains nothing. "Not now" leaves the
+  // reader exactly where they were.
+  const paywall = page.getByRole("dialog");
+  for (const open of [
+    () => page.getByRole("button", { name: "Add a document" }).click(),
+    () => page.getByRole("button", { name: "New document" }).click(),
+    () => page.getByRole("button", { name: "Restore access" }).click(),
+  ]) {
+    await open();
+    await expect(paywall.getByRole("heading", { level: 2 })).toContainText(
+      /subscription has lapsed|free trial has ended|Subscribe to keep writing/,
+    );
+    await expect(paywall).toContainText("Bindersnap Pro");
+    await paywall.getByRole("button", { name: "Not now" }).click();
+    await expect(paywall).toHaveCount(0);
+  }
   expect(new URL(page.url()).pathname).toBe(`/${org}/${binder}`);
   // The empty state must not instruct an action whose control is gone.
   // A fresh binder's listing is read from Gitea, which can take longer than
