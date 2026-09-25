@@ -1,6 +1,7 @@
 import { FilePen, FileText, Home, Library } from "lucide-react";
 
-import type { AppRoute } from "../routes";
+import { followInApp } from "../appLink";
+import { routeToPath, type AppRoute } from "../routes";
 
 /**
  * Navigation on a phone, where the sidebar is not rendered.
@@ -81,18 +82,18 @@ export function AppBottomNav({ route, org, onNavigate }: AppBottomNavProps) {
       {entries.map((entry) => {
         const Icon = entry.icon;
         return (
-          <button
+          <a
             key={entry.key}
-            type="button"
+            href={routeToPath(entry.to)}
             className={`app-bottom-nav-item${
               entry.isActive ? " app-bottom-nav-item--active" : ""
             }`}
             aria-current={entry.isActive ? "page" : undefined}
-            onClick={() => onNavigate(entry.to)}
+            onClick={(event) => followInApp(event, () => onNavigate(entry.to))}
           >
             <Icon size={19} strokeWidth={1.75} aria-hidden="true" />
             <span className="app-bottom-nav-label">{entry.label}</span>
-          </button>
+          </a>
         );
       })}
     </nav>

@@ -4261,8 +4261,9 @@ button.bs-knot {
 
 .app-topnav {
   height: var(--brand-nav-height);
-  background: var(--bs-nav-bg);
-  border-bottom: 1px solid var(--bs-rule);
+  /* The same ground as the sidebar: the bar and the map are the frame, and
+     the sheet under them is the only thing that is raised. */
+  background: var(--bs-surface-2);
   display: flex;
   align-items: center;
   padding: 0 var(--brand-space-8);
@@ -4328,29 +4329,6 @@ button.bs-knot {
   white-space: nowrap;
 }
 
-.app-topnav-nav {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-1);
-  margin-left: var(--brand-space-6);
-  flex-shrink: 0;
-}
-
-/* The sidebar is the map above 768px and carries these same destinations plus
-   the ones the top bar never had, so the links come out rather than being said
-   twice. Below that the sidebar is display:none and these are the only
-   navigation there is — which is why they stay in the markup. The organization
-   switcher beside them is not part of this: it is a control, not a link, and it
-   is wanted at every width. */
-/* Above 768px the sidebar carries these destinations; below it the bottom bar
-   does. The top bar's own links are not the navigation at either width any
-   more — they were only ever there because there was nowhere else to put them,
-   and on a phone they pushed search and the account control off the edge of a
-   bar with overflow:hidden. */
-.app-topnav-nav {
-  display: none;
-}
-
 /* ── BOTTOM NAVIGATION ───────────────────────────────────────
    Phones only. The half of the screen a thumb reaches, and it
    gives the top bar back to search and the account.
@@ -4390,6 +4368,7 @@ button.bs-knot {
     border: none;
     background: transparent;
     color: var(--bs-text-muted);
+    text-decoration: none;
     cursor: pointer;
   }
 
@@ -4427,20 +4406,174 @@ button.bs-knot {
   }
 }
 
-/* The switcher sat inside .app-topnav-nav until the sidebar arrived, so hiding
-   that nav took it with it. It has its own box now: same place on screen, at
-   every width. */
-.app-topnav-org {
+/* ── LOCATION TRAIL ──────────────────────────────────────────
+   Organization / binder, in the top bar — GitHub's owner / repo.
+   The scope and never the page: where inside the binder you are is
+   the page path's job, inside the content (see PAGE PATH).
+──────────────────────────────────────────────────────────────── */
+
+.app-topnav-brand {
+  text-decoration: none;
+}
+
+.app-trail {
   display: flex;
   align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
   margin-left: var(--brand-space-6);
+}
+
+.app-trail-list {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.app-trail-org {
+  display: flex;
+  align-items: center;
   flex-shrink: 0;
 }
 
+/* Nothing to name yet: the separator after it would open the trail with a
+   slash. */
+.app-trail-org:empty + .app-trail-step > .app-trail-sep {
+  display: none;
+}
+
+.app-trail-step {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.app-trail-sep {
+  padding: 0 var(--brand-space-1);
+  color: var(--bs-text-faint);
+  font-size: var(--brand-text-ui-md);
+  user-select: none;
+}
+
+.app-trail-link,
+.app-trail-text {
+  display: block;
+  min-width: 0;
+  padding: var(--brand-space-1) var(--brand-space-1-5);
+  border-radius: var(--brand-radius-md);
+  overflow: hidden;
+  font-size: var(--brand-text-ui-md);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.app-trail-link {
+  color: var(--bs-text-secondary);
+  text-decoration: none;
+}
+
+.app-trail-link:hover {
+  color: var(--bs-text-primary);
+  background: var(--bs-surface-3);
+}
+
+.app-trail-link:focus-visible {
+  outline: 2px solid var(--bs-coral-text);
+  outline-offset: 1px;
+}
+
+.app-trail-text--current {
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-medium);
+}
+
+.app-trail-org .app-topnav-link[aria-current="page"] {
+  color: var(--bs-text-primary);
+}
+
 @media (max-width: 768px) {
-  .app-topnav-org {
+  .app-trail {
     margin-left: var(--brand-space-3);
   }
+
+  /* **A phone keeps the organization and nothing after it.** The binder is
+     the first chip of the strip under the top bar, so naming it here too
+     would cost the search button beside it for a word already on screen. */
+  .app-trail-step {
+    display: none;
+  }
+}
+
+/* ── PAGE PATH ───────────────────────────────────────────────
+   Change requests / Change 4 / Compare, above a binder page's
+   title. Inside the content because it is about the content —
+   GitLab's file path, not its header. Quieter than the title it
+   leads to, and every step above the last is a link back up.
+──────────────────────────────────────────────────────────────── */
+
+.page-path {
+  margin: 0 0 var(--brand-space-3);
+}
+
+.page-path-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: var(--brand-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--brand-text-ui-md);
+}
+
+.page-path-step {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.page-path-sep {
+  padding: 0 var(--brand-space-1-5);
+  color: var(--bs-text-faint);
+  user-select: none;
+}
+
+.page-path-link,
+.page-path-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.page-path-link {
+  color: var(--bs-text-secondary);
+  text-decoration: none;
+  border-radius: var(--brand-radius-sm);
+}
+
+.page-path-link:hover {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.page-path-link:focus-visible {
+  outline: 2px solid var(--bs-coral-text);
+  outline-offset: 2px;
+}
+
+.page-path-text {
+  color: var(--bs-text-muted);
+}
+
+.page-path-text--current {
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-medium);
 }
 
 .app-workspace-pill {
@@ -5028,6 +5161,47 @@ button.bs-knot {
   flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
+  background: var(--bs-surface-2);
+}
+
+/* ── CANVAS ──────────────────────────────────────────────────
+   **The content, in a sheet of its own.** Everything about what
+   is on screen — a binder's files, the page, its path — sits on
+   one raised sheet; the things that are not about it (the brand,
+   the organization, search, the account, the map of the product)
+   sit on the warm ground around it. The sheet runs to the bottom
+   of the screen and rounds only its top corners, so it reads as
+   rising out of the frame rather than floating in it.
+──────────────────────────────────────────────────────────────── */
+
+.app-canvas {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0 var(--brand-space-2) 0 0;
+  overflow: hidden;
+  background: var(--bs-page-bg);
+  border: 1px solid var(--bs-rule);
+  border-bottom: none;
+  border-radius: var(--brand-radius-xl) var(--brand-radius-xl) 0 0;
+  box-shadow: var(--bs-shadow-sm);
+}
+
+@media (max-width: 768px) {
+  /* No sidebar beside it, so no ground to rise from on the sides: edge to
+     edge, keeping the rounded top that separates it from the bar. */
+  .app-canvas {
+    margin: 0;
+    border-left: none;
+    border-right: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-canvas {
+    display: block;
+    overflow: visible;
+  }
 }
 
 /* ── SIDEBAR ─────────────────────────────────────────────────── */
@@ -5035,8 +5209,8 @@ button.bs-knot {
 .app-sidebar {
   width: 220px;
   flex-shrink: 0;
-  background: var(--bs-surface-1);
-  border-right: 1px solid var(--bs-rule);
+  /* On the ground, not a panel: the sheet beside it is the panel. */
+  background: transparent;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -5079,7 +5253,9 @@ button.bs-knot {
   border: none;
   background: transparent;
   width: 100%;
+  box-sizing: border-box;
   text-align: left;
+  text-decoration: none;
   transition:
     color var(--brand-transition-base),
     background var(--brand-transition-base);
@@ -5087,12 +5263,12 @@ button.bs-knot {
 
 .app-sidebar-item:hover {
   color: var(--bs-text-primary);
-  background: var(--bs-surface-2);
+  background: var(--bs-surface-3);
 }
 
 .app-sidebar-item--active {
   color: var(--bs-text-primary);
-  background: var(--bs-surface-2);
+  background: var(--bs-surface-3);
   font-weight: var(--brand-weight-medium);
 }
 
@@ -5115,6 +5291,8 @@ button.bs-knot {
 
 .app-sidebar-item--muted {
   color: var(--bs-text-faint);
+  cursor: default;
+  pointer-events: none;
 }
 
 .app-sidebar-spacer {
@@ -5633,10 +5811,6 @@ button.bs-knot {
 
   .quick-find-all {
     white-space: nowrap;
-  }
-
-  .app-topnav-nav {
-    margin-left: var(--brand-space-3);
   }
 }
 
@@ -6918,6 +7092,19 @@ a.cmp-file-act {
 .app-menu-item:focus-visible {
   background: var(--bs-surface-2);
   outline: none;
+}
+
+.app-menu-item--check {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+}
+
+.app-menu-item-check {
+  display: inline-flex;
+  width: var(--brand-icon-sm);
+  flex-shrink: 0;
+  color: var(--bs-coral-text);
 }
 
 /* Read-only mode — a delinquent organization can read everything and write
@@ -8212,6 +8399,8 @@ a.bs-row:focus-visible {
   font-size: var(--brand-text-ui-md);
   font-weight: var(--brand-weight-semibold);
   text-align: left;
+  text-decoration: none;
+  box-sizing: border-box;
   cursor: pointer;
 }
 
@@ -8289,6 +8478,7 @@ a.bs-row:focus-visible {
     font-size: var(--brand-text-ui-md);
     font-weight: var(--brand-weight-medium);
     white-space: nowrap;
+    text-decoration: none;
     cursor: pointer;
   }
 

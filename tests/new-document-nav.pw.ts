@@ -18,7 +18,7 @@ test.describe("top nav new policy button", () => {
     // hidden because the sidebar carries the same destinations.
     await page
       .locator(".app-sidebar")
-      .getByRole("button", { name: "Documents" })
+      .getByRole("link", { name: "Documents" })
       .click();
     await expect(page.locator(".docs-page")).toBeVisible();
 
