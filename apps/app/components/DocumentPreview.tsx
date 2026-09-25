@@ -224,7 +224,7 @@ export function DocumentPreview({
           </span>
         </span>
         <button
-          className="bs-btn bs-btn-secondary doc-preview-download"
+          className="bs-btn bs-btn--sm bs-btn-secondary doc-preview-download"
           type="button"
           disabled={downloading || !fileName}
           onClick={() => onDownload(loadedBlob)}
@@ -253,7 +253,7 @@ export function DocumentPreview({
             </span>
           ) : null}
           <button
-            className="bs-btn bs-btn-secondary doc-preview-download"
+            className="bs-btn bs-btn--sm bs-btn-secondary doc-preview-download"
             type="button"
             disabled={downloading || !fileName}
             onClick={() => onDownload(loadedBlob)}
