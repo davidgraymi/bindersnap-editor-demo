@@ -102,20 +102,26 @@ export function DocumentChanges({
       <div className="bs-panel-bar">
         <div className="bs-segmented" role="group" aria-label="Filter changes">
           <button
-            className="bs-seg"
+            className="bs-seg queue-counter"
             type="button"
             aria-pressed={filter === "open"}
             onClick={() => onFilterChange("open")}
           >
-            Open {openChanges.length}
+            Open
+            <span className="queue-counter-value">{openChanges.length}</span>
           </button>
           <button
-            className="bs-seg"
+            className="bs-seg queue-counter"
             type="button"
             aria-pressed={filter === "closed"}
             onClick={() => onFilterChange("closed")}
           >
-            Closed{closedChanges === null ? "" : ` ${closedChanges.length}`}
+            Closed
+            {closedChanges === null ? null : (
+              <span className="queue-counter-value">
+                {closedChanges.length}
+              </span>
+            )}
           </button>
         </div>
       </div>
