@@ -1,6 +1,7 @@
 import { followInApp, navigateToHref } from "../appLink";
 import { buildLocationTrail, type TrailStep } from "../locationTrail";
 import type { AppRoute } from "../routes";
+import { BinderSwitcher } from "./BinderSwitcher";
 import { OrganizationSwitcher } from "./OrganizationSwitcher";
 
 /**
@@ -70,6 +71,8 @@ export function LocationTrail({
   const trail = buildLocationTrail(route, window.location.search);
   const binder = binderMissing ? null : trail.binder;
   const { organizationIsCurrent } = trail;
+  const binderRoute =
+    route.kind === "binder" || route.kind === "binderDocument" ? route : null;
 
   return (
     <nav className="app-trail" aria-label="Organization and binder">
@@ -83,12 +86,20 @@ export function LocationTrail({
             onSelect={(next) => onNavigate({ kind: "organization", org: next })}
           />
         </li>
-        {binder ? (
+        {binder && binderRoute ? (
           <li className="app-trail-step">
             <span className="app-trail-sep" aria-hidden="true">
               /
             </span>
-            <TrailStepLabel step={binder} current prefix="app-trail" />
+            {/* Every other binder in the organization, one click away — the
+                level people actually move between. */}
+            <BinderSwitcher
+              org={binderRoute.org}
+              binder={binderRoute.binder}
+              label={binder.label}
+              href={binder.href ?? null}
+              onNavigate={onNavigate}
+            />
           </li>
         ) : null}
       </ol>
