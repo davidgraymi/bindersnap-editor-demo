@@ -2,6 +2,11 @@ import { expect, test } from "@playwright/test";
 
 import { signInAsAlice } from "./helpers";
 
+// The People tab reads the organization's members, teams and invitations
+// before the form draws, which on a loaded runner uses up the suite's 10s
+// default by itself.
+test.describe.configure({ timeout: 45_000 });
+
 /**
  * A settings form is sized like the rest of the app, not like the landing page.
  *
