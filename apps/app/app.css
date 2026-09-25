@@ -8118,6 +8118,18 @@ a.bs-row:focus-visible {
   font-size: var(--brand-text-ui-md);
 }
 
+/* What each choice means, as a picture beside its name: a building for the
+   whole organization, a lock for a closed list. */
+.bs-choice-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--bs-text-muted);
+}
+
+.bs-choice:has(input:checked) .bs-choice-icon {
+  color: var(--bs-coral-text);
+}
+
 /* ── Container three: the note ────────────────────────────────────────────
    Empty states and consequences, and nothing else. A note that is always
    there is furniture; the sign-off empty state earns its place precisely
@@ -9710,16 +9722,6 @@ a.binder-latest-title:focus-visible {
   color: var(--bs-status-danger-fg);
 }
 
-.new-binder-choice-icon {
-  flex-shrink: 0;
-  margin-top: 1px;
-  color: var(--bs-text-muted);
-}
-
-.bs-choice:has(input:checked) .new-binder-choice-icon {
-  color: var(--bs-coral-text);
-}
-
 .new-binder-actions {
   display: flex;
   flex-wrap: wrap;
@@ -9730,4 +9732,55 @@ a.binder-latest-title:focus-visible {
 
 .new-binder-actions .bs-btn {
   text-decoration: none;
+}
+
+/* ── Settings groups ──────────────────────────────────────────────────────
+   GitLab's settings hierarchy: a named group with a sentence under it, its
+   settings as subsections, and a rule between groups. The subsections keep
+   their own 15px titles; the group title is the step up. */
+
+.bs-settings {
+  display: flex;
+  flex-direction: column;
+}
+
+.bs-settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-4) 0;
+  border-top: 1px solid var(--bs-rule-warm);
+}
+
+.bs-settings-group:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+.bs-settings-group-head {
+  display: grid;
+  gap: var(--brand-space-0-5);
+}
+
+.bs-settings-group-title {
+  margin: 0;
+  color: var(--bs-text-primary);
+  font-family: var(--brand-font-sans);
+  font-size: 1.25rem;
+  font-weight: var(--brand-weight-semibold);
+  letter-spacing: -0.012em;
+  line-height: var(--brand-leading-snug);
+}
+
+.bs-settings-group-note {
+  max-width: var(--brand-measure);
+  margin: 0;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+.bs-settings-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-4);
 }
