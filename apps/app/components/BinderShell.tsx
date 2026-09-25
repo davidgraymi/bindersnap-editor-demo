@@ -39,6 +39,7 @@ import { BinderChanges } from "./BinderChanges";
 import { BinderHistory } from "./BinderHistory";
 import { BinderSettings } from "./BinderSettings";
 import { BinderDocumentPage } from "./BinderDocumentPage";
+import { BinderLatestChange } from "./BinderLatestChange";
 import { BinderDocuments } from "./BinderPage";
 import type { SidebarBinder } from "./AppSidebar";
 import type { DocumentRefView } from "../documentRefs";
@@ -850,35 +851,53 @@ export function BinderShell({
           }}
         />
       ) : (
-        <BinderDocuments
-          org={org}
-          binder={binder}
-          onOpenDocument={openDocument}
-          documentHref={documentHref}
-          activeDocument={documentPath ?? null}
-          draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
-          draftPicker={
-            draft?.draft && editMode === "editing" ? (
-              <BinderDraftPicker
-                drafts={draft.drafts}
-                others={draft.others}
-                current={draft.draft.branch}
-                busy={startingEdit}
-                onSwitch={switchDraft}
-                onStart={startAnother}
-                onRename={renameDraft}
-              />
-            ) : null
-          }
-          draftActs={draft?.draft?.acts ?? []}
-          reloadKey={reloadKey}
-          onEdited={refreshDraft}
-          onDraftLost={leaveEditMode}
-          onOpenArchive={() => goToArchive(true)}
-          onOpenChange={openChangeNumber}
-          onAddPolicy={() => setAdding(true)}
-          onNewFolder={() => setAddingFolder(true)}
-        />
+        <div className="binder-home">
+          {/* What happened last, above what is in it — GitLab's newest commit
+              over the files. Not while editing: the draft bar is the news
+              then, and the record has not moved. */}
+          {editMode === "off" ? (
+            <BinderLatestChange
+              key={reloadKey}
+              org={org}
+              binder={binder}
+              changeHref={(change) =>
+                buildBinderUrl({ org, binder, tab: "changes", change })
+              }
+              historyHref={buildBinderUrl({ org, binder, tab: "history" })}
+              onOpenChange={openChangeNumber}
+              onOpenHistory={() => goTo("history")}
+            />
+          ) : null}
+          <BinderDocuments
+            org={org}
+            binder={binder}
+            onOpenDocument={openDocument}
+            documentHref={documentHref}
+            activeDocument={documentPath ?? null}
+            draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
+            draftPicker={
+              draft?.draft && editMode === "editing" ? (
+                <BinderDraftPicker
+                  drafts={draft.drafts}
+                  others={draft.others}
+                  current={draft.draft.branch}
+                  busy={startingEdit}
+                  onSwitch={switchDraft}
+                  onStart={startAnother}
+                  onRename={renameDraft}
+                />
+              ) : null
+            }
+            draftActs={draft?.draft?.acts ?? []}
+            reloadKey={reloadKey}
+            onEdited={refreshDraft}
+            onDraftLost={leaveEditMode}
+            onOpenArchive={() => goToArchive(true)}
+            onOpenChange={openChangeNumber}
+            onAddPolicy={() => setAdding(true)}
+            onNewFolder={() => setAddingFolder(true)}
+          />
+        </div>
       )}
 
       {/* Last in the page, and sticky to the bottom of the viewport: it is
