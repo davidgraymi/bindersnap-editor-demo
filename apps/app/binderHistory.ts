@@ -163,6 +163,30 @@ export function describeApprovers(approvers: readonly string[]): string {
   return `approved by ${approvers.slice(0, -1).join(", ")} and ${last}`;
 }
 
+/**
+ * "Published by Carol Mendes · approved by Bob Okafor" — the history's own
+ * words, in one place for every screen that says them.
+ *
+ * `nameOf` turns a login into what the person is called. Without the
+ * organization's names to hand it capitalizes the login, which is right for
+ * `carol` and merely better than nothing for `jsmith`.
+ */
+export function describePublication(
+  change: Pick<HistoryChange, "submittedBy" | "approvers">,
+  nameOf: (login: string) => string = capitalizeLogin,
+): string {
+  const publisher = change.submittedBy
+    ? `Published by ${nameOf(change.submittedBy)} · `
+    : "";
+  const sentence = `${publisher}${describeApprovers(change.approvers.map(nameOf))}`;
+  // Capitalized as a whole: with no publisher, it starts at "no recorded…".
+  return sentence.charAt(0).toUpperCase() + sentence.slice(1);
+}
+
+function capitalizeLogin(login: string): string {
+  return login.charAt(0).toUpperCase() + login.slice(1);
+}
+
 /** How many versions a stretch of the spine published. */
 export function countVersions(changes: readonly HistoryChange[]): number {
   return changes.reduce(

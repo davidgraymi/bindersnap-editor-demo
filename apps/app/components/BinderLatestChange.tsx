@@ -4,15 +4,12 @@ import { History } from "lucide-react";
 import { fetchBinderHistory } from "../api";
 import { followInApp } from "../appLink";
 import {
-  describeApprovers,
+  describePublication,
   groupHistoryByChange,
   type HistoryChange,
 } from "../binderHistory";
-import {
-  capitalizeFirst,
-  formatAge,
-  formatTimestamp,
-} from "../documentDisplay";
+import { formatAge, formatTimestamp } from "../documentDisplay";
+import { nameFor, usePeopleNames } from "../usePeopleNames";
 import { PersonAvatar } from "./PersonAvatar";
 import { SkeletonLine } from "./Skeleton";
 
@@ -41,17 +38,6 @@ interface BinderLatestChangeProps {
   onOpenHistory: () => void;
 }
 
-/** "Published by Bob · approved by Carol" — the history's own words. */
-export function describeLatestChange(change: HistoryChange): string {
-  const publisher = change.submittedBy
-    ? `Published by ${capitalizeFirst(change.submittedBy)} · `
-    : "";
-  // Capitalized as a whole: with no publisher, it starts at "no recorded…".
-  return capitalizeFirst(
-    `${publisher}${describeApprovers(change.approvers.map(capitalizeFirst))}`,
-  );
-}
-
 export function BinderLatestChange({
   org,
   binder,
@@ -60,6 +46,8 @@ export function BinderLatestChange({
   onOpenChange,
   onOpenHistory,
 }: BinderLatestChangeProps) {
+  const names = usePeopleNames(org);
+  const nameOf = (login: string) => nameFor(names, login);
   // Undefined while loading; null once it is known there is nothing to show.
   const [latest, setLatest] = useState<HistoryChange | null | undefined>(
     undefined,
@@ -107,7 +95,10 @@ export function BinderLatestChange({
   return (
     <section className="bs-panel binder-latest" aria-label="Latest change">
       <PersonAvatar
-        person={{ login: latest.submittedBy, fullName: latest.submittedBy }}
+        person={{
+          login: latest.submittedBy,
+          fullName: nameOf(latest.submittedBy),
+        }}
         size="md"
       />
       <div className="binder-latest-body">
@@ -123,7 +114,7 @@ export function BinderLatestChange({
           </a>
         )}
         <p className="binder-latest-meta">
-          {describeLatestChange(latest)}
+          {describePublication(latest, nameOf)}
           {latest.publishedAt ? (
             <>
               {" · "}
