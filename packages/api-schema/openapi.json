@@ -1976,6 +1976,12 @@
           },
           "description": {
             "type": "string"
+          },
+          "openChangeCount": {
+            "type": "number"
+          },
+          "updatedAt": {
+            "type": "string"
           }
         },
         "required": [
@@ -1983,7 +1989,9 @@
           "name",
           "owner",
           "fullName",
-          "description"
+          "description",
+          "openChangeCount",
+          "updatedAt"
         ]
       },
       "WorkspaceListPayload": {
@@ -2008,6 +2016,12 @@
                 },
                 "description": {
                   "type": "string"
+                },
+                "openChangeCount": {
+                  "type": "number"
+                },
+                "updatedAt": {
+                  "type": "string"
                 }
               },
               "required": [
@@ -2015,7 +2029,9 @@
                 "name",
                 "owner",
                 "fullName",
-                "description"
+                "description",
+                "openChangeCount",
+                "updatedAt"
               ]
             }
           }
@@ -3741,6 +3757,12 @@
                           },
                           "description": {
                             "type": "string"
+                          },
+                          "openChangeCount": {
+                            "type": "number"
+                          },
+                          "updatedAt": {
+                            "type": "string"
                           }
                         },
                         "required": [
@@ -3748,7 +3770,9 @@
                           "name",
                           "owner",
                           "fullName",
-                          "description"
+                          "description",
+                          "openChangeCount",
+                          "updatedAt"
                         ]
                       }
                     }
@@ -3806,6 +3830,12 @@
                           },
                           "description": {
                             "type": "string"
+                          },
+                          "openChangeCount": {
+                            "type": "number"
+                          },
+                          "updatedAt": {
+                            "type": "string"
                           }
                         },
                         "required": [
@@ -3813,7 +3843,9 @@
                           "name",
                           "owner",
                           "fullName",
-                          "description"
+                          "description",
+                          "openChangeCount",
+                          "updatedAt"
                         ]
                       }
                     }
@@ -3892,6 +3924,12 @@
                         },
                         "description": {
                           "type": "string"
+                        },
+                        "openChangeCount": {
+                          "type": "number"
+                        },
+                        "updatedAt": {
+                          "type": "string"
                         }
                       },
                       "required": [
@@ -3899,7 +3937,9 @@
                         "name",
                         "owner",
                         "fullName",
-                        "description"
+                        "description",
+                        "openChangeCount",
+                        "updatedAt"
                       ]
                     }
                   },
@@ -3962,6 +4002,12 @@
                         },
                         "description": {
                           "type": "string"
+                        },
+                        "openChangeCount": {
+                          "type": "number"
+                        },
+                        "updatedAt": {
+                          "type": "string"
                         }
                       },
                       "required": [
@@ -3969,7 +4015,9 @@
                         "name",
                         "owner",
                         "fullName",
-                        "description"
+                        "description",
+                        "openChangeCount",
+                        "updatedAt"
                       ]
                     },
                     "documentCount": {

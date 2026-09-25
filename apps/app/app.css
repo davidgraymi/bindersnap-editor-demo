@@ -807,6 +807,40 @@ input {
   min-width: 12rem;
 }
 
+/* An organization's binders: open changes, then when it last moved. Both
+   columns hold their width so the list reads straight down. */
+.org-binder-facts {
+  align-self: center;
+  gap: var(--brand-space-3);
+  color: var(--bs-text-faint);
+  font-size: var(--brand-text-ui-md);
+  font-variant-numeric: tabular-nums;
+}
+
+.org-binder-changes {
+  display: inline-flex;
+  min-width: 44px;
+  align-items: center;
+  gap: var(--brand-space-1);
+}
+
+.org-binder-updated {
+  min-width: 9.5rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .org-binder-changes:empty {
+    display: none;
+  }
+
+  /* A phone has the width for the name or the date, and the name wins. */
+  .org-binder-updated {
+    display: none;
+  }
+}
+
 .org-group-remove {
   display: inline-flex;
   flex-shrink: 0;
@@ -7793,6 +7827,13 @@ a.bs-row:focus-visible {
   place-items: center;
   width: 18px;
   color: var(--bs-text-faint);
+}
+
+/* A tall row's icon belongs to its name, not to the row: one line of the
+   name's height, so the two share a centre instead of sharing a top edge. */
+.bs-row--tall > .bs-row-icon {
+  height: 1lh;
+  font-size: var(--brand-text-sm);
 }
 
 .bs-row-body {
