@@ -123,6 +123,10 @@ import {
   reconcileStripeCustomerByCustomerId,
 } from "./stripe/reconcile";
 import {
+  isStripeEventForThisRun,
+  stripeRunTagMetadata,
+} from "./stripe/run-tag";
+import {
   createGiteaBasicAuthClient,
   createGiteaClient,
   GiteaApiError,
@@ -3549,6 +3553,17 @@ async function handleStripeWebhook(
 
   logger.info("Stripe webhook received", { type, eventId });
 
+  // Another stack sharing this Stripe account caused this event (CI runs
+  // several at once). Acknowledge it so Stripe stops retrying, and touch
+  // nothing: its organization ids are that stack's, not ours.
+  if (!isStripeEventForThisRun(data, config.stripeRunTag)) {
+    logger.info("Stripe webhook belongs to another run — ignoring", {
+      eventId,
+      type,
+    });
+    return json(200, { received: true }, baseHeaders);
+  }
+
   if (eventId && (await webhookEventStore.isProcessed(eventId))) {
     logger.info("Duplicate webhook event — skipping", { eventId, type });
     return json(200, { received: true }, baseHeaders);
@@ -3621,6 +3636,7 @@ async function handleStripeWebhook(
             metadata: {
               bindersnap_gitea_org_id: String(giteaOrgId),
               ...(username ? { bindersnap_username: username } : {}),
+              ...stripeRunTagMetadata(config.stripeRunTag),
             },
           });
           logger.info("Backfilled customer metadata", {
@@ -9919,11 +9935,13 @@ async function handleBillingCheckout(
       bindersnap_gitea_org_id: String(organization.id),
       bindersnap_organization: organization.name,
       bindersnap_username: auth.session.username,
+      ...stripeRunTagMetadata(config.stripeRunTag),
     },
     subscription_data: {
       metadata: {
         bindersnap_gitea_org_id: String(organization.id),
         bindersnap_username: auth.session.username,
+        ...stripeRunTagMetadata(config.stripeRunTag),
       },
     },
     success_url: `${config.appOrigin}/billing?checkout=success`,

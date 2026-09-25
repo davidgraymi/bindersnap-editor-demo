@@ -22,6 +22,7 @@
  */
 
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -288,6 +289,18 @@ export default async function globalSetup(): Promise<void> {
         "Docker is not running or not installed. Start Docker and retry.",
       );
     }
+  }
+
+  // Every stack on one Stripe test account hears every event on it, so a
+  // checkout in another CI job would otherwise land on this job's
+  // same-numbered organization. The tag goes to the API through compose, and
+  // to the workers through process.env; see services/api/stripe/run-tag.ts.
+  // A SKIP_STACK run keeps whatever the running stack was started with.
+  if (
+    process.env.SKIP_STACK !== "1" &&
+    (process.env.STRIPE_RUN_TAG ?? "").trim() === ""
+  ) {
+    process.env.STRIPE_RUN_TAG = `run-${randomUUID()}`;
   }
 
   await ensureStripeWebhookSecret({

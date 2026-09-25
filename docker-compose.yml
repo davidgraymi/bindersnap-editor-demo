@@ -154,6 +154,7 @@ services:
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
       - STRIPE_PRICE_ID=${STRIPE_PRICE_ID:-}
+      - STRIPE_RUN_TAG=${STRIPE_RUN_TAG:-}
     ports:
       - "${API_PORT:-8787}:${API_PORT:-8787}"
     volumes:
