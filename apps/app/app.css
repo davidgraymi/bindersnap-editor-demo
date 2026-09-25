@@ -9590,3 +9590,95 @@ a.bs-row:focus-visible {
 .change-tabs .doc-tab {
   text-decoration: none;
 }
+
+/* The card and the tree it sits over are one thing, so they sit closer to
+   each other than to the header. */
+.binder-home {
+  display: grid;
+  gap: var(--brand-space-1-5);
+  align-content: start;
+}
+
+/* ── The binder's latest change ───────────────────────────────────────────
+   GitLab's last-commit card, above the files: who, what, when, and the way to
+   the rest of the record. One line on a desktop; the actions drop under the
+   words on a phone rather than squeezing the title. */
+
+.binder-latest {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  padding: var(--brand-space-1-5) var(--brand-space-2);
+}
+
+.binder-latest--loading {
+  min-height: 62px;
+  box-sizing: border-box;
+}
+
+.binder-latest-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.binder-latest-title {
+  display: block;
+  overflow: hidden;
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-semibold);
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+a.binder-latest-title:hover {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+a.binder-latest-title:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 1px;
+  border-radius: var(--brand-radius-sm);
+}
+
+.binder-latest-meta {
+  margin: 2px 0 0;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.binder-latest-right {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+}
+
+.binder-latest-count {
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+  white-space: nowrap;
+}
+
+.binder-latest-history {
+  gap: 6px;
+  text-decoration: none;
+}
+
+@media (max-width: 640px) {
+  .binder-latest {
+    flex-wrap: wrap;
+  }
+
+  .binder-latest-title {
+    white-space: normal;
+  }
+
+  .binder-latest-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
