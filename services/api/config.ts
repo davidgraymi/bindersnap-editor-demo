@@ -14,6 +14,9 @@ export interface ApiConfig {
   stripeSecretKey: string;
   stripeWebhookSecret: string;
   stripePriceId: string;
+  // Set only where several stacks share one Stripe account (CI). See
+  // stripe/run-tag.ts.
+  stripeRunTag: string;
   defaultAppOrigin: string;
   appOrigin: string;
   configuredAllowedOrigins: Set<string>;
@@ -64,6 +67,7 @@ const STRING_ENV: Record<string, StringSpec> = {
   STRIPE_SECRET_KEY: { requiredInProduction: true, default: "" },
   STRIPE_WEBHOOK_SECRET: { requiredInProduction: true, default: "" },
   STRIPE_PRICE_ID: { requiredInProduction: true, default: "" },
+  STRIPE_RUN_TAG: { default: "" },
   BINDERSNAP_ALLOWED_ORIGINS: { default: "" },
   BINDERSNAP_APP_ORIGIN: { default: "" },
   BINDERSNAP_USER_EMAIL_DOMAIN: { default: "users.bindersnap.local" },
@@ -349,6 +353,7 @@ export function initializeConfig(
       isProduction,
     ),
     stripePriceId: parseString(resolvedEnv, "STRIPE_PRICE_ID", isProduction),
+    stripeRunTag: parseString(resolvedEnv, "STRIPE_RUN_TAG", isProduction),
     defaultAppOrigin,
     appOrigin: resolvePrimaryAppOrigin(
       allowedOriginsRaw,

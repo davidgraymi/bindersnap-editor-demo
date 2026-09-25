@@ -26,7 +26,11 @@ import { randomUUID } from "node:crypto";
 
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import { resolveStripeWebhookSecret } from "./stripe-runtime";
-import { buildTestStripeEvent, signWebhookBody } from "./stripe-webhook";
+import {
+  buildTestStripeEvent,
+  signWebhookBody,
+  stripeRunTag,
+} from "./stripe-webhook";
 import { STRIPE_API_VERSION } from "../services/api/stripe/api-version";
 
 // ---------------------------------------------------------------------------
@@ -119,6 +123,16 @@ async function stripeFetch(
 }
 
 /**
+ * This run's tag as form fields. Every CI job's `stripe listen` hears the
+ * events these objects cause, and without the tag another job's API would
+ * reconcile them onto its own organization with the same number.
+ */
+function runTagParams(): Record<string, string> {
+  const tag = stripeRunTag();
+  return tag === "" ? {} : { "metadata[bindersnap_run]": tag };
+}
+
+/**
  * Create a Stripe test Customer + Subscription in trial mode.
  *
  * Uses the 4242 test card — no real charge is made. The subscription is
@@ -136,6 +150,7 @@ async function createTestCustomerAndSubscription(giteaOrgId: number): Promise<{
     "/v1/customers",
     new URLSearchParams({
       "metadata[bindersnap_gitea_org_id]": String(giteaOrgId),
+      ...runTagParams(),
     }),
   );
   const customerId = customer.id as string;
@@ -164,6 +179,7 @@ async function createTestCustomerAndSubscription(giteaOrgId: number): Promise<{
       customer: customerId,
       "items[0][price]": STRIPE_PRICE_ID,
       trial_period_days: "1",
+      ...runTagParams(),
     }),
   );
 
