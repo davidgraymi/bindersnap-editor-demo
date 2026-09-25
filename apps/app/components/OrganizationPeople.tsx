@@ -826,12 +826,11 @@ function AddOrgPersonForm({
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [results, setResults] = useState<
-    Array<{ login: string; fullName: string; avatarUrl: string }>
+    Array<{ login: string; fullName: string }>
   >([]);
   const [picked, setPicked] = useState<{
     login: string;
     fullName: string;
-    avatarUrl: string;
   } | null>(null);
   const [owner, setOwner] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -867,7 +866,6 @@ function AddOrgPersonForm({
             .map((user) => ({
               login: user.login ?? "",
               fullName: user.full_name ?? "",
-              avatarUrl: user.avatar_url ?? "",
             }))
             .filter((user) => user.login !== ""),
         );
