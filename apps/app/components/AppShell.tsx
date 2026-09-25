@@ -479,7 +479,6 @@ export function AppShell({
       {/* Below 768px the sidebar is not rendered and this is the navigation.
           Fixed to the bottom, so it sits outside the scrolling body. */}
       <AppBottomNav route={route} org={sidebarOrg} onNavigate={onNavigate} />
-
     </div>
   );
 }
