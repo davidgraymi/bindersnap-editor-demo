@@ -154,10 +154,20 @@ test("folding a document keeps its bar, and every act in it", async ({
   page,
 }) => {
   await signInAsAlice(page);
-  await page.goto(comparisonUrl("facilities", 4));
+  // Not facilities #4: that change only renames a folder, so both of its
+  // documents read the same at both refs, draw no comparison, and leave an
+  // empty body that the stylesheet already hides. "Visible before folding"
+  // held there only while the comparison was still loading — a race, and one
+  // CI lost. Clinical #19 changes the wording, so its body settles to a diff
+  // that stays on screen until it is folded.
+  await page.goto(comparisonUrl("clinical", 19));
 
   const first = page.locator(".cmp-file").first();
-  await expect(first.locator(".cmp-file-body")).toBeVisible();
+  const body = first.locator(".cmp-file-body");
+  // Wait for the settled diff, not the loading skeleton, so folding is the
+  // only thing that can hide it.
+  await expect(body.locator("del").first()).toBeVisible({ timeout: 30_000 });
+  await expect(body).toBeVisible();
 
   await first.locator(".cmp-file-fold").click();
 
@@ -168,7 +178,7 @@ test("folding a document keeps its bar, and every act in it", async ({
   // the document and leaves the way to view or download it.
   await expect(
     first.locator(".cmp-file-head").getByRole("link", { name: "View" }),
-  ).toHaveAttribute("href", /\?ref=.*&change=4/);
+  ).toHaveAttribute("href", /\?ref=.*&change=19/);
   await expect(
     first.locator(".cmp-file-head").getByRole("button", { name: "Download" }),
   ).toBeVisible();
