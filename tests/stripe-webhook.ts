@@ -1,15 +1,25 @@
+import { randomUUID } from "node:crypto";
+
+/**
+ * A synthetic Stripe event, as `stripe/webhook` receives one.
+ *
+ * The id is random, not the clock: the API drops an event id it has already
+ * processed, so two events built in the same millisecond used to collide and
+ * the second was silently skipped as a duplicate.
+ */
 export function buildTestStripeEvent(
   type: string,
   object: Record<string, unknown>,
+  options: { created?: number } = {},
 ): {
   body: string;
   event: Record<string, unknown>;
 } {
   const event = {
-    id: `evt_test_${Date.now()}`,
+    id: `evt_test_${randomUUID().replace(/-/g, "")}`,
     type,
     livemode: false,
-    created: Math.floor(Date.now() / 1000),
+    created: options.created ?? Math.floor(Date.now() / 1000),
     data: { object },
   };
 
