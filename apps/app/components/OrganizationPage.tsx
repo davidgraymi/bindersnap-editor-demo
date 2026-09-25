@@ -10,7 +10,7 @@ import { buildBinderUrl } from "../binderShell";
 import { formatDocumentName } from "../documentDisplay";
 import { NewBinderPage } from "./NewBinderPage";
 import { OrganizationPeople } from "./OrganizationPeople";
-import { SkeletonGroup, SkeletonLine } from "./Skeleton";
+import { SkeletonPanel } from "./Skeleton";
 
 /** The organization's tabs. Binders is the one it opens on. */
 const ORG_TABS = ["binders", "people"] as const;
@@ -189,20 +189,7 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
       {header}
 
       {binders === null ? (
-        <SkeletonGroup label={`Opening ${org}`}>
-          {Array.from({ length: 3 }).map((_, index) => (
-            <div
-              className="docs-list-item docs-list-item--skeleton"
-              key={index}
-            >
-              <span className="docs-list-item-icon" />
-              <span className="bs-skeleton-lines">
-                <SkeletonLine width="medium" />
-                <SkeletonLine width="short" />
-              </span>
-            </div>
-          ))}
-        </SkeletonGroup>
+        <SkeletonPanel label={`Opening ${org}`} rows={3} />
       ) : binders.length === 0 ? (
         <div className="bs-panel">
           <div className="bs-empty">

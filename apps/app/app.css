@@ -1026,7 +1026,6 @@ input {
    because how far a heading is from what follows it is a property of what
    follows it. */
 .doc-header-title,
-.docs-title,
 .home-greeting {
   font-family: var(--brand-font-serif);
   font-size: 26px;
@@ -3998,6 +3997,28 @@ a.bs-knot {
   border-radius: var(--brand-radius-full);
 }
 
+.bs-skeleton-shape--glyph {
+  width: 16px;
+  height: 16px;
+  border-radius: var(--brand-radius-xs);
+}
+
+/* A panel's rows, waiting. The shapes pulse; the panel around them does not,
+   because the panel is not what is loading. The label that goes first is for
+   screen readers, so it must not take the first row's place. */
+.bs-skeleton-panel .bs-panel-bar .bs-skeleton-line {
+  flex: 0 0 auto;
+  width: 120px;
+}
+
+.bs-skeleton-panel .bs-skeleton-label + .bs-row {
+  border-top: none;
+}
+
+.bs-skeleton-panel .bs-row--tall {
+  align-items: center;
+}
+
 /* A row of shapes: icon, body lines, and whatever sits on the right. */
 .bs-skeleton-row {
   display: flex;
@@ -6064,8 +6085,8 @@ a.bs-knot {
    a time, narrowed by people, and nothing else to set.
    ══════════════════════════════════════════════════════════════ */
 
-.docs-title {
-  margin: 0 0 var(--brand-space-5);
+.docs-page > .bs-pagehead {
+  margin-bottom: var(--brand-space-5);
 }
 
 /* ── Saved views and person filters ── */
@@ -6323,10 +6344,6 @@ a.bs-knot {
   outline-offset: -2px;
 }
 
-.docs-list-item--skeleton {
-  cursor: default;
-}
-
 .docs-list-item-icon {
   width: 36px;
   height: 36px;
@@ -6405,12 +6422,6 @@ a.bs-knot {
   font-size: var(--brand-text-ui-md);
   color: var(--bs-text-muted);
   max-width: 52ch;
-}
-
-.docs-count {
-  margin: 14px 4px 0;
-  font-size: var(--brand-text-ui-sm);
-  color: var(--bs-text-faint);
 }
 
 /*
