@@ -140,7 +140,7 @@ export function DocumentsPage({
 
       <div className="docs-views">
         <input
-          className="bs-input docs-search"
+          className="bs-input bs-input--sm docs-search"
           type="search"
           value={state.freeText}
           placeholder="Search documents"
@@ -154,7 +154,7 @@ export function DocumentsPage({
 
         {library && library.binders.length > 1 ? (
           <select
-            className="bs-input docs-binder-filter"
+            className="bs-input bs-input--sm docs-binder-filter"
             value={state.binder ?? ""}
             aria-label="Which binder"
             onChange={(event) => {
