@@ -13,6 +13,7 @@ import {
   type QueueRow,
 } from "../reviewQueue";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
+import { buildBinderUrl } from "../binderShell";
 import { ChangeRowView } from "./ChangeRow";
 
 /**
@@ -163,6 +164,12 @@ export function ReviewQueuePage({
                     meta={row.meta}
                     tone={row.tone}
                     standing={row.standing}
+                    href={buildBinderUrl({
+                      org: row.owner,
+                      binder: row.repo,
+                      tab: "changes",
+                      change: row.number,
+                    })}
                     onOpen={() => onOpenChange(row.owner, row.repo, row.number)}
                   />
                 ))}
