@@ -2834,8 +2834,8 @@ input {
   font-weight: var(--brand-weight-semibold);
 }
 
-button.bs-knot {
-  cursor: pointer;
+a.bs-knot {
+  text-decoration: none;
 }
 
 .bs-knot--change:hover {
@@ -2876,9 +2876,28 @@ button.bs-knot {
   font: inherit;
   font-weight: var(--brand-weight-medium);
   text-align: left;
+  text-decoration: none;
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
+}
+
+.bs-spine-title {
+  color: inherit;
+  text-decoration: none;
+}
+
+.bs-spine-title:hover {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.bs-spine-title:focus-visible,
+.bs-versionrow-name:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 1px;
+  border-radius: var(--brand-radius-sm);
 }
 
 .bs-versionrow-name:hover {

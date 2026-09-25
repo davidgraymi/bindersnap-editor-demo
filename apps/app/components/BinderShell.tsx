@@ -798,6 +798,12 @@ export function BinderShell({
           binder={binder}
           onOpenDocument={openDocument}
           onOpenChange={openChangeNumber}
+          documentHref={(documentPath, version) =>
+            buildDocumentUrl({ org, binder, documentPath, version })
+          }
+          changeHref={(change) =>
+            buildBinderUrl({ org, binder, tab: "changes", change })
+          }
         />
       ) : activeTab === "settings" ? (
         <BinderSettings
