@@ -34,6 +34,14 @@ function resolveAppPort(): string {
   return process.env.APP_PORT ?? "5173";
 }
 
+function resolveWorkers(): number | string | undefined {
+  const configured = process.env.PLAYWRIGHT_WORKERS?.trim();
+  if (configured) {
+    return /^\d+$/.test(configured) ? Number(configured) : configured;
+  }
+  return process.env.CI ? 4 : undefined;
+}
+
 const APP_PORT = resolveAppPort();
 process.env.APP_PORT = APP_PORT;
 const baseURL =
@@ -44,6 +52,12 @@ export default defineConfig({
   testMatch: "**/*.pw.ts",
   timeout: 10_000,
   retries: process.env.CI ? 2 : 1,
+
+  // Playwright's default is half the cores: two on a 4-vCPU CI runner, which
+  // left the suite at ~18 minutes. The specs spend their time waiting on
+  // Gitea and the API rather than on the CPU, so CI runs four. Override with
+  // PLAYWRIGHT_WORKERS (a count or a percentage) on a smaller machine.
+  workers: resolveWorkers(),
 
   // globalSetup starts the Docker Compose stack before any test runs.
   // globalTeardown shuts it down afterwards.
@@ -56,7 +70,10 @@ export default defineConfig({
     headless: true,
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
-    video: "retain-on-failure",
+    // Video encodes every test, pass or fail, on the same four cores that run
+    // the stack. In CI the retained trace already carries a screencast and a
+    // DOM snapshot per action, which is what a failure is debugged from.
+    video: process.env.CI ? "off" : "retain-on-failure",
   },
 
   // Write all artefacts under the repo-root test-results/ directory so they

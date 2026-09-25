@@ -39,6 +39,20 @@ SKIP_STACK=1 bun run test:integration
 If you want proxy-path webhook coverage in that mode, make sure the existing
 stack includes the local Caddy service on `http://localhost:${API_PROXY_PORT:-8788}`.
 
+### Workers, and when a spec file may be serial
+
+CI runs four Playwright workers, and a local run uses half the cores. Set
+`PLAYWRIGHT_WORKERS` (a count like `3`, or a percentage like `50%`) to override
+either one.
+
+A spec file whose tests each sign up their own account and build their own
+organization is `mode: "parallel"`, so its tests can spread across workers.
+Mark a file `serial` only if its tests really share something: a `beforeAll`,
+a module-level variable one test sets and a later one reads, or seeded data
+that one test changes and another asserts on. A serial file ties up one worker
+from its first test to its last. Before these files went parallel,
+`workspace-provisioning` alone ran six minutes that way.
+
 ### Testing an API you built from source
 
 By default the run goes through the stack's Caddy proxy, which means the API

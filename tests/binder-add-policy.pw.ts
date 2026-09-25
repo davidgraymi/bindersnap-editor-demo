@@ -31,7 +31,7 @@ import {
 
 // Signup, an organization, two binders and several page loads on a stack that
 // may be cold. The suite default is nowhere near enough.
-test.describe.configure({ mode: "serial", timeout: 180_000 });
+test.describe.configure({ mode: "parallel", timeout: 180_000 });
 
 interface Credentials {
   username: string;
