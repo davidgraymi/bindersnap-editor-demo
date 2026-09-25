@@ -43,6 +43,11 @@ interface LocationTrailProps {
   route: AppRoute;
   /** The organization the page belongs to, or the one the app settled on. */
   org: string | null;
+  /**
+   * The address names a binder that is not there. The trail stops at the
+   * organization rather than naming a binder the page says does not exist.
+   */
+  binderMissing?: boolean;
   onNavigate: (route: AppRoute) => void;
 }
 
@@ -56,11 +61,15 @@ interface LocationTrailProps {
  * route on `popstate`, which every in-app move dispatches, so reading the
  * query here at render time is reading the address the page is showing.
  */
-export function LocationTrail({ route, org, onNavigate }: LocationTrailProps) {
-  const { binder, organizationIsCurrent } = buildLocationTrail(
-    route,
-    window.location.search,
-  );
+export function LocationTrail({
+  route,
+  org,
+  binderMissing = false,
+  onNavigate,
+}: LocationTrailProps) {
+  const trail = buildLocationTrail(route, window.location.search);
+  const binder = binderMissing ? null : trail.binder;
+  const { organizationIsCurrent } = trail;
 
   return (
     <nav className="app-trail" aria-label="Organization and binder">

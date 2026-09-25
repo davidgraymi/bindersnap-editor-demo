@@ -23,6 +23,17 @@ test("a binder that does not exist is a not-found page, not a crash", async ({
   ).toBeVisible();
   // No binder, so nothing to add to it or edit.
   await expect(page.getByRole("button", { name: "Edit" })).toHaveCount(0);
+  // And the top bar stops at the organization instead of naming it.
+  const trail = page.getByRole("navigation", {
+    name: "Organization and binder",
+  });
+  await expect(trail).toBeVisible();
+  await expect(trail).not.toContainText("No Such Binder");
+
+  // A binder that is there still gets its name back.
+  await page.goto("/riverside-health/corporate");
+  await expect(trail).toContainText("Corporate");
+  await page.goto("/riverside-health/no-such-binder");
 
   await page.getByRole("link", { name: /^Back to / }).click();
   await expect(page).toHaveURL(/\/riverside-health$/);
