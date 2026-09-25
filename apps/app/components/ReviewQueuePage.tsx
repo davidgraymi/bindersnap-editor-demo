@@ -12,7 +12,7 @@ import {
   type QueueFilter,
   type QueueRow,
 } from "../reviewQueue";
-import { SkeletonGroup, SkeletonLine } from "./Skeleton";
+import { SkeletonPanel } from "./Skeleton";
 import { buildBinderUrl } from "../binderShell";
 import { ChangeRowView } from "./ChangeRow";
 
@@ -91,27 +91,21 @@ export function ReviewQueuePage({
 
   return (
     <div className="docw-page queue-page">
-      <header className="doc-header">
-        <div className="doc-header-top">
-          <div className="doc-header-identity">
-            <h1 className="doc-header-title">Change requests</h1>
-            <p className="doc-header-fact">
-              {documents === null
-                ? "Gathering what is in flight…"
-                : describeQueue(counts)}
-            </p>
-          </div>
+      <div className="bs-pagehead">
+        <div className="bs-pagehead-body">
+          <h1 className="bs-title">Change requests</h1>
+          <p className="bs-subtitle">
+            {documents === null
+              ? "Gathering what is in flight…"
+              : describeQueue(counts)}
+          </p>
         </div>
-      </header>
+      </div>
 
       {error ? <p className="app-inline-error">{error}</p> : null}
 
       {documents === null ? (
-        <SkeletonGroup label="Loading change requests">
-          <SkeletonLine width="medium" />
-          <SkeletonLine width="wide" />
-          <SkeletonLine width="wide" />
-        </SkeletonGroup>
+        <SkeletonPanel label="Loading change requests" rows={3} bar right />
       ) : rows.length === 0 ? (
         <div className="home-empty">
           <p>Nothing is in flight right now.</p>

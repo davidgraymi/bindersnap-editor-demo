@@ -378,19 +378,14 @@ test("every page begins in the same place, at the same size", async ({
     await settleOnRealShell(page);
     // And the page's own heading, because it is one of the four things
     // measured below and a route can still be a render behind its shell.
-    await page
-      .locator(".bs-title, .doc-header-title, .docs-title")
-      .first()
-      .waitFor();
+    await page.locator(".bs-title, .doc-header-title").first().waitFor();
 
     const shape = await page.evaluate(() => {
       const main = document.querySelector(".app-main");
       const root = main?.firstElementChild as HTMLElement | undefined;
       if (!root) return null;
       const box = root.getBoundingClientRect();
-      const heading = main!.querySelector(
-        ".bs-title, .doc-header-title, .docs-title",
-      );
+      const heading = main!.querySelector(".bs-title, .doc-header-title");
       return {
         left: Math.round(box.left),
         width: Math.round(box.width),
@@ -654,7 +649,7 @@ test("no heading on a page outranks the page's own title", async ({ page }) => {
       const main = document.querySelector(".app-main");
       if (!main) return null;
       const title = main.querySelector(
-        ".bs-title, .doc-header-title, .docs-title, .home-greeting",
+        ".bs-title, .doc-header-title, .home-greeting",
       );
       if (!title) return [];
       const titleSize = parseFloat(getComputedStyle(title).fontSize);

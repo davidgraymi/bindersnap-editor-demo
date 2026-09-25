@@ -19,7 +19,7 @@ import {
 import { followInApp } from "../appLink";
 import { buildDocumentUrl } from "../binderDocument";
 import { buildBinderUrl } from "../binderShell";
-import { SkeletonGroup, SkeletonLine } from "./Skeleton";
+import { SkeletonPanel } from "./Skeleton";
 
 interface DocumentsPageProps {
   onSelectDocument: (org: string, binder: string, slugPath: string) => void;
@@ -123,16 +123,20 @@ export function DocumentsPage({
       {/* Named for the entry that opens it. It was "Policies" while the
           navigation said "Documents", so the page a reader arrived at was not
           the page they had clicked. */}
-      <h1 className="docs-title">Documents</h1>
-      <p className="docs-count">
-        {library === null
-          ? "Reading your binders…"
-          : `${describeDocumentCount(rows.length)} across ${
-              library.binders.length === 1
-                ? "1 binder"
-                : `${library.binders.length} binders`
-            }`}
-      </p>
+      <div className="bs-pagehead">
+        <div className="bs-pagehead-body">
+          <h1 className="bs-title">Documents</h1>
+          <p className="bs-subtitle">
+            {library === null
+              ? "Reading your binders…"
+              : `${describeDocumentCount(rows.length)} across ${
+                  library.binders.length === 1
+                    ? "1 binder"
+                    : `${library.binders.length} binders`
+                }`}
+          </p>
+        </div>
+      </div>
 
       <div className="docs-views">
         <input
@@ -182,10 +186,7 @@ export function DocumentsPage({
       </div>
 
       {library === null ? (
-        <SkeletonGroup label="Reading your documents">
-          <SkeletonLine width="medium" />
-          <SkeletonLine width="short" />
-        </SkeletonGroup>
+        <SkeletonPanel label="Reading your documents" rows={3} bar right />
       ) : rows.length === 0 ? (
         <p className="doc-rail-note">
           {state.freeText
