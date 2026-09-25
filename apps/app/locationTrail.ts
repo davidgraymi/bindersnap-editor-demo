@@ -96,9 +96,11 @@ function binderPath(org: string, binder: string, search: string): TrailStep[] {
     // The binder as a change would leave it, from the branch link on a
     // comparison. Still inside that change, so still under it.
     const onBranch = params.get("ref") !== null && tab === "documents";
+    // Named for the tab that opens it — Overview · Changes, the way a code
+    // host names a merge request's — so the trail and the tab agree.
     const subpage =
       view === "compare"
-        ? "Compare"
+        ? "Changes"
         : view === "preview"
           ? "Preview"
           : onBranch

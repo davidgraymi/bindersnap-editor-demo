@@ -127,6 +127,13 @@ interface DocumentChangeDetailProps {
   banner?: React.ReactNode;
   /** Which of several documents the file screens are about. */
   documentPicker?: React.ReactNode;
+  /**
+   * Whether it is still open, or how it ended — the badge before the line
+   * under the title.
+   */
+  status?: React.ReactNode;
+  /** Overview and Changes: the change's two screens, as tabs under its header. */
+  tabs?: React.ReactNode;
 }
 
 interface PRActionState {
@@ -278,6 +285,8 @@ export function DocumentChangeDetail({
   onOpenSignOffRules = null,
   banner = null,
   documentPicker = null,
+  status = null,
+  tabs = null,
 }: DocumentChangeDetailProps) {
   // Above every early return, like the other hooks here — the notes on
   // `DocumentPreview` record what hook order costs when it slips.
@@ -547,6 +556,7 @@ export function DocumentChangeDetail({
             <div className="bs-pagehead-body">
               <h1 className="bs-title rev-title">{change.summary}</h1>
               <p className="bs-facts">
+                {status}
                 {opening.who} opened this on {opening.when}
                 {opening.becomes !== null ? (
                   <>
@@ -579,6 +589,8 @@ export function DocumentChangeDetail({
             ) : null}
           </header>
         )}
+
+        {tabs}
 
         {outcome ? (
           <p className="rev-outcome" role="status">
