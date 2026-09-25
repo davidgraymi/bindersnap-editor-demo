@@ -312,7 +312,6 @@ export function BinderChangePage({
           /* Arriving from a particular document's Compare button opens on that
              document rather than at the top of a page of six. */
           focusDocument={shown?.slugPath ?? null}
-          onBackToChange={() => onViewChange("discussion")}
           /* The branch's root: the binder as this change would leave it. */
           branchHref={buildBinderUrl({
             org,

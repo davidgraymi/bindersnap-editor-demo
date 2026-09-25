@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Building2, ChevronDown } from "lucide-react";
+import { Building2, Check, ChevronDown } from "lucide-react";
 
 import { fetchOrganizations } from "../api";
+import { followInApp } from "../appLink";
+import { formatDocumentName } from "../documentDisplay";
 import { defaultOrganization } from "../useOrganizationDisplayName";
 import type { OrganizationSummary } from "../../../packages/api-schema/schemas/organizations";
 
@@ -21,11 +23,19 @@ import type { OrganizationSummary } from "../../../packages/api-schema/schemas/o
 interface OrganizationSwitcherProps {
   /** The organization the current page belongs to, if any. */
   currentOrg?: string;
+  /**
+   * Whether the organization's own page is the one on screen.
+   *
+   * It is the first step of the location trail, so it is marked the way the
+   * last step of any trail is.
+   */
+  isCurrentPage?: boolean;
   onSelect: (org: string) => void;
 }
 
 export function OrganizationSwitcher({
   currentOrg,
+  isCurrentPage = false,
   onSelect,
 }: OrganizationSwitcherProps) {
   const [organizations, setOrganizations] = useState<OrganizationSummary[]>([]);
@@ -80,7 +90,23 @@ export function OrganizationSwitcher({
     return () => window.removeEventListener("resize", placeMenu);
   }, [isOpen, placeMenu]);
 
-  if (organizations.length === 0) return null;
+  // **Named from the address while the list loads.** This is the first step
+  // of the trail in the top bar, and a trail that starts with the binder and
+  // then grows an organization in front of it a moment later is a trail that
+  // jumps. The slug formats to the display name in the ordinary case.
+  if (organizations.length === 0) {
+    return currentOrg ? (
+      <a
+        className="app-topnav-link"
+        href={`/${currentOrg}`}
+        aria-current={isCurrentPage ? "page" : undefined}
+        onClick={(event) => followInApp(event, () => onSelect(currentOrg))}
+      >
+        <Building2 size={14} strokeWidth={1.5} aria-hidden="true" />{" "}
+        {formatDocumentName(currentOrg)}
+      </a>
+    ) : null;
+  }
 
   // Same rule as the sidebar and the server when the page names no
   // organization: the oldest, so all three agree about which one is meant.
@@ -94,14 +120,16 @@ export function OrganizationSwitcher({
   // One organization is not a choice. Show where you are, without pretending
   // there is somewhere else to go.
   if (organizations.length === 1) {
+    const only = organizations[0]!.name;
     return (
-      <button
-        type="button"
+      <a
         className="app-topnav-link"
-        onClick={() => onSelect(organizations[0]!.name)}
+        href={`/${only}`}
+        aria-current={isCurrentPage ? "page" : undefined}
+        onClick={(event) => followInApp(event, () => onSelect(only))}
       >
         <Building2 size={14} strokeWidth={1.5} aria-hidden="true" /> {label}
-      </button>
+      </a>
     );
   }
 
@@ -132,15 +160,22 @@ export function OrganizationSwitcher({
             <button
               key={organization.id}
               type="button"
-              role="menuitem"
-              className="app-menu-item"
+              // Which one you are in is a state of the item, so it is said as
+              // one — a check a reader sees and a screen reader announces.
+              role="menuitemradio"
+              aria-checked={organization.name === currentOrg}
+              className="app-menu-item app-menu-item--check"
               onClick={() => {
                 setIsOpen(false);
                 onSelect(organization.name);
               }}
             >
+              <span className="app-menu-item-check" aria-hidden="true">
+                {organization.name === currentOrg ? (
+                  <Check size={14} strokeWidth={2} />
+                ) : null}
+              </span>
               {organization.displayName}
-              {organization.name === currentOrg ? " ·" : ""}
             </button>
           ))}
         </div>

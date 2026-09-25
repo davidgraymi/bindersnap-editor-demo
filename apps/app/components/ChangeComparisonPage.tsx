@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { MouseEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import {
   Archive,
   ArchiveRestore,
@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { downloadDocument } from "../api";
+import { followInApp } from "../appLink";
 import type { ChangeScope } from "../changeScope";
 import {
   describeChangedBadge,
@@ -78,7 +79,6 @@ interface ChangeComparisonPageProps {
    * reviewer arrived by pressing Compare on a particular document.
    */
   focusDocument?: string | null;
-  onBackToChange: () => void;
   /**
    * The address of the change's branch at its root — the whole binder as the
    * change would leave it. Where the branch under the title links to.
@@ -177,24 +177,6 @@ function WordCounts({
   );
 }
 
-/**
- * A link that stays inside the app on an ordinary click, and still behaves as
- * a link — new tab, copy address — on every other kind.
- */
-function followInApp(event: MouseEvent<HTMLAnchorElement>, go: () => void) {
-  if (
-    event.button !== 0 ||
-    event.metaKey ||
-    event.ctrlKey ||
-    event.shiftKey ||
-    event.altKey
-  ) {
-    return;
-  }
-  event.preventDefault();
-  go();
-}
-
 /** `clinical/nursing` for `clinical/nursing/hand-hygiene`; "" at the top. */
 function folderOf(slugPath: string): string {
   const at = slugPath.lastIndexOf("/");
@@ -228,7 +210,6 @@ export function ChangeComparisonPage({
   rows: listed,
   headRef,
   focusDocument = null,
-  onBackToChange,
   branchHref,
   onOpenBranch,
   fileHref,
@@ -518,21 +499,11 @@ export function ChangeComparisonPage({
   const allCollapsed =
     rows.length > 0 && rows.every((row) => collapsed.has(row.anchor));
 
-  /* The way back is a crumb, not a button floating above the title — the same
-     row the change request itself uses, so the two screens open the same way.
-     "Change 4" is not a name, which is why a change keeps its crumbs where a
-     policy does not. */
+  /* The way back is the trail in the top bar — `Clinical / Change requests /
+     Change 4 / Compare` — which every screen shares, so this one opens on its
+     title like the rest. */
   const header = (
     <>
-      <nav className="bs-crumbs" aria-label="Where this is">
-        <button type="button" onClick={onBackToChange}>
-          Change {changeNumber}
-        </button>
-        <span className="bs-crumbs-sep" aria-hidden="true">
-          /
-        </span>
-        <span>Everything that changed</span>
-      </nav>
       <div className="bs-pagehead">
         <div className="bs-pagehead-body">
           <h1 className="bs-title">{title}</h1>

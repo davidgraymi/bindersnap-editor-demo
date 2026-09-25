@@ -171,7 +171,9 @@ test("a member files a policy from the binder's own page", async ({ page }) => {
   await expect(page.getByText("Proposed version")).toBeVisible({
     timeout: 30_000,
   });
-  await expect(page.getByRole("button", { name: "All changes" })).toBeVisible();
+  await expect(
+    page.locator(".page-path").getByRole("link", { name: "Change requests" }),
+  ).toBeVisible();
 
   // And the binder still holds nothing, because nothing has been published.
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);

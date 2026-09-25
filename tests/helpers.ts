@@ -537,7 +537,7 @@ export async function expectOpenChangeCount(
 ): Promise<void> {
   const entry = page
     .locator(".app-sidebar")
-    .getByRole("button", { name: /^Changes/ });
+    .getByRole("link", { name: /^Changes/ });
   if (count === 0) {
     await expect(entry.locator(".app-sidebar-item-count")).toHaveCount(0, {
       timeout,
@@ -557,7 +557,7 @@ export async function openBinderSection(
 ): Promise<void> {
   const entry = page
     .locator(".app-sidebar")
-    .getByRole("button", { name: new RegExp(`^${section}`) })
+    .getByRole("link", { name: new RegExp(`^${section}`) })
     .last();
   await expect(entry).toBeVisible({ timeout: 15_000 });
   await entry.click();

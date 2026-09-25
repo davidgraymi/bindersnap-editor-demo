@@ -481,18 +481,9 @@ export function DocumentChangeDetail({
   return (
     <article className="change-detail bs-with-rail">
       <div className="change-main">
-        {/* A change request keeps its crumbs, where a policy does not: "Change
-            4" is not a name, and the way back to the list is worth a row. */}
-        <nav className="bs-crumbs" aria-label="Where this change is">
-          <button type="button" onClick={onBackToList}>
-            All changes
-          </button>
-          <span className="bs-crumbs-sep" aria-hidden="true">
-            /
-          </span>
-          <span>Change {prNum}</span>
-        </nav>
-
+        {/* The way back to the list is the trail in the top bar — `Clinical
+            / Change requests / Change 4` — the same line every page has, so
+            it is not drawn a second time here. */}
         {editing ? (
           /* A change request is open for days, and the first thing a
              reviewer's question produces is a better title. Once it is

@@ -255,7 +255,7 @@ test.describe("app shell routes", () => {
     // The shell's navigation. At this viewport that is the sidebar — the top
     // bar's own links are for widths where the sidebar is not rendered.
     await expect(
-      page.locator(".app-sidebar").getByRole("button", { name: "Documents" }),
+      page.locator(".app-sidebar").getByRole("link", { name: "Documents" }),
     ).toBeVisible();
   });
 
@@ -269,7 +269,7 @@ test.describe("app shell routes", () => {
     await expect(page).toHaveURL(new RegExp(`/${OWNER}/${REPO}$`));
     await expect(page.locator(".docw-page")).toBeVisible();
     await expect(
-      page.locator(".app-sidebar").getByRole("button", { name: "Documents" }),
+      page.locator(".app-sidebar").getByRole("link", { name: "Documents" }),
     ).toBeVisible();
   });
 });

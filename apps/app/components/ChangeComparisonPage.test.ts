@@ -186,7 +186,6 @@ function page(
     }),
     headRef: "change-4",
     author: "alice",
-    onBackToChange: () => {},
     branchHref: "/riverside/clinical?ref=change-4&change=4",
     onOpenBranch: () => {},
     fileHref: (slugPath: string) =>
@@ -322,7 +321,6 @@ test("a change that versions no document says what it does instead", async () =>
     rows: [],
     headRef: "sign-off/nursing",
     author: "alice",
-    onBackToChange: () => {},
     branchHref: "/riverside/clinical?ref=change-4&change=4",
     onOpenBranch: () => {},
     fileHref: (slugPath: string) =>
@@ -355,7 +353,6 @@ test("a change with no branch on record says why it cannot compare", async () =>
     }),
     headRef: null,
     author: "alice",
-    onBackToChange: () => {},
     branchHref: "/riverside/clinical?ref=change-4&change=4",
     onOpenBranch: () => {},
     fileHref: (slugPath: string) =>
