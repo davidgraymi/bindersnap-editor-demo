@@ -3,7 +3,7 @@ import { useIsReadOnly } from "../readOnlyContext";
 import { CreditCard, LogOut, Moon, Shield } from "lucide-react";
 import type { SessionUser } from "../api";
 import { buildDocumentsUrl, parseDocumentsViewState } from "../documentsView";
-import { followInApp } from "../appLink";
+import { followInApp, navigateToHref } from "../appLink";
 import { routeToPath, type AppRoute } from "../routes";
 import { BinderShell } from "./BinderShell";
 import { OrganizationPage } from "./OrganizationPage";
@@ -18,10 +18,9 @@ import { AppSidebar, type SidebarBinder } from "./AppSidebar";
 import { BinderExplorer } from "./BinderExplorer";
 import { AppBottomNav } from "./AppBottomNav";
 import { useDefaultOrganization } from "../useOrganizationDisplayName";
-import { NewPolicyModal } from "./NewPolicyModal";
 import { HomePage } from "./HomePage";
 import { NavSearch } from "./NavSearch";
-import { NewDocumentButton } from "./NewDocumentButton";
+import { CreateMenu } from "./CreateMenu";
 
 interface AppShellProps {
   user: SessionUser | null;
@@ -144,18 +143,17 @@ export function AppShell({
     [route],
   );
   const [profileOpen, setProfileOpen] = useState(false);
-  const [showCreateDocumentModal, setShowCreateDocumentModal] = useState(false);
   // A search that was linked to or reloaded is still the search that is on
   // screen, so the box says so.
   const [initialSearch] = useState(
     () => parseDocumentsViewState(window.location.search).freeText,
   );
 
-  const openCreateDocumentModal = useCallback(() => {
-    setShowCreateDocumentModal(true);
-  }, []);
-  // Drawn while the organization cannot write, and answered with the paywall.
-  const createDocument = useWriteAction(openCreateDocumentModal);
+  // A binder is a write, so it meets the paywall while the organization
+  // cannot write. An organization is free to make: the first has a trial.
+  const newBinder = useWriteAction((org: string) =>
+    navigateToHref(`/${org}?new=binder`),
+  );
 
   // Leaving a binder takes its section with it, so the map does not keep
   // offering the screens of a binder you are no longer in.
@@ -164,16 +162,6 @@ export function AppShell({
       setSidebarBinder(null);
     }
   }, [route]);
-
-  useEffect(() => {
-    document.addEventListener("bs:open-create-modal", openCreateDocumentModal);
-    return () => {
-      document.removeEventListener(
-        "bs:open-create-modal",
-        openCreateDocumentModal,
-      );
-    };
-  }, [openCreateDocumentModal]);
 
   return (
     <div className="app-shell">
@@ -220,12 +208,13 @@ export function AppShell({
             onSearchLibrary={navigateToSearch}
           />
 
-          {/* Create document — a convenience, not the page's headline action.
-              Gone while the organization is read-only, like every other way
-              in: it sits on every page, so leaving it is offering the one
-              affordance a delinquent customer sees everywhere and cannot
-              use. */}
-          <NewDocumentButton onClick={createDocument} />
+          {/* Make something that has no page to be added from: a binder, an
+              organization. A document is added on its binder's page. */}
+          <CreateMenu
+            org={sidebarOrg}
+            onNewBinder={newBinder}
+            onNewOrganization={() => onNavigate({ kind: "createOrganization" })}
+          />
 
           {/* User profile: avatar with dropdown */}
           <div className="app-topnav-profile">
@@ -474,7 +463,12 @@ export function AppShell({
                     })
                   }
                   onBrowseDocuments={() => onNavigate({ kind: "documents" })}
-                  onNewDocument={openCreateDocumentModal}
+                  onOpenBinders={
+                    sidebarOrg
+                      ? () =>
+                          onNavigate({ kind: "organization", org: sidebarOrg })
+                      : null
+                  }
                 />
               )}
             </main>
@@ -486,23 +480,6 @@ export function AppShell({
           Fixed to the bottom, so it sits outside the scrolling body. */}
       <AppBottomNav route={route} org={sidebarOrg} onNavigate={onNavigate} />
 
-      {showCreateDocumentModal ? (
-        <NewPolicyModal
-          org={sidebarOrg}
-          onClose={() => setShowCreateDocumentModal(false)}
-          onAdded={(org, binder, changeNumber) => {
-            setShowCreateDocumentModal(false);
-            // The change request it is in, not the document it will become.
-            onNavigate({
-              kind: "binder",
-              org,
-              binder,
-              tab: "changes",
-              change: changeNumber,
-            });
-          }}
-        />
-      ) : null}
     </div>
   );
 }

@@ -24,7 +24,8 @@ interface HomePageProps {
   /** Open one change request — the only thing a row on this page links to. */
   onOpenChange: (owner: string, repo: string, changeNumber: number) => void;
   onBrowseDocuments: () => void;
-  onNewDocument: () => void;
+  /** The organization's binders, where a document is added. */
+  onOpenBinders: (() => void) | null;
 }
 
 /**
@@ -39,7 +40,7 @@ export function HomePage({
   currentUserFullName = "",
   onOpenChange,
   onBrowseDocuments,
-  onNewDocument,
+  onOpenBinders,
 }: HomePageProps) {
   const [documents, setDocuments] = useState<HomeOpenDocument[]>([]);
   const [decided, setDecided] = useState<HomeDecidedRow[]>([]);
@@ -161,13 +162,17 @@ export function HomePage({
               No change requests yet. Submit a new version of a document and it
               will show up here the moment someone has to look at it.
             </p>
-            <button
-              type="button"
-              className="bs-btn bs-btn-secondary bs-btn--sm"
-              onClick={onNewDocument}
-            >
-              Add a document
-            </button>
+            {/* A document is added on its binder's page, where the binder and
+                its rules are already on screen. */}
+            {onOpenBinders ? (
+              <button
+                type="button"
+                className="bs-btn bs-btn-secondary bs-btn--sm"
+                onClick={onOpenBinders}
+              >
+                Open your binders
+              </button>
+            ) : null}
           </div>
         </section>
       ) : (
