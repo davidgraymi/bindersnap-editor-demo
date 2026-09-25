@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 
-import type { HistoryChange } from "../binderHistory";
-import { describeLatestChange } from "./BinderLatestChange";
+import { describePublication, type HistoryChange } from "../binderHistory";
 
 /** The card's one sentence, in the history's own words. */
 
@@ -18,19 +17,29 @@ function change(overrides: Partial<HistoryChange> = {}): HistoryChange {
 }
 
 test("names who published it and who approved it", () => {
-  expect(describeLatestChange(change())).toBe(
+  expect(describePublication(change())).toBe(
     "Published by Bob · approved by Carol",
   );
 });
 
 test("names every approver, the way the history does", () => {
   expect(
-    describeLatestChange(change({ approvers: ["carol", "dan", "priya"] })),
+    describePublication(change({ approvers: ["carol", "dan", "priya"] })),
   ).toBe("Published by Bob · approved by Carol, Dan and Priya");
 });
 
 test("a tag written outside the app says only what it can", () => {
-  expect(describeLatestChange(change({ submittedBy: "", approvers: [] }))).toBe(
+  expect(describePublication(change({ submittedBy: "", approvers: [] }))).toBe(
     "No recorded approval",
+  );
+});
+
+test("says what each person is called, when their names are known", () => {
+  const names: Record<string, string> = {
+    bob: "Bob Okafor",
+    carol: "Carol Mendes",
+  };
+  expect(describePublication(change(), (login) => names[login] ?? login)).toBe(
+    "Published by Bob Okafor · approved by Carol Mendes",
   );
 });

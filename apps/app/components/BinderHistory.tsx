@@ -7,7 +7,7 @@ import type { WorkspaceHistoryEntry } from "../../../packages/api-schema/schemas
 import { buildAuditRecord } from "../auditRecord";
 import {
   countVersions,
-  describeApprovers,
+  describePublication,
   filterHistory,
   groupHistoryByChange,
   historyPolicies,
@@ -15,11 +15,8 @@ import {
   type HistoryChange,
   type HistorySince,
 } from "../binderHistory";
-import {
-  capitalizeFirst,
-  formatDocumentName,
-  formatTimestamp,
-} from "../documentDisplay";
+import { formatDocumentName, formatTimestamp } from "../documentDisplay";
+import { nameFor, usePeopleNames } from "../usePeopleNames";
 import { AppIcon } from "./AppIcon";
 import { PersonAvatar } from "./PersonAvatar";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
@@ -78,6 +75,8 @@ export function BinderHistory({
     null,
   );
   const [error, setError] = useState<string | null>(null);
+  const names = usePeopleNames(org);
+  const nameOf = (login: string) => nameFor(names, login);
   const [policy, setPolicy] = useState("");
   const [since, setSince] = useState<HistorySince>("all");
 
@@ -243,6 +242,7 @@ export function BinderHistory({
                   : `change:${change.changeNumber}`
               }
               change={change}
+              nameOf={nameOf}
               onOpenDocument={onOpenDocument}
               onOpenChange={onOpenChange}
               documentHref={documentHref}
@@ -261,8 +261,11 @@ function ChangeEntry({
   onOpenChange,
   documentHref,
   changeHref,
+  nameOf,
 }: {
   change: HistoryChange;
+  /** What a login is called, for the line naming who published it. */
+  nameOf: (login: string) => string;
   onOpenDocument: (slugPath: string, version: number | null) => void;
   onOpenChange: (changeNumber: number) => void;
   documentHref: (slugPath: string, version: number | null) => string;
@@ -370,14 +373,11 @@ function ChangeEntry({
             <PersonAvatar
               person={{
                 login: change.submittedBy,
-                fullName: change.submittedBy,
+                fullName: nameOf(change.submittedBy),
               }}
             />
           ) : null}
-          {change.submittedBy
-            ? `Published by ${capitalizeFirst(change.submittedBy)} · `
-            : ""}
-          {describeApprovers(change.approvers.map(capitalizeFirst))}
+          {describePublication(change, nameOf)}
         </div>
       </div>
     </li>
