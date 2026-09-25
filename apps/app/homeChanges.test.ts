@@ -331,6 +331,41 @@ describe("buildDecidedChangeRows", () => {
     expect(rows[0]?.standing).toBe("Closed");
   });
 
+  test("a decision says who made it by name, and you by 'you'", () => {
+    const declined = (decidedBy: string) =>
+      buildDecidedChangeRows(
+        [
+          {
+            owner: "david",
+            repo: "mutual-nda",
+            changes: [
+              closed({
+                outcome: "declined",
+                publishedVersion: null,
+                decidedBy,
+                closedAt: "2026-08-12T10:00:00Z",
+                reviewers: [reviewer("david")],
+                reviews: [
+                  review("tom", {
+                    author: {
+                      login: "tom",
+                      fullName: "Tom Okafor",
+                      avatarUrl: "",
+                    },
+                    state: "changes_requested",
+                  }),
+                ],
+              }),
+            ],
+          },
+        ],
+        "david",
+      )[0]?.meta;
+
+    expect(declined("tom")).toBe("declined by Tom Okafor");
+    expect(declined("david")).toBe("declined by you");
+  });
+
   test("a decision the reader had no part in is left off", () => {
     const rows = buildDecidedChangeRows(
       [

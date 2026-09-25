@@ -419,7 +419,9 @@ export function DocumentChangeDetail({
     (login) => nameFor(names, login),
   );
   const description = describeChangeBody(change.summary, change.description);
-  const outcome = describeChangeOutcome(change);
+  const outcome = describeChangeOutcome(change, (login) =>
+    nameFor(names, login),
+  );
   const proposed = buildProposedVersionFacts({
     fileName,
     branchName: change.branchName,

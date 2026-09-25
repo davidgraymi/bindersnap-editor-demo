@@ -11,7 +11,8 @@ import type {
   BinderDraftPayload,
   OwnDraft,
 } from "../../../packages/api-schema/schemas/workspaces";
-import { capitalizeFirst, formatAge } from "../documentDisplay";
+import { formatAge } from "../documentDisplay";
+import { nameFor, usePeopleNames } from "../usePeopleNames";
 import { AppIcon } from "./AppIcon";
 import { PersonAvatar } from "./PersonAvatar";
 
@@ -35,6 +36,8 @@ import { PersonAvatar } from "./PersonAvatar";
  */
 
 interface BinderDraftPickerProps {
+  /** Whose people the other editors are, for their names. */
+  org: string;
   /** Every draft of yours, newest first, and everybody else's. */
   drafts: BinderDraftPayload["drafts"];
   others: BinderDraftPayload["others"];
@@ -67,6 +70,7 @@ const MENU_WIDTH = 340;
 const MENU_MAX_HEIGHT = 360;
 
 export function BinderDraftPicker({
+  org,
   drafts,
   others,
   current,
@@ -75,6 +79,7 @@ export function BinderDraftPicker({
   onStart,
   onRename,
 }: BinderDraftPickerProps) {
+  const names = usePeopleNames(org);
   const [open, setOpen] = useState(false);
   /** Set while naming: a new draft, or one being renamed. */
   const [naming, setNaming] = useState<{
@@ -292,12 +297,15 @@ export function BinderDraftPicker({
               {others.map((other) => (
                 <div className="bs-row bs-row--muted" key={other.branch}>
                   <PersonAvatar
-                    person={{ login: other.owner, fullName: "" }}
+                    person={{
+                      login: other.owner,
+                      fullName: nameFor(names, other.owner),
+                    }}
                     size="sm"
                   />
                   <span className="bs-row-body">
                     <span className="bs-row-name">
-                      {capitalizeFirst(other.owner)}
+                      {nameFor(names, other.owner)}
                     </span>
                     <span className="bs-row-meta">
                       Editing this binder — you cannot see their draft
