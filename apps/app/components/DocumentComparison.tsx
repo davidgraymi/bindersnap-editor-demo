@@ -293,7 +293,7 @@ export function DocumentComparison({
         </span>
         <span className="doc-compare-fallback-actions">
           <button
-            className="bs-btn bs-btn-secondary doc-preview-download"
+            className="bs-btn bs-btn--sm bs-btn-secondary doc-preview-download"
             type="button"
             onClick={() => onDownload(base.ref)}
           >
@@ -301,7 +301,7 @@ export function DocumentComparison({
             {base.label}
           </button>
           <button
-            className="bs-btn bs-btn-secondary doc-preview-download"
+            className="bs-btn bs-btn--sm bs-btn-secondary doc-preview-download"
             type="button"
             onClick={() => onDownload(headRef)}
           >

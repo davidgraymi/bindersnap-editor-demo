@@ -1285,9 +1285,7 @@ input {
 .doc-preview-download {
   display: inline-flex;
   align-items: center;
-  gap: var(--brand-space-2);
-  padding: var(--brand-space-2) var(--brand-space-3);
-  font-size: var(--brand-text-sm);
+  gap: var(--brand-space-1-5);
 }
 
 /* The document reads top to bottom with the page, the way a document should —
@@ -1527,22 +1525,29 @@ input {
   height: auto;
 }
 
-/* Summary rail — three sections, stated in the order they matter: what
-   somebody still has to decide, what is already on the record, and who is
-   here. Section titles are mono labels on the paper; only the cards under
-   them are white. */
+/* Summary rail — what somebody still has to decide, then what is already on
+   the record. Each is a panel of the shared grammar. */
 .doc-rail {
   display: grid;
   align-content: start;
-  gap: var(--brand-space-6);
+  gap: var(--brand-space-4);
   position: sticky;
   top: var(--brand-space-4);
 }
 
-.doc-rail-section {
-  display: grid;
-  gap: var(--brand-space-2-5);
-  align-content: start;
+/* A panel with nothing in it says so in one quiet line, not a whole empty
+   state: the rail is a summary, and "nothing" is a complete answer. */
+.doc-rail-empty {
+  margin: 0;
+  padding: var(--brand-space-2-5) var(--brand-space-2);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+/* Something is waiting on a decision: the rail's one coral element. */
+.bs-section-count.doc-rail-count--open {
+  background: var(--bs-coral-dim);
+  color: var(--bs-coral-text);
 }
 
 .doc-rail-title {
@@ -1554,63 +1559,6 @@ input {
   margin: 0;
 }
 
-/* The rail's one coral element, and the page's second: what is unfinished. */
-.doc-rail-title--urgent {
-  color: var(--bs-coral-text);
-}
-
-.doc-rail-card {
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-xl);
-  padding: 14px var(--brand-space-4);
-}
-
-.doc-rail-card--quiet {
-  background: none;
-  border-style: dashed;
-}
-
-.doc-rail-card--rows {
-  padding: var(--brand-space-1-5) var(--brand-space-4);
-}
-
-.doc-rail-card-title {
-  margin: 0;
-  font-size: var(--brand-text-ui-md);
-  font-weight: var(--brand-weight-medium);
-  color: var(--bs-text-primary);
-}
-
-.doc-rail-card-meta {
-  margin: 3px 0 var(--brand-space-2);
-  font-size: var(--brand-text-ui-sm);
-  color: var(--bs-text-muted);
-}
-
-.doc-rail-more,
-.doc-team-manage {
-  appearance: none;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--bs-coral-text);
-  cursor: pointer;
-  font-family: var(--brand-font-sans);
-  text-align: left;
-}
-
-.doc-rail-more,
-.doc-team-manage {
-  font-size: var(--brand-text-ui-sm);
-  font-weight: var(--brand-weight-medium);
-}
-
-.doc-rail-more:hover,
-.doc-team-manage:hover {
-  color: var(--brand-coral);
-}
-
 .doc-rail-note {
   margin: 0;
   font-size: var(--brand-text-ui-sm);
@@ -1620,45 +1568,9 @@ input {
   max-width: var(--brand-measure);
 }
 
-/* Versions: hairline-separated rows inside one card, not one card each. */
-.doc-rail-row {
-  appearance: none;
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-2-5);
-  width: 100%;
-  padding: 9px 0;
-  border: none;
-  border-top: 1px solid var(--bs-rule-warm);
-  background: none;
-  color: var(--bs-text-secondary);
-  font-family: var(--brand-font-sans);
-  font-size: var(--brand-text-ui-md);
-  text-align: left;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.doc-rail-row:first-child {
-  border-top: none;
-}
-
-/* The earlier version somebody is actually reading. */
-.doc-rail-row--viewing {
-  background: var(--bs-coral-dim);
-}
-
-.doc-rail-row:hover .doc-rail-row-date {
-  color: var(--bs-text-primary);
-}
-
-.doc-rail-row:focus-visible {
-  outline: 2px solid var(--brand-coral);
-  outline-offset: -2px;
-}
-
 .doc-rail-version {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   font-variant-numeric: tabular-nums;
   font-size: var(--brand-text-label);
@@ -1673,52 +1585,6 @@ input {
 .doc-rail-version--current {
   background: var(--bs-green-dim);
   color: var(--brand-green);
-}
-
-.doc-rail-row-date {
-  flex: 1;
-}
-
-.doc-rail-row-note {
-  font-size: var(--brand-text-ui-sm);
-  color: var(--bs-text-muted);
-}
-
-/* A rail row that states a fact rather than going somewhere. */
-.doc-rail-row--static {
-  cursor: default;
-}
-
-/* Team: faces, then the way to the page that lists them properly. */
-.doc-team {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-2);
-  flex-wrap: wrap;
-}
-
-.doc-team-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--brand-radius-full);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  background: var(--bs-surface-2);
-  color: var(--bs-text-secondary);
-  font-size: var(--brand-text-ui-xs);
-  font-weight: var(--brand-weight-semibold);
-}
-
-.doc-team-avatar--more {
-  background: none;
-  border: 1px dashed var(--bs-rule);
-  color: var(--bs-text-muted);
-}
-
-.doc-team-manage {
-  margin-left: var(--brand-space-1);
 }
 
 /* Access & approvals — who is on the document, then what has to happen
@@ -9748,4 +9614,10 @@ a.binder-latest-title:focus-visible {
   .org-person-block .bs-row-right {
     margin-left: 32px;
   }
+}
+
+/* A version's date is a fact about the row, not its name. */
+.doc-rail .bs-row-body {
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-md);
 }

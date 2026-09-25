@@ -444,99 +444,128 @@ export function BinderDocumentPage({
           )}
         </div>
 
+        {/* **Two panels, the way GitLab's merge request sidebar stacks its
+            blocks** — a bar that names the block and counts it, then rows
+            that go somewhere. These were uppercase, letter-spaced labels over
+            cards of their own shape: the only lists in the app drawn that
+            way, and the loudest type on a page whose subject is a policy. */}
         <aside className="doc-rail" aria-label="Document summary">
-          <section className="doc-rail-section">
-            <h2 className="doc-rail-title">Waiting on a decision</h2>
+          <section className="bs-panel" aria-labelledby="doc-rail-open">
+            <div className="bs-panel-bar">
+              <h2 className="bs-panel-bar-title" id="doc-rail-open">
+                Waiting on a decision
+              </h2>
+              {openChanges.length > 0 ? (
+                <span className="bs-section-count doc-rail-count--open">
+                  {openChanges.length}
+                </span>
+              ) : null}
+            </div>
             {openChanges.length === 0 ? (
-              <p className="doc-rail-note">Nothing is in review.</p>
+              <p className="doc-rail-empty">Nothing is in review.</p>
             ) : (
-              <div className="doc-rail-card doc-rail-card--rows">
+              <ul className="bs-row-list">
                 {openChanges.map((change) => (
-                  <a
-                    className="doc-rail-row"
-                    key={change.number}
-                    href={buildBinderUrl({
-                      org,
-                      binder,
-                      tab: "changes",
-                      change: change.number,
-                    })}
-                    onClick={(event) =>
-                      followInApp(event, () => onOpenChange(change.number))
-                    }
-                  >
-                    <span className="doc-rail-row-date">
-                      {parseChangeTitle(change.body, change.user?.login ?? "")}
-                    </span>
-                    <span className="doc-rail-row-note">
-                      {getApprovalStateLabel(change.approvalState)}
-                    </span>
-                  </a>
+                  <li key={change.number}>
+                    <a
+                      className="bs-row bs-row--tall"
+                      href={buildBinderUrl({
+                        org,
+                        binder,
+                        tab: "changes",
+                        change: change.number,
+                      })}
+                      onClick={(event) =>
+                        followInApp(event, () => onOpenChange(change.number))
+                      }
+                    >
+                      <span className="bs-row-body">
+                        <span className="bs-row-name bs-row-name--wrap">
+                          {parseChangeTitle(
+                            change.body,
+                            change.user?.login ?? "",
+                          )}
+                        </span>
+                        <span className="bs-row-meta">
+                          #{change.number} ·{" "}
+                          {getApprovalStateLabel(change.approvalState)}
+                        </span>
+                      </span>
+                    </a>
+                  </li>
                 ))}
-              </div>
+              </ul>
             )}
           </section>
 
-          <section className="doc-rail-section">
-            <h2 className="doc-rail-title">Versions</h2>
+          <section className="bs-panel" aria-labelledby="doc-rail-versions">
+            <div className="bs-panel-bar">
+              <h2 className="bs-panel-bar-title" id="doc-rail-versions">
+                Versions
+              </h2>
+              {versions.length > 0 ? (
+                <span className="bs-section-count">{versions.length}</span>
+              ) : null}
+            </div>
             {versions.length === 0 ? (
-              <p className="doc-rail-note">
+              <p className="doc-rail-empty">
                 No version has been published yet.
               </p>
             ) : (
-              <div className="doc-rail-card doc-rail-card--rows">
+              <ul className="bs-row-list">
                 {versions.map((version) => {
                   const isCurrent = version.version === latestVersion?.version;
                   const isViewing =
                     viewing.version?.version === version.version;
                   const target = isCurrent ? null : version.version;
                   return (
-                    <a
-                      className={`doc-rail-row${isViewing && !isViewingRecord ? " doc-rail-row--viewing" : ""}`}
-                      key={version.tag}
-                      href={buildDocumentUrl({
-                        org,
-                        binder,
-                        documentPath: resolvedPath,
-                        version: target,
-                      })}
-                      // The rail says which version is on screen, not only
-                      // which one is the record — reading v1 beside a row
-                      // marked "Current" is exactly the confusion to avoid.
-                      aria-current={isViewing ? "page" : undefined}
-                      onClick={(event) =>
-                        followInApp(event, () => selectVersion(target))
-                      }
-                    >
-                      <span
-                        className={`doc-rail-version${isCurrent ? " doc-rail-version--current" : ""}`}
+                    <li key={version.tag}>
+                      <a
+                        className={`bs-row${isViewing && !isViewingRecord ? " bs-row--on" : ""}`}
+                        href={buildDocumentUrl({
+                          org,
+                          binder,
+                          documentPath: resolvedPath,
+                          version: target,
+                        })}
+                        // The rail says which version is on screen, not only
+                        // which one is the record — reading v1 beside a row
+                        // marked "Current" is exactly the confusion to avoid.
+                        aria-current={isViewing ? "page" : undefined}
+                        onClick={(event) =>
+                          followInApp(event, () => selectVersion(target))
+                        }
                       >
-                        v{version.version}
-                      </span>
-                      {/* When this version was published. The tag's commit
-                          carries the date in the same call, so nothing extra
-                          is fetched to say it.
+                        <span
+                          className={`doc-rail-version${isCurrent ? " doc-rail-version--current" : ""}`}
+                        >
+                          v{version.version}
+                        </span>
+                        {/* When this version was published. The tag's commit
+                            carries the date in the same call, so nothing
+                            extra is fetched to say it.
 
-                          This used to print the commit SHA. The SHA is the
-                          coordinate the evidence is keyed on, but it is not a
-                          fact about the policy that a compliance manager can
-                          use — on a page whose job is to be trustworthy it
-                          reads as an error code. It stays in the tag, the
-                          audit export and the API, where a surveyor can ask
-                          for it. Empty when Gitea did not give us a date:
-                          "v1 · Current" says more than a date we invented. */}
-                      <span className="doc-rail-row-date">
-                        {formatShortDate(version.publishedAt)}
-                      </span>
-                      {isCurrent ? (
-                        <span className="doc-rail-row-note">Current</span>
-                      ) : isViewing ? (
-                        <span className="doc-rail-row-note">Viewing</span>
-                      ) : null}
-                    </a>
+                            This used to print the commit SHA. The SHA is the
+                            coordinate the evidence is keyed on, but it is not
+                            a fact about the policy that a compliance manager
+                            can use — on a page whose job is to be trustworthy
+                            it reads as an error code. It stays in the tag, the
+                            audit export and the API, where a surveyor can ask
+                            for it. Empty when Gitea did not give us a date:
+                            "v1 · Current" says more than a date we invented. */}
+                        <span className="bs-row-body">
+                          {formatShortDate(version.publishedAt)}
+                        </span>
+                        {isCurrent ? (
+                          <span className="bs-row-right">Current</span>
+                        ) : isViewing ? (
+                          <span className="bs-row-right">Viewing</span>
+                        ) : null}
+                      </a>
+                    </li>
                   );
                 })}
-              </div>
+              </ul>
             )}
           </section>
         </aside>
