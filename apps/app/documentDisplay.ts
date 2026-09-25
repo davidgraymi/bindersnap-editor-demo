@@ -95,8 +95,8 @@ export function formatTimestamp(timestamp: string): string {
 
 const APPROVAL_STATE_LABELS: Record<string, string> = {
   approved: "Approved",
-  changes_requested: "Changes Requested",
-  in_review: "Awaiting Approval",
+  changes_requested: "Changes requested",
+  in_review: "Awaiting approval",
   published: "Published",
 };
 

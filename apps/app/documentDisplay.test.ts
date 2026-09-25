@@ -183,7 +183,7 @@ test("an open change keeps its approval state as its badge", () => {
 
   expect(change.open).toBe(true);
   expect(change.summary).toBe("Adds the 2026 retention clause.");
-  expect(getChangeStateLabel(change)).toBe("Awaiting Approval");
+  expect(getChangeStateLabel(change)).toBe("Awaiting approval");
   expect(describeChangeOutcome(change)).toBeNull();
 });
 
