@@ -54,12 +54,29 @@ const stripeFullyConfigured = stripeKeySet && webhookSecretSet && priceIdSet;
 // Helpers — Stripe API
 // ---------------------------------------------------------------------------
 
+/**
+ * How far ahead of now a synthetic event is stamped.
+ *
+ * The lifecycle tests make a real subscription, and Stripe delivers that
+ * subscription's own events (`customer.subscription.created`, trialing)
+ * through `stripe listen` a few seconds later. The API skips an event only
+ * when it is strictly older than the last one it applied for that customer,
+ * and a synthetic event posted in the same second as the real subscription
+ * was created is not — so the late real event landed after the test's
+ * `past_due` and put the organization back on its trial. Stamped a minute
+ * ahead, every real event the setup caused is older than the test's own and
+ * is dropped as out of order, which is the ordering the test means.
+ */
+const SYNTHETIC_EVENT_LEAD_SECONDS = 60;
+
 /** POST a signed webhook event to the running API. */
 async function postWebhook(
   type: string,
   object: Record<string, unknown>,
 ): Promise<Response> {
-  const { body } = buildTestStripeEvent(type, object);
+  const { body } = buildTestStripeEvent(type, object, {
+    created: Math.floor(Date.now() / 1000) + SYNTHETIC_EVENT_LEAD_SECONDS,
+  });
   const sig = await signWebhookBody(body, STRIPE_WEBHOOK_SECRET);
 
   return fetch(`${API_BASE_URL}/stripe/webhook`, {
