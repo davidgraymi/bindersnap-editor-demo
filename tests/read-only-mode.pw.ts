@@ -238,3 +238,70 @@ test("a delinquent organization keeps its record, and its controls open the payw
   expect(refusal.code).toBe("subscription_required");
   expect(refusal.organization).toBe(org);
 });
+
+/**
+ * Billing is per organization, for a person in two of them.
+ *
+ * Only a person's first organization gets a trial, so their second starts
+ * unable to write. The server used to answer every billing question for the
+ * oldest: the second read as paid for by the first, the paywall's checkout
+ * billed the first, and the second could never be subscribed to at all.
+ */
+test("a second organization is gated, offered and billed as itself", async ({
+  page,
+}) => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const first = await createOrganization(
+    sessionCookie,
+    `First Health ${randomUUID().slice(0, 6)}`,
+  );
+  const secondName = `Second Health ${randomUUID().slice(0, 6)}`;
+  const second = await createOrganization(sessionCookie, secondName);
+
+  // The API: the first is on its trial, the second has nothing.
+  const intoSecond = await fetch(
+    `${API_BASE_URL}/api/app/orgs/${second}/binders`,
+    {
+      method: "POST",
+      headers: authHeaders(sessionCookie),
+      body: JSON.stringify({ name: "Refused" }),
+    },
+  );
+  expect(intoSecond.status).toBe(402);
+  expect(
+    ((await intoSecond.json()) as { organization?: string }).organization,
+  ).toBe(second);
+  await createBinder(sessionCookie, first, "Allowed");
+
+  await signInBrowser(page, sessionCookie);
+
+  // The first organization writes; the second is read-only, and says whose.
+  await page.goto(`${APP_BASE_URL}/${first}`);
+  await expect(
+    page.getByRole("heading", { name: /First Health/ }),
+  ).toBeVisible();
+  await expect(page.getByTestId("read-only-banner")).toHaveCount(0);
+
+  await page.goto(`${APP_BASE_URL}/${second}`);
+  const banner = page.getByTestId("read-only-banner");
+  await expect(banner).toContainText(secondName);
+  await page.getByRole("button", { name: "Restore access" }).click();
+  const paywall = page.getByRole("dialog");
+  await expect(paywall).toContainText(secondName);
+  await paywall.getByRole("button", { name: "Not now" }).click();
+
+  // Its billing page is its own, reached from the entry under its name.
+  const orgNav = page.getByRole("navigation", { name: secondName });
+  await orgNav.getByRole("link", { name: "Billing" }).click();
+  await expect(page).toHaveURL(new RegExp(`/billing/${second}$`));
+  const plan = page.getByRole("region", { name: "Plan" });
+  await expect(plan).toContainText("Inactive");
+  await expect(
+    page.getByRole("button", { name: "Subscribe", exact: true }),
+  ).toBeVisible();
+
+  // And the first organization's billing still shows its trial.
+  await page.goto(`${APP_BASE_URL}/billing/${first}`);
+  await expect(plan).toContainText("Trial");
+});

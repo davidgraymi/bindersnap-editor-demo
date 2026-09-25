@@ -115,8 +115,19 @@ export async function resolveOrganizationForUser(
 export async function resolveSessionOrganization(
   client: GiteaClient,
   session: SessionRecord,
+  /**
+   * The organization the request is about, when it names one — the owner of
+   * the binder being written to, or the organization whose billing page is
+   * open. Billing is per organization (ADR 0004), so a person in two of them
+   * is gated and billed by the one they are acting in, not by whichever is
+   * oldest. Ignored unless the session belongs to it.
+   */
+  preferred?: string | null,
 ): Promise<SessionOrganization | null> {
   const organizations = await listSessionOrganizations(client);
+
+  const named = pickOrganization(organizations, preferred);
+  if (named) return named;
 
   if (organizations.length === 0) {
     logger.info("Session has no organization", {
@@ -135,4 +146,28 @@ export async function resolveSessionOrganization(
   }
 
   return oldest(organizations);
+}
+
+function pickOrganization(
+  organizations: SessionOrganization[],
+  name: string | null | undefined,
+): SessionOrganization | null {
+  if (!name) return null;
+  const wanted = name.toLowerCase();
+  // Gitea org names are case-insensitive, and a URL is typed by a person.
+  return organizations.find((org) => org.name.toLowerCase() === wanted) ?? null;
+}
+
+/**
+ * The session's organization called `name`, or null when it is not one of
+ * theirs.
+ *
+ * For the requests that must never fall back: a checkout for the wrong
+ * organization bills somebody for a subscription they did not choose.
+ */
+export async function findSessionOrganization(
+  client: GiteaClient,
+  name: string,
+): Promise<SessionOrganization | null> {
+  return pickOrganization(await listSessionOrganizations(client), name);
 }

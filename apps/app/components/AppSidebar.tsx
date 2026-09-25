@@ -287,7 +287,9 @@ export function AppSidebar({
       key: "billing",
       label: "Billing",
       icon: CreditCard,
-      route: { kind: "billing" },
+      // This organization's billing, not the reader's oldest: billing is per
+      // organization, and the entry sits under this one's name.
+      route: org === null ? null : { kind: "billing", org },
       isActive: (r) => r.kind === "billing",
     },
   ];

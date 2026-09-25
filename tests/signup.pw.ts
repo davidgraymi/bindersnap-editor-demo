@@ -119,7 +119,7 @@ async function signUpThroughOrganizationSetup(
   await expect(
     page.locator(`.app-topnav-avatar[aria-label="User: ${username}"]`),
   ).toBeVisible({ timeout: 60_000 });
-  await expect(page).not.toHaveURL(/\/billing$/);
+  await expect(page).not.toHaveURL(/\/billing(\/|$)/);
 }
 
 async function signUpAndReturnToLogin(

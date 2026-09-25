@@ -201,3 +201,16 @@ test("the app's own single-segment routes are still not organizations", () => {
   expect(getRoute("/login").kind).toBe("login");
   expect(getRoute("/billing").kind).toBe("billing");
 });
+
+test("billing names the organization it is about", () => {
+  expect(getRoute("/billing/riverside-health")).toEqual({
+    kind: "billing",
+    org: "riverside-health",
+  });
+  expect(routeToPath({ kind: "billing", org: "riverside-health" })).toBe(
+    "/billing/riverside-health",
+  );
+  // The address from before billing was per organization still resolves.
+  expect(getRoute("/billing")).toEqual({ kind: "billing" });
+  expect(routeToPath({ kind: "billing" })).toBe("/billing");
+});

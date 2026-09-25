@@ -8,5 +8,6 @@ import type { CreateBillingCheckoutBodyIntent } from './createBillingCheckoutBod
 
 export type CreateBillingCheckoutBody = {
   idempotencyKey: string;
+  organization?: string;
   intent?: CreateBillingCheckoutBodyIntent;
 };

@@ -9,7 +9,8 @@ import type {
   CreateBillingCheckoutBody,
   CreateBillingPortal200,
   CreateBillingPortalBody,
-  GetBillingStatus200
+  GetBillingStatus200,
+  GetBillingStatusParams
 } from '../model';
 
 import { customFetch } from '.././mutator.ts';
@@ -26,17 +27,24 @@ export type getBillingStatusResponseSuccess = (getBillingStatusResponse200) & {
 
 export type getBillingStatusResponse = (getBillingStatusResponseSuccess)
 
-export const getGetBillingStatusUrl = () => {
+export const getGetBillingStatusUrl = (params?: GetBillingStatusParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/app/billing/status`
+  return stringifiedParams.length > 0 ? `/api/app/billing/status?${stringifiedParams}` : `/api/app/billing/status`
 }
 
-export const getBillingStatus = async ( options?: Parameters<typeof customFetch>[1]): Promise<getBillingStatusResponse> => {
+export const getBillingStatus = async (params?: GetBillingStatusParams, options?: Parameters<typeof customFetch>[1]): Promise<getBillingStatusResponse> => {
 
-  return customFetch<getBillingStatusResponse>(getGetBillingStatusUrl(),
+  return customFetch<getBillingStatusResponse>(getGetBillingStatusUrl(params),
   {
     ...options,
     method: 'GET'

@@ -10,7 +10,14 @@ export type AppRoute =
   | { kind: "documents" }
   | { kind: "changes" }
   | { kind: "adminSubscriptions" }
-  | { kind: "billing" }
+  /**
+   * One organization's billing: `/billing/{org}`.
+   *
+   * Billing is per organization, so the page names the one it is about. Bare
+   * `/billing` is an address that predates that — the app answers it with the
+   * session's oldest organization and rewrites the address to say so.
+   */
+  | { kind: "billing"; org?: string }
   | { kind: "createOrganization" }
   /**
    * An organization: what it owns, and who is in it. `/{org}`.
@@ -98,6 +105,14 @@ function normalizePathname(pathname: string): string {
   return path.replace(/\/+$/, "") || "/";
 }
 
+function decodeSegment(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
+
 export function isHomePath(pathname: string): boolean {
   return normalizePathname(pathname) === "/";
 }
@@ -180,6 +195,10 @@ export function getRoute(pathname: string): AppRoute {
   if (normalizedPath === "/billing") {
     return { kind: "billing" };
   }
+  const billingMatch = normalizedPath.match(/^\/billing\/([^/]+)$/);
+  if (billingMatch) {
+    return { kind: "billing", org: decodeSegment(billingMatch[1]!) };
+  }
 
   // `/{org}/{binder}` and `/{org}/{binder}/{path}`, the address Gitea and
   // GitHub both use. It is matched last because it would otherwise swallow
@@ -220,7 +239,9 @@ export function routeToPath(route: AppRoute): string {
     case "adminSubscriptions":
       return "/admin/subscriptions";
     case "billing":
-      return "/billing";
+      return route.org
+        ? `/billing/${encodeURIComponent(route.org)}`
+        : "/billing";
     case "createOrganization":
       return "/organizations/new";
     case "organization":

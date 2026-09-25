@@ -107,7 +107,9 @@ export function AppShell({
     route.kind === "binder" ||
     route.kind === "binderDocument"
       ? route.org
-      : defaultOrg;
+      : route.kind === "billing" && route.org
+        ? route.org
+        : defaultOrg;
   const isAdminSubscriptions = route.kind === "adminSubscriptions";
 
   const displayName = user?.fullName ?? user?.username ?? "";
@@ -272,7 +274,11 @@ export function AppShell({
                       role="menuitem"
                       onClick={() => {
                         setProfileOpen(false);
-                        onNavigate({ kind: "billing" });
+                        onNavigate(
+                          sidebarOrg
+                            ? { kind: "billing", org: sidebarOrg }
+                            : { kind: "billing" },
+                        );
                       }}
                     >
                       <span className="app-profile-menu-icon">
