@@ -2090,10 +2090,17 @@ input {
   padding: 13px 18px;
 }
 
+/* Wraps as whole words: on a phone "Resolved" and "Show 1 reply" go to a line
+   of their own, rather than every item breaking in two to share one. */
 .rev-thread-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--brand-space-2);
+  gap: var(--brand-space-1) var(--brand-space-2);
+}
+
+.rev-thread-head > * {
+  white-space: nowrap;
 }
 
 .rev-thread-author {
@@ -5019,9 +5026,15 @@ a.bs-knot {
 }
 
 @media (max-width: 640px) {
+  /* **The sheet still runs to the bottom of the screen.** In block flow it
+     ended where the page's content did, and a short page — a binder of three
+     folders, a one-version policy — stopped mid-screen on a hard edge with the
+     ground's coral wash showing under it. At least the screen below the bar,
+     so a short page is a sheet with room left on it, not a card. */
   .app-canvas {
     display: block;
     overflow: visible;
+    min-height: calc(100dvh - var(--brand-nav-height));
   }
 }
 
