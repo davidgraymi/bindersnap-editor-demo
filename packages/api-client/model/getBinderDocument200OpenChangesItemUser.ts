@@ -10,4 +10,5 @@
  */
 export type GetBinderDocument200OpenChangesItemUser = {
   login: string;
+  full_name?: string;
 } | null;

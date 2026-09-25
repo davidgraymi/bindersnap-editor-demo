@@ -10,4 +10,5 @@
  */
 export type GetBinderChange200ChangeUser = {
   login: string;
+  full_name?: string;
 } | null;
