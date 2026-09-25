@@ -286,30 +286,36 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
           the same people, under the same rules.
         </p>
       ) : (
-        <div className="docs-list">
-          {binders.map((binder) => (
-            <a
-              className="docs-list-item"
-              key={binder.id}
-              href={buildBinderUrl({ org, binder: binder.name })}
-              onClick={(event) =>
-                followInApp(event, () => onOpenBinder(binder.name))
-              }
-            >
-              <span className="docs-list-item-icon" aria-hidden="true">
-                <BookOpen size={16} strokeWidth={1.4} />
-              </span>
-              <span className="docs-list-item-body">
-                <span className="docs-list-item-name">
-                  {formatDocumentName(binder.name)}
-                </span>
-                <span className="docs-list-item-meta">
-                  {binder.description || "No description"}
-                </span>
-              </span>
-            </a>
-          ))}
-        </div>
+        /* The panel and row every other list uses — Home, the change
+           requests, a binder's own documents — so an organization's binders
+           read as a list of the same kind as everything inside them. */
+        <section className="bs-panel" aria-label="Binders">
+          <ul className="bs-row-list">
+            {binders.map((binder) => (
+              <li key={binder.id}>
+                <a
+                  className="bs-row bs-row--tall"
+                  href={buildBinderUrl({ org, binder: binder.name })}
+                  onClick={(event) =>
+                    followInApp(event, () => onOpenBinder(binder.name))
+                  }
+                >
+                  <span className="bs-row-icon">
+                    <BookOpen size={16} strokeWidth={1.5} aria-hidden="true" />
+                  </span>
+                  <span className="bs-row-body">
+                    <span className="bs-row-name">
+                      {formatDocumentName(binder.name)}
+                    </span>
+                    <span className="bs-row-meta">
+                      {binder.description || "No description"}
+                    </span>
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
     </section>
   );

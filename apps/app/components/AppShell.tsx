@@ -379,6 +379,9 @@ export function AppShell({
                       documentPath,
                     })
                   }
+                  onOpenBinder={(org, binder) =>
+                    onNavigate({ kind: "binder", org, binder })
+                  }
                 />
               ) : route.kind === "organization" ? (
                 <OrganizationPage
