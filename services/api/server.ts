@@ -9843,6 +9843,35 @@ async function handleCreateOrganization(
   }
 }
 
+/**
+ * Whether this session may change what its organization pays for.
+ *
+ * ADR 0004: billing belongs to the organization's Owners, read from Gitea. A
+ * member could start a checkout and open the Stripe portal — where the
+ * subscription can be cancelled — which is the one act in billing that must
+ * not be anybody's. A site admin may too, because support is how a stuck
+ * customer gets unstuck.
+ */
+async function canManageOrganizationBilling(
+  auth: { client: GiteaClient; session: SessionRecord },
+  organization: { name: string } | null,
+): Promise<boolean> {
+  if (!organization) return false;
+  if (
+    await isOrganizationOwnerDirect({
+      client: auth.client,
+      org: organization.name,
+      username: auth.session.username,
+    })
+  ) {
+    return true;
+  }
+  const currentUser = await fetchSessionGiteaUser(auth.session).catch(
+    () => null,
+  );
+  return currentUser?.isAdmin === true;
+}
+
 async function handleBillingStatus(
   req: Request,
   baseHeaders: Headers,
@@ -9856,11 +9885,15 @@ async function handleBillingStatus(
     auth.session,
   );
 
-  const priceInfo = await fetchStripePriceInfo();
-  const accessState = await resolveSubscriptionAccessState(
-    username,
-    organization,
-  );
+  const [priceInfo, accessState, canManageBilling, subscription] =
+    await Promise.all([
+      fetchStripePriceInfo(),
+      resolveSubscriptionAccessState(username, organization),
+      canManageOrganizationBilling(auth, organization),
+      organization
+        ? subscriptionStore.getByOrganization(organization.id)
+        : Promise.resolve(null),
+    ]);
   return json(
     200,
     {
@@ -9875,6 +9908,11 @@ async function handleBillingStatus(
       accessSource: accessState.source,
       override: serializeSubscriptionOverride(accessState.override),
       plan: priceInfo,
+      canManageBilling,
+      // A Stripe customer exists, so the portal has something to open — true
+      // for a lapsed or cancelled subscription too, which is exactly when a
+      // customer most needs to reach it.
+      hasBillingAccount: subscription !== null,
     },
     baseHeaders,
   );
@@ -9912,6 +9950,14 @@ async function handleBillingCheckout(
     return json(
       409,
       { error: "You are not in an organization yet." },
+      baseHeaders,
+    );
+  }
+
+  if (!(await canManageOrganizationBilling(auth, organization))) {
+    return json(
+      403,
+      { error: "Only an owner of this organization can change its billing." },
       baseHeaders,
     );
   }
@@ -10236,6 +10282,14 @@ async function handleBillingPortal(
     return json(404, { error: "No subscription found." }, baseHeaders);
   }
 
+  if (!(await canManageOrganizationBilling(auth, organization))) {
+    return json(
+      403,
+      { error: "Only an owner of this organization can change its billing." },
+      baseHeaders,
+    );
+  }
+
   if (!config.stripeSecretKey) {
     return json(503, { error: "Billing not configured." }, baseHeaders);
   }
@@ -10246,10 +10300,29 @@ async function handleBillingPortal(
 
   try {
     const stripe = getStripeClient();
+    // "Cancel subscription" lands on Stripe's own cancel screen rather than
+    // the portal's front page, so the button does what it says. Stripe owns
+    // the confirmation, the proration and the webhook that tells us.
+    const cancelling =
+      body.intent === "cancel" && Boolean(record.stripeSubscriptionId);
     const session = await stripe.billingPortal.sessions.create(
       {
         customer: record.stripeCustomerId,
         return_url: `${config.appOrigin}/billing`,
+        ...(cancelling
+          ? {
+              flow_data: {
+                type: "subscription_cancel" as const,
+                subscription_cancel: {
+                  subscription: record.stripeSubscriptionId!,
+                },
+                after_completion: {
+                  type: "redirect" as const,
+                  redirect: { return_url: `${config.appOrigin}/billing` },
+                },
+              },
+            }
+          : {}),
       },
       {
         idempotencyKey: createStripeRequestIdempotencyKey(

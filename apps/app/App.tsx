@@ -314,6 +314,8 @@ export function App() {
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false);
   const [cancelAt, setCancelAt] = useState<number | null>(null);
   const [trialEndsAt, setTrialEndsAt] = useState<number | null>(null);
+  const [canManageBilling, setCanManageBilling] = useState(false);
+  const [hasBillingAccount, setHasBillingAccount] = useState(false);
   const [plan, setPlan] = useState<{
     amount: number;
     currency: string;
@@ -379,6 +381,8 @@ export function App() {
           setCancelAt(billing.cancelAt);
           setPlan(billing.plan);
           setTrialEndsAt(billing.trialEndsAt);
+          setCanManageBilling(billing.canManageBilling === true);
+          setHasBillingAccount(billing.hasBillingAccount === true);
         } catch {
           setSubscriptionStatus("none");
           setAccessSource(null);
@@ -715,6 +719,12 @@ export function App() {
                 const { url } = await createPortalSession();
                 window.location.href = url;
               }}
+              onCancel={async () => {
+                const { url } = await createPortalSession("cancel");
+                window.location.href = url;
+              }}
+              canManageBilling={canManageBilling}
+              hasBillingAccount={hasBillingAccount}
               onSubscriptionConfirmed={handleSubscriptionConfirmed}
               onRetryBillingStatus={async () => {
                 await refreshSession();

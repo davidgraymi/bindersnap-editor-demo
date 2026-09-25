@@ -1616,9 +1616,12 @@ export async function createCheckoutSession(): Promise<{ url: string }> {
   return response.data;
 }
 
-export async function createPortalSession(): Promise<{ url: string }> {
+export async function createPortalSession(
+  intent?: "cancel",
+): Promise<{ url: string }> {
   const response = await BillingClient.createBillingPortal({
     idempotencyKey: crypto.randomUUID(),
+    ...(intent ? { intent } : {}),
   });
   return response.data;
 }

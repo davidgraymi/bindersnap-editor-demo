@@ -51,11 +51,17 @@ export const BillingStatusPayloadSchema = z.object({
   accessSource: AdminSubscriptionAccessSourceSchema.nullable(),
   override: AdminSubscriptionAccessOverrideSchema.nullable(),
   plan: BillingPlanSchema.nullable(),
+  /** Whether this session may subscribe, cancel or change the card. */
+  canManageBilling: z.boolean().optional(),
+  /** Whether a Stripe customer exists, so its billing portal has a page. */
+  hasBillingAccount: z.boolean().optional(),
 });
 export type BillingStatusPayload = z.infer<typeof BillingStatusPayloadSchema>;
 
 export const BillingActionBodySchema = z.object({
   idempotencyKey: z.string(),
+  /** Portal only: open straight on Stripe's cancel screen. */
+  intent: z.enum(["cancel"]).optional(),
 });
 export type BillingActionBody = z.infer<typeof BillingActionBodySchema>;
 
