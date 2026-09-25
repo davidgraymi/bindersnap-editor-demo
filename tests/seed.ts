@@ -2532,20 +2532,27 @@ export async function seedDevStack(
     await ensureStaffMembers(baseUrl, adminAuth, staffTeamId, scenario);
   }
 
+  // **Binders at once, not one after another.** Each is its own repository
+  // with its own role teams, branches and pull request numbers, so nothing one
+  // writes is read by another — and applied in turn they were most of the
+  // stack's boot time, which every integration run and every `bun run up`
+  // waits through. The result is merged in scenario order all the same.
   const pullRequests: Record<string, number> = {};
-  for (const binder of scenario.binders) {
-    Object.assign(
-      pullRequests,
-      await applyBinder(
+  const applied = await Promise.all(
+    scenario.binders.map((binder) =>
+      applyBinder(
         baseUrl,
         adminAuth,
         authFor,
         scenario.organization,
         binder,
         staffTeamId,
-        log,
+        (message) => log(`[${binder.name}] ${message}`),
       ),
-    );
+    ),
+  );
+  for (const binderPullRequests of applied) {
+    Object.assign(pullRequests, binderPullRequests);
   }
 
   const redirectUri = `http://localhost:${process.env.APP_PORT ?? "5173"}/auth/callback`;
