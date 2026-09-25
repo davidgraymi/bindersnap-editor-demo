@@ -38,6 +38,11 @@ function timeOf(value: string | null | undefined): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
+/** How a login is said aloud: "Carol Mendes", or "Carol" when unknown. */
+export type NameOf = (login: string) => string;
+
+const loginAsName: NameOf = (login) => capitalizeFirst(login);
+
 function personName(author: { login: string; fullName: string }): string {
   return author.fullName.trim() || capitalizeFirst(author.login);
 }
@@ -56,9 +61,10 @@ export function describeChangeOpening(
    * "becomes v1 when published" would be false for it.
    */
   nextVersion: number | null,
+  nameOf: NameOf = loginAsName,
 ): { who: string; when: string; becomes: number | null } {
   return {
-    who: capitalizeFirst(change.submittedBy || "Someone"),
+    who: change.submittedBy ? nameOf(change.submittedBy) : "Someone",
     when: formatShortDate(change.submittedAt),
     becomes: change.open ? nextVersion : null,
   };
@@ -262,10 +268,11 @@ function closingEvent(
   decidedBy: string | null,
   publishedVersion: number | null,
   when: string,
+  nameOf: NameOf,
 ): TimelineEvent {
   if (outcome === "published") {
     return {
-      actor: decidedBy ? capitalizeFirst(decidedBy) : null,
+      actor: decidedBy ? nameOf(decidedBy) : null,
       verb:
         publishedVersion === null
           ? "published this"
@@ -279,7 +286,7 @@ function closingEvent(
   }
 
   return {
-    actor: decidedBy ? capitalizeFirst(decidedBy) : null,
+    actor: decidedBy ? nameOf(decidedBy) : null,
     verb:
       outcome === "declined"
         ? "closed this without publishing"
@@ -306,8 +313,16 @@ export function buildReviewTimeline(params: {
   threads: DiscussionThread[];
   updates: ChangeUpdate[];
   resetsApprovals: boolean;
+  /** Who a login is, for the events that record only a login. */
+  nameOf?: NameOf;
 }): TimelineEntry[] {
-  const { change, threads, updates, resetsApprovals } = params;
+  const {
+    change,
+    threads,
+    updates,
+    resetsApprovals,
+    nameOf = loginAsName,
+  } = params;
 
   const opened: TimelineEntry = {
     key: "opened",
@@ -315,7 +330,7 @@ export function buildReviewTimeline(params: {
     at: timeOf(change.submittedAt),
     thread: null,
     event: {
-      actor: capitalizeFirst(change.submittedBy || "Someone"),
+      actor: change.submittedBy ? nameOf(change.submittedBy) : "Someone",
       verb: "opened this change request",
       emphasiseVerb: false,
       tag: null,
@@ -333,7 +348,7 @@ export function buildReviewTimeline(params: {
       at: timeOf(update.at),
       thread: null,
       event: {
-        actor: capitalizeFirst(update.author || "Someone"),
+        actor: update.author ? nameOf(update.author) : "Someone",
         verb: "updated the proposed version",
         emphasiseVerb: false,
         tag: `(update ${update.index})`,
@@ -381,6 +396,7 @@ export function buildReviewTimeline(params: {
             change.decidedBy,
             change.publishedVersion,
             formatEventDate(change.closedAt ?? ""),
+            nameOf,
           ),
         },
       ]

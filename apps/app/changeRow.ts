@@ -43,6 +43,11 @@ export interface ChangeRowFacts {
 export interface ChangeRowInput {
   number: number;
   submittedBy: string;
+  /**
+   * "Carol Mendes" — the name behind `submittedBy`, when the list knows it. A
+   * login is not a name: `jsmith` capitalized is "Jsmith".
+   */
+  submittedByName?: string | null;
   submittedAt: string;
   /** When it last moved. Equal to `submittedAt` when nothing has. */
   updatedAt?: string;
@@ -64,7 +69,9 @@ export function describeChangeMeta(
   change: ChangeRowInput,
   now: number = Date.now(),
 ): string {
-  const who = capitalizeFirst(change.submittedBy || "Someone");
+  const who =
+    change.submittedByName?.trim() ||
+    capitalizeFirst(change.submittedBy || "Someone");
   const opened = Date.parse(change.submittedAt);
   const touched = Date.parse(change.updatedAt ?? change.submittedAt);
 

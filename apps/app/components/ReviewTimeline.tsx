@@ -22,6 +22,7 @@ import {
 import { applyReactionLocally } from "../reactions";
 import type { TimelineEntry, TimelineEntryKind } from "../changeReview";
 import { buildReviewTimeline } from "../changeReview";
+import { nameFor, usePeopleNames } from "../usePeopleNames";
 import type { ChangeRecord } from "../documentDisplay";
 import { ReviewThread } from "./ReviewThread";
 import { SkeletonGroup, SkeletonLine, SkeletonShape } from "./Skeleton";
@@ -130,6 +131,7 @@ export function ReviewTimeline({
   // then lost to a 402.
   const isReadOnly = useIsReadOnly();
   const canParticipate = canParticipateProp && !isReadOnly;
+  const names = usePeopleNames(scope.org);
   const [summary, setSummary] = useState<DiscussionSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -254,6 +256,7 @@ export function ReviewTimeline({
     threads: summary?.threads ?? [],
     updates,
     resetsApprovals,
+    nameOf: (login) => nameFor(names, login),
   });
   const unresolved = summary?.unresolvedCount ?? 0;
 

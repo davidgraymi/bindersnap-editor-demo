@@ -218,7 +218,14 @@ export const PullRequestWithApprovalStateSchema = z.object({
   assignee: ChangeUserSchema.nullable(),
   body: z.string().optional(),
   approvalState: ApprovalStateSchema,
-  user: z.object({ login: z.string() }).nullable().optional(),
+  user: z
+    .object({
+      login: z.string(),
+      /** What they are called, straight from Gitea; "" when never set. */
+      full_name: z.string().optional(),
+    })
+    .nullable()
+    .optional(),
   /**
    * The reviews on this change, oldest first. Only the document detail
    * populates it — a workspace list has no room for a review trail.
