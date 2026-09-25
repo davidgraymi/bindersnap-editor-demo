@@ -9621,3 +9621,27 @@ a.binder-latest-title:focus-visible {
   color: var(--bs-text-secondary);
   font-size: var(--brand-text-ui-md);
 }
+
+/* **A page's own actions are the compact size**, as GitLab's are beside a
+   project's name. At 40px, "Add a document" and "Edit" stood taller than the
+   title's second line and were the heaviest things on the page — heavier than
+   the list they act on. The size `.bs-btn--sm` names, so the head's buttons
+   match every other row of controls in the app. */
+.bs-pagehead-actions .bs-btn,
+.doc-header-top > .bs-btn {
+  min-height: 32px;
+  padding: var(--brand-space-1-5) var(--brand-space-4);
+  font-size: var(--brand-text-ui-sm);
+}
+
+/* An icon and its label never touch. Set once, here, rather than remembered
+   per button: the archive link at the foot of a binder forgot, and read
+   "▭1 archived document". */
+.bs-btn {
+  gap: var(--brand-space-1-5);
+}
+
+/* The busy spinner is spaced by that gap too, not by a margin of its own. */
+.bs-btn[aria-busy="true"]::before {
+  margin-right: 0;
+}
