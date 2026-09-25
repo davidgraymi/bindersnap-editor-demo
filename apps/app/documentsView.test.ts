@@ -7,9 +7,13 @@ import {
   buildDocumentRow,
   buildDocumentRows,
   buildDocumentsUrl,
+  describeBinderHeading,
   describeDocumentCount,
+  describeFolder,
   getDocumentRowStatusLabel,
+  getDocumentRowTone,
   parseDocumentsViewState,
+  spansOrganizations,
 } from "./documentsView";
 
 /**
@@ -143,5 +147,51 @@ describe("counting", () => {
     expect(describeDocumentCount(0)).toBe("No documents");
     expect(describeDocumentCount(1)).toBe("1 document");
     expect(describeDocumentCount(12)).toBe("12 documents");
+  });
+});
+
+describe("a binder's heading", () => {
+  const clinical = { organization: "riverside-health", binder: "clinical" };
+
+  test("is the binder's name, titled, when there is one organization", () => {
+    expect(describeBinderHeading(clinical, false)).toBe("Clinical");
+  });
+
+  test("carries the organization when two could share a binder's name", () => {
+    // The page printed "binder" over three lists from three organizations,
+    // because it headed each with the binder's name alone.
+    expect(describeBinderHeading(clinical, true)).toBe(
+      "Riverside Health / Clinical",
+    );
+  });
+
+  test("names the organization only when the reader can reach several", () => {
+    expect(
+      spansOrganizations([
+        { organization: "riverside-health" },
+        { organization: "riverside-health" },
+      ]),
+    ).toBe(false);
+    expect(
+      spansOrganizations([
+        { organization: "riverside-health" },
+        { organization: "mercy" },
+      ]),
+    ).toBe(true);
+    expect(spansOrganizations([])).toBe(false);
+  });
+});
+
+describe("a row's columns", () => {
+  test("titles a folder the way the binder's tree does", () => {
+    expect(describeFolder("nursing")).toBe("Nursing");
+    expect(describeFolder("nursing/wound-care")).toBe("Nursing / Wound Care");
+    expect(describeFolder("")).toBe("");
+  });
+
+  test("colours a status the way a change row colours the same word", () => {
+    expect(getDocumentRowTone("in_review")).toBe("awaiting");
+    expect(getDocumentRowTone("published")).toBe("published");
+    expect(getDocumentRowTone("unpublished")).toBe("closed");
   });
 });

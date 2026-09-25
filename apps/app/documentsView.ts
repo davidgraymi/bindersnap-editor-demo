@@ -115,6 +115,55 @@ export function applyBinderFilter(
   return rows.filter((row) => binderKey(row) === binder);
 }
 
+/**
+ * A binder as a heading names it: "Clinical", or "Riverside Health / Clinical"
+ * when the reader can reach more than one organization.
+ *
+ * **The organization only when it tells the binders apart.** The library spans
+ * every organization the reader is in, and two of them can each have a binder
+ * called "Clinical" — headed by the binder's name alone, the page printed the
+ * same heading over two different lists, the way a code host would if it
+ * dropped the namespace from `group / project`. With one organization it is
+ * the same word on every heading, and the top bar already says it.
+ */
+export function describeBinderHeading(
+  binder: { organization: string; binder: string },
+  spansOrganizations: boolean,
+): string {
+  const name = formatDocumentName(binder.binder);
+  return spansOrganizations
+    ? `${formatDocumentName(binder.organization)} / ${name}`
+    : name;
+}
+
+/** Whether the binders a reader can reach belong to more than one organization. */
+export function spansOrganizations(
+  binders: readonly { organization: string }[],
+): boolean {
+  return new Set(binders.map((binder) => binder.organization)).size > 1;
+}
+
+/**
+ * The folder a document is filed in, as words: "Nursing / Wound Care".
+ *
+ * Titled the way the binder's own tree titles it, so the two pages do not
+ * disagree about what a folder is called.
+ */
+export function describeFolder(folder: string): string {
+  return folder.split("/").filter(Boolean).map(formatDocumentName).join(" / ");
+}
+
+/**
+ * The dot beside a document's status — the same three colours a change row
+ * uses, so "in review" looks the same on every list that says it.
+ */
+export function getDocumentRowTone(
+  status: DocumentRowStatus,
+): "published" | "awaiting" | "closed" {
+  if (status === "in_review") return "awaiting";
+  return status === "published" ? "published" : "closed";
+}
+
 /** "12 documents", "1 document", "No documents". */
 export function describeDocumentCount(count: number): string {
   if (count === 0) return "No documents";

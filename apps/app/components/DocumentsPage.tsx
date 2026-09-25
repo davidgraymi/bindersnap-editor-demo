@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { FileText } from "lucide-react";
+import { BookOpen, FileText } from "lucide-react";
 
 import { fetchLibrary, type LibraryPayload } from "../api";
 import {
   applyBinderFilter,
+  describeBinderHeading,
+  describeFolder,
+  getDocumentRowTone,
+  spansOrganizations,
   binderKey,
   buildDocumentRows,
   buildDocumentsUrl,
@@ -14,10 +18,13 @@ import {
 } from "../documentsView";
 import { followInApp } from "../appLink";
 import { buildDocumentUrl } from "../binderDocument";
+import { buildBinderUrl } from "../binderShell";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 interface DocumentsPageProps {
   onSelectDocument: (org: string, binder: string, slugPath: string) => void;
+  /** Open a binder, from the heading of its group. */
+  onOpenBinder: (org: string, binder: string) => void;
 }
 
 /** Move the page, and let the app's popstate listener redraw it. */
@@ -43,7 +50,10 @@ function navigateTo(state: DocumentsViewState): void {
  * with the same name in different binders are different objects, and a flat
  * list would make them look like duplicates.
  */
-export function DocumentsPage({ onSelectDocument }: DocumentsPageProps) {
+export function DocumentsPage({
+  onSelectDocument,
+  onOpenBinder,
+}: DocumentsPageProps) {
   const [state, setState] = useState<DocumentsViewState>(() =>
     parseDocumentsViewState(window.location.search),
   );
@@ -102,6 +112,8 @@ export function DocumentsPage({ onSelectDocument }: DocumentsPageProps) {
     return [...byBinder.entries()];
   }, [rows]);
 
+  const manyOrganizations = spansOrganizations(library?.binders ?? []);
+
   if (error) {
     return <p className="app-inline-error">{error}</p>;
   }
@@ -159,7 +171,10 @@ export function DocumentsPage({ onSelectDocument }: DocumentsPageProps) {
                   binder: binder.name,
                 })}
               >
-                {binder.name}
+                {describeBinderHeading(
+                  { organization: binder.organization, binder: binder.name },
+                  manyOrganizations,
+                )}
               </option>
             ))}
           </select>
@@ -180,52 +195,115 @@ export function DocumentsPage({ onSelectDocument }: DocumentsPageProps) {
               : "None of your binders holds a document yet."}
         </p>
       ) : (
-        grouped.map(([key, binderRows]) => (
-          <section className="docs-binder-group" key={key}>
-            <h2 className="doc-rail-title">
-              {binderRows[0]!.binder}
-              <span className="doc-tab-count">{binderRows.length}</span>
-            </h2>
+        grouped.map(([key, binderRows]) => {
+          const first = binderRows[0]!;
+          const heading = describeBinderHeading(first, manyOrganizations);
 
-            <div className="docs-list">
-              {binderRows.map((row) => (
-                <a
-                  className="docs-list-item"
-                  key={row.key}
-                  href={buildDocumentUrl({
-                    org: row.organization,
-                    binder: row.binder,
-                    documentPath: row.slugPath,
-                    version: null,
-                  })}
-                  onClick={(event) =>
-                    followInApp(event, () =>
-                      onSelectDocument(
-                        row.organization,
-                        row.binder,
-                        row.slugPath,
-                      ),
-                    )
-                  }
-                >
-                  <FileText size={16} strokeWidth={1.5} aria-hidden="true" />
-                  <span className="docs-list-item-body">
-                    <span className="docs-list-item-name">{row.name}</span>
-                    <span className="docs-list-item-meta">
-                      {[
-                        row.folder,
-                        row.version,
-                        getDocumentRowStatusLabel(row.status),
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </span>
-                  </span>
-                </a>
-              ))}
-            </div>
-          </section>
-        ))
+          /* **The same panel every other list is drawn in**, the way a code
+             host draws a project's files: a bar that names the binder and
+             counts what is in it, then one row per document. It was a
+             letter-spaced label over a stack of 80px cards — the only list in
+             the app shaped like that, and one where a page of twelve policies
+             was two screens of scrolling. */
+          return (
+            <section
+              className="bs-panel docs-binder-group"
+              key={key}
+              aria-label={heading}
+            >
+              <div className="bs-panel-bar">
+                {/* The heading is the way into the binder, the way a group's
+                    name is on GitLab: a reader who found the policy usually
+                    wants the rest of its binder next. */}
+                <h2 className="bs-panel-bar-title">
+                  <a
+                    className="docs-binder-link"
+                    href={buildBinderUrl({
+                      org: first.organization,
+                      binder: first.binder,
+                    })}
+                    onClick={(event) =>
+                      followInApp(event, () =>
+                        onOpenBinder(first.organization, first.binder),
+                      )
+                    }
+                  >
+                    <BookOpen size={15} strokeWidth={1.6} aria-hidden="true" />
+                    {heading}
+                  </a>
+                </h2>
+                <span className="bs-panel-bar-spacer" />
+                <span className="binder-count">
+                  {describeDocumentCount(binderRows.length)}
+                </span>
+              </div>
+
+              <ul className="bs-row-list">
+                {binderRows.map((row) => (
+                  <li key={row.key}>
+                    <a
+                      className="bs-row docs-row"
+                      href={buildDocumentUrl({
+                        org: row.organization,
+                        binder: row.binder,
+                        documentPath: row.slugPath,
+                        version: null,
+                      })}
+                      onClick={(event) =>
+                        followInApp(event, () =>
+                          onSelectDocument(
+                            row.organization,
+                            row.binder,
+                            row.slugPath,
+                          ),
+                        )
+                      }
+                    >
+                      <span className="bs-row-icon">
+                        <FileText
+                          size={16}
+                          strokeWidth={1.5}
+                          aria-hidden="true"
+                        />
+                      </span>
+                      <span className="bs-row-body">
+                        <span className="bs-row-name">{row.name}</span>
+                        {row.folder ? (
+                          <span className="bs-row-meta">
+                            {describeFolder(row.folder)}
+                          </span>
+                        ) : null}
+                      </span>
+                      {/* **Columns, not a sentence.** The version and the
+                          status were run together into the line under the
+                          name — "nursing · v3 · Published" — so reading down
+                          the list for the one still in review meant reading
+                          every row. They are columns now, in the same place
+                          on every row, and the status is the same dot and
+                          word a change request's is. */}
+                      <span className="bs-row-right">
+                        <span className="bs-ver docs-row-version">
+                          {row.version}
+                        </span>
+                        <span
+                          className={`change-standing change-standing--${getDocumentRowTone(
+                            row.status,
+                          )}`}
+                        >
+                          <span
+                            className="change-standing-dot"
+                            aria-hidden="true"
+                          />
+                          {getDocumentRowStatusLabel(row.status)}
+                        </span>
+                      </span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          );
+        })
       )}
     </section>
   );
