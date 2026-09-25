@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { BindersnapLogoMark } from "./BindersnapLogoMark";
 import { fetchBillingStatus } from "../api";
 import {
   VISIBLE_POLLING_DELAYS_MS,
@@ -7,8 +6,9 @@ import {
   BACKGROUND_POLL_WINDOW_MS,
   runBackgroundPoll,
 } from "./checkoutPolling";
-import { SkeletonGroup, SkeletonLine } from "./Skeleton";
-import { hasManageableSubscription } from "./billingAccess";
+import { SkeletonPanel } from "./Skeleton";
+import { describeBilling } from "./billingAccess";
+import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
 
 interface BillingPageProps {
   subscriptionStatus: "active" | "none" | "loading";
@@ -22,6 +22,9 @@ interface BillingPageProps {
   currentPeriodEnd: number | null;
   cancelAtPeriodEnd: boolean;
   cancelAt: number | null;
+  trialEndsAt: number | null;
+  /** Whose bill it is — the organization's slug, or null outside one. */
+  organization: string | null;
   plan: {
     amount: number;
     currency: string;
@@ -32,9 +35,18 @@ interface BillingPageProps {
   onManage: () => Promise<void>;
   onSubscriptionConfirmed: () => void;
   onRetryBillingStatus: () => Promise<void>;
-  onSignOut: () => void | Promise<void>;
 }
 
+/**
+ * Billing, as a page of the app rather than a screen in front of it.
+ *
+ * It used to borrow the sign-in card: no sidebar, no top bar, and "Sign out"
+ * as the only way off it, so a sidebar link opened a dead end. A paying
+ * customer never saw it at all — they were bounced straight back to Home —
+ * and everybody else was told to "Start your subscription", whatever access
+ * they already had. Now it says where the organization stands and offers the
+ * one thing to do about it, inside the shell every other settings page uses.
+ */
 export function BillingPage({
   subscriptionStatus,
   accessSource,
@@ -42,13 +54,15 @@ export function BillingPage({
   currentPeriodEnd,
   cancelAtPeriodEnd,
   cancelAt,
+  trialEndsAt,
+  organization,
   plan,
   onSubscribe,
   onManage,
   onSubscriptionConfirmed,
   onRetryBillingStatus,
-  onSignOut,
 }: BillingPageProps) {
+  const organizationName = useOrganizationDisplayName(organization ?? "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(false);
@@ -121,256 +135,150 @@ export function BillingPage({
     void runVisiblePolling();
   }, [onSubscriptionConfirmed]);
 
-  if (isPolling) {
-    return (
-      <section className="app-login-shell">
-        <div className="app-login-wrap">
-          <div className="app-login-logo">
-            <div className="app-login-logo-mark" aria-hidden="true">
-              <BindersnapLogoMark width={24} height={24} />
-            </div>
-            <span className="app-login-logo-text">Bindersnap</span>
-          </div>
-          <div className="app-login-panel bs-card">
-            <h1>Payment received — activating your workspace…</h1>
-            <p
-              style={{
-                color: "var(--bs-text-muted)",
-                fontSize: "var(--brand-text-sm)",
-              }}
-            >
-              Verifying your subscription, this will only take a moment.
-            </p>
-          </div>
-        </div>
-      </section>
-    );
-  }
+  const summary = describeBilling({
+    subscriptionStatus,
+    accessSource,
+    currentPeriodEnd,
+    cancelAtPeriodEnd,
+    cancelAt,
+    trialEndsAt,
+  });
+  const loading = subscriptionStatus === "loading";
+  const checkoutReturned = window.location.search.includes("checkout=success");
 
-  if (pollingFailed && window.location.search.includes("checkout=success")) {
-    return (
-      <section className="app-login-shell">
-        <div className="app-login-wrap">
-          <div className="app-login-logo">
-            <div className="app-login-logo-mark" aria-hidden="true">
-              <BindersnapLogoMark width={24} height={24} />
-            </div>
-            <span className="app-login-logo-text">Bindersnap</span>
-          </div>
-          <div className="app-login-panel bs-card">
-            <h1>Activation is taking longer than expected</h1>
-            <p style={{ color: "var(--bs-text-muted)" }}>
-              Your payment was received. Activation can occasionally take up to
-              5 minutes — we&apos;re still checking in the background and will
-              redirect you automatically when your workspace is ready.
-            </p>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
-  // Only a Stripe-backed subscription gets the manage panel. A trialing
-  // organization is "active" too — it has access — but it has nothing to
-  // manage and every reason to be shown the way to subscribe, which is the
-  // whole point of the page it just navigated to.
-  if (hasManageableSubscription(subscriptionStatus, accessSource)) {
-    const renewalLabel = cancelAtPeriodEnd
-      ? cancelAt !== null
-        ? `Cancels on ${new Date(cancelAt * 1000).toLocaleDateString()}`
-        : "Cancels at end of billing period"
-      : currentPeriodEnd !== null
-        ? `Renews on ${new Date(currentPeriodEnd * 1000).toLocaleDateString()}`
-        : "Active";
-
-    return (
-      <section className="app-login-shell">
-        <div className="app-login-wrap">
-          <div className="app-login-logo">
-            <div className="app-login-logo-mark" aria-hidden="true">
-              <BindersnapLogoMark width={24} height={24} />
-            </div>
-            <span className="app-login-logo-text">Bindersnap</span>
-          </div>
-          <div className="app-login-panel bs-card">
-            <h1>Bindersnap Pro</h1>
-            <p style={{ color: "var(--bs-text-muted)" }}>{renewalLabel}</p>
-            <button
-              className="bs-btn bs-btn-primary"
-              type="button"
-              disabled={isSubmitting}
-              onClick={async () => {
-                setIsSubmitting(true);
-                setError(null);
-                try {
-                  await onManage();
-                } catch (manageError) {
-                  if (
-                    manageError instanceof Error &&
-                    manageError.message.trim() !== ""
-                  ) {
-                    setError(manageError.message);
-                  } else {
-                    setError("Unable to open billing portal.");
-                  }
-                } finally {
-                  setIsSubmitting(false);
-                }
-              }}
-            >
-              {isSubmitting ? "Opening portal…" : "Manage subscription"}
-            </button>
-            {error ? <p className="app-inline-error">{error}</p> : null}
-            <button
-              type="button"
-              style={{
-                background: "none",
-                border: "none",
-                padding: 0,
-                cursor: "pointer",
-                color: "var(--bs-text-muted)",
-                fontSize: "var(--brand-text-sm)",
-                fontFamily: "var(--brand-font-sans)",
-                textAlign: "left",
-              }}
-              onClick={() => window.history.back()}
-            >
-              &larr; Return to workspace
-            </button>
-            <button
-              type="button"
-              style={{
-                background: "none",
-                border: "none",
-                padding: 0,
-                cursor: "pointer",
-                color: "var(--bs-text-muted)",
-                fontSize: "var(--brand-text-sm)",
-                fontFamily: "var(--brand-font-sans)",
-                textAlign: "left",
-              }}
-              onClick={() => void onSignOut()}
-            >
-              Sign out
-            </button>
-          </div>
-        </div>
-      </section>
-    );
-  }
+  const run = async (action: () => Promise<void>, fallback: string) => {
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await action();
+    } catch (actionError) {
+      setError(
+        actionError instanceof Error && actionError.message.trim() !== ""
+          ? actionError.message
+          : fallback,
+      );
+    } finally {
+      if (isMounted.current) setIsSubmitting(false);
+    }
+  };
 
   return (
-    <section className="app-login-shell">
-      <div className="app-login-wrap">
-        <div className="app-login-logo">
-          <div className="app-login-logo-mark" aria-hidden="true">
-            <BindersnapLogoMark width={24} height={24} />
-          </div>
-          <span className="app-login-logo-text">Bindersnap</span>
+    <div className="docw-page billing-page">
+      <div className="bs-pagehead">
+        <div className="bs-pagehead-body">
+          <h1 className="bs-title">Billing</h1>
+          <p className="bs-subtitle">
+            {organization
+              ? `What ${organizationName} pays for Bindersnap.`
+              : "What your organization pays for Bindersnap."}
+          </p>
         </div>
-        <div className="app-login-panel bs-card">
-          <h1>Start your subscription</h1>
-          {hasBillingStatusError ? (
-            <div
-              role="status"
-              style={{
-                display: "grid",
-                gap: "var(--brand-space-3)",
-                marginBottom: "var(--brand-space-4)",
-                padding: "var(--brand-space-4)",
-                borderRadius: "var(--brand-radius-lg)",
-                border: "1px solid var(--bs-rule)",
-                background: "var(--bs-surface-2)",
-                color: "var(--bs-text-secondary)",
-              }}
-            >
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "var(--brand-text-sm)",
-                }}
-              >
-                We couldn&apos;t verify your billing status. Please retry before
-                you continue.
-              </p>
-              <div>
-                <button
-                  className="bs-btn bs-btn-secondary"
-                  type="button"
-                  disabled={isRetryingBillingStatus}
-                  onClick={async () => {
-                    setIsRetryingBillingStatus(true);
-                    try {
-                      await onRetryBillingStatus();
-                    } finally {
-                      if (isMounted.current) {
-                        setIsRetryingBillingStatus(false);
-                      }
-                    }
-                  }}
-                >
-                  {isRetryingBillingStatus
-                    ? "Retrying…"
-                    : "Retry billing check"}
-                </button>
-              </div>
-            </div>
-          ) : null}
-          {plan ? (
-            <p style={{ color: "var(--bs-text-muted)" }}>{plan.formatted}</p>
-          ) : (
-            <SkeletonGroup label="Loading the price">
-              <SkeletonLine width="medium" />
-            </SkeletonGroup>
-          )}
+      </div>
+
+      {isPolling ? (
+        <p className="bs-note" role="status">
+          Payment received. Activating your subscription — this takes a moment.
+        </p>
+      ) : pollingFailed && checkoutReturned ? (
+        <p className="bs-note" role="status">
+          Your payment was received. Activation can take up to 5 minutes; this
+          page is still checking and will update when it is done.
+        </p>
+      ) : null}
+
+      {hasBillingStatusError ? (
+        <div className="bs-note bs-note--danger billing-retry" role="alert">
+          <span>
+            We couldn&apos;t read your billing status. Retry before you change
+            anything.
+          </span>
           <button
-            className="bs-btn bs-btn-primary"
+            className="bs-btn bs-btn-secondary bs-btn--sm"
             type="button"
-            disabled={
-              isSubmitting ||
-              isRetryingBillingStatus ||
-              subscriptionStatus === "loading"
-            }
+            disabled={isRetryingBillingStatus}
             onClick={async () => {
-              setIsSubmitting(true);
-              setError(null);
+              setIsRetryingBillingStatus(true);
               try {
-                await onSubscribe();
-              } catch (subscribeError) {
-                if (
-                  subscribeError instanceof Error &&
-                  subscribeError.message.trim() !== ""
-                ) {
-                  setError(subscribeError.message);
-                } else {
-                  setError("Unable to start checkout.");
-                }
+                await onRetryBillingStatus();
               } finally {
-                setIsSubmitting(false);
+                if (isMounted.current) setIsRetryingBillingStatus(false);
               }
             }}
           >
-            {isSubmitting ? "Redirecting…" : "Subscribe now"}
-          </button>
-          {error ? <p className="app-inline-error">{error}</p> : null}
-          <button
-            type="button"
-            style={{
-              background: "none",
-              border: "none",
-              padding: 0,
-              cursor: "pointer",
-              color: "var(--bs-text-muted)",
-              fontSize: "var(--brand-text-sm)",
-              fontFamily: "var(--brand-font-sans)",
-              textAlign: "left",
-            }}
-            onClick={() => void onSignOut()}
-          >
-            Sign out
+            {isRetryingBillingStatus ? "Retrying…" : "Retry"}
           </button>
         </div>
-      </div>
-    </section>
+      ) : null}
+
+      {loading ? (
+        <SkeletonPanel label="Loading your billing" rows={2} bar />
+      ) : hasBillingStatusError ? null : (
+        <section className="bs-panel" aria-label="Plan">
+          <div className="bs-panel-bar">
+            <span className="bs-section-title">Bindersnap Pro</span>
+            <span className={`bs-status bs-status--${summary.tone}`}>
+              {summary.standing}
+            </span>
+          </div>
+          <ul className="bs-row-list">
+            <li className="bs-row">
+              <span className="bs-row-body">
+                <span className="bs-row-meta billing-detail">
+                  {summary.detail}
+                </span>
+              </span>
+            </li>
+            {summary.action === "subscribe" ? (
+              <li className="bs-row">
+                <span className="bs-row-body">
+                  <span className="bs-row-name">Price</span>
+                </span>
+                <span className="bs-row-right bs-settings-value">
+                  {plan ? plan.formatted : "Shown at checkout"}
+                </span>
+              </li>
+            ) : null}
+          </ul>
+          {summary.action ? (
+            <div className="bs-panel-foot">
+              <span className="bs-panel-foot-note">
+                {summary.action === "manage"
+                  ? "Invoices, payment method and cancellation are handled by Stripe."
+                  : "Checkout is handled by Stripe. You come back here when it is done."}
+              </span>
+              {summary.action === "manage" ? (
+                <button
+                  className="bs-btn bs-btn-primary bs-btn--sm"
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() =>
+                    void run(onManage, "Unable to open billing portal.")
+                  }
+                >
+                  {isSubmitting ? "Opening…" : "Manage subscription"}
+                </button>
+              ) : (
+                <button
+                  className="bs-btn bs-btn-primary bs-btn--sm"
+                  type="button"
+                  disabled={isSubmitting || isRetryingBillingStatus}
+                  onClick={() =>
+                    void run(onSubscribe, "Unable to start checkout.")
+                  }
+                >
+                  {isSubmitting ? "Redirecting…" : "Subscribe"}
+                </button>
+              )}
+            </div>
+          ) : null}
+        </section>
+      )}
+
+      {error ? (
+        <p className="bs-note bs-note--danger" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }

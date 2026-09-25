@@ -45,13 +45,7 @@ import {
 import { resolveSignupPrefill } from "./authIntent";
 
 type AuthView =
-  | "loading"
-  | "callback"
-  | "landing"
-  | "login"
-  | "billing"
-  | "createOrganization"
-  | "app";
+  "loading" | "callback" | "landing" | "login" | "createOrganization" | "app";
 type AuthMode = "signin" | "signup";
 
 interface LoginPageProps {
@@ -319,6 +313,7 @@ export function App() {
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState<number | null>(null);
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false);
   const [cancelAt, setCancelAt] = useState<number | null>(null);
+  const [trialEndsAt, setTrialEndsAt] = useState<number | null>(null);
   const [plan, setPlan] = useState<{
     amount: number;
     currency: string;
@@ -383,6 +378,7 @@ export function App() {
           setCancelAtPeriodEnd(billing.cancelAtPeriodEnd);
           setCancelAt(billing.cancelAt);
           setPlan(billing.plan);
+          setTrialEndsAt(billing.trialEndsAt);
         } catch {
           setSubscriptionStatus("none");
           setAccessSource(null);
@@ -391,6 +387,7 @@ export function App() {
           setCancelAtPeriodEnd(false);
           setCancelAt(null);
           setPlan(null);
+          setTrialEndsAt(null);
         }
       } else {
         setOrganizations(null);
@@ -478,9 +475,6 @@ export function App() {
       return;
     }
 
-    const isCheckoutSuccess =
-      window.location.search.includes("checkout=success");
-
     if (
       user &&
       user.isAdmin &&
@@ -505,19 +499,8 @@ export function App() {
     // the customer's approval history hostage. They land where they were
     // going, read everything, and get the banner and no write controls.
 
-    // Bounce back to the workspace only when there is genuinely nothing to do
-    // on this page. A customer on a trial has access but no subscription, and
-    // sending them home would leave them no way to become a paying one.
-    if (
-      user &&
-      subscriptionStatus === "active" &&
-      accessSource === "stripe" &&
-      route.kind === "billing" &&
-      !isCheckoutSuccess
-    ) {
-      navigateTo({ kind: "home" }, true);
-      return;
-    }
+    // No bounce away from /billing for a paying customer either. It is where
+    // they manage the subscription, and the sidebar links to it.
   }, [accessSource, isCheckingSession, route, subscriptionStatus, user]);
 
   useEffect(() => {
@@ -549,6 +532,16 @@ export function App() {
     ],
   );
 
+  // Stable, because the billing page restarts its checkout polling whenever
+  // this changes. Dropping `?checkout=success` from the address is what ends
+  // the polling, and the page then shows the subscription it just confirmed.
+  const handleSubscriptionConfirmed = useCallback(() => {
+    setSubscriptionStatus("active");
+    setAccessSource("stripe");
+    setHasBillingStatusError(false);
+    navigateTo({ kind: "billing" }, true);
+  }, []);
+
   const view: AuthView = useMemo(() => {
     if (route.kind === "callback") {
       return "callback";
@@ -575,10 +568,6 @@ export function App() {
 
     if (route.kind === "createOrganization" && user) {
       return "createOrganization";
-    }
-
-    if (route.kind === "billing" && user) {
-      return "billing";
     }
 
     return user ? "app" : "login";
@@ -624,43 +613,6 @@ export function App() {
           // Skipping has to actually leave. Reading is free, so the workspace
           // is a legitimate place to be without an organization.
           setOrganizationSetupReason(null);
-          navigateTo({ kind: "home" }, true);
-        }}
-      />
-    );
-  }
-
-  if (view === "billing") {
-    return (
-      <BillingPage
-        subscriptionStatus={subscriptionStatus ?? "loading"}
-        accessSource={accessSource}
-        hasBillingStatusError={hasBillingStatusError}
-        currentPeriodEnd={currentPeriodEnd}
-        cancelAtPeriodEnd={cancelAtPeriodEnd}
-        cancelAt={cancelAt}
-        plan={plan}
-        onSubscribe={async () => {
-          const { url } = await createCheckoutSession();
-          window.location.href = url;
-        }}
-        onManage={async () => {
-          const { url } = await createPortalSession();
-          window.location.href = url;
-        }}
-        onSubscriptionConfirmed={() => {
-          setSubscriptionStatus("active");
-          setAccessSource("stripe");
-          setHasBillingStatusError(false);
-          navigateTo({ kind: "home" }, true);
-        }}
-        onRetryBillingStatus={async () => {
-          await refreshSession();
-        }}
-        onSignOut={async () => {
-          await logoutSession();
-          setUser(null);
-          setCallbackError(null);
           navigateTo({ kind: "home" }, true);
         }}
       />
@@ -744,6 +696,31 @@ export function App() {
         <AppShell
           user={user}
           route={asShellRoute(route)}
+          billing={
+            <BillingPage
+              subscriptionStatus={subscriptionStatus ?? "loading"}
+              accessSource={accessSource}
+              hasBillingStatusError={hasBillingStatusError}
+              currentPeriodEnd={currentPeriodEnd}
+              cancelAtPeriodEnd={cancelAtPeriodEnd}
+              cancelAt={cancelAt}
+              trialEndsAt={trialEndsAt}
+              organization={billingOrganizationName}
+              plan={plan}
+              onSubscribe={async () => {
+                const { url } = await createCheckoutSession();
+                window.location.href = url;
+              }}
+              onManage={async () => {
+                const { url } = await createPortalSession();
+                window.location.href = url;
+              }}
+              onSubscriptionConfirmed={handleSubscriptionConfirmed}
+              onRetryBillingStatus={async () => {
+                await refreshSession();
+              }}
+            />
+          }
           onNavigate={navigateTo}
           onSignOut={async () => {
             await logoutSession();

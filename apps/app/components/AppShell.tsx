@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
 import { CreditCard, LogOut, Moon, Shield } from "lucide-react";
 import type { SessionUser } from "../api";
@@ -27,6 +27,11 @@ interface AppShellProps {
   route: AppRoute;
   onNavigate: (route: AppRoute, replace?: boolean) => void;
   onSignOut: () => void | Promise<void>;
+  /**
+   * The billing page, built by the app that holds the billing state. Drawn in
+   * the shell like any other settings page, rather than in place of it.
+   */
+  billing?: ReactNode;
 }
 
 function toggleTheme() {
@@ -86,6 +91,7 @@ export function AppShell({
   route,
   onNavigate,
   onSignOut,
+  billing = null,
 }: AppShellProps) {
   const isReadOnly = useIsReadOnly();
   const isWorkspace = route.kind === "workspace";
@@ -444,6 +450,8 @@ export function AppShell({
                     })
                   }
                 />
+              ) : route.kind === "billing" ? (
+                billing
               ) : route.kind === "adminSubscriptions" ? (
                 <AdminSubscriptionManagementPage
                   currentUsername={currentUsername}
