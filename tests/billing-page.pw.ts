@@ -2,6 +2,10 @@ import { expect, test } from "@playwright/test";
 
 import { signInAsAlice } from "./helpers";
 
+// Sign-in, an organization page and the billing page, each waiting on the
+// API: more than the suite's 10s default on a loaded runner.
+test.describe.configure({ timeout: 30_000 });
+
 /**
  * Billing is a page of the app, reached from the sidebar and left the same way.
  *
