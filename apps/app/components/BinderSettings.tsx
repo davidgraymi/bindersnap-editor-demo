@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
+  Building2,
   FileText,
   Folder,
   Library,
+  Lock,
   Pencil,
   ShieldCheck,
   Users,
@@ -182,51 +184,105 @@ export function BinderSettings({
 
   return (
     <div className="binder-pane bs-settings">
-      {canManage ? (
-        <NameAndDescription
+      <SettingsGroup
+        id="binder-settings-general"
+        title="General"
+        note="What this binder is called, and what it is for."
+      >
+        {canManage ? (
+          <NameAndDescription
+            org={org}
+            binder={binder}
+            description={description}
+            onRenamed={onRenamed}
+            onDescribed={(next) => {
+              setDescription(next);
+              onDescribed?.();
+            }}
+          />
+        ) : (
+          // Said once, at the top, rather than as a missing control in every
+          // block below.
+          <p className="bs-section-note">
+            Only a binder administrator can change these settings.
+          </p>
+        )}
+      </SettingsGroup>
+
+      <SettingsGroup
+        id="binder-settings-access"
+        title="Access"
+        note="Who can read this binder, and what each person can do in it."
+      >
+        <PeopleSections
+          ref={peopleRef}
           org={org}
           binder={binder}
-          description={description}
-          onRenamed={onRenamed}
-          onDescribed={(next) => {
-            setDescription(next);
-            onDescribed?.();
-          }}
+          payload={people}
+          canManage={canManagePeople}
+          onChanged={setPeople}
         />
-      ) : (
-        // Said once, at the top, rather than as a missing control in every
-        // block below.
-        <p className="bs-section-note">
-          Only a binder administrator can change these settings.
-        </p>
-      )}
+      </SettingsGroup>
 
-      <PeopleSections
-        ref={peopleRef}
-        org={org}
-        binder={binder}
-        payload={people}
-        canManage={canManagePeople}
-        onChanged={setPeople}
-      />
+      <SettingsGroup
+        id="binder-settings-review"
+        title="Review and publishing"
+        note="What has to be true before a change becomes the published version."
+      >
+        <SignOffSection
+          ref={signOffRef}
+          org={org}
+          binder={binder}
+          settings={settings}
+          canManage={canManage}
+          onOpenChange={onOpenChange}
+        />
 
-      <SignOffSection
-        ref={signOffRef}
-        org={org}
-        binder={binder}
-        settings={settings}
-        canManage={canManage}
-        onOpenChange={onOpenChange}
-      />
-
-      <ApprovalSection
-        org={org}
-        binder={binder}
-        settings={settings}
-        canManage={canManage}
-        onChanged={setSettings}
-      />
+        <ApprovalSection
+          org={org}
+          binder={binder}
+          settings={settings}
+          canManage={canManage}
+          onChanged={setSettings}
+        />
+      </SettingsGroup>
     </div>
+  );
+}
+
+/**
+ * One of the page's three questions, with a sentence saying which.
+ *
+ * **GitLab's settings page, without the accordion.** What it gets right is the
+ * hierarchy: a few named groups, each saying in one line what it holds, with
+ * the individual settings as subsections under it. Six headings of equal
+ * weight made "Groups" and "How changes are approved" look like the same kind
+ * of thing, and nothing said that the visibility choice, the people and the
+ * groups are three halves of one answer. What it gets wrong for a page this
+ * short is folding: six blocks read in one scroll, and a closed section is a
+ * setting nobody checks.
+ */
+function SettingsGroup({
+  id,
+  title,
+  note,
+  children,
+}: {
+  id: string;
+  title: string;
+  note: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="bs-section bs-settings-group" aria-labelledby={id}>
+      <header className="bs-settings-group-head">
+        <h2 className="bs-settings-group-title" id={id}>
+          {title}
+        </h2>
+        <p className="bs-settings-group-note">{note}</p>
+      </header>
+      <div className="bs-settings-group-body">{children}</div>
+    </section>
   );
 }
 
@@ -302,11 +358,18 @@ function NameAndDescription({
             type="text"
             value={name}
             disabled={saving}
+            aria-describedby="binder-settings-name-hint"
             onChange={(event) => {
               setName(event.target.value);
               setNotice(null);
             }}
           />
+          {/* The one consequence of a rename somebody would want to know
+              before pressing Save: the address moves, and links survive. */}
+          <p className="bs-field-hint" id="binder-settings-name-hint">
+            Renaming it changes its address. Links to the old address keep
+            working.
+          </p>
         </div>
         <div className="bs-field">
           <label
@@ -414,9 +477,9 @@ function PeopleSections({
     <>
       <section className="bs-section" aria-labelledby="binder-settings-seen">
         <div className="bs-section-head">
-          <h2 className="bs-section-title" id="binder-settings-seen">
+          <h3 className="bs-section-title" id="binder-settings-seen">
             Who can see this binder
-          </h2>
+          </h3>
         </div>
         {canManage ? (
           /* A radio pair rather than a toggle: the two states are a choice
@@ -438,6 +501,12 @@ function PeopleSections({
                   void run(() => setBinderVisibility(org, binder, true))
                 }
               />
+              <Building2
+                className="bs-choice-icon"
+                size={16}
+                strokeWidth={1.75}
+                aria-hidden="true"
+              />
               <span>
                 <span className="bs-choice-name">
                   Everyone at {orgDisplayName}
@@ -457,6 +526,12 @@ function PeopleSections({
                 onChange={() =>
                   void run(() => setBinderVisibility(org, binder, false))
                 }
+              />
+              <Lock
+                className="bs-choice-icon"
+                size={16}
+                strokeWidth={1.75}
+                aria-hidden="true"
               />
               <span>
                 <span className="bs-choice-name">Only the people below</span>
@@ -488,9 +563,9 @@ function PeopleSections({
         aria-labelledby="binder-settings-people"
       >
         <div className="bs-section-head">
-          <h2 className="bs-section-title" id="binder-settings-people">
+          <h3 className="bs-section-title" id="binder-settings-people">
             People
-          </h2>
+          </h3>
           <span className="bs-section-count">{payload.people.length}</span>
         </div>
         <div className="bs-panel">
@@ -762,9 +837,9 @@ function GroupsSection({
   return (
     <section className="bs-section" aria-labelledby="binder-settings-groups">
       <div className="bs-section-head">
-        <h2 className="bs-section-title" id="binder-settings-groups">
+        <h3 className="bs-section-title" id="binder-settings-groups">
           Groups
-        </h2>
+        </h3>
         <span className="bs-section-count">{groups.length}</span>
       </div>
       <div className="bs-panel">
@@ -1183,9 +1258,9 @@ function SignOffSection({
       aria-labelledby="binder-settings-sign-off"
     >
       <div className="bs-section-head">
-        <h2 className="bs-section-title" id="binder-settings-sign-off">
+        <h3 className="bs-section-title" id="binder-settings-sign-off">
           Sign-off rules
-        </h2>
+        </h3>
         {signOff.rules.length > 0 ? (
           <span className="bs-section-count">{signOff.rules.length}</span>
         ) : null}
@@ -1495,9 +1570,9 @@ function ApprovalSection({
   return (
     <section className="bs-section" aria-labelledby="binder-settings-approval">
       <div className="bs-section-head">
-        <h2 className="bs-section-title" id="binder-settings-approval">
+        <h3 className="bs-section-title" id="binder-settings-approval">
           How changes are approved
-        </h2>
+        </h3>
       </div>
 
       {/* Worth saying loudly: a binder without this is not making the
