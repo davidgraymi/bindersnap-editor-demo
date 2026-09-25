@@ -208,10 +208,10 @@ test("the nav's New policy asks which binder, then files into it", async ({
   ).toBeVisible();
 
   // Scoped to the dialog: the organization page behind it lists the same
-  // binders, so an unscoped match finds two.
+  // binders, so an unscoped match finds two. By name, as the row shows it.
   await page
     .getByRole("dialog")
-    .getByRole("button", { name: second, exact: false })
+    .getByRole("button", { name: "Corporate Policies" })
     .click();
   await expect(
     page.getByRole("heading", { name: "Add a document" }),

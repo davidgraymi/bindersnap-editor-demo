@@ -3946,6 +3946,13 @@ a.bs-knot {
   width: min(100%, 620px);
 }
 
+/* The top bar's "which binder?" list scrolls inside the dialog rather than
+   pushing Cancel off the bottom of the screen. */
+.new-policy-binders {
+  max-height: min(55vh, 420px);
+  overflow-y: auto;
+}
+
 .create-document-form {
   display: grid;
   gap: var(--brand-space-4);
