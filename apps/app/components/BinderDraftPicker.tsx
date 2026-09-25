@@ -292,7 +292,7 @@ export function BinderDraftPicker({
               {others.map((other) => (
                 <div className="bs-row bs-row--muted" key={other.branch}>
                   <PersonAvatar
-                    person={{ login: other.owner, fullName: "", avatarUrl: "" }}
+                    person={{ login: other.owner, fullName: "" }}
                     size="sm"
                   />
                   <span className="bs-row-body">
