@@ -9,15 +9,22 @@ The question was where the backend is weak, with two ideas to test:
 
 The short answers:
 
-- **There is already a queue.** Every Gitea call goes through a four-slot
-  process-wide gate (`gitea-client/request-gate.ts`). A second queue would not
-  make a page faster: it would only reorder the same calls. What makes pages
-  slow is **how many calls each page makes**, and a lot of those calls fetch
-  data the page never uses. Pages also run steps one after another that could
-  run in parallel, and Gitea's SQLite is still in its default rollback-journal
-  mode. A queue _is_ the right tool in one place: the **publish write path**,
-  where a merge and its version tags are separate writes that can half-fail
-  (§5).
+- **A durable, idempotent job queue is needed, and the gap is bigger than
+  publishing.** Six user actions are a chain of separate Gitea writes with no
+  record of intent. If the API process dies partway through, which a deploy
+  or restart can cause, the chain stops and nothing finishes it. Two leave
+  compliance damage. A publish can merge without writing its version tags. A
+  new binder can be left with an **unprotected `main`**. In both cases,
+  retrying from the UI is refused. §4 lists every such flow and proposes a
+  write-ahead job table with idempotent steps. It uses SQLite in the API
+  process, not SQS, and explains why.
+- **The queue that already exists is a different kind.** Every Gitea call
+  goes through a four-slot in-memory gate (`gitea-client/request-gate.ts`).
+  It limits load; it doesn't make work durable. Pages are slow because of
+  **how many calls each page makes**, and many of those calls fetch data the
+  page never uses. Pages also run independent steps one after another. The
+  gate limit was tuned on the dev stack, which runs Gitea's SQLite in a
+  different journal mode from production (§2).
 - **A general cache in front of Gitea is banned by this repo's own rules**, and
   on a compliance product that rule is correct (AGENTS.md: "Anything else that
   duplicates Gitea state is a cache, and caches are still banned."). Three
@@ -25,7 +32,7 @@ The short answers:
   sharing one in-flight request between callers, memoizing within a single
   request, and caching data keyed by a git object that can never change. Those
   get most of the benefit. A webhook-invalidated read cache is possible, but it
-  needs an ADR change first (§6).
+  needs an ADR change first (§5).
 - **Four bugs came up along the way.** They are more urgent than the
   performance work. The worst one breaks publishing once a binder has more than
   30 tags. I reproduced it against a real Gitea 1.27.3 (§3.1).
@@ -84,19 +91,45 @@ median of 3 runs, at a fixed concurrency.
   writes `updated_unix` and SQLite serializes writers.
 - **In WAL mode the collapse mostly disappears.** 32 in flight is 3.3× faster
   than rollback mode, and 4 in flight is about 24% faster.
-- Gitea defaults to `journal_mode=delete`. I checked this with `PRAGMA
-journal_mode` on a fresh install. Neither compose file sets
-  `GITEA__database__SQLITE_JOURNAL_MODE`.
 - **Basic auth costs about 3× a token call** (23 ms vs 7 ms per request,
   sequential), because Gitea hashes the password on every request. This only
   affects dev, but dev is where the gate limit was tuned and where "the app
   loads slowly" is usually noticed.
 
-Production probably already runs Gitea's DB in WAL, because Litestream switches
-the database it replicates to WAL and that setting sticks in the file. But
-nothing in this repo requires it, dev does not have it, and **the gate limit
-of 4 was measured on dev**, so it is probably too low for production. See
-P1-1.
+### What the infrastructure config says about Gitea's database
+
+This comes from reading `docker-compose.yml`, `deploy/files/`, `infra/compute/`
+and the pinned upstream sources:
+
+| Setting               | Dev (`docker-compose.yml`)                                                                       | Prod (`deploy/files/docker-compose.prod.yml`)                                                                                                                                                                                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Gitea                 | 28.0.0 nightly (pinned digest)                                                                   | `gitea/gitea:1.27.3`                                                                                                                                                                                                                                                                           |
+| DB                    | SQLite, `/data/gitea.db`                                                                         | SQLite, `/data/gitea.db`                                                                                                                                                                                                                                                                       |
+| `SQLITE_JOURNAL_MODE` | not set, so SQLite's default applies (Gitea's default is `""`, `modules/setting/database.go:75`) | not set                                                                                                                                                                                                                                                                                        |
+| Litestream            | **none**                                                                                         | `litestream/litestream:0.3` replicates `gitea.db` and `sessions.db` (`litestream.yml`). On start, Litestream runs `PRAGMA journal_mode = wal` on each database (`db.go:432` at v0.3.13), and that mode is stored in the file. It starts after Gitea is healthy (`depends_on: service_healthy`) |
+| Effective mode        | **rollback journal (`delete`)**                                                                  | **WAL**, set by Litestream as a side effect. Gitea itself never asks for it                                                                                                                                                                                                                    |
+| `SQLITE_TIMEOUT`      | not set → 20 s busy timeout (Gitea raises any value below 5000 to 20000)                         | same                                                                                                                                                                                                                                                                                           |
+| Privileged auth       | basic auth (no service token in compose)                                                         | service token (`BINDERSNAP_GITEA_SERVICE_TOKEN`)                                                                                                                                                                                                                                               |
+| Host                  | developer machine                                                                                | one `t4g.small` (2 vCPU, 2 GiB, `infra/compute/main.tf:53`). Gitea, the API, Caddy, Litestream and the CloudWatch agent share it                                                                                                                                                               |
+
+Three things follow from this:
+
+1. **Dev and prod run Gitea's database in different modes.** The gate's
+   comment says it was "measured against a seeded dev stack", so the limit of 4
+   was tuned in rollback mode. That is the column where concurrency collapses.
+   Production runs in WAL mode, where it doesn't collapse. The limit is
+   probably conservative for prod, but prod is also a 2-vCPU host running four
+   other processes. Re-measure there, or on a `t4g.small` running the prod
+   compose file, before changing it (P1-1).
+2. **Prod's WAL mode depends on a sidecar.** If Litestream is removed,
+   replaced, or starts later, prod silently falls back to rollback mode, and
+   every page gets the collapse shown in the left-hand column. Set
+   `GITEA__database__SQLITE_JOURNAL_MODE=WAL` in **both** compose files so the
+   mode is stated where it is relied on, and so dev behaves like prod.
+3. **A Gitea stall shows up as slowness, not as errors.** With a 20 s busy
+   timeout, a call stuck behind the write lock waits rather than failing.
+   Together with the BFF having no timeout (P2-2), one slow Gitea write can
+   hold a gate slot for up to 20 s.
 
 ## 3. Findings
 
@@ -116,8 +149,9 @@ was on page 2. So:
 - `handlePublishWorkspaceChange` computes `nextVersion = 1` for that document
   (`server.ts:3993–4005`), **merges** (`server.ts:4007`), and then
   `POST /tags` for `<uid>/v1` gets `409 tag already exists`, which I reproduced.
-  The change ends up merged with no version tag. There's no retry and no
-  reconciler, so the evidence record now has a gap.
+  The change ends up merged with no version tag. Nothing retries and nothing
+  reconciles, so the evidence record now has a gap. This is the same failure
+  as a crash between the merge and the tags (§4), just triggered by a bug.
 - The document page (`server.ts:7673`) shows that document with no versions and
   can mark it `proposed` (`server.ts:7690`).
 - The change page (`server.ts:4281`) labels the button "Publish v1".
@@ -244,46 +278,173 @@ it adds unqueued load exactly when the page fan-out is busiest.
   Litestream replicates `sessions.db` to S3. Consider encrypting that column
   with a host-held key.
 
-## 4. On the queue idea
+## 4. On the queue idea: durable, idempotent jobs
 
-"One browser request becomes several Gitea requests" is true, but a queue
-doesn't change that. The existing gate already is a queue, and it is doing
-its job: keeping Gitea's SQLite from piling up writers. Adding another queue
-in front of it only moves the waiting to a different place. To make pages
-faster:
+The question behind the queue idea: **if the app goes down in the middle of an
+action, does that action still finish?** Today it doesn't. Every multi-step
+write runs as a chain of `await`s inside the HTTP handler. Nothing records the
+intent before the first write, so a crash, a deploy or an OOM kill loses the
+rest of the chain. Gitea has no cross-call transactions, so the writes that
+already happened stay. Deploys make this likely rather than rare: every push
+to `main` replaces the API container (`API_TAG` is pinned per commit).
+
+### 4.1 Which actions can be left half-done
+
+| Action                                                                      | Steps (in order)                                                                                                                                            | If the process dies partway                                                                                                                                                                             | Retry from the UI today                                                                                                                                                                                     |
+| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Publish** (`handlePublishWorkspaceChange`, `server.ts:3826`)              | compute next versions → **merge** → re-read PR for the stamp → one version tag per document, in sequence → list tags → one archive tag per removed document | **Merged with some or all version tags missing.** Documents are live on `main` with no version and no stamp. This is an evidence gap                                                                    | Refused, because the change is already merged                                                                                                                                                               |
+| **Create binder** (`provisionWorkspace`, `workspaces.ts:463`)               | create repo → delete auto-init README → ensure `staff` → grant `staff` → **protect `main`** (last)                                                          | **A binder whose `main` has no branch protection.** Anyone with write can push to `main` with no approvals. Or it keeps the generated README, which lists as a document. Or it isn't granted to `staff` | **409 "already exists"** (`server.ts:9484`). The half-built binder is permanent until someone fixes it in Gitea                                                                                             |
+| **Upload a new document** (`proposeBinderFileChange`, `binderFiles.ts:184`) | create `upload/<slug>/…` branch → commit → open PR                                                                                                          | Branch with a commit and no change request                                                                                                                                                              | **Refused.** `findPendingDocumentBranch` (`workspaceDocuments.ts:673`) treats the orphan branch as a pending upload at that address, so the address stays blocked                                           |
+| **Add or change a binder person** (`handleBinderPerson`, `server.ts:6431`)  | ensure org membership → **remove from role teams** → create role team → grant it → add member → recompute approvals whitelist                               | Their old role is removed and the new one isn't granted, so they lose access. Or they have access but aren't on the approvals whitelist, so their approval doesn't count                                | Works (each step is set-to-state), but only if someone notices                                                                                                                                              |
+| **Create organization** (`provisionSignup`, `signup-provisioning.ts:95`)    | create Gitea org → `staff` + founder → **SQLite org record** (trial clock) → claim legacy billing                                                           | Gitea org with no SQLite record, so no trial and no billing row                                                                                                                                         | Makes a **second** org. The name loop skips any name it can see (`findOrganization … continue`), and the founder can see their own orphan, so the retry lands on `name-2`. The doc comment claims otherwise |
+| Propose a draft (`server.ts:8466`)                                          | open PR → delete SQLite draft row                                                                                                                           | Draft row left pointing at a proposed branch                                                                                                                                                            | Low impact                                                                                                                                                                                                  |
+| Signup (`server.ts:1921`)                                                   | create Gitea user → verify → session                                                                                                                        | User exists, no session                                                                                                                                                                                 | The user can log in. Low impact                                                                                                                                                                             |
+
+The **Stripe webhook** (`server.ts:3515`) is already built the right way, and
+it's the model for everything above. It is at-least-once: Stripe retries
+until it gets a 2xx. It's deduplicated: `webhookEventStore.isProcessed(event.id)`.
+And it's marked done only **after** processing (`server.ts:3766`), so a crash
+means a redelivery, not a lost event. The Gitea-side actions have no
+equivalent of Stripe's retry, so the BFF has to supply its own.
+
+### 4.2 What "idempotent queue" has to mean here
+
+A queue alone doesn't fix this. SQS guarantees delivery **at least once**, so
+a job that crashed after the merge will be delivered again and has to cope
+with the merge having already happened. The durability comes from four
+properties, and the transport is secondary:
+
+1. **Write intent before the first irreversible write.** The handler
+   validates, computes the whole plan and stores it as a job row before
+   touching Gitea. For publish, the plan is the PR number, the expected head
+   SHA, and per document its uid, version number, tag name and the stamp
+   inputs (who approved, and when). A process that dies after that point
+   leaves a row that says exactly what is left to do.
+2. **Every step is check-then-act against Gitea, which is the source of
+   truth.**
+   - _Merge:_ if the PR is already merged, read its `merge_commit_sha` and
+     continue. If it was merged at a head other than the planned one, stop
+     and dead-letter.
+   - _Tag:_ if `<uid>/vN` already exists **and points at the merge SHA**,
+     treat it as done. If it exists and points anywhere else, that's a real
+     conflict, so dead-letter it and don't overwrite. This is why P0-2 (tag
+     the merge SHA, not `main`) comes first: without a fixed target, "already
+     done" can't be told apart from "somebody else's tag".
+   - _Repo create:_ if the repo exists, continue to the next step instead of
+     returning 409.
+   - _Protection, whitelist, team grants:_ these are already "set to this
+     state" calls, so they are naturally idempotent.
+   - _Branch plus PR:_ look for an open PR from that head before opening one.
+3. **Roll forward, never back.** A saga with compensating steps (delete the
+   repo, revert the merge) is the usual pattern, but here it's wrong: a merge
+   and a tag are evidence, and deleting evidence to undo a half-publish is
+   worse than finishing it. Every job drives toward completion. If it can't
+   finish, it stops in a visible `failed` state for a human to handle.
+4. **One job at a time per binder.** Two publishes in one binder race for
+   version numbers today (both compute `v4` and the second gets a 409). If a
+   binder's publish jobs run in order (an SQS FIFO `MessageGroupId`, or
+   `WHERE repo = ? … ORDER BY id` with one runner per repo), the version
+   numbers become correct by construction. Different binders still run in
+   parallel.
+
+Two more pieces round it out. An **`Idempotency-Key`** header on the mutating
+endpoints, stored on the job row, makes a double-click or a browser retry get
+the same job back instead of starting a second one. **Lease plus attempts plus
+backoff plus a dead-letter status** means a runner holds a job for N seconds.
+If it dies, the lease lapses and another pickup resumes it. After K failures
+the job goes to `failed` and raises a CloudWatch alarm, because the API
+already ships logs to `/bindersnap/api` through `awslogs`.
+
+### 4.3 SQS or SQLite
+
+**Recommendation: a job table in the API's existing SQLite database
+(`sessions.db`), processed by a loop inside the API process. Keep it behind a
+small interface so it can move to SQS later.**
+
+|                            | SQLite job table (outbox)                                                                                                     | Amazon SQS (FIFO)                                                                                                                                                                            |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Survives an API crash      | Yes. The row is committed before the first Gitea write                                                                        | Yes, **but only after** the `SendMessage` succeeds. A crash between the BFF's decision and the send loses the intent, so you'd still want a local outbox to feed SQS                         |
+| Survives losing the host   | Yes, within Litestream's lag. `sessions.db` is already replicated to S3, and the API opens it in WAL mode (`db/client.ts:17`) | Yes                                                                                                                                                                                          |
+| Ordering per binder        | `ORDER BY id` per repo                                                                                                        | FIFO message groups                                                                                                                                                                          |
+| Deduplication              | Unique `idempotency_key` for as long as you want                                                                              | FIFO dedup only lasts **5 minutes**, so step-level idempotency is needed anyway                                                                                                              |
+| Fits this deployment       | One host and one API container (ADR 0003). No new AWS resource, IAM policy or endpoint. `bun run up` works unchanged          | New Terraform resource plus IAM on the instance role. Local dev needs an emulator (ElasticMQ or LocalStack) in `docker-compose.yml`, which is one more thing the dev stack can't run without |
+| Consumer                   | The API process (or a second `bun` entrypoint in the same image)                                                              | Still a process on the same host, so SQS moves the queue off the box but not the worker                                                                                                      |
+| Where it stops being right | More than one API instance: move to SQS (or `SELECT … FOR UPDATE SKIP LOCKED` on Postgres)                                    | Once there are several workers or hosts                                                                                                                                                      |
+
+With one host, SQS adds a network hop and a failure mode without adding a
+guarantee the SQLite table lacks. The idempotency still has to live in the
+steps either way (§4.2). The table is also the outbox SQS would need anyway.
+So the table is the right first step, and it doesn't rule out SQS later.
+
+**Does a job table break "evidence lives in Gitea"?** No, but write that down
+in ADR 0004. A job row records **work still to do**, not what happened. It is
+never read to answer "was this approved" or "what version is live"; Gitea
+answers those. Once done, a row can be deleted without losing anything (keep
+it for 30 days for debugging). The Stripe `webhook_events` table is the
+existing precedent for operational state in SQLite.
+
+### 4.4 Sketch
+
+```ts
+// services/api/jobs/  (new)
+interface JobRow {
+  id: string; // uuid
+  kind:
+    | "publish"
+    | "provision-binder"
+    | "grant-binder-person"
+    | "propose-upload";
+  groupKey: string; // "org/repo"; one runner per group
+  idempotencyKey: string | null; // unique; from the request header
+  plan: string; // JSON, everything needed to finish without the request
+  status: "pending" | "running" | "done" | "failed";
+  step: number; // last completed step (informational; steps are re-checked anyway)
+  attempts: number;
+  leaseUntil: number | null;
+  lastError: string | null;
+  createdBy: string; // username; the runner acts with the service token, not the session
+}
+```
+
+- **Handler:** validate, build the plan, insert the row (return the existing
+  one if the idempotency key matches), **run it inline**, then answer
+  `200` with the result. A normal request is as fast as it is today. If the
+  inline run fails partway, answer `202 { jobId }`, and the page shows
+  "finishing publish…" and polls `GET /api/app/jobs/:id`.
+- **Runner:** on startup, and then every few seconds, it claims
+  `pending`/expired-lease rows and runs them. Each step is a `check → act`
+  pair.
+- **Credentials:** a job can't depend on a session token that may have
+  expired. The runner acts with the service token, and the plan records the
+  acting user for the audit fields. Because this changes who appears to
+  perform a Gitea write, it's worth a sentence in ADR 0004 too. The
+  alternative is to keep inline runs on the user's token and use the service
+  token only for recovery.
+- **Where to start:** publish, then binder provisioning. Those two are the
+  compliance-relevant rows in §4.1. The other flows can move over once the
+  mechanism exists.
+
+A **reconciler** still earns a place alongside it. It's a periodic scan for
+merged changes with missing version tags, and for binders without protection
+on `main`. It repairs what happened before the job table existed, and
+anything done outside the BFF. It reads only from Gitea, so it needs no new
+state.
+
+### 4.5 The throughput gate is a separate concern
+
+The in-memory gate is a queue too, but it solves a different problem: it
+limits how hard the BFF presses on Gitea's SQLite. It isn't why pages are
+slow, and making it bigger or smaller won't make pages much faster. To do
+that:
 
 1. **Make fewer calls** (§3.2): roughly 30–50% of calls on the list pages
    fetch data nobody uses.
 2. **Wait less between calls**: parallelize the sequential steps (§3.2 items
    5–6).
-3. **Make each call cheaper and raise the gate limit**: turn on WAL
-   explicitly, re-measure, and raise the limit if the numbers support it (P1-1
-   below).
-4. **Make the queue fair** (P2-1) and able to cancel work (P2-2).
+3. **Tune the gate against production's journal mode, not dev's** (§2, P1-1).
+4. **Make the gate fair** (P2-1) and able to cancel work (P2-2).
 
-## 5. Where a queue does belong: publishing
-
-Publishing is **a merge followed by N tag writes**
-(`server.ts:4007–4119`). These are separate, non-atomic Gitea writes. P0-1
-shows the tag step can fail after the merge has succeeded, and nothing ever
-finishes the job. That is the textbook case for durable, retryable work:
-
-- **Reconciler (preferred, no new state).** A periodic job finds merged
-  changes whose merge commit has no `<uid>/vN` tag for a file it changed, and
-  writes the missing tags. It can be rebuilt entirely from Gitea, so it fits
-  ADR 0004's derived-index rule without new tables. The publish handler keeps
-  tagging inline, and the reconciler repairs whatever slips through.
-- **Outbox (if tag writes should move off the request path).** Keep a
-  `publish_jobs` SQLite row `{org, repo, pull, merge_sha, attempts, status}`
-  and run a worker loop with retry and backoff. Every tag name is
-  deterministic, and git refuses a duplicate ref, so a retry is idempotent by
-  construction. This row is operational state, not evidence: it records work
-  still to do and says nothing about what happened.
-
-Either option needs P0-2 (tag the merge SHA, not `main`). Otherwise a retry
-would tag whatever `main` points to at retry time.
-
-## 6. On the cache idea
+## 5. On the cache idea
 
 **The constraint.** AGENTS.md and ADR 0004 ban caching Gitea state. The
 reason isn't style: on this product, a cached "approved" that Gitea has since
@@ -326,33 +487,40 @@ critical path. Neither needs a new service: at this scale an in-process LRU
 beats Redis, and one EC2 host with one API container doesn't need a shared
 cache.
 
-## 7. Recommended order
+## 6. Recommended order
 
-| #      | Change                                                                                                                                                           | Why                                                            | Size         |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------ |
-| P0-1   | Versions from paginated tags; test with >30 tags                                                                                                                 | Publish breaks after the merge                                 | S            |
-| P0-2   | Tag `merge_commit_sha`, not `main`                                                                                                                               | Evidence points at the wrong commit under concurrent publishes | S            |
-| P0-3   | `listAllPages` helper; apply to repos, pulls, teams, members, drafts                                                                                             | Silent truncation, seat undercount                             | M            |
-| P0-4   | Drop `listDocTags`; Home uses binder tags                                                                                                                        | Wrong data plus a wasted call                                  | S            |
-| sec    | Remove `token` from `/auth/me`                                                                                                                                   | Non-negotiable #1                                              | XS           |
-| P2-3   | Per-request Gitea call and gate-wait metrics                                                                                                                     | Measures everything after this                                 | S            |
-| P1-1   | `GITEA__database__SQLITE_JOURNAL_MODE=WAL` in both compose files; re-run the gate benchmark in prod-like mode; raise `MAX_CONCURRENT_GITEA_REQUESTS` if it holds | Up to 3.3× under load (measured)                               | XS + measure |
-| P1-2   | Review-free open-change listing; `open_pr_counter`; `getPullRequestHeadBranch`                                                                                   | 30–50% fewer calls on list pages                               | S            |
-| P1-3   | Per-request memo; reuse tags and protection in change detail                                                                                                     | Removes duplicate reads                                        | S            |
-| P1-4   | Parallelize the document-detail waterfall, closed-change and tag paging                                                                                          | Shorter critical path                                          | S            |
-| P2-1/2 | Fair gate, `AbortSignal` and timeouts                                                                                                                            | One user can't stall everyone; hung calls get a deadline       | M            |
-| dev    | Mint a service token in the dev seed instead of basic auth                                                                                                       | Dev privileged reads ~3× cheaper; dev behaves like prod        | S            |
-| §5     | Publish reconciler (then an outbox, if wanted)                                                                                                                   | Half-finished publishes get repaired                           | M            |
-| §6.1–3 | Singleflight, then SHA-keyed LRU (with an ADR note)                                                                                                              | Less Gitea load, fewer critical-path calls                     | M            |
-| §6.4   | Webhook-invalidated cache                                                                                                                                        | Only if the above isn't enough; ADR first                      | L            |
+| #      | Change                                                                                                                                                                                                                          | Why                                                                                                  | Size         |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------ |
+| P0-1   | Versions from paginated tags; test with >30 tags                                                                                                                                                                                | Publish breaks after the merge                                                                       | S            |
+| P0-2   | Tag `merge_commit_sha`, not `main`                                                                                                                                                                                              | Evidence points at the wrong commit under concurrent publishes                                       | S            |
+| P0-3   | `listAllPages` helper; apply to repos, pulls, teams, members, drafts                                                                                                                                                            | Silent truncation, seat undercount                                                                   | M            |
+| P0-4   | Drop `listDocTags`; Home uses binder tags                                                                                                                                                                                       | Wrong data plus a wasted call                                                                        | S            |
+| sec    | Remove `token` from `/auth/me`                                                                                                                                                                                                  | Non-negotiable #1                                                                                    | XS           |
+| P2-3   | Per-request Gitea call and gate-wait metrics                                                                                                                                                                                    | Measures everything after this                                                                       | S            |
+| P1-1   | Set `GITEA__database__SQLITE_JOURNAL_MODE=WAL` in both compose files (prod is WAL only through Litestream; dev is rollback); re-run the gate benchmark on a prod-shaped host; raise `MAX_CONCURRENT_GITEA_REQUESTS` if it holds | Dev matches prod; up to 3.3× under load in dev (measured); prod no longer depends on a sidecar       | XS + measure |
+| P1-2   | Review-free open-change listing; `open_pr_counter`; `getPullRequestHeadBranch`                                                                                                                                                  | 30–50% fewer calls on list pages                                                                     | S            |
+| P1-3   | Per-request memo; reuse tags and protection in change detail                                                                                                                                                                    | Removes duplicate reads                                                                              | S            |
+| P1-4   | Parallelize the document-detail waterfall, closed-change and tag paging                                                                                                                                                         | Shorter critical path                                                                                | S            |
+| P2-1/2 | Fair gate, `AbortSignal` and timeouts                                                                                                                                                                                           | One user can't stall everyone; hung calls get a deadline                                             | M            |
+| dev    | Mint a service token in the dev seed instead of basic auth                                                                                                                                                                      | Dev privileged reads ~3× cheaper; dev behaves like prod                                              | S            |
+| §4     | Job table + runner; move **publish** onto it (needs P0-2), then **binder provisioning**                                                                                                                                         | A crash or deploy mid-action can no longer leave a merge without tags or a binder without protection | M            |
+| §4     | Idempotent retries in the UI: binder create continues past an existing repo; upload ignores an orphan branch with no PR; org create resumes its own orphan                                                                      | Stops the "retry is refused" column in §4.1                                                          | S            |
+| §4     | Reconciler for merged-without-tags and unprotected-`main` binders                                                                                                                                                               | Repairs what already happened                                                                        | S            |
+| §5.1–3 | Singleflight, then SHA-keyed LRU (with an ADR note)                                                                                                                                                                             | Less Gitea load, fewer critical-path calls                                                           | M            |
+| §5.4   | Webhook-invalidated cache                                                                                                                                                                                                       | Only if the above isn't enough; ADR first                                                            | L            |
 
-## 8. What this review did not verify
+## 7. What this review did not verify
 
 - **Production latency.** All numbers are local and relative. P2-3 is how to
   get real ones.
-- **Whether production's `gitea.db` is actually in WAL right now.** Check with
-  `sqlite3 /data/gitea.db 'PRAGMA journal_mode'` on the host (through the
-  break-glass SSM path), then set it explicitly regardless.
+- **The live host.** §2 comes from the committed config and the pinned
+  upstream sources, not from the running machine. The one thing only the host
+  can show is whether an out-of-band change overrides the committed config.
+  `PRAGMA journal_mode` on `/data/gitea.db`, through the SSM path, answers
+  that in a second.
+- **The §4.1 crash windows** come from reading the code. I didn't kill a
+  process mid-flight to reproduce them. The publish case is reproduced
+  indirectly: P0-1's 409 leaves the same state a crash would.
 - **Gitea 28 (the dev nightly).** Paging defaults and tag ordering were checked
   on 1.27.3, the production tag.
 - **The frontend.** A browser-side cache and request deduplication (for
