@@ -694,26 +694,6 @@ input {
   flex-wrap: wrap;
 }
 
-/* A person or a group in the organization's people list. */
-.org-person {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-3);
-  padding: var(--brand-space-3) var(--brand-space-4);
-  border-top: 1px solid var(--bs-rule-warm);
-}
-
-.org-person:first-child {
-  border-top: none;
-}
-
-.org-person-body {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-  flex: 1;
-}
-
 /* The binder's settings: the rules said in sentences, then the people. */
 .binder-settings-section {
   display: grid;
@@ -735,29 +715,18 @@ input {
 }
 
 /* A person's row plus whatever it has to say underneath — a reason a control
-   is disabled, or a confirmation. Grouped so the explanation stays attached to
-   the row that raised it rather than floating above the next person. */
-.org-person-block {
-  border-top: 1px solid var(--bs-rule-warm);
-}
-
-.org-person-block:first-child {
-  border-top: none;
-}
-
-.org-person-block > .org-person {
-  border-top: none;
-}
-
+   is disabled, or a confirmation. Grouped in one list item so the explanation
+   stays attached to the row that raised it rather than floating above the
+   next person; indented to the name, past the avatar. */
 .org-person-reason {
   margin: 0;
-  padding: 0 var(--brand-space-4) var(--brand-space-3) 3.25rem;
+  padding: 0 var(--brand-space-2) var(--brand-space-2) 44px;
 }
 
 .org-person-confirm {
   display: grid;
   gap: var(--brand-space-2);
-  margin: 0 var(--brand-space-4) var(--brand-space-4) 3.25rem;
+  margin: 0 var(--brand-space-2) var(--brand-space-3) 44px;
   padding: var(--brand-space-4);
   background: var(--bs-surface-2);
   border-radius: var(--brand-radius-md);
@@ -767,41 +736,31 @@ input {
 /* A group on the organization's People tab: a row that opens onto who is in
    it. Collapsed by default — the answer to "what groups are there" is the list,
    and the membership is the follow-up question. */
-.org-group {
-  border-top: 1px solid var(--bs-rule-warm);
+.org-group-chevron svg {
+  transition: transform var(--brand-transition-fast);
 }
 
-.org-group:first-child {
-  border-top: none;
+.org-group-head[aria-expanded="true"] .org-group-chevron svg {
+  transform: rotate(90deg);
 }
 
-.org-group-head {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-3);
-  width: 100%;
-  padding: var(--brand-space-3) var(--brand-space-4);
-  background: none;
-  border: none;
-  text-align: left;
-  cursor: pointer;
-  color: inherit;
-  font: inherit;
-}
-
-.org-group-head:hover {
-  background: var(--bs-surface-2);
+@media (prefers-reduced-motion: reduce) {
+  .org-group-chevron svg {
+    transition: none;
+  }
 }
 
 /* The level, beside the name, everywhere the group appears. A Gitea team
    carries one unit map, so this travels with the name and is never a per-binder
    choice. */
 .org-group-level {
-  margin-left: var(--brand-space-2);
-  font-size: var(--brand-text-label);
-  letter-spacing: var(--brand-tracking-wide);
-  text-transform: uppercase;
+  margin-left: var(--brand-space-1-5);
+  padding: 1px 7px;
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-surface-3);
   color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-xs);
+  font-weight: var(--brand-weight-medium);
 }
 
 /* Indented under its own row and tied to it by a rule, so an open group does
@@ -809,7 +768,7 @@ input {
 .org-group-body {
   display: grid;
   gap: var(--brand-space-5);
-  margin: 0 var(--brand-space-4) var(--brand-space-4);
+  margin: 0 var(--brand-space-2) var(--brand-space-4) 17px;
   padding-left: var(--brand-space-4);
   border-left: 2px solid var(--bs-rule-warm);
 }
@@ -850,6 +809,7 @@ input {
 
 .org-group-remove {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   width: 1.25rem;
@@ -868,47 +828,11 @@ input {
   color: var(--bs-status-danger-fg);
 }
 
-.org-group-form {
-  display: grid;
-  gap: var(--brand-space-4);
-  padding: var(--brand-space-4);
-  border: 1px solid var(--bs-rule-warm);
-  border-radius: var(--brand-radius-md);
-  justify-items: start;
-}
-
-/* A radio question — a group's level, a binder's visibility. Used wherever the
-   answer is one of a short list of named choices with a consequence worth
-   spelling out under each. */
-.org-visibility-choice {
-  display: grid;
-  gap: var(--brand-space-3);
-  margin: 0;
-  padding: 0;
-  border: none;
-}
-
-.org-choice {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: start;
-  gap: var(--brand-space-3);
-  cursor: pointer;
-}
-
-/* Aligned to the cap height of the label beside it rather than to the top of
-   the box, which left the control floating above its own text. */
-.org-choice > input[type="radio"] {
-  width: 1rem;
-  height: 1rem;
-  margin: 0.15rem 0 0;
-  accent-color: var(--brand-coral);
-}
-
-.org-choice > span {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
+/* The act at the foot of an organization form, at its own width rather than
+   stretched across the column of fields above it. */
+.org-people-actions {
+  display: flex;
+  gap: var(--brand-space-2);
 }
 
 /* The visibility question, above the list it changes the meaning of. Boxed,
@@ -925,7 +849,7 @@ input {
 /* The role control on a person's row. Narrower than the people picker beside
    it: it holds one of three words, and a full-width select would read as the
    more important of the two. */
-.org-person > .binder-role-select,
+.bs-row-right > .binder-role-select,
 .org-group-add > .binder-role-select {
   flex: 0 0 auto;
   width: auto;
@@ -8378,6 +8302,13 @@ a.bs-row:focus-visible {
   cursor: pointer;
 }
 
+/* Where a row's action would be, on the one row that has none — so the
+   controls before it line up with every other row's. */
+.bs-rowact-slot {
+  flex-shrink: 0;
+  width: 28px;
+}
+
 .bs-rowact:hover:not(:disabled) {
   border-color: var(--bs-rule);
   background: var(--bs-surface-1);
@@ -9774,6 +9705,9 @@ a.binder-latest-title:focus-visible {
 }
 
 .bs-settings-group-title {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
   margin: 0;
   color: var(--bs-text-primary);
   font-family: var(--brand-font-sans);
@@ -9794,4 +9728,24 @@ a.binder-latest-title:focus-visible {
   display: flex;
   flex-direction: column;
   gap: var(--brand-space-4);
+}
+
+/* A member's role and remove sit on the middle of the row, not its top line:
+   they are about the person, not about the first line of text. */
+.org-person-block > .bs-row--tall {
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  .org-person-block > .bs-row--tall {
+    flex-wrap: wrap;
+  }
+
+  .org-person-block .bs-row-body {
+    flex-basis: calc(100% - 48px);
+  }
+
+  .org-person-block .bs-row-right {
+    margin-left: 32px;
+  }
 }
