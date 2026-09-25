@@ -94,6 +94,13 @@ interface ChangeComparisonPageProps {
   /** Open one document's proposed file on its own screen. */
   onReadFile: (slugPath: string) => void;
   onDownload: (row: ChangedDocumentRow, gitRef: string) => void;
+  /**
+   * Whether it is still open, or how it ended — the badge before the line
+   * under the title.
+   */
+  status?: ReactNode;
+  /** Overview and Changes: the change's two screens, as tabs under its header. */
+  tabs?: ReactNode;
 }
 
 /** How far ahead of the viewport a document's comparison starts loading. */
@@ -215,6 +222,8 @@ export function ChangeComparisonPage({
   fileHref,
   onReadFile,
   onDownload,
+  status = null,
+  tabs = null,
 }: ChangeComparisonPageProps) {
   const groups = useMemo(() => groupByFolder(listed), [listed]);
   const rows = useMemo(() => groups.flatMap((group) => group.rows), [groups]);
@@ -512,6 +521,7 @@ export function ChangeComparisonPage({
               the binder, because "from where" is a place you can go. */}
           {rows.length > 0 ? (
             <p className="cmp-byline">
+              {status}
               {author ? <strong>{author}</strong> : "Somebody"}{" "}
               {describePublishIntent({ open, documents: rows.length })}
               {headRef ? (
@@ -546,6 +556,7 @@ export function ChangeComparisonPage({
           ) : null}
         </div>
       </div>
+      {tabs}
     </>
   );
 

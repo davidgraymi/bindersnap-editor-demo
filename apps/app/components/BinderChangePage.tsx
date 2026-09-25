@@ -15,6 +15,7 @@ import type { ChangeScope } from "../changeScope";
 import { formatDocumentName, toChangeRecord } from "../documentDisplay";
 import type { DocumentChangeView } from "../routes";
 import { ChangeComparisonPage } from "./ChangeComparisonPage";
+import { ChangeStateBadge, ChangeTabs } from "./ChangeTabs";
 import { DocumentChangeDetail } from "./DocumentChangeDetail";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
@@ -283,6 +284,44 @@ export function BinderChangePage({
 
   const isOpen = detail.change.state === "open";
 
+  /* **The same header on both screens**: whether the change is open, and the
+     two tabs that are its two screens. A code host draws a merge request this
+     way — Overview, Changes — and the comparison stops being a page you reach
+     by a button in the rail and leave by the trail. */
+  // A merged change reads as published; one closed without merging did not
+  // publish, and the change alone does not say who ended it or why.
+  const status = (
+    <ChangeStateBadge
+      state={
+        isOpen
+          ? "open"
+          : detail.change.approvalState === "published"
+            ? "published"
+            : "closed"
+      }
+    />
+  );
+  const tabs = (
+    <ChangeTabs
+      view={view}
+      overviewHref={buildBinderUrl({
+        org,
+        binder,
+        tab: "changes",
+        change: changeNumber,
+      })}
+      changesHref={buildBinderUrl({
+        org,
+        binder,
+        tab: "changes",
+        change: changeNumber,
+        view: "compare",
+      })}
+      documentCount={comparisonRows.length}
+      onSelect={onViewChange}
+    />
+  );
+
   /**
    * Everything this change does, on one screen.
    *
@@ -342,6 +381,8 @@ export function BinderChangePage({
             }
           }}
           onDownload={(row, gitRef) => void handleRowDownload(row, gitRef)}
+          status={status}
+          tabs={tabs}
         />
       </div>
     );
@@ -383,6 +424,8 @@ export function BinderChangePage({
       ) : null}
 
       <DocumentChangeDetail
+        status={status}
+        tabs={tabs}
         banner={behind}
         documentPicker={
           documents.length > 1 ? (
