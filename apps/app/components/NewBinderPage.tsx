@@ -7,7 +7,7 @@ import type { WorkspaceSummary } from "../../../packages/api-schema/schemas/work
 import { slugifyOrganizationName } from "../../../packages/utils/organizationName";
 
 /**
- * A new binder, on a page of its own: `/{org}?new=binder`.
+ * A new binder, on a page of its own: `/{org}/-/binders/new`.
  *
  * **GitLab's "Create blank project", for a binder.** The form used to open in
  * place above the list, which made it a drawer on somebody else's page: no

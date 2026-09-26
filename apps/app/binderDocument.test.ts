@@ -171,7 +171,9 @@ test("the record's URL carries no version", () => {
       documentPath: "nursing/hand-hygiene",
       version: null,
     }),
-  ).toBe("/riverside-health/clinical-policies/nursing/hand-hygiene");
+  ).toBe(
+    "/riverside-health/clinical-policies/-/blob/main/nursing/hand-hygiene",
+  );
 });
 
 test("an earlier version's URL names it, so it can be linked to", () => {
@@ -182,7 +184,9 @@ test("an earlier version's URL names it, so it can be linked to", () => {
       documentPath: "nursing/hand-hygiene",
       version: 2,
     }),
-  ).toBe("/riverside-health/clinical-policies/nursing/hand-hygiene?version=2");
+  ).toBe(
+    "/riverside-health/clinical-policies/-/blob/main/nursing/hand-hygiene?version=2",
+  );
 });
 
 // ── a document that only exists inside a change ────────────────────

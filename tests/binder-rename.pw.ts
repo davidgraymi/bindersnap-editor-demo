@@ -331,7 +331,7 @@ test("renaming from the settings tab moves the address bar with it", async ({
   await page.getByRole("button", { name: "Save", exact: true }).click();
 
   await expect(page).toHaveURL(
-    new RegExp(`/${org}/clinical-governance\\?tab=settings$`),
+    new RegExp(`/${org}/clinical-governance/-/settings$`),
     { timeout: 30_000 },
   );
   await expect(page.locator(".app-sidebar-binder-name")).toHaveText(

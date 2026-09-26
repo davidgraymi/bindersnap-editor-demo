@@ -294,7 +294,7 @@ test("a second organization is gated, offered and billed as itself", async ({
   // Its billing page is its own, reached from the entry under its name.
   const orgNav = page.getByRole("navigation", { name: secondName });
   await orgNav.getByRole("link", { name: "Billing" }).click();
-  await expect(page).toHaveURL(new RegExp(`/billing/${second}$`));
+  await expect(page).toHaveURL(new RegExp(`/${second}/-/billing$`));
   const plan = page.getByRole("region", { name: "Plan" });
   await expect(plan).toContainText("Inactive");
   await expect(

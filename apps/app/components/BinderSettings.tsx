@@ -76,7 +76,7 @@ interface BinderSettingsProps {
   binder: string;
   /**
    * A block to scroll to once the page has read, for the addresses that were
-   * tabs of their own — `?tab=people` and `?tab=sign-off` still resolve.
+   * tabs of their own — `/-/settings/people` and `/-/settings/sign-off` open on them.
    */
   focus?: BinderSettingsSection;
   /**

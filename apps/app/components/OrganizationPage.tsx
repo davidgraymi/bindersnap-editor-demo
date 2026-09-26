@@ -17,14 +17,14 @@ import { SkeletonPanel } from "./Skeleton";
 const ORG_TABS = ["binders", "people"] as const;
 type OrgTab = (typeof ORG_TABS)[number];
 
-function orgTabFromSearch(search: string): OrgTab {
-  const raw = new URLSearchParams(search).get("tab");
-  return ORG_TABS.find((tab) => tab === raw) ?? "binders";
+/** `/{org}/-/people` is People; anything else of the organization's is Binders. */
+function orgTabFromPath(pathname: string): OrgTab {
+  return /^\/[^/]+\/-\/people\/?$/.test(pathname) ? "people" : "binders";
 }
 
-/** `?new=binder`: the new-binder form, as an address of its own. */
-function isCreatingFromSearch(search: string): boolean {
-  return new URLSearchParams(search).get("new") === "binder";
+/** `/{org}/-/binders/new`: the new-binder form, as an address of its own. */
+function isCreatingFromPath(pathname: string): boolean {
+  return /^\/[^/]+\/-\/binders\/new\/?$/.test(pathname);
 }
 
 /**
@@ -50,7 +50,7 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
   const isReadOnly = useIsReadOnly();
   const displayName = useOrganizationDisplayName(org);
   const [tab, setTab] = useState<OrgTab>(() =>
-    orgTabFromSearch(window.location.search),
+    orgTabFromPath(window.location.pathname),
   );
   const [binders, setBinders] = useState<WorkspaceSummary[] | null>(null);
   // What the list's own bar narrows it to — the binder's "Filter this
@@ -60,7 +60,7 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
   // Behind the header's "New binder", at an address of its own rather than a
   // drawer over the list: it can be sent, reloaded and left with Back.
   const [creating, setCreating] = useState(() =>
-    isCreatingFromSearch(window.location.search),
+    isCreatingFromPath(window.location.pathname),
   );
 
   useEffect(() => {
@@ -90,8 +90,8 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
   // address bar rather than its own memory of what was clicked.
   useEffect(() => {
     const handler = () => {
-      setTab(orgTabFromSearch(window.location.search));
-      setCreating(isCreatingFromSearch(window.location.search));
+      setTab(orgTabFromPath(window.location.pathname));
+      setCreating(isCreatingFromPath(window.location.pathname));
     };
     window.addEventListener("popstate", handler);
     return () => window.removeEventListener("popstate", handler);
@@ -101,13 +101,13 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
     window.history.pushState(
       {},
       "",
-      next === "binders" ? `/${org}` : `/${org}?tab=${next}`,
+      next === "binders" ? `/${org}` : `/${org}/-/${next}`,
     );
     setTab(next);
     setCreating(false);
   };
 
-  const newBinderHref = `/${org}?new=binder`;
+  const newBinderHref = `/${org}/-/binders/new`;
   const openNewBinder = () => {
     window.history.pushState({}, "", newBinderHref);
     setTab("binders");

@@ -43,9 +43,9 @@ test.describe.configure({ mode: "serial", timeout: 180_000 });
 // to use it.
 const expect = baseExpect.configure({ timeout: 20_000 });
 
-/** `?view=compare` — its own address, so a reviewer can send the diff. */
+/** `/-/changes/{n}/diffs` — its own address, so a reviewer can send the diff. */
 function comparisonUrl(binder: string, change: number): string {
-  return `${APP_BASE_URL}/${OWNER}/${binder}?tab=changes&change=${change}&view=compare`;
+  return `${APP_BASE_URL}/${OWNER}/${binder}/-/changes/${change}/diffs`;
 }
 
 test("a document in the change's list opens its own diff", async ({ page }) => {
@@ -64,7 +64,7 @@ test("a document in the change's list opens its own diff", async ({ page }) => {
   const name = await second.locator(".bs-row-name").innerText();
   await second.click();
 
-  await expect(page).toHaveURL(/view=compare/);
+  await expect(page).toHaveURL(/\/-\/changes\/\d+\/diffs/);
   // Both documents, on one screen, and the one clicked is the one marked.
   await expect(page.locator(".cmp-file")).toHaveCount(2);
   await expect(page.locator(".bs-rail .bs-row")).toHaveCount(2);
@@ -87,7 +87,7 @@ test("a change to one document reads the same as a change to several", async ({
   ).toHaveCount(0);
 
   await page.locator(".change-does .bs-row").click();
-  await expect(page).toHaveURL(/view=compare/);
+  await expect(page).toHaveURL(/\/-\/changes\/\d+\/diffs/);
   await expect(page.locator(".cmp-file")).toHaveCount(1);
 });
 
@@ -207,7 +207,7 @@ test("folding a document keeps its bar, and every act in it", async ({
   // the document and leaves the way to view or download it.
   await expect(
     first.locator(".cmp-file-head").getByRole("link", { name: "View" }),
-  ).toHaveAttribute("href", /\?ref=.*&change=19/);
+  ).toHaveAttribute("href", /\/-\/blob\/.+\?change=19/);
   await expect(
     first.locator(".cmp-file-head").getByRole("button", { name: "Download" }),
   ).toBeVisible();
@@ -226,17 +226,17 @@ test("the branch opens the binder at its root, and View opens the file", async (
   const branchName = (await branch.textContent())!.trim();
   await expect(branch).toHaveAttribute(
     "href",
-    /^\/[^/]+\/clinical\?ref=.+&change=19$/,
+    /^\/[^/]+\/clinical\/-\/tree\/[^/?]+\?change=19$/,
   );
 
   // View in the file's bar is that one file on the branch — a real link, so
   // it can be opened in a new tab or sent to somebody.
   await expect(
     page.locator(".cmp-file-head").first().getByRole("link", { name: "View" }),
-  ).toHaveAttribute("href", /\/clinical\/.+\?ref=.+&change=19$/);
+  ).toHaveAttribute("href", /\/clinical\/-\/blob\/[^/?]+\/.+\?change=19$/);
 
   await branch.click();
-  await expect(page).toHaveURL(/\/clinical\?ref=.+&change=19$/);
+  await expect(page).toHaveURL(/\/clinical\/-\/tree\/[^/?]+\?change=19$/);
   // The tree, named for the branch it is read on, with the way back.
   await expect(page.locator(".binder-pane .cmp-branch")).toHaveText(branchName);
   await expect(page.locator(".binder-tree-row").first()).toBeVisible();
@@ -248,6 +248,8 @@ test("the branch opens the binder at its root, and View opens the file", async (
   await page
     .getByRole("link", { name: "Code Of Conduct", exact: true })
     .click();
-  await expect(page).toHaveURL(/\/clinical\/[^?]+\?ref=.+&change=19$/);
+  await expect(page).toHaveURL(
+    /\/clinical\/-\/blob\/[^/?]+\/[^?]+\?change=19$/,
+  );
   await expect(page.locator("h1.bs-title")).toHaveText(/code of conduct/i);
 });

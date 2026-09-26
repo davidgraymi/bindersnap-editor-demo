@@ -18,8 +18,11 @@
  */
 
 import { parseDocumentFilename } from "../../packages/utils/documentPath";
-import { parseRequestedChange } from "./binderChange";
-import { binderTabFromSearch, buildBinderUrl } from "./binderShell";
+import {
+  buildBinderUrl,
+  parseBinderAddress,
+  type BinderAddress,
+} from "./binderShell";
 import { formatDocumentName } from "./documentDisplay";
 import type { AppRoute } from "./routes";
 
@@ -80,22 +83,24 @@ function documentLabel(filename: string): string {
 }
 
 /** Where in a binder its screen is. Empty on the binder's own contents. */
-function binderPath(org: string, binder: string, search: string): TrailStep[] {
+function binderPath(
+  org: string,
+  binder: string,
+  address: BinderAddress,
+  search: string,
+): TrailStep[] {
   const params = new URLSearchParams(search);
-
-  const change = parseRequestedChange(search);
-  const tab = binderTabFromSearch(search);
+  const { change, tab, view } = address;
   const changesStep: TrailStep = {
     label: "Change requests",
     href: buildBinderUrl({ org, binder, tab: "changes" }),
   };
 
   if (change !== null) {
-    const view = params.get("view");
     const changeLabel = `Change ${change}`;
     // The binder as a change would leave it, from the branch link on a
     // comparison. Still inside that change, so still under it.
-    const onBranch = params.get("ref") !== null && tab === "documents";
+    const onBranch = address.ref !== null && tab === "documents";
     // Named for the tab that opens it — Overview · Changes, the way a code
     // host names a merge request's — so the trail and the tab agree.
     const subpage =
@@ -119,7 +124,7 @@ function binderPath(org: string, binder: string, search: string): TrailStep[] {
     ];
   }
 
-  if (params.get("archive") === "1") {
+  if (address.archive) {
     return [here("Archive")];
   }
 
@@ -150,11 +155,10 @@ function documentPath(
   org: string,
   binder: string,
   address: string,
-  search: string,
+  change: number | null,
 ): TrailStep[] {
   const segments = address.split("/").filter(Boolean);
   const filename = segments.pop() ?? address;
-  const change = parseRequestedChange(search);
 
   // Read on a change's branch: the change is where the reader came from, and
   // the way back to it is worth a step. The path under it is the file's own.
@@ -182,8 +186,8 @@ function documentPath(
 /**
  * The trail for an address.
  *
- * Takes the query as well as the route because a binder's screens live in the
- * query (`?tab=changes&change=4`), which the route does not carry.
+ * Read from the address itself — `/-/changes/4/diffs` — rather than from the
+ * route, which a screen may hand over with only the binder on it.
  *
  * Pages across the organization — the queue, Documents, Billing — have no
  * path: they are one level deep, their title names them and the sidebar marks
@@ -191,13 +195,25 @@ function documentPath(
  */
 export function buildLocationTrail(
   route: AppRoute,
+  pathname: string,
   search: string,
 ): LocationTrail {
   if (route.kind === "binder" || route.kind === "binderDocument") {
+    const rest =
+      pathname.match(/^\/[^/]+\/[^/]+(\/.*)?$/)?.[1]?.replace(/\/+$/, "") ?? "";
+    const address = parseBinderAddress(rest, search) ?? {
+      ...parseBinderAddress("")!,
+      documentPath: rest.slice(1) || null,
+    };
     const path =
       route.kind === "binder"
-        ? binderPath(route.org, route.binder, search)
-        : documentPath(route.org, route.binder, route.documentPath, search);
+        ? binderPath(route.org, route.binder, address, search)
+        : documentPath(
+            route.org,
+            route.binder,
+            route.documentPath,
+            address.change,
+          );
     const label = formatDocumentName(route.binder);
     return {
       binder:
@@ -212,11 +228,10 @@ export function buildLocationTrail(
     };
   }
 
-  // The route only carries a tab when the app navigated there itself; an
-  // address that was typed or reloaded says it in the query.
   const organizationIsCurrent =
     route.kind === "organization" &&
-    (route.tab ?? new URLSearchParams(search).get("tab")) !== "people";
+    route.tab !== "people" &&
+    !/^\/[^/]+\/-\/people\/?$/.test(pathname);
 
   return { binder: null, path: [], organizationIsCurrent };
 }

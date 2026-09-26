@@ -30,7 +30,7 @@ test.describe("top bar create menu", () => {
     await expect(menu).not.toContainText("document");
 
     await menu.getByRole("menuitem", { name: /New binder/ }).click();
-    await expect(page).toHaveURL(/\/riverside-health\?new=binder$/);
+    await expect(page).toHaveURL(/\/riverside-health\/-\/binders\/new$/);
     await expect(page.locator("h1.bs-title")).toHaveText("New binder");
   });
 
