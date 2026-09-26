@@ -120,6 +120,22 @@ export function AppShell({
   const [sidebarBinder, setSidebarBinder] = useState<SidebarBinder | null>(
     null,
   );
+  /**
+   * The `org/binder` of an address that turned out to name no binder, so the
+   * top bar does not go on naming it. Kept by address rather than cleared on
+   * navigation: any other binder simply is not this one.
+   */
+  const [missingBinder, setMissingBinder] = useState<string | null>(null);
+  const onBinderMissing = useCallback(
+    (missing: boolean) => {
+      if (route.kind !== "binder" && route.kind !== "binderDocument") return;
+      const key = `${route.org}/${route.binder}`;
+      setMissingBinder((current) =>
+        missing ? key : current === key ? null : current,
+      );
+    },
+    [route],
+  );
   const [profileOpen, setProfileOpen] = useState(false);
   const [showCreateDocumentModal, setShowCreateDocumentModal] = useState(false);
   // A search that was linked to or reloaded is still the search that is on
@@ -173,7 +189,15 @@ export function AppShell({
             GitHub's owner / repo. Where inside the binder is drawn above the
             page's title instead (`PagePath`), inside the content. The
             organization is the switcher it always was. */}
-        <LocationTrail route={route} org={sidebarOrg} onNavigate={onNavigate} />
+        <LocationTrail
+          route={route}
+          org={sidebarOrg}
+          binderMissing={
+            (route.kind === "binder" || route.kind === "binderDocument") &&
+            missingBinder === `${route.org}/${route.binder}`
+          }
+          onNavigate={onNavigate}
+        />
 
         <div className="app-topnav-spacer" />
 
@@ -402,6 +426,7 @@ export function AppShell({
                     : {})}
                   currentUser={currentUsername}
                   onBinderChange={setSidebarBinder}
+                  onBinderMissing={onBinderMissing}
                   onOpenDocument={(documentPath, version) =>
                     onNavigate({
                       kind: "binderDocument",

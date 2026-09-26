@@ -94,6 +94,11 @@ interface BinderShellProps {
    */
   onBinderChange?: (binder: SidebarBinder | null) => void;
   /**
+   * Tell the shell above that the address names no binder, so its top bar
+   * stops naming one. Called with false once a binder answers again.
+   */
+  onBinderMissing?: (missing: boolean) => void;
+  /**
    * Open a document. `version` opens it at one published version — the
    * history links that way, because a row there is evidence of a version and
    * not a pointer at whatever the document says now.
@@ -108,6 +113,7 @@ export function BinderShell({
   documentPath,
   currentUser,
   onBinderChange,
+  onBinderMissing,
   onOpenDocument,
   onOpenBinder,
 }: BinderShellProps) {
@@ -524,6 +530,7 @@ export function BinderShell({
   useEffect(() => {
     // No binder, no binder section: its Changes, History and Settings would
     // each lead to another page about a binder that is not there.
+    onBinderMissing?.(missing);
     if (missing) {
       onBinderChange?.(null);
       return;
@@ -560,6 +567,7 @@ export function BinderShell({
     documentPath,
     documentRefFromSearch,
     onBinderChange,
+    onBinderMissing,
     missing,
   ]);
 
