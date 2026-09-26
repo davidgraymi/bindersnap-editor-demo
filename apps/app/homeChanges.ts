@@ -333,7 +333,15 @@ function describeDecision(change: ClosedChange, username: string): string {
     return describeApprovers(change, username) || "no approvals were recorded";
   }
 
-  const decidedBy = capitalizeFirst(change.decidedBy ?? change.submittedBy);
+  const login = change.decidedBy ?? change.submittedBy;
+  // A review carries the name the login stands for; the reader is "you", as
+  // on the approvals line above.
+  const decidedBy =
+    login === username
+      ? "you"
+      : change.reviews
+          .find((review) => review.author.login === login)
+          ?.author.fullName.trim() || capitalizeFirst(login);
   return change.outcome === "declined"
     ? `declined by ${decidedBy}`
     : `withdrawn by ${decidedBy}`;
