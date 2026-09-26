@@ -637,11 +637,14 @@ export function getChangeStateBadgeClass(change: ChangeRecord): string {
  * A closed change's reason is the whole point of showing it — "closed" on its
  * own is the answer to a question nobody asked.
  */
-export function describeChangeOutcome(change: ChangeRecord): string | null {
+export function describeChangeOutcome(
+  change: ChangeRecord,
+  nameOf: (login: string) => string = capitalizeFirst,
+): string | null {
   if (!change.outcome) return null;
 
   const when = change.closedAt ? formatShortDate(change.closedAt) : null;
-  const who = change.decidedBy ? capitalizeFirst(change.decidedBy) : null;
+  const who = change.decidedBy ? nameOf(change.decidedBy) : null;
 
   switch (change.outcome) {
     case "published": {

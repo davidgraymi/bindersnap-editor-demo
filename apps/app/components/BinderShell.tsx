@@ -953,6 +953,7 @@ export function BinderShell({
             draftPicker={
               draft?.draft && editMode === "editing" ? (
                 <BinderDraftPicker
+                  org={org}
                   drafts={draft.drafts}
                   others={draft.others}
                   current={draft.draft.branch}
