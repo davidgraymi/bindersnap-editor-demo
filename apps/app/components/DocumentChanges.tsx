@@ -1,4 +1,5 @@
 import type { ChangeRecord } from "../documentDisplay";
+import { nameFor, usePeopleNames } from "../usePeopleNames";
 import { ChangeRow } from "./ChangeRow";
 import { SkeletonGroup, SkeletonLine, SkeletonShape } from "./Skeleton";
 
@@ -28,6 +29,8 @@ interface DocumentChangesProps {
   /** The address of one change, so each row is a link. */
   changeHref: (pullNumber: number) => string;
   onRetryClosed: () => void;
+  /** Whose people these are, so a row names its author, not their login. */
+  org: string;
 }
 
 /**
@@ -45,10 +48,12 @@ interface DocumentChangesProps {
  */
 function BinderChangeRow({
   change,
+  authorName,
   href,
   onOpenChange,
 }: {
   change: ChangeRecord;
+  authorName: string;
   href: string;
   onOpenChange: (pullNumber: number) => void;
 }) {
@@ -58,6 +63,7 @@ function BinderChangeRow({
         number: change.number,
         title: change.summary,
         submittedBy: change.submittedBy,
+        submittedByName: authorName,
         submittedAt: change.submittedAt,
         updatedAt: change.updatedAt,
         commentCount: change.commentCount,
@@ -92,8 +98,10 @@ export function DocumentChanges({
   onOpenChange,
   changeHref,
   onRetryClosed,
+  org,
 }: DocumentChangesProps) {
   const rows = filter === "open" ? openChanges : (closedChanges ?? []);
+  const names = usePeopleNames(org);
 
   return (
     <section className="bs-panel" aria-label="Changes">
@@ -176,6 +184,7 @@ export function DocumentChanges({
             <BinderChangeRow
               key={change.number}
               change={change}
+              authorName={nameFor(names, change.submittedBy)}
               href={changeHref(change.number)}
               onOpenChange={onOpenChange}
             />

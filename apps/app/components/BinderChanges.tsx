@@ -117,6 +117,7 @@ export function BinderChanges({
           buildBinderUrl({ org, binder, tab: "changes", change })
         }
         onRetryClosed={() => void loadClosed()}
+        org={org}
       />
     </div>
   );

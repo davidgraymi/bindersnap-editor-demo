@@ -168,8 +168,13 @@ function nextVersionOf(change: { nextVersion: number | null }): number | null {
   return change.nextVersion;
 }
 
-function submitterName(change: { user?: { login: string } | null }): string {
-  return capitalizeFirst(change.user?.login ?? "someone");
+function submitterName(change: {
+  user?: { login: string; full_name?: string } | null;
+}): string {
+  return (
+    change.user?.full_name?.trim() ||
+    capitalizeFirst(change.user?.login ?? "someone")
+  );
 }
 
 function classify(
@@ -255,6 +260,7 @@ export function buildOpenChangeRows(
           {
             number: change.number,
             submittedBy: change.user?.login ?? "",
+            submittedByName: change.user?.full_name,
             submittedAt: change.created_at ?? change.created ?? "",
             updatedAt: change.updated_at ?? undefined,
             approvalCount: 0,
@@ -296,10 +302,14 @@ export function selectSubmissions(rows: HomeChangeRow[]): HomeChangeRow[] {
 }
 
 function describeApprovers(change: ClosedChange, username: string): string {
-  const approvers = new Set(
+  // Login to name: a review carries both, and a sentence wants the name.
+  const approvers = new Map(
     change.reviews
       .filter((review) => review.state === "approved" && !review.dismissed)
-      .map((review) => review.author.login),
+      .map((review) => [
+        review.author.login,
+        review.author.fullName.trim() || capitalizeFirst(review.author.login),
+      ]),
   );
 
   if (approvers.size === 0) return "";
@@ -311,7 +321,7 @@ function describeApprovers(change: ClosedChange, username: string): string {
     return `you and ${others} others approved`;
   }
 
-  const names = [...approvers].map(capitalizeFirst);
+  const names = [...approvers.values()];
   return `${formatNameList(names)} approved`;
 }
 

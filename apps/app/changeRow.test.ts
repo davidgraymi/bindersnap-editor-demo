@@ -109,3 +109,16 @@ test("a binder that demands no approvals is still awaiting one", () => {
     describeChangeStandingWord(change({ requiredApprovals: 0 })).standing,
   ).toBe("Awaiting approval");
 });
+
+/** A login is not a name: `jsmith` capitalized is "Jsmith". */
+test("the row names its author when the list knows the name", () => {
+  expect(
+    describeChangeMeta(
+      change({ submittedBy: "jsmith", submittedByName: "Jo Smith" }),
+      NOW,
+    ),
+  ).toBe("#4 · Jo Smith opened 2 hours ago");
+  expect(describeChangeMeta(change({ submittedByName: "  " }), NOW)).toBe(
+    "#4 · Alice opened 2 hours ago",
+  );
+});

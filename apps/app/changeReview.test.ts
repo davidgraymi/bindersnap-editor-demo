@@ -467,3 +467,18 @@ test("an unparseable date renders as nothing rather than 'Invalid Date'", () => 
   expect(formatEventDate("not-a-date")).toBe("");
   expect(formatEventDate("")).toBe("");
 });
+
+test("the timeline and the opening line name people, not logins", () => {
+  const names: Record<string, string> = { maya: "Maya Okafor" };
+  const nameOf = (login: string) => names[login] ?? login;
+
+  const entries = buildReviewTimeline({
+    change: change(),
+    threads: [],
+    updates: [],
+    resetsApprovals: false,
+    nameOf,
+  });
+  expect(entries[0]?.event?.actor).toBe("Maya Okafor");
+  expect(describeChangeOpening(change(), 4, nameOf).who).toBe("Maya Okafor");
+});

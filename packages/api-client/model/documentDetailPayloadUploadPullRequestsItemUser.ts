@@ -10,4 +10,5 @@
  */
 export type DocumentDetailPayloadUploadPullRequestsItemUser = {
   login: string;
+  full_name?: string;
 } | null;

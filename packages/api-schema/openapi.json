@@ -275,6 +275,9 @@
                   "properties": {
                     "login": {
                       "type": "string"
+                    },
+                    "full_name": {
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -588,6 +591,9 @@
                   "properties": {
                     "login": {
                       "type": "string"
+                    },
+                    "full_name": {
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -796,6 +802,9 @@
                   "nullable": true,
                   "properties": {
                     "login": {
+                      "type": "string"
+                    },
+                    "full_name": {
                       "type": "string"
                     }
                   },
@@ -2659,7 +2668,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Every policy in every binder this person can reach",
+            "description": "Every document in every binder this person can reach",
             "content": {
               "application/json": {
                 "schema": {
@@ -2978,6 +2987,9 @@
                                   "nullable": true,
                                   "properties": {
                                     "login": {
+                                      "type": "string"
+                                    },
+                                    "full_name": {
                                       "type": "string"
                                     }
                                   },
@@ -7645,6 +7657,9 @@
                             "properties": {
                               "login": {
                                 "type": "string"
+                              },
+                              "full_name": {
+                                "type": "string"
                               }
                             },
                             "required": [
@@ -9376,6 +9391,9 @@
                           "nullable": true,
                           "properties": {
                             "login": {
+                              "type": "string"
+                            },
+                            "full_name": {
                               "type": "string"
                             }
                           },
