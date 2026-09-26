@@ -947,7 +947,7 @@ function AddOrgPersonForm({
             Adding <code>{picked.login}</code>.{" "}
             <button
               type="button"
-              className="bs-btn bs-btn-ghost bs-btn--sm"
+              className="bs-btn bs-btn--quiet bs-btn--sm"
               disabled={disabled}
               onClick={() => {
                 setPicked(null);
