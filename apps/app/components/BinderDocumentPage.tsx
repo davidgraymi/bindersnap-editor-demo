@@ -456,7 +456,7 @@ export function BinderDocumentPage({
                 Waiting on a decision
               </h2>
               {openChanges.length > 0 ? (
-                <span className="bs-section-count doc-rail-count--open">
+                <span className="bs-section-count bs-section-count--attention">
                   {openChanges.length}
                 </span>
               ) : null}

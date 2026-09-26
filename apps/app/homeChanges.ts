@@ -260,7 +260,10 @@ export function buildOpenChangeRows(
           {
             number: change.number,
             submittedBy: change.user?.login ?? "",
-            submittedByName: change.user?.full_name,
+            // Your own change says "You", as "you approved" does: your name
+            // on every row of your own work is noise.
+            submittedByName:
+              change.user?.login === username ? "You" : change.user?.full_name,
             submittedAt: change.created_at ?? change.created ?? "",
             updatedAt: change.updated_at ?? undefined,
             approvalCount: 0,

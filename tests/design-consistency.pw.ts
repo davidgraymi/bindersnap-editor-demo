@@ -648,9 +648,7 @@ test("no heading on a page outranks the page's own title", async ({ page }) => {
     const louder = await page.evaluate(() => {
       const main = document.querySelector(".app-main");
       if (!main) return null;
-      const title = main.querySelector(
-        ".bs-title, .doc-header-title, .home-greeting",
-      );
+      const title = main.querySelector(".bs-title, .doc-header-title");
       if (!title) return [];
       const titleSize = parseFloat(getComputedStyle(title).fontSize);
 

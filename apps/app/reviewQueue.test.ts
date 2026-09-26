@@ -341,3 +341,14 @@ test("the page opens on the reader's own work, or on everything", () => {
     }),
   ).toBe("all");
 });
+
+/** Your own name on every row of your own work is noise. */
+test("your own change says You, and somebody else's says their name", () => {
+  const [mine] = buildQueueRows([binder("clinical", [change()])], "alice", NOW);
+  expect(mine?.meta).toBe("#1 · You · updated 1 hour ago");
+
+  const named = change();
+  named.user = { login: "alice", full_name: "Alice Nguyen" };
+  const [theirs] = buildQueueRows([binder("clinical", [named])], "bob", NOW);
+  expect(theirs?.meta).toBe("#1 · Alice Nguyen · updated 1 hour ago");
+});
