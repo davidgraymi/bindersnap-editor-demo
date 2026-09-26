@@ -6,6 +6,7 @@ import {
   BACKGROUND_POLL_WINDOW_MS,
   runBackgroundPoll,
 } from "./checkoutPolling";
+import { PlanOffer } from "./PlanOffer";
 import { SkeletonPanel } from "./Skeleton";
 import { describeBilling } from "./billingAccess";
 import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
@@ -155,6 +156,14 @@ export function BillingPage({
     hasBillingAccount,
   });
   const loading = subscriptionStatus === "loading";
+  // Subscribing is the offer below the panel; the panel keeps the portal.
+  const offersPlan =
+    summary.actions.includes("subscribe") ||
+    (summary.ownersOnly &&
+      (summary.standing === "Trial" || summary.standing === "Inactive"));
+  const portalActions = summary.actions.filter(
+    (action): action is "manage" | "cancel" => action !== "subscribe",
+  );
   const checkoutReturned = window.location.search.includes("checkout=success");
 
   const run = async (action: () => Promise<void>, fallback: string) => {
@@ -226,7 +235,7 @@ export function BillingPage({
       ) : hasBillingStatusError ? null : (
         <section className="bs-panel" aria-label="Plan">
           <div className="bs-panel-bar">
-            <span className="bs-section-title">Bindersnap Pro</span>
+            <span className="bs-section-title">Subscription</span>
             <span className={`bs-status bs-status--${summary.tone}`}>
               {summary.standing}
             </span>
@@ -239,18 +248,8 @@ export function BillingPage({
                 </span>
               </span>
             </li>
-            {summary.actions.includes("subscribe") ? (
-              <li className="bs-row">
-                <span className="bs-row-body">
-                  <span className="bs-row-name">Price</span>
-                </span>
-                <span className="bs-row-right bs-settings-value">
-                  {plan ? plan.formatted : "Shown at checkout"}
-                </span>
-              </li>
-            ) : null}
           </ul>
-          {summary.ownersOnly ? (
+          {summary.ownersOnly && !offersPlan ? (
             <div className="bs-panel-foot">
               <span className="bs-panel-foot-note">
                 Only an owner of{" "}
@@ -258,14 +257,13 @@ export function BillingPage({
                 subscribe, change the card or cancel.
               </span>
             </div>
-          ) : summary.actions.length > 0 ? (
+          ) : portalActions.length > 0 ? (
             <div className="bs-panel-foot">
               <span className="bs-panel-foot-note">
-                {summary.actions.includes("subscribe")
-                  ? "Checkout is handled by Stripe. You come back here when it is done."
-                  : "Invoices, the card on file and cancelling are handled in Stripe's billing portal."}
+                Invoices, the card on file and cancelling are handled in
+                Stripe&apos;s billing portal.
               </span>
-              {summary.actions.map((action, index) => {
+              {portalActions.map((action, index) => {
                 const busy = isSubmitting || isRetryingBillingStatus;
                 const tone =
                   action === "cancel"
@@ -273,24 +271,11 @@ export function BillingPage({
                     : index === 0
                       ? "bs-btn-primary"
                       : "bs-btn-secondary";
-                const [label, work, fallback] =
-                  action === "subscribe"
-                    ? ([
-                        "Subscribe",
-                        onSubscribe,
-                        "Unable to start checkout.",
-                      ] as const)
-                    : action === "manage"
-                      ? ([
-                          "Manage subscription",
-                          onManage,
-                          "Unable to open billing portal.",
-                        ] as const)
-                      : ([
-                          "Cancel subscription",
-                          onCancel,
-                          "Unable to open billing portal.",
-                        ] as const);
+                const [label, work] =
+                  action === "manage"
+                    ? (["Manage subscription", onManage] as const)
+                    : (["Cancel subscription", onCancel] as const);
+                const fallback = "Unable to open billing portal.";
                 return (
                   <button
                     key={action}
@@ -307,6 +292,20 @@ export function BillingPage({
           ) : null}
         </section>
       )}
+
+      {/* The same offer the paywall makes, so the price and the promise are
+          one wherever a customer meets them. */}
+      {!loading && !hasBillingStatusError && offersPlan ? (
+        <PlanOffer
+          organizationName={
+            organization ? organizationName : "your organization"
+          }
+          plan={plan}
+          canManage={canManageBilling}
+          submitting={isSubmitting}
+          onSubscribe={() => void run(onSubscribe, "Unable to start checkout.")}
+        />
+      ) : null}
 
       {error ? (
         <p className="bs-note bs-note--danger" role="alert">

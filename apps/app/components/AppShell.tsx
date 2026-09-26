@@ -8,6 +8,7 @@ import { routeToPath, type AppRoute } from "../routes";
 import { BinderShell } from "./BinderShell";
 import { OrganizationPage } from "./OrganizationPage";
 import { LocationTrail } from "./LocationTrail";
+import { useWriteAction } from "../paywallContext";
 import { AdminSubscriptionManagementPage } from "./AdminSubscriptionManagementPage";
 import { AppIcon } from "./AppIcon";
 import { BindersnapLogoMark } from "./BindersnapLogoMark";
@@ -153,6 +154,8 @@ export function AppShell({
   const openCreateDocumentModal = useCallback(() => {
     setShowCreateDocumentModal(true);
   }, []);
+  // Drawn while the organization cannot write, and answered with the paywall.
+  const createDocument = useWriteAction(openCreateDocumentModal);
 
   // Leaving a binder takes its section with it, so the map does not keep
   // offering the screens of a binder you are no longer in.
@@ -222,9 +225,7 @@ export function AppShell({
               in: it sits on every page, so leaving it is offering the one
               affordance a delinquent customer sees everywhere and cannot
               use. */}
-          {isReadOnly ? null : (
-            <NewDocumentButton onClick={openCreateDocumentModal} />
-          )}
+          <NewDocumentButton onClick={createDocument} />
 
           {/* User profile: avatar with dropdown */}
           <div className="app-topnav-profile">

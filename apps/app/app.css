@@ -8256,6 +8256,75 @@ a.bs-row:focus-visible {
   width: 8.5rem;
 }
 
+/* ── The offer ────────────────────────────────────────────────────────────
+   One panel, in the paywall and on Billing: the plan, its price, what it
+   gets you, and the button. */
+.plan-offer-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-4) var(--brand-space-4) var(--brand-space-2);
+}
+
+.plan-offer-name {
+  margin: 0;
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-body-lg);
+  color: var(--bs-text-primary);
+}
+
+.plan-offer-for {
+  margin: 2px 0 0;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+.plan-offer-price {
+  margin: 0;
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-body-lg);
+  font-weight: var(--brand-weight-semibold);
+  white-space: nowrap;
+}
+
+.plan-offer-list {
+  display: grid;
+  gap: var(--brand-space-1-5);
+  margin: 0;
+  padding: var(--brand-space-2) var(--brand-space-4) var(--brand-space-4);
+  list-style: none;
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-sm);
+}
+
+.plan-offer-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--brand-space-2);
+}
+
+.plan-offer-list svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: var(--brand-green-dark);
+}
+
+.plan-offer .bs-panel-foot-note {
+  flex: 1 1 14rem;
+}
+
+.paywall {
+  width: min(100%, 560px);
+}
+
+.paywall-lede {
+  margin: var(--brand-space-2) 0 0;
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-sm);
+}
+
 /* Billing: one panel saying where the organization stands, at the measure
    the other settings pages keep. */
 .billing-page > .bs-panel,

@@ -5,6 +5,7 @@ import { BookOpen, FilePen } from "lucide-react";
 
 import { fetchOrganizationBinders } from "../api";
 import type { WorkspaceSummary } from "../../../packages/api-schema/schemas/workspaces";
+import { useWriteAction } from "../paywallContext";
 import { followInApp } from "../appLink";
 import { buildBinderUrl } from "../binderShell";
 import { formatAge, formatDocumentName } from "../documentDisplay";
@@ -109,6 +110,8 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
     setTab("binders");
     setCreating(true);
   };
+  // Drawn while the organization cannot write, and answered with the paywall.
+  const newBinder = useWriteAction(openNewBinder);
 
   const header = (
     <header className="doc-header">
@@ -122,11 +125,11 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
             permanently, which made the page read as a settings screen for
             something that has not started yet — the list is the answer to
             "is my organization in good shape", so the list comes first. */}
-        {tab === "binders" && !isReadOnly ? (
+        {tab === "binders" ? (
           <a
             className="bs-btn bs-btn-primary"
             href={newBinderHref}
-            onClick={(event) => followInApp(event, openNewBinder)}
+            onClick={(event) => followInApp(event, newBinder)}
           >
             New binder
           </a>
@@ -198,15 +201,13 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
               A binder is a set of documents governed together — by the same
               people, under the same rules.
             </p>
-            {isReadOnly ? null : (
-              <a
-                className="bs-btn bs-btn-primary"
-                href={newBinderHref}
-                onClick={(event) => followInApp(event, openNewBinder)}
-              >
-                New binder
-              </a>
-            )}
+            <a
+              className="bs-btn bs-btn-primary"
+              href={newBinderHref}
+              onClick={(event) => followInApp(event, newBinder)}
+            >
+              New binder
+            </a>
           </div>
         </div>
       ) : (
