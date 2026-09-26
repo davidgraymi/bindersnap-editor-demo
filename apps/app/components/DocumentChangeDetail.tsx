@@ -421,6 +421,10 @@ export function DocumentChangeDetail({
     subject || documentCount !== 1 ? null : nextVersion,
     (login) => nameFor(names, login),
   );
+  // **The rail is about one document, so it may say that document's version**
+  // even when the header may not. The header speaks for the whole change and
+  // stays quiet when there are several; the rail names the document it means.
+  const railBecomes = subject || !change.open ? null : nextVersion;
   const description = describeChangeBody(change.summary, change.description);
   const outcome = describeChangeOutcome(change, (login) =>
     nameFor(names, login),
@@ -642,9 +646,7 @@ export function DocumentChangeDetail({
                 {/* The version it will become sits with the file, now that the
                     line under the title is the one both tabs share. */}
                 {[
-                  opening.becomes !== null
-                    ? `Becomes v${opening.becomes}`
-                    : null,
+                  railBecomes !== null ? `Becomes v${railBecomes}` : null,
                   proposed.fileName,
                   proposed.updateLabel,
                   proposed.date,
@@ -689,8 +691,8 @@ export function DocumentChangeDetail({
                   {/* Compared with what is the question the bare verb left
                       open. A first version has nothing before it, and the
                       Changes tab simply reads it. */}
-                  {opening.becomes !== null && opening.becomes > 1
-                    ? `Compare with v${opening.becomes - 1}`
+                  {railBecomes !== null && railBecomes > 1
+                    ? `Compare with v${railBecomes - 1}`
                     : "Compare"}
                 </button>
                 <span className="bs-panel-bar-spacer" />
