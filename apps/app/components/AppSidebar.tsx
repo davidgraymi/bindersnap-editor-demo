@@ -213,7 +213,10 @@ export function AppSidebar({
     ? [
         {
           key: "binder-changes",
-          label: "Changes",
+          // What the page it opens is titled, and what the same list is
+          // called under Your work — GitLab's project sidebar says "Merge
+          // requests" too, not a shorter word for the same thing.
+          label: "Change requests",
           icon: FilePen,
           route: {
             kind: "binder",
