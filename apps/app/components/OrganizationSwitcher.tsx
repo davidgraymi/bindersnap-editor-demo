@@ -102,8 +102,10 @@ export function OrganizationSwitcher({
         aria-current={isCurrentPage ? "page" : undefined}
         onClick={(event) => followInApp(event, () => onSelect(currentOrg))}
       >
-        <Building2 size={14} strokeWidth={1.5} aria-hidden="true" />{" "}
-        {formatDocumentName(currentOrg)}
+        <Building2 size={14} strokeWidth={1.5} aria-hidden="true" />
+        <span className="app-topnav-link-label">
+          {formatDocumentName(currentOrg)}
+        </span>
       </a>
     ) : null;
   }
@@ -128,13 +130,18 @@ export function OrganizationSwitcher({
         aria-current={isCurrentPage ? "page" : undefined}
         onClick={(event) => followInApp(event, () => onSelect(only))}
       >
-        <Building2 size={14} strokeWidth={1.5} aria-hidden="true" /> {label}
+        <Building2 size={14} strokeWidth={1.5} aria-hidden="true" />
+        <span className="app-topnav-link-label">{label}</span>
       </a>
     );
   }
 
   return (
-    <div ref={containerRef} style={{ position: "relative" }}>
+    <div
+      ref={containerRef}
+      className="app-org-switcher"
+      style={{ position: "relative" }}
+    >
       <button
         ref={buttonRef}
         type="button"
@@ -146,7 +153,8 @@ export function OrganizationSwitcher({
           setIsOpen((open) => !open);
         }}
       >
-        <Building2 size={14} strokeWidth={1.5} aria-hidden="true" /> {label}{" "}
+        <Building2 size={14} strokeWidth={1.5} aria-hidden="true" />
+        <span className="app-topnav-link-label">{label}</span>
         <ChevronDown size={14} strokeWidth={1.5} aria-hidden="true" />
       </button>
 
