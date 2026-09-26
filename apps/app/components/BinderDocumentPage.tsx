@@ -359,7 +359,9 @@ export function BinderDocumentPage({
               className="bs-btn bs-btn-primary"
               onClick={() => setRevising(true)}
             >
-              New version
+              {/* **What it asks of you.** "New version" read as though it
+                  made one; what it does is take a file and propose it. */}
+              Upload new version
             </button>
           </div>
         ) : null}
