@@ -146,7 +146,11 @@ export function parsePositiveIntParam(
   return Number.isInteger(value) && value > 0 ? value : null;
 }
 
-/** `/{org}/{binder}/{path}`, with the version only when one is being read. */
+/**
+ * `/{org}/{binder}/-/blob/{ref}/{path}` — the file at the branch it is read
+ * on, `main` when that is the record. The version rides in the query only
+ * when one is being read.
+ */
 export function buildDocumentUrl(params: {
   org: string;
   binder: string;
@@ -171,6 +175,11 @@ export function buildDocumentUrl(params: {
    * a change has the way back — it says where you came from, not what to read.
    */
   ref?: string | null;
+  /**
+   * Opened from the tree while editing, so it is read in your draft — where a
+   * policy renamed a moment ago actually has the name it was clicked under.
+   */
+  edit?: boolean;
 }): string {
   const {
     org,
@@ -179,11 +188,14 @@ export function buildDocumentUrl(params: {
     version,
     change = null,
     ref = null,
+    edit = false,
   } = params;
-  const base = `/${org}/${binder}/${documentPath}`;
+  const base = `/${org}/${binder}/-/blob/${encodeURIComponent(
+    ref ?? "main",
+  )}/${documentPath}`;
 
   const query = new URLSearchParams();
-  if (ref) query.set("ref", ref);
+  if (edit) query.set("edit", "1");
   if (change !== null) query.set("change", String(change));
   // A version is about the record, so it never travels with a branch: one
   // asks for what was published and the other for what is proposed, and an
@@ -194,19 +206,4 @@ export function buildDocumentUrl(params: {
 
   const search = query.toString();
   return search === "" ? base : `${base}?${search}`;
-}
-
-/** Which branch the address is asking to read this document on. */
-export function parseRequestedRef(search: string): string | null {
-  const raw = new URLSearchParams(search).get("ref")?.trim() ?? "";
-  return raw === "" ? null : raw;
-}
-
-/**
- * Which change request the address is asking to read this document on.
- *
- * Null for the record, which is what every link that does not name one means.
- */
-export function parseRequestedChangeRef(search: string): number | null {
-  return parsePositiveIntParam(search, "change");
 }

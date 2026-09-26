@@ -23,7 +23,7 @@ import { DocumentChangeDetail } from "./DocumentChangeDetail";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 /**
- * One change in a binder, at `/{org}/{binder}?tab=changes&change=3`.
+ * One change in a binder, at `/{org}/{binder}/-/changes/3`.
  *
  * The review itself is `DocumentChangeDetail` — the same discussion, timeline,
  * comparison, reviewer list and publish gate the per-document workspace has.
@@ -312,9 +312,9 @@ export function BinderChangePage({
    *
    * Its own screen rather than a panel on this one, and a full-width one: a
    * change that touches six documents is six comparisons, and a comparison in
-   * half a column beside a discussion is a diff nobody can read. `?view=compare`
-   * addresses it, so a reviewer can send "the diff" rather than "open the
-   * change and press Compare".
+   * half a column beside a discussion is a diff nobody can read.
+   * `/-/changes/{n}/diffs` addresses it, so a reviewer can send "the diff"
+   * rather than "open the change and press Compare".
    *
    * `key` on the change number, because everything the screen remembers —
    * which documents are folded, which are ticked, where the reader had got to

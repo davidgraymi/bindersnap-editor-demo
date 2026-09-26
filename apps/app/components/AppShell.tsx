@@ -154,7 +154,7 @@ export function AppShell({
   // A binder is a write, so it meets the paywall while the organization
   // cannot write. An organization is free to make: the first has a trial.
   const newBinder = useWriteAction((org: string) =>
-    navigateToHref(`/${org}?new=binder`),
+    navigateToHref(`/${org}/-/binders/new`),
   );
 
   // Leaving a binder takes its section with it, so the map does not keep
