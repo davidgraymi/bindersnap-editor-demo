@@ -733,7 +733,7 @@ export async function openTopnavNewDocumentModal(page: Page): Promise<void> {
   await expect(
     page.getByRole("heading", { name: "Which binder?" }),
   ).toBeVisible();
-  await page.locator(".docs-list-item").first().click();
+  await page.getByRole("dialog").locator(".bs-row").first().click();
 
   await expect(
     page.getByRole("heading", { name: "Add a document" }),
