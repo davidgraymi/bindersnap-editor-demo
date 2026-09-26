@@ -7,6 +7,7 @@ import {
   fetchBinderChange,
   updateBinderChange,
 } from "../api";
+import { followInApp } from "../appLink";
 import { describeChangedDocument, describeMove } from "../binderChange";
 import { buildDocumentUrl, downloadFileName } from "../binderDocument";
 import { buildBinderUrl } from "../binderShell";
@@ -315,6 +316,13 @@ export function BinderChangePage({
       }
     />
   );
+  const changesHref = buildBinderUrl({
+    org,
+    binder,
+    tab: "changes",
+    change: changeNumber,
+    view: "compare",
+  });
   const tabs = (
     <ChangeTabs
       view={view}
@@ -324,13 +332,7 @@ export function BinderChangePage({
         tab: "changes",
         change: changeNumber,
       })}
-      changesHref={buildBinderUrl({
-        org,
-        binder,
-        tab: "changes",
-        change: changeNumber,
-        view: "compare",
-      })}
+      changesHref={changesHref}
       documentCount={comparisonRows.length}
       onSelect={onViewChange}
     />
@@ -462,32 +464,31 @@ export function BinderChangePage({
                 <span className="binder-count">
                   {documents.length} documents
                 </span>
-                {/* **The list answers "what", this answers "what changed".**
-                    Picking each row in turn and reading its diff was the only
-                    way to see what a change did to all of it — the "which
-                    version did we approve?" problem one level up. In the
-                    list's own bar, because a control that acts on a list does
-                    not float on the paper above it. */}
-                <button
-                  className="bs-linkbtn"
-                  type="button"
-                  onClick={() => onViewChange("compare")}
-                >
-                  See everything that changed →
-                </button>
               </div>
               <ul className="bs-row-list">
                 {documents.map((document) => {
                   const facts = describeChangedDocument(document, !isOpen);
-                  const on = document.slugPath === shown?.slugPath;
+                  const anchor = comparisonRows.find(
+                    (row) => row.slugPath === document.slugPath,
+                  )?.anchor;
 
                   return (
                     <li key={document.slugPath}>
-                      <button
-                        className={`bs-row${on ? " bs-row--on" : ""}`}
-                        type="button"
-                        aria-current={on ? "true" : undefined}
-                        onClick={() => setViewing(document.slugPath)}
+                      {/* **A way into its diff, not a selector.** Picking a
+                          row used to repoint the rail at that document, so
+                          seeing what changed was pick, then Compare — when
+                          what a reviewer does is open Changes and scroll.
+                          Each row now goes straight to its own place on
+                          that screen. */}
+                      <a
+                        className="bs-row"
+                        href={`${changesHref}${anchor ? `#${anchor}` : ""}`}
+                        onClick={(event) =>
+                          followInApp(event, () => {
+                            setViewing(document.slugPath);
+                            onViewChange("compare");
+                          })
+                        }
                       >
                         <span className="bs-row-body">
                           <span className="bs-row-name">{facts.title}</span>
@@ -504,7 +505,7 @@ export function BinderChangePage({
                           ) : null}
                           <span className="bs-ver">{facts.effect}</span>
                         </span>
-                      </button>
+                      </a>
                     </li>
                   );
                 })}
@@ -570,7 +571,7 @@ export function BinderChangePage({
         onBackToList={onBackToChanges}
       />
 
-      {shown ? (
+      {shown && documents.length === 1 ? (
         <p className="change-open-document">
           <button
             className="bs-linkbtn"
