@@ -31,11 +31,17 @@
  * Requires the full Docker Compose stack — run via `bun run test:integration`.
  */
 
-import { expect, test } from "@playwright/test";
+import { expect as baseExpect, test } from "@playwright/test";
 
 import { APP_BASE_URL, OWNER, signInAsAlice } from "./helpers";
 
 test.describe.configure({ mode: "serial", timeout: 180_000 });
+
+// A comparison reads every changed document at two refs before it draws, and
+// on a loaded runner that outlasts the 5s an assertion waits by default — CI
+// caught the page still empty. The tests have 180s; their assertions get room
+// to use it.
+const expect = baseExpect.configure({ timeout: 20_000 });
 
 /** `?view=compare` — its own address, so a reviewer can send the diff. */
 function comparisonUrl(binder: string, change: number): string {
