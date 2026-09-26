@@ -527,7 +527,7 @@ export async function expectPublishedVersion(
 /**
  * Assert how many changes are waiting on a decision.
  *
- * The count is on the sidebar's Changes entry: a binder's screens are a
+ * The count is on the binder's Change requests entry: a binder's screens are a
  * section of the map now rather than a tab strip on every page it holds.
  */
 export async function expectOpenChangeCount(
@@ -535,9 +535,12 @@ export async function expectOpenChangeCount(
   count: number,
   timeout = 30_000,
 ): Promise<void> {
+  // `.last()`: Your work has a Change requests entry of its own, above the
+  // binder's.
   const entry = page
     .locator(".app-sidebar")
-    .getByRole("link", { name: /^Changes/ });
+    .getByRole("link", { name: /^Change requests/ })
+    .last();
   if (count === 0) {
     await expect(entry.locator(".app-sidebar-item-count")).toHaveCount(0, {
       timeout,
@@ -553,7 +556,7 @@ export async function expectOpenChangeCount(
 /** Open one of the binder's screens from the sidebar's own section of it. */
 export async function openBinderSection(
   page: Page,
-  section: "Changes" | "History" | "Settings",
+  section: "Change requests" | "History" | "Settings",
 ): Promise<void> {
   const entry = page
     .locator(".app-sidebar")
