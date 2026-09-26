@@ -9728,6 +9728,9 @@
                     "isBehind": {
                       "type": "boolean"
                     },
+                    "hasConflicts": {
+                      "type": "boolean"
+                    },
                     "blockOnUnresolvedThreads": {
                       "type": "boolean"
                     },
@@ -9766,6 +9769,7 @@
                     "documents",
                     "removedDocuments",
                     "isBehind",
+                    "hasConflicts",
                     "blockOnUnresolvedThreads",
                     "unresolvedThreadCount",
                     "canManage",
@@ -9968,6 +9972,298 @@
         "responses": {
           "200": {
             "description": "The change's branch now carries the binder's main",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "caughtUp": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "caughtUp"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/changes/{changeNumber}/conflicts": {
+      "get": {
+        "operationId": "getBinderChangeConflicts",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "changeNumber",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Every document the change and the binder both changed, read where the change began, on the change, and as published since",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "changeNumber": {
+                      "type": "number"
+                    },
+                    "open": {
+                      "type": "boolean"
+                    },
+                    "upToDate": {
+                      "type": "boolean"
+                    },
+                    "headSha": {
+                      "type": "string"
+                    },
+                    "baseSha": {
+                      "type": "string"
+                    },
+                    "canResolve": {
+                      "type": "boolean"
+                    },
+                    "files": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "path": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "editor",
+                              "text",
+                              "binary"
+                            ]
+                          },
+                          "automatic": {
+                            "type": "string",
+                            "nullable": true,
+                            "enum": [
+                              "ours",
+                              "theirs",
+                              null
+                            ]
+                          },
+                          "base": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "size": {
+                                "type": "number"
+                              },
+                              "content": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "size",
+                              "content"
+                            ]
+                          },
+                          "ours": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "size": {
+                                "type": "number"
+                              },
+                              "content": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "size",
+                              "content"
+                            ]
+                          },
+                          "theirs": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "size": {
+                                "type": "number"
+                              },
+                              "content": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "size",
+                              "content"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "path",
+                          "kind",
+                          "automatic",
+                          "base",
+                          "ours",
+                          "theirs"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "changeNumber",
+                    "open",
+                    "upToDate",
+                    "headSha",
+                    "baseSha",
+                    "canResolve",
+                    "files"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "resolveBinderChangeConflicts",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "changeNumber",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "headSha": {
+                    "type": "string"
+                  },
+                  "baseSha": {
+                    "type": "string"
+                  },
+                  "resolutions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string"
+                        },
+                        "take": {
+                          "type": "string",
+                          "enum": [
+                            "ours",
+                            "theirs",
+                            "none",
+                            "content"
+                          ]
+                        },
+                        "base64Content": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "key",
+                        "take"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "headSha",
+                  "baseSha",
+                  "resolutions"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The conflicts are resolved as decided and the change is up to date",
             "content": {
               "application/json": {
                 "schema": {

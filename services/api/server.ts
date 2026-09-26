@@ -210,6 +210,15 @@ import {
   type PullRequestWithReviews,
 } from "./gitea-client/pullRequests";
 import {
+  ConflictResolutionError,
+  findConflictingFiles,
+  readBlob,
+  readTreeBlobs,
+  resolveChangeConflicts,
+  type ConflictingFile,
+  type FileResolution,
+} from "./gitea-client/conflicts";
+import {
   buildChangeReviewers,
   approverLogins,
   countApprovals,
@@ -4387,6 +4396,11 @@ async function handleWorkspaceChangeDetail(
         // branch's head. Both are on the pull request Gitea already returned,
         // so knowing this costs nothing.
         isBehind: isChangeBehindBase(entry.pullRequest),
+        // Behind *and* not mergeable is the one state "Bring up to date"
+        // cannot fix: the merge has files both sides changed.
+        hasConflicts:
+          isChangeBehindBase(entry.pullRequest) &&
+          (entry.pullRequest as { mergeable?: boolean }).mergeable === false,
         blockOnUnresolvedThreads: reviewSettings.blockOnUnresolvedThreads,
         unresolvedThreadCount: discussions.unresolvedCount,
         canManage: access.push,
@@ -4572,6 +4586,344 @@ async function handleWorkspaceChangeUpdate(
       "Unable to bring the change up to date.",
     );
   }
+}
+
+/** A file's side of a conflict as the page reads it: where, how big, what. */
+interface ConflictSidePayload {
+  path: string;
+  size: number;
+  /** The bytes, base64 — null past the size a page should be sent. */
+  content: string | null;
+}
+
+/** Larger than this and a side is offered as a download, not inline. */
+const CONFLICT_INLINE_LIMIT = 4 * 1024 * 1024;
+
+/** How the page can show a file: rendered, as text, or only as a choice. */
+function conflictFileKind(path: string): "editor" | "text" | "binary" {
+  const extension = path.split(".").pop()?.toLowerCase() ?? "";
+  if (extension === "json") return "editor";
+  if (
+    ["md", "markdown", "txt", "csv", "html", "htm", "yml", "yaml"].includes(
+      extension,
+    )
+  ) {
+    return "text";
+  }
+  // `.gitea/CODEOWNERS` and the placeholders that hold folders open.
+  if (!path.split("/").pop()?.includes(".") || path.startsWith(".gitea/")) {
+    return "text";
+  }
+  return "binary";
+}
+
+interface ChangeHeads {
+  branch: string;
+  headSha: string;
+  baseSha: string;
+  mergeBase: string;
+  open: boolean;
+}
+
+async function readChangeHeads(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  pullNumber: number;
+}): Promise<ChangeHeads> {
+  const { client, org, workspace, pullNumber } = params;
+  const pull = (await unwrap(
+    client.GET("/repos/{owner}/{repo}/pulls/{index}", {
+      params: { path: { owner: org, repo: workspace, index: pullNumber } },
+    }),
+  )) as {
+    state?: string;
+    merge_base?: string;
+    head?: { ref?: string; sha?: string } | null;
+    base?: { sha?: string } | null;
+  };
+  return {
+    branch: pull.head?.ref ?? "",
+    headSha: pull.head?.sha ?? "",
+    baseSha: pull.base?.sha ?? "",
+    mergeBase: pull.merge_base ?? "",
+    open: pull.state === "open",
+  };
+}
+
+async function readChangeConflicts(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  heads: ChangeHeads;
+}): Promise<ConflictingFile[]> {
+  const { client, org, workspace, heads } = params;
+  if (!heads.mergeBase || heads.mergeBase === heads.baseSha) return [];
+  const [base, ours, theirs] = await Promise.all(
+    [heads.mergeBase, heads.headSha, heads.baseSha].map((sha) =>
+      readTreeBlobs({ client, org, workspace, sha }),
+    ),
+  );
+  return findConflictingFiles(base!, ours!, theirs!);
+}
+
+/**
+ * The documents a change and the binder both changed, read three ways.
+ *
+ * The page that resolves them needs each file where the change began, as the
+ * change has it, and as it has been published since — and it needs them
+ * together, because the decision is made looking at all three. So the bytes
+ * come with the answer, up to a size a page should be sent; past it a side is
+ * named and offered as a download instead.
+ *
+ * A read, so never gated.
+ */
+async function handleWorkspaceChangeConflicts(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+  pullNumber: number,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { client } = auth;
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const [heads, access] = await Promise.all([
+      readChangeHeads({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+        pullNumber,
+      }),
+      readWorkspaceAccess({ client, org: orgName, name: workspaceName }),
+    ]);
+    const conflicts = heads.open
+      ? await readChangeConflicts({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          heads,
+        })
+      : [];
+
+    const side = async (
+      entry: { path: string; sha: string } | null,
+    ): Promise<ConflictSidePayload | null> => {
+      if (!entry) return null;
+      const blob = await readBlob({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+        sha: entry.sha,
+      });
+      return {
+        path: entry.path,
+        size: blob.size,
+        content: blob.size <= CONFLICT_INLINE_LIMIT ? blob.base64 : null,
+      };
+    };
+
+    const files = await Promise.all(
+      conflicts.map(async (conflict) => ({
+        key: conflict.key,
+        path: conflict.path,
+        kind: conflictFileKind(conflict.path),
+        automatic: conflict.automatic,
+        base: await side(conflict.base),
+        ours: await side(conflict.ours),
+        theirs: await side(conflict.theirs),
+      })),
+    );
+
+    return json(
+      200,
+      {
+        organization: orgName,
+        workspace: workspaceName,
+        changeNumber: pullNumber,
+        open: heads.open,
+        upToDate: !heads.mergeBase || heads.mergeBase === heads.baseSha,
+        headSha: heads.headSha,
+        baseSha: heads.baseSha,
+        canResolve: access.push,
+        files,
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to read a change's conflicts", {
+      username: auth.session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      pullNumber,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to read what conflicts in this change.",
+    );
+  }
+}
+
+/**
+ * Resolve a change's conflicts as decided, and bring it up to date.
+ *
+ * **Checked against the heads the page was looking at.** A resolution is a
+ * decision about three particular versions of each file; if either the change
+ * or the binder has moved since the page read them, the decision is about
+ * versions that are no longer the ones being merged, and it is refused rather
+ * than applied to the wrong ones.
+ */
+async function handleResolveWorkspaceChangeConflicts(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+  pullNumber: number,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { client, session } = auth;
+
+  const body = await readJsonBody<{
+    headSha?: unknown;
+    baseSha?: unknown;
+    resolutions?: unknown;
+  }>(req);
+  const resolutions = parseResolutions(body?.resolutions);
+  if (
+    !body ||
+    typeof body.headSha !== "string" ||
+    typeof body.baseSha !== "string" ||
+    resolutions === null
+  ) {
+    return json(
+      400,
+      { error: "headSha, baseSha and resolutions are required." },
+      baseHeaders,
+    );
+  }
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const heads = await readChangeHeads({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      pullNumber,
+    });
+    if (!heads.open) {
+      return json(
+        409,
+        { error: "This change is no longer open." },
+        baseHeaders,
+      );
+    }
+    if (heads.headSha !== body.headSha || heads.baseSha !== body.baseSha) {
+      return json(
+        409,
+        {
+          error:
+            "The change or the binder has moved on since this page was opened. Reload it to resolve against the latest versions.",
+        },
+        baseHeaders,
+      );
+    }
+
+    const conflicts = await readChangeConflicts({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      heads,
+    });
+    if (conflicts.length === 0) {
+      return json(
+        409,
+        {
+          error:
+            "Nothing in this change conflicts with the binder. Bring it up to date instead.",
+        },
+        baseHeaders,
+      );
+    }
+
+    const { caughtUp } = await resolveChangeConflicts({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      pullNumber,
+      branch: heads.branch,
+      conflicts,
+      resolutions,
+      username: session.username,
+    });
+
+    logger.info("Binder change conflicts resolved", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      pullNumber,
+      files: conflicts.length,
+      caughtUp,
+    });
+
+    return json(200, { ok: true, caughtUp }, baseHeaders);
+  } catch (err) {
+    if (err instanceof ConflictResolutionError) {
+      return json(err.status, { error: err.message }, baseHeaders);
+    }
+    logger.error("Failed to resolve a change's conflicts", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      pullNumber,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to resolve this change's conflicts.",
+    );
+  }
+}
+
+/** The page's decisions, or null when they are not the shape they must be. */
+function parseResolutions(raw: unknown): FileResolution[] | null {
+  if (!Array.isArray(raw)) return null;
+  const parsed: FileResolution[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== "object" || entry === null) return null;
+    const { key, take, base64Content } = entry as Record<string, unknown>;
+    if (typeof key !== "string") return null;
+    if (take === "ours" || take === "theirs" || take === "none") {
+      parsed.push({ key, take });
+    } else if (take === "content" && typeof base64Content === "string") {
+      parsed.push({ key, take, base64Content });
+    } else {
+      return null;
+    }
+  }
+  return parsed;
 }
 
 /**
@@ -10666,6 +11018,9 @@ export function createApiServer() {
         // request, so everything below is the document model's own handler
         // reached at the binder's address. Same behaviour, one namespace per
         // shape of thing — not a second implementation.
+        const workspaceChangeConflictsMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/conflicts$/,
+        );
         const workspaceChangeDiscussionsMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/discussions$/,
         );
@@ -11033,6 +11388,22 @@ export function createApiServer() {
             baseHeaders,
             workspaceChangesMatch[1]!,
             workspaceChangesMatch[2]!,
+          );
+        } else if (workspaceChangeConflictsMatch && method === "GET") {
+          response = await handleWorkspaceChangeConflicts(
+            req,
+            baseHeaders,
+            workspaceChangeConflictsMatch[1]!,
+            workspaceChangeConflictsMatch[2]!,
+            Number.parseInt(workspaceChangeConflictsMatch[3] ?? "", 10),
+          );
+        } else if (workspaceChangeConflictsMatch && method === "POST") {
+          response = await handleResolveWorkspaceChangeConflicts(
+            req,
+            baseHeaders,
+            workspaceChangeConflictsMatch[1]!,
+            workspaceChangeConflictsMatch[2]!,
+            Number.parseInt(workspaceChangeConflictsMatch[3] ?? "", 10),
           );
         } else if (workspaceChangeUpdateMatch && method === "POST") {
           response = await handleWorkspaceChangeUpdate(

@@ -28,6 +28,7 @@ import type {
   GetBinderArchive200,
   GetBinderArchiveParams,
   GetBinderChange200,
+  GetBinderChangeConflicts200,
   GetBinderDocument200,
   GetBinderDocumentParams,
   GetBinderDraft200,
@@ -65,6 +66,8 @@ import type {
   RenameBinderFolderBody,
   ReplyToBinderChangeDiscussion201,
   ReplyToBinderChangeDiscussionBody,
+  ResolveBinderChangeConflicts200,
+  ResolveBinderChangeConflictsBody,
   ResolveBinderChangeDiscussion200,
   ResolveBinderChangeDiscussionBody,
   RestoreBinderDocument201,
@@ -1494,6 +1497,79 @@ export const updateBinderChange = async (org: string,
     method: 'POST'
 
 
+  }
+);}
+
+
+export type getBinderChangeConflictsResponse200 = {
+  data: GetBinderChangeConflicts200
+  status: 200
+}
+
+export type getBinderChangeConflictsResponseSuccess = (getBinderChangeConflictsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getBinderChangeConflictsResponse = (getBinderChangeConflictsResponseSuccess)
+
+export const getGetBinderChangeConflictsUrl = (org: string,
+    binder: string,
+    changeNumber: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/changes/${changeNumber}/conflicts`
+}
+
+export const getBinderChangeConflicts = async (org: string,
+    binder: string,
+    changeNumber: string, options?: Parameters<typeof customFetch>[1]): Promise<getBinderChangeConflictsResponse> => {
+
+  return customFetch<getBinderChangeConflictsResponse>(getGetBinderChangeConflictsUrl(org,binder,changeNumber),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type resolveBinderChangeConflictsResponse200 = {
+  data: ResolveBinderChangeConflicts200
+  status: 200
+}
+
+export type resolveBinderChangeConflictsResponseSuccess = (resolveBinderChangeConflictsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type resolveBinderChangeConflictsResponse = (resolveBinderChangeConflictsResponseSuccess)
+
+export const getResolveBinderChangeConflictsUrl = (org: string,
+    binder: string,
+    changeNumber: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/changes/${changeNumber}/conflicts`
+}
+
+export const resolveBinderChangeConflicts = async (org: string,
+    binder: string,
+    changeNumber: string,
+    resolveBinderChangeConflictsBody: ResolveBinderChangeConflictsBody, options?: Parameters<typeof customFetch>[1]): Promise<resolveBinderChangeConflictsResponse> => {
+
+  return customFetch<resolveBinderChangeConflictsResponse>(getResolveBinderChangeConflictsUrl(org,binder,changeNumber),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(resolveBinderChangeConflictsBody)
   }
 );}
 

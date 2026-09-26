@@ -155,5 +155,7 @@ export function buildBinderUrl(params: {
  */
 export function changeViewFromSearch(search: string): DocumentChangeView {
   const raw = new URLSearchParams(search).get("view");
-  return raw === "preview" || raw === "compare" ? raw : "discussion";
+  return raw === "preview" || raw === "compare" || raw === "conflicts"
+    ? raw
+    : "discussion";
 }

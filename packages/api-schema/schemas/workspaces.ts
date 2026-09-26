@@ -463,6 +463,15 @@ export const WorkspaceChangeDetailPayloadSchema = z.object({
    */
   isBehind: z.boolean(),
   /**
+   * Behind, and not mergeable: documents both sides changed since the change
+   * began, which "Bring up to date" cannot merge on its own. The page offers
+   * the conflict resolver instead.
+   *
+   * Gitea's `mergeable`, which it recomputes after every push — so for a few
+   * seconds after the binder moves this can still read false.
+   */
+  hasConflicts: z.boolean(),
+  /**
    * Whether publishing is held while a discussion thread is open.
    *
    * Gitea has no equivalent, so the BFF enforces it at publish time — the page
@@ -1282,3 +1291,63 @@ export const ProposedDraftPayloadSchema = z.object({
   changeNumber: z.number(),
 });
 export type ProposedDraftPayload = z.infer<typeof ProposedDraftPayloadSchema>;
+
+/** One side of a conflicting file: where it is, how big, and its bytes. */
+export const ConflictSideSchema = z.object({
+  path: z.string(),
+  size: z.number(),
+  /** Base64. Null past the size a page is sent inline; download it instead. */
+  content: z.string().nullable(),
+});
+
+export const ConflictingFileSchema = z.object({
+  /** The document's identity, or its path when it has none. */
+  key: z.string(),
+  /** Where the resolved file goes. */
+  path: z.string(),
+  /** How the page can show it: rendered, as text, or only as a choice. */
+  kind: z.enum(["editor", "text", "binary"]),
+  /**
+   * The answer when there is one without asking — a document moved on one
+   * side and edited on the other. Null: a person decides.
+   */
+  automatic: z.enum(["ours", "theirs"]).nullable(),
+  /** Where the change began. Null: the file did not exist then. */
+  base: ConflictSideSchema.nullable(),
+  /** The change's version. Null: the change removed it. */
+  ours: ConflictSideSchema.nullable(),
+  /** The version published since. Null: the binder removed it. */
+  theirs: ConflictSideSchema.nullable(),
+});
+export type ConflictingFilePayload = z.infer<typeof ConflictingFileSchema>;
+
+export const ChangeConflictsPayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  changeNumber: z.number(),
+  open: z.boolean(),
+  /** Nothing has been published since the change began. */
+  upToDate: z.boolean(),
+  /** The heads the files were read at; a resolution names them back. */
+  headSha: z.string(),
+  baseSha: z.string(),
+  /** Whether this caller may write to the change's branch. */
+  canResolve: z.boolean(),
+  files: z.array(ConflictingFileSchema),
+});
+export type ChangeConflictsPayload = z.infer<
+  typeof ChangeConflictsPayloadSchema
+>;
+
+export const ConflictResolutionSchema = z.object({
+  key: z.string(),
+  take: z.enum(["ours", "theirs", "none", "content"]),
+  /** With `content`: the resolved file, base64. */
+  base64Content: z.string().optional(),
+});
+
+export const ResolveConflictsBodySchema = z.object({
+  headSha: z.string(),
+  baseSha: z.string(),
+  resolutions: z.array(ConflictResolutionSchema),
+});

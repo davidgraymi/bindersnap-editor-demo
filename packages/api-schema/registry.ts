@@ -72,7 +72,9 @@ import {
   WorkspaceDocumentListPayloadSchema,
   CreatedWorkspaceDocumentPayloadSchema,
   CreatedWorkspacePayloadSchema,
+  ChangeConflictsPayloadSchema,
   NewWorkspaceBodySchema,
+  ResolveConflictsBodySchema,
   WorkspaceListPayloadSchema,
   WorkspaceSummarySchema,
 } from "./schemas/workspaces";
@@ -1639,6 +1641,64 @@ registry.registerPath({
   responses: {
     200: {
       description: "The change's branch now carries the binder's main",
+      content: {
+        "application/json": {
+          schema: z.object({
+            ok: z.boolean(),
+            /** False while Gitea is still recomputing the merge base. */
+            caughtUp: z.boolean(),
+          }),
+        },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/binders/{org}/{binder}/changes/{changeNumber}/conflicts",
+  operationId: "getBinderChangeConflicts",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({
+      org: z.string(),
+      binder: z.string(),
+      changeNumber: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description:
+        "Every document the change and the binder both changed, read where the change began, on the change, and as published since",
+      content: {
+        "application/json": { schema: ChangeConflictsPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/changes/{changeNumber}/conflicts",
+  operationId: "resolveBinderChangeConflicts",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({
+      org: z.string(),
+      binder: z.string(),
+      changeNumber: z.string(),
+    }),
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: ResolveConflictsBodySchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description:
+        "The conflicts are resolved as decided and the change is up to date",
       content: {
         "application/json": {
           schema: z.object({
