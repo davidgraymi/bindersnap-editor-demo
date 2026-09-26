@@ -1298,7 +1298,9 @@ input {
   border: 1px solid var(--bs-rule);
   border-radius: var(--brand-radius-xl);
   overflow: hidden;
-  min-height: 540px;
+  /* No floor of its own: the card ends where the document does, as a file
+     view on GitLab does. The body keeps a short one so a one-line document
+     still reads as a page, and a PDF's frame sets its own height. */
 }
 
 /* Slim chrome on a white sheet: the file it is, and the way to keep it. */
