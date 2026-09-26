@@ -116,13 +116,7 @@ export function OrganizationSetupPage({
             {/* What they type is not what Gitea can be given, so show the
                 address they are actually choosing before they commit to it. */}
             {slug ? (
-              <p
-                className="app-field-hint"
-                style={{
-                  color: "var(--bs-text-muted)",
-                  fontSize: "var(--brand-text-sm)",
-                }}
-              >
+              <p className="bs-field-hint">
                 Your workspace address will be <code>{slug}</code>
               </p>
             ) : null}
