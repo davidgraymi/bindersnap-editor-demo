@@ -3167,6 +3167,10 @@
                                 "branchName": {
                                   "type": "string"
                                 },
+                                "documentSlugPath": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
                                 "submittedBy": {
                                   "type": "string"
                                 },
@@ -3330,6 +3334,7 @@
                                 "title",
                                 "body",
                                 "branchName",
+                                "documentSlugPath",
                                 "submittedBy",
                                 "submittedAt",
                                 "closedAt",

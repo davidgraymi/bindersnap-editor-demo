@@ -211,12 +211,11 @@ function classify(
  * rather than a document that does not exist.
  */
 function describeChangeSubject(
-  document: HomeOpenDocument,
-  change: HomeOpenDocument["pendingPRs"][number],
+  binder: string,
+  slugPath: string | null | undefined,
 ): string {
-  const slugPath = change.documentSlugPath;
-  if (slugPath === null || slugPath === "") {
-    return formatDocumentName(document.repo.name);
+  if (slugPath === null || slugPath === undefined || slugPath === "") {
+    return formatDocumentName(binder);
   }
 
   const leaf = slugPath.split("/").pop() ?? slugPath;
@@ -252,7 +251,10 @@ export function buildOpenChangeRows(
         // control policy. The change carries which document it is about; the
         // binder's name is the fallback for a change that is about none —
         // a sign-off rules change, for instance.
-        documentName: describeChangeSubject(document, change),
+        documentName: describeChangeSubject(
+          document.repo.name,
+          change.documentSlugPath,
+        ),
         number: change.number,
         title: parseChangeTitle(change.body, change.user?.login ?? ""),
         kind,
@@ -384,7 +386,12 @@ export function buildDecidedChangeRows(
         key: `${document.owner}/${document.repo}#${change.number}`,
         owner: document.owner,
         repo: document.repo,
-        documentName: formatDocumentName(document.repo),
+        // The document, as on an open row — the binder only when the change
+        // was about none of its documents.
+        documentName: describeChangeSubject(
+          document.repo,
+          change.documentSlugPath,
+        ),
         number: change.number,
         title: parseChangeTitle(change.body, change.submittedBy),
         outcome: change.outcome === "published" ? "published" : "closed",

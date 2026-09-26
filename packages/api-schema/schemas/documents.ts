@@ -399,6 +399,12 @@ export const ClosedChangeSchema = z.object({
   body: z.string(),
   /** The branch the submitted file lived on. Empty once Gitea prunes it. */
   branchName: z.string(),
+  /**
+   * Which document this change was about, read from its upload branch as an
+   * open change's is. Null for a change about no document — a sign-off rules
+   * change — so a row names the binder there rather than a file.
+   */
+  documentSlugPath: z.string().nullable(),
   submittedBy: z.string(),
   submittedAt: z.string(),
   closedAt: z.string().nullable(),
