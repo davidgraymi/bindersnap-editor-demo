@@ -851,7 +851,6 @@ export function BinderShell({
           onViewChange={(next) => openChangeNumber(openChange, next)}
           onBackToChanges={() => goTo("changes")}
           onOpenSignOffRules={() => goTo("sign-off")}
-          onOpenDocument={openDocument}
           /* The document's own address, on this change's branch — the binder
              at another ref rather than a panel inside the change. */
           /* **The branch, not the change.** A file lives on a branch, which

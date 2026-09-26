@@ -8,8 +8,8 @@ import {
   updateBinderChange,
 } from "../api";
 import { followInApp } from "../appLink";
-import { describeChangedDocument, describeMove } from "../binderChange";
-import { buildDocumentUrl, downloadFileName } from "../binderDocument";
+import { describeChangedDocument } from "../binderChange";
+import { buildDocumentUrl } from "../binderDocument";
 import { buildBinderUrl } from "../binderShell";
 import { buildChangedDocumentRows } from "../changedDocuments";
 import type { ChangeScope } from "../changeScope";
@@ -43,7 +43,6 @@ interface BinderChangePageProps {
   view: DocumentChangeView;
   onViewChange: (view: DocumentChangeView) => void;
   onBackToChanges: () => void;
-  onOpenDocument: (slugPath: string) => void;
   /**
    * Open a document at its own address, on this change's branch.
    *
@@ -79,7 +78,6 @@ export function BinderChangePage({
   view,
   onViewChange,
   onBackToChanges,
-  onOpenDocument,
   onChanged,
   onOpenSignOffRules,
   onOpenOnBranch,
@@ -94,7 +92,6 @@ export function BinderChangePage({
   const [viewing, setViewing] = useState<string | null>(null);
   const [catchingUp, setCatchingUp] = useState(false);
   const [catchUpError, setCatchUpError] = useState<string | null>(null);
-  const [downloadingRef, setDownloadingRef] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -209,51 +206,23 @@ export function BinderChangePage({
     }
   };
 
-  const handleDownload = async (gitRef: string, loaded?: Blob | null) => {
-    if (!shown) return;
-    setDownloadingRef(gitRef);
-    try {
-      const blob =
-        loaded ??
-        // By identity, for the same reason the scope is: a download of the
-        // version this change replaces is a read at a ref that does not know
-        // the new name.
-        (await downloadBinderDocument(
-          org,
-          binder,
-          shown.path || shown.slugPath,
-          gitRef,
-        ));
-      triggerBrowserDownload(blob, downloadFileName(shown));
-    } finally {
-      setDownloadingRef(null);
-    }
-  };
-
   /**
    * Download one document out of the comparison, at whichever ref it asks for.
    *
-   * Separate from {@link handleDownload} because that one is about the
-   * document on screen, and on the comparison screen every document is on
-   * screen. By identity for the same reason: a download of the version being
-   * replaced is a read at a ref that has never heard of a new name.
+   * By identity: a download of the version being replaced is a read at a ref
+   * that has never heard of a new name.
    */
   const handleRowDownload = async (
     row: { path: string; slugPath: string; fileName: string },
     gitRef: string,
   ) => {
-    setDownloadingRef(gitRef);
-    try {
-      const blob = await downloadBinderDocument(
-        org,
-        binder,
-        row.path || row.slugPath,
-        gitRef,
-      );
-      triggerBrowserDownload(blob, row.fileName);
-    } finally {
-      setDownloadingRef(null);
-    }
+    const blob = await downloadBinderDocument(
+      org,
+      binder,
+      row.path || row.slugPath,
+      gitRef,
+    );
+    triggerBrowserDownload(blob, row.fileName);
   };
 
   if (error) {
@@ -450,7 +419,7 @@ export function BinderChangePage({
         }
         banner={behind}
         documentPicker={
-          documents.length > 1 ? (
+          documents.length > 0 ? (
             /* **What this change does, document by document.** A change is the
                unit of approval and routinely touches several, and this panel
                was a picker rather than an answer: it showed the raw filename,
@@ -462,7 +431,9 @@ export function BinderChangePage({
                 <h2 className="bs-panel-bar-title">What this change does</h2>
                 <span className="bs-panel-bar-spacer" />
                 <span className="binder-count">
-                  {documents.length} documents
+                  {documents.length === 1
+                    ? "1 document"
+                    : `${documents.length} documents`}
                 </span>
               </div>
               <ul className="bs-row-list">
@@ -531,22 +502,7 @@ export function BinderChangePage({
         blockOnUnresolvedThreads={detail.blockOnUnresolvedThreads}
         canManageAssignments={detail.canManage}
         nextVersion={shown?.nextVersion ?? 1}
-        /* **How many documents this change touches**, which decides whether
-           the header may claim a version. "becomes v2 when published" sits
-           under the change's own title, so with several documents it is a
-           sentence about the change carrying a fact about whichever row
-           happened to be selected — and it changed as you clicked between
-           them. With more than one, the versions belong on the rows that own
-           them and the header says nothing about any. */
         documentCount={documents.length}
-        /* A rename is a change even when not a word of the document changed,
-           and the comparison cannot show it. */
-        documentMove={shown ? describeMove(shown) : null}
-        onOpenOnBranch={
-          shown && detail.change.branchName
-            ? () => onOpenOnBranch(shown.slugPath, detail.change.branchName)
-            : null
-        }
         // A change that touches no document is a change to this binder's
         // sign-off rules — the one kind that goes through review and versions
         // nothing. Saying so replaces the version wording and the file panel,
@@ -563,25 +519,10 @@ export function BinderChangePage({
         documentName={
           shown ? formatDocumentName(shown.name) : `this binder's rules`
         }
-        fileName={shown ? downloadFileName(shown) : null}
-        downloading={downloadingRef !== null}
-        onDownload={(gitRef, loaded) => void handleDownload(gitRef, loaded)}
         onChanged={load}
         onViewChange={onViewChange}
         onBackToList={onBackToChanges}
       />
-
-      {shown && documents.length === 1 ? (
-        <p className="change-open-document">
-          <button
-            className="bs-linkbtn"
-            type="button"
-            onClick={() => onOpenDocument(shown.slugPath)}
-          >
-            Open {formatDocumentName(shown.name)} in the binder →
-          </button>
-        </p>
-      ) : null}
     </div>
   );
 }
