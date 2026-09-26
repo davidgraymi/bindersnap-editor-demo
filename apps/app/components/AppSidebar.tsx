@@ -1,4 +1,5 @@
 import {
+  Building2,
   CreditCard,
   FileText,
   FilePen,
@@ -17,6 +18,7 @@ import { followInApp } from "../appLink";
 import { routeToPath, type AppRoute, type OrganizationTab } from "../routes";
 import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
 import { useCollapsedSidebar } from "../useCollapsedSidebar";
+import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
 
 /**
  * The map of the product, always on screen.
@@ -26,10 +28,10 @@ import { useCollapsedSidebar } from "../useCollapsedSidebar";
  * own page — was reachable only by first entering a binder or by typing a URL,
  * so a new reader had no way to learn what the product contained.
  *
- * The grouping is the teaching, and it is worth more than the links. The work
- * you do, then the things you manage, then the settings you rarely touch. A
- * flat list of eight would answer "where is billing" no better than the top bar
- * did.
+ * The grouping is the teaching, and it is worth more than the links. **Each
+ * group is a scope, named, outermost first**: your work across every
+ * organization, then this organization's binders, people and billing, then
+ * the binder you are in. A reader always knows whose page an entry opens.
  *
  * **The binder you are in is a section of this, and it was a tab bar** (D1,
  * the customer's call). A binder is still a place — one set of rules, one set
@@ -171,6 +173,7 @@ export function AppSidebar({
   // The org-scoped entries have nowhere to point until we know which
   // organization is on screen. Rendered muted and inert rather than hidden:
   // a map that changes shape as you walk around it is not a map.
+  const orgName = useOrganizationDisplayName(org ?? "");
   const orgRoute = (tab?: OrganizationTab): AppRoute | null =>
     org === null
       ? null
@@ -198,18 +201,6 @@ export function AppSidebar({
       icon: FileText,
       route: { kind: "documents" },
       isActive: (r) => r.kind === "documents",
-    },
-    {
-      key: "binders",
-      label: "Binders",
-      icon: Library,
-      route: orgRoute(),
-      // A binder and a document inside it are both "in" the binders section —
-      // you got there through it, and the sidebar should not lose your place.
-      isActive: (r) =>
-        (r.kind === "organization" && !isOrganizationPeople(r)) ||
-        r.kind === "binder" ||
-        r.kind === "binderDocument",
     },
   ];
 
@@ -265,7 +256,26 @@ export function AppSidebar({
       ]
     : [];
 
-  const manage: Entry[] = [
+  /**
+   * **The organization's own entries, under its name.** They were split
+   * across "Manage" and "Settings" headings between the binder and the foot,
+   * with nothing saying which organization they belonged to — beside Home and
+   * Change requests, which span every organization you are in. Now each scope
+   * is a labelled group: yours, this organization's, this binder's.
+   */
+  const organization: Entry[] = [
+    {
+      key: "binders",
+      label: "Binders",
+      icon: Library,
+      route: orgRoute(),
+      // A binder and a document inside it are both "in" the binders section —
+      // you got there through it, and the sidebar should not lose your place.
+      isActive: (r) =>
+        (r.kind === "organization" && !isOrganizationPeople(r)) ||
+        r.kind === "binder" ||
+        r.kind === "binderDocument",
+    },
     {
       key: "people",
       label: "People & access",
@@ -273,22 +283,6 @@ export function AppSidebar({
       route: orgRoute("people"),
       isActive: isOrganizationPeople,
     },
-  ];
-
-  /**
-   * **One destination per entry.**
-   *
-   * "Organization" pointed at the organization's page — which is the binder
-   * list, which "Binders" above it already opens, which the org button in the
-   * top bar also opens. Three entries, one destination, and a reader learning
-   * the product from the map would conclude two of them were broken.
-   *
-   * It is gone rather than repointed: "Binders" is the organization's home
-   * and "People & access" under Manage is the rest of it, so there was nothing
-   * left for a third entry to mean. Billing is the only thing under Settings
-   * that is genuinely a setting.
-   */
-  const settings: Entry[] = [
     {
       key: "billing",
       label: "Billing",
@@ -349,7 +343,23 @@ export function AppSidebar({
       className={`app-sidebar${collapsed ? " app-sidebar--collapsed" : ""}`}
     >
       <nav className="app-sidebar-section" aria-label="Your work">
+        <div className="app-sidebar-label">Your work</div>
         {work.map(renderEntry)}
+      </nav>
+
+      {/* The organization's, under its own name — outermost to innermost:
+          your work, this organization, the binder you are in. */}
+      <nav
+        className="app-sidebar-section"
+        aria-label={orgName ? orgName : "Organization"}
+      >
+        <div className="app-sidebar-label app-sidebar-label--scope">
+          <Building2 size={12} strokeWidth={2} aria-hidden="true" />
+          <span className="app-sidebar-label-text">
+            {orgName || "Organization"}
+          </span>
+        </div>
+        {organization.map(renderEntry)}
       </nav>
 
       {binder ? (
@@ -388,16 +398,6 @@ export function AppSidebar({
           {binderEntries.map(renderEntry)}
         </nav>
       ) : null}
-
-      <nav className="app-sidebar-section" aria-label="Manage">
-        <div className="app-sidebar-label">Manage</div>
-        {manage.map(renderEntry)}
-      </nav>
-
-      <nav className="app-sidebar-section" aria-label="Settings">
-        <div className="app-sidebar-label">Settings</div>
-        {settings.map(renderEntry)}
-      </nav>
 
       <div className="app-sidebar-spacer" />
 
