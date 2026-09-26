@@ -199,7 +199,11 @@ test("a delinquent organization keeps its record and loses its controls", async 
   );
   expect(new URL(page.url()).pathname).toBe(`/${org}/${binder}`);
   // The empty state must not instruct an action whose control is gone.
-  await expect(page.getByText("Nothing filed here yet.")).toBeVisible();
+  // A fresh binder's listing is read from Gitea, which can take longer than
+  // the 5s default on a loaded runner — CI caught it still on its skeleton.
+  await expect(page.getByText("Nothing filed here yet.")).toBeVisible({
+    timeout: 20_000,
+  });
   await expect(page.getByText("Add a document and it joins")).toHaveCount(0);
 
   // The API half of the same promise, asserted directly rather than through

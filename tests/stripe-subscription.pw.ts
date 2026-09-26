@@ -953,21 +953,26 @@ test.describe("Stripe subscription lifecycle", () => {
       ).toBeVisible({ timeout: 30_000 });
 
       // Subscribing is now a thing the customer chooses to do, so go and do it.
+      // A trial: the page says so, and offers the one thing to do about it.
       await page.goto("/billing", { waitUntil: "domcontentloaded" });
+      await expect(page.getByRole("region", { name: "Plan" })).toContainText(
+        "Trial",
+        { timeout: 20_000 },
+      );
       await expect(
-        page.getByRole("button", { name: "Subscribe now" }),
+        page.getByRole("button", { name: "Subscribe", exact: true }),
       ).toBeVisible({ timeout: 20_000 });
 
-      await page.getByRole("button", { name: "Subscribe now" }).click();
+      await page
+        .getByRole("button", { name: "Subscribe", exact: true })
+        .click();
       await completeHostedStripeCheckout(page, credentials.email);
 
       await expect(page).toHaveURL(/\/billing\?checkout=success/, {
         timeout: 60_000,
       });
       await expect(
-        page.getByRole("heading", {
-          name: "Payment received — activating your workspace…",
-        }),
+        page.getByRole("status").filter({ hasText: "Payment received" }),
       ).toBeVisible({ timeout: 20_000 });
 
       await expect(page).toHaveURL(/\/$/, { timeout: 30_000 });

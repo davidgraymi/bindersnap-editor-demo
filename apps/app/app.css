@@ -8219,6 +8219,31 @@ a.bs-row:focus-visible {
   width: 8.5rem;
 }
 
+/* Billing: one panel saying where the organization stands, at the measure
+   the other settings pages keep. */
+.billing-page > .bs-panel,
+.billing-page > .bs-note {
+  max-width: 860px;
+}
+
+.billing-page .bs-panel-bar .bs-status {
+  margin-left: auto;
+}
+
+.billing-detail {
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-sm);
+  white-space: normal;
+}
+
+.billing-retry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--brand-space-1-5);
+}
+
 .bs-settings-value {
   color: var(--bs-text-primary);
   font-weight: var(--brand-weight-medium);
