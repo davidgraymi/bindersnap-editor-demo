@@ -983,8 +983,7 @@ input {
    under a row of tabs without shouting over them. Margins stay with each page,
    because how far a heading is from what follows it is a property of what
    follows it. */
-.doc-header-title,
-.home-greeting {
+.doc-header-title {
   font-family: var(--brand-font-serif);
   font-size: 26px;
   font-weight: var(--brand-weight-semibold);
@@ -1579,11 +1578,6 @@ input {
 }
 
 /* Something is waiting on a decision: the rail's one coral element. */
-.bs-section-count.doc-rail-count--open {
-  background: var(--bs-coral-dim);
-  color: var(--bs-coral-text);
-}
-
 .doc-rail-title {
   font-size: var(--brand-text-ui-xs);
   font-weight: var(--brand-weight-medium);
@@ -5782,108 +5776,16 @@ a.bs-knot {
    HOME — the reader's queue of change requests
    ═════════════════════════════════════════════════════════════ */
 
-.home-greeting {
-  margin: 0 0 var(--brand-space-1);
-}
-
-.home-subtitle {
-  margin: 0 0 var(--brand-space-8);
-  font-size: var(--brand-text-sm);
-  color: var(--bs-text-muted);
-}
-
-.home-section {
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-xl);
-  overflow: hidden;
-  margin-bottom: var(--brand-space-6);
-}
-
-.home-section:last-child {
-  margin-bottom: 0;
-}
-
-.home-section-count {
-  font-variant-numeric: tabular-nums;
-  font-size: var(--brand-text-label);
-  background: var(--bs-coral-dim);
-  color: var(--bs-coral-text);
-  border-radius: var(--brand-radius-full);
-  padding: 1px var(--brand-space-2);
-}
-
 .home-section-link {
   font-size: var(--brand-text-ui-md);
   font-weight: var(--brand-weight-medium);
   color: var(--bs-coral-text);
-  background: transparent;
-  border: none;
-  padding: 0;
-  cursor: pointer;
+  text-decoration: none;
 }
 
 .home-section-link:hover {
   color: var(--brand-coral);
-}
-
-.home-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: var(--brand-space-4) var(--brand-space-5);
-  border-top: 1px solid var(--bs-rule-warm);
-  text-align: left;
-  cursor: pointer;
-  background: transparent;
-}
-
-.home-row:hover {
-  background: var(--bs-surface-2);
-}
-
-.home-row:focus-visible {
-  outline: 2px solid var(--brand-coral);
-  outline-offset: -2px;
-}
-
-.home-row--skeleton {
-  cursor: default;
-}
-
-.home-row-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--brand-radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.home-row-icon--quiet {
-  background: var(--bs-surface-2);
-  color: var(--bs-text-muted);
-}
-
-.home-row-action {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--brand-space-1-5);
-  background: var(--bs-surface-1);
-  color: var(--bs-text-primary);
-  border: 1.5px solid var(--bs-rule);
-  border-radius: var(--brand-radius-md);
-  padding: 8px 14px;
-  font-family: var(--brand-font-sans);
-  font-size: var(--brand-text-ui-md);
-  font-weight: var(--brand-weight-semibold);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.home-row-action:hover {
-  border-color: var(--bs-text-faint);
+  text-decoration: underline;
 }
 
 .home-empty {
@@ -5900,20 +5802,6 @@ a.bs-knot {
   font-size: var(--brand-text-ui-md);
   color: var(--bs-text-muted);
   max-width: 52ch;
-}
-
-@media (max-width: 640px) {
-  .home-row {
-    flex-wrap: wrap;
-  }
-
-  .home-row-icon {
-    order: 0;
-  }
-
-  .home-row-action {
-    order: 2;
-  }
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -7679,6 +7567,14 @@ a.cmp-file-act {
   color: var(--bs-text-muted);
   font-size: var(--brand-text-ui-xs);
   font-weight: var(--brand-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A count that is somebody's to-do — waiting on you, waiting on a decision —
+   in the brand colour, so it is the one the eye goes to. */
+.bs-section-count--attention {
+  background: var(--bs-coral-dim);
+  color: var(--bs-coral-text);
 }
 
 .bs-section-spacer {

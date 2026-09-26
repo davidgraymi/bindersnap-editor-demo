@@ -111,7 +111,7 @@ export function ReviewQueuePage({
           <p>Nothing is in flight right now.</p>
           <button
             type="button"
-            className="home-row-action"
+            className="bs-btn bs-btn-secondary bs-btn--sm"
             onClick={onBrowseDocuments}
           >
             Browse documents

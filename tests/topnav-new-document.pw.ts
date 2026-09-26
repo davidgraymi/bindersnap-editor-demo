@@ -13,7 +13,7 @@ test.describe("topnav new policy button", () => {
     await signInAsAlice(page);
     await page.goto("/");
 
-    await expect(page.locator(".home-greeting")).toBeVisible();
+    await expect(page.locator(".home-page .bs-title")).toBeVisible();
 
     await openTopnavNewDocumentModal(page);
 
@@ -25,6 +25,6 @@ test.describe("topnav new policy button", () => {
     await page.goto("/inbox");
 
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.locator(".home-greeting")).toBeVisible();
+    await expect(page.locator(".home-page .bs-title")).toBeVisible();
   });
 });

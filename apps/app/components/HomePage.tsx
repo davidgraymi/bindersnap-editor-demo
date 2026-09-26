@@ -12,9 +12,11 @@ import {
   type HomeChangeRow,
   type HomeDecidedRow,
 } from "../homeChanges";
+import { followInApp } from "../appLink";
 import { buildBinderUrl } from "../binderShell";
+import { routeToPath } from "../routes";
 import { ChangeRowView } from "./ChangeRow";
-import { SkeletonGroup, SkeletonLine } from "./Skeleton";
+import { SkeletonPanel } from "./Skeleton";
 
 interface HomePageProps {
   currentUsername: string;
@@ -96,20 +98,36 @@ export function HomePage({
   const hasAnything =
     waitingOnYou.length > 0 || submissions.length > 0 || decided.length > 0;
 
+  // "Browse documents" is a place, so it is a link: it opens in a new tab and
+  // shows where it goes, which a button that moved the address bar did not.
+  const browseLink = (
+    <a
+      className="home-section-link"
+      href={routeToPath({ kind: "documents" })}
+      onClick={(event) => followInApp(event, onBrowseDocuments)}
+    >
+      Browse documents →
+    </a>
+  );
+
   return (
-    <div className="home-page">
-      <h1 className="home-greeting">
-        {getGreeting()}, {getGreetingName(currentUsername, currentUserFullName)}
-        .
-      </h1>
-      <p className="home-subtitle">
-        {isLoading
-          ? "Gathering the change requests you are part of."
-          : describeWaitingCount(waitingOnYou.length)}
-      </p>
+    <div className="docw-page home-page">
+      <div className="bs-pagehead">
+        <div className="bs-pagehead-body">
+          <h1 className="bs-title">
+            {getGreeting()},{" "}
+            {getGreetingName(currentUsername, currentUserFullName)}.
+          </h1>
+          <p className="bs-subtitle">
+            {isLoading
+              ? "Gathering the change requests you are part of."
+              : describeWaitingCount(waitingOnYou.length)}
+          </p>
+        </div>
+      </div>
 
       {error ? (
-        <section className="bs-panel home-section">
+        <section className="bs-panel">
           <div className="bs-panel-bar">
             <h2 className="bs-panel-bar-title">Something went wrong</h2>
           </div>
@@ -117,7 +135,7 @@ export function HomePage({
             <p>{error}</p>
             <button
               type="button"
-              className="home-row-action"
+              className="bs-btn bs-btn-secondary bs-btn--sm"
               onClick={() => void load()}
             >
               Try again
@@ -125,24 +143,18 @@ export function HomePage({
           </div>
         </section>
       ) : isLoading ? (
-        <section className="bs-panel home-section">
-          <div className="bs-panel-bar">
-            <h2 className="bs-panel-bar-title">Waiting on you</h2>
-          </div>
-          <HomeSkeletonRows count={2} />
-        </section>
+        <SkeletonPanel
+          label="Loading your change requests"
+          rows={3}
+          bar
+          right
+        />
       ) : !hasAnything ? (
-        <section className="bs-panel home-section">
+        <section className="bs-panel">
           <div className="bs-panel-bar">
             <h2 className="bs-panel-bar-title">Waiting on you</h2>
             <span className="bs-panel-bar-spacer" />
-            <button
-              type="button"
-              className="home-section-link"
-              onClick={onBrowseDocuments}
-            >
-              Browse documents →
-            </button>
+            {browseLink}
           </div>
           <div className="home-empty">
             <p>
@@ -151,7 +163,7 @@ export function HomePage({
             </p>
             <button
               type="button"
-              className="home-row-action"
+              className="bs-btn bs-btn-secondary bs-btn--sm"
               onClick={onNewDocument}
             >
               Add a document
@@ -161,10 +173,10 @@ export function HomePage({
       ) : (
         <>
           {waitingOnYou.length > 0 ? (
-            <section className="bs-panel home-section">
+            <section className="bs-panel">
               <div className="bs-panel-bar">
                 <h2 className="bs-panel-bar-title">Waiting on you</h2>
-                <span className="home-section-count">
+                <span className="bs-section-count bs-section-count--attention">
                   {waitingOnYou.length}
                 </span>
               </div>
@@ -181,9 +193,12 @@ export function HomePage({
           ) : null}
 
           {submissions.length > 0 ? (
-            <section className="bs-panel home-section">
+            <section className="bs-panel">
               <div className="bs-panel-bar">
                 <h2 className="bs-panel-bar-title">Your submissions</h2>
+                {/* Counted like the section above it, in the quiet colour:
+                    these are waiting on somebody else, not on you. */}
+                <span className="bs-section-count">{submissions.length}</span>
               </div>
               <ul className="bs-row-list">
                 {submissions.map((row) => (
@@ -197,17 +212,11 @@ export function HomePage({
             </section>
           ) : null}
 
-          <section className="bs-panel home-section">
+          <section className="bs-panel">
             <div className="bs-panel-bar">
               <h2 className="bs-panel-bar-title">Recently decided</h2>
               <span className="bs-panel-bar-spacer" />
-              <button
-                type="button"
-                className="home-section-link"
-                onClick={onBrowseDocuments}
-              >
-                Browse documents →
-              </button>
+              {browseLink}
             </div>
             {decided.length === 0 ? (
               <div className="home-empty">
@@ -228,22 +237,6 @@ export function HomePage({
         </>
       )}
     </div>
-  );
-}
-
-function HomeSkeletonRows({ count }: { count: number }) {
-  return (
-    <SkeletonGroup label="Loading your change requests">
-      {Array.from({ length: count }, (_, index) => (
-        <div className="home-row home-row--skeleton" key={index}>
-          <div className="home-row-icon home-row-icon--quiet" />
-          <span className="bs-skeleton-lines">
-            <SkeletonLine width="medium" />
-            <SkeletonLine width="short" />
-          </span>
-        </div>
-      ))}
-    </SkeletonGroup>
   );
 }
 
