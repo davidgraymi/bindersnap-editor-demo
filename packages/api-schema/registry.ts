@@ -1852,6 +1852,12 @@ registry.registerPath({
   path: "/api/app/billing/status",
   operationId: "getBillingStatus",
   tags: ["billing"],
+  request: {
+    query: z.object({
+      /** Which of this person's organizations; their oldest when omitted. */
+      organization: z.string().optional(),
+    }),
+  },
   responses: {
     200: {
       description: "Billing status",

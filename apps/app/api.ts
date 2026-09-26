@@ -1591,9 +1591,17 @@ export async function downloadBinderDocument(
 
 // Billing functions
 
-export async function fetchBillingStatus(): Promise<BillingStatusPayload> {
+/**
+ * One organization's billing. Billing is per organization, so every call
+ * names the one it is about; omitting it asks for the session's oldest.
+ */
+export async function fetchBillingStatus(
+  organization?: string | null,
+): Promise<BillingStatusPayload> {
   try {
-    const response = await BillingClient.getBillingStatus();
+    const response = await BillingClient.getBillingStatus(
+      organization ? { organization } : undefined,
+    );
     return response.data;
   } catch (error) {
     // 402 from the billing endpoint contains billing data (e.g. past_due status),
@@ -1609,18 +1617,23 @@ export async function fetchBillingStatus(): Promise<BillingStatusPayload> {
   }
 }
 
-export async function createCheckoutSession(): Promise<{ url: string }> {
+export async function createCheckoutSession(
+  organization?: string | null,
+): Promise<{ url: string }> {
   const response = await BillingClient.createBillingCheckout({
     idempotencyKey: crypto.randomUUID(),
+    ...(organization ? { organization } : {}),
   });
   return response.data;
 }
 
 export async function createPortalSession(
+  organization?: string | null,
   intent?: "cancel",
 ): Promise<{ url: string }> {
   const response = await BillingClient.createBillingPortal({
     idempotencyKey: crypto.randomUUID(),
+    ...(organization ? { organization } : {}),
     ...(intent ? { intent } : {}),
   });
   return response.data;

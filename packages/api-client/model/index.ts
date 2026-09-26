@@ -158,6 +158,7 @@ export * from './getBillingStatus200Override.ts';
 export * from './getBillingStatus200OverrideAccess.ts';
 export * from './getBillingStatus200OverrideMode.ts';
 export * from './getBillingStatus200Plan.ts';
+export * from './getBillingStatusParams.ts';
 export * from './getBinder200.ts';
 export * from './getBinder200Workspace.ts';
 export * from './getBinderArchive200.ts';

@@ -79,6 +79,12 @@ export function BillingPage({
   const [pollingFailed, setPollingFailed] = useState(false);
   const [isRetryingBillingStatus, setIsRetryingBillingStatus] = useState(false);
   const isMounted = useRef(true);
+  // Polling asks after the organization the checkout was for, which is the
+  // one this page is about. A ref, so a name arriving late does not restart it.
+  const pollOrganization = useRef(organization);
+  pollOrganization.current = organization;
+  const fetchThisOrganization = () =>
+    fetchBillingStatus(pollOrganization.current);
 
   useEffect(() => {
     isMounted.current = true;
@@ -112,7 +118,7 @@ export function BillingPage({
         }
 
         try {
-          const billing = await fetchBillingStatus();
+          const billing = await fetchThisOrganization();
           if (billing.status === "active" || billing.status === "trialing") {
             if (isMounted.current) {
               setIsPolling(false);
@@ -130,7 +136,7 @@ export function BillingPage({
         setPollingFailed(true);
 
         void runBackgroundPoll(
-          fetchBillingStatus,
+          fetchThisOrganization,
           () => {
             if (isMounted.current) {
               onSubscriptionConfirmed();

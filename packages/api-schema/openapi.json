@@ -11912,6 +11912,16 @@
         "tags": [
           "billing"
         ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "organization",
+            "in": "query"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Billing status",
@@ -12073,6 +12083,9 @@
                   "idempotencyKey": {
                     "type": "string"
                   },
+                  "organization": {
+                    "type": "string"
+                  },
                   "intent": {
                     "type": "string",
                     "enum": [
@@ -12123,6 +12136,9 @@
                 "type": "object",
                 "properties": {
                   "idempotencyKey": {
+                    "type": "string"
+                  },
+                  "organization": {
                     "type": "string"
                   },
                   "intent": {

@@ -968,7 +968,8 @@ test.describe("Stripe subscription lifecycle", () => {
         .click();
       await completeHostedStripeCheckout(page, credentials.email);
 
-      await expect(page).toHaveURL(/\/billing\?checkout=success/, {
+      // Back on the billing page of the organization that was billed.
+      await expect(page).toHaveURL(/\/billing\/[^/?]+\?checkout=success/, {
         timeout: 60_000,
       });
       await expect(
