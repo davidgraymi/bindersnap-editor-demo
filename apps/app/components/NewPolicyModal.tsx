@@ -1,8 +1,11 @@
+import { BookOpen } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { fetchBinders } from "../api";
 import type { WorkspaceSummary } from "../../../packages/api-schema/schemas/workspaces";
+import { formatDocumentName } from "../documentDisplay";
 import { AddPolicyModal } from "./AddPolicyModal";
+import { SkeletonPanel } from "./Skeleton";
 
 /**
  * "New policy", from the top nav — where no binder is in scope yet.
@@ -23,12 +26,22 @@ import { AddPolicyModal } from "./AddPolicyModal";
  */
 
 interface NewPolicyModalProps {
+  /**
+   * The organization on screen. Its binders are the ones offered: a person in
+   * several organizations was shown every binder they could reach, one row
+   * each, named only by slug.
+   */
+  org?: string | null;
   onClose: () => void;
   /** The binder it was filed into, and the change request it is in. */
   onAdded: (org: string, binder: string, changeNumber: number) => void;
 }
 
-export function NewPolicyModal({ onClose, onAdded }: NewPolicyModalProps) {
+export function NewPolicyModal({
+  org = null,
+  onClose,
+  onAdded,
+}: NewPolicyModalProps) {
   const [binders, setBinders] = useState<WorkspaceSummary[] | null>(null);
   const [chosen, setChosen] = useState<WorkspaceSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -39,8 +52,12 @@ export function NewPolicyModal({ onClose, onAdded }: NewPolicyModalProps) {
     fetchBinders()
       .then((found) => {
         if (cancelled) return;
-        setBinders(found);
-        if (found.length === 1) setChosen(found[0] ?? null);
+        // The organization's own, unless it has none this person can file in —
+        // then everything, rather than a list with nothing on it.
+        const here = org ? found.filter((binder) => binder.owner === org) : [];
+        const offered = here.length > 0 ? here : found;
+        setBinders(offered);
+        if (offered.length === 1) setChosen(offered[0] ?? null);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -54,7 +71,7 @@ export function NewPolicyModal({ onClose, onAdded }: NewPolicyModalProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [org]);
 
   if (chosen) {
     return (
@@ -72,53 +89,81 @@ export function NewPolicyModal({ onClose, onAdded }: NewPolicyModalProps) {
     );
   }
 
+  // The classes every other dialog uses. This one named `modal-backdrop` and
+  // `modal-panel`, which no stylesheet defines, so it opened as loose text
+  // under the page with nothing to click away on.
   return (
-    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+    <div
+      className="upload-modal-backdrop"
+      role="presentation"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
       <div
-        className="modal-panel"
+        className="upload-modal"
         role="dialog"
         aria-modal="true"
-        aria-label="Add a document"
+        aria-labelledby="new-policy-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 className="doc-rail-title">Which binder?</h2>
+        <h2 id="new-policy-title">Which binder?</h2>
 
         {error ? <p className="app-inline-error">{error}</p> : null}
 
         {binders === null && error === null ? (
-          <p className="doc-rail-note">Reading your binders…</p>
+          <SkeletonPanel label="Reading your binders" rows={3} />
         ) : null}
 
         {binders !== null && binders.length === 0 ? (
           // Not an error, and not a dead end worth a stack trace: a person with
           // no binder has not gone wrong, they have not started yet.
-          <p className="doc-rail-note">
+          <p className="bs-field-hint">
             You are not in a binder yet. A document is filed in one, so somebody
             has to create a binder before there is anywhere to put this.
           </p>
         ) : null}
 
         {binders !== null && binders.length > 0 ? (
-          <div className="docs-list">
-            {binders.map((binder) => (
-              <button
-                key={binder.fullName}
-                type="button"
-                className="docs-list-item"
-                onClick={() => setChosen(binder)}
-              >
-                <span className="docs-list-item-body">
-                  <span className="docs-list-item-name">{binder.name}</span>
-                  <span className="docs-list-item-meta">
-                    {binder.description || binder.owner}
-                  </span>
-                </span>
-              </button>
-            ))}
+          <div className="bs-panel new-policy-binders">
+            <ul className="bs-row-list">
+              {binders.map((binder) => (
+                <li key={binder.fullName}>
+                  <button
+                    type="button"
+                    className="bs-row bs-row--tall"
+                    onClick={() => setChosen(binder)}
+                  >
+                    <span className="bs-row-icon">
+                      <BookOpen
+                        size={16}
+                        strokeWidth={1.5}
+                        aria-hidden="true"
+                      />
+                    </span>
+                    <span className="bs-row-body">
+                      <span className="bs-row-name">
+                        {formatDocumentName(binder.name)}
+                      </span>
+                      <span className="bs-row-meta">
+                        {/* Which organization, when the list spans more than
+                            the one on screen. */}
+                        {[
+                          binder.owner === org ? null : binder.owner,
+                          binder.description,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         ) : null}
 
-        <div className="modal-actions">
+        <div className="upload-modal-actions">
           <button
             type="button"
             className="bs-btn bs-btn-secondary"

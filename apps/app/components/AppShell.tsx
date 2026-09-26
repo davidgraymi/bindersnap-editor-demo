@@ -487,6 +487,7 @@ export function AppShell({
 
       {showCreateDocumentModal ? (
         <NewPolicyModal
+          org={sidebarOrg}
           onClose={() => setShowCreateDocumentModal(false)}
           onAdded={(org, binder, changeNumber) => {
             setShowCreateDocumentModal(false);
