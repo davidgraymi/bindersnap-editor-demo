@@ -242,7 +242,12 @@ export function DocumentPreview({
         <header className="doc-preview-toolbar">
           <span className="doc-preview-filename">
             <FileText size={14} strokeWidth={1.5} aria-hidden="true" />
-            {fileName ?? "No file"}
+            <span
+              className="doc-preview-filename-text"
+              title={fileName ?? undefined}
+            >
+              {fileName ?? "No file"}
+            </span>
           </span>
           <span className="doc-preview-toolbar-spacer" />
           {state.status === "text" ||
