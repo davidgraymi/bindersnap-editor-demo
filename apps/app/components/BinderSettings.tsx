@@ -318,7 +318,7 @@ function NameAndDescription({
             Name
           </label>
           <input
-            className="bs-input"
+            className="bs-input bs-input--sm"
             id="binder-settings-name"
             type="text"
             value={name}
@@ -345,7 +345,7 @@ function NameAndDescription({
             <span className="bs-field-optional">optional</span>
           </label>
           <textarea
-            className="bs-input bs-settings-description"
+            className="bs-input bs-input--sm bs-settings-description"
             id="binder-settings-description"
             value={about}
             disabled={saving}

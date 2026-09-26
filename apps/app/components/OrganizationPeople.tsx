@@ -926,7 +926,7 @@ function AddOrgPersonForm({
         <label className="bs-field">
           <span className="bs-field-label">Who</span>
           <input
-            className="bs-input"
+            className="bs-input bs-input--sm"
             value={picked ? picked.fullName || picked.login : query}
             placeholder="Their username"
             disabled={disabled}
@@ -1016,7 +1016,7 @@ function AddOrgPersonForm({
         <div className="org-people-actions">
           <button
             type="submit"
-            className="bs-btn bs-btn-primary"
+            className="bs-btn bs-btn-primary bs-btn--sm"
             disabled={disabled || username === ""}
           >
             {saving ? "Adding…" : `Add to ${org}`}
@@ -1100,7 +1100,7 @@ function NewGroupForm({
         <label className="bs-field">
           <span className="bs-field-label">Name</span>
           <input
-            className="bs-input"
+            className="bs-input bs-input--sm"
             value={name}
             placeholder="Quality Committee"
             disabled={busy || saving}
@@ -1145,7 +1145,7 @@ function NewGroupForm({
         <div className="org-people-actions">
           <button
             type="submit"
-            className="bs-btn bs-btn-primary"
+            className="bs-btn bs-btn-primary bs-btn--sm"
             disabled={busy || saving || handle === "" || taken}
           >
             {saving ? "Creating…" : "Create group"}
