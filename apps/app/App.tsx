@@ -10,6 +10,8 @@ import "./app.css";
 
 import { AppShell } from "./components/AppShell";
 import { BillingPage } from "./components/BillingPage";
+import { PaywallDialog } from "./components/PaywallDialog";
+import { PaywallProvider } from "./paywallContext";
 import { OrganizationSetupPage } from "./components/OrganizationSetupPage";
 import { BindersnapLogoMark } from "./components/BindersnapLogoMark";
 import { LandingPage } from "./components/LandingPage";
@@ -315,6 +317,8 @@ export function App() {
   const [cancelAt, setCancelAt] = useState<number | null>(null);
   const [trialEndsAt, setTrialEndsAt] = useState<number | null>(null);
   const [canManageBilling, setCanManageBilling] = useState(false);
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  const paywall = useMemo(() => ({ open: () => setPaywallOpen(true) }), []);
   const [hasBillingAccount, setHasBillingAccount] = useState(false);
   const [plan, setPlan] = useState<{
     amount: number;
@@ -346,6 +350,9 @@ export function App() {
       setSubscriptionStatus("none");
       setAccessSource(null);
       setHasBillingStatusError(false);
+      // And say what it costs, there and then: the paywall is the answer to
+      // "why did that not save", not a banner discovered later.
+      setPaywallOpen(true);
       setCurrentPeriodEnd(null);
       setCancelAtPeriodEnd(false);
       setCancelAt(null);
@@ -693,53 +700,75 @@ export function App() {
 
   return (
     <ReadOnlyProvider value={readOnly}>
-      <div className="app-root">
-        <ReadOnlyBanner
-          onManageBilling={() => navigateTo({ kind: "billing" })}
-        />
-        <AppShell
-          user={user}
-          route={asShellRoute(route)}
-          billing={
-            <BillingPage
-              subscriptionStatus={subscriptionStatus ?? "loading"}
-              accessSource={accessSource}
-              hasBillingStatusError={hasBillingStatusError}
-              currentPeriodEnd={currentPeriodEnd}
-              cancelAtPeriodEnd={cancelAtPeriodEnd}
-              cancelAt={cancelAt}
-              trialEndsAt={trialEndsAt}
+      <PaywallProvider value={paywall}>
+        <div className="app-root">
+          <ReadOnlyBanner
+            // The same offer every other way in makes.
+            onManageBilling={() => setPaywallOpen(true)}
+          />
+          <AppShell
+            user={user}
+            route={asShellRoute(route)}
+            billing={
+              <BillingPage
+                subscriptionStatus={subscriptionStatus ?? "loading"}
+                accessSource={accessSource}
+                hasBillingStatusError={hasBillingStatusError}
+                currentPeriodEnd={currentPeriodEnd}
+                cancelAtPeriodEnd={cancelAtPeriodEnd}
+                cancelAt={cancelAt}
+                trialEndsAt={trialEndsAt}
+                organization={billingOrganizationName}
+                plan={plan}
+                onSubscribe={async () => {
+                  const { url } = await createCheckoutSession();
+                  window.location.href = url;
+                }}
+                onManage={async () => {
+                  const { url } = await createPortalSession();
+                  window.location.href = url;
+                }}
+                onCancel={async () => {
+                  const { url } = await createPortalSession("cancel");
+                  window.location.href = url;
+                }}
+                canManageBilling={canManageBilling}
+                hasBillingAccount={hasBillingAccount}
+                onSubscriptionConfirmed={handleSubscriptionConfirmed}
+                onRetryBillingStatus={async () => {
+                  await refreshSession();
+                }}
+              />
+            }
+            onNavigate={navigateTo}
+            onSignOut={async () => {
+              await logoutSession();
+              setUser(null);
+              setCallbackError(null);
+              navigateTo({ kind: "home" }, true);
+            }}
+          />
+          {paywallOpen ? (
+            <PaywallDialog
               organization={billingOrganizationName}
+              standing={
+                trialEndsAt !== null && trialEndsAt * 1000 < Date.now()
+                  ? "trial-ended"
+                  : hasBillingAccount
+                    ? "lapsed"
+                    : "none"
+              }
               plan={plan}
+              canManage={canManageBilling}
               onSubscribe={async () => {
                 const { url } = await createCheckoutSession();
                 window.location.href = url;
               }}
-              onManage={async () => {
-                const { url } = await createPortalSession();
-                window.location.href = url;
-              }}
-              onCancel={async () => {
-                const { url } = await createPortalSession("cancel");
-                window.location.href = url;
-              }}
-              canManageBilling={canManageBilling}
-              hasBillingAccount={hasBillingAccount}
-              onSubscriptionConfirmed={handleSubscriptionConfirmed}
-              onRetryBillingStatus={async () => {
-                await refreshSession();
-              }}
+              onClose={() => setPaywallOpen(false)}
             />
-          }
-          onNavigate={navigateTo}
-          onSignOut={async () => {
-            await logoutSession();
-            setUser(null);
-            setCallbackError(null);
-            navigateTo({ kind: "home" }, true);
-          }}
-        />
-      </div>
+          ) : null}
+        </div>
+      </PaywallProvider>
     </ReadOnlyProvider>
   );
 }
