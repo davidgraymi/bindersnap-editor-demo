@@ -164,6 +164,7 @@ export function buildQueueRows(
           {
             number: change.number,
             submittedBy: change.user?.login ?? "",
+            submittedByName: change.user?.full_name,
             submittedAt: change.created_at ?? change.created ?? "",
             updatedAt: change.updated_at ?? undefined,
             approvalCount: change.approvalCount,

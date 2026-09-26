@@ -23,6 +23,7 @@ import {
 } from "../documentDisplay";
 import type { DocumentChangeView } from "../routes";
 import { ChangeReviewers } from "./ChangeReviewers";
+import { nameFor, usePeopleNames } from "../usePeopleNames";
 import { ReviewTimeline } from "./ReviewTimeline";
 
 interface DocumentChangeDetailProps {
@@ -294,6 +295,7 @@ export function DocumentChangeDetail({
   const [actionState, setActionState] = useState<PRActionState>(
     DEFAULT_PR_ACTION_STATE,
   );
+  const names = usePeopleNames(scope.org);
   const [unresolvedCount, setUnresolvedCount] = useState(0);
   // Who is still holding a thread open. The reviewer list needs it to tell a
   // reviewer who is done from one who raised a concern and never closed it,
@@ -414,6 +416,7 @@ export function DocumentChangeDetail({
   const opening = describeChangeOpening(
     change,
     subject || documentCount !== 1 ? null : nextVersion,
+    (login) => nameFor(names, login),
   );
   const description = describeChangeBody(change.summary, change.description);
   const outcome = describeChangeOutcome(change);
