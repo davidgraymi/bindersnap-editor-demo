@@ -60,6 +60,11 @@ export type BillingStatusPayload = z.infer<typeof BillingStatusPayloadSchema>;
 
 export const BillingActionBodySchema = z.object({
   idempotencyKey: z.string(),
+  /**
+   * Which of this person's organizations, by its Gitea name. Omitted means
+   * their oldest — the answer from before billing was chosen per organization.
+   */
+  organization: z.string().optional(),
   /** Portal only: open straight on Stripe's cancel screen. */
   intent: z.enum(["cancel"]).optional(),
 });

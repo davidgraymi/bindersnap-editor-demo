@@ -8,5 +8,6 @@ import type { CreateBillingPortalBodyIntent } from './createBillingPortalBodyInt
 
 export type CreateBillingPortalBody = {
   idempotencyKey: string;
+  organization?: string;
   intent?: CreateBillingPortalBodyIntent;
 };

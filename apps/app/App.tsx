@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -326,6 +327,64 @@ export function App() {
     interval: string;
     formatted: string;
   } | null>(null);
+  /**
+   * Whose billing the app is showing: the organization on screen.
+   *
+   * Billing is per organization, so a person in two of them has two answers
+   * to "may I write here?" and "what do I pay?". The app used to ask once, and
+   * the server answered for their oldest organization wherever they were —
+   * so a second organization read as paid for by the first, and could not be
+   * subscribed to at all. Pages that belong to no one organization (Home,
+   * Documents, Change requests) leave it null, which asks for the oldest.
+   */
+  const billingOrganization =
+    route.kind === "organization" ||
+    route.kind === "binder" ||
+    route.kind === "binderDocument" ||
+    route.kind === "billing"
+      ? (route.org ?? null)
+      : null;
+  // Read by `loadBilling`, which `refreshSession` calls from a callback that
+  // must not change identity whenever the route does.
+  const billingOrganizationRef = useRef(billingOrganization);
+  billingOrganizationRef.current = billingOrganization;
+  // Which request is the latest. Walking from one organization to another
+  // while a read is in flight must not let the first answer land last.
+  const billingRequest = useRef(0);
+
+  const loadBilling = useCallback(async () => {
+    const request = ++billingRequest.current;
+    setSubscriptionStatus("loading");
+    setHasBillingStatusError(false);
+    try {
+      const billing = await fetchBillingStatus(billingOrganizationRef.current);
+      if (request !== billingRequest.current) return;
+      setSubscriptionStatus(
+        resolveSubscriptionStatus(billing.status, billing.hasAccess),
+      );
+      setAccessSource(billing.accessSource ?? null);
+      setBillingOrganizationName(billing.organization?.name ?? null);
+      setHasBillingStatusError(false);
+      setCurrentPeriodEnd(billing.currentPeriodEnd);
+      setCancelAtPeriodEnd(billing.cancelAtPeriodEnd);
+      setCancelAt(billing.cancelAt);
+      setPlan(billing.plan);
+      setTrialEndsAt(billing.trialEndsAt);
+      setCanManageBilling(billing.canManageBilling === true);
+      setHasBillingAccount(billing.hasBillingAccount === true);
+    } catch {
+      if (request !== billingRequest.current) return;
+      setSubscriptionStatus("none");
+      setAccessSource(null);
+      setHasBillingStatusError(true);
+      setCurrentPeriodEnd(null);
+      setCancelAtPeriodEnd(false);
+      setCancelAt(null);
+      setPlan(null);
+      setTrialEndsAt(null);
+    }
+  }, []);
+
   const handlePaymentRequired = useCallback(
     (event: PaymentRequiredEvent) => {
       if (!user) {
@@ -374,32 +433,8 @@ export function App() {
       if (resolvedUser) {
         setSubscriptionStatus("loading");
         setHasBillingStatusError(false);
-        try {
-          setOrganizations(await fetchOrganizations().catch(() => null));
-          const billing = await fetchBillingStatus();
-          setSubscriptionStatus(
-            resolveSubscriptionStatus(billing.status, billing.hasAccess),
-          );
-          setAccessSource(billing.accessSource ?? null);
-          setBillingOrganizationName(billing.organization?.name ?? null);
-          setHasBillingStatusError(false);
-          setCurrentPeriodEnd(billing.currentPeriodEnd);
-          setCancelAtPeriodEnd(billing.cancelAtPeriodEnd);
-          setCancelAt(billing.cancelAt);
-          setPlan(billing.plan);
-          setTrialEndsAt(billing.trialEndsAt);
-          setCanManageBilling(billing.canManageBilling === true);
-          setHasBillingAccount(billing.hasBillingAccount === true);
-        } catch {
-          setSubscriptionStatus("none");
-          setAccessSource(null);
-          setHasBillingStatusError(true);
-          setCurrentPeriodEnd(null);
-          setCancelAtPeriodEnd(false);
-          setCancelAt(null);
-          setPlan(null);
-          setTrialEndsAt(null);
-        }
+        setOrganizations(await fetchOrganizations().catch(() => null));
+        await loadBilling();
       } else {
         setOrganizations(null);
         setOrganizationSetupReason(null);
@@ -428,7 +463,7 @@ export function App() {
     } finally {
       setIsCheckingSession(false);
     }
-  }, []);
+  }, [loadBilling]);
 
   // `/inbox` is gone — Home shows what used to be there. Rewrite the address
   // bar so an old link lands somewhere that still exists and stays bookmarkable.
@@ -452,6 +487,30 @@ export function App() {
   }, []);
 
   usePaymentRequiredHandler(handlePaymentRequired);
+
+  // A different organization on screen is a different bill. Only once signed
+  // in and settled — the first read is `refreshSession`'s.
+  const signedIn = Boolean(user);
+  const lastBillingOrganization = useRef(billingOrganization);
+  useEffect(() => {
+    if (lastBillingOrganization.current === billingOrganization) return;
+    lastBillingOrganization.current = billingOrganization;
+    if (!signedIn || isCheckingSession) return;
+    void loadBilling();
+  }, [billingOrganization, isCheckingSession, loadBilling, signedIn]);
+
+  // `/billing` from before billing was per organization: say which one it is
+  // showing, in the address bar, once the server has answered.
+  useEffect(() => {
+    if (
+      route.kind === "billing" &&
+      !route.org &&
+      billingOrganizationName &&
+      subscriptionStatus !== "loading"
+    ) {
+      navigateTo({ kind: "billing", org: billingOrganizationName }, true);
+    }
+  }, [billingOrganizationName, route, subscriptionStatus]);
 
   useEffect(() => {
     if (route.kind === "callback") {
@@ -718,18 +777,29 @@ export function App() {
                 cancelAtPeriodEnd={cancelAtPeriodEnd}
                 cancelAt={cancelAt}
                 trialEndsAt={trialEndsAt}
-                organization={billingOrganizationName}
+                organization={
+                  route.kind === "billing" && route.org
+                    ? route.org
+                    : billingOrganizationName
+                }
                 plan={plan}
                 onSubscribe={async () => {
-                  const { url } = await createCheckoutSession();
+                  const { url } = await createCheckoutSession(
+                    billingOrganizationName,
+                  );
                   window.location.href = url;
                 }}
                 onManage={async () => {
-                  const { url } = await createPortalSession();
+                  const { url } = await createPortalSession(
+                    billingOrganizationName,
+                  );
                   window.location.href = url;
                 }}
                 onCancel={async () => {
-                  const { url } = await createPortalSession("cancel");
+                  const { url } = await createPortalSession(
+                    billingOrganizationName,
+                    "cancel",
+                  );
                   window.location.href = url;
                 }}
                 canManageBilling={canManageBilling}
@@ -761,7 +831,11 @@ export function App() {
               plan={plan}
               canManage={canManageBilling}
               onSubscribe={async () => {
-                const { url } = await createCheckoutSession();
+                // The organization the refusal named, which is the one on
+                // screen — never a different one of this person's.
+                const { url } = await createCheckoutSession(
+                  billingOrganizationName,
+                );
                 window.location.href = url;
               }}
               onClose={() => setPaywallOpen(false)}

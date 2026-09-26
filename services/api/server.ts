@@ -15,6 +15,7 @@ import { organizationStore } from "./organizations";
 import {
   listSessionOrganizations,
   resolveOrganizationForUser,
+  findSessionOrganization,
   resolveSessionOrganization,
   type SessionOrganization,
 } from "./session-organization";
@@ -939,6 +940,27 @@ function paymentRequired(
   );
 }
 
+/**
+ * The organization a request writes into, read from its address.
+ *
+ * Every authoring route is `/api/app/binders/{org}/…` or
+ * `/api/app/orgs/{org}/…`, so the path already says whose binder it is. That
+ * is the organization whose subscription decides the write — gating on the
+ * writer's oldest organization instead let a lapsed one block work in a paid
+ * one, and a paid one unlock work in a lapsed one.
+ */
+function requestOrganization(req: Request): string | null {
+  const match = new URL(req.url).pathname.match(
+    /^\/api\/app\/(?:binders|orgs)\/([^/]+)\//,
+  );
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]!);
+  } catch {
+    return null;
+  }
+}
+
 async function requireSubscription(
   req: Request,
   baseHeaders: Headers,
@@ -959,6 +981,7 @@ async function requireSubscription(
   const organization = await resolveSessionOrganization(
     auth.client,
     auth.session,
+    requestOrganization(req),
   );
   if (!organization || !(await organizationHasAccess(organization.id))) {
     return paymentRequired(baseHeaders, organization?.name ?? null);
@@ -1018,6 +1041,7 @@ async function requireSubscriptionOrAdmin(
   const organization = await resolveSessionOrganization(
     auth.client,
     auth.session,
+    requestOrganization(req),
   );
   if (organization && (await organizationHasAccess(organization.id))) {
     return auth;
@@ -9181,7 +9205,11 @@ async function handleCreateWorkspaceDocument(
   const extension = getFileExtension(file.name);
   const filePath = buildDocumentFilePath(name, extension, uid, folder);
 
-  const organization = await resolveSessionOrganization(client, session);
+  const organization = await resolveSessionOrganization(
+    client,
+    session,
+    orgName,
+  );
   if (!organization) {
     return json(
       409,
@@ -9872,6 +9900,37 @@ async function canManageOrganizationBilling(
   return currentUser?.isAdmin === true;
 }
 
+/**
+ * Which organization a billing request is about.
+ *
+ * Billing is per organization (ADR 0004), and a person may be in several, so
+ * every billing request can name one. Naming one they are not in is a 404,
+ * never a quiet fallback: a checkout that fell back would bill an
+ * organization nobody chose. Naming none keeps the old answer, the oldest.
+ */
+async function resolveBillingOrganization(
+  auth: { client: GiteaClient; session: SessionRecord },
+  requested: unknown,
+  baseHeaders: Headers,
+): Promise<SessionOrganization | null | Response> {
+  if (typeof requested === "string" && requested.trim() !== "") {
+    const organization = await findSessionOrganization(
+      auth.client,
+      requested.trim(),
+    );
+    return (
+      organization ??
+      json(404, { error: "You are not in that organization." }, baseHeaders)
+    );
+  }
+  return resolveSessionOrganization(auth.client, auth.session);
+}
+
+/** Where Stripe sends someone back to: that organization's billing page. */
+function billingPageUrl(organization: { name: string }): string {
+  return `${config.appOrigin}/billing/${encodeURIComponent(organization.name)}`;
+}
+
 async function handleBillingStatus(
   req: Request,
   baseHeaders: Headers,
@@ -9880,10 +9939,12 @@ async function handleBillingStatus(
   if (auth instanceof Response) return auth;
 
   const { username } = auth.session;
-  const organization = await resolveSessionOrganization(
-    auth.client,
-    auth.session,
+  const organization = await resolveBillingOrganization(
+    auth,
+    new URL(req.url).searchParams.get("organization"),
+    baseHeaders,
   );
+  if (organization instanceof Response) return organization;
 
   const [priceInfo, accessState, canManageBilling, subscription] =
     await Promise.all([
@@ -9940,12 +10001,18 @@ async function handleBillingCheckout(
     return json(503, { error: "Billing not configured." }, baseHeaders);
   }
 
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const clientIdempotencyKey =
+    typeof body.idempotencyKey === "string" ? body.idempotencyKey : null;
+
   // Checkout buys a subscription for the organization, not for the person
   // clicking the button — so there has to be one.
-  const organization = await resolveSessionOrganization(
-    auth.client,
-    auth.session,
+  const organization = await resolveBillingOrganization(
+    auth,
+    body.organization,
+    baseHeaders,
   );
+  if (organization instanceof Response) return organization;
   if (!organization) {
     return json(
       409,
@@ -9967,10 +10034,6 @@ async function handleBillingCheckout(
   );
   const userEmail = await fetchSessionUserEmail(auth.session);
 
-  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-  const clientIdempotencyKey =
-    typeof body.idempotencyKey === "string" ? body.idempotencyKey : null;
-
   const params: Stripe.Checkout.SessionCreateParams = {
     mode: "subscription",
     line_items: [{ price: config.stripePriceId, quantity: 1 }],
@@ -9990,8 +10053,8 @@ async function handleBillingCheckout(
         ...stripeRunTagMetadata(config.stripeRunTag),
       },
     },
-    success_url: `${config.appOrigin}/billing?checkout=success`,
-    cancel_url: `${config.appOrigin}/billing`,
+    success_url: `${billingPageUrl(organization)}?checkout=success`,
+    cancel_url: billingPageUrl(organization),
   };
   if (existingSubscription?.stripeCustomerId) {
     params.customer = existingSubscription.stripeCustomerId;
@@ -10037,10 +10100,14 @@ async function handleDevGrantSubscription(
   if (auth instanceof Response) return auth;
 
   const { username } = auth.session;
-  const organization = await resolveSessionOrganization(
-    auth.client,
-    auth.session,
+  // Which organization, when a test holds more than one.
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const organization = await resolveBillingOrganization(
+    auth,
+    body.organization,
+    baseHeaders,
   );
+  if (organization instanceof Response) return organization;
   if (!organization) {
     return json(
       409,
@@ -10086,10 +10153,14 @@ async function handleDevEndTrial(
   const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
 
-  const organization = await resolveSessionOrganization(
-    auth.client,
-    auth.session,
+  // Which organization, when a test holds more than one.
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const organization = await resolveBillingOrganization(
+    auth,
+    body.organization,
+    baseHeaders,
   );
+  if (organization instanceof Response) return organization;
   if (!organization) {
     return json(
       409,
@@ -10271,14 +10342,20 @@ async function handleBillingPortal(
   const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
 
-  const organization = await resolveSessionOrganization(
-    auth.client,
-    auth.session,
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const clientIdempotencyKey =
+    typeof body.idempotencyKey === "string" ? body.idempotencyKey : null;
+
+  const organization = await resolveBillingOrganization(
+    auth,
+    body.organization,
+    baseHeaders,
   );
+  if (organization instanceof Response) return organization;
   const record = organization
     ? await subscriptionStore.getByOrganization(organization.id)
     : null;
-  if (!record) {
+  if (!organization || !record) {
     return json(404, { error: "No subscription found." }, baseHeaders);
   }
 
@@ -10294,10 +10371,6 @@ async function handleBillingPortal(
     return json(503, { error: "Billing not configured." }, baseHeaders);
   }
 
-  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-  const clientIdempotencyKey =
-    typeof body.idempotencyKey === "string" ? body.idempotencyKey : null;
-
   try {
     const stripe = getStripeClient();
     // "Cancel subscription" lands on Stripe's own cancel screen rather than
@@ -10308,7 +10381,7 @@ async function handleBillingPortal(
     const session = await stripe.billingPortal.sessions.create(
       {
         customer: record.stripeCustomerId,
-        return_url: `${config.appOrigin}/billing`,
+        return_url: billingPageUrl(organization),
         ...(cancelling
           ? {
               flow_data: {
@@ -10318,7 +10391,7 @@ async function handleBillingPortal(
                 },
                 after_completion: {
                   type: "redirect" as const,
-                  redirect: { return_url: `${config.appOrigin}/billing` },
+                  redirect: { return_url: billingPageUrl(organization) },
                 },
               },
             }

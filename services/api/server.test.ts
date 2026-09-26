@@ -50,6 +50,12 @@ let giteaOrgOwners = new Map<string, MockedGiteaUser[]>();
 // Logins that are members but not owners of their organization. Everyone
 // else owns the one they were seeded with, as a signup does.
 let giteaNonOwners = new Set<string>();
+// Organizations a login joined after its first, newest last — a person may
+// be in several, and billing has to follow the one they are acting in.
+let giteaExtraOrgsByUsername = new Map<
+  string,
+  { id: number; username: string }[]
+>();
 let nextGiteaOrgId = 4000;
 let stripeSubscriptionsById = new Map<string, MockedStripeResource>();
 let stripeCustomersById = new Map<string, MockedStripeResource>();
@@ -78,6 +84,7 @@ beforeEach(() => {
   giteaOrgsByUsername = new Map();
   giteaOrgOwners = new Map();
   giteaNonOwners = new Set();
+  giteaExtraOrgsByUsername = new Map();
   nextGiteaOrgId = 4000;
   stripeSubscriptionsById = new Map();
   stripeCustomersById = new Map();
@@ -182,10 +189,14 @@ beforeEach(() => {
         : "";
       const login = giteaLoginsByToken.get(token);
       const organization = login ? giteaOrgsByUsername.get(login) : null;
-      return new Response(JSON.stringify(organization ? [organization] : []), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+      const extra = login ? (giteaExtraOrgsByUsername.get(login) ?? []) : [];
+      return new Response(
+        JSON.stringify([...(organization ? [organization] : []), ...extra]),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
 
     if (url.pathname === "/api/v1/user") {
@@ -402,6 +413,20 @@ function seedOrganizationFor(username: string): number {
   return nextGiteaOrgId;
 }
 
+/** Put a user in a second organization, newer than their first. */
+function seedSecondOrganizationFor(username: string): {
+  id: number;
+  username: string;
+} {
+  nextGiteaOrgId += 1;
+  const organization = { id: nextGiteaOrgId, username: `${username}-second` };
+  giteaExtraOrgsByUsername.set(username, [
+    ...(giteaExtraOrgsByUsername.get(username) ?? []),
+    organization,
+  ]);
+  return organization;
+}
+
 /** The Gitea org id seeded for a user. Billing hangs off this, not the name. */
 function orgIdFor(username: string): number {
   const organization = giteaOrgsByUsername.get(username);
@@ -558,6 +583,121 @@ describe("billing belongs to the organization's owners", () => {
     expect((await read(owner)).canManageBilling).toBe(true);
     expect((await read(member)).canManageBilling).toBe(false);
     expect((await read(owner)).hasBillingAccount).toBe(false);
+  });
+});
+
+describe("billing is per organization", () => {
+  async function activate(giteaOrgId: number) {
+    await subscriptionStore.upsert({
+      giteaOrgId,
+      stripeCustomerId: `cus_${giteaOrgId}`,
+      stripeSubscriptionId: `sub_${giteaOrgId}`,
+      status: "active",
+      currentPeriodEnd: Math.floor(Date.now() / 1000) + 86_400,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
+      updatedAt: Date.now(),
+    });
+  }
+
+  test("the status answers for the organization it names", async () => {
+    const server = createApiServer();
+    const username = `two-orgs-${randomUUID()}`;
+    const sessionId = await seedSession(username);
+    const second = seedSecondOrganizationFor(username);
+    await activate(orgIdFor(username));
+
+    const read = async (query: string) =>
+      (await (
+        await server.fetch(
+          makeSessionRequest(`/api/app/billing/status${query}`, sessionId),
+        )
+      ).json()) as { organization: { id: number }; hasAccess: boolean };
+
+    // Named: the second organization, which nobody has paid for.
+    const named = await read(`?organization=${second.username}`);
+    expect(named.organization.id).toBe(second.id);
+    expect(named.hasAccess).toBe(false);
+    // Unnamed: the oldest, as before.
+    const unnamed = await read("");
+    expect(unnamed.organization.id).toBe(orgIdFor(username));
+    expect(unnamed.hasAccess).toBe(true);
+  });
+
+  test("naming an organization you are not in is refused, not replaced", async () => {
+    const server = createApiServer();
+    const sessionId = await seedSession(`outsider-${randomUUID()}`);
+    const other = `someone-${randomUUID()}`;
+    await seedSession(other);
+
+    const status = await server.fetch(
+      makeSessionRequest(
+        `/api/app/billing/status?organization=${other}-org`,
+        sessionId,
+      ),
+    );
+    expect(status.status).toBe(404);
+
+    const checkout = await server.fetch(
+      makeBillingRequest("/api/app/billing/checkout", sessionId, {
+        organization: `${other}-org`,
+      }),
+    );
+    expect(checkout.status).toBe(404);
+    expect(getFetchCallsByPath("/v1/checkout/sessions")).toHaveLength(0);
+  });
+
+  test("checkout bills the organization it names, and returns to its page", async () => {
+    const server = createApiServer();
+    const username = `two-orgs-${randomUUID()}`;
+    const sessionId = await seedSession(username);
+    const second = seedSecondOrganizationFor(username);
+
+    const response = await server.fetch(
+      makeBillingRequest("/api/app/billing/checkout", sessionId, {
+        organization: second.username,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const form = getPostedFormBody(
+      getFetchCallsByPath("/v1/checkout/sessions")[0]!,
+    );
+    expect(form.get("metadata[bindersnap_gitea_org_id]")).toBe(
+      String(second.id),
+    );
+    expect(form.get("success_url")).toBe(
+      `${config.appOrigin}/billing/${second.username}?checkout=success`,
+    );
+  });
+
+  test("a write is gated by the organization it writes into", async () => {
+    const server = createApiServer();
+    const username = `two-orgs-${randomUUID()}`;
+    const sessionId = await seedSession(username);
+    const second = seedSecondOrganizationFor(username);
+    const first = `${username}-org`;
+    // The oldest is paid for; the second is not.
+    await activate(orgIdFor(username));
+
+    const rename = (org: string) =>
+      server.fetch(
+        makeSessionRequest(`/api/app/binders/${org}/handbook/name`, sessionId, {
+          method: "POST",
+          body: { name: "Handbook" },
+        }),
+      );
+
+    const intoSecond = await rename(second.username);
+    expect(intoSecond.status).toBe(402);
+    expect(await intoSecond.json()).toMatchObject({
+      organization: second.username,
+    });
+    expect((await rename(first)).status).not.toBe(402);
+
+    // And the other way round: paying for the second opens it.
+    await activate(second.id);
+    expect((await rename(second.username)).status).not.toBe(402);
   });
 });
 

@@ -25,7 +25,8 @@ test("billing opens inside the app and says where the organization stands", asyn
     .getByRole("link", { name: "Billing" })
     .click();
 
-  await expect(page).toHaveURL(/\/billing$/);
+  // This organization's billing: the entry sits under its name.
+  await expect(page).toHaveURL(/\/billing\/riverside-health$/);
   await expect(page.getByRole("heading", { name: "Billing" })).toBeVisible();
   const plan = page.getByRole("region", { name: "Plan" });
   await expect(plan).toBeVisible();
@@ -40,4 +41,14 @@ test("billing opens inside the app and says where the organization stands", asyn
     .getByRole("link", { name: "Home" })
     .click();
   await expect(page).toHaveURL(/\/$/);
+});
+
+test("the old /billing address says which organization it is showing", async ({
+  page,
+}) => {
+  await signInAsAlice(page);
+  await page.goto("/billing");
+
+  await expect(page).toHaveURL(/\/billing\/[^/?]+$/);
+  await expect(page.getByRole("region", { name: "Plan" })).toBeVisible();
 });
