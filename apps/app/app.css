@@ -8901,13 +8901,36 @@ a.bs-row:focus-visible {
 
 .change-detail.bs-with-rail {
   display: grid;
+  /* The head and the discussion share the left column; the rail spans both
+     beside them. In the document it sits between the two, which is where a
+     narrow screen stacks it. The last row takes the slack, so a rail taller
+     than a short discussion never opens a gap under the tabs. */
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
+.change-head,
 .change-main {
   display: grid;
   gap: var(--brand-space-4);
   align-content: start;
   min-width: 0;
+}
+
+@media (min-width: 901px) {
+  .change-detail > .change-head {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .change-detail > .bs-rail {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  .change-detail > .change-main {
+    grid-column: 1;
+    grid-row: 2;
+  }
 }
 
 .bs-rail-note {

@@ -497,7 +497,11 @@ export function DocumentChangeDetail({
 
   return (
     <article className="change-detail bs-with-rail">
-      <div className="change-main">
+      {/* **The head, the decision, then the discussion — in that order in the
+          document**, so a narrow screen that stacks them puts Approve under
+          the title rather than under every comment ever made on the change.
+          A wide one lays the rail beside both; see `.change-detail`. */}
+      <div className="change-head">
         {/* The way back to the list is the trail in the top bar — `Clinical
             / Change requests / Change 4` — the same line every page has, so
             it is not drawn a second time here. */}
@@ -609,53 +613,6 @@ export function DocumentChangeDetail({
         )}
 
         {tabs}
-
-        {outcome ? (
-          <p className="rev-outcome" role="status">
-            {outcome}
-          </p>
-        ) : null}
-
-        {banner}
-        {documentPicker}
-
-        <ReviewTimeline
-          scope={scope}
-          change={change}
-          updates={updates}
-          resetsApprovals={resetsApprovals}
-          canParticipate={!isAnonymous}
-          currentUsername={currentUser}
-          blockOnUnresolvedThreads={blockOnUnresolvedThreads}
-          onOpenUpdate={
-            proposed.ref === null || !onOpenOnBranch
-              ? null
-              : () => onOpenOnBranch()
-          }
-          onSummaryChange={(next) => {
-            setUnresolvedCount((prev) =>
-              prev === next.unresolvedCount ? prev : next.unresolvedCount,
-            );
-            setOpenThreadAuthors((prev) => {
-              const authors = new Set(
-                next.threads
-                  .filter((thread) => !thread.resolved)
-                  .map((thread) => thread.comments[0]?.author.login ?? "")
-                  .filter(Boolean),
-              );
-              // Identity churn here would re-render the reviewer list on
-              // every poll, so a set that says the same thing stays the same
-              // set.
-              if (
-                authors.size === prev.size &&
-                [...authors].every((login) => prev.has(login))
-              ) {
-                return prev;
-              }
-              return authors;
-            });
-          }}
-        />
       </div>
 
       {/* **Everything needed to decide, in one sticky rail, in the same order
@@ -904,6 +861,55 @@ export function DocumentChangeDetail({
           </div>
         )}
       </aside>
+
+      <div className="change-main">
+        {outcome ? (
+          <p className="rev-outcome" role="status">
+            {outcome}
+          </p>
+        ) : null}
+
+        {banner}
+        {documentPicker}
+
+        <ReviewTimeline
+          scope={scope}
+          change={change}
+          updates={updates}
+          resetsApprovals={resetsApprovals}
+          canParticipate={!isAnonymous}
+          currentUsername={currentUser}
+          blockOnUnresolvedThreads={blockOnUnresolvedThreads}
+          onOpenUpdate={
+            proposed.ref === null || !onOpenOnBranch
+              ? null
+              : () => onOpenOnBranch()
+          }
+          onSummaryChange={(next) => {
+            setUnresolvedCount((prev) =>
+              prev === next.unresolvedCount ? prev : next.unresolvedCount,
+            );
+            setOpenThreadAuthors((prev) => {
+              const authors = new Set(
+                next.threads
+                  .filter((thread) => !thread.resolved)
+                  .map((thread) => thread.comments[0]?.author.login ?? "")
+                  .filter(Boolean),
+              );
+              // Identity churn here would re-render the reviewer list on
+              // every poll, so a set that says the same thing stays the same
+              // set.
+              if (
+                authors.size === prev.size &&
+                [...authors].every((login) => prev.has(login))
+              ) {
+                return prev;
+              }
+              return authors;
+            });
+          }}
+        />
+      </div>
     </article>
   );
 }
