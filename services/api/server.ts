@@ -7215,6 +7215,7 @@ async function handleListWorkspaceDocuments(
   workspaceName: string,
   draftRaw: string | null,
   changeRaw: string | null,
+  refRaw: string | null,
 ): Promise<Response> {
   const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
@@ -7227,6 +7228,21 @@ async function handleListWorkspaceDocuments(
     });
     if (!workspace) {
       return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    // **The binder at a branch, named.** A branch is the primitive — the tree
+    // at `/-/tree/{ref}` is the same page as the binder's own, read somewhere
+    // else — so it is asked for by ref, under the same rule a document read
+    // at a ref follows: somebody else's unproposed draft is refused.
+    const readable = await resolveReadableRef({
+      client: auth.client,
+      org: orgName,
+      workspace: workspaceName,
+      username: auth.session.username,
+      refRaw,
+    });
+    if (readable && "error" in readable) {
+      return json(409, { error: readable.error }, baseHeaders);
     }
 
     const draft = await resolveOwnDraftBranch({
@@ -7251,7 +7267,7 @@ async function handleListWorkspaceDocuments(
     // on the branch you are reading.
     const changeNumber = Number.parseInt(changeRaw ?? "", 10);
     const onChange =
-      !draft && Number.isFinite(changeNumber) && changeNumber > 0
+      !draft && !readable && Number.isFinite(changeNumber) && changeNumber > 0
         ? await getPullRequestWithReviews({
             client: auth.client,
             owner: orgName,
@@ -7262,7 +7278,9 @@ async function handleListWorkspaceDocuments(
             .catch(() => null)
         : null;
 
-    const ref = draft ? draft.branch : onChange;
+    // A draft is yours, a ref is explicit, and a change is a lookup: the most
+    // specific claim the caller made wins, the order a document read uses.
+    const ref = draft ? draft.branch : (readable?.ref ?? onChange);
 
     return json(
       200,
@@ -7516,6 +7534,52 @@ async function countOpenChangesByDocument(params: {
  * `clinical/infection-control` or `clinical/infection-control.pdf`, and the
  * extension is how we render a document rather than how a person refers to it.
  */
+/**
+ * A branch named by the address, if the reader may read it.
+ *
+ * **Somebody else's draft is refused here**, which is the one rule a raw ref
+ * would otherwise walk straight through. Gitea lets every collaborator read
+ * every branch in the repository, and the product's rule is narrower: other
+ * people's drafts are visible as existing and never as contents. So a `draft/`
+ * branch goes through the same ownership check every other draft read uses,
+ * and anything else is an ordinary branch anybody who can read the binder may
+ * read.
+ *
+ * **Only an unproposed draft is private.** The moment a change request sits on
+ * a branch it stops being a draft and becomes the thing every reviewer is being
+ * asked to read — `listBinderDrafts` already subtracts those, so a branch still
+ * in that list is somebody's work in progress and a branch that has left it is
+ * a change request.
+ *
+ * Null when the address names no branch.
+ */
+async function resolveReadableRef(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  username: string;
+  refRaw: string | null;
+}): Promise<{ ref: string } | { error: string } | null> {
+  const asked = (params.refRaw ?? "").trim();
+  if (asked === "") return null;
+
+  const unproposed = isDraftBranch(asked)
+    ? await listBinderDrafts({
+        client: params.client,
+        org: params.org,
+        workspace: params.workspace,
+      })
+    : [];
+  const stillADraft = unproposed.find((entry) => entry.branch === asked);
+  if (stillADraft && stillADraft.owner !== params.username) {
+    return {
+      error:
+        "That draft is not yours. Other people's drafts are visible as existing and never as contents.",
+    };
+  }
+  return { ref: asked };
+}
+
 async function handleWorkspaceDocumentDetail(
   req: Request,
   baseHeaders: Headers,
@@ -7547,45 +7611,18 @@ async function handleWorkspaceDocumentDetail(
      * commit that it was made on. Similarly we should navigate to the branch
      * view instead of the change view."* A change request is one thing that
      * happens to a branch; the branch is the thing the file is on.
-     *
-     * **Somebody else's draft is refused here**, which is the one rule a raw
-     * ref would otherwise walk straight through. Gitea lets every
-     * collaborator read every branch in the repository, and the product's rule
-     * is narrower: other people's drafts are visible as existing and never as
-     * contents. So a `draft/` branch goes through the same ownership check
-     * every other draft read uses, and anything else is an ordinary branch
-     * anybody who can read the binder may read.
      */
-    const askedRef = (refRaw ?? "").trim();
-    let onRef: string | null = null;
-    if (askedRef !== "") {
-      // **Only an unproposed draft is private.** The moment a change request
-      // sits on a branch it stops being a draft and becomes the thing every
-      // reviewer is being asked to read — `listBinderDrafts` already subtracts
-      // those, so a branch still in that list is somebody's work in progress
-      // and a branch that has left it is a change request.
-      const unproposed = isDraftBranch(askedRef)
-        ? await listBinderDrafts({
-            client: auth.client,
-            org: orgName,
-            workspace: workspaceName,
-          })
-        : [];
-      const stillADraft = unproposed.find((entry) => entry.branch === askedRef);
-
-      if (stillADraft && stillADraft.owner !== auth.session.username) {
-        return json(
-          409,
-          {
-            error:
-              "That draft is not yours. Other people's drafts are visible as existing and never as contents.",
-          },
-          baseHeaders,
-        );
-      }
-
-      onRef = askedRef;
+    const readable = await resolveReadableRef({
+      client: auth.client,
+      org: orgName,
+      workspace: workspaceName,
+      username: auth.session.username,
+      refRaw,
+    });
+    if (readable && "error" in readable) {
+      return json(409, { error: readable.error }, baseHeaders);
     }
+    const onRef = readable ? readable.ref : null;
 
     /**
      * The branch a change request proposes, when the address names one.
@@ -10888,6 +10925,7 @@ export function createApiServer() {
             workspaceDocumentsMatch[2]!,
             url.searchParams.get("draft"),
             url.searchParams.get("change"),
+            url.searchParams.get("ref"),
           );
         } else if (workspaceChangeReviewMatch && method === "POST") {
           response = await handleWorkspaceChangeReview(

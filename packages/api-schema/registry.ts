@@ -832,6 +832,13 @@ registry.registerPath({
        * lead to an address that does not exist on the branch being read.
        */
       change: z.string().optional(),
+      /**
+       * Read the binder at a branch, named — `/-/tree/{ref}` in the app.
+       *
+       * Somebody else's unproposed draft is refused, as it is for a document
+       * read at a ref.
+       */
+      ref: z.string().optional(),
     }),
   },
   responses: {

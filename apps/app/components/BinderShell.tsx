@@ -41,7 +41,9 @@ import { BinderChanges } from "./BinderChanges";
 import { BinderHistory } from "./BinderHistory";
 import { BinderSettings } from "./BinderSettings";
 import { BinderDocumentPage } from "./BinderDocumentPage";
+import { BinderBranchSummary } from "./BinderBranchSummary";
 import { BinderLatestChange } from "./BinderLatestChange";
+import { BinderRefPicker } from "./BinderRefPicker";
 import { BinderDocuments } from "./BinderPage";
 import type { SidebarBinder } from "./AppSidebar";
 import type { DocumentRefView } from "../documentRefs";
@@ -254,14 +256,13 @@ export function BinderShell({
       edit: editMode === "editing" && Boolean(draft?.draft),
     });
 
-  /** A document on the branch the address names, with the way back. */
+  /** A document on the branch the tree is read at. */
   const branchDocumentHref = (documentPath: string) =>
     buildDocumentUrl({
       org,
       binder,
       documentPath,
       version: null,
-      change: openChange,
       ref: documentRefFromSearch,
     });
 
@@ -510,6 +511,22 @@ export function BinderShell({
 
   const binderName = formatDocumentName(binder);
 
+  /**
+   * The binder's own page, read at a branch: `/-/tree/{ref}`.
+   *
+   * **The same page as the record's**, title, description and all — a branch
+   * is the binder somewhere else, not a screen of the change that made it.
+   * What differs is said by the picker over the tree and the card above it,
+   * and the acts that write to the record are not offered.
+   */
+  const onBranch =
+    documentRefFromSearch !== null &&
+    !documentPath &&
+    activeTab === "documents" &&
+    openChange === null &&
+    !archive &&
+    editMode === "off";
+
   const draftForContents =
     editMode === "off" ? null : (draft?.draft?.branch ?? null);
 
@@ -752,7 +769,7 @@ export function BinderShell({
               The contents only. This is the page's one filled button, and on
               the other three screens the answer to "what is this page for" is
               not "add a policy". */}
-          {activeTab !== "documents" ? null : (
+          {activeTab !== "documents" || onBranch ? null : (
             <div className="bs-pagehead-actions">
               {/* **The same buttons in the same slots.** Reading, the header
                   offers Add a policy and Edit; editing, it offers the way
@@ -837,28 +854,12 @@ export function BinderShell({
              The change is where the reader came from. */
           documentRef={documentRefFromSearch}
           change={openChange}
-          onBackToChange={openChangeNumber}
           onRefsChange={setReading}
           /* Opened from the tree while editing, so it is read where the name
              it was clicked under actually exists. */
           draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
           onOpenBinder={onOpenBinder}
           onOpenChange={openChangeNumber}
-        />
-      ) : openChange !== null &&
-        documentRefFromSearch !== null &&
-        activeTab === "documents" ? (
-        /* **The binder at a change's branch**, from the branch link under a
-           comparison's title — the root of the branch, the way a code host
-           opens one, rather than whichever file happened to be first. */
-        <BinderDocuments
-          org={org}
-          binder={binder}
-          onChange={{ number: openChange, branch: documentRefFromSearch }}
-          onBackToChange={openChangeNumber}
-          onOpenChange={openChangeNumber}
-          onOpenDocument={(slugPath) => moveTo(branchDocumentHref(slugPath))}
-          documentHref={branchDocumentHref}
         />
       ) : openChange !== null ? (
         <BinderChangePage
@@ -882,20 +883,12 @@ export function BinderShell({
                 binder,
                 documentPath: slugPath,
                 version: null,
-                change: openChange,
                 ref: branch,
               }),
             )
           }
           onOpenBranch={(branch) =>
-            moveTo(
-              buildBinderUrl({
-                org,
-                binder,
-                ref: branch,
-                change: openChange,
-              }),
-            )
+            moveTo(buildBinderUrl({ org, binder, ref: branch }))
           }
           onChanged={loadOverview}
         />
@@ -974,7 +967,25 @@ export function BinderShell({
           {/* What happened last, above what is in it — GitLab's newest commit
               over the files. Not while editing: the draft bar is the news
               then, and the record has not moved. */}
-          {editMode === "off" ? (
+          {onBranch ? (
+            <BinderBranchSummary
+              org={org}
+              binder={binder}
+              branch={documentRefFromSearch!}
+              changeHref={(change, compare) =>
+                buildBinderUrl({
+                  org,
+                  binder,
+                  tab: "changes",
+                  change,
+                  view: compare ? "compare" : "discussion",
+                })
+              }
+              onOpenChange={(change, compare) =>
+                openChangeNumber(change, compare ? "compare" : "discussion")
+              }
+            />
+          ) : editMode === "off" ? (
             <BinderLatestChange
               key={reloadKey}
               org={org}
@@ -990,8 +1001,24 @@ export function BinderShell({
           <BinderDocuments
             org={org}
             binder={binder}
-            onOpenDocument={openDocument}
-            documentHref={documentHref}
+            onOpenDocument={(slugPath) =>
+              onBranch
+                ? moveTo(branchDocumentHref(slugPath))
+                : openDocument(slugPath)
+            }
+            documentHref={onBranch ? branchDocumentHref : documentHref}
+            atRef={onBranch ? documentRefFromSearch : null}
+            refPicker={
+              editMode === "off" ? (
+                <BinderRefPicker
+                  org={org}
+                  binder={binder}
+                  current={onBranch ? documentRefFromSearch : null}
+                  onPick={(ref) => moveTo(buildBinderUrl({ org, binder, ref }))}
+                  onPickDraft={(branch) => goToEdit("editing", branch)}
+                />
+              ) : null
+            }
             activeDocument={documentPath ?? null}
             draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
             draftPicker={

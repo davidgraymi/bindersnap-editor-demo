@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import {
   Check,
   ChevronDown,
@@ -15,6 +15,7 @@ import { formatAge } from "../documentDisplay";
 import { nameFor, usePeopleNames } from "../usePeopleNames";
 import { AppIcon } from "./AppIcon";
 import { PersonAvatar } from "./PersonAvatar";
+import { useFloatingMenu } from "./useFloatingMenu";
 
 /**
  * Which draft you are editing in, and the way to any of the others.
@@ -65,10 +66,6 @@ export function describeDraft(draft: OwnDraft): string {
   return `${changes} · ${when}`;
 }
 
-/** How wide the floating menu is, and how much room it needs below. */
-const MENU_WIDTH = 340;
-const MENU_MAX_HEIGHT = 360;
-
 export function BinderDraftPicker({
   org,
   drafts,
@@ -87,78 +84,12 @@ export function BinderDraftPicker({
     branch: string;
     value: string;
   } | null>(null);
-  const boxRef = useRef<HTMLDivElement | null>(null);
-  const pickRef = useRef<HTMLButtonElement | null>(null);
-  /**
-   * Where the menu sits on the page, in viewport coordinates.
-   *
-   * **It floats rather than being laid out**, for the same reason the reviewer
-   * picker does: this button lives in a `.bs-panel`'s bar, and a panel is a
-   * squircle — `overflow: hidden` is what rounds its corners, and it cut this
-   * menu off mid-row.
-   */
-  const [at, setAt] = useState<{ left: number; top: number } | null>(null);
+  const { boxRef, buttonRef, style } = useFloatingMenu(open, () => {
+    setOpen(false);
+    setNaming(null);
+  });
 
   const mine = drafts.find((draft) => draft.branch === current) ?? null;
-
-  // Every other menu on the page closes on Escape and on a click elsewhere,
-  // and one that only closes by its own button is a trap.
-  useEffect(() => {
-    if (!open) return;
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setOpen(false);
-        setNaming(null);
-      }
-    };
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (
-        target instanceof Node &&
-        boxRef.current &&
-        !boxRef.current.contains(target)
-      ) {
-        setOpen(false);
-        setNaming(null);
-      }
-    };
-
-    document.addEventListener("keydown", onKeyDown);
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.removeEventListener("pointerdown", onPointerDown);
-    };
-  }, [open]);
-
-  /** Keep the floating menu on its button as the page scrolls under it. */
-  useEffect(() => {
-    if (!open) return;
-
-    const place = () => {
-      const button = pickRef.current;
-      if (!button) return;
-      const rect = button.getBoundingClientRect();
-      const width = Math.min(MENU_WIDTH, window.innerWidth - 16);
-      const below = window.innerHeight - rect.bottom;
-      setAt({
-        left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
-        top:
-          below < MENU_MAX_HEIGHT && rect.top > below
-            ? Math.max(8, rect.top - MENU_MAX_HEIGHT - 8)
-            : rect.bottom + 6,
-      });
-    };
-
-    place();
-    window.addEventListener("scroll", place, true);
-    window.addEventListener("resize", place);
-    return () => {
-      window.removeEventListener("scroll", place, true);
-      window.removeEventListener("resize", place);
-    };
-  }, [open]);
 
   const commitName = async () => {
     if (!naming) return;
@@ -177,7 +108,7 @@ export function BinderDraftPicker({
       <button
         type="button"
         className="bs-draftpick"
-        ref={pickRef}
+        ref={buttonRef}
         aria-expanded={open}
         aria-haspopup="menu"
         disabled={busy}
@@ -197,15 +128,7 @@ export function BinderDraftPicker({
       </button>
 
       {open ? (
-        <div
-          className="bs-draftmenu"
-          role="menu"
-          style={
-            at
-              ? { left: `${at.left}px`, top: `${at.top}px` }
-              : { visibility: "hidden" }
-          }
-        >
+        <div className="bs-draftmenu" role="menu" style={style}>
           <div className="bs-panel-bar">
             <span className="bs-section-title">Your drafts</span>
           </div>

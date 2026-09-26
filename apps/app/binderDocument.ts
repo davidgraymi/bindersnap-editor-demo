@@ -196,7 +196,9 @@ export function buildDocumentUrl(params: {
 
   const query = new URLSearchParams();
   if (edit) query.set("edit", "1");
-  if (change !== null) query.set("change", String(change));
+  // Only with no branch named: then it is how the server finds the branch. A
+  // branch named is the whole address — nothing on it is a way back.
+  if (!ref && change !== null) query.set("change", String(change));
   // A version is about the record, so it never travels with a branch: one
   // asks for what was published and the other for what is proposed, and an
   // address claiming both is a question with no answer.
