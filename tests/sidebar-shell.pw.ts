@@ -113,7 +113,7 @@ test("the sidebar took the binder, and gives it a section of its own", async ({
     "Clinical",
     { timeout: 30_000 },
   );
-  for (const entry of ["Changes", "History", "Settings"] as const) {
+  for (const entry of ["Change requests", "History", "Settings"] as const) {
     await expect(
       sidebar.getByRole("link", { name: new RegExp(`^${entry}`) }).last(),
     ).toBeVisible();

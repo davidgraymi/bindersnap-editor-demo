@@ -410,7 +410,7 @@ test("the header's one filled button belongs to the tab it sits above", async ({
   const addAPolicy = page.getByRole("button", { name: "Add a document" });
   await expect(addAPolicy).toBeVisible();
 
-  for (const section of ["Changes", "History", "Settings"] as const) {
+  for (const section of ["Change requests", "History", "Settings"] as const) {
     await openBinderSection(page, section);
     await expect(addAPolicy).toHaveCount(0, { timeout: 30_000 });
   }
