@@ -3946,13 +3946,6 @@ a.bs-knot {
   width: min(100%, 620px);
 }
 
-/* The top bar's "which binder?" list scrolls inside the dialog rather than
-   pushing Cancel off the bottom of the screen. */
-.new-policy-binders {
-  max-height: min(55vh, 420px);
-  overflow-y: auto;
-}
-
 .create-document-form {
   display: grid;
   gap: var(--brand-space-4);
@@ -6920,6 +6913,36 @@ a.cmp-file-act {
 .app-menu-item:focus-visible {
   background: var(--bs-surface-2);
   outline: none;
+}
+
+/* The top bar's "+": each thing you can make, with a line saying where. */
+.create-menu {
+  min-width: 260px;
+}
+
+.create-menu-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--brand-space-2);
+  padding: var(--brand-space-2);
+}
+
+.create-menu-item > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--bs-text-muted);
+}
+
+.create-menu-name {
+  display: block;
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-medium);
+}
+
+.create-menu-note {
+  display: block;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
 }
 
 .app-menu-item--check {

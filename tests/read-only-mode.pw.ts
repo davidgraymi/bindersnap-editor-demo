@@ -171,9 +171,7 @@ test("a delinquent organization keeps its record, and its controls open the payw
   await expect(
     page.getByRole("button", { name: "Add a document" }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "New document" }),
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create new…" })).toBeVisible();
   await expect(page.getByTestId("read-only-banner")).toHaveCount(0);
 
   const adminSession = await signIn(GITEA_ADMIN_USER, GITEA_ADMIN_PASS);
@@ -195,7 +193,10 @@ test("a delinquent organization keeps its record, and its controls open the payw
   const paywall = page.getByRole("dialog");
   for (const open of [
     () => page.getByRole("button", { name: "Add a document" }).click(),
-    () => page.getByRole("button", { name: "New document" }).click(),
+    async () => {
+      await page.getByRole("button", { name: "Create new…" }).click();
+      await page.getByRole("menuitem", { name: /New binder/ }).click();
+    },
     () => page.getByRole("button", { name: "Restore access" }).click(),
   ]) {
     await open();
