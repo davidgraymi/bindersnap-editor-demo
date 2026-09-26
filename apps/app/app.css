@@ -4432,6 +4432,25 @@ a.bs-knot {
     margin-left: var(--brand-space-3);
   }
 
+  /* The organization gives way before the search button does: a long name
+     ends in "…" rather than running under it. */
+  .app-trail-org,
+  .app-org-switcher,
+  .app-trail-org .app-topnav-link {
+    min-width: 0;
+    flex-shrink: 1;
+  }
+
+  .app-org-switcher {
+    display: flex;
+  }
+
+  /* Qualified to outrank the base rule further down, which lets this group
+     shrink — here that squeezed the search button to half its width. */
+  .app-topnav .app-topnav-right {
+    flex-shrink: 0;
+  }
+
   /* **A phone keeps the organization and nothing after it.** The binder is
      the first chip of the strip under the top bar, so naming it here too
      would cost the search button beside it for a word already on screen. */
@@ -4813,6 +4832,16 @@ a.bs-knot {
   transition: none;
   white-space: nowrap;
   text-decoration: none;
+}
+
+.app-topnav-link > svg {
+  flex-shrink: 0;
+}
+
+.app-topnav-link-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .app-topnav-link:hover {
