@@ -725,17 +725,3 @@ export async function openNewDocumentModal(page: Page): Promise<void> {
  * the question is always shown here — with exactly one binder it is skipped,
  * because choosing from a list of one teaches nothing.
  */
-export async function openTopnavNewDocumentModal(page: Page): Promise<void> {
-  const button = page.locator("#topnav-new-doc-btn");
-  await expect(button).toBeVisible();
-  await button.click();
-
-  await expect(
-    page.getByRole("heading", { name: "Which binder?" }),
-  ).toBeVisible();
-  await page.getByRole("dialog").locator(".bs-row").first().click();
-
-  await expect(
-    page.getByRole("heading", { name: "Add a document" }),
-  ).toBeVisible();
-}

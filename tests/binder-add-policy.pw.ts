@@ -182,80 +182,6 @@ test("a member files a policy from the binder's own page", async ({ page }) => {
   });
 });
 
-test("the nav's New policy asks which binder, then files into it", async ({
-  page,
-}) => {
-  // The nav is the one surface with no binder in scope. Asking first is not a
-  // nicety: the binder decides who can see the policy, who approves it and
-  // what the rules are, and it is the one answer that cannot be changed
-  // afterwards without re-filing.
-  const credentials = buildCredentials();
-  const sessionCookie = await signUp(credentials);
-  const org = await createOrganization(
-    sessionCookie,
-    `Riverbend ${randomUUID().slice(0, 6)}`,
-  );
-  const first = await createBinder(sessionCookie, org, "Clinical Policies");
-  const second = await createBinder(sessionCookie, org, "Corporate Policies");
-
-  await signInBrowser(page, sessionCookie);
-  await page.goto(`${APP_BASE_URL}/${org}`);
-
-  await page.locator("#topnav-new-doc-btn").click();
-
-  await expect(
-    page.getByRole("heading", { name: "Which binder?" }),
-  ).toBeVisible();
-
-  // Scoped to the dialog: the organization page behind it lists the same
-  // binders, so an unscoped match finds two. By name, as the row shows it.
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: "Corporate Policies" })
-    .click();
-  await expect(
-    page.getByRole("heading", { name: "Add a document" }),
-  ).toBeVisible();
-
-  await fileAPolicy(page, "Expenses Policy", "");
-
-  // Wait for the app to land on the change request before asking the API about
-  // it — otherwise the fetch races the upload and reads an empty binder.
-  await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
-
-  // It landed in the binder that was chosen, not the first one in the list.
-  //
-  // Asked of that binder's change requests rather than its documents: a binder
-  // lists what is on `main`, and a policy filed a moment ago is not there yet.
-  // The change request is where it is, and naming the right binder is the whole
-  // point of this test.
-  const changes = await fetch(
-    `${API_BASE_URL}/api/app/binders/${org}/${second}/changes?state=open`,
-    { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
-  );
-  expect(changes.status).toBe(200);
-  const listed = (await changes.json()) as {
-    changes: Array<{ branchName?: string; title?: string }>;
-  };
-  expect(
-    listed.changes.some(
-      (change) =>
-        (change.branchName ?? "").startsWith("upload/expenses-policy/") ||
-        (change.title ?? "").includes("expenses-policy"),
-    ),
-    JSON.stringify(listed.changes),
-  ).toBe(true);
-
-  // And the binder it was *not* filed into has nothing in flight.
-  const otherChanges = await fetch(
-    `${API_BASE_URL}/api/app/binders/${org}/${first}/changes?state=open`,
-    { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
-  );
-  expect(
-    ((await otherChanges.json()) as { changes: unknown[] }).changes,
-  ).toHaveLength(0);
-});
-
 /**
  * Approve and publish the one open change in a binder, as somebody else.
  *
@@ -492,12 +418,6 @@ test("the header's one filled button belongs to the tab it sits above", async ({
   // Back to the binder's contents and it returns: scoped, not deleted.
   await page.locator(".app-sidebar-binder").click();
   await expect(addAPolicy).toBeVisible({ timeout: 30_000 });
-
-  // Filing a policy is never more than one click away regardless — the top
-  // nav carries it on every page in the app.
-  await expect(
-    page.getByRole("button", { name: "New document" }),
-  ).toBeVisible();
 });
 
 test("a new binder has a page of its own, and lands you in it", async ({

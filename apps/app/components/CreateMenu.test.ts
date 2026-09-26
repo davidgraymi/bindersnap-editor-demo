@@ -5,14 +5,14 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { JSDOM } from "jsdom";
 
-import { NewDocumentButton } from "./NewDocumentButton";
+import { CreateMenu } from "./CreateMenu";
 
 /**
- * The nav's create action, rendered.
+ * The top bar's "+", rendered.
  *
- * The point of this button is restraint: it has to stay reachable and named
- * for a screen reader while giving up the coral that belongs to whatever the
- * page itself is asking for.
+ * Quiet — an icon, named for a screen reader, never coral — and it offers the
+ * things that have no page to be added from: a binder and an organization. A
+ * document is added on its binder's page.
  */
 
 const DOM_KEYS = [
@@ -82,51 +82,59 @@ function render(element: ReactElement) {
   };
 }
 
-test("the button is named for a screen reader and on hover", () => {
-  const { container, unmount } = render(
-    createElement(NewDocumentButton, { onClick: () => {} }),
-  );
+function click(element: Element | null | undefined) {
+  flushSync(() => {
+    element?.dispatchEvent(new window.Event("click", { bubbles: true }));
+  });
+}
+
+function menu(org: string | null, calls: string[] = []) {
+  return createElement(CreateMenu, {
+    org,
+    onNewBinder: (inOrg: string) => calls.push(`binder:${inOrg}`),
+    onNewOrganization: () => calls.push("organization"),
+  });
+}
+
+test("the button is quiet and named for a screen reader", () => {
+  const { container, unmount } = render(menu("riverside"));
 
   const button = container.querySelector("button");
-  expect(button).not.toBeNull();
-  expect(button?.getAttribute("aria-label")).toBe("New document");
-  expect(button?.getAttribute("title")).toBe("New document");
-  expect(button?.getAttribute("type")).toBe("button");
-
-  unmount();
-});
-
-test("the button stays quiet — no visible label, no coral styling", () => {
-  const { container, unmount } = render(
-    createElement(NewDocumentButton, { onClick: () => {} }),
-  );
-
-  const button = container.querySelector("button");
-  // Icon only: nothing in the button reads as a word on screen.
+  expect(button?.getAttribute("aria-label")).toBe("Create new…");
+  expect(button?.getAttribute("aria-haspopup")).toBe("menu");
   expect(button?.textContent?.trim()).toBe("");
-  expect(container.querySelector("svg")).not.toBeNull();
-  // It borrows the nav's plain icon-button styling rather than a coral CTA.
   expect(button?.className.split(/\s+/)).toContain("app-topnav-icon-btn");
 
   unmount();
 });
 
-test("clicking it asks for a new document", () => {
-  let clicks = 0;
-  const { container, unmount } = render(
-    createElement(NewDocumentButton, {
-      onClick: () => {
-        clicks += 1;
-      },
-    }),
+test("it offers a binder in the organization on screen, and an organization", () => {
+  const calls: string[] = [];
+  const { container, unmount } = render(menu("riverside", calls));
+
+  click(container.querySelector("button"));
+  const items = [...container.querySelectorAll('[role="menuitem"]')];
+  expect(
+    items.map((item) => item.querySelector(".create-menu-name")?.textContent),
+  ).toEqual(["New binder", "New organization"]);
+  // Not "Add a document": that is the binder page's.
+  expect(container.textContent).not.toContain("document");
+
+  click(items[0]);
+  expect(calls).toEqual(["binder:riverside"]);
+  expect(container.querySelector('[role="menu"]')).toBeNull();
+
+  unmount();
+});
+
+test("outside an organization there is no binder to add to", () => {
+  const { container, unmount } = render(menu(null));
+
+  click(container.querySelector("button"));
+  const names = [...container.querySelectorAll(".create-menu-name")].map(
+    (name) => name.textContent,
   );
-
-  const button = container.querySelector("button");
-  flushSync(() => {
-    button?.dispatchEvent(new window.Event("click", { bubbles: true }));
-  });
-
-  expect(clicks).toBe(1);
+  expect(names).toEqual(["New organization"]);
 
   unmount();
 });
