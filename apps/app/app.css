@@ -1353,6 +1353,28 @@ input {
   gap: var(--brand-space-1-5);
 }
 
+/* **On a phone, the arrow is the button.** A download arrow is read without its
+   word, and the word cost the filename beside it most of its line. The label
+   stays for a screen reader, so the button's name does not change. The button
+   keeps a 36px square so a thumb still finds it. */
+@media (max-width: 768px) {
+  .bs-btn.doc-preview-download {
+    justify-content: center;
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0;
+  }
+
+  .doc-preview-download-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
 /* The document reads top to bottom with the page, the way a document should —
    no scrollbox inside a scrollbox. */
 .doc-preview-body {
@@ -8607,6 +8629,13 @@ a.bs-row:focus-visible {
     white-space: nowrap;
     text-decoration: none;
     cursor: pointer;
+  }
+
+  /* A round chip the same height as the worded ones. */
+  .binder-strip-item--icon {
+    justify-content: center;
+    min-width: 32px;
+    padding: 0;
   }
 
   .binder-strip-item--active {

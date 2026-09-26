@@ -225,12 +225,15 @@ export function DocumentPreview({
         </span>
         <button
           className="bs-btn bs-btn--sm bs-btn-secondary doc-preview-download"
+          title="Download"
           type="button"
           disabled={downloading || !fileName}
           onClick={() => onDownload(loadedBlob)}
         >
           <Download size={14} strokeWidth={1.5} aria-hidden="true" />
-          {downloading ? "Downloading…" : "Download"}
+          <span className="doc-preview-download-label">
+            {downloading ? "Downloading…" : "Download"}
+          </span>
         </button>
       </div>
     );
@@ -259,12 +262,15 @@ export function DocumentPreview({
           ) : null}
           <button
             className="bs-btn bs-btn--sm bs-btn-secondary doc-preview-download"
+            title="Download"
             type="button"
             disabled={downloading || !fileName}
             onClick={() => onDownload(loadedBlob)}
           >
             <Download size={14} strokeWidth={1.5} aria-hidden="true" />
-            {downloading ? "Downloading…" : "Download"}
+            <span className="doc-preview-download-label">
+              {downloading ? "Downloading…" : "Download"}
+            </span>
           </button>
         </header>
       )}
