@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
 import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
-import { BookOpen } from "lucide-react";
+import { BookOpen, FilePen } from "lucide-react";
 
 import { fetchOrganizationBinders } from "../api";
 import type { WorkspaceSummary } from "../../../packages/api-schema/schemas/workspaces";
 import { followInApp } from "../appLink";
 import { buildBinderUrl } from "../binderShell";
-import { formatDocumentName } from "../documentDisplay";
+import { formatAge, formatDocumentName } from "../documentDisplay";
 import { NewBinderPage } from "./NewBinderPage";
 import { OrganizationPeople } from "./OrganizationPeople";
 import { SkeletonPanel } from "./Skeleton";
@@ -235,6 +235,7 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
                       {binder.description || "No description"}
                     </span>
                   </span>
+                  <BinderFacts binder={binder} />
                 </a>
               </li>
             ))}
@@ -242,5 +243,45 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
         </section>
       )}
     </section>
+  );
+}
+
+/**
+ * What a binder is doing, on the right of its row: how many changes are open
+ * in it and when anything last moved.
+ *
+ * **GitLab's project list, for a binder.** The list said what each binder was
+ * *for* and nothing about what was happening in it, so finding the one with
+ * work waiting meant opening them in turn. Both facts come on the repository
+ * Gitea already returns — no request per row.
+ *
+ * The count's slot is always there, empty when nothing is open, so "Updated"
+ * lines up down the list rather than stepping sideways on the rows that have
+ * work in them — the same rule the change rows' comment count follows.
+ */
+function BinderFacts({ binder }: { binder: WorkspaceSummary }) {
+  const open = binder.openChangeCount;
+  const updated = formatAge(binder.updatedAt);
+  const openLabel =
+    open === 1 ? "1 open change request" : `${open} open change requests`;
+
+  return (
+    <span className="bs-row-right org-binder-facts">
+      <span
+        className="org-binder-changes"
+        {...(open > 0 ? { title: openLabel } : { "aria-hidden": true })}
+      >
+        {open > 0 ? (
+          <>
+            <FilePen size={13} strokeWidth={1.75} aria-hidden="true" />
+            <span aria-hidden="true">{open}</span>
+            <span className="sr-only">{openLabel}</span>
+          </>
+        ) : null}
+      </span>
+      {updated ? (
+        <span className="org-binder-updated">Updated {updated}</span>
+      ) : null}
+    </span>
   );
 }
