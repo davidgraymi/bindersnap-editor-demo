@@ -149,7 +149,9 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
             aria-selected={tab === entry}
             onClick={() => goTo(entry)}
           >
-            {entry === "binders" ? "Binders" : "People"}
+            {/* The sidebar's word for the same page. Two names for one
+                screen made "People" and "People & access" read as two. */}
+            {entry === "binders" ? "Binders" : "People & access"}
             {entry === "binders" && binders !== null && binders.length > 0 ? (
               <span className="doc-tab-count">{binders.length}</span>
             ) : null}
