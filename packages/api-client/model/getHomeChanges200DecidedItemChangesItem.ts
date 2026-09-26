@@ -14,6 +14,8 @@ export type GetHomeChanges200DecidedItemChangesItem = {
   title: string;
   body: string;
   branchName: string;
+  /** @nullable */
+  documentSlugPath: string | null;
   submittedBy: string;
   submittedAt: string;
   /** @nullable */
