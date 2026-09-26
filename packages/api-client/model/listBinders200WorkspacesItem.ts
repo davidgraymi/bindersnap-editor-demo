@@ -11,4 +11,6 @@ export type ListBinders200WorkspacesItem = {
   owner: string;
   fullName: string;
   description: string;
+  openChangeCount: number;
+  updatedAt: string;
 };

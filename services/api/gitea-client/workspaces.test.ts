@@ -464,6 +464,8 @@ test("listOrganizationWorkspaces returns the org's binders in the app's shape", 
           full_name: "mercy-health/clinical-policies",
           owner: { login: "mercy-health" },
           description: "Nursing and clinical practice",
+          open_pr_counter: 3,
+          updated_at: "2026-09-20T10:00:00Z",
         },
         {
           id: 9,
@@ -488,6 +490,8 @@ test("listOrganizationWorkspaces returns the org's binders in the app's shape", 
       fullName: "mercy-health/clinical-policies",
       owner: "mercy-health",
       description: "Nursing and clinical practice",
+      openChangeCount: 3,
+      updatedAt: "2026-09-20T10:00:00Z",
     },
     // A binder with no description is an ordinary binder, not a broken one.
     {
@@ -496,6 +500,8 @@ test("listOrganizationWorkspaces returns the org's binders in the app's shape", 
       fullName: "mercy-health/hr",
       owner: "mercy-health",
       description: "",
+      openChangeCount: 0,
+      updatedAt: "",
     },
   ]);
 });

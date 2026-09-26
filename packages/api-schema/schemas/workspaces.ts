@@ -30,6 +30,13 @@ export const WorkspaceSummarySchema = z.object({
   /** `owner/name`, as Gitea addresses it. */
   fullName: z.string(),
   description: z.string(),
+  /**
+   * Open change requests — every open pull request, the same count the
+   * binder's own Changes tab carries. Free on Gitea's repository object.
+   */
+  openChangeCount: z.number(),
+  /** When anything last moved in it (ISO); "" when Gitea does not say. */
+  updatedAt: z.string(),
 });
 export type WorkspaceSummary = z.infer<typeof WorkspaceSummarySchema>;
 
