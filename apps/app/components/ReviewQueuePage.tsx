@@ -173,6 +173,7 @@ export function ReviewQueuePage({
                   meta={row.meta}
                   tone={row.tone}
                   standing={row.standing}
+                  commentCount={row.commentCount}
                   href={buildBinderUrl({
                     org: row.owner,
                     binder: row.repo,

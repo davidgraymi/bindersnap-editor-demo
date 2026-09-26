@@ -68,6 +68,12 @@ export interface QueueRow {
    * you, and hiding either fact would be the wrong one to hide.
    */
   waitingOnYou: boolean;
+  /**
+   * How many comments are on it — the count Home and a binder's own list put
+   * beside the same change. A row that showed it in two lists and not the
+   * third read as a change nobody had discussed.
+   */
+  commentCount: number;
   /** Sort key. Not rendered. */
   movedAt: number;
 }
@@ -185,6 +191,8 @@ export function buildQueueRows(
           isRejected: standing?.tone === "blocked",
         }),
         waitingOnYou: isWaitingOnReader(document, change, username, status),
+        // Gitea's own count on the pull request, passed through as Home reads it.
+        commentCount: (change as { comments?: number }).comments ?? 0,
         movedAt,
       });
     }
