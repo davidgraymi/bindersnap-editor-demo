@@ -4367,6 +4367,52 @@ a.bs-knot {
   font-weight: var(--brand-weight-medium);
 }
 
+/* The chevron beside the binder's name: every other binder in the
+   organization. The name stays a link; this is the switcher. */
+.app-trail-switch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  margin-left: -2px;
+  padding: 0;
+  border: none;
+  border-radius: var(--brand-radius-md);
+  background: none;
+  color: var(--bs-text-muted);
+  cursor: pointer;
+}
+
+.app-trail-switch:hover,
+.app-trail-switch[aria-expanded="true"] {
+  background: var(--bs-surface-3);
+  color: var(--bs-text-primary);
+}
+
+.app-trail-switch:focus-visible {
+  outline: 2px solid var(--bs-coral-text);
+  outline-offset: 1px;
+}
+
+.binder-switcher {
+  min-width: 220px;
+}
+
+.binder-switcher-note {
+  margin: 0;
+  padding: var(--brand-space-1-5) var(--brand-space-2);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-sm);
+}
+
+.binder-switcher-foot {
+  margin-top: var(--brand-space-0-5);
+  padding-top: var(--brand-space-1);
+  border-top: 1px solid var(--bs-rule-warm);
+}
+
 .app-trail-org .app-topnav-link[aria-current="page"] {
   color: var(--bs-text-primary);
 }
