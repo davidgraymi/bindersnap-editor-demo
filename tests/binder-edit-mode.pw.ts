@@ -1350,7 +1350,7 @@ test("Open on a change lands on the document's own page", async ({ page }) => {
   await page.goto(
     `${APP_BASE_URL}/${org}/${binder}?tab=changes&change=${number}`,
   );
-  await page.getByRole("button", { name: "Open", exact: true }).click();
+  await page.getByRole("button", { name: "View file", exact: true }).click();
 
   // The document's address, and the document's own name as the page's title.
   // The branch is the address and the change rides along as the way back —
@@ -1759,7 +1759,7 @@ test("Open on a change lands on the branch, and browsing stays there", async ({
   await page.goto(
     `${APP_BASE_URL}/${org}/${binder}?tab=changes&change=${number}`,
   );
-  await page.getByRole("button", { name: "Open", exact: true }).click();
+  await page.getByRole("button", { name: "View file", exact: true }).click();
 
   // The branch is the address, and the change rides along as the way back.
   await expect(page).toHaveURL(/[?&]ref=/, { timeout: 30_000 });
