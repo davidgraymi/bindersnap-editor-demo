@@ -1290,6 +1290,9 @@ input {
    picture of a document. */
 .doc-preview {
   display: grid;
+  /* minmax(0, …): the file bar's name does not wrap, and an auto column would
+     widen to fit it and push the card off a narrow screen. */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
   background: var(--bs-surface-1);
   border: 1px solid var(--bs-rule);
@@ -1315,7 +1318,22 @@ input {
   font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
   color: var(--bs-text-secondary);
-  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+/* One line at every width. The name is under the title already, so a long
+   one can lose its end here rather than push Download onto a second row. */
+.doc-preview-filename-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-preview-filename svg,
+.doc-preview-size,
+.doc-preview-download {
+  flex-shrink: 0;
 }
 
 .doc-preview-toolbar-spacer {
@@ -2958,14 +2976,6 @@ a.bs-knot {
 
   .doc-spline-head {
     flex-wrap: wrap;
-  }
-
-  .doc-preview-toolbar {
-    flex-wrap: wrap;
-  }
-
-  .doc-preview-filename {
-    flex-basis: 100%;
   }
 
   .doc-preview-body {
