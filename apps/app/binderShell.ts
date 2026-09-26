@@ -68,8 +68,12 @@ function decodeRef(segment: string): string {
  *
  * `rest` is that remainder with its leading slash, and null when it is not
  * one of ours — an older `/{org}/{binder}/{path}` address, which the app
- * rewrites before anything reads it. `?change=` beside a branch is where the
- * reader came from; it is the one screen fact still in the query.
+ * rewrites before anything reads it.
+ *
+ * **A branch is not reached "from" a change.** It is the primitive: its tree
+ * says which change sits on it, and nothing on it is a way back to where the
+ * reader happened to click from — GitLab's tree at a branch has no such
+ * button either.
  */
 export function parseBinderAddress(
   rest: string,
@@ -84,9 +88,7 @@ export function parseBinderAddress(
 
   switch (screen) {
     case "tree":
-      return parts[0]
-        ? { ...HOME, ref: decodeRef(parts[0]), change: cameFrom }
-        : HOME;
+      return parts[0] ? { ...HOME, ref: decodeRef(parts[0]) } : HOME;
     case "blob": {
       const [ref, ...file] = parts;
       if (!ref || file.length === 0) return HOME;
@@ -94,7 +96,9 @@ export function parseBinderAddress(
         ...HOME,
         ref: decodeRef(ref),
         documentPath: file.join("/"),
-        change: cameFrom,
+        // Only from an address that named a change and no branch — the server
+        // looks the branch up. Nothing builds one now.
+        change: ref === DEFAULT_REF ? cameFrom : null,
       };
     }
     case "changes": {
@@ -214,13 +218,7 @@ export function buildBinderUrl(params: {
   draft?: string | null;
   /** The archive — what this binder has taken off the record. */
   archive?: boolean;
-  /**
-   * Read the binder's documents at a branch rather than on `main`.
-   *
-   * With `change` beside it and no `tab`, this is the binder as that change
-   * would leave it — where a change's branch link goes. The change says which
-   * one to ask the server for and gives the reader the way back.
-   */
+  /** Read the binder's documents at a branch rather than on `main`. */
   ref?: string | null;
 }): string {
   const {
@@ -255,8 +253,6 @@ export function buildBinderUrl(params: {
     path = `/-/settings/${tab}`;
   } else {
     path = ref ? `/-/tree/${encodeURIComponent(ref)}` : "";
-    // Where a branch was reached from, so the reader keeps the way back.
-    if (ref && change !== undefined) query.set("change", String(change));
     // Not editing is the ordinary state, so it says nothing — the binder's
     // own address stays the short one.
     if (edit === "editing") query.set("edit", "1");

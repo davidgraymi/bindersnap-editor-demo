@@ -71,8 +71,6 @@ interface BinderDocumentPageProps {
    * because `ref` is React's own prop and cannot be one of ours.
    */
   documentRef?: string | null;
-  /** Back to the change this is being read on. */
-  onBackToChange?: ((changeNumber: number) => void) | null;
   /**
    * Which versions of this document exist, for the file panel's own control.
    *
@@ -109,7 +107,6 @@ export function BinderDocumentPage({
   draft = null,
   change = null,
   documentRef = null,
-  onBackToChange = null,
   onRefsChange,
   onOpenBinder,
   onOpenChange,
@@ -280,30 +277,6 @@ export function BinderDocumentPage({
 
   return (
     <div className="binder-pane">
-      {/* **Which version you are reading is said by the file panel now.** It
-          was a warning strip here: "You are reading the branch
-          draft/alice/20260922131449975", which named a git object at a reader
-          of a policy manual and offered no way anywhere from it. The panel
-          beside the page is a view of one version of the binder, so the
-          control naming that version sits at the top of it — the customer, of
-          GitHub: *"a branch selector in the file explorer so that it's clear
-          what branch the user is viewing. We should do the same."*
-
-          The way back to the change stays, because it is not a fact about the
-          ref: it is where the reader came from, and somebody who came here to
-          read came here to decide. */}
-      {change !== null && onBackToChange ? (
-        <div className="doc-on-change" role="status">
-          <button
-            type="button"
-            className="bs-btn bs-btn--sm bs-btn-secondary"
-            onClick={() => onBackToChange(change)}
-          >
-            Back to change {change}
-          </button>
-        </div>
-      ) : null}
-
       <header className="bs-pagehead">
         <div className="bs-pagehead-body">
           <h1 className="bs-title">{formatDocumentName(document.name)}</h1>

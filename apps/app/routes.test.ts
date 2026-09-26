@@ -169,7 +169,7 @@ test("an address from before `/-/` is rewritten to the one that replaced it", ()
     `${clinical}/-/archive`,
   );
   expect(canonicalLocation(clinical, "?ref=upload%2Fx&change=7")).toBe(
-    `${clinical}/-/tree/upload%2Fx?change=7`,
+    `${clinical}/-/tree/upload%2Fx`,
   );
   expect(
     canonicalLocation(`${clinical}/nursing/hand-hygiene`, "?version=2"),
@@ -179,7 +179,7 @@ test("an address from before `/-/` is rewritten to the one that replaced it", ()
       `${clinical}/nursing/hand-hygiene`,
       "?ref=upload%2Fx&change=7",
     ),
-  ).toBe(`${clinical}/-/blob/upload%2Fx/nursing/hand-hygiene?change=7`);
+  ).toBe(`${clinical}/-/blob/upload%2Fx/nursing/hand-hygiene`);
   // Editing is not a screen, so it stays where it was.
   expect(canonicalLocation(`${clinical}/nursing/hand-hygiene`, "?edit=1")).toBe(
     `${clinical}/-/blob/main/nursing/hand-hygiene?edit=1`,

@@ -9109,6 +9109,20 @@ a.bs-row:focus-visible {
   cursor: pointer;
 }
 
+/* A change's title is a sentence; in a 340px menu it ends in an ellipsis
+   rather than off the edge. */
+.bs-draftmenu-pick {
+  min-width: 0;
+}
+
+.bs-draftmenu-pick .bs-row-name,
+.bs-draftmenu-pick .bs-row-meta {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .bs-draftmenu-pick:disabled {
   cursor: default;
 }
@@ -9126,6 +9140,56 @@ a.bs-row:focus-visible {
 
 .bs-draftmenu-split {
   border-top: 1px solid var(--bs-rule);
+}
+
+/* A line inside the menu where a list has nothing in it yet. */
+.bs-draftmenu-note {
+  margin: 0;
+  padding: var(--brand-space-1-5) var(--brand-space-2);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+/* ── Which version of the binder the tree is ──────────────────────────────
+   GitLab's branch selector, first in the tree's bar. Quiet on the record,
+   where it is a choice nobody has made yet; tinted the branch chip's blue
+   anywhere else, so the one fact that makes the page not the record is the
+   loudest thing over the tree. */
+.bs-refpick {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  max-width: 280px;
+  min-height: 32px;
+  padding: 0 var(--brand-space-1) 0 var(--brand-space-1-5);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-1);
+  color: var(--bs-text-primary);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-medium);
+  cursor: pointer;
+}
+
+.bs-refpick:hover {
+  border-color: var(--bs-text-muted);
+}
+
+.bs-refpick--branch {
+  border-color: transparent;
+  background: var(--bs-status-info-bg);
+  color: var(--bs-status-info-fg);
+}
+
+.bs-refpick--branch:hover {
+  border-color: var(--bs-status-info-fg);
+}
+
+.bs-refpick-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .bs-draftmenu-new {
@@ -9236,17 +9300,6 @@ a.bs-row:focus-visible {
 .change-does .bs-row-right {
   flex-shrink: 0;
   gap: var(--brand-space-2);
-}
-
-/* Which branch a document is being read on, said before anything on it. The
-   page is the document's own — its title, its full width — and what makes it a
-   proposal rather than the record is a fact about the ref. */
-.doc-on-change {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--brand-space-3);
 }
 
 /* ── A change request in a list ────────────────────────────────────────────
@@ -9743,6 +9796,29 @@ a.bs-row:focus-visible {
   align-items: center;
   gap: var(--brand-space-1-5);
   padding: var(--brand-space-1-5) var(--brand-space-2);
+}
+
+/* The same card on a branch, saying which branch — in the picker's blue, so
+   the two read as one statement: this is not the published binder. */
+.binder-latest--branch {
+  border-color: var(--bs-status-info-bg);
+  background: color-mix(
+    in srgb,
+    var(--bs-status-info-bg) 45%,
+    var(--bs-surface-1)
+  );
+}
+
+.binder-latest-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bs-status-info-bg);
+  color: var(--bs-status-info-fg);
 }
 
 .binder-latest--loading {

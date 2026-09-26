@@ -98,19 +98,10 @@ function binderPath(
 
   if (change !== null) {
     const changeLabel = `Change ${change}`;
-    // The binder as a change would leave it, from the branch link on a
-    // comparison. Still inside that change, so still under it.
-    const onBranch = address.ref !== null && tab === "documents";
     // Named for the tab that opens it — Overview · Changes, the way a code
     // host names a merge request's — so the trail and the tab agree.
     const subpage =
-      view === "compare"
-        ? "Changes"
-        : view === "preview"
-          ? "Preview"
-          : onBranch
-            ? "Proposed files"
-            : null;
+      view === "compare" ? "Changes" : view === "preview" ? "Preview" : null;
 
     return [
       changesStep,
