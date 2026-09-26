@@ -52,8 +52,8 @@ test("a document in the change's list opens its own diff", async ({ page }) => {
   await signInAsAlice(page);
   await page.goto(`${APP_BASE_URL}/${OWNER}/facilities?tab=changes&change=4`);
 
-  // A row is a way into the Changes screen, not a selector for the rail — the
-  // rail has no per-file panel on a change to several documents.
+  // A row is a way into the Changes screen, not a selector for the rail —
+  // the rail has no per-file panel, whatever the count.
   const rows = page.locator(".change-does .bs-row");
   await expect(rows).toHaveCount(2);
   await expect(
@@ -71,6 +71,24 @@ test("a document in the change's list opens its own diff", async ({ page }) => {
   await expect(
     page.locator('.bs-rail .bs-row[aria-current="true"]'),
   ).toContainText(name);
+});
+
+test("a change to one document reads the same as a change to several", async ({
+  page,
+}) => {
+  await signInAsAlice(page);
+  await page.goto(`${APP_BASE_URL}/${OWNER}/clinical?tab=changes&change=7`);
+
+  // The same list, with its one row, and the same rail.
+  await expect(page.locator(".change-does .bs-row")).toHaveCount(1);
+  await expect(page.locator(".change-does")).toContainText("1 document");
+  await expect(
+    page.locator(".bs-rail").getByRole("heading", { name: "Proposed version" }),
+  ).toHaveCount(0);
+
+  await page.locator(".change-does .bs-row").click();
+  await expect(page).toHaveURL(/view=compare/);
+  await expect(page.locator(".cmp-file")).toHaveCount(1);
 });
 
 test("a renamed policy is read by identity, not by address", async ({

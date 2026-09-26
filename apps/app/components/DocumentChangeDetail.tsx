@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
-import { Columns2, Download, FileText, Pencil } from "lucide-react";
+import { Columns2, FileText, Pencil } from "lucide-react";
 
 import type { ChangeUpdate, RepoBranchProtection } from "../api";
 import {
@@ -9,7 +9,6 @@ import {
   submitDocumentReview,
 } from "../api";
 import {
-  buildProposedVersionFacts,
   describeChangeBody,
   describeChangeOpening,
   resolveReviewDecision,
@@ -49,34 +48,10 @@ interface DocumentChangeDetailProps {
   canManageAssignments: boolean;
   nextVersion: number;
   /**
-   * How many documents this change touches.
-   *
-   * Only the header cares: "becomes v2 when published" is printed under the
-   * change's own title, and with several documents that is a sentence about
-   * the change carrying a fact about one row of it. Publishing still uses
-   * {@link nextVersion}, which is about the document being shown.
+   * How many documents this change touches, for the approve prompt — the
+   * versions themselves are on the rows of "What this change does".
    */
   documentCount?: number;
-  /**
-   * "Renamed from Hand Hygiene", when this change renamed or refiled it.
-   *
-   * **A rename is a change even when not a word of the document changed**, and
-   * the comparison cannot show it — the identity survives a rename and the
-   * address does not, so both versions read identically and the screen said
-   * "nothing changed" about a change that plainly did something.
-   */
-  documentMove?: string | null;
-  /**
-   * Open this document at its own address, on this change's branch.
-   *
-   * **A change request is a branch, and a document on it has an address.**
-   * Reading the proposed version used to happen here, in a panel beside the
-   * discussion: half a column wide, under a heading naming the change rather
-   * than the document, at a URL that said nothing about which document it was.
-   * It is the binder at another ref, which is what every other git front end
-   * does and what a reader already knows how to use.
-   */
-  onOpenOnBranch?: (() => void) | null;
   /**
    * What this change is about, when it is **not** a document.
    *
@@ -93,11 +68,6 @@ interface DocumentChangeDetailProps {
    */
   subject?: { title: string; description: string } | null;
   documentName: string;
-  /** Canonical file name, so the proposed version can be previewed and saved. */
-  fileName: string | null;
-  /** Set while this change's file is being fetched for download. */
-  downloading: boolean;
-  onDownload: (gitRef: string, loaded?: Blob | null) => void;
   onChanged: () => void | Promise<void>;
   onViewChange: (view: DocumentChangeView) => void;
   onBackToList: () => void;
@@ -273,14 +243,9 @@ export function DocumentChangeDetail({
   canManageAssignments,
   nextVersion,
   documentCount = 1,
-  documentMove = null,
-  onOpenOnBranch = null,
   byline,
   subject = null,
   documentName,
-  fileName,
-  downloading,
-  onDownload,
   onChanged,
   onViewChange,
   onBackToList,
@@ -416,21 +381,17 @@ export function DocumentChangeDetail({
   // round trip that ends in a 409.
   const threadsBlockPublish = blockOnUnresolvedThreads && unresolvedCount > 0;
   const ownSubmission = currentUser === change.submittedBy;
-  const opening = describeChangeOpening(
-    change,
-    subject || documentCount !== 1 ? null : nextVersion,
-    (login) => nameFor(names, login),
+  // **No version under the title**, on any change. It is printed under the
+  // change's own name, so on a change to several documents it was a fact
+  // about one of them; the rows of "What this change does" carry each
+  // document's own, the same way whatever the count.
+  const opening = describeChangeOpening(change, null, (login) =>
+    nameFor(names, login),
   );
   const description = describeChangeBody(change.summary, change.description);
   const outcome = describeChangeOutcome(change, (login) =>
     nameFor(names, login),
   );
-  const proposed = buildProposedVersionFacts({
-    fileName,
-    branchName: change.branchName,
-    submittedAt: change.submittedAt,
-    updates,
-  });
   const decision = resolveReviewDecision({
     open: change.open,
     isAnonymous,
@@ -622,80 +583,19 @@ export function DocumentChangeDetail({
           colliding with the title whenever it wrapped — which it does at any
           realistic length. */}
       <aside className="bs-rail" aria-label="The decision">
-        {/* **One file, or none of this.** With several documents the list in
-            the page says what happens to each, and the Changes tab shows it;
-            a panel here could only describe whichever one had been picked. */}
-        {subject || documentCount <= 1 ? (
+        {/* **Only when there is no document to list.** A change to the
+            sign-off rules versions nothing, so this says what is being
+            decided instead. A change to documents lists them in the page,
+            one row each, whether it touches one or six — a panel here for
+            one and not the other made two pages out of one. */}
+        {subject ? (
           <div className="bs-panel">
             <div className="bs-panel-bar">
-              <h2 className="bs-panel-bar-title">
-                {subject ? subject.title : "Proposed version"}
-              </h2>
+              <h2 className="bs-panel-bar-title">{subject.title}</h2>
             </div>
-            {subject ? (
-              <div className="bs-panel-body bs-rail-note">
-                {subject.description}
-              </div>
-            ) : (
-              <>
-                <div className="bs-panel-body bs-rail-note">
-                  {/* **Which document this is.** The panel described a version
-                    of something it never named — and on a change to several
-                    documents, whichever one happened to be picked below. */}
-                  <p className="change-proposed-name">{documentName}</p>
-                  {/* The version it will become sits with the file, now that the
-                    line under the title is the one both tabs share. */}
-                  {[
-                    opening.becomes !== null
-                      ? `Becomes v${opening.becomes}`
-                      : null,
-                    proposed.fileName,
-                    proposed.updateLabel,
-                    proposed.date,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                  {/* **A rename is a change even when not a word of the document
-                    changed**, and no comparison can show it: the identity
-                    survives a rename and the address does not, so both refs
-                    read identically. Said here, beside the version it is true
-                    of, rather than only on the screen that draws the diff. */}
-                  {documentMove ? <p>{documentMove}.</p> : null}
-                </div>
-                <div className="bs-panel-foot">
-                  <button
-                    className="bs-btn bs-btn--sm bs-btn-secondary"
-                    type="button"
-                    disabled={!proposed.ref || !onOpenOnBranch}
-                    onClick={() => onOpenOnBranch?.()}
-                  >
-                    {/* Not "Open": the badge beside the title says whether the
-                      change is open, and the same word here meant something
-                      else. */}
-                    View file
-                  </button>
-                  <span className="bs-panel-bar-spacer" />
-                  {/* A download arrow with the word "Download" beside it is the
-                    word twice. */}
-                  {proposed.ref ? (
-                    <button
-                      className="bs-actionbtn"
-                      type="button"
-                      aria-label={`Download ${fileName ?? "this version"}`}
-                      title="Download"
-                      disabled={downloading || !fileName}
-                      onClick={() => onDownload(proposed.ref!, null)}
-                    >
-                      <Download
-                        size={15}
-                        strokeWidth={1.6}
-                        aria-hidden="true"
-                      />
-                    </button>
-                  ) : null}
-                </div>
-              </>
-            )}
+            <div className="bs-panel-body bs-rail-note">
+              {subject.description}
+            </div>
           </div>
         ) : null}
 
@@ -744,11 +644,11 @@ export function DocumentChangeDetail({
             {actionState.showApproveConfirm ? (
               <div className="rev-decision-confirm">
                 <p className="rev-decision-confirm-line">
-                  {subject
-                    ? `Approve this change to ${documentName}? Your name and the time go on the record.`
-                    : documentCount > 1
-                      ? `Approve this change to ${documentCount} documents? Your name and the time go on the record.`
-                      : `Approve version ${nextVersion} of ${documentName}? Your name and the time go on the record.`}
+                  {`Approve this change to ${
+                    subject || documentCount === 1
+                      ? documentName
+                      : `${documentCount} documents`
+                  }? Your name and the time go on the record.`}
                 </p>
                 <div className="rev-decision-row">
                   <button
@@ -880,11 +780,8 @@ export function DocumentChangeDetail({
           canParticipate={!isAnonymous}
           currentUsername={currentUser}
           blockOnUnresolvedThreads={blockOnUnresolvedThreads}
-          onOpenUpdate={
-            proposed.ref === null || !onOpenOnBranch
-              ? null
-              : () => onOpenOnBranch()
-          }
+          /* What an update did is what the Changes tab shows. */
+          onOpenUpdate={subject ? null : () => onViewChange("compare")}
           onSummaryChange={(next) => {
             setUnresolvedCount((prev) =>
               prev === next.unresolvedCount ? prev : next.unresolvedCount,

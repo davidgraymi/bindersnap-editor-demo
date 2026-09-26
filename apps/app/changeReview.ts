@@ -88,49 +88,6 @@ export function describeChangeBody(
 }
 
 /**
- * The proposed-version card's mono line: which file, which update, when.
- *
- * Fixed chrome in a fixed place on every change, so a reviewer never has to
- * hunt for the thing they are being asked to approve. "update 2 of 2" is the
- * honest answer to "am I looking at the latest one?" — a question the old
- * single "Preview" button left a reader to guess at.
- */
-export interface ProposedVersionFacts {
-  fileName: string;
-  /** "update 2 of 2", or null when there is only ever been one. */
-  updateLabel: string | null;
-  /** When the newest update landed. Empty when nothing is known. */
-  date: string;
-  /** The ref to open, newest update first, falling back to the branch. */
-  ref: string | null;
-  /** Whether there is more than one update, so "All updates" is worth showing. */
-  hasHistory: boolean;
-}
-
-export function buildProposedVersionFacts(params: {
-  fileName: string | null;
-  branchName: string | null;
-  submittedAt: string;
-  updates: ChangeUpdate[];
-}): ProposedVersionFacts {
-  const { fileName, branchName, submittedAt, updates } = params;
-  const latest = updates.length > 0 ? updates[updates.length - 1]! : null;
-
-  return {
-    fileName: fileName ?? "The submitted file",
-    updateLabel:
-      updates.length > 1
-        ? `update ${latest!.index} of ${updates.length}`
-        : null,
-    date: formatEventDate(latest?.at ?? submittedAt),
-    // The branch head and the newest update are the same commit, and the
-    // branch keeps working when the updates call fails or returns nothing.
-    ref: branchName,
-    hasHistory: updates.length > 1,
-  };
-}
-
-/**
  * Where a thread stands, and how much of it to show.
  *
  * A thread is one comment primitive: a reply is what makes it a thread, and
