@@ -151,6 +151,8 @@ test("no page scrolls sideways on a phone", async ({ page }) => {
     "/riverside-health/clinical",
     "/riverside-health/clinical?tab=changes",
     "/riverside-health/clinical?tab=history",
+    // Its "Taken off the record" and long dates are what overflowed.
+    "/riverside-health/corporate?tab=history",
     "/riverside-health/clinical?tab=settings",
     "/riverside-health",
     "/changes",
@@ -167,5 +169,35 @@ test("no page scrolls sideways on a phone", async ({ page }) => {
         document.documentElement.clientWidth,
     );
     expect(overflow, `${path} is wider than the phone`).toBeLessThanOrEqual(0);
+
+    // **Clipped is not the same as fitting.** The sheet hides what spills
+    // out of it, so a page can be wider than the phone without the page
+    // scrolling — the history's panels ran 23px past the edge and were cut
+    // off, and the check above never saw it. Anything past the right edge
+    // that is not inside a strip meant to scroll sideways is cut off.
+    await page.waitForLoadState("networkidle");
+    const clipped = await page.evaluate(() => {
+      const edge = document.documentElement.clientWidth + 1;
+      const scrollsSideways = (element: Element | null): boolean => {
+        for (let at = element; at; at = at.parentElement) {
+          const { overflowX } = getComputedStyle(at);
+          if (overflowX === "auto" || overflowX === "scroll") {
+            if (!at.matches(".app-main-area, .app-main, body, html")) {
+              return true;
+            }
+          }
+        }
+        return false;
+      };
+      return Array.from(document.querySelectorAll(".app-main *"))
+        .filter((element) => {
+          const box = element.getBoundingClientRect();
+          return box.width > 0 && box.right > edge;
+        })
+        .filter((element) => !scrollsSideways(element.parentElement))
+        .slice(0, 3)
+        .map((element) => element.className.toString().slice(0, 60));
+    });
+    expect(clipped, `${path} runs past the phone's edge`).toEqual([]);
   }
 });
