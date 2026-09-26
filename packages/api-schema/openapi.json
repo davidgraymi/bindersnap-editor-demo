@@ -2296,6 +2296,12 @@
               "interval",
               "formatted"
             ]
+          },
+          "canManageBilling": {
+            "type": "boolean"
+          },
+          "hasBillingAccount": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -12024,6 +12030,12 @@
                         "interval",
                         "formatted"
                       ]
+                    },
+                    "canManageBilling": {
+                      "type": "boolean"
+                    },
+                    "hasBillingAccount": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -12060,6 +12072,12 @@
                 "properties": {
                   "idempotencyKey": {
                     "type": "string"
+                  },
+                  "intent": {
+                    "type": "string",
+                    "enum": [
+                      "cancel"
+                    ]
                   }
                 },
                 "required": [
@@ -12106,6 +12124,12 @@
                 "properties": {
                   "idempotencyKey": {
                     "type": "string"
+                  },
+                  "intent": {
+                    "type": "string",
+                    "enum": [
+                      "cancel"
+                    ]
                   }
                 },
                 "required": [

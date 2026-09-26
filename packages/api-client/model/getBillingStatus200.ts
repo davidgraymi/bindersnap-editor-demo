@@ -28,4 +28,6 @@ export type GetBillingStatus200 = {
   override: GetBillingStatus200Override;
   /** @nullable */
   plan: GetBillingStatus200Plan;
+  canManageBilling?: boolean;
+  hasBillingAccount?: boolean;
 };

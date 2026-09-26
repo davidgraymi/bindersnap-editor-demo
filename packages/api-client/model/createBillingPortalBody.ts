@@ -4,7 +4,9 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { CreateBillingPortalBodyIntent } from './createBillingPortalBodyIntent.ts';
 
 export type CreateBillingPortalBody = {
   idempotencyKey: string;
+  intent?: CreateBillingPortalBodyIntent;
 };

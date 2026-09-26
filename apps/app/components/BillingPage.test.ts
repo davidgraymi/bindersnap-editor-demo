@@ -99,7 +99,7 @@ test("a paying organization is told when it renews, and can manage it", () => {
   });
   expect(summary.standing).toBe("Active");
   expect(summary.detail).toBe("Renews on Oct 9, 2026.");
-  expect(summary.action).toBe("manage");
+  expect(summary.actions).toEqual(["manage", "cancel"]);
 });
 
 test("a trial says when it ends and offers to subscribe", () => {
@@ -110,7 +110,7 @@ test("a trial says when it ends and offers to subscribe", () => {
   });
   expect(summary.standing).toBe("Trial");
   expect(summary.detail).toContain("Free trial until Oct 9, 2026.");
-  expect(summary.action).toBe("subscribe");
+  expect(summary.actions).toEqual(["subscribe"]);
 });
 
 test("complimentary access is not asked to subscribe", () => {
@@ -119,7 +119,7 @@ test("complimentary access is not asked to subscribe", () => {
   for (const accessSource of ["admin_grant", "config_bypass"]) {
     const summary = describeBilling({ ...base, accessSource });
     expect(summary.standing).toBe("Complimentary");
-    expect(summary.action).toBeNull();
+    expect(summary.actions).toEqual([]);
   }
 });
 
@@ -130,5 +130,22 @@ test("a lapsed organization is read-only and can subscribe", () => {
     accessSource: "none",
   });
   expect(summary.standing).toBe("Inactive");
-  expect(summary.action).toBe("subscribe");
+  expect(summary.actions).toEqual(["subscribe"]);
+});
+
+test("a lapsed subscription can fix its card in Stripe", () => {
+  const summary = describeBilling({
+    ...base,
+    subscriptionStatus: "none",
+    accessSource: "none",
+    hasBillingAccount: true,
+  });
+  expect(summary.actions).toEqual(["subscribe", "manage"]);
+});
+
+test("a member sees where things stand, and that an owner acts on it", () => {
+  const summary = describeBilling({ ...base, canManage: false });
+  expect(summary.standing).toBe("Active");
+  expect(summary.actions).toEqual([]);
+  expect(summary.ownersOnly).toBe(true);
 });

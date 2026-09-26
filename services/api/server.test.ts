@@ -47,6 +47,9 @@ let giteaLoginsByToken = new Map<string, string>();
 let giteaOrgsByUsername = new Map<string, { id: number; username: string }>();
 // org name -> its Owners team members, for the admin browse listing.
 let giteaOrgOwners = new Map<string, MockedGiteaUser[]>();
+// Logins that are members but not owners of their organization. Everyone
+// else owns the one they were seeded with, as a signup does.
+let giteaNonOwners = new Set<string>();
 let nextGiteaOrgId = 4000;
 let stripeSubscriptionsById = new Map<string, MockedStripeResource>();
 let stripeCustomersById = new Map<string, MockedStripeResource>();
@@ -74,6 +77,7 @@ beforeEach(() => {
   giteaLoginsByToken = new Map();
   giteaOrgsByUsername = new Map();
   giteaOrgOwners = new Map();
+  giteaNonOwners = new Set();
   nextGiteaOrgId = 4000;
   stripeSubscriptionsById = new Map();
   stripeCustomersById = new Map();
@@ -143,6 +147,17 @@ beforeEach(() => {
             email: member.email,
           })),
         ),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    const permissionsMatch = url.pathname.match(
+      /^\/api\/v1\/users\/([^/]+)\/orgs\/([^/]+)\/permissions$/,
+    );
+    if (permissionsMatch) {
+      const login = decodeURIComponent(permissionsMatch[1] ?? "");
+      return new Response(
+        JSON.stringify({ is_owner: !giteaNonOwners.has(login) }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
     }
@@ -332,8 +347,11 @@ async function seedSession(
     isAdmin?: boolean;
     /** Pass false for an account that predates ADR 0004 and has no org. */
     withOrganization?: boolean;
+    /** Pass false for a member who does not own their organization. */
+    owner?: boolean;
   },
 ): Promise<string> {
+  if (options?.owner === false) giteaNonOwners.add(username);
   const sessionId = `sess_${randomUUID()}`;
   const giteaToken = `gitea_token_${randomUUID()}`;
   const email =
@@ -508,6 +526,40 @@ async function makeStripeWebhookRequest(
     body: rawBody,
   });
 }
+
+describe("billing belongs to the organization's owners", () => {
+  test("a member who is not an owner cannot start a checkout", async () => {
+    const server = createApiServer();
+    const username = `member-${randomUUID()}`;
+    const sessionId = await seedSession(username, { owner: false });
+
+    const response = await server.fetch(
+      makeBillingRequest("/api/app/billing/checkout", sessionId),
+    );
+
+    expect(response.status).toBe(403);
+    expect(getFetchCallsByPath("/v1/checkout/sessions")).toHaveLength(0);
+  });
+
+  test("the status says who may manage billing", async () => {
+    const server = createApiServer();
+    const owner = await seedSession(`owner-${randomUUID()}`);
+    const member = await seedSession(`member-${randomUUID()}`, {
+      owner: false,
+    });
+
+    const read = async (sessionId: string) =>
+      (await (
+        await server.fetch(
+          makeSessionRequest("/api/app/billing/status", sessionId),
+        )
+      ).json()) as { canManageBilling: boolean; hasBillingAccount: boolean };
+
+    expect((await read(owner)).canManageBilling).toBe(true);
+    expect((await read(member)).canManageBilling).toBe(false);
+    expect((await read(owner)).hasBillingAccount).toBe(false);
+  });
+});
 
 describe("billing Stripe idempotency", () => {
   test("checkout sends a unique Stripe Idempotency-Key per attempt when no client key provided", async () => {
