@@ -101,6 +101,8 @@ interface DocumentChangeDetailProps {
   onChanged: () => void | Promise<void>;
   onViewChange: (view: DocumentChangeView) => void;
   onBackToList: () => void;
+  /** Who, what and from where: the line under the title, shared with Changes. */
+  byline?: React.ReactNode;
   /**
    * The reviewers this change is actually held for.
    *
@@ -273,6 +275,7 @@ export function DocumentChangeDetail({
   documentCount = 1,
   documentMove = null,
   onOpenOnBranch = null,
+  byline,
   subject = null,
   documentName,
   fileName,
@@ -560,22 +563,26 @@ export function DocumentChangeDetail({
           <header className="bs-pagehead">
             <div className="bs-pagehead-body">
               <h1 className="bs-title rev-title">{change.summary}</h1>
-              <p className="bs-facts">
-                {status}
-                {/* One flex item, not four: loose text beside the badge
-                    wrapped at every fragment, and put "when published" on a
-                    line of its own. */}
-                <span>
-                  {opening.who} opened this on{" "}
-                  <span className="bs-nowrap">{opening.when}</span>
-                  {opening.becomes !== null ? (
-                    <span className="bs-nowrap">
-                      {" · becomes "}
-                      <strong>v{opening.becomes}</strong> when published
-                    </span>
-                  ) : null}
-                </span>
-              </p>
+              {/* The line the Changes tab has too, so moving between the
+                  two does not change the sentence under the title. */}
+              {byline ?? (
+                <p className="bs-facts">
+                  {status}
+                  {/* One flex item, not four: loose text beside the badge
+                      wrapped at every fragment, and put "when published" on a
+                      line of its own. */}
+                  <span>
+                    {opening.who} opened this on{" "}
+                    <span className="bs-nowrap">{opening.when}</span>
+                    {opening.becomes !== null ? (
+                      <span className="bs-nowrap">
+                        {" · becomes "}
+                        <strong>v{opening.becomes}</strong> when published
+                      </span>
+                    ) : null}
+                  </span>
+                </p>
+              )}
               {description ? (
                 <p className="rev-description">{description}</p>
               ) : null}
@@ -671,7 +678,16 @@ export function DocumentChangeDetail({
           ) : (
             <>
               <div className="bs-panel-body bs-rail-note">
-                {[proposed.fileName, proposed.updateLabel, proposed.date]
+                {/* The version it will become sits with the file, now that the
+                    line under the title is the one both tabs share. */}
+                {[
+                  opening.becomes !== null
+                    ? `Becomes v${opening.becomes}`
+                    : null,
+                  proposed.fileName,
+                  proposed.updateLabel,
+                  proposed.date,
+                ]
                   .filter(Boolean)
                   .join(" · ")}
                 {/* **A rename is a change even when not a word of the document
