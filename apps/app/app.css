@@ -5122,6 +5122,30 @@ a.bs-knot {
   margin-bottom: var(--brand-space-1);
 }
 
+/* The organization's heading is its name, so it is set as a name — the case
+   it is written in, and a building beside it — rather than as a shouted
+   category. It is a label, not a link: Binders under it is the way in. */
+.app-sidebar-label--scope {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  min-width: 0;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.app-sidebar-label--scope svg {
+  flex-shrink: 0;
+}
+
+.app-sidebar-label-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .app-sidebar-item {
   display: flex;
   align-items: center;
