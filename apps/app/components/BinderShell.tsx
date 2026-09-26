@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
+import { ApiRequestError } from "../../../packages/api-client/mutator";
+import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
+import { routeToPath } from "../routes";
 
 import {
   discardBinderDraft,
@@ -109,9 +112,15 @@ export function BinderShell({
   onOpenBinder,
 }: BinderShellProps) {
   const isReadOnly = useIsReadOnly();
+  const orgDisplayName = useOrganizationDisplayName(org);
   const [overview, setOverview] = useState<WorkspaceOverviewPayload | null>(
     null,
   );
+  /**
+   * The binder is not there — or not there for you, which Gitea answers the
+   * same way on purpose, so a private binder's name does not leak.
+   */
+  const [missing, setMissing] = useState(false);
   /**
    * The binder's contents, for the navigation beside an open policy.
    *
@@ -236,8 +245,17 @@ export function BinderShell({
         if (!cancelled) setOverview(payload);
       })
       // The header is context, not content: a binder whose counts cannot be
-      // read still opens, and the tab that failed says so itself.
-      .catch(() => undefined);
+      // read still opens, and the tab that failed says so itself. The one
+      // exception is a binder that is not there at all.
+      .catch((err: unknown) => {
+        if (
+          !cancelled &&
+          err instanceof ApiRequestError &&
+          err.status === 404
+        ) {
+          setMissing(true);
+        }
+      });
 
     return () => {
       cancelled = true;
@@ -246,6 +264,7 @@ export function BinderShell({
 
   useEffect(() => {
     setOverview(null);
+    setMissing(false);
     return loadOverview();
   }, [loadOverview]);
 
@@ -503,6 +522,12 @@ export function BinderShell({
 
   // The sidebar's binder section, kept in step with what is on screen.
   useEffect(() => {
+    // No binder, no binder section: its Changes, History and Settings would
+    // each lead to another page about a binder that is not there.
+    if (missing) {
+      onBinderChange?.(null);
+      return;
+    }
     onBinderChange?.({
       org,
       binder,
@@ -535,6 +560,7 @@ export function BinderShell({
     documentPath,
     documentRefFromSearch,
     onBinderChange,
+    missing,
   ]);
 
   /**
@@ -592,6 +618,37 @@ export function BinderShell({
                         ? { subtitle: overview.workspace.description }
                         : {}),
                   };
+
+  // **A page, not a broken binder.** An address with no binder behind it drew
+  // the whole binder — its name made up from the address, Add a document and
+  // Edit buttons, a subtitle that never loaded — around one red line. GitLab
+  // answers a bad address with a page that says so and the way back.
+  if (missing) {
+    const orgHref = routeToPath({ kind: "organization", org });
+    return (
+      <section className="docw-page">
+        <div className="bs-empty not-found">
+          <p className="not-found-code">404</p>
+          <h1 className="bs-title">Binder not found</h1>
+          <p>
+            There is no binder at{" "}
+            <code>
+              /{org}/{binder}
+            </code>
+            , or it is one you have not been given access to. Its address may
+            have changed if it was renamed.
+          </p>
+          <a
+            className="bs-btn bs-btn-secondary bs-btn--sm"
+            href={orgHref}
+            onClick={(event) => followInApp(event, () => moveTo(orgHref))}
+          >
+            Back to {orgDisplayName}
+          </a>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section

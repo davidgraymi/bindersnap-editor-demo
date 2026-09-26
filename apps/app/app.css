@@ -7952,6 +7952,20 @@ a.bs-row:focus-visible {
   margin: 0;
 }
 
+/* A page for an address with nothing behind it. */
+.not-found {
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-12) 0;
+}
+
+.not-found-code {
+  color: var(--bs-text-faint);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--brand-tracking-wider);
+}
+
 /* ── Buttons that were missing ────────────────────────────────────────── */
 
 /* An act whose icon already names it — Download, Export, React. A download
