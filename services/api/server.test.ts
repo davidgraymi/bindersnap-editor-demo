@@ -667,7 +667,7 @@ describe("billing is per organization", () => {
       String(second.id),
     );
     expect(form.get("success_url")).toBe(
-      `${config.appOrigin}/billing/${second.username}?checkout=success`,
+      `${config.appOrigin}/${second.username}/-/billing?checkout=success`,
     );
   });
 

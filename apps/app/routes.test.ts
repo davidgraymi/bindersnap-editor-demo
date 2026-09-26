@@ -342,6 +342,10 @@ test("billing names the organization it is about", () => {
   expect(canonicalLocation("/billing/riverside-health", "")).toBe(
     "/riverside-health/-/billing",
   );
+  // Stripe's return keeps the query that says a payment has just landed.
+  expect(
+    canonicalLocation("/billing/riverside-health", "?checkout=success"),
+  ).toBe("/riverside-health/-/billing?checkout=success");
   // The address from before billing was per organization still resolves.
   expect(getRoute("/billing")).toEqual({ kind: "billing" });
   expect(routeToPath({ kind: "billing" })).toBe("/billing");

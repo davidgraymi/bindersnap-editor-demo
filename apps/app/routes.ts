@@ -334,7 +334,9 @@ export function canonicalLocation(
   const [first = "", second, ...rest] = path.slice(1).split("/");
   if (first === "" || RESERVED_FIRST_SEGMENTS.has(first)) {
     const billing = path.match(/^\/billing\/([^/]+)$/);
-    return billing ? `/${billing[1]}/-/billing${hash}` : null;
+    // The query is kept: Stripe returns here with `?checkout=success`, and
+    // that is what tells the page a payment has just landed.
+    return billing ? `/${billing[1]}/-/billing${search}${hash}` : null;
   }
 
   // `/{org}?tab=people`, `/{org}?new=binder`.
