@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { History, Settings, type LucideIcon } from "lucide-react";
 import { useIsReadOnly } from "../readOnlyContext";
 import { ApiRequestError } from "../../../packages/api-client/mutator";
 import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
@@ -579,11 +580,22 @@ export function BinderShell({
    * whole of D1. Below it the sidebar is `display: none`, so the strip is the
    * same shape the tab bar had — and that shape already worked.
    */
-  const sections: Array<{ id: BinderTab; label: string; count?: number }> = [
+  const sections: Array<{
+    id: BinderTab;
+    label: string;
+    count?: number;
+    /**
+     * Drawn instead of the word. History and Settings are the clock and the
+     * gear the sidebar already uses, and their words pushed Settings off the
+     * end of a 320px strip. The binder and its changes keep their words: they
+     * carry counts, and they are where people are going.
+     */
+    icon?: LucideIcon;
+  }> = [
     { id: "documents", label: binderName, count: overview?.documentCount },
     { id: "changes", label: "Changes", count: overview?.openChangeCount },
-    { id: "history", label: "History" },
-    { id: "settings", label: "Settings" },
+    { id: "history", label: "History", icon: History },
+    { id: "settings", label: "Settings", icon: Settings },
   ];
 
   /**
@@ -681,12 +693,20 @@ export function BinderShell({
             key={entry.id}
             href={buildBinderUrl({ org, binder, tab: entry.id })}
             className={`binder-strip-item${
-              activeTab === entry.id ? " binder-strip-item--active" : ""
-            }`}
+              entry.icon ? " binder-strip-item--icon" : ""
+            }${activeTab === entry.id ? " binder-strip-item--active" : ""}`}
+            title={entry.icon ? entry.label : undefined}
             aria-current={activeTab === entry.id ? "page" : undefined}
             onClick={(event) => followInApp(event, () => goTo(entry.id))}
           >
-            {entry.label}
+            {entry.icon ? (
+              <>
+                <entry.icon size={15} strokeWidth={1.75} aria-hidden="true" />
+                <span className="sr-only">{entry.label}</span>
+              </>
+            ) : (
+              entry.label
+            )}
             {entry.count !== undefined && entry.count > 0 ? (
               <span className="binder-strip-count">{entry.count}</span>
             ) : null}
