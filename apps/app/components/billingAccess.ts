@@ -37,7 +37,13 @@ export interface BillingSummaryInput {
   cancelAtPeriodEnd: boolean;
   cancelAt: number | null;
   trialEndsAt: number | null;
+  /** Whether this person may subscribe, cancel or change the card. */
+  canManage?: boolean;
+  /** Whether a Stripe customer exists, so Stripe's portal has a page. */
+  hasBillingAccount?: boolean;
 }
+
+export type BillingAction = "subscribe" | "manage" | "cancel";
 
 export interface BillingSummary {
   /** One word for the badge: where the organization stands. */
@@ -45,8 +51,10 @@ export interface BillingSummary {
   tone: "approved" | "review" | "changes" | "working";
   /** The sentence under it: what that means, and until when. */
   detail: string;
-  /** The one thing to do about it, if there is one. */
-  action: "manage" | "subscribe" | null;
+  /** What can be done about it, most likely first. Empty for a non-owner. */
+  actions: BillingAction[];
+  /** Set when there is something to do, but not by this person. */
+  ownersOnly: boolean;
 }
 
 /**
@@ -59,7 +67,22 @@ export interface BillingSummary {
  * told when the trial ends.
  */
 export function describeBilling(input: BillingSummaryInput): BillingSummary {
+  const summary = describeStanding(input);
+  // Billing is the owners' (ADR 0004). A member reads where things stand and
+  // is told who can change it, rather than meeting a 403 behind a button.
+  if (input.canManage === false) {
+    return {
+      ...summary,
+      actions: [],
+      ownersOnly: summary.actions.length > 0,
+    };
+  }
+  return summary;
+}
+
+function describeStanding(input: BillingSummaryInput): BillingSummary {
   const { accessSource } = input;
+  const account = input.hasBillingAccount === true;
 
   if (hasManageableSubscription(input.subscriptionStatus, accessSource)) {
     const detail = input.cancelAtPeriodEnd
@@ -73,7 +96,10 @@ export function describeBilling(input: BillingSummaryInput): BillingSummary {
       standing: input.cancelAtPeriodEnd ? "Cancelling" : "Active",
       tone: input.cancelAtPeriodEnd ? "review" : "approved",
       detail,
-      action: "manage",
+      // Cancelling is its own button, not a hunt through the portal. One that
+      // is already cancelling can be renewed there, which "Manage" covers.
+      actions: input.cancelAtPeriodEnd ? ["manage"] : ["manage", "cancel"],
+      ownersOnly: false,
     };
   }
 
@@ -86,7 +112,8 @@ export function describeBilling(input: BillingSummaryInput): BillingSummary {
           input.trialEndsAt !== null
             ? `Free trial until ${formatBillingDate(input.trialEndsAt)}. Subscribe before then to keep writing.`
             : "On a free trial. Subscribe to keep writing when it ends.",
-        action: "subscribe",
+        actions: ["subscribe"],
+        ownersOnly: false,
       };
     }
     // A grant from us, or this environment's own exemption: access with no
@@ -98,7 +125,8 @@ export function describeBilling(input: BillingSummaryInput): BillingSummary {
         accessSource === "config_bypass"
           ? "This environment exempts your account from billing. There is nothing to pay."
           : "Bindersnap has granted this organization access. There is nothing to pay.",
-      action: null,
+      actions: [],
+      ownersOnly: false,
     };
   }
 
@@ -108,7 +136,8 @@ export function describeBilling(input: BillingSummaryInput): BillingSummary {
       tone: "changes",
       detail:
         "Bindersnap has suspended this organization's access. Everything can still be read; nothing can be changed.",
-      action: null,
+      actions: [],
+      ownersOnly: false,
     };
   }
 
@@ -117,7 +146,8 @@ export function describeBilling(input: BillingSummaryInput): BillingSummary {
       standing: "No organization",
       tone: "working",
       detail: "Billing belongs to an organization, and you are not in one yet.",
-      action: null,
+      actions: [],
+      ownersOnly: false,
     };
   }
 
@@ -126,6 +156,8 @@ export function describeBilling(input: BillingSummaryInput): BillingSummary {
     tone: "changes",
     detail:
       "No active subscription. Everything can still be read; nothing can be changed until one starts.",
-    action: "subscribe",
+    // A card that failed is fixed in Stripe, where the invoices are too.
+    actions: account ? ["subscribe", "manage"] : ["subscribe"],
+    ownersOnly: false,
   };
 }

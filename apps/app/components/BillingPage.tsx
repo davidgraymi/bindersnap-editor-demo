@@ -33,6 +33,12 @@ interface BillingPageProps {
   } | null;
   onSubscribe: () => Promise<void>;
   onManage: () => Promise<void>;
+  /** Open Stripe's portal on its cancel screen. */
+  onCancel: () => Promise<void>;
+  /** Whether this person may subscribe, cancel or change the card. */
+  canManageBilling: boolean;
+  /** Whether a Stripe customer exists, so the portal has a page. */
+  hasBillingAccount: boolean;
   onSubscriptionConfirmed: () => void;
   onRetryBillingStatus: () => Promise<void>;
 }
@@ -59,6 +65,9 @@ export function BillingPage({
   plan,
   onSubscribe,
   onManage,
+  onCancel,
+  canManageBilling,
+  hasBillingAccount,
   onSubscriptionConfirmed,
   onRetryBillingStatus,
 }: BillingPageProps) {
@@ -142,6 +151,8 @@ export function BillingPage({
     cancelAtPeriodEnd,
     cancelAt,
     trialEndsAt,
+    canManage: canManageBilling,
+    hasBillingAccount,
   });
   const loading = subscriptionStatus === "loading";
   const checkoutReturned = window.location.search.includes("checkout=success");
@@ -228,7 +239,7 @@ export function BillingPage({
                 </span>
               </span>
             </li>
-            {summary.action === "subscribe" ? (
+            {summary.actions.includes("subscribe") ? (
               <li className="bs-row">
                 <span className="bs-row-body">
                   <span className="bs-row-name">Price</span>
@@ -239,36 +250,59 @@ export function BillingPage({
               </li>
             ) : null}
           </ul>
-          {summary.action ? (
+          {summary.ownersOnly ? (
             <div className="bs-panel-foot">
               <span className="bs-panel-foot-note">
-                {summary.action === "manage"
-                  ? "Invoices, payment method and cancellation are handled by Stripe."
-                  : "Checkout is handled by Stripe. You come back here when it is done."}
+                Only an owner of{" "}
+                {organization ? organizationName : "the organization"} can
+                subscribe, change the card or cancel.
               </span>
-              {summary.action === "manage" ? (
-                <button
-                  className="bs-btn bs-btn-primary bs-btn--sm"
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() =>
-                    void run(onManage, "Unable to open billing portal.")
-                  }
-                >
-                  {isSubmitting ? "Opening…" : "Manage subscription"}
-                </button>
-              ) : (
-                <button
-                  className="bs-btn bs-btn-primary bs-btn--sm"
-                  type="button"
-                  disabled={isSubmitting || isRetryingBillingStatus}
-                  onClick={() =>
-                    void run(onSubscribe, "Unable to start checkout.")
-                  }
-                >
-                  {isSubmitting ? "Redirecting…" : "Subscribe"}
-                </button>
-              )}
+            </div>
+          ) : summary.actions.length > 0 ? (
+            <div className="bs-panel-foot">
+              <span className="bs-panel-foot-note">
+                {summary.actions.includes("subscribe")
+                  ? "Checkout is handled by Stripe. You come back here when it is done."
+                  : "Invoices, the card on file and cancelling are handled in Stripe's billing portal."}
+              </span>
+              {summary.actions.map((action, index) => {
+                const busy = isSubmitting || isRetryingBillingStatus;
+                const tone =
+                  action === "cancel"
+                    ? "bs-btn--quiet"
+                    : index === 0
+                      ? "bs-btn-primary"
+                      : "bs-btn-secondary";
+                const [label, work, fallback] =
+                  action === "subscribe"
+                    ? ([
+                        "Subscribe",
+                        onSubscribe,
+                        "Unable to start checkout.",
+                      ] as const)
+                    : action === "manage"
+                      ? ([
+                          "Manage subscription",
+                          onManage,
+                          "Unable to open billing portal.",
+                        ] as const)
+                      : ([
+                          "Cancel subscription",
+                          onCancel,
+                          "Unable to open billing portal.",
+                        ] as const);
+                return (
+                  <button
+                    key={action}
+                    className={`bs-btn ${tone} bs-btn--sm`}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void run(work, fallback)}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
             </div>
           ) : null}
         </section>
