@@ -440,8 +440,15 @@ function isAllowedOrigin(origin: string | null): boolean {
   return false;
 }
 
-function corsHeaders(req: Request): Headers {
-  const headers = new Headers();
+export function corsHeaders(req: Request): Headers {
+  // **On every response, not only the ones that carry CORS headers.** Whether
+  // a response carries them depends on the request's Origin, so a cache has to
+  // be told that — including about the response that got none. A file is
+  // cached for hours; one fetched without an Origin was stored with no
+  // Allow-Origin and no Vary, and the next cross-origin read of it took that
+  // copy and was blocked. Opening a change's comparison a second time showed
+  // "Failed to fetch" for every file on it.
+  const headers = new Headers({ Vary: "Origin" });
   const origin = requestOrigin(req);
 
   if (origin && isAllowedOrigin(origin)) {
@@ -456,7 +463,6 @@ function corsHeaders(req: Request): Headers {
       "Access-Control-Allow-Methods",
       "GET,POST,PUT,PATCH,DELETE,OPTIONS",
     );
-    headers.set("Vary", "Origin");
   }
 
   return headers;
