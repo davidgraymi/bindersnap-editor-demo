@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 
 import { config } from "./config";
 import { OrganizationStore, organizationStore } from "./organizations";
-import { createApiServer } from "./server";
+import { corsHeaders, createApiServer } from "./server";
 import { SessionStore, sessionStore } from "./sessions";
 import { resetStripeClientForTests } from "./stripe/client";
 import {
@@ -1779,5 +1779,28 @@ describe("admin subscription access overrides", () => {
     } finally {
       server.stop(true);
     }
+  });
+});
+
+describe("CORS headers and caches", () => {
+  test("a request from an allowed origin is told it may read the response", () => {
+    const headers = corsHeaders(
+      new Request("http://api.test/api/app/x", {
+        headers: { Origin: "http://localhost:5173" },
+      }),
+    );
+    expect(headers.get("Access-Control-Allow-Origin")).toBe(
+      "http://localhost:5173",
+    );
+    expect(headers.get("Vary")).toBe("Origin");
+  });
+
+  // A file response is cacheable for hours. Stored without Vary, the copy made
+  // for a request with no Origin was later reused for one with an Origin, and
+  // the browser blocked it for lacking Allow-Origin.
+  test("a request with no origin still says the answer varies by origin", () => {
+    const headers = corsHeaders(new Request("http://api.test/api/app/x"));
+    expect(headers.get("Access-Control-Allow-Origin")).toBeNull();
+    expect(headers.get("Vary")).toBe("Origin");
   });
 });
