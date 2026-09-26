@@ -29,6 +29,7 @@ import { ChevronRight, X } from "lucide-react";
 import { AppIcon } from "./AppIcon";
 import { SettingsGroup } from "./SettingsGroup";
 import { SkeletonPanel } from "./Skeleton";
+import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
 
 /**
  * Who is in the organization, and the groups it has.
@@ -51,6 +52,7 @@ interface OrganizationPeopleProps {
 }
 
 export function OrganizationPeople({ org }: OrganizationPeopleProps) {
+  const orgName = useOrganizationDisplayName(org);
   // Same fold as the binder's People tab: a delinquent organization draws no
   // controls, by the flag that already decides whether controls exist.
   const isReadOnly = useIsReadOnly();
@@ -91,7 +93,7 @@ export function OrganizationPeople({ org }: OrganizationPeopleProps) {
   if (payload === null) {
     return (
       <div className="binder-pane">
-        <SkeletonPanel label={`Reading who is in ${org}`} rows={4} right />
+        <SkeletonPanel label={`Reading who is in ${orgName}`} rows={4} right />
       </div>
     );
   }
@@ -113,7 +115,7 @@ export function OrganizationPeople({ org }: OrganizationPeopleProps) {
         id="org-people-members"
         title="Members"
         count={payload.people.length}
-        note={`Everyone in ${org}. An owner runs the organization; what a member can do is set binder by binder, by the groups they are in.`}
+        note={`Everyone in ${orgName}. An owner runs the organization; what a member can do is set binder by binder, by the groups they are in.`}
       >
         {notice ? (
           <p className="bs-note bs-note--danger" role="alert">
@@ -121,7 +123,7 @@ export function OrganizationPeople({ org }: OrganizationPeopleProps) {
           </p>
         ) : null}
 
-        <section className="bs-panel" aria-label={`Members of ${org}`}>
+        <section className="bs-panel" aria-label={`Members of ${orgName}`}>
           <ul className="bs-row-list">
             {payload.people.map((person) => (
               <OrgPersonRow
@@ -215,6 +217,7 @@ function OrgPersonRow({
   onFailed: (message: string | null) => void;
   onBusy: (busy: boolean) => void;
 }) {
+  const orgName = useOrganizationDisplayName(org);
   const [confirming, setConfirming] = useState<"promote" | "remove" | null>(
     null,
   );
@@ -267,7 +270,7 @@ function OrgPersonRow({
               className="bs-input bs-input--sm binder-role-select"
               value={person.isOwner ? "owner" : "member"}
               disabled={busy || lastOwner}
-              aria-label={`What ${name} can do in ${org}`}
+              aria-label={`What ${name} can do in ${orgName}`}
               onChange={(event) => {
                 if (event.target.value === "owner") {
                   setConfirming("promote");
@@ -295,8 +298,8 @@ function OrgPersonRow({
                 type="button"
                 className="bs-rowact bs-rowact--danger"
                 disabled={busy}
-                aria-label={`Remove ${name} from ${org}`}
-                title={`Remove ${name} from ${org}`}
+                aria-label={`Remove ${name} from ${orgName}`}
+                title={`Remove ${name} from ${orgName}`}
                 onClick={() => setConfirming("remove")}
               >
                 <AppIcon icon={X} size="sm" />
@@ -311,7 +314,7 @@ function OrgPersonRow({
       {/* In place of a tooltip, which nobody reads and no keyboard reaches. */}
       {canManage && lastOwner ? (
         <p className="bs-row-meta org-person-reason">
-          {org} needs at least one owner. Make someone else an owner first.
+          {orgName} needs at least one owner. Make someone else an owner first.
         </p>
       ) : null}
 
@@ -348,7 +351,7 @@ function OrgPersonRow({
       {confirming === "remove" ? (
         <div className="org-person-confirm">
           <p className="docs-list-item-name">
-            Remove {name} from {org}?
+            Remove {name} from {orgName}?
           </p>
           <p className="docs-list-item-meta">
             They lose access immediately, everywhere.
@@ -425,6 +428,7 @@ function OrganizationGroups({
   onChanged: (next: OrganizationPeoplePayload) => void;
   onError: (message: string | null) => void;
 }) {
+  const orgName = useOrganizationDisplayName(org);
   const isReadOnly = useIsReadOnly();
   const [open, setOpen] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -475,7 +479,7 @@ function OrganizationGroups({
           </div>
         </div>
       ) : (
-        <section className="bs-panel" aria-label={`Groups in ${org}`}>
+        <section className="bs-panel" aria-label={`Groups in ${orgName}`}>
           <ul className="bs-row-list">
             {payload.groups.map((group) => {
               const expanded = open === group.name;
@@ -823,6 +827,7 @@ function AddOrgPersonForm({
   onFailed: (message: string) => void;
   onBusy: (busy: boolean) => void;
 }) {
+  const orgName = useOrganizationDisplayName(org);
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [results, setResults] = useState<
@@ -1019,7 +1024,7 @@ function AddOrgPersonForm({
             className="bs-btn bs-btn-primary bs-btn--sm"
             disabled={disabled || username === ""}
           >
-            {saving ? "Adding…" : `Add to ${org}`}
+            {saving ? "Adding…" : `Add to ${orgName}`}
           </button>
         </div>
 
@@ -1059,6 +1064,7 @@ function NewGroupForm({
   onCreated: () => Promise<void>;
   onFailed: (message: string) => void;
 }) {
+  const orgName = useOrganizationDisplayName(org);
   const [name, setName] = useState("");
   const [level, setLevel] = useState<string>("reviewer");
   const [saving, setSaving] = useState(false);
@@ -1112,7 +1118,7 @@ function NewGroupForm({
           <p className="bs-field-hint">
             {taken ? (
               <>
-                {org} already has a group called <code>{handle}</code>.
+                {orgName} already has a group called <code>{handle}</code>.
               </>
             ) : (
               <>

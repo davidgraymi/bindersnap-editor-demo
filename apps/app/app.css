@@ -2076,16 +2076,20 @@ input {
   color: var(--brand-green);
 }
 
+/* A sentence, so it wraps like one. As a flex row every fragment was its own
+   box, and on a phone " · Sep 23" dropped to a line of its own, dot first.
+   The padding centres a one-line event on the 28px node beside it. */
 .rev-event {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
   min-height: 28px;
   margin: 0;
-  padding-top: 5px;
+  padding-top: 7px;
   font-size: var(--brand-text-ui-sm);
+  line-height: 1.5;
   color: var(--bs-text-muted);
+}
+
+.rev-event > .rev-event-tag {
+  margin-left: 4px;
 }
 
 .rev-event-actor {
@@ -2107,6 +2111,10 @@ input {
 .rev-event-when,
 .rev-event-note {
   color: var(--bs-text-muted);
+}
+
+.rev-event-when {
+  white-space: nowrap;
 }
 
 /* ── One comment. A reply is what makes it a thread. ───────────────── */
@@ -7525,6 +7533,11 @@ a.cmp-file-act {
 }
 
 /* The facts about the subject, on the line under its name. */
+/* A phrase that reads wrong split, like "becomes v2 when published". */
+.bs-nowrap {
+  white-space: nowrap;
+}
+
 .bs-facts {
   display: flex;
   flex-wrap: wrap;

@@ -562,13 +562,19 @@ export function DocumentChangeDetail({
               <h1 className="bs-title rev-title">{change.summary}</h1>
               <p className="bs-facts">
                 {status}
-                {opening.who} opened this on {opening.when}
-                {opening.becomes !== null ? (
-                  <>
-                    {" · becomes "}
-                    <strong>v{opening.becomes}</strong> when published
-                  </>
-                ) : null}
+                {/* One flex item, not four: loose text beside the badge
+                    wrapped at every fragment, and put "when published" on a
+                    line of its own. */}
+                <span>
+                  {opening.who} opened this on{" "}
+                  <span className="bs-nowrap">{opening.when}</span>
+                  {opening.becomes !== null ? (
+                    <span className="bs-nowrap">
+                      {" · becomes "}
+                      <strong>v{opening.becomes}</strong> when published
+                    </span>
+                  ) : null}
+                </span>
               </p>
               {description ? (
                 <p className="rev-description">{description}</p>
