@@ -165,7 +165,7 @@ test("a member files a policy from the binder's own page", async ({ page }) => {
   // binder — it opens a change request, and that is where this lands. Landing
   // on the document's page made the act look finished; a change request is
   // what actually happened and what has to be decided next.
-  await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/-\/changes\/\d+/, { timeout: 30_000 });
   // The change's own screen: the document it proposes, and the way back to
   // the list. Not "Publish", which a change with no approvals yet does not
   // offer.
@@ -269,7 +269,7 @@ test("the library lists a policy across every binder it can reach", async ({
     await page.getByRole("button", { name: "Add a document" }).click();
     await fileAPolicy(page, name, "");
     // Filing opens a change request, which is where it lands.
-    await expect(page).toHaveURL(/tab=changes&change=\d+/, {
+    await expect(page).toHaveURL(/\/-\/changes\/\d+/, {
       timeout: 30_000,
     });
     // Onto `main`, because the library lists the record and nothing else.
@@ -334,7 +334,7 @@ test("the binder's tabs still work once a document is open", async ({
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
   await page.getByRole("button", { name: "Add a document" }).click();
   await fileAPolicy(page, "Hand Hygiene Policy", "nursing");
-  await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/-\/changes\/\d+/, { timeout: 30_000 });
 
   // Published, because a binder lists the record — and a document is opened by
   // clicking it in that list, which is the journey this test is about.
@@ -367,7 +367,7 @@ test("the binder's tabs still work once a document is open", async ({
   await expect(page.locator(".app-sidebar-binder-name")).toHaveText(
     binderTitle,
   );
-  expect(new URL(page.url()).pathname).toBe(`/${org}/${binder}`);
+  expect(new URL(page.url()).pathname).toBe(`/${org}/${binder}/-/settings`);
 
   // Who can act here is a question about people, not about billing. The seat
   // chip on every row and the "N people · N seats · N free" line above them
@@ -436,7 +436,7 @@ test("a new binder has a page of its own, and lands you in it", async ({
   await page.goto(`${APP_BASE_URL}/${org}`);
   await page.getByRole("link", { name: "New binder" }).click();
 
-  await expect(page).toHaveURL(new RegExp(`/${org}\\?new=binder$`));
+  await expect(page).toHaveURL(new RegExp(`/${org}/-/binders/new$`));
   await expect(page.locator("h1.bs-title")).toHaveText("New binder");
   // Named the way people read it, not by its slug.
   await expect(page.getByText(`Everyone at ${displayName}`)).toBeVisible();

@@ -39,6 +39,7 @@ import { ReadOnlyProvider } from "./readOnlyContext";
 import { ReadOnlyBanner } from "./components/ReadOnlyBanner";
 import {
   asShellRoute,
+  canonicalLocation,
   getRoute,
   isLegacyInboxPath,
   isProtectedAppRoute,
@@ -65,6 +66,19 @@ interface LoginPageProps {
     email: string,
     password: string,
   ) => Promise<void>;
+}
+
+/**
+ * Put an address from before `/-/` into its current form, in place.
+ *
+ * Before anything reads it — the screens below read the address bar
+ * themselves — and as a replace, so Back does not return to the old form.
+ */
+function settleAddress(): void {
+  const { pathname, search, hash } = window.location;
+  const next = canonicalLocation(pathname, search, hash);
+  if (next !== null)
+    window.history.replaceState(window.history.state, "", next);
 }
 
 function navigateTo(route: AppRoute, replace = false): void {
@@ -273,9 +287,10 @@ function LoginPage({
 }
 
 export function App() {
-  const [route, setRoute] = useState<AppRoute>(() =>
-    getRoute(window.location.pathname),
-  );
+  const [route, setRoute] = useState<AppRoute>(() => {
+    settleAddress();
+    return getRoute(window.location.pathname);
+  });
   const [user, setUser] = useState<SessionUser | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(
     () => route.kind !== "callback",
@@ -476,6 +491,7 @@ export function App() {
 
   useEffect(() => {
     const handlePopState = () => {
+      settleAddress();
       setRoute(getRoute(window.location.pathname));
     };
 

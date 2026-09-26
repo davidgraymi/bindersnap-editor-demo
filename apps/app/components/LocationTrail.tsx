@@ -68,7 +68,11 @@ export function LocationTrail({
   binderMissing = false,
   onNavigate,
 }: LocationTrailProps) {
-  const trail = buildLocationTrail(route, window.location.search);
+  const trail = buildLocationTrail(
+    route,
+    window.location.pathname,
+    window.location.search,
+  );
   const binder = binderMissing ? null : trail.binder;
   const { organizationIsCurrent } = trail;
   const binderRoute =
@@ -116,7 +120,11 @@ export function LocationTrail({
  * back to: one step would only repeat the title under it.
  */
 export function PagePath({ route }: { route: AppRoute }) {
-  const { path } = buildLocationTrail(route, window.location.search);
+  const { path } = buildLocationTrail(
+    route,
+    window.location.pathname,
+    window.location.search,
+  );
   if (path.length < 2) return null;
 
   return (

@@ -189,11 +189,14 @@ under the same header with Documents still marked, because a document is a file
 inside the binder — its own trail says `nursing / Infection Control Policy`,
 the part the header above it cannot say.
 
-Tabs ride in the query (`?tab=changes`) for the reason `?version=` and
-`?change=` do: `/{org}/{binder}/changes` cannot be told apart from a policy
-filed at `changes`, and neither can `history` or `settings`. The tab a binder
-opens on carries no query at all, so a binder's own address stays the short
-one.
+Tabs rode in the query (`?tab=changes`) because `/{org}/{binder}/changes`
+could not be told apart from a policy filed at `changes`. They are paths now,
+behind GitLab's `-` segment — `/-/changes/3/diffs`, `/-/history`,
+`/-/settings`, and a file at `/-/blob/{ref}/{path}` — since `-` is a name Gitea
+refuses for a repository, an organization and a folder. The older query
+addresses are rewritten on arrival (`canonicalLocation` in
+`apps/app/routes.ts`). The tab a binder opens on carries nothing at all, so a
+binder's own address stays the short one.
 
 **`DocumentChanges` is reused whole** — the Open/Closed filter, the outcome
 icons, the approval meters, the "who is holding this up" wording. It needed one

@@ -74,7 +74,7 @@ interface ChangeTabsProps {
   view: DocumentChangeView;
   /** The change's discussion: its own address, without a view. */
   overviewHref: string;
-  /** Everything it changes, side by side: `?view=compare`. */
+  /** Everything it changes, side by side: `/-/changes/{n}/diffs`. */
   changesHref: string;
   /** How many documents it touches; none for a change to the rules. */
   documentCount: number;

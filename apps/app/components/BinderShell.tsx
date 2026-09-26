@@ -18,10 +18,9 @@ import type {
   WorkspaceOverviewPayload,
 } from "../../../packages/api-schema/schemas/workspaces";
 import {
-  archiveFromSearch,
-  binderTabFromSearch,
   buildBinderUrl,
-  changeViewFromSearch,
+  currentBinderAddress,
+  DEFAULT_REF,
   draftFromSearch,
   editModeFromSearch,
   type BinderEditMode,
@@ -29,8 +28,7 @@ import {
 } from "../binderShell";
 import type { DocumentChangeView } from "../routes";
 import { followInApp } from "../appLink";
-import { parseRequestedChange } from "../binderChange";
-import { buildDocumentUrl, parseRequestedRef } from "../binderDocument";
+import { buildDocumentUrl } from "../binderDocument";
 import { formatDocumentName } from "../documentDisplay";
 import { AddPolicyModal } from "./AddPolicyModal";
 import { NewFolderModal } from "./NewFolderModal";
@@ -70,11 +68,23 @@ import { useWriteAction } from "../paywallContext";
  * The dispatch is the whole point, and leaving it out is the bug this
  * replaced. A tab click drops the document path off the URL, but the route
  * the app holds is only re-read on `popstate` — so without one, the app kept
- * rendering `/{org}/{binder}/{path}` while the address bar said
- * `/{org}/{binder}?tab=people`, and every tab in the binder stopped working
+ * rendering a document while the address bar said
+ * `/{org}/{binder}/-/settings/people`, and every tab in the binder stopped working
  * the moment somebody opened a document. Same shape as the library's own
  * navigation, for the same reason.
  */
+/**
+ * The branch the address reads at, or null for the record.
+ *
+ * `main` named outright is the record too: a document on the record lives at
+ * `/-/blob/main/…`, and treating that as "a branch" would draw the chrome of
+ * reading somewhere else around the thing everybody reads.
+ */
+function readRef(): string | null {
+  const { ref } = currentBinderAddress();
+  return ref === DEFAULT_REF ? null : ref;
+}
+
 function moveTo(url: string): void {
   window.history.pushState({}, "", url);
   window.dispatchEvent(new PopStateEvent("popstate"));
@@ -152,21 +162,17 @@ export function BinderShell({
 
   // Back and forward are how somebody leaves a tab or a change, so the shell
   // follows the address bar rather than its own memory of what was clicked.
-  const [tab, setTab] = useState<BinderTab>(() =>
-    binderTabFromSearch(window.location.search),
+  const [tab, setTab] = useState<BinderTab>(() => currentBinderAddress().tab);
+  const [openChange, setOpenChange] = useState<number | null>(
+    () => currentBinderAddress().change,
   );
-  const [openChange, setOpenChange] = useState<number | null>(() =>
-    parseRequestedChange(window.location.search),
-  );
-  const [changeView, setChangeView] = useState<DocumentChangeView>(() =>
-    changeViewFromSearch(window.location.search),
+  const [changeView, setChangeView] = useState<DocumentChangeView>(
+    () => currentBinderAddress().view,
   );
   const [editMode, setEditMode] = useState<BinderEditMode>(() =>
     editModeFromSearch(window.location.search),
   );
-  const [archive, setArchive] = useState(() =>
-    archiveFromSearch(window.location.search),
-  );
+  const [archive, setArchive] = useState(() => currentBinderAddress().archive);
   /**
    * Which of your drafts is being edited, from the address.
    *
@@ -178,9 +184,9 @@ export function BinderShell({
   const [draftBranch, setDraftBranch] = useState<string | null>(() =>
     draftFromSearch(window.location.search),
   );
-  /** The branch a document is being read on, from `?ref=`. */
+  /** The branch the documents are read on: `/-/tree/{ref}`, `/-/blob/{ref}`. */
   const [documentRefFromSearch, setDocumentRef] = useState<string | null>(() =>
-    parseRequestedRef(window.location.search),
+    readRef(),
   );
 
   /**
@@ -199,13 +205,14 @@ export function BinderShell({
 
   useEffect(() => {
     const handler = () => {
-      setTab(binderTabFromSearch(window.location.search));
-      setOpenChange(parseRequestedChange(window.location.search));
-      setChangeView(changeViewFromSearch(window.location.search));
+      const address = currentBinderAddress();
+      setTab(address.tab);
+      setOpenChange(address.change);
+      setChangeView(address.view);
       setEditMode(editModeFromSearch(window.location.search));
       setDraftBranch(draftFromSearch(window.location.search));
-      setDocumentRef(parseRequestedRef(window.location.search));
-      setArchive(archiveFromSearch(window.location.search));
+      setDocumentRef(readRef());
+      setArchive(address.archive);
     };
     window.addEventListener("popstate", handler);
     return () => window.removeEventListener("popstate", handler);
@@ -223,7 +230,15 @@ export function BinderShell({
    */
   const openDocument = (documentPath: string, version?: number | null) => {
     if (editMode === "editing" && draft?.draft) {
-      moveTo(`/${org}/${binder}/${documentPath}?edit=1`);
+      moveTo(
+        buildDocumentUrl({
+          org,
+          binder,
+          documentPath,
+          version: null,
+          edit: true,
+        }),
+      );
       return;
     }
     onOpenDocument(documentPath, version);
@@ -231,9 +246,13 @@ export function BinderShell({
 
   /** Where {@link openDocument} goes, for the rows that are links to it. */
   const documentHref = (documentPath: string) =>
-    editMode === "editing" && draft?.draft
-      ? `/${org}/${binder}/${documentPath}?edit=1`
-      : buildDocumentUrl({ org, binder, documentPath, version: null });
+    buildDocumentUrl({
+      org,
+      binder,
+      documentPath,
+      version: null,
+      edit: editMode === "editing" && Boolean(draft?.draft),
+    });
 
   /** A document on the branch the address names, with the way back. */
   const branchDocumentHref = (documentPath: string) =>
