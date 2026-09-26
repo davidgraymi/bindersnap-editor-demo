@@ -8195,6 +8195,14 @@ a.bs-row:focus-visible {
   max-width: none;
 }
 
+/* **A field is as wide as what goes in it.** A name typed into a box the
+   width of the page read as a paragraph waiting to be written, and a choice
+   of three levels spread its one-line notes across 860px. The list above the
+   form keeps the column; the form keeps a measure. */
+.bs-settings .bs-fields > .bs-field {
+  max-width: 32rem;
+}
+
 /* Compound selectors: the token file is loaded again after this one, so a
    lone class here loses to its `.bs-input { width: 100% }`. */
 .bs-input.bs-settings-description {
