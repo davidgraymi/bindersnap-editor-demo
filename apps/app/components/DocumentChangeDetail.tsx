@@ -635,6 +635,10 @@ export function DocumentChangeDetail({
           ) : (
             <>
               <div className="bs-panel-body bs-rail-note">
+                {/* **Which document this is.** The panel described a version
+                    of something it never named — and on a change to several
+                    documents, whichever one happened to be picked below. */}
+                <p className="change-proposed-name">{documentName}</p>
                 {/* The version it will become sits with the file, now that the
                     line under the title is the one both tabs share. */}
                 {[
@@ -661,7 +665,10 @@ export function DocumentChangeDetail({
                   disabled={!proposed.ref || !onOpenOnBranch}
                   onClick={() => onOpenOnBranch?.()}
                 >
-                  Open
+                  {/* Not "Open": the badge beside the title says whether the
+                      change is open, and the same word here meant something
+                      else. */}
+                  View file
                 </button>
                 {/* The question a reviewer actually opens a change with is
                     "what is different?", not "what does it say?".
@@ -679,7 +686,12 @@ export function DocumentChangeDetail({
                   disabled={!proposed.ref}
                   onClick={() => onViewChange("compare")}
                 >
-                  Compare
+                  {/* Compared with what is the question the bare verb left
+                      open. A first version has nothing before it, and the
+                      Changes tab simply reads it. */}
+                  {opening.becomes !== null && opening.becomes > 1
+                    ? `Compare with v${opening.becomes - 1}`
+                    : "Compare"}
                 </button>
                 <span className="bs-panel-bar-spacer" />
                 {/* A download arrow with the word "Download" beside it is the
