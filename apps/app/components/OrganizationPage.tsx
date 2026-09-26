@@ -53,6 +53,9 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
     orgTabFromSearch(window.location.search),
   );
   const [binders, setBinders] = useState<WorkspaceSummary[] | null>(null);
+  // What the list's own bar narrows it to — the binder's "Filter this
+  // binder…", one level up.
+  const [filter, setFilter] = useState("");
   const [error, setError] = useState<string | null>(null);
   // Behind the header's "New binder", at an address of its own rather than a
   // drawer over the list: it can be sent, reloaded and left with Back.
@@ -156,6 +159,8 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
     </header>
   );
 
+  const shown = binders === null ? [] : filterBinders(binders, filter);
+
   if (error) {
     return (
       <section className="docw-page">
@@ -215,35 +220,77 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
            requests, a binder's own documents — so an organization's binders
            read as a list of the same kind as everything inside them. */
         <section className="bs-panel" aria-label="Binders">
-          <ul className="bs-row-list">
-            {binders.map((binder) => (
-              <li key={binder.id}>
-                <a
-                  className="bs-row bs-row--tall"
-                  href={buildBinderUrl({ org, binder: binder.name })}
-                  onClick={(event) =>
-                    followInApp(event, () => onOpenBinder(binder.name))
-                  }
-                >
-                  <span className="bs-row-icon">
-                    <BookOpen size={16} strokeWidth={1.5} aria-hidden="true" />
-                  </span>
-                  <span className="bs-row-body">
-                    <span className="bs-row-name">
-                      {formatDocumentName(binder.name)}
+          <div className="bs-panel-bar">
+            <input
+              className="bs-input bs-input--sm binder-filter"
+              type="search"
+              value={filter}
+              placeholder="Filter binders…"
+              aria-label="Filter binders"
+              onChange={(event) => setFilter(event.target.value)}
+            />
+            <span className="bs-panel-bar-spacer" />
+            <span className="binder-count">
+              {binders.length === 1 ? "1 binder" : `${binders.length} binders`}
+            </span>
+          </div>
+          {shown.length === 0 ? (
+            <div className="bs-empty">
+              <p>No binder here is called that.</p>
+            </div>
+          ) : (
+            <ul className="bs-row-list">
+              {shown.map((binder) => (
+                <li key={binder.id}>
+                  <a
+                    className="bs-row bs-row--tall"
+                    href={buildBinderUrl({ org, binder: binder.name })}
+                    onClick={(event) =>
+                      followInApp(event, () => onOpenBinder(binder.name))
+                    }
+                  >
+                    <span className="bs-row-icon">
+                      <BookOpen
+                        size={16}
+                        strokeWidth={1.5}
+                        aria-hidden="true"
+                      />
                     </span>
-                    <span className="bs-row-meta">
-                      {binder.description || "No description"}
+                    <span className="bs-row-body">
+                      <span className="bs-row-name">
+                        {formatDocumentName(binder.name)}
+                      </span>
+                      <span className="bs-row-meta">
+                        {binder.description || "No description"}
+                      </span>
                     </span>
-                  </span>
-                  <BinderFacts binder={binder} />
-                </a>
-              </li>
-            ))}
-          </ul>
+                    <BinderFacts binder={binder} />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       )}
     </section>
+  );
+}
+
+/**
+ * The binders whose name or description holds what was typed, in the order
+ * the list already had. Case and surrounding space do not count.
+ */
+export function filterBinders(
+  binders: WorkspaceSummary[],
+  query: string,
+): WorkspaceSummary[] {
+  const needle = query.trim().toLowerCase();
+  if (needle === "") return binders;
+  return binders.filter((binder) =>
+    [formatDocumentName(binder.name), binder.name, binder.description ?? ""]
+      .join(" ")
+      .toLowerCase()
+      .includes(needle),
   );
 }
 
