@@ -48,24 +48,29 @@ function comparisonUrl(binder: string, change: number): string {
   return `${APP_BASE_URL}/${OWNER}/${binder}?tab=changes&change=${change}&view=compare`;
 }
 
-test("the change's own list is the way in, and it names the screen", async ({
-  page,
-}) => {
+test("a document in the change's list opens its own diff", async ({ page }) => {
   await signInAsAlice(page);
   await page.goto(`${APP_BASE_URL}/${OWNER}/facilities?tab=changes&change=4`);
 
-  // In the list's own bar, beside the count — not floating on the paper above
-  // it, which is the rule that makes the binder's screens read as one product.
-  const link = page.getByRole("button", {
-    name: /See everything that changed/,
-  });
-  await expect(link).toBeVisible();
-  await link.click();
+  // A row is a way into the Changes screen, not a selector for the rail — the
+  // rail has no per-file panel on a change to several documents.
+  const rows = page.locator(".change-does .bs-row");
+  await expect(rows).toHaveCount(2);
+  await expect(
+    page.locator(".bs-rail").getByRole("heading", { name: "Proposed version" }),
+  ).toHaveCount(0);
+
+  const second = rows.nth(1);
+  const name = await second.locator(".bs-row-name").innerText();
+  await second.click();
 
   await expect(page).toHaveURL(/view=compare/);
-  // Both documents, on one screen, without picking either.
+  // Both documents, on one screen, and the one clicked is the one marked.
   await expect(page.locator(".cmp-file")).toHaveCount(2);
   await expect(page.locator(".bs-rail .bs-row")).toHaveCount(2);
+  await expect(
+    page.locator('.bs-rail .bs-row[aria-current="true"]'),
+  ).toContainText(name);
 });
 
 test("a renamed policy is read by identity, not by address", async ({
