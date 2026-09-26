@@ -45,6 +45,8 @@ import {
 } from "../binderMove";
 import { formatAge, formatDocumentName } from "../documentDisplay";
 import { buildBinderUrl } from "../binderShell";
+import { describeBranch } from "../branchLabel";
+import { nameFor, usePeopleNames } from "../usePeopleNames";
 import { useOpenFolders } from "../useOpenFolders";
 import { BinderTreeView } from "./BinderTree";
 import { MoveToFolderModal } from "./MoveToFolderModal";
@@ -193,6 +195,7 @@ export function BinderDocuments({
   onChange = null,
   onBackToChange,
 }: BinderDocumentsProps) {
+  const names = usePeopleNames(org);
   const isReadOnly = useIsReadOnly();
   const [documents, setDocuments] = useState<
     WorkspaceDocumentListEntry[] | null
@@ -691,9 +694,11 @@ export function BinderDocuments({
               {/* Which branch this is, in the tree's own bar — the list reads
                   like the record otherwise, and is not it. */}
               {onChange ? (
-                <span className="cmp-branch" title="The branch being read">
+                <span className="cmp-branch" title={onChange.branch}>
                   <GitBranch size={12} strokeWidth={1.75} aria-hidden="true" />
-                  {onChange.branch}
+                  {describeBranch(onChange.branch, (login) =>
+                    nameFor(names, login),
+                  )}
                 </span>
               ) : null}
               <input

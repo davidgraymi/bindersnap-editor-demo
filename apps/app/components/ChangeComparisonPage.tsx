@@ -11,7 +11,6 @@ import {
   FilePlus2,
   FileText,
   Folder,
-  GitBranch,
   Layers,
 } from "lucide-react";
 
@@ -21,7 +20,6 @@ import type { ChangeScope } from "../changeScope";
 import {
   describeChangedBadge,
   describeChangedKind,
-  describePublishIntent,
   describeReadProgress,
   summarizeChangeScale,
   type ChangedDocumentRow,
@@ -30,6 +28,7 @@ import type { ComparisonSummary } from "../documentComparison";
 import { classifyDocumentFile } from "../documentFile";
 import { DocumentComparison, type ImageMode } from "./DocumentComparison";
 import { DocumentPreview } from "./DocumentPreview";
+import { ChangeByline } from "./ChangeByline";
 
 /**
  * Everything one change does to a binder, on one screen.
@@ -65,8 +64,12 @@ interface ChangeComparisonPageProps {
   title: string;
   /** Whether it is still awaiting a decision — the wording differs. */
   open: boolean;
-  /** Who proposed it, for "alice wants to publish 3 documents from …". */
+  /** Who proposed it, as a name, for "Alice Nguyen wants to publish …". */
   author: string;
+  /** When it was opened, for the end of that line. */
+  openedAt?: string;
+  /** Names the login inside a draft's branch. */
+  nameOf?: (login: string) => string;
   rows: readonly ChangedDocumentRow[];
   /**
    * The branch holding the proposed files, or null when the change has none
@@ -214,6 +217,8 @@ export function ChangeComparisonPage({
   title,
   open,
   author,
+  openedAt = "",
+  nameOf,
   rows: listed,
   headRef,
   focusDocument = null,
@@ -520,31 +525,17 @@ export function ChangeComparisonPage({
               pull request's title. The branch is a link to that branch in
               the binder, because "from where" is a place you can go. */}
           {rows.length > 0 ? (
-            <p className="cmp-byline">
-              {status}
-              {author ? <strong>{author}</strong> : "Somebody"}{" "}
-              {describePublishIntent({ open, documents: rows.length })}
-              {headRef ? (
-                <>
-                  {" from "}
-                  {/* The branch's root, not its first file — the whole
-                      binder as this change would leave it, which a change
-                      that only archives has as much as any other. */}
-                  <a
-                    className="cmp-branch"
-                    href={branchHref}
-                    onClick={(event) => followInApp(event, onOpenBranch)}
-                  >
-                    <GitBranch
-                      size={12}
-                      strokeWidth={1.75}
-                      aria-hidden="true"
-                    />
-                    {headRef}
-                  </a>
-                </>
-              ) : null}
-            </p>
+            <ChangeByline
+              status={status}
+              author={author}
+              open={open}
+              documents={rows.length}
+              branch={headRef}
+              branchHref={branchHref}
+              onOpenBranch={onOpenBranch}
+              openedAt={openedAt}
+              nameOf={nameOf}
+            />
           ) : null}
           {/* Nothing to size is not a size. The states below say what this
               change does instead, at length — the scale line above them would

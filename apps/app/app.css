@@ -6470,8 +6470,16 @@ a.bs-knot {
   font-weight: var(--brand-weight-semibold);
 }
 
-/* A branch name is machine text, so it is set in the monospace and chipped
-   like one — the same shape a code host gives it, so it reads as a place. */
+/* Where a change came from, chipped the way a code host chips a branch so it
+   reads as a place. Its label is a name (`describeBranch`), so it is set like
+   one; the raw branch is the tooltip. */
+.cmp-byline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+}
+
 .cmp-branch {
   display: inline-flex;
   align-items: center;
@@ -6480,8 +6488,9 @@ a.bs-knot {
   border-radius: var(--brand-radius-sm);
   background: var(--bs-status-info-bg);
   color: var(--bs-status-info-fg);
-  font-family: var(--brand-font-mono);
+  font-family: var(--brand-font-sans);
   font-size: var(--brand-text-ui-sm);
+  font-weight: var(--brand-weight-medium);
   text-decoration: none;
   overflow-wrap: anywhere;
 }
