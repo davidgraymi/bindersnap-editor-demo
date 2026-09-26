@@ -1238,7 +1238,15 @@ input {
 .doc-tab:hover,
 .doc-tab:focus-visible {
   color: var(--bs-text-primary);
-  outline: none;
+}
+
+/* A ring, not a colour: the active tab is already the darker colour, so a
+   keyboard landing on it changed nothing you could see. Inset, because on a
+   phone the strip scrolls sideways and clips anything drawn outside it. */
+.doc-tab:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: -2px;
+  border-radius: var(--brand-radius-sm);
 }
 
 .doc-tab--active {
