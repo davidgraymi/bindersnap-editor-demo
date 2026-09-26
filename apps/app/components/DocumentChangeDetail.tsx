@@ -421,10 +421,6 @@ export function DocumentChangeDetail({
     subject || documentCount !== 1 ? null : nextVersion,
     (login) => nameFor(names, login),
   );
-  // **The rail is about one document, so it may say that document's version**
-  // even when the header may not. The header speaks for the whole change and
-  // stays quiet when there are several; the rail names the document it means.
-  const railBecomes = subject || !change.open ? null : nextVersion;
   const description = describeChangeBody(change.summary, change.description);
   const outcome = describeChangeOutcome(change, (login) =>
     nameFor(names, login),
@@ -626,94 +622,82 @@ export function DocumentChangeDetail({
           colliding with the title whenever it wrapped — which it does at any
           realistic length. */}
       <aside className="bs-rail" aria-label="The decision">
-        <div className="bs-panel">
-          <div className="bs-panel-bar">
-            <h2 className="bs-panel-bar-title">
-              {subject ? subject.title : "Proposed version"}
-            </h2>
-          </div>
-          {subject ? (
-            <div className="bs-panel-body bs-rail-note">
-              {subject.description}
+        {/* **One file, or none of this.** With several documents the list in
+            the page says what happens to each, and the Changes tab shows it;
+            a panel here could only describe whichever one had been picked. */}
+        {subject || documentCount <= 1 ? (
+          <div className="bs-panel">
+            <div className="bs-panel-bar">
+              <h2 className="bs-panel-bar-title">
+                {subject ? subject.title : "Proposed version"}
+              </h2>
             </div>
-          ) : (
-            <>
+            {subject ? (
               <div className="bs-panel-body bs-rail-note">
-                {/* **Which document this is.** The panel described a version
+                {subject.description}
+              </div>
+            ) : (
+              <>
+                <div className="bs-panel-body bs-rail-note">
+                  {/* **Which document this is.** The panel described a version
                     of something it never named — and on a change to several
                     documents, whichever one happened to be picked below. */}
-                <p className="change-proposed-name">{documentName}</p>
-                {/* The version it will become sits with the file, now that the
+                  <p className="change-proposed-name">{documentName}</p>
+                  {/* The version it will become sits with the file, now that the
                     line under the title is the one both tabs share. */}
-                {[
-                  railBecomes !== null ? `Becomes v${railBecomes}` : null,
-                  proposed.fileName,
-                  proposed.updateLabel,
-                  proposed.date,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-                {/* **A rename is a change even when not a word of the document
+                  {[
+                    opening.becomes !== null
+                      ? `Becomes v${opening.becomes}`
+                      : null,
+                    proposed.fileName,
+                    proposed.updateLabel,
+                    proposed.date,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                  {/* **A rename is a change even when not a word of the document
                     changed**, and no comparison can show it: the identity
                     survives a rename and the address does not, so both refs
                     read identically. Said here, beside the version it is true
                     of, rather than only on the screen that draws the diff. */}
-                {documentMove ? <p>{documentMove}.</p> : null}
-              </div>
-              <div className="bs-panel-foot">
-                <button
-                  className="bs-btn bs-btn--sm bs-btn-secondary"
-                  type="button"
-                  disabled={!proposed.ref || !onOpenOnBranch}
-                  onClick={() => onOpenOnBranch?.()}
-                >
-                  {/* Not "Open": the badge beside the title says whether the
+                  {documentMove ? <p>{documentMove}.</p> : null}
+                </div>
+                <div className="bs-panel-foot">
+                  <button
+                    className="bs-btn bs-btn--sm bs-btn-secondary"
+                    type="button"
+                    disabled={!proposed.ref || !onOpenOnBranch}
+                    onClick={() => onOpenOnBranch?.()}
+                  >
+                    {/* Not "Open": the badge beside the title says whether the
                       change is open, and the same word here meant something
                       else. */}
-                  View file
-                </button>
-                {/* The question a reviewer actually opens a change with is
-                    "what is different?", not "what does it say?".
-
-                    **Held open for a document with nothing published yet.** It
-                    used to be disabled, because this screen could only draw a
-                    diff and a first version has no before. What it opens now
-                    is the whole change, where a new document is simply read —
-                    which is what a reviewer wants from a policy nobody has
-                    seen. The only thing that can still make it impossible is
-                    a change with no branch on record. */}
-                <button
-                  className="bs-btn bs-btn--sm bs-btn-secondary"
-                  type="button"
-                  disabled={!proposed.ref}
-                  onClick={() => onViewChange("compare")}
-                >
-                  {/* Compared with what is the question the bare verb left
-                      open. A first version has nothing before it, and the
-                      Changes tab simply reads it. */}
-                  {railBecomes !== null && railBecomes > 1
-                    ? `Compare with v${railBecomes - 1}`
-                    : "Compare"}
-                </button>
-                <span className="bs-panel-bar-spacer" />
-                {/* A download arrow with the word "Download" beside it is the
-                    word twice. */}
-                {proposed.ref ? (
-                  <button
-                    className="bs-actionbtn"
-                    type="button"
-                    aria-label={`Download ${fileName ?? "this version"}`}
-                    title="Download"
-                    disabled={downloading || !fileName}
-                    onClick={() => onDownload(proposed.ref!, null)}
-                  >
-                    <Download size={15} strokeWidth={1.6} aria-hidden="true" />
+                    View file
                   </button>
-                ) : null}
-              </div>
-            </>
-          )}
-        </div>
+                  <span className="bs-panel-bar-spacer" />
+                  {/* A download arrow with the word "Download" beside it is the
+                    word twice. */}
+                  {proposed.ref ? (
+                    <button
+                      className="bs-actionbtn"
+                      type="button"
+                      aria-label={`Download ${fileName ?? "this version"}`}
+                      title="Download"
+                      disabled={downloading || !fileName}
+                      onClick={() => onDownload(proposed.ref!, null)}
+                    >
+                      <Download
+                        size={15}
+                        strokeWidth={1.6}
+                        aria-hidden="true"
+                      />
+                    </button>
+                  ) : null}
+                </div>
+              </>
+            )}
+          </div>
+        ) : null}
 
         <div className="bs-panel">
           <div className="bs-panel-bar">
@@ -762,7 +746,9 @@ export function DocumentChangeDetail({
                 <p className="rev-decision-confirm-line">
                   {subject
                     ? `Approve this change to ${documentName}? Your name and the time go on the record.`
-                    : `Approve version ${nextVersion} of ${documentName}? Your name and the time go on the record.`}
+                    : documentCount > 1
+                      ? `Approve this change to ${documentCount} documents? Your name and the time go on the record.`
+                      : `Approve version ${nextVersion} of ${documentName}? Your name and the time go on the record.`}
                 </p>
                 <div className="rev-decision-row">
                   <button
