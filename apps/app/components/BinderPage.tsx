@@ -554,13 +554,6 @@ export function BinderDocuments({
     };
   };
 
-  if (error) {
-    return <p className="app-inline-error">{error}</p>;
-  }
-
-  const policyCount = documents?.length ?? 0;
-  const folderCount = everyFolder.length;
-
   /**
    * The rows this draft has touched.
    *
@@ -577,6 +570,15 @@ export function BinderDocuments({
     }
     return paths;
   }, [draftActs]);
+
+  // Every hook above this line, and no hook below it: an early return that
+  // skips one is what crashed the page for a binder that does not exist.
+  if (error) {
+    return <p className="app-inline-error">{error}</p>;
+  }
+
+  const policyCount = documents?.length ?? 0;
+  const folderCount = everyFolder.length;
 
   const isTouched = (node: BinderTreeNode): boolean => {
     if (!draft) return false;
