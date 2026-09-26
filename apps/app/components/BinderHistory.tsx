@@ -377,7 +377,11 @@ function ChangeEntry({
               }}
             />
           ) : null}
-          {describePublication(change, nameOf)}
+          {/* Its own box, so a sentence too long for a phone wraps beside the
+              face instead of dropping the whole line below it. */}
+          <span className="history-byline">
+            {describePublication(change, nameOf)}
+          </span>
         </div>
       </div>
     </li>

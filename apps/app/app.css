@@ -894,6 +894,10 @@ input {
    the header, so a pane only has to space its own contents. */
 .binder-pane {
   display: grid;
+  /* One column, as wide as the pane and no wider. The implicit column is
+     `auto`, which grows to its widest child's minimum — on a phone the
+     history's filters and dates pushed it 23px past the screen's edge. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--brand-space-5);
   align-content: start;
   min-width: 0;
@@ -8173,6 +8177,11 @@ a.bs-row:focus-visible {
   min-width: 14rem;
 }
 
+.history-byline {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
 /* ── Settings ─────────────────────────────────────────────────────────────
    A form wants a measure. At the full column a person's row puts their name
    at one edge and their role at the other, with the width of the page
@@ -8287,8 +8296,8 @@ a.bs-row:focus-visible {
 
 /* ── The binder's screens on a phone ───────────────────────────────────────
    Below 768px there is no sidebar, so the binder's own screens are a strip
-   under the page title — the shape the tab bar had, which already worked at
-   that width. It scrolls sideways rather than wrapping. */
+   at the top of every binder screen — the shape the tab bar had, which
+   already worked at that width. It scrolls sideways rather than wrapping. */
 
 .binder-strip {
   display: none;
