@@ -104,6 +104,7 @@ function closed(overrides: Partial<ClosedChange> = {}): ClosedChange {
     title: "New onboarding checklist",
     body: "New onboarding checklist",
     branchName: "version/6",
+    documentSlugPath: null,
     submittedBy: "maya",
     submittedAt: "2026-08-18T10:00:00Z",
     closedAt: "2026-08-19T10:00:00Z",
@@ -304,6 +305,22 @@ describe("buildDecidedChangeRows", () => {
     // repeating it inside the standing was the same fact twice.
     expect(rows[0]?.standing).toBe("Published");
     expect(rows[0]?.tone).toBe("published");
+  });
+
+  test("a decided change names its document, not the binder it is in", () => {
+    const rows = buildDecidedChangeRows(
+      [
+        {
+          owner: "david",
+          repo: "clinical",
+          changes: [closed({ documentSlugPath: "nursing/hand-hygiene" })],
+        },
+      ],
+      "david",
+      new Set(["david/clinical"]),
+    );
+
+    expect(rows[0]?.documentName).toBe("Hand Hygiene");
   });
 
   test("a withdrawn change says who withdrew it", () => {

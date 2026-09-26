@@ -234,6 +234,28 @@ test("a change closed with no decision on it was withdrawn", () => {
   expect(change?.branchName).toBe("upload/v4");
 });
 
+test("a closed change names the document its upload branch was for", () => {
+  const [change] = buildClosedChanges(
+    [
+      closedPR(4, {
+        head: { ref: "upload/nursing/hand-hygiene/20260909/101500Z-alice" },
+      }),
+    ],
+    [],
+  );
+
+  expect(change?.documentSlugPath).toBe("nursing/hand-hygiene");
+});
+
+test("a closed change on no document's branch names no document", () => {
+  const [change] = buildClosedChanges(
+    [closedPR(4, { head: { ref: "sign-off/rules" } })],
+    [],
+  );
+
+  expect(change?.documentSlugPath).toBeNull();
+});
+
 test("closed changes come back newest first", () => {
   const changes = buildClosedChanges(
     [closedPR(2), closedPR(11), closedPR(7)],

@@ -16,6 +16,7 @@ import {
   readRequestedReviewers,
 } from "./change-assignments";
 import type { DocTag } from "./gitea-client/repos";
+import { documentSlugPathFromUploadBranch } from "./gitea-client/uploads";
 import type { PullRequestWithReviews } from "./gitea-client/pullRequests";
 import type { components } from "./gitea-client/spec/gitea";
 import type {
@@ -238,6 +239,9 @@ export function buildClosedChanges(
         approvalCount: countApprovals(reviews),
         requiredApprovals,
         branchName: pullRequest.head?.ref ?? "",
+        documentSlugPath: documentSlugPathFromUploadBranch(
+          pullRequest.head?.ref ?? "",
+        ),
         submittedBy,
         submittedAt: pullRequest.created_at ?? "",
         closedAt: pullRequest.merged_at ?? pullRequest.closed_at ?? null,
