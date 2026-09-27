@@ -258,6 +258,12 @@ test("closing with unsaved words asks first, and Cancel keeps them", async ({
   await text.getByText("Clean your hands").click();
   await page.keyboard.press("End");
   await page.keyboard.type(" Every time.");
+  // Unsaved, and said so where somebody with several tabs open will look:
+  // the browser tab, and the policy's row in the file panel.
+  await expect(page).toHaveTitle(/^• Hand Hygiene/);
+  await expect(
+    page.getByRole("img", { name: "Unsaved changes" }),
+  ).toBeVisible();
 
   await page.getByRole("button", { name: "Close", exact: true }).click();
   const ask = page.getByRole("alertdialog");

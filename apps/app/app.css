@@ -10139,6 +10139,16 @@ html.bs-writing .app-main {
   padding-top: var(--brand-space-2);
 }
 
+/* The open policy has words not saved yet — the dot an IDE puts on a tab. */
+.doc-files-unsaved {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: var(--bs-status-warn-fg);
+}
+
 /* A Word file or a PDF is in the binder but not the editor's to open. */
 .doc-files-item--file {
   color: var(--bs-text-muted);
