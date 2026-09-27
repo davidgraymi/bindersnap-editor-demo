@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { History, Settings, type LucideIcon } from "lucide-react";
 import { useIsReadOnly } from "../readOnlyContext";
 import { ApiRequestError } from "../../../packages/api-client/mutator";
@@ -318,6 +318,39 @@ export function BinderShell({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [org, binder, editMode, draftBranch]);
 
+  /**
+   * Your drafts while reading, so the binder's page and a document's can offer
+   * the way into one. A read, never a start: looking at the record must not
+   * make a draft.
+   */
+  const [readingDrafts, setReadingDrafts] = useState<BinderDraftPayload | null>(
+    null,
+  );
+  useEffect(() => {
+    if (editMode !== "off") return;
+    let cancelled = false;
+    fetchBinderDraft(org, binder)
+      .then((payload) => {
+        if (!cancelled) setReadingDrafts(payload);
+      })
+      .catch(() => {
+        if (!cancelled) setReadingDrafts(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [org, binder, editMode, reloadKey]);
+  /** Your drafts, whichever of the two reads has them. */
+  const knownDrafts = draft ?? readingDrafts;
+  const draftChoices = useMemo(
+    () =>
+      (knownDrafts?.drafts ?? []).map(({ branch, name }) => ({
+        branch,
+        name,
+      })),
+    [knownDrafts],
+  );
+
   const goToEdit = (
     next: BinderEditMode,
     branch: string | null = draftBranch,
@@ -456,6 +489,48 @@ export function BinderShell({
     if (branch) query.set("draft", branch);
     moveTo(`/${org}/${binder}/${documentPath}?${query.toString()}`);
     setEditMode("editing");
+  };
+
+  /**
+   * The policy the propose step was opened from, to go back to on Cancel.
+   * Null when it was opened from the binder's own bar.
+   */
+  const [proposingFrom, setProposingFrom] = useState<string | null>(null);
+
+  /** The same policy, in the editor, in another of your drafts. */
+  const writeInDraft = (branch: string) => {
+    if (!documentPath) return;
+    setDraft(null);
+    setDraftBranch(branch);
+    moveTo(buildDocumentEditUrl({ org, binder, documentPath, draft: branch }));
+    setEditMode("writing");
+  };
+
+  /** Start a draft from the editor, and carry on in it on the same policy. */
+  const startDraftInEditor = async (name: string) => {
+    setStartingEdit(true);
+    setDraftError(null);
+    try {
+      const payload = await openBinderDraft(org, binder, name);
+      const branch = payload.draft?.branch;
+      if (branch) writeInDraft(branch);
+    } catch (err) {
+      setDraftError(
+        err instanceof Error && err.message.trim() !== ""
+          ? err.message
+          : "Unable to start another draft.",
+      );
+    } finally {
+      setStartingEdit(false);
+    }
+  };
+
+  /** Propose the draft the editor is saving into. */
+  const proposeFromEditor = () => {
+    const branch = draft?.draft?.branch ?? draftBranch;
+    if (!branch) return;
+    setProposingFrom(documentPath ?? null);
+    goToEdit("proposing", branch);
   };
 
   /** Move to another of your drafts. The address is what carries it. */
@@ -903,6 +978,12 @@ export function BinderShell({
             setAddingFromEditor(true);
             setAdding(true);
           }}
+          drafts={draft}
+          draftBusy={startingEdit}
+          onSwitchDraft={writeInDraft}
+          onStartDraft={startDraftInEditor}
+          onRenameDraft={renameDraft}
+          onPropose={proposeFromEditor}
         />
       ) : documentPath ? (
         <BinderDocumentPage
@@ -920,6 +1001,8 @@ export function BinderShell({
           /* Opened from the tree while editing, so it is read where the name
              it was clicked under actually exists. */
           draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
+          draftName={editMode === "off" ? null : (draft?.draft?.name ?? null)}
+          drafts={draftChoices}
           onEditDocument={editDocument}
           editing={startingEdit}
           onOpenBinder={onOpenBinder}
@@ -1038,8 +1121,26 @@ export function BinderShell({
              to put in front of reviewers as what a change is for. */
           name={draft.draft.named ? draft.draft.name : ""}
           acts={draft.draft.acts}
-          onCancel={() => goToEdit("editing")}
+          onCancel={() => {
+            // Back to the policy it was proposed from, still in the editor.
+            const from = proposingFrom;
+            setProposingFrom(null);
+            if (from) {
+              moveTo(
+                buildDocumentEditUrl({
+                  org,
+                  binder,
+                  documentPath: from,
+                  draft: draft.draft!.branch,
+                }),
+              );
+              setEditMode("writing");
+            } else {
+              goToEdit("editing");
+            }
+          }}
           onProposed={(changeNumber) => {
+            setProposingFrom(null);
             // Straight to the change request. The draft is a change request
             // now — it has reviewers, a number and somewhere to be discussed —
             // and leaving somebody on the tree they were editing would show
@@ -1086,6 +1187,21 @@ export function BinderShell({
                   onSwitch={switchDraft}
                   onStart={startAnother}
                   onRename={renameDraft}
+                  onRecord={leaveEditMode}
+                />
+              ) : editMode === "off" && !isReadOnly && readingDrafts ? (
+                /* Reading, the same control says you are on the record, and
+                   is the way into any of your drafts from here. */
+                <BinderDraftPicker
+                  org={org}
+                  drafts={readingDrafts.drafts}
+                  others={readingDrafts.others}
+                  current={null}
+                  busy={startingEdit}
+                  onSwitch={switchDraft}
+                  onStart={startAnother}
+                  onRename={renameDraft}
+                  onRecord={() => undefined}
                 />
               ) : null
             }

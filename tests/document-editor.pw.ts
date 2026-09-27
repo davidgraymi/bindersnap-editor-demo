@@ -313,6 +313,97 @@ test("after a save, every page reads the draft as it now is, not a copy kept fro
   for (const header of kept) expect(header).toBe("no-store");
 });
 
+test("the draft is chosen, proposed and read from the editor, with no trip through the binder", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/edit=write/);
+  const first = new URL(page.url()).searchParams.get("draft")!;
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await expect(text).toContainText("Clean your hands");
+
+  // Which draft Save goes into is a control in the title bar.
+  const picker = page.locator(".doc-editor-where .bs-draftpick");
+  await expect(picker).toContainText("Draft of");
+  const firstName = (await picker.innerText()).split("·")[0]!.trim();
+
+  // Nothing to propose until there is something in the draft.
+  const propose = page.getByRole("button", { name: "Propose", exact: true });
+  await expect(propose).toBeDisabled();
+
+  await text.getByText("Clean your hands").click();
+  await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Every time.");
+
+  // Propose from here: unsaved words are saved first, into this draft.
+  await expect(propose).toBeEnabled();
+  await propose.click();
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Save and propose" })
+    .click();
+  await expect(page).toHaveURL(
+    new RegExp(`edit=propose&draft=${encodeURIComponent(first)}`),
+  );
+  expect(await policyText(session, org, binder, first)).toContain(
+    "Every time.",
+  );
+
+  // Back to editing lands back in the policy, not on the binder.
+  await page.getByRole("button", { name: "Back to editing" }).click();
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write/);
+  await expect(text).toContainText("Every time.");
+
+  // Another draft, started here: the same policy, as the record has it.
+  await picker.click();
+  await page.getByRole("button", { name: "Start another draft" }).click();
+  const naming = page.getByRole("textbox", {
+    name: "What to call the new draft",
+  });
+  await naming.fill("Gloves wording");
+  await naming.press("Enter");
+  await expect(picker).toContainText("Gloves wording");
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write/);
+  expect(new URL(page.url()).searchParams.get("draft")).not.toBe(first);
+  await expect(text).toContainText("Clean your hands");
+  await expect(text).not.toContainText("Every time.");
+
+  // And back to the first, where the words are.
+  await picker.click();
+  await page.getByRole("button", { name: new RegExp(`^${firstName}`) }).click();
+  await expect(text).toContainText("Every time.");
+
+  // Close reads the policy in that draft, and says so.
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/hand-hygiene\\?edit=1&draft=${encodeURIComponent(first)}`),
+  );
+  await expect(page.locator(".doc-version-pill")).toHaveText(`In ${firstName}`);
+  await expect(page.locator(".doc-preview-prose")).toContainText("Every time.");
+
+  // The binder's own page, read on the record, is the way into either draft.
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  const binderPicker = page.locator(".bs-draftpick");
+  await expect(binderPicker).toContainText("On the record");
+  await binderPicker.click();
+  await expect(
+    page.getByRole("button", { name: /^Gloves wording/ }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: new RegExp(`^${firstName}`) }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`edit=1&draft=${encodeURIComponent(first)}`),
+  );
+  await expect(page.locator(".bs-draftpick")).toContainText(firstName);
+});
+
 test("closing with unsaved words asks first, and Cancel keeps them", async ({
   page,
 }) => {
