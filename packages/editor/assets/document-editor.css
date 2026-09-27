@@ -1358,47 +1358,62 @@
 
 /* ─── Print: the page, and nothing around it ─────────────────────────────── */
 
+/* ─── Print ───────────────────────────────────────────────────────────────
+   The printout is a copy of the document under <body> — see `printCopy.ts`
+   for why — and nothing else is drawn. The page's own margins become the
+   paper's, and its name and page numbers go in the paper's margins. */
+.bs-print-root {
+  display: none;
+}
+
 @media print {
-  html.bs-printing-document body * {
-    visibility: hidden;
+  html.bs-printing-document,
+  html.bs-printing-document body {
+    height: auto !important;
+    overflow: visible !important;
+    background: none !important;
   }
 
-  html.bs-printing-document .bs-doc-page,
-  html.bs-printing-document .bs-doc-page * {
-    visibility: visible;
+  html.bs-printing-document body > :not(.bs-print-root) {
+    display: none !important;
   }
 
-  html.bs-printing-document .bs-doc-page {
-    position: absolute;
-    top: 0;
-    left: 0;
+  html.bs-printing-document .bs-print-root {
+    display: block;
+  }
+
+  .bs-print-root .bs-doc-page {
     width: auto;
     min-height: 0;
     padding: 0;
     box-shadow: none;
-    zoom: 1 !important;
+    cursor: auto;
   }
 
-  html.bs-printing-document .bs-doc-page-probe {
-    visibility: hidden;
+  .bs-print-root .bs-doc-content {
+    min-height: 0;
   }
 
-  html.bs-printing-document .bs-search-match {
-    background: none;
-    box-shadow: none;
-  }
-
-  html.bs-printing-document .bs-page-break {
+  .bs-print-root .bs-page-break {
     border: none;
     margin: 0;
   }
 
-  html.bs-printing-document .bs-page-break::after {
+  .bs-print-root .bs-page-break::after {
     content: none;
   }
 
-  @page {
-    size: letter;
-    margin: 1in;
+  /* A heading stays with what it heads; a picture or a table row is not cut
+     in half by the edge of the paper. */
+  .bs-print-root h1,
+  .bs-print-root h2,
+  .bs-print-root h3,
+  .bs-print-root h4 {
+    break-after: avoid;
+  }
+
+  .bs-print-root img,
+  .bs-print-root tr {
+    break-inside: avoid;
   }
 }

@@ -465,3 +465,34 @@ test("words never saved are kept on this device and offered back", async ({
   ).toContainText("Nails kept short.", { timeout: 20_000 });
   await expect(again.getByText("were kept on this device")).toHaveCount(0);
 });
+
+test("printing prints the policy, not the app around it", async ({ page }) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(
+    page.getByRole("textbox", { name: "Hand Hygiene" }),
+  ).toContainText("Clean your hands");
+
+  // What Ctrl+P and the View tab's Print both set off.
+  await page.evaluate(() => window.dispatchEvent(new Event("beforeprint")));
+  await page.emulateMedia({ media: "print" });
+  const copy = page.locator("body > .bs-print-root");
+  await expect(copy).toBeVisible();
+  await expect(copy).toContainText("Clean your hands");
+  await expect(page.locator(".bs-ribbon")).toBeHidden();
+  await expect(page.locator(".doc-files")).toBeHidden();
+  // The policy's name is the running header.
+  expect(
+    await page
+      .locator("#bs-print-margins")
+      .evaluate((node) => node.textContent),
+  ).toContain('content: "Hand Hygiene"');
+
+  await page.emulateMedia({ media: "screen" });
+  await page.evaluate(() => window.dispatchEvent(new Event("afterprint")));
+  await expect(page.locator(".bs-print-root")).toHaveCount(0);
+  await expect(page.locator(".bs-ribbon")).toBeVisible();
+});
