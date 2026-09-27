@@ -32,6 +32,7 @@ import { followInApp } from "../appLink";
 import { parseRequestedChange } from "../binderChange";
 import {
   buildDocumentEditUrl,
+  pickPolicyToWrite,
   buildDocumentUrl,
   parseRequestedRef,
 } from "../binderDocument";
@@ -400,6 +401,55 @@ export function BinderShell({
         err instanceof Error && err.message.trim() !== ""
           ? err.message
           : "Unable to start editing this binder.",
+      );
+    } finally {
+      setStartingEdit(false);
+    }
+  };
+
+  /**
+   * Edit on a binder: your draft, open in the editor.
+   *
+   * **Edit means write.** It opened the tree in edit mode, where the one thing
+   * you cannot do is change a word; changing the words meant opening a policy
+   * from there and pressing Edit a second time. It now opens the policy you
+   * were last writing in the draft — or the binder's first — in the editor,
+   * with the draft's files beside it. Renaming, refiling and folders are
+   * Organize. A binder of nothing but Word files and PDFs has nothing to
+   * write, so there Edit opens the tree as before.
+   */
+  const startWriting = async () => {
+    setStartingEdit(true);
+    setDraftError(null);
+    try {
+      const payload = await openBinderDraft(org, binder);
+      const branch = payload.draft?.branch ?? null;
+      setDraft(payload);
+      const listing = branch
+        ? await fetchBinderDocuments(org, binder, branch)
+        : null;
+      const target = listing
+        ? pickPolicyToWrite(listing.documents, payload.draft?.acts ?? [])
+        : null;
+      if (!target) {
+        goToEdit("editing", branch);
+        return;
+      }
+      setDraftBranch(branch);
+      moveTo(
+        buildDocumentEditUrl({
+          org,
+          binder,
+          documentPath: target,
+          draft: branch,
+        }),
+      );
+      setEditMode("writing");
+    } catch (err) {
+      setDraftError(
+        err instanceof Error && err.message.trim() !== ""
+          ? err.message
+          : "Unable to open your draft to edit this binder.",
       );
     } finally {
       setStartingEdit(false);
@@ -789,7 +839,8 @@ export function BinderShell({
   // Kept on screen while the organization cannot write, and answered with the
   // paywall: a missing button explains nothing, an offer does.
   const addDocument = useWriteAction(() => setAdding(true));
-  const editBinder = useWriteAction(() => void startEditing());
+  const editBinder = useWriteAction(() => void startWriting());
+  const organizeBinder = useWriteAction(() => void startEditing());
   const editDocument = useWriteAction(
     (slugPath: string) => void writeDocument(slugPath),
   );
@@ -903,6 +954,16 @@ export function BinderShell({
                   >
                     Add a document
                   </button>
+                  {/* Rename, refile and make folders: the tree, in your
+                      draft. Edit is for the words. */}
+                  <button
+                    className="bs-btn bs-btn-secondary"
+                    type="button"
+                    onClick={organizeBinder}
+                    disabled={startingEdit}
+                  >
+                    Organize
+                  </button>
                   <button
                     className="bs-btn bs-btn-primary"
                     type="button"
@@ -984,6 +1045,9 @@ export function BinderShell({
           onStartDraft={startDraftInEditor}
           onRenameDraft={renameDraft}
           onPropose={proposeFromEditor}
+          onOrganize={() =>
+            goToEdit("editing", draft?.draft?.branch ?? draftBranch)
+          }
         />
       ) : documentPath ? (
         <BinderDocumentPage

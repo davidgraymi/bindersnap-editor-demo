@@ -723,7 +723,7 @@ test("a popover is not clipped by the panel it opens from", async ({
   // tree's own bar — another `.bs-panel`, another squircle.
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
   await settleOnRealShell(page);
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Organize", exact: true }).click();
   const pick = page.locator(".bs-draftpick");
   await pick.waitFor({ timeout: 30_000 });
   await pick.click();
