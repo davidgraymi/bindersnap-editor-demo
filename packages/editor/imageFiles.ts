@@ -27,6 +27,19 @@ export const MAX_EDGE_PX = 1600;
 /** The most one picture may add to a document, once scaled. */
 export const MAX_PICTURE_BYTES = 1_500_000;
 
+/**
+ * A picture's stored width as whole pixels, or null for its own size. Pasted
+ * HTML brings widths as strings, and some as percentages, which are not kept.
+ */
+export function pictureWidth(value: unknown): number | null {
+  if (typeof value === "string" && !/^\s*\d+(\.\d+)?\s*(px)?\s*$/.test(value)) {
+    return null;
+  }
+  const px =
+    typeof value === "number" ? value : Number.parseFloat(String(value));
+  return Number.isFinite(px) && px > 0 ? Math.round(px) : null;
+}
+
 export class PictureError extends Error {}
 
 export function isPictureFile(file: File): boolean {

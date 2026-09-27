@@ -58,6 +58,8 @@ const ALLOWED_ATTR = [
   "colspan",
   "rowspan",
   "rel",
+  // A picture's size, in whole pixels only — see the hook below.
+  "width",
   // Filtered to a handful of typographic properties by `safeStyle` below.
   "style",
 ];
@@ -316,6 +318,16 @@ export function sanitizeHtml(html: string): string {
 
     if (attrName.startsWith("on") || attrName.startsWith("data-")) {
       data.keepAttr = false;
+      return;
+    }
+
+    if (attrName === "width") {
+      if (
+        typeof data.attrValue !== "string" ||
+        !/^\d{1,4}$/.test(data.attrValue.trim())
+      ) {
+        data.keepAttr = false;
+      }
       return;
     }
 

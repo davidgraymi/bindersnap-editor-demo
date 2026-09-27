@@ -114,7 +114,10 @@ pasted or dropped, a picture is scaled to at most 1600px and written into the
 document as a `data:image/…;base64` source, so it is versioned with the words
 in the same commit and cannot change under an approved version. Raster types
 only; the sanitizer (`isSafeImageSrc`) refuses SVG and every other `data:`
-address. Limit 1.5 MB per picture after scaling.
+address. Limit 1.5 MB per picture after scaling. A picture's size is its
+`width` attribute alone, in pixels at 100% zoom (`extensions/PictureSize.ts`,
+the corner handles, and the Picture tab's presets); a height is never stored,
+so it cannot be saved squashed.
 
 **AutoRecover** (`apps/app/editorRecovery.ts`): unsaved words are kept in this
 browser's `localStorage`, per org/binder/draft/policy, 800ms after the last

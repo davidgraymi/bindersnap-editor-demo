@@ -417,6 +417,104 @@ test("a picture from this device is kept inside the policy, in the draft", async
   ).toBeVisible();
 });
 
+test("a picture is sized by its corners or the Picture tab, and keeps its size", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/edit=write/);
+  const draft = new URL(page.url()).searchParams.get("draft")!;
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  // At 100%, so a pixel dragged on screen is a pixel on the page.
+  await page.getByRole("tab", { name: "View" }).click();
+  await page
+    .getByRole("tabpanel")
+    .getByRole("button", { name: "100%", exact: true })
+    .click();
+  await text.getByText("Clean your hands").click();
+  await page.keyboard.press("End");
+
+  // A 400×200 picture, drawn here so the test carries no binary file.
+  const png = await page.evaluate(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 400;
+    canvas.height = 200;
+    const context = canvas.getContext("2d")!;
+    context.fillStyle = "#2f6f5e";
+    context.fillRect(0, 0, 400, 200);
+    return canvas.toDataURL("image/png").split(",")[1]!;
+  });
+  await page.getByRole("tab", { name: "Insert" }).click();
+  await page.getByRole("button", { name: "Picture" }).click();
+  await page.locator(".bs-rform input[type=file]").setInputFiles({
+    name: "Sink.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(png, "base64"),
+  });
+  const picture = text.getByRole("img", { name: "Sink" });
+  await expect(picture).toBeVisible();
+  // No Picture tab until the picture is chosen, as in Word.
+  await expect(page.getByRole("tab", { name: "Picture" })).toHaveCount(0);
+
+  await picture.click();
+  await page.getByRole("tab", { name: "Picture" }).click();
+  await page.getByRole("button", { name: "Medium" }).click();
+  await expect(picture).toHaveAttribute("width", "312");
+  await expect(page.getByRole("button", { name: "Medium" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+
+  // Drag the bottom-right corner 112 pixels left: 312 → 200 wide.
+  const corner = page.locator(".bs-picture-handle--bottom-right");
+  const box = (await corner.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 - 60, box.y + 10, { steps: 4 });
+  await page.mouse.move(box.x + box.width / 2 - 112, box.y + 20, {
+    steps: 4,
+  });
+  await page.mouse.up();
+  await expect(picture).toHaveAttribute("width", "200");
+  // Stored, not only drawn: the ribbon no longer calls it Medium.
+  await expect(
+    page.getByRole("button", { name: "Medium" }),
+  ).not.toHaveAttribute("aria-pressed", "true");
+  // It keeps its shape: the height follows the width.
+  await expect
+    .poll(async () => (await picture.boundingBox())?.height)
+    .toBeCloseTo(100, 0);
+
+  await page.getByRole("button", { name: "Alt text" }).click();
+  const altText = page.getByRole("dialog", { name: "Alt text" });
+  await altText
+    .getByRole("textbox", { name: "Description, for screen readers" })
+    .fill("The sink by the ward door");
+  await altText.getByRole("button", { name: "Save" }).click();
+  const described = text.getByRole("img", {
+    name: "The sink by the ward door",
+  });
+  await expect(described).toBeVisible();
+
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.getByText(/Saved just now/)).toBeVisible({
+    timeout: 20_000,
+  });
+  const saved = await policyText(session, org, binder, draft);
+  expect(saved).toContain('"width": 200');
+
+  // The reader draws it at the same size.
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(
+    page.locator(".doc-preview-prose").getByRole("img", {
+      name: "The sink by the ward door",
+    }),
+  ).toHaveAttribute("width", "200");
+});
+
 test("words never saved are kept on this device and offered back", async ({
   context,
   page,
