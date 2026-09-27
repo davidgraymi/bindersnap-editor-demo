@@ -288,6 +288,59 @@ test("closing with unsaved words asks first, and Cancel keeps them", async ({
   await expect(page).toHaveURL(/edit=write/);
 });
 
+test("on a tablet the ribbon folds its groups and the files open over the page", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+  await page.setViewportSize({ width: 700, height: 1000 });
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await expect(text).toBeVisible();
+
+  // The files start as a rail, so the page has the width.
+  const files = page.getByRole("complementary", {
+    name: "Files in Clinical Policies",
+  });
+  await expect(files).toHaveCount(0);
+  const show = page.getByRole("button", { name: "Show the draft's files" });
+  await show.click();
+  await expect(files).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(files).toHaveCount(0);
+
+  // Every command fits, folded into its group's button, with no sideways
+  // scroll; the Font group's commands are one press away.
+  const panel = page.locator(".bs-ribbon-panel");
+  await expect
+    .poll(() => panel.evaluate((node) => node.scrollWidth - node.clientWidth))
+    .toBeLessThanOrEqual(1);
+  const foldedFont = page
+    .getByRole("group", { name: "Font" })
+    .getByRole("button", { name: "Font", exact: true });
+  await expect(foldedFont).toHaveAttribute("aria-haspopup", "dialog");
+  await text
+    .getByText("Clean your hands")
+    .dblclick({ position: { x: 8, y: 5 } });
+  // Cut lights up once the editor has the selected word.
+  await expect(page.getByRole("button", { name: "Cut" })).toBeEnabled();
+  await foldedFont.click();
+  const font = page.getByRole("dialog", { name: "Font" });
+  await font.getByRole("button", { name: "Bold" }).click();
+  await expect(text.locator("strong")).toHaveCount(1);
+
+  // A menu inside the fold opens and closes without taking the fold with it.
+  await font.getByRole("button", { name: "Font color" }).click();
+  await expect(page.getByRole("menu", { name: "Font color" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu", { name: "Font color" })).toHaveCount(0);
+  await expect(font).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(font).toHaveCount(0);
+});
+
 test("a new policy can be written here instead of uploaded", async ({
   page,
 }) => {
