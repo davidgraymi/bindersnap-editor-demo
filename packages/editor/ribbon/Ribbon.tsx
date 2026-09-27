@@ -15,6 +15,7 @@ import {
   AlignRight,
   Baseline,
   Bold,
+  CaseSensitive,
   ChevronUp,
   ClipboardPaste,
   Code,
@@ -69,6 +70,7 @@ import {
 } from "lucide-react";
 
 import { LINE_SPACINGS } from "../documentSchema";
+import { CASE_MODES } from "../extensions/ChangeCase";
 import {
   PICTURE_TYPES,
   PictureError,
@@ -473,6 +475,27 @@ function HomeTab({
             shortcut="Ctrl+["
             onClick={() => setSize(stepFontSize(size ?? 11, -1))}
           />
+          <DropButton
+            label="Change case"
+            tip="Change case (Shift+F3)"
+            className="bs-rdrop--icon"
+            panelClassName="bs-rpanel--list bs-rpanel--narrow"
+            panel={(close) =>
+              CASE_MODES.map(({ mode, label }) => (
+                <MenuChoice
+                  key={mode}
+                  onPick={() => {
+                    chain().changeCase(mode).run();
+                    close();
+                  }}
+                >
+                  {label}
+                </MenuChoice>
+              ))
+            }
+          >
+            <CaseSensitive size={16} strokeWidth={1.75} aria-hidden="true" />
+          </DropButton>
           <RibbonButton
             icon={RemoveFormatting}
             label="Clear formatting"

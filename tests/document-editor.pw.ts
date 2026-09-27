@@ -911,6 +911,34 @@ test("the Format Painter brushes one word's look onto others", async ({
   await expect(text).not.toHaveClass(/is-painting/);
 });
 
+test("Change Case recases a word from the ribbon, and Shift+F3 cycles it", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await expect(text).toBeVisible();
+
+  const clean = await wordBox(page, "Clean");
+  await page.mouse.dblclick(clean.x, clean.y);
+  await expect(page.getByRole("button", { name: "Cut" })).toBeEnabled();
+
+  await page.getByRole("button", { name: "Change case" }).click();
+  await page.getByRole("menuitem", { name: "UPPERCASE" }).click();
+  await expect(text).toContainText("CLEAN your hands");
+
+  // Back in the page, the words still selected: Shift+F3 goes on to
+  // Capitalize Each Word, then lowercase, as Word's does.
+  await text.focus();
+  await page.keyboard.press("Shift+F3");
+  await expect(text).toContainText("Clean your hands");
+  await page.keyboard.press("Shift+F3");
+  await expect(text).toContainText("clean your hands");
+});
+
 test("a change that only makes a word bold still shows in its comparison", async ({
   page,
 }) => {
