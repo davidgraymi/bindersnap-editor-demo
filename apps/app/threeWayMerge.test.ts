@@ -56,6 +56,24 @@ describe("the three-way merge", () => {
     expect(applyChoices(chunks, ["both"])?.join("")).toBe("aXY");
   });
 
+  test("a document both sides added asks only where they differ", () => {
+    // No base: diff3 alone makes the whole document one conflict.
+    const chunks = merged("", "TaXc", "TaYc");
+    expect(chunks).toEqual([
+      { kind: "settled", items: ["T", "a"] },
+      { kind: "conflict", base: [], ours: ["X"], theirs: ["Y"] },
+      { kind: "settled", items: ["c"] },
+    ]);
+    expect(applyChoices(chunks, ["theirs"])?.join("")).toBe("TaYc");
+  });
+
+  test("what both sides of a conflict share settles between the clashes", () => {
+    // Both rewrote a and b, and both added the same s between them.
+    const split = merged("ab", "XsZb", "YsWb");
+    expect(countConflicts(split)).toBe(2);
+    expect(applyChoices(split, ["ours", "theirs"])?.join("")).toBe("XsWb");
+  });
+
   test("a removal against an edit is a conflict", () => {
     const chunks = merged("abc", "ac", "aYc");
     expect(chunks[1]).toEqual({

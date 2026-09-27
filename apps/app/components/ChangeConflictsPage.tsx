@@ -14,6 +14,7 @@ import {
 import { followInApp } from "../appLink";
 import {
   describeConflictFile,
+  describeConflictName,
   displayConflictPath,
   emptyDecision,
   isDecided,
@@ -129,6 +130,14 @@ export function ChangeConflictsPage({
     ({ file, merge }) =>
       !isDecided(merge, decisions[file.key] ?? emptyDecision(merge)),
   ).length;
+  // What is left to click, counted the way the page asks: each clash in a
+  // document merged piece by piece, and a document chosen whole as one.
+  const clashes = files.reduce((sum, { file, merge }) => {
+    const decision = decisions[file.key] ?? emptyDecision(merge);
+    if (isDecided(merge, decision)) return sum;
+    if (merge.mode === "whole") return sum + 1;
+    return sum + decision.pieces.filter((choice) => choice === null).length;
+  }, 0);
 
   const submit = async () => {
     if (!payload) return;
@@ -249,10 +258,12 @@ export function ChangeConflictsPage({
             <strong>
               {open === 0
                 ? "Every conflict is decided."
-                : `${open} ${open === 1 ? "document still needs" : "documents still need"} a decision.`}
+                : `${clashes} ${clashes === 1 ? "conflict still needs" : "conflicts still need"} a decision.`}
             </strong>{" "}
-            This brings the change up to date. Approvals already given are
-            dismissed, because they were for different content.
+            <span className="conflicts-bar-why">
+              This brings the change up to date. Approvals already given are
+              dismissed, because they were for different content.
+            </span>
           </div>
           {submitError ? (
             <p className="bs-note bs-note--danger" role="alert">
@@ -382,6 +393,7 @@ function ConflictFile({
   // A file that can be merged in pieces can still be chosen whole, for the
   // resolver who knows one side is simply right.
   const [whole, setWhole] = useState(merge.mode === "whole");
+  const named = describeConflictName(file.path);
 
   return (
     <section
@@ -390,8 +402,17 @@ function ConflictFile({
     >
       <div className="bs-panel-bar conflict-file-bar">
         <FileText size={15} strokeWidth={1.75} aria-hidden="true" />
-        <span className="conflict-file-path">
-          {displayConflictPath(file.path)}
+        <span
+          className="conflict-file-name"
+          title={displayConflictPath(file.path)}
+        >
+          {named.folder ? (
+            <span className="conflict-file-folder">{named.folder} / </span>
+          ) : null}
+          <strong>{named.title}</strong>
+          {named.extension ? (
+            <span className="conflict-file-ext">.{named.extension}</span>
+          ) : null}
         </span>
         <span className="bs-status bs-status--sm bs-status--review conflict-file-badge">
           {describeConflictFile(file)}
@@ -596,6 +617,11 @@ function Pieces({
               <Side
                 label="This change"
                 items={chunk.ours}
+                absent={
+                  chunk.base.length === 0
+                    ? "Not in this version."
+                    : "Removed here."
+                }
                 format={merge.format}
                 picked={choice === "ours" || choice === "both"}
                 action={
@@ -603,16 +629,22 @@ function Pieces({
                     type="button"
                     className="bs-btn bs-btn--sm bs-btn-secondary"
                     aria-pressed={choice === "ours"}
+                    aria-label="Use this change's wording"
                     disabled={disabled}
                     onClick={() => onChoose(at, "ours")}
                   >
-                    Use this change's
+                    Use this
                   </button>
                 }
               />
               <Side
                 label="Published since"
                 items={chunk.theirs}
+                absent={
+                  chunk.base.length === 0
+                    ? "Not in this version."
+                    : "Removed here."
+                }
                 format={merge.format}
                 picked={choice === "theirs" || choice === "both"}
                 action={
@@ -620,10 +652,11 @@ function Pieces({
                     type="button"
                     className="bs-btn bs-btn--sm bs-btn-secondary"
                     aria-pressed={choice === "theirs"}
+                    aria-label="Use the published wording"
                     disabled={disabled}
                     onClick={() => onChoose(at, "theirs")}
                   >
-                    Use the published
+                    Use this
                   </button>
                 }
               />
@@ -669,12 +702,15 @@ function Pieces({
 function Side({
   label,
   items,
+  absent,
   format,
   picked,
   action,
 }: {
   label: string;
   items: unknown[];
+  /** What an empty side says: removed here, or never in this version. */
+  absent: string;
   format: "editor" | "text";
   picked: boolean;
   action: ReactNode;
@@ -686,7 +722,7 @@ function Side({
         {action}
       </div>
       {items.length === 0 ? (
-        <p className="conflict-side-empty">Removed here.</p>
+        <p className="conflict-side-empty">{absent}</p>
       ) : format === "editor" ? (
         <Blocks blocks={items} />
       ) : (

@@ -232,7 +232,7 @@ test("a change that clashes with the binder is resolved from its own page", asyn
   await expect(page).toHaveURL(/view=conflicts/);
   const file = page.locator(".conflict-file");
   await expect(file).toHaveCount(1);
-  await expect(file).toContainText("hand-hygiene.json");
+  await expect(file).toContainText("Hand Hygiene");
   // Only the paragraph both changed is asked about, read as the policy.
   await expect(file.locator(".conflict-hunk")).toHaveCount(1);
   await expect(file.locator(".conflict-side").first()).toContainText(
@@ -246,7 +246,7 @@ test("a change that clashes with the binder is resolved from its own page", asyn
     name: "Resolve and bring up to date",
   });
   await expect(submit).toBeDisabled();
-  await file.getByRole("button", { name: "Use this change's" }).click();
+  await file.getByRole("button", { name: "Use this change's wording" }).click();
   await expect(submit).toBeEnabled();
   await submit.click();
 

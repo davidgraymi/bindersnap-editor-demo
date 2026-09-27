@@ -123,7 +123,67 @@ export function mergeThreeWay<T>(
     t = theirsTo + 1;
   }
 
-  return chunks;
+  return refineConflicts(chunks, equal);
+}
+
+/**
+ * git's "zealous" merge: what both sides of a conflict say alike is not in
+ * conflict.
+ *
+ * diff3 only knows the anchors all three versions share, so a policy both
+ * sides added — no base at all — came back as one conflict the length of the
+ * document, with the title and every paragraph the two agree on inside it.
+ * Diffing the two sides of each conflict against each other settles what
+ * they share, and leaves only the places they actually differ to be asked
+ * about.
+ */
+function refineConflicts<T>(
+  chunks: MergeChunk<T>[],
+  equal: (a: T, b: T) => boolean,
+): MergeChunk<T>[] {
+  const out: MergeChunk<T>[] = [];
+  const settle = (items: T[]) => {
+    if (items.length === 0) return;
+    const last = out[out.length - 1];
+    if (last?.kind === "settled") last.items.push(...items);
+    else out.push({ kind: "settled", items: [...items] });
+  };
+
+  for (const chunk of chunks) {
+    if (chunk.kind === "settled") {
+      settle(chunk.items);
+      continue;
+    }
+    const pieces: MergeChunk<T>[] = [];
+    let ours: T[] = [];
+    let theirs: T[] = [];
+    const flush = () => {
+      if (ours.length === 0 && theirs.length === 0) return;
+      pieces.push({ kind: "conflict", base: [], ours, theirs });
+      ours = [];
+      theirs = [];
+    };
+    for (const part of diffArrays(chunk.ours, chunk.theirs, {
+      comparator: equal,
+    })) {
+      if (part.removed) ours = ours.concat(part.value);
+      else if (part.added) theirs = theirs.concat(part.value);
+      else {
+        flush();
+        pieces.push({ kind: "settled", items: part.value });
+      }
+    }
+    flush();
+
+    const conflicts = pieces.filter((piece) => piece.kind === "conflict");
+    // One clash left is the clash diff3 found, and keeps its base.
+    if (conflicts.length === 1) conflicts[0]!.base = chunk.base;
+    for (const piece of pieces) {
+      if (piece.kind === "settled") settle(piece.items);
+      else out.push(piece);
+    }
+  }
+  return out;
 }
 
 /** How one conflict was decided. */
