@@ -16,7 +16,7 @@ import { FileText, Columns3, Minus, Plus } from "lucide-react";
 
 import { sanitizeProseMirrorJson } from "../utils/sanitizer";
 import { EMPTY_DOCUMENT, documentContentExtensions } from "./documentSchema";
-import { countDocument, paginate } from "./documentStats";
+import { countDocument, countSelectedWords, paginate } from "./documentStats";
 import { EnterOverSelection } from "./extensions/EnterOverSelection";
 import { PictureFiles } from "./extensions/PictureFiles";
 import { PictureSize } from "./extensions/PictureSize";
@@ -541,6 +541,17 @@ function StatusBar({
       a?.paragraphs === b?.paragraphs,
   });
   const words = counts?.words ?? 0;
+  const selected = useEditorState({
+    editor,
+    selector: ({ editor: now }) =>
+      now.isDestroyed
+        ? null
+        : countSelectedWords(
+            now.state.doc,
+            now.state.selection.from,
+            now.state.selection.to,
+          ),
+  });
   const zoomTo = (next: number) =>
     onViewChange({ ...view, zoom: clampZoom(next) });
 
@@ -570,7 +581,11 @@ function StatusBar({
             </dl>
           )}
         >
-          {words.toLocaleString()} {words === 1 ? "word" : "words"}
+          {selected === null || selected === undefined
+            ? `${words.toLocaleString()} ${words === 1 ? "word" : "words"}`
+            : `${selected.toLocaleString()} of ${words.toLocaleString()} ${
+                words === 1 ? "word" : "words"
+              }`}
         </DropButton>
         {start}
       </div>
