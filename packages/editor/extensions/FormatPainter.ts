@@ -198,7 +198,9 @@ export const FormatPainter = Extension.create({
         // rather than from ProseMirror's, which catches up a moment later —
         // and a moment later a quick second click has already happened.
         view(view) {
-          let timer: number | undefined;
+          // One per stroke: a second click before the first has landed is a
+          // second stroke, not a correction of the first.
+          const timers = new Set<number>();
           const strokeRange = () => {
             const dom = view.dom.ownerDocument.getSelection();
             if (!dom || !dom.anchorNode || !dom.focusNode) return null;
@@ -220,10 +222,10 @@ export const FormatPainter = Extension.create({
           const onUp = () => {
             if (formatPainterState(view.state).brush === "off") return;
             const range = strokeRange();
-            window.clearTimeout(timer);
             // After ProseMirror's own mouseup, so the stroke is not undone
             // by it settling the selection.
-            timer = window.setTimeout(() => {
+            const timer = window.setTimeout(() => {
+              timers.delete(timer);
               const { state } = view;
               const { marks, brush } = formatPainterState(state);
               if (brush === "off" || marks === null || range === null) return;
@@ -241,11 +243,12 @@ export const FormatPainter = Extension.create({
               }
               view.dispatch(tr);
             }, 0);
+            timers.add(timer);
           };
           view.dom.addEventListener("mouseup", onUp);
           return {
             destroy() {
-              window.clearTimeout(timer);
+              for (const pending of timers) window.clearTimeout(pending);
               view.dom.removeEventListener("mouseup", onUp);
             },
           };
