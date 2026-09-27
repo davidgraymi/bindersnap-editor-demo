@@ -23,6 +23,12 @@ import { API_BASE_URL, APP_BASE_URL } from "./helpers";
 
 test.describe.configure({ mode: "parallel", timeout: 240_000 });
 
+// A desktop window, wide enough that the ribbon shows its Styles gallery:
+// several tests read the gallery's "Normal" to know the click has landed, and
+// how much of the gallery fits at 1280 depends on the machine's fonts. The
+// tablet test sets its own size, and is where the folding is tested.
+test.use({ viewport: { width: 1440, height: 900 } });
+
 interface Credentials {
   username: string;
   email: string;

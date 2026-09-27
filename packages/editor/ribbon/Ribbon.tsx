@@ -181,6 +181,31 @@ export function Ribbon({
     return () => observer.disconnect();
   }, [collapsed]);
 
+  /**
+   * **A font arriving is a width change too**, of the ribbon's contents
+   * rather than its box. Measured with the fallback font — wider on Linux
+   * than the one the page asked for — the ribbon folded, and the width never
+   * changed again to unfold it, so the Styles gallery stayed one button for
+   * as long as the page was open. Every font load starts again from unfolded.
+   */
+  const [fontsLoaded, setFontsLoaded] = useState(0);
+  useEffect(() => {
+    const fonts = typeof document === "undefined" ? undefined : document.fonts;
+    if (!fonts) return;
+    let live = true;
+    const refit = () => {
+      if (!live) return;
+      setFold(0);
+      setFontsLoaded((count) => count + 1);
+    };
+    fonts.addEventListener?.("loadingdone", refit);
+    void fonts.ready?.then(refit);
+    return () => {
+      live = false;
+      fonts.removeEventListener?.("loadingdone", refit);
+    };
+  }, []);
+
   const tabs: RibbonTab[] = [
     "home",
     "insert",
@@ -197,7 +222,7 @@ export function Ribbon({
     if (panel.scrollWidth > panel.clientWidth + 1 && fold < MAX_FOLD) {
       setFold(fold + 1);
     }
-  }, [fold, tab, panelWidth]);
+  }, [fold, tab, panelWidth, fontsLoaded]);
 
   const pickTab = (next: RibbonTab) => {
     if (collapsed) setCollapsed(false);
