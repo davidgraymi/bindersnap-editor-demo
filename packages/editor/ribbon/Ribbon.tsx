@@ -1,4 +1,10 @@
-import { useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import type { Editor } from "@tiptap/core";
 import {
   AArrowDown,
@@ -35,6 +41,7 @@ import {
   Rows3,
   ScanText,
   Scissors,
+  Pilcrow,
   Search,
   SeparatorHorizontal,
   Sigma,
@@ -137,11 +144,45 @@ export function Ribbon({
   const [chosen, setChosen] = useState<RibbonTab>("home");
   const [collapsed, setCollapsed] = useState(false);
 
+  /**
+   * How far the Home tab is folded to fit, as Word's ribbon folds: the style
+   * gallery narrows a style at a time and then becomes one Styles button,
+   * then Editing becomes one Find button, then Cut and Copy lose their
+   * words. Measured rather than set by breakpoints, because what the ribbon
+   * has to fit beside — the file panel, the navigation pane — is not the
+   * window's business. Every width change starts again from unfolded, and
+   * each fold is taken before the browser paints.
+   */
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [fold, setFold] = useState(0);
+  const [panelWidth, setPanelWidth] = useState(0);
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      const width = Math.round(entry?.contentRect.width ?? 0);
+      setPanelWidth((was) => {
+        if (was !== width) setFold(0);
+        return width;
+      });
+    });
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, [collapsed]);
+
   const tabs: RibbonTab[] = format.inTable
     ? ["home", "insert", "view", "table"]
     : ["home", "insert", "view"];
   // Leaving a table takes its tab with it, and lands back on Home.
   const tab = tabs.includes(chosen) ? chosen : "home";
+
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    if (!panel || tab !== "home") return;
+    if (panel.scrollWidth > panel.clientWidth + 1 && fold < MAX_FOLD) {
+      setFold(fold + 1);
+    }
+  }, [fold, tab, panelWidth]);
 
   const pickTab = (next: RibbonTab) => {
     if (collapsed) setCollapsed(false);
@@ -195,13 +236,19 @@ export function Ribbon({
 
       {collapsed ? null : (
         <div
+          ref={panelRef}
           className="bs-ribbon-panel"
           id="bs-ribbon-panel"
           role="tabpanel"
           aria-labelledby={`bs-ribbon-tab-${tab}`}
         >
           {tab === "home" ? (
-            <HomeTab editor={editor} format={format} onFind={onFind} />
+            <HomeTab
+              editor={editor}
+              format={format}
+              onFind={onFind}
+              fold={fold}
+            />
           ) : tab === "insert" ? (
             <InsertTab
               editor={editor}
@@ -241,15 +288,24 @@ export function Ribbon({
 /** How many styles the gallery shows before folding the rest into a menu. */
 const GALLERY_SIZE = 4;
 
+/** Gallery 4 → 0 is four folds; then Styles, Editing and Clipboard. */
+const MAX_FOLD = GALLERY_SIZE + 2;
+
 function HomeTab({
   editor,
   format,
   onFind,
+  fold,
 }: {
   editor: Editor;
   format: FormatState;
   onFind: (replace: boolean) => void;
+  /** How folded to fit: see `Ribbon`. */
+  fold: number;
 }) {
+  const gallery = Math.max(0, GALLERY_SIZE - fold);
+  const compactEditing = fold > GALLERY_SIZE;
+  const compactClipboard = fold > GALLERY_SIZE + 1;
   const chain = () => editor.chain().focus();
   const size = format.fontSizePt;
 
@@ -291,7 +347,7 @@ function HomeTab({
             icon={Scissors}
             label="Cut"
             shortcut="Ctrl+X"
-            showLabel
+            showLabel={!compactClipboard}
             disabled={!format.hasSelection}
             onClick={() => {
               editor.commands.focus();
@@ -302,7 +358,7 @@ function HomeTab({
             icon={Copy}
             label="Copy"
             shortcut="Ctrl+C"
-            showLabel
+            showLabel={!compactClipboard}
             disabled={!format.hasSelection}
             onClick={() => {
               editor.commands.focus();
@@ -539,41 +595,49 @@ function HomeTab({
       </RibbonGroup>
 
       <RibbonGroup label="Styles" className="bs-rgroup--styles">
-        <div className="bs-styles" role="listbox" aria-label="Styles">
-          {PARAGRAPH_STYLES.slice(0, GALLERY_SIZE).map((style) => (
-            <button
-              key={style.id}
-              type="button"
-              role="option"
-              aria-selected={format.style === style.id}
-              className={`bs-style bs-style--${style.id}${
-                format.style === style.id ? " is-on" : ""
-              }`}
-              title={
-                style.shortcut
-                  ? `${style.label} (${shortcutLabel(style.shortcut)})`
-                  : style.label
-              }
-              onMouseDown={keepSelection}
-              onClick={() => applyStyle(style.id)}
-            >
-              <span className="bs-style-sample" aria-hidden="true">
-                AaBbCc
-              </span>
-              <span className="bs-style-name">{style.label}</span>
-            </button>
-          ))}
-        </div>
+        {gallery > 0 ? (
+          <div className="bs-styles" role="listbox" aria-label="Styles">
+            {PARAGRAPH_STYLES.slice(0, gallery).map((style) => (
+              <button
+                key={style.id}
+                type="button"
+                role="option"
+                aria-selected={format.style === style.id}
+                className={`bs-style bs-style--${style.id}${
+                  format.style === style.id ? " is-on" : ""
+                }`}
+                title={
+                  style.shortcut
+                    ? `${style.label} (${shortcutLabel(style.shortcut)})`
+                    : style.label
+                }
+                onMouseDown={keepSelection}
+                onClick={() => applyStyle(style.id)}
+              >
+                <span className="bs-style-sample" aria-hidden="true">
+                  AaBbCc
+                </span>
+                <span className="bs-style-name">{style.label}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
         {/* Word's gallery shows a row and folds the rest behind its arrow;
-            this one does the same, so the ribbon fits beside the page. */}
+            this one does the same, so the ribbon fits beside the page. With
+            no room for a row at all, the arrow is the Styles button. */}
         <DropButton
-          label="More styles"
-          className="bs-rdrop--icon bs-rdrop--gallery"
+          label={gallery > 0 ? "More styles" : "Styles"}
+          className={
+            gallery > 0 ? "bs-rdrop--icon bs-rdrop--gallery" : "bs-rdrop--large"
+          }
           panelClassName="bs-rpanel--list"
+          // Lit when the style in force is one the row does not show; as the
+          // Styles button there is no row, and every style would light it.
           active={
+            gallery > 0 &&
             format.style !== null &&
             PARAGRAPH_STYLES.findIndex((style) => style.id === format.style) >=
-              GALLERY_SIZE
+              gallery
           }
           panel={(close) =>
             PARAGRAPH_STYLES.map((style) => (
@@ -595,34 +659,83 @@ function HomeTab({
             ))
           }
         >
-          <span className="sr-only">More styles</span>
+          {gallery > 0 ? (
+            <span className="sr-only">More styles</span>
+          ) : (
+            <>
+              <Pilcrow size={22} strokeWidth={1.75} aria-hidden="true" />
+              <span className="bs-rb-label">Styles</span>
+            </>
+          )}
         </DropButton>
       </RibbonGroup>
 
       <RibbonGroup label="Editing">
-        <div className="bs-rstack">
-          <RibbonButton
-            icon={Search}
+        {compactEditing ? (
+          <DropButton
             label="Find"
-            shortcut="Ctrl+F"
-            showLabel
-            onClick={() => onFind(false)}
-          />
-          <RibbonButton
-            icon={Replace}
-            label="Replace"
-            shortcut="Ctrl+H"
-            showLabel
-            onClick={() => onFind(true)}
-          />
-          <RibbonButton
-            icon={ScanText}
-            label="Select all"
-            shortcut="Ctrl+A"
-            showLabel
-            onClick={() => chain().selectAll().run()}
-          />
-        </div>
+            className="bs-rdrop--large"
+            panelClassName="bs-rpanel--list"
+            panel={(close) => (
+              <>
+                <MenuChoice
+                  hint={shortcutLabel("Ctrl+F")}
+                  onPick={() => {
+                    close();
+                    onFind(false);
+                  }}
+                >
+                  Find
+                </MenuChoice>
+                <MenuChoice
+                  hint={shortcutLabel("Ctrl+H")}
+                  onPick={() => {
+                    close();
+                    onFind(true);
+                  }}
+                >
+                  Replace
+                </MenuChoice>
+                <MenuChoice
+                  hint={shortcutLabel("Ctrl+A")}
+                  onPick={() => {
+                    close();
+                    chain().selectAll().run();
+                  }}
+                >
+                  Select all
+                </MenuChoice>
+              </>
+            )}
+          >
+            <Search size={22} strokeWidth={1.75} aria-hidden="true" />
+            <span className="bs-rb-label">Find</span>
+          </DropButton>
+        ) : (
+          <div className="bs-rstack">
+            <RibbonButton
+              icon={Search}
+              label="Find"
+              shortcut="Ctrl+F"
+              showLabel
+              onClick={() => onFind(false)}
+            />
+            <RibbonButton
+              icon={Replace}
+              label="Replace"
+              shortcut="Ctrl+H"
+              showLabel
+              onClick={() => onFind(true)}
+            />
+            <RibbonButton
+              icon={ScanText}
+              label="Select all"
+              shortcut="Ctrl+A"
+              showLabel
+              onClick={() => chain().selectAll().run()}
+            />
+          </div>
+        )}
       </RibbonGroup>
     </>
   );

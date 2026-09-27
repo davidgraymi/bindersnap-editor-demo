@@ -256,6 +256,19 @@ test("closing with unsaved words asks first, and Cancel keeps them", async ({
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   const text = page.getByRole("textbox", { name: "Hand Hygiene" });
   await text.getByText("Clean your hands").click();
+
+  // The Home tab folds to fit beside the file panel rather than hiding
+  // Find off the end of a sideways scroll.
+  await page.setViewportSize({ width: 1280, height: 720 });
+  const panel = page.locator(".bs-ribbon-panel");
+  await expect
+    .poll(() => panel.evaluate((node) => node.scrollWidth - node.clientWidth))
+    .toBeLessThanOrEqual(1);
+  await expect(
+    panel.getByRole("button", { name: /^Find/ }).first(),
+  ).toBeInViewport();
+
+  await text.getByText("Clean your hands").click();
   await page.keyboard.press("End");
   await page.keyboard.type(" Every time.");
   // Unsaved, and said so where somebody with several tabs open will look:
