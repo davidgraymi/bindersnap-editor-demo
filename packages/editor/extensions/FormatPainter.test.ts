@@ -51,7 +51,7 @@ function at(editor: Editor, word: string): number {
 describe("the Format Painter", () => {
   test("copies a look and gives it to other words, replacing theirs", () => {
     const editor = editorWith(
-      '<p><strong><span style="color: #c00000">Warning</span></strong> wash <em>hands</em> now</p>',
+      '<p><strong><span style="color: red">Warning</span></strong> wash <em>hands</em> now</p>',
     );
     editor.commands.setTextSelection(at(editor, "Warning") + 2);
     editor.commands.pickUpFormatting("off");
@@ -65,7 +65,7 @@ describe("the Format Painter", () => {
     editor.commands.pasteFormatting();
     const html = editor.getHTML();
     expect(html).toContain(
-      '<span style="color: rgb(192, 0, 0);"><strong>hands</strong></span>',
+      '<span style="color: red;"><strong>hands</strong></span>',
     );
     expect(html).not.toContain("<em>");
   });
