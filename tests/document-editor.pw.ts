@@ -426,7 +426,7 @@ test("words never saved are kept on this device and offered back", async ({
   const offer = again.getByRole("status").filter({
     hasText: "were kept on this device",
   });
-  await expect(offer).toBeVisible();
+  await expect(offer).toBeVisible({ timeout: 20_000 });
   const reopened = again.getByRole("textbox", { name: "Hand Hygiene" });
   await expect(reopened).not.toContainText("Nails kept short.");
   await offer.getByRole("button", { name: "Restore" }).click();
@@ -439,8 +439,10 @@ test("words never saved are kept on this device and offered back", async ({
     timeout: 20_000,
   });
   await again.reload();
+  // The editor is loaded on demand, which on a slow runner is past the
+  // default five seconds after a reload.
   await expect(
     again.getByRole("textbox", { name: "Hand Hygiene" }),
-  ).toContainText("Nails kept short.");
+  ).toContainText("Nails kept short.", { timeout: 20_000 });
   await expect(again.getByText("were kept on this device")).toHaveCount(0);
 });
