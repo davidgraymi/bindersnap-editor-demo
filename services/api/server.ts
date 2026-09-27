@@ -1414,7 +1414,27 @@ async function readMultipartBody(req: Request): Promise<FormData | null> {
   }
 }
 
-function downloadHeaders(baseHeaders: Headers, response: Response): Headers {
+/** A commit id: the one kind of ref whose files can never change. */
+const COMMIT_REF = /^[0-9a-f]{40}$/i;
+
+/**
+ * The headers a document's bytes go out with.
+ *
+ * **Gitea's caching is for a commit, and most refs here are branches.** Gitea
+ * answers a raw read with `private, max-age=21600` whatever the ref, and that
+ * was passed straight on: a browser that had read a policy on a draft — the
+ * editor does, to open it — kept that copy for six hours. Save moved the
+ * branch; the document page, and both sides of a change's comparison, went on
+ * reading the words from before the save, so an edit looked lost and a change
+ * showed a document as edited with nothing in it to see. A branch, `main` and
+ * a tag can all move, so only a commit id keeps Gitea's answer; everything
+ * else is asked again each time.
+ */
+export function downloadHeaders(
+  baseHeaders: Headers,
+  response: Response,
+  ref: string,
+): Headers {
   const headers = mergeHeaders(baseHeaders);
   for (const key of [
     "content-type",
@@ -1428,6 +1448,11 @@ function downloadHeaders(baseHeaders: Headers, response: Response): Headers {
     if (value) {
       headers.set(key, value);
     }
+  }
+  if (!COMMIT_REF.test(ref)) {
+    headers.set("cache-control", "no-store");
+    headers.delete("etag");
+    headers.delete("last-modified");
   }
   return headers;
 }
@@ -7839,7 +7864,7 @@ async function handleWorkspaceDocumentRaw(
 
     return new Response(response.body, {
       status: response.status,
-      headers: downloadHeaders(baseHeaders, response),
+      headers: downloadHeaders(baseHeaders, response, ref),
     });
   } catch (err) {
     logger.error("Failed to download a binder document", {

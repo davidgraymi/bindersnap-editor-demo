@@ -1585,6 +1585,9 @@ export async function downloadBinderDocument(
     binder,
     documentPath,
     ref ? { ref } : undefined,
+    // A branch moves with every save; a copy the browser kept from before one
+    // showed the words the save replaced. See `downloadHeaders` in the API.
+    { cache: "no-store" },
   );
   return response.data;
 }
