@@ -45,6 +45,39 @@ import {
 import { TableOfContents } from "./extensions/TableOfContents";
 import { pictureWidth } from "./imageFiles";
 
+/**
+ * A cell's shading as `#rrggbb`, or null for anything that is not a colour.
+ *
+ * A browser hands back a colour it was given as hex in `rgb()` form, so both
+ * are read, and it is kept as hex whichever arrived: one spelling, so two
+ * versions of a policy with the same shading compare as the same.
+ */
+export function shadingColor(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.trim().toLowerCase();
+  if (/^#[0-9a-f]{6}$/.test(text)) return text;
+  const rgb = text.match(
+    /^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/,
+  );
+  if (!rgb) return null;
+  const parts = rgb.slice(1).map(Number);
+  if (parts.some((part) => part > 255)) return null;
+  return `#${parts.map((part) => part.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** Word's cell Shading, kept on the cell and drawn as its background. */
+const CELL_SHADING = {
+  background: {
+    default: null,
+    parseHTML: (element: HTMLElement) =>
+      shadingColor(element.style.backgroundColor),
+    renderHTML: (attributes: Record<string, unknown>) => {
+      const color = shadingColor(attributes.background);
+      return color ? { style: `background-color: ${color}` } : {};
+    },
+  },
+};
+
 /** Line spacing a paragraph may take — Word's own menu, as multiples. */
 export const LINE_SPACINGS = ["1", "1.15", "1.5", "2", "2.5", "3"] as const;
 
@@ -273,8 +306,16 @@ export function documentContentExtensions(): AnyExtension[] {
     Superscript,
     Table.configure({ resizable: true }),
     TableRow,
-    TableCell,
-    TableHeader,
+    TableCell.extend({
+      addAttributes() {
+        return { ...this.parent?.(), ...CELL_SHADING };
+      },
+    }),
+    TableHeader.extend({
+      addAttributes() {
+        return { ...this.parent?.(), ...CELL_SHADING };
+      },
+    }),
     ParagraphFormat,
     PageBreak,
     TableOfContents,

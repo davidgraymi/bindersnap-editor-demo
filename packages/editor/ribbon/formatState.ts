@@ -2,6 +2,7 @@ import type { Editor } from "@tiptap/core";
 import { NodeSelection } from "@tiptap/pm/state";
 import { useEditorState } from "@tiptap/react";
 
+import { shadingColor } from "../documentSchema";
 import { formatPainterState } from "../extensions/FormatPainter";
 import { pictureWidth } from "../imageFiles";
 
@@ -41,6 +42,8 @@ export interface FormatState {
   inTable: boolean;
   canMergeCells: boolean;
   canSplitCell: boolean;
+  /** The shading of the cell the cursor is in, or null for none. */
+  cellShading: string | null;
   /** The Format Painter's brush is loaded. */
   painting: boolean;
   /** A picture is selected, by clicking it: the Picture tab's cue. */
@@ -143,6 +146,10 @@ export function readFormatState(editor: Editor): FormatState {
     inTable: editor.isActive("table"),
     canMergeCells: editor.can().mergeCells(),
     canSplitCell: editor.can().splitCell(),
+    cellShading: shadingColor(
+      editor.getAttributes("tableCell").background ??
+        editor.getAttributes("tableHeader").background,
+    ),
     painting: formatPainterState(editor.state).brush !== "off",
     picture: picture !== null,
     pictureWidth: picture ? pictureWidth(picture.attrs.width) : null,
@@ -176,6 +183,7 @@ const EMPTY: FormatState = {
   inTable: false,
   canMergeCells: false,
   canSplitCell: false,
+  cellShading: null,
   painting: false,
   picture: false,
   pictureWidth: null,

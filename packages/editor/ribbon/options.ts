@@ -94,6 +94,21 @@ export const HIGHLIGHT_COLORS: ColorChoice[] = [
   { label: "Gray", value: "#e7e5e4" },
 ];
 
+/**
+ * Cell shading: pale enough that black text reads on it, as Word's lighter
+ * theme tints are — a header row, a column of owners, a row to notice.
+ */
+export const SHADING_COLORS: ColorChoice[] = [
+  { label: "Light gray", value: "#f5f5f4" },
+  { label: "Gray", value: "#e7e5e4" },
+  { label: "Blue", value: "#dbeafe" },
+  { label: "Green", value: "#dcfce7" },
+  { label: "Yellow", value: "#fef9c3" },
+  { label: "Orange", value: "#ffedd5" },
+  { label: "Red", value: "#fee2e2" },
+  { label: "Violet", value: "#ede9fe" },
+];
+
 export type ParagraphStyleId =
   | "normal"
   | "heading1"
