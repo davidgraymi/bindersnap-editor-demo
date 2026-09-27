@@ -102,6 +102,16 @@ export function DocumentEditorPage({
   const savedJson = useRef<string>("");
   const [, setTick] = useState(0);
 
+  // **The whole window is the desk.** Word does not keep your file browser
+  // open beside the page, and here the product's map and the binder's files
+  // squeezed Letter to half size on a laptop. While a document is open in the
+  // editor the shell drops both; the top bar stays, as the way out.
+  useEffect(() => {
+    const html = document.documentElement;
+    html.classList.add("bs-writing");
+    return () => html.classList.remove("bs-writing");
+  }, []);
+
   useEffect(() => {
     if (!draft) return;
     let cancelled = false;
@@ -281,36 +291,36 @@ export function DocumentEditorPage({
 
   return (
     <div className="doc-editor-page">
-      <header className="bs-pagehead doc-editor-head">
-        <div className="bs-pagehead-body">
-          <h1 className="bs-title">{name}</h1>
+      <header className="doc-editor-head">
+        <div className="doc-editor-head-body">
+          <h1 className="doc-editor-title">{name}</h1>
           {/* Where Save puts things, said before it is pressed. */}
-          <p className="doc-editor-where">
+          <p
+            className="doc-editor-where"
+            title="The version on record does not change until the draft is proposed and approved."
+          >
             <GitBranch size={14} strokeWidth={1.75} aria-hidden="true" />
             <span>
-              Saving to your draft
-              {draftName ? (
-                <>
-                  {" "}
-                  <strong>{draftName}</strong>
-                </>
-              ) : null}
-              . The version on record does not change until the draft is
-              proposed and approved.
+              Saving to{" "}
+              {draftName ? <strong>{draftName}</strong> : "your draft"}
+              <span className="doc-editor-where-more">
+                {" "}
+                · nothing on record changes until it is approved
+              </span>
             </span>
           </p>
         </div>
-        <div className="bs-pagehead-actions">
+        <div className="doc-editor-head-actions">
           <button
             type="button"
-            className="bs-btn bs-btn-secondary"
+            className="bs-btn bs-btn-secondary bs-btn--sm"
             onClick={requestClose}
           >
             Close
           </button>
           <button
             type="button"
-            className="bs-btn bs-btn-primary"
+            className="bs-btn bs-btn-primary bs-btn--sm"
             disabled={!dirty || save.kind === "saving"}
             onClick={() => void saveNow()}
           >

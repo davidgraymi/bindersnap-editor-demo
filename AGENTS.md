@@ -101,7 +101,9 @@ the author's draft** through the ordinary revise endpoint, so the version on
 record does not move until the draft is proposed and published. Edit on a
 document's page opens (or resumes) that draft first. Only a file the editor
 writes — `*.json` — is offered it; a Word file or a PDF is edited in the
-program that made it and uploaded as a new version.
+program that made it and uploaded as a new version. It opens **full page**:
+while it is mounted it sets `bs-writing` on `<html>`, and the shell drops the
+sidebar and the binder's file panel so Letter fits at 100% on a laptop.
 
 `documentSchema.ts` is the one list of Tiptap extensions both the editor and
 the reader (`apps/app/editorDocumentHtml.ts`) load. Add a node or an attribute
