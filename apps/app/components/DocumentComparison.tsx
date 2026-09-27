@@ -77,6 +77,8 @@ type ComparisonState =
       segments: DiffSegment[];
       /** A scanned PDF has no text layer, so there is nothing to compare. */
       empty: boolean;
+      /** Both sides as rendered, and their diff, for what words miss. */
+      markup: { before: string; after: string; diffed: string };
     }
   | { status: "text"; segments: DiffSegment[]; truncated: boolean }
   | { status: "image"; beforeUrl: string; afterUrl: string }
@@ -87,6 +89,23 @@ function describeLoadFailure(message: string): string {
   return /not found|404/i.test(message)
     ? "One of these two versions has no file at that point in the record, so there is nothing to compare."
     : message;
+}
+
+/** Two rendered sides, diffed as markup and made safe to draw. */
+function renderedComparison(
+  before: string,
+  after: string,
+  segments: DiffSegment[],
+  empty = false,
+): ComparisonState {
+  const diffed = diffRenderedHtml(before, after);
+  return {
+    status: "rendered",
+    html: sanitizeHtml(diffed),
+    segments,
+    empty,
+    markup: { before, after, diffed },
+  };
 }
 
 async function readText(blob: Blob): Promise<{ text: string; cut: boolean }> {
@@ -142,17 +161,19 @@ export function DocumentComparison({
             readText(after),
           ]);
           if (cancelled) return;
-          setState({
-            status: "rendered",
-            html: sanitizeHtml(
-              diffRenderedHtml(
-                markdownToHtml(left.text),
-                markdownToHtml(right.text),
-              ),
+          // Words as they read, not as they are typed: `**hands**` is the
+          // same word as `hands`, made bold.
+          const [leftHtml, rightHtml] = [
+            markdownToHtml(left.text),
+            markdownToHtml(right.text),
+          ];
+          setState(
+            renderedComparison(
+              leftHtml,
+              rightHtml,
+              diffWords(htmlToText(leftHtml), htmlToText(rightHtml)),
             ),
-            segments: diffWords(left.text, right.text),
-            empty: false,
-          });
+          );
           return;
         }
 
@@ -175,12 +196,13 @@ export function DocumentComparison({
                 ]);
           if (cancelled) return;
           if (leftHtml !== null && rightHtml !== null) {
-            setState({
-              status: "rendered",
-              html: sanitizeHtml(diffRenderedHtml(leftHtml, rightHtml)),
-              segments: diffWords(htmlToText(leftHtml), htmlToText(rightHtml)),
-              empty: false,
-            });
+            setState(
+              renderedComparison(
+                leftHtml,
+                rightHtml,
+                diffWords(htmlToText(leftHtml), htmlToText(rightHtml)),
+              ),
+            );
             return;
           }
 
@@ -198,12 +220,14 @@ export function DocumentComparison({
             docxToHtml(after),
           ]);
           if (cancelled) return;
-          setState({
-            status: "rendered",
-            html: sanitizeHtml(diffRenderedHtml(leftHtml, rightHtml)),
-            segments: diffWords(htmlToText(leftHtml), htmlToText(rightHtml)),
-            empty: leftHtml.trim() === "" && rightHtml.trim() === "",
-          });
+          setState(
+            renderedComparison(
+              leftHtml,
+              rightHtml,
+              diffWords(htmlToText(leftHtml), htmlToText(rightHtml)),
+              leftHtml.trim() === "" && rightHtml.trim() === "",
+            ),
+          );
           return;
         }
 
@@ -216,20 +240,14 @@ export function DocumentComparison({
           // **No object URLs for a PDF any more.** They existed to feed two
           // `<iframe>`s side by side, and two PDF viewers in half a column
           // each are two documents nobody can read.
-          setState({
-            status: "rendered",
-            html: sanitizeHtml(
-              diffRenderedHtml(
-                blocksToHtml(leftBlocks),
-                blocksToHtml(rightBlocks),
-              ),
+          setState(
+            renderedComparison(
+              blocksToHtml(leftBlocks),
+              blocksToHtml(rightBlocks),
+              diffWords(blocksToText(leftBlocks), blocksToText(rightBlocks)),
+              leftBlocks.length === 0 && rightBlocks.length === 0,
             ),
-            segments: diffWords(
-              blocksToText(leftBlocks),
-              blocksToText(rightBlocks),
-            ),
-            empty: leftBlocks.length === 0 && rightBlocks.length === 0,
-          });
+          );
           return;
         }
 
@@ -263,7 +281,7 @@ export function DocumentComparison({
   const summary = useMemo(() => {
     if (state.status === "text") return summarizeSegments(state.segments);
     if (state.status === "rendered" && !state.empty) {
-      return summarizeSegments(state.segments);
+      return summarizeSegments(state.segments, state.markup);
     }
     return null;
   }, [state]);
@@ -361,14 +379,23 @@ export function DocumentComparison({
             <SkeletonLine width="short" />
           </SkeletonGroup>
         ) : state.status === "rendered" && !state.empty ? (
-          <article
-            className="doc-preview-sheet doc-preview-prose doc-compare-prose"
-            // Every side of this went through a renderer of ours that escapes
-            // its input — our Markdown renderer, the block renderer, or
-            // mammoth's own subset — and the whole result went through the
-            // sanitizer before it landed here.
-            dangerouslySetInnerHTML={{ __html: state.html }}
-          />
+          <>
+            {summary?.restyled ? (
+              <p className="doc-compare-restyled" role="note">
+                Not a word or picture changed — the formatting did: a style,
+                bold or italic, a list, or a picture&rsquo;s size. Shown as it
+                reads now.
+              </p>
+            ) : null}
+            <article
+              className="doc-preview-sheet doc-preview-prose doc-compare-prose"
+              // Every side of this went through a renderer of ours that escapes
+              // its input — our Markdown renderer, the block renderer, or
+              // mammoth's own subset — and the whole result went through the
+              // sanitizer before it landed here.
+              dangerouslySetInnerHTML={{ __html: state.html }}
+            />
+          </>
         ) : state.status === "text" ? (
           <article className="doc-preview-sheet">
             <pre className="doc-preview-plain doc-compare-plain">
