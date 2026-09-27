@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, FileText } from "lucide-react";
 
 import { sanitizeHtml } from "../../../packages/utils/sanitizer";
@@ -10,6 +10,7 @@ import {
 import { docxToHtml } from "../docxHtml";
 import { markdownToHtml } from "../markdown";
 import { editorDocumentToHtml } from "../editorDocumentHtml";
+import { wireContentsLinks } from "../contentsLinks";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 interface DocumentPreviewProps {
@@ -83,6 +84,16 @@ export function DocumentPreview({
   bare = false,
 }: DocumentPreviewProps) {
   const [state, setState] = useState<PreviewState>({ status: "idle" });
+  const proseRef = useRef<HTMLElement>(null);
+  const proseHtml = state.status === "richText" ? state.html : null;
+
+  // The contents list, followed: see `contentsLinks.ts`. Again whenever the
+  // document is drawn again, since that is a fresh set of entries.
+  useEffect(() => {
+    const root = proseRef.current;
+    if (!root || proseHtml === null) return;
+    return wireContentsLinks(root);
+  }, [proseHtml]);
   // Kept so the Download button can save what is already on screen.
   const [loadedBlob, setLoadedBlob] = useState<Blob | null>(null);
   const kind = classifyDocumentFile(fileName);
@@ -304,6 +315,7 @@ export function DocumentPreview({
           </div>
         ) : state.status === "richText" ? (
           <article
+            ref={proseRef}
             className="doc-preview-sheet doc-preview-prose"
             // Mammoth emits a small semantic subset of HTML, and the result is
             // sanitized before it lands here.
