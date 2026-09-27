@@ -634,6 +634,78 @@ test("a table of contents lists the headings and keeps up with them", async ({
   await expect(read.getByText("Wearing Gloves and aprons")).toBeVisible();
 });
 
+/** Where a word is drawn on screen, to click it as a person would. */
+async function wordBox(page: Page, word: string) {
+  return page.evaluate((target) => {
+    const content = document.querySelector(".bs-doc-content")!;
+    const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const at = node.textContent!.indexOf(target);
+      if (at === -1) continue;
+      const range = document.createRange();
+      range.setStart(node, at);
+      range.setEnd(node, at + target.length);
+      const rect = range.getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    }
+    throw new Error(`"${target}" is not on the page`);
+  }, word);
+}
+
+test("the Format Painter brushes one word's look onto others", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await expect(text).toBeVisible();
+
+  // "Clean" in bold and underlined: the look to copy.
+  const clean = await wordBox(page, "Clean");
+  await page.mouse.dblclick(clean.x, clean.y);
+  const cut = page.getByRole("button", { name: "Cut" });
+  await expect(cut).toBeEnabled();
+  await page.keyboard.press("ControlOrMeta+b");
+  await page.keyboard.press("ControlOrMeta+u");
+  await expect(text.locator("u strong, strong u")).toHaveText("Clean");
+
+  // Pick it up, then click a word: that word takes it, and the brush is put
+  // down, as Word's is after one stroke. (The cursor is still in "Clean".)
+  const painter = page.getByRole("button", { name: "Format Painter" });
+  await painter.click();
+  await expect(painter).toHaveAttribute("aria-pressed", "true");
+  await expect(text).toHaveClass(/is-painting/);
+  const hands = await wordBox(page, "hands");
+  await page.mouse.click(hands.x, hands.y);
+  await expect(text.locator("u strong, strong u")).toHaveText([
+    "Clean",
+    "hands",
+  ]);
+  await expect(painter).not.toHaveAttribute("aria-pressed", "true");
+
+  // Double-click keeps it on for more than one stroke, until Escape. The
+  // cursor is in "hands" now, which has the same look.
+  await painter.dblclick();
+  await expect(painter).toHaveAttribute("aria-pressed", "true");
+  for (const word of ["before", "contact"]) {
+    const box = await wordBox(page, word);
+    await page.mouse.click(box.x, box.y);
+  }
+  await expect(text.locator("u strong, strong u")).toHaveText([
+    "Clean",
+    "hands",
+    "before",
+    "contact",
+  ]);
+  await expect(painter).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("Escape");
+  await expect(painter).not.toHaveAttribute("aria-pressed", "true");
+  await expect(text).not.toHaveClass(/is-painting/);
+});
+
 test("words never saved are kept on this device and offered back", async ({
   context,
   page,

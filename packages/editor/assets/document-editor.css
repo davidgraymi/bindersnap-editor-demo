@@ -675,6 +675,12 @@
   cursor: pointer;
 }
 
+/* The Format Painter's brush is loaded: the pointer says so, as Word's does. */
+.bs-doc-content.is-painting,
+.bs-doc-content.is-painting * {
+  cursor: copy;
+}
+
 /* A picture is never wider than the page it is on. */
 .bs-doc-content img {
   max-width: 100%;
