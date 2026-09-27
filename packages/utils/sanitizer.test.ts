@@ -238,3 +238,17 @@ describe("pictures embedded by the editor", () => {
     ).not.toContain("width");
   });
 });
+
+describe("a table of contents", () => {
+  test("is kept, with the entries it stored", () => {
+    const entries = [{ level: 1, text: "Scope" }];
+    const json = sanitizeProseMirrorJson({
+      type: "doc",
+      content: [{ type: "tableOfContents", attrs: { entries } }],
+    });
+    expect(json.content?.[0]).toEqual({
+      type: "tableOfContents",
+      attrs: { entries },
+    });
+  });
+});

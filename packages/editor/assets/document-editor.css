@@ -1221,6 +1221,57 @@
 }
 
 /* A page break on screen: a labelled rule the width of the text. */
+/* A table of contents: Word's plain style, the entries indented by level.
+   Kept current by the editor (see TableOfContents.ts). */
+.bs-toc {
+  margin: 0 0 12pt;
+  padding: 6pt 0;
+  border-top: 1px solid var(--brand-mockup-rule);
+  border-bottom: 1px solid var(--brand-mockup-rule);
+}
+
+.bs-doc-content .bs-toc p {
+  margin: 0;
+}
+
+.bs-doc-content .bs-toc .bs-toc-title {
+  margin-bottom: 4pt;
+  font-size: 13pt;
+  font-weight: 600;
+}
+
+.bs-toc-entry {
+  padding-block: 1pt;
+}
+
+.bs-toc-entry--2 {
+  padding-left: 0.25in;
+}
+
+.bs-toc-entry--3 {
+  padding-left: 0.5in;
+}
+
+.bs-toc-empty {
+  color: var(--brand-mockup-muted);
+  font-style: italic;
+}
+
+/* In the editor an entry goes to its heading, so it looks like it will. */
+.ProseMirror[contenteditable="true"] .bs-toc-entry {
+  cursor: pointer;
+}
+
+.ProseMirror[contenteditable="true"] .bs-toc-entry:hover {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+}
+
+.bs-doc-content .bs-toc.ProseMirror-selectednode {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 2px;
+}
+
 .bs-page-break {
   position: relative;
   height: 0;
