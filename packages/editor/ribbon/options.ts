@@ -109,6 +109,26 @@ export const SHADING_COLORS: ColorChoice[] = [
   { label: "Violet", value: "#ede9fe" },
 ];
 
+/**
+ * A cell's shading as `#rrggbb`, or null for anything that is not a colour.
+ *
+ * A browser hands back a colour it was given as hex in `rgb()` form, so both
+ * are read, and it is kept as hex whichever arrived: one spelling, so two
+ * versions of a policy with the same shading compare as the same.
+ */
+export function shadingColor(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.trim().toLowerCase();
+  if (/^#[0-9a-f]{6}$/.test(text)) return text;
+  const rgb = text.match(
+    /^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/,
+  );
+  if (!rgb) return null;
+  const parts = rgb.slice(1).map(Number);
+  if (parts.some((part) => part > 255)) return null;
+  return `#${parts.map((part) => part.toString(16).padStart(2, "0")).join("")}`;
+}
+
 export type ParagraphStyleId =
   | "normal"
   | "heading1"

@@ -2,12 +2,11 @@ import type { Editor } from "@tiptap/core";
 import { NodeSelection } from "@tiptap/pm/state";
 import { useEditorState } from "@tiptap/react";
 
-import { shadingColor } from "../documentSchema";
 import { formatPainterState } from "../extensions/FormatPainter";
 import { pictureWidth } from "../imageFiles";
 
 import type { ParagraphStyleId } from "./options";
-import { HIGHLIGHT_COLORS, parseFontSizePt } from "./options";
+import { HIGHLIGHT_COLORS, parseFontSizePt, shadingColor } from "./options";
 
 /**
  * What the selection looks like, for the ribbon to reflect.

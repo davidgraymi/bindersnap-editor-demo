@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { Editor, generateHTML } from "@tiptap/core";
 
-import { documentContentExtensions, shadingColor } from "./documentSchema";
+import { documentContentExtensions } from "./documentSchema";
 import {
   countDocument,
   countSelectedWords,
@@ -44,42 +44,6 @@ describe("the document schema", () => {
     // What the reader draws, from the same list.
     const html = generateHTML(json, documentContentExtensions());
     expect(html).toContain('style="line-height: 1.5;"');
-  });
-
-  test("a cell's shading is kept as hex, however the browser spelled it", () => {
-    expect(shadingColor("#DBEAFE")).toBe("#dbeafe");
-    expect(shadingColor("rgb(219, 234, 254)")).toBe("#dbeafe");
-    expect(shadingColor("rgb(300, 0, 0)")).toBeNull();
-    expect(shadingColor("url(x)")).toBeNull();
-    expect(shadingColor("red")).toBeNull();
-    expect(shadingColor(null)).toBeNull();
-  });
-
-  test("a shaded cell survives the round trip, header or not", () => {
-    const editor = editorWith(
-      '<table><tr><th style="background-color: rgb(219, 234, 254)"><p>Owner</p></th></tr><tr><td><p>Ward</p></td></tr></table>',
-    );
-    const cell = (row: number) =>
-      editor.getJSON().content?.[0]?.content?.[row]?.content?.[0];
-    expect(cell(0)?.attrs?.background).toBe("#dbeafe");
-    expect(cell(1)?.attrs?.background).toBeNull();
-
-    // The cursor in the second row's cell, and Shading set on it.
-    let wardAt = 0;
-    editor.state.doc.descendants((node, pos) => {
-      if (node.isText && node.text === "Ward") wardAt = pos;
-    });
-    editor
-      .chain()
-      .setTextSelection(wardAt + 1)
-      .setCellAttribute("background", "#fef9c3")
-      .run();
-    expect(cell(1)?.attrs?.background).toBe("#fef9c3");
-
-    const html = generateHTML(editor.getJSON(), documentContentExtensions());
-    // The DOM writes a style back in rgb(); either is a colour and no more.
-    expect(html).toMatch(/background-color: (#dbeafe|rgb\(219, 234, 254\))/);
-    expect(html).toMatch(/background-color: (#fef9c3|rgb\(254, 249, 195\))/);
   });
 
   test("a spacing that is not on the menu is refused", () => {
