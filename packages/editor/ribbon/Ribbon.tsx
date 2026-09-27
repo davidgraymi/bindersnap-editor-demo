@@ -475,27 +475,6 @@ function HomeTab({
             shortcut="Ctrl+["
             onClick={() => setSize(stepFontSize(size ?? 11, -1))}
           />
-          <DropButton
-            label="Change case"
-            tip="Change case (Shift+F3)"
-            className="bs-rdrop--icon"
-            panelClassName="bs-rpanel--list bs-rpanel--narrow"
-            panel={(close) =>
-              CASE_MODES.map(({ mode, label }) => (
-                <MenuChoice
-                  key={mode}
-                  onPick={() => {
-                    chain().changeCase(mode).run();
-                    close();
-                  }}
-                >
-                  {label}
-                </MenuChoice>
-              ))
-            }
-          >
-            <CaseSensitive size={16} strokeWidth={1.75} aria-hidden="true" />
-          </DropButton>
           <RibbonButton
             icon={RemoveFormatting}
             label="Clear formatting"
@@ -568,6 +547,30 @@ function HomeTab({
                 : chain().setHighlight({ color }).run()
             }
           />
+          {/* In the second row, where Word's font row has no room to spare:
+              the first sets the group's width, and a wider group folds the
+              Styles gallery sooner. */}
+          <DropButton
+            label="Change case"
+            tip="Change case (Shift+F3)"
+            className="bs-rdrop--icon"
+            panelClassName="bs-rpanel--list bs-rpanel--narrow"
+            panel={(close) =>
+              CASE_MODES.map(({ mode, label }) => (
+                <MenuChoice
+                  key={mode}
+                  onPick={() => {
+                    chain().changeCase(mode).run();
+                    close();
+                  }}
+                >
+                  {label}
+                </MenuChoice>
+              ))
+            }
+          >
+            <CaseSensitive size={16} strokeWidth={1.75} aria-hidden="true" />
+          </DropButton>
         </RibbonRow>
       </RibbonGroup>
 
