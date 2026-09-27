@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Editor, JSONContent } from "@tiptap/core";
-import { GitBranch, History } from "lucide-react";
+import { GitBranch, GitPullRequest, History } from "lucide-react";
 
 import type {
   BinderDraftPayload,
@@ -95,6 +95,12 @@ interface DocumentEditorPageProps {
   onPropose: () => void;
   /** Rename, refile and make folders: the binder's tree, in this draft. */
   onOrganize: () => void;
+  /**
+   * Saving into an open change request rather than a draft. `draft` is then
+   * the change's branch, read from and saved to; there is nothing to propose,
+   * because it already has been, and every save is in front of its reviewers.
+   */
+  change?: { number: number; title: string } | null;
 }
 
 /** Where the person was going when unsaved words stopped them. */
@@ -155,6 +161,7 @@ export function DocumentEditorPage({
   onStartDraft,
   onRenameDraft,
   onPropose,
+  change = null,
   onOrganize,
 }: DocumentEditorPageProps) {
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
@@ -176,6 +183,9 @@ export function DocumentEditorPage({
     return () => html.classList.remove("bs-writing");
   }, []);
 
+  // By number: the shell builds `change` afresh on every render.
+  const changeNumber = change?.number ?? null;
+
   useEffect(() => {
     if (!draft) return;
     let cancelled = false;
@@ -184,13 +194,20 @@ export function DocumentEditorPage({
     setSave({ kind: "idle" });
 
     (async () => {
-      // Read in the draft: a policy edited a minute ago is only there.
-      const detail = await fetchBinderDocument(
-        org,
-        binder,
-        documentPath,
-        draft,
-      );
+      // Read in the draft: a policy edited a minute ago is only there. On a
+      // change request, at its branch — a proposed draft is not a draft any
+      // more, and the server says so when asked for one.
+      const detail =
+        changeNumber !== null
+          ? await fetchBinderDocument(
+              org,
+              binder,
+              documentPath,
+              undefined,
+              changeNumber,
+              draft,
+            )
+          : await fetchBinderDocument(org, binder, documentPath, draft);
       const blob = await downloadBinderDocument(
         org,
         binder,
@@ -217,7 +234,7 @@ export function DocumentEditorPage({
     return () => {
       cancelled = true;
     };
-  }, [org, binder, documentPath, draft]);
+  }, [org, binder, documentPath, draft, changeNumber]);
 
   // "Saved 3 minutes ago" has to keep counting while nobody types.
   useEffect(() => {
@@ -287,7 +304,7 @@ export function DocumentEditorPage({
         binder,
         file,
         load.detail.document.slugPath,
-        { draft },
+        change ? { changeNumber: change.number } : { draft },
         "editor",
       );
       savedJson.current = json;
@@ -308,7 +325,7 @@ export function DocumentEditorPage({
       });
       return false;
     }
-  }, [binder, draft, forgetKept, load, onSaved, org, save.kind]);
+  }, [binder, change, draft, forgetKept, load, onSaved, org, save.kind]);
 
   const go = (to: Leaving) => {
     if (to.kind === "close") onClose();
@@ -474,35 +491,49 @@ export function DocumentEditorPage({
         <div className="doc-editor-head-body">
           <h1 className="doc-editor-title">{name}</h1>
           {/* Where Save puts things, said before it is pressed. */}
-          <p
-            className="doc-editor-where"
-            title="The version on record does not change until the draft is proposed and approved."
-          >
-            <GitBranch size={14} strokeWidth={1.75} aria-hidden="true" />
-            <span className="doc-editor-where-label">Saving to</span>
-            {/* **Which draft, and the way to the others, here.** Changing
+          {change ? (
+            <p
+              className="doc-editor-where"
+              title="The version on record does not change until the change is approved and published."
+            >
+              <GitPullRequest size={14} strokeWidth={1.75} aria-hidden="true" />
+              <span className="doc-editor-where-label">Saving to</span>
+              <strong>Change {change.number}</strong>
+              <span className="doc-editor-where-more">
+                · {change.title} — its reviewers see every save
+              </span>
+            </p>
+          ) : (
+            <p
+              className="doc-editor-where"
+              title="The version on record does not change until the draft is proposed and approved."
+            >
+              <GitBranch size={14} strokeWidth={1.75} aria-hidden="true" />
+              <span className="doc-editor-where-label">Saving to</span>
+              {/* **Which draft, and the way to the others, here.** Changing
                 drafts meant closing the policy, finding the binder's own page
                 and its picker, and opening the policy again — and with two
                 drafts called "Draft of 27 September", saving into one and
                 proposing the other. */}
-            {drafts && current ? (
-              <BinderDraftPicker
-                org={org}
-                drafts={drafts.drafts}
-                others={drafts.others}
-                current={current.branch}
-                busy={draftBusy}
-                onSwitch={(branch) => leave({ kind: "draft", branch })}
-                onStart={(name) => leave({ kind: "start", name })}
-                onRename={onRenameDraft}
-              />
-            ) : (
-              <strong>{draftName ?? "your draft"}</strong>
-            )}
-            <span className="doc-editor-where-more">
-              · nothing on record changes until it is approved
-            </span>
-          </p>
+              {drafts && current ? (
+                <BinderDraftPicker
+                  org={org}
+                  drafts={drafts.drafts}
+                  others={drafts.others}
+                  current={current.branch}
+                  busy={draftBusy}
+                  onSwitch={(branch) => leave({ kind: "draft", branch })}
+                  onStart={(name) => leave({ kind: "start", name })}
+                  onRename={onRenameDraft}
+                />
+              ) : (
+                <strong>{draftName ?? "your draft"}</strong>
+              )}
+              <span className="doc-editor-where-more">
+                · nothing on record changes until it is approved
+              </span>
+            </p>
+          )}
         </div>
         <div className="doc-editor-head-actions">
           <button
@@ -514,29 +545,36 @@ export function DocumentEditorPage({
           </button>
           <button
             type="button"
-            className="bs-btn bs-btn-secondary bs-btn--sm"
+            className={`bs-btn ${change ? "bs-btn-primary" : "bs-btn-secondary"} bs-btn--sm`}
             disabled={load.kind !== "ready" || !dirty || save.kind === "saving"}
-            title="Save into your draft (Ctrl+S)"
+            title={
+              change
+                ? `Save into change ${change.number} (Ctrl+S)`
+                : "Save into your draft (Ctrl+S)"
+            }
             onClick={() => void saveNow()}
           >
             {save.kind === "saving" ? "Saving…" : "Save"}
           </button>
           {/* **Proposed from where it was written.** It meant Close, the
               binder, Edit, and the bar's Propose — four steps, and a chance at
-              each to land in a different draft from the one just saved. */}
-          <button
-            type="button"
-            className="bs-btn bs-btn-primary bs-btn--sm"
-            disabled={!proposable || save.kind === "saving"}
-            title={
-              proposable
-                ? "Ask for this draft to be approved"
-                : "Nothing in this draft to propose yet"
-            }
-            onClick={() => leave({ kind: "propose" })}
-          >
-            Propose
-          </button>
+              each to land in a different draft from the one just saved. A
+              change request has been proposed already. */}
+          {change ? null : (
+            <button
+              type="button"
+              className="bs-btn bs-btn-primary bs-btn--sm"
+              disabled={!proposable || save.kind === "saving"}
+              title={
+                proposable
+                  ? "Ask for this draft to be approved"
+                  : "Nothing in this draft to propose yet"
+              }
+              onClick={() => leave({ kind: "propose" })}
+            >
+              Propose
+            </button>
+          )}
         </div>
       </header>
 
@@ -596,8 +634,9 @@ export function DocumentEditorPage({
             active={documentPath}
             unsaved={dirty}
             onOpen={(slugPath) => leave({ kind: "open", slugPath })}
-            onNew={() => leave({ kind: "new" })}
-            onOrganize={() => leave({ kind: "organize" })}
+            // A change request is revised, not added to or reshaped, here.
+            onNew={change ? undefined : () => leave({ kind: "new" })}
+            onOrganize={change ? undefined : () => leave({ kind: "organize" })}
           />
         ) : null}
         <div className="doc-editor-main">{body}</div>
