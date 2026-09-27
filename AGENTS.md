@@ -116,6 +116,12 @@ in the same commit and cannot change under an approved version. Raster types
 only; the sanitizer (`isSafeImageSrc`) refuses SVG and every other `data:`
 address. Limit 1.5 MB per picture after scaling.
 
+**AutoRecover** (`apps/app/editorRecovery.ts`): unsaved words are kept in this
+browser's `localStorage`, per org/binder/draft/policy, 800ms after the last
+change, and offered back (Restore / Discard) the next time that policy opens
+in that draft. Dropped on save and on any deliberate "without saving". It is a
+device-local safety net only — nothing reaches Gitea until Save.
+
 `documentSchema.ts` is the one list of Tiptap extensions both the editor and
 the reader (`apps/app/editorDocumentHtml.ts`) load. Add a node or an attribute
 there, never to one side: ProseMirror drops what its schema does not declare,
