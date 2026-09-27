@@ -1129,6 +1129,37 @@ test("typing curls quotes and makes dashes, and Backspace takes one back", async
   await expect(text).toContainText("it\u2019s policy (c)");
 });
 
+test("closing the editor lands on the policy with the draft bar, and Propose is there", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+  await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Every time.");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Save", exact: true }),
+  ).toBeDisabled();
+  // Not over the editor, which has a Propose of its own.
+  await expect(page.locator(".bs-draftbar")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=1&draft=/);
+  const bar = page.locator(".bs-draftbar");
+  await expect(bar).toContainText("1 change", { timeout: 30_000 });
+  await bar.getByRole("button", { name: "Propose" }).click();
+  await expect(page).toHaveURL(/edit=propose&draft=/);
+});
+
 test("the author edits an open change request in the editor, and saves into it", async ({
   page,
 }) => {
