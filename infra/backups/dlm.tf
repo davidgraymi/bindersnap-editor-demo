@@ -7,6 +7,9 @@
 # repositories at the same instant, which is also what makes it the consistent
 # restore point: restoring gitea.db from Litestream on top of repositories from
 # an older snapshot leaves rows pointing at commits that do not exist.
+#
+# See docs/ops/cloud-architecture-review.md for the RPO/RTO this buys and what
+# still has to follow (off-account copy, restore drills).
 
 resource "aws_ec2_tag" "gitea_data_backup" {
   count = var.gitea_data_volume_id == null ? 0 : 1
