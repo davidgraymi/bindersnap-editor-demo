@@ -951,3 +951,45 @@ test("describeMergeRefusal speaks the publisher's language", async () => {
     expect(sentence).not.toMatch(/branch|merge|head|base/i);
   }
 });
+
+test("readMergeCommitSha answers the merge commit, and null for an unmerged change", async () => {
+  const { readMergeCommitSha } = await import("./pullRequests");
+
+  const merged = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/pulls/{index}": () => ({
+        number: 12,
+        merged: true,
+        merge_commit_sha: "9f1c2e",
+      }),
+    },
+  });
+  expect(
+    await readMergeCommitSha({
+      client: merged.client,
+      owner: "mercy-health",
+      repo: "clinical",
+      pullNumber: 12,
+    }),
+  ).toBe("9f1c2e");
+
+  // An open change has no merge commit. Tagging would have to guess, and the
+  // guess the old code made — `main` — is the wrong one.
+  const open = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/pulls/{index}": () => ({
+        number: 12,
+        merged: false,
+        merge_commit_sha: null,
+      }),
+    },
+  });
+  expect(
+    await readMergeCommitSha({
+      client: open.client,
+      owner: "mercy-health",
+      repo: "clinical",
+      pullNumber: 12,
+    }),
+  ).toBeNull();
+});
