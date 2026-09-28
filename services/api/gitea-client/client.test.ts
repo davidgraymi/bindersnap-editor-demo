@@ -103,3 +103,36 @@ test("readAllPages stops at maxPages when Gitea ignores page", async () => {
   expect(calls).toBe(3);
   expect(all).toHaveLength(150);
 });
+
+test("readAllPages reads one page alone, then the rest in waves", async () => {
+  const { readAllPages } = await import("./client");
+
+  const short = Array.from({ length: 12 }, (_, index) => index);
+  let calls = 0;
+  const one = await readAllPages(
+    async () => {
+      calls += 1;
+      return short;
+    },
+    { parallel: 3 },
+  );
+  // A list that fits on one page costs one call, however wide the waves.
+  expect(one).toEqual(short);
+  expect(calls).toBe(1);
+
+  const rows = Array.from({ length: 180 }, (_, index) => index);
+  const inFlight: number[] = [];
+  let running = 0;
+  const all = await readAllPages(
+    async ({ page, limit }) => {
+      running += 1;
+      inFlight.push(running);
+      await Bun.sleep(1);
+      running -= 1;
+      return rows.slice((page - 1) * limit, page * limit);
+    },
+    { parallel: 3 },
+  );
+  expect(all).toEqual(rows);
+  expect(Math.max(...inFlight)).toBe(3);
+});
