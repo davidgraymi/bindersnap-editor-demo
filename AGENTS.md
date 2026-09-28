@@ -116,8 +116,15 @@ in the file panel's "What you are reading". The binder's own page offers the
 same picker while reading, with "On the record" as a place. **Edit on a
 binder opens the editor** (`pickPolicyToWrite`: the policy last written in the
 draft, else the first) — only a binder with nothing the editor writes opens
-the tree. Renaming, refiling and folders are **Organize**, on the binder's
-header and in the editor's file panel. **An open change request is edited in
+the tree. **The editor's file panel organizes the draft in place**: each row
+renames (pencil, double-click on the open one, or F2), moves (drag onto a
+folder, or Move), and a policy archives; New folder is in its head. Every act
+goes into the same draft. When one moves the open policy — renaming it,
+refiling it, or renaming a folder above it — its unsaved words are saved first
+and the editor follows it by identity (`uid`) to its new address; archived, it
+goes on to the next policy to write (`actInEditor` in `BinderShell.tsx`).
+Organize on the binder's header is the same tree on the binder's own page,
+with the archive and restore. **An open change request is edited in
 place by its author**: Edit on its Proposed version card opens the editor at
 `?edit=write&change=N`, which reads the change's branch and saves with
 `changeNumber` (the server's `resolveChangeToJoin`) — no draft, no Propose,

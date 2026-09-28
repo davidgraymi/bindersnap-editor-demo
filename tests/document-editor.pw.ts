@@ -410,7 +410,7 @@ test("the draft is chosen, proposed and read from the editor, with no trip throu
   await expect(page.locator(".bs-draftpick")).toContainText(firstName);
 });
 
-test("Edit on a binder opens the editor; Organize is the tree", async ({
+test("Edit on a binder opens the editor, and its files are renamed and refiled there", async ({
   page,
 }) => {
   const { session, org, binder } = await provision();
@@ -426,7 +426,7 @@ test("Edit on a binder opens the editor; Organize is the tree", async ({
     page.getByRole("textbox", { name: "Hand Hygiene" }),
   ).toContainText("Clean your hands");
 
-  // A save is an edit, and the draft says so in words.
+  // Words typed and not saved yet.
   const text = page.getByRole("textbox", { name: "Hand Hygiene" });
   await text.getByText("Clean your hands").click();
   await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
@@ -435,23 +435,62 @@ test("Edit on a binder opens the editor; Organize is the tree", async ({
   );
   await page.keyboard.press("End");
   await page.keyboard.type(" Always.");
-  await page.keyboard.press("ControlOrMeta+s");
-  await expect(page.getByText(/Saved just now/)).toBeVisible({
-    timeout: 20_000,
+
+  const files = page.getByRole("complementary", {
+    name: "Files in Clinical Policies",
   });
 
-  // Renaming and refiling are the tree's, one press away, in the same draft.
-  await page
-    .getByRole("button", { name: "Organize: rename, move and make folders" })
-    .click();
-  await expect(page).toHaveURL(
-    new RegExp(`/${binder}\\?edit=1&draft=${encodeURIComponent(draft)}`),
-  );
-  await expect(page.locator(".bs-draftbar")).toContainText("Edit Hand Hygiene");
-  await expect(page.locator(".bs-draftbar")).not.toContainText("document.json");
+  // A folder, made from the panel, without leaving the page.
+  await files.getByRole("button", { name: "New folder" }).click();
+  await page.getByLabel("What to call it").fill("Nursing");
+  await page.getByRole("button", { name: "Add folder" }).click();
+  await expect(
+    files.getByRole("button", { name: "Nursing", exact: true }),
+  ).toBeVisible({
+    timeout: 20_000,
+  });
+  // Still writing, and the words still unsaved.
+  await expect(text).toContainText("Always.");
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write/);
 
-  // And from the binder's own page, Organize goes there directly.
-  await page.getByRole("button", { name: "Done" }).click();
+  // Renaming the open policy saves its words first, and the editor follows it
+  // to its new name — in the same draft.
+  await files.getByRole("button", { name: /^Hand Hygiene/ }).hover();
+  await files.getByRole("button", { name: "Rename Hand Hygiene" }).click();
+  const box = files.getByRole("textbox", { name: "New name" });
+  await box.fill("Hand Washing");
+  await box.press("Enter");
+  await expect(page).toHaveURL(
+    new RegExp(`/hand-washing\\?edit=write&draft=${encodeURIComponent(draft)}`),
+    { timeout: 20_000 },
+  );
+  const renamed = page.getByRole("textbox", { name: "Hand Washing" });
+  await expect(renamed).toContainText("Clean your hands");
+  await expect(renamed).toContainText("Always.");
+
+  // Refiled from its row's Move, into the folder just made.
+  await files.getByRole("button", { name: /^Hand Washing/ }).hover();
+  await files.getByRole("button", { name: "Move Hand Washing" }).click();
+  await page.getByLabel("Where it goes").selectOption({ label: "Nursing" });
+  await page.getByRole("button", { name: "Move", exact: true }).click();
+  await expect(page).toHaveURL(
+    new RegExp(
+      `/nursing/hand-washing\\?edit=write&draft=${encodeURIComponent(draft)}`,
+      "i",
+    ),
+    { timeout: 20_000 },
+  );
+  await expect(
+    page.getByRole("textbox", { name: "Hand Washing" }),
+  ).toContainText("Always.");
+
+  // Closing lands on the policy, in the draft, at its new address.
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page).toHaveURL(/\/nursing\/hand-washing\?edit=1/i);
+  await expect(page.locator(".doc-preview-prose")).toContainText("Always.");
+
+  // And from the binder's own page, Organize is still the whole tree.
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
   await page.getByRole("button", { name: "Organize", exact: true }).click();
   await expect(page.locator(".bs-draftbar")).toBeVisible();
   await expect(page).toHaveURL(/edit=1/);
@@ -611,12 +650,12 @@ test("the editor's file panel starts a policy and moves between them, saving fir
   const visitor = page.getByRole("textbox", { name: "Visitor Policy" });
   await expect(visitor).toBeFocused();
   await expect(
-    files.getByRole("button", { name: "Visitor Policy" }),
+    files.getByRole("button", { name: /^Visitor Policy/ }),
   ).toBeVisible();
 
   // Back to the first policy with unsaved words: asked, and saved on the way.
   await page.keyboard.type("Visitors sign in at reception.");
-  await files.getByRole("button", { name: "Hand Hygiene" }).click();
+  await files.getByRole("button", { name: /^Hand Hygiene/ }).click();
   const ask = page.getByRole("alertdialog");
   await expect(ask).toContainText("Save your changes to Visitor Policy?");
   await ask.getByRole("button", { name: "Save and open" }).click();
