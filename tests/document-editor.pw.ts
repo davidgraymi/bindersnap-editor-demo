@@ -763,6 +763,68 @@ test("Ctrl+K links the selected words from anywhere, as Word's does", async ({
   await expect(text.locator("a")).toHaveCount(1);
 });
 
+test("the arrow keys walk the file panel's tree, as in a file explorer", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write&draft=/);
+  const files = page.getByRole("complementary", {
+    name: "Files in Clinical Policies",
+  });
+
+  // A folder with a policy in it, above the one open.
+  await files.getByRole("button", { name: "New folder" }).click();
+  await page.getByLabel("What to call it").fill("Nursing");
+  await page.getByRole("button", { name: "Add folder" }).click();
+  const nursing = files.getByRole("button", { name: "Nursing", exact: true });
+  await expect(nursing).toBeVisible({ timeout: 20_000 });
+  await nursing.click({ button: "right" });
+  await page
+    .getByRole("menu", { name: "Nursing: actions" })
+    .getByRole("menuitem", { name: "New document here" })
+    .click();
+  await page.getByLabel("What it is called").fill("Night Rounds");
+  await page.getByRole("button", { name: "Start writing" }).click();
+  await expect(page).toHaveURL(/\/nursing\/night-rounds\?edit=write/i, {
+    timeout: 20_000,
+  });
+
+  const night = files.getByRole("button", { name: /^Night Rounds/ });
+  const hand = files.getByRole("button", { name: /^Hand Hygiene/ });
+  await expect(nursing).toHaveAttribute("aria-expanded", "true");
+
+  // Left from a row in a folder goes to the folder; Left again shuts it.
+  await night.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(nursing).toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await expect(nursing).toHaveAttribute("aria-expanded", "false");
+  await expect(night).toHaveCount(0);
+
+  // Down past the shut folder to the next row; Up and Right open it again.
+  await page.keyboard.press("ArrowDown");
+  await expect(hand).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(nursing).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  await expect(nursing).toHaveAttribute("aria-expanded", "true");
+  await page.keyboard.press("ArrowRight");
+  await expect(night).toBeFocused();
+  await page.keyboard.press("End");
+  await expect(hand).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect(nursing).toBeFocused();
+
+  // Enter opens what has focus.
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write/);
+});
+
 test("closing with unsaved words asks first, and Cancel keeps them", async ({
   page,
 }) => {
