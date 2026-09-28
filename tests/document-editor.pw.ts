@@ -660,6 +660,41 @@ test("a policy archived from the editor's panel comes back by Undo, or from the 
   await expect(archive).toHaveCount(0);
 });
 
+test("the title bar says where the policy is filed, and moves it from there", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write&draft=/);
+  const files = page.getByRole("complementary", {
+    name: "Files in Clinical Policies",
+  });
+  await files.getByRole("button", { name: "New folder" }).click();
+  await page.getByLabel("What to call it").fill("Nursing");
+  await page.getByRole("button", { name: "Add folder" }).click();
+  await expect(
+    files.getByRole("button", { name: "Nursing", exact: true }),
+  ).toBeVisible({ timeout: 20_000 });
+
+  const filed = page.getByRole("button", {
+    name: "Move Hand Hygiene, filed at the top level",
+  });
+  await expect(filed).toHaveText("Top level");
+  await filed.click();
+  await page.getByLabel("Where it goes").selectOption({ label: "Nursing" });
+  await page.getByRole("button", { name: "Move", exact: true }).click();
+
+  await expect(page).toHaveURL(/\/nursing\/hand-hygiene\?edit=write/i, {
+    timeout: 20_000,
+  });
+  await expect(
+    page.getByRole("button", { name: "Move Hand Hygiene, filed in Nursing" }),
+  ).toHaveText("Nursing");
+});
+
 test("closing with unsaved words asks first, and Cancel keeps them", async ({
   page,
 }) => {
