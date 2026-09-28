@@ -10356,3 +10356,27 @@ html.bs-writing .app-main {
 .add-policy-mode .bs-choice + .bs-choice {
   margin-top: 0;
 }
+
+/* Numbered sections: 1. Purpose, 2.1 Wards. Drawn, never typed, so they
+   cannot fall out of step when a section is added in the middle. See
+   `NumberedHeadings.ts`. */
+.doc-preview-prose {
+  counter-reset: bs-section bs-subsection;
+}
+
+.doc-preview-prose h2.bs-numbered {
+  counter-increment: bs-section;
+  counter-reset: bs-subsection;
+}
+
+.doc-preview-prose h3.bs-numbered {
+  counter-increment: bs-subsection;
+}
+
+.doc-preview-prose h2.bs-numbered::before {
+  content: counter(bs-section) ".\00a0\00a0";
+}
+
+.doc-preview-prose h3.bs-numbered::before {
+  content: counter(bs-section) "." counter(bs-subsection) "\00a0\00a0";
+}
