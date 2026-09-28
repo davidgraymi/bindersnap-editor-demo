@@ -867,6 +867,59 @@ test("Go to file opens the first match on Enter, and Down steps into the matches
   await expect(find).toHaveValue("");
 });
 
+test("Make a copy starts a policy from another one, and opens the copy", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write&draft=/);
+  const draft = new URL(page.url()).searchParams.get("draft")!;
+
+  // Words not saved yet go into the copy too.
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+  await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Twenty seconds.");
+
+  const files = page.getByRole("complementary", {
+    name: "Files in Clinical Policies",
+  });
+  await files
+    .getByRole("button", { name: /^Hand Hygiene/ })
+    .click({ button: "right" });
+  await page
+    .getByRole("menu", { name: "Hand Hygiene: actions" })
+    .getByRole("menuitem", { name: "Make a copy" })
+    .click();
+
+  await expect(page).toHaveURL(
+    new RegExp(
+      `/hand-hygiene-copy\\?edit=write&draft=${encodeURIComponent(draft)}`,
+    ),
+    { timeout: 20_000 },
+  );
+  await expect(
+    page.getByRole("textbox", { name: "Hand Hygiene Copy" }),
+  ).toContainText("Twenty seconds.");
+  await expect(
+    files.getByRole("button", { name: /^Hand Hygiene Copy/ }),
+  ).toHaveAttribute("aria-current", "page");
+  // The original is still there, with the words saved into it.
+  await expect(
+    files.getByRole("button", { name: /^Hand Hygiene$/ }),
+  ).toBeVisible();
+  expect(await policyText(session, org, binder, draft)).toContain(
+    "Twenty seconds.",
+  );
+});
+
 test("closing with unsaved words asks first, and Cancel keeps them", async ({
   page,
 }) => {
