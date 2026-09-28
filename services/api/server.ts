@@ -221,12 +221,14 @@ import {
 import {
   createPullRequest,
   getPullRequestWithReviews,
+  getPullRequestHeadBranch,
+  listPullRequestsWithoutReviews,
+  attachReviews,
   readMergeCommitSha,
   listBranchUpdates,
   listPullRequests,
   findClosedChanges,
   listPullRequestsWithReviews,
-  getPullRequestHeadBranch,
   searchInvolvedChanges,
   type InvolvedChangeRef,
   mergeWorkspaceChange,
@@ -3116,7 +3118,7 @@ async function loadOpenChangeSummary(
   repo: string,
 ) {
   try {
-    const [versionsByDocument, openWithReviews] = await Promise.all([
+    const [versionsByDocument, open] = await Promise.all([
       // **The binder's own version tags, not `doc/vNNNN`.** That pattern is the
       // old one-repo-per-document model's, which nothing writes any more — so
       // this used to find nothing, `latestTag` was always null, and Home told
@@ -3126,11 +3128,18 @@ async function loadOpenChangeSummary(
       listVersionsByDocument({ client, org: owner, workspace: repo }).catch(
         () => new Map<string, DocumentVersion[]>(),
       ),
-      listPullRequestsWithReviews({ client, owner, repo, state: "open" }),
+      listPullRequestsWithoutReviews({ client, owner, repo, state: "open" }),
     ]);
-    const pending = openWithReviews.filter((entry) =>
-      (entry.pullRequest.head?.ref ?? "").startsWith("upload/"),
-    );
+    // Reviews only for the changes that make a row. The rest were read and
+    // then dropped, a call or more each, on every library and Home load.
+    const pending = await attachReviews({
+      client,
+      owner,
+      repo,
+      pullRequests: open.filter((pullRequest) =>
+        (pullRequest.head?.ref ?? "").startsWith("upload/"),
+      ),
+    });
     // The approval policy only ever answers "how many approvals does this
     // change still need", so a document with nothing in flight has no question
     // to ask — and most of them don't. Asking anyway spent a Gitea round trip
@@ -6266,26 +6275,21 @@ async function handleWorkspaceOverview(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    const [documents, openChanges] = await Promise.all([
-      listWorkspaceDocuments({
-        client: auth.client,
-        org: orgName,
-        workspace: workspaceName,
-      }),
-      listPullRequests({
-        client: auth.client,
-        owner: orgName,
-        repo: workspaceName,
-        state: "open",
-      }),
-    ]);
+    const documents = await listWorkspaceDocuments({
+      client: auth.client,
+      org: orgName,
+      workspace: workspaceName,
+    });
 
     return json(
       200,
       {
         workspace,
         documentCount: documents.length,
-        openChangeCount: openChanges.length,
+        // Gitea's own count, on the repository read above. Listing the open
+        // changes to count them also read every one's reviews, a call or more
+        // each, for a number the repository already carries.
+        openChangeCount: workspace.openChangeCount,
       },
       baseHeaders,
     );
@@ -6655,7 +6659,8 @@ async function handleWorkspaceSettings(
       // Listing them needs org ownership, so a binder admin who is not an owner
       // falls back to the teams granted here rather than losing the page.
       listOrganizationTeams({ client, org: orgName }).catch(() => null),
-      listPullRequests({
+      // Branches only, to find a sign-off change in flight.
+      listPullRequestsWithoutReviews({
         client,
         owner: orgName,
         repo: workspaceName,
@@ -7373,7 +7378,7 @@ async function handleBinderSignOffRules(
     // One open sign-off change at a time. Two would leave competing versions
     // of the rules in review, and whichever merged last would silently win —
     // with no screen able to say that the other one had been overwritten.
-    const open = await listPullRequests({
+    const open = await listPullRequestsWithoutReviews({
       client,
       owner: orgName,
       repo: workspaceName,
@@ -9252,13 +9257,13 @@ async function handleListWorkspaceDocuments(
     const changeNumber = Number.parseInt(changeRaw ?? "", 10);
     const onChange =
       !draft && !readable && Number.isFinite(changeNumber) && changeNumber > 0
-        ? await getPullRequestWithReviews({
+        ? await getPullRequestHeadBranch({
             client: auth.client,
             owner: orgName,
             repo: workspaceName,
             pullNumber: changeNumber,
           })
-            .then((entry) => entry.pullRequest.branchName || null)
+            .then((branch) => branch || null)
             .catch(() => null)
         : null;
 
@@ -9345,7 +9350,14 @@ async function readBinderDocuments(params: {
   // either way; it was only the folders being thrown away.
   const [tree, openChanges, tags] = await Promise.all([
     readWorkspaceTree({ client, org, workspace, ...(ref ? { ref } : {}) }),
-    listPullRequests({ client, owner: org, repo: workspace, state: "open" }),
+    // Numbers only: which documents each change touches is read below, and
+    // nothing here shows a review.
+    listPullRequestsWithoutReviews({
+      client,
+      owner: org,
+      repo: workspace,
+      state: "open",
+    }),
     listAllTags({ client, owner: org, repo: workspace }),
   ]);
   const documents = tree.documents;
@@ -9625,13 +9637,13 @@ async function handleWorkspaceDocumentDetail(
     const changeNumber = Number.parseInt(changeRaw ?? "", 10);
     const onChange =
       Number.isFinite(changeNumber) && changeNumber > 0
-        ? await getPullRequestWithReviews({
+        ? await getPullRequestHeadBranch({
             client: auth.client,
             owner: orgName,
             repo: workspaceName,
             pullNumber: changeNumber,
           })
-            .then((entry) => entry.pullRequest.branchName || null)
+            .then((branch) => branch || null)
             .catch(() => null)
         : null;
 
@@ -9743,13 +9755,29 @@ async function handleWorkspaceDocumentDetail(
         workspace: workspaceName,
         uid: resolved.uid,
       }),
-      listPullRequests({
+      listPullRequestsWithoutReviews({
         client: auth.client,
         owner: orgName,
         repo: workspaceName,
         state: "open",
       }),
     ]);
+
+    // Reviews for the changes that touch this document, and no others: the
+    // rest of the binder's changes are narrowed away below, and reading their
+    // reviews first was a call or more each for nothing.
+    const touching = await attachReviews({
+      client: auth.client,
+      owner: orgName,
+      repo: workspaceName,
+      pullRequests: await filterChangesTouching({
+        client: auth.client,
+        org: orgName,
+        workspace: workspaceName,
+        openChanges,
+        slugPath: resolved.slugPath,
+      }),
+    });
 
     // A document read on a branch and never published is proposed: the branch
     // is the only place it exists. One that has versions is on the record and
@@ -9767,13 +9795,7 @@ async function handleWorkspaceDocumentDetail(
         versions,
         latestVersion: versions[0] ?? null,
         folders: tree.folders,
-        openChanges: await filterChangesTouching({
-          client: auth.client,
-          org: orgName,
-          workspace: workspaceName,
-          openChanges,
-          slugPath: resolved.slugPath,
-        }),
+        openChanges: touching.map((entry) => entry.pullRequest),
       },
       baseHeaders,
     );
@@ -10145,7 +10167,7 @@ async function resolveChangeToJoin(params: {
     return { error: "That is not a change request number." };
   }
 
-  const open = await listPullRequests({
+  const open = await listPullRequestsWithoutReviews({
     client,
     owner: org,
     repo: workspace,
