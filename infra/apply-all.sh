@@ -244,7 +244,8 @@ tf_run "backups" \
   "gitea_data_volume_id=${DATA_VOLUME_ID}"
 
 LITESTREAM_BUCKET="$(tf_output backups litestream_bucket_name)"
-echo "  Backups outputs: litestream_bucket=${LITESTREAM_BUCKET}"
+DLM_POLICY_ID="$(tf_output backups dlm_policy_id)"
+echo "  Backups outputs: litestream_bucket=${LITESTREAM_BUCKET} dlm_policy=${DLM_POLICY_ID:-<none>}"
 
 # 4. Monitoring (needs instance ID)
 tf_run "monitoring" "instance_id=${INSTANCE_ID}"
