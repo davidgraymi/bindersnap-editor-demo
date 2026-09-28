@@ -10137,6 +10137,66 @@ html.bs-writing .app-main {
   white-space: nowrap;
 }
 
+/* The name, renamed where it is shown. Reads as the title at rest; the
+   pencil and a hover ground say it can be changed. */
+.doc-editor-title-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  max-width: 100%;
+  margin: 0 calc(-1 * var(--brand-space-1-5));
+  padding: var(--brand-space-0-5) var(--brand-space-1-5);
+  border: 1px solid transparent;
+  border-radius: var(--brand-radius-sm);
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: text;
+}
+
+.doc-editor-title-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-editor-title-button svg {
+  flex: none;
+  color: var(--bs-text-faint);
+  opacity: 0;
+  transition: opacity var(--brand-transition-fast);
+}
+
+.doc-editor-title-button:hover:not(:disabled) {
+  border-color: var(--bs-rule);
+}
+
+.doc-editor-title-button:hover svg,
+.doc-editor-title-button:focus-visible svg {
+  opacity: 1;
+}
+
+.doc-editor-title-button:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 1px;
+}
+
+.doc-editor-title-input {
+  width: 22rem;
+  max-width: 100%;
+  font: inherit;
+  color: var(--bs-text-primary);
+  background: var(--bs-surface-1);
+  border: 1.5px solid var(--brand-coral);
+  border-radius: var(--brand-radius-sm);
+  padding: 0 var(--brand-space-1-5);
+}
+
+.doc-editor-title-input:focus {
+  outline: none;
+}
+
 .doc-editor-where {
   display: flex;
   align-items: center;
