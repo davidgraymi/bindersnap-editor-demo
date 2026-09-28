@@ -119,6 +119,9 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high_warning" {
 
 # Disk usage alarm — requires CloudWatch agent emitting to Bindersnap namespace.
 # Triggers when any monitored mount (/, /data) exceeds 85% for 10 minutes.
+# The agent tags disk metrics with path/device/fstype as well, so this
+# InstanceId-only series exists only because cloudwatch-agent-config.json
+# aggregates on [InstanceId]; Maximum then reads the fullest mount.
 resource "aws_cloudwatch_metric_alarm" "disk_high" {
   alarm_name          = "${var.project}-instance-disk-high"
   alarm_description   = "Alert when disk usage exceeds 85% on any mount for 10+ minutes"
