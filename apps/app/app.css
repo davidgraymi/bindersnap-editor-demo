@@ -10144,7 +10144,10 @@ html.bs-writing .app-main {
   align-items: center;
   gap: var(--brand-space-1-5);
   max-width: 100%;
-  margin: 0 calc(-1 * var(--brand-space-1-5));
+  /* No negative margin to pull the name back into line: the heading sizes
+     to its content, and a margin taken off the button is width taken off
+     the name, which then ellipsed on the shortest title. */
+  margin: 0;
   padding: var(--brand-space-0-5) var(--brand-space-1-5);
   border: 1px solid transparent;
   border-radius: var(--brand-radius-sm);
