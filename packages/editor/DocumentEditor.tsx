@@ -27,6 +27,7 @@ import { WordKeymap } from "./extensions/WordKeymap";
 import { ChangeCase } from "./extensions/ChangeCase";
 import { AutoFormat } from "./extensions/AutoFormat";
 import { NavigationPane } from "./NavigationPane";
+import { ShortcutsDialog } from "./ShortcutsDialog";
 import { DropButton, shortcutLabel } from "./ribbon/controls";
 import { Ribbon, type ViewSettings } from "./ribbon/Ribbon";
 import { ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, clampZoom } from "./ribbon/options";
@@ -218,6 +219,11 @@ export function DocumentEditor({
   );
 
   const rootRef = useRef<HTMLDivElement>(null);
+  const [shortcuts, setShortcuts] = useState(false);
+  const closeShortcuts = useCallback(() => {
+    setShortcuts(false);
+    editor?.commands.focus();
+  }, [editor]);
 
   // Save, Find and Replace, from anywhere in the editor — the ribbon and the
   // pane as well as the page, as in Word.
@@ -237,6 +243,9 @@ export function DocumentEditor({
       } else if (key === "h" && !event.shiftKey) {
         event.preventDefault();
         openFind(true);
+      } else if (key === "/" || event.code === "Slash") {
+        event.preventDefault();
+        setShortcuts(true);
       }
     };
     root.addEventListener("keydown", onKey);
@@ -290,9 +299,12 @@ export function DocumentEditor({
           onViewChange={setView}
           onFind={openFind}
           onPrint={print}
+          onShortcuts={() => setShortcuts(true)}
           end={ribbonEnd}
         />
       ) : null}
+
+      {shortcuts ? <ShortcutsDialog onClose={closeShortcuts} /> : null}
 
       {notice ? (
         <div className="bs-doc-notice" role="alert">

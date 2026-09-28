@@ -1611,3 +1611,120 @@
 .bs-doc-content h3.bs-numbered::before {
   content: counter(bs-section) "." counter(bs-subsection) "\00a0\00a0";
 }
+
+/* ── Keyboard shortcuts (Ctrl+/) ──────────────────────────────────────────
+   One sheet of every key, in columns, over the page. */
+.bs-shortcuts-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--brand-z-modal);
+  display: grid;
+  place-items: center;
+  padding: var(--brand-space-6);
+  background: var(--brand-scrim);
+}
+
+.bs-shortcuts {
+  display: flex;
+  flex-direction: column;
+  width: min(56rem, 100%);
+  max-height: min(40rem, 100%);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-xl);
+  background: var(--bs-surface-1);
+  box-shadow: var(--bs-elevation-modal);
+  color: var(--bs-text-primary);
+  font-family: var(--brand-font-sans);
+}
+
+.bs-shortcuts-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--brand-space-4) var(--brand-space-5);
+  border-bottom: 1px solid var(--bs-rule);
+}
+
+.bs-shortcuts-head h2 {
+  margin: 0;
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-body-lg);
+}
+
+.bs-shortcuts-close {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: var(--brand-radius-sm);
+  background: none;
+  color: var(--bs-text-muted);
+  cursor: pointer;
+}
+
+.bs-shortcuts-close:hover {
+  border-color: var(--bs-rule);
+  color: var(--bs-text-primary);
+}
+
+.bs-shortcuts-close:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 1px;
+}
+
+.bs-shortcuts-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: var(--brand-space-5) var(--brand-space-8);
+  padding: var(--brand-space-5);
+  overflow-y: auto;
+}
+
+.bs-shortcuts-group h3 {
+  margin: 0 0 var(--brand-space-2);
+  color: var(--bs-text-faint);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-xs);
+  font-weight: var(--brand-weight-medium);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.bs-shortcuts-group dl {
+  margin: 0;
+}
+
+.bs-shortcuts-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-1) 0;
+  border-bottom: 1px solid var(--bs-rule);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.bs-shortcuts-row dt {
+  color: var(--bs-text-secondary);
+}
+
+.bs-shortcuts-row dd {
+  display: flex;
+  flex: none;
+  gap: var(--brand-space-0-5);
+  margin: 0;
+}
+
+.bs-shortcuts-row kbd {
+  min-width: 1.5em;
+  padding: 0 var(--brand-space-1);
+  border: 1px solid var(--bs-rule);
+  border-bottom-width: 2px;
+  border-radius: var(--brand-radius-xs);
+  background: var(--bs-surface-2);
+  color: var(--bs-text-primary);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-xs);
+  text-align: center;
+}
