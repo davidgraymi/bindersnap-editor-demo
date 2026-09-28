@@ -224,7 +224,7 @@ test("a policy written here opens in the editor, and Save puts it in your draft"
   await expect(
     page
       .getByRole("complementary", { name: `Files in Clinical Policies` })
-      .getByRole("button", { name: "Hand Hygiene" }),
+      .getByRole("button", { name: /^Hand Hygiene/ }),
   ).toHaveAttribute("aria-current", "page");
 
   await text.getByText("Clean your hands").click();
