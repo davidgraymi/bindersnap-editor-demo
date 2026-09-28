@@ -10626,3 +10626,13 @@ html.bs-writing .app-main {
   background: var(--bs-surface-2);
   box-shadow: inset 0 0 0 1px var(--bs-rule);
 }
+
+/* A row this draft has changed: quiet, after the name — the binder tree's
+   mark, so "changed in this draft" looks the same in both places. */
+.doc-files-changed {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: var(--brand-radius-full);
+  background: var(--brand-coral);
+}
