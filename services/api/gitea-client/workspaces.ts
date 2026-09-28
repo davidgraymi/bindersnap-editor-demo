@@ -1,6 +1,11 @@
 import type { components } from "./spec/gitea";
 
-import { GiteaApiError, unwrap, type GiteaClient } from "./client";
+import {
+  GiteaApiError,
+  readAllPages,
+  unwrap,
+  type GiteaClient,
+} from "./client";
 import { bootstrapEmptyMainBranch } from "./repos";
 import {
   addTeamMember,
@@ -130,11 +135,15 @@ export async function listOrganizationWorkspaces(
 ): Promise<WorkspaceSummary[]> {
   const { client, org } = params;
 
-  const repos = await unwrap(
-    client.GET("/orgs/{org}/repos", { params: { path: { org } } }),
+  // Every page: an unpaged read stops at Gitea's 30, and binders past that
+  // vanished from the list, the library and quick-find.
+  const repos = await readAllPages((query) =>
+    unwrap(
+      client.GET("/orgs/{org}/repos", { params: { path: { org }, query } }),
+    ),
   );
 
-  return (repos ?? []).map(normalizeWorkspace);
+  return repos.map(normalizeWorkspace);
 }
 
 export interface WorkspacePathExistsParams {

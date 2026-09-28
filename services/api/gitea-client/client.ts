@@ -101,3 +101,39 @@ export async function unwrap<T>(
 
   return data;
 }
+
+/**
+ * Gitea's page ceiling. Asking for more is not an error, it is silently this:
+ * `limit=100` answers with 50, and a caller that stops at "fewer than I asked
+ * for" stops after the first page every time.
+ */
+export const GITEA_PAGE_SIZE = 50;
+
+/**
+ * Every page of a Gitea list, in order.
+ *
+ * Gitea answers an unpaged list with 30 and caps any page at 50, so a list
+ * read once is a list that silently stops — binders past the thirtieth, seats
+ * past the fiftieth. This reads `limit: 50` pages until a short one arrives.
+ *
+ * `maxPages` is a stop no real binder reaches, which turns a Gitea that ignored
+ * `page` from an infinite loop into a bounded read.
+ */
+export async function readAllPages<T>(
+  readPage: (query: {
+    page: number;
+    limit: number;
+  }) => Promise<T[] | null | undefined>,
+  options: { maxPages?: number } = {},
+): Promise<T[]> {
+  const maxPages = options.maxPages ?? 200;
+  const all: T[] = [];
+
+  for (let page = 1; page <= maxPages; page += 1) {
+    const batch = (await readPage({ page, limit: GITEA_PAGE_SIZE })) ?? [];
+    all.push(...batch);
+    if (batch.length < GITEA_PAGE_SIZE) break;
+  }
+
+  return all;
+}

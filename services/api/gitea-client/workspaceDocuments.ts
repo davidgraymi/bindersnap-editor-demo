@@ -8,7 +8,12 @@ import {
 } from "../../../packages/utils/documentPath";
 
 import { readStampedChange, readVersionStamp } from "../version-stamp";
-import { GiteaApiError, unwrap, type GiteaClient } from "./client";
+import {
+  GiteaApiError,
+  readAllPages,
+  unwrap,
+  type GiteaClient,
+} from "./client";
 
 /**
  * Reading the documents out of a binder.
@@ -719,19 +724,18 @@ export async function findPendingDocumentBranch(params: {
   const { client, org, workspace, slugPath } = params;
 
   try {
-    const branches = (await unwrap(
-      client.GET("/repos/{owner}/{repo}/branches", {
-        params: {
-          path: { owner: org, repo: workspace },
-          query: { limit: 100 },
-        },
-      }),
+    const branches = (await readAllPages((query) =>
+      unwrap(
+        client.GET("/repos/{owner}/{repo}/branches", {
+          params: { path: { owner: org, repo: workspace }, query },
+        }),
+      ),
     )) as GitBranch[];
 
     const prefix = `upload/${slugPath}/`;
     return (
-      (branches ?? []).find((branch) => (branch.name ?? "").startsWith(prefix))
-        ?.name ?? null
+      branches.find((branch) => (branch.name ?? "").startsWith(prefix))?.name ??
+      null
     );
   } catch (err) {
     // A binder with no branches yet is not a conflict.
@@ -779,31 +783,18 @@ export async function listAllTags(params: {
 }): Promise<GitTag[]> {
   const { client, owner, repo } = params;
 
-  // Gitea's ceiling. Asking for more is not an error, it is silently this.
-  const PAGE_SIZE = 50;
   // A stop that cannot be reached by any real binder — 500 pages is 25,000
   // versions — but that turns a Gitea that ignored `page` from an infinite
   // loop into a bounded read.
-  const MAX_PAGES = 500;
-
-  const all: GitTag[] = [];
-
-  for (let page = 1; page <= MAX_PAGES; page += 1) {
-    const batch = (await unwrap(
-      client.GET("/repos/{owner}/{repo}/tags", {
-        params: {
-          path: { owner, repo },
-          query: { page, limit: PAGE_SIZE },
-        },
-      }),
-    )) as GitTag[];
-
-    if (!batch || batch.length === 0) break;
-    all.push(...batch);
-    if (batch.length < PAGE_SIZE) break;
-  }
-
-  return all;
+  return (await readAllPages(
+    (query) =>
+      unwrap(
+        client.GET("/repos/{owner}/{repo}/tags", {
+          params: { path: { owner, repo }, query },
+        }),
+      ),
+    { maxPages: 500 },
+  )) as GitTag[];
 }
 
 /**

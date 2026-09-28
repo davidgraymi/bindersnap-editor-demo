@@ -40,7 +40,12 @@
  * each with its change's number, for the callers that ask.
  */
 
-import { unwrap, GiteaApiError, type GiteaClient } from "./client";
+import {
+  readAllPages,
+  unwrap,
+  GiteaApiError,
+  type GiteaClient,
+} from "./client";
 import { createUploadBranch } from "./uploads";
 
 /**
@@ -170,14 +175,13 @@ export async function listBinderDrafts(params: {
 
   let branches: BranchRow[];
   try {
-    branches = ((await unwrap(
-      client.GET("/repos/{owner}/{repo}/branches", {
-        params: {
-          path: { owner: org, repo: workspace },
-          query: { limit: 100 },
-        },
-      }),
-    )) ?? []) as BranchRow[];
+    branches = (await readAllPages((query) =>
+      unwrap(
+        client.GET("/repos/{owner}/{repo}/branches", {
+          params: { path: { owner: org, repo: workspace }, query },
+        }),
+      ),
+    )) as BranchRow[];
   } catch (err) {
     // A binder with no branches beyond `main` is not an error, and neither is
     // one Gitea has not finished creating.
@@ -189,14 +193,16 @@ export async function listBinderDrafts(params: {
   // reads every change's reviews as well, and this needs nothing but the list
   // of branches already spoken for. On a busy binder the difference is a
   // round trip per open change, paid to answer a question about branches.
-  const open = ((await unwrap(
-    client.GET("/repos/{owner}/{repo}/pulls", {
-      params: {
-        path: { owner: org, repo: workspace },
-        query: { state: "open", limit: 100 },
-      },
-    }),
-  )) ?? []) as Array<{ number?: number; head?: { ref?: string } }>;
+  const open = (await readAllPages((query) =>
+    unwrap(
+      client.GET("/repos/{owner}/{repo}/pulls", {
+        params: {
+          path: { owner: org, repo: workspace },
+          query: { state: "open", ...query },
+        },
+      }),
+    ),
+  )) as Array<{ number?: number; head?: { ref?: string } }>;
   const proposed = new Map<string, number>();
   for (const pull of open) {
     const ref = pull.head?.ref ?? "";
@@ -340,21 +346,23 @@ export async function readDraftActs(params: {
   const { client, org, workspace, branch } = params;
 
   try {
-    const commits = ((await unwrap(
-      client.GET("/repos/{owner}/{repo}/commits", {
-        params: {
-          path: { owner: org, repo: workspace },
-          query: {
-            sha: branch,
-            not: "main",
-            stat: false,
-            verification: false,
-            files: true,
-            limit: 100,
+    const commits = (await readAllPages((query) =>
+      unwrap(
+        client.GET("/repos/{owner}/{repo}/commits", {
+          params: {
+            path: { owner: org, repo: workspace },
+            query: {
+              sha: branch,
+              not: "main",
+              stat: false,
+              verification: false,
+              files: true,
+              ...query,
+            },
           },
-        },
-      }),
-    )) ?? []) as CommitRow[];
+        }),
+      ),
+    )) as CommitRow[];
 
     return commits.map((commit) => ({
       summary: firstLine(commit.commit?.message ?? ""),
