@@ -65,6 +65,30 @@ variable "daily_backup_tag_value" {
   default     = "daily"
 }
 
+variable "hourly_snapshot_retain_count" {
+  description = "Hourly EBS snapshots to keep (48 = two days of hourly restore points)"
+  type        = number
+  default     = 48
+}
+
+variable "daily_snapshot_retain_count" {
+  description = "Daily EBS snapshots to keep in the primary region"
+  type        = number
+  default     = 35
+}
+
+variable "dr_region" {
+  description = "Region the daily EBS snapshot is copied to, so a regional outage or a deleted volume is survivable. Null disables the copy."
+  type        = string
+  default     = "us-west-2"
+}
+
+variable "dr_copy_retain_days" {
+  description = "Days to keep each daily snapshot copy in dr_region"
+  type        = number
+  default     = 35
+}
+
 variable "ec2_instance_role_name" {
   description = "Existing EC2 IAM role name to attach the Litestream S3 policy to"
   type        = string
