@@ -615,6 +615,51 @@ test("a row's menu in the file panel acts on it: a folder takes a new document a
   );
 });
 
+test("a policy archived from the editor's panel comes back by Undo, or from the archive at its foot", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write&draft=/);
+  const files = page.getByRole("complementary", {
+    name: "Files in Clinical Policies",
+  });
+
+  // A second policy to be in while the first is archived.
+  await files.getByRole("button", { name: "New document" }).click();
+  await page.getByLabel("What it is called").fill("Visitor Policy");
+  await page.getByRole("button", { name: "Start writing" }).click();
+  await expect(page).toHaveURL(/\/visitor-policy\?edit=write/);
+
+  const hand = files.getByRole("button", { name: /^Hand Hygiene/ });
+  await hand.hover();
+  await files.getByRole("button", { name: "Archive Hand Hygiene" }).click();
+  await expect(hand).toHaveCount(0, { timeout: 20_000 });
+
+  // Undo, straight away, puts it back — in the same draft.
+  const notice = files.getByRole("status").filter({ hasText: "archived" });
+  await expect(notice).toContainText("Hand Hygiene archived in this draft.");
+  await notice.getByRole("button", { name: "Undo" }).click();
+  await expect(hand).toBeVisible({ timeout: 20_000 });
+  await expect(notice).toHaveCount(0);
+  await expect(page).toHaveURL(/\/visitor-policy\?edit=write/);
+
+  // Archived again, it is in the archive at the panel's foot, and Restore
+  // there brings it back too.
+  await hand.hover();
+  await files.getByRole("button", { name: "Archive Hand Hygiene" }).click();
+  await expect(hand).toHaveCount(0, { timeout: 20_000 });
+  const archive = files.getByRole("button", { name: /^Archived/ });
+  await expect(archive).toContainText("1");
+  await archive.click();
+  await files.getByRole("button", { name: "Restore Hand Hygiene" }).click();
+  await expect(hand).toBeVisible({ timeout: 20_000 });
+  await expect(archive).toHaveCount(0);
+});
+
 test("closing with unsaved words asks first, and Cancel keeps them", async ({
   page,
 }) => {
