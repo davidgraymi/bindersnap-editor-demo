@@ -20,6 +20,7 @@
 import { parseDocumentFilename } from "../../packages/utils/documentPath";
 import {
   buildBinderUrl,
+  DEFAULT_REF,
   parseBinderAddress,
   type BinderAddress,
 } from "./binderShell";
@@ -82,6 +83,11 @@ function documentLabel(filename: string): string {
   return formatDocumentName(parseDocumentFilename(filename).name);
 }
 
+/** Read at a branch rather than on the record — `main` named outright is the record. */
+function onBranch(address: BinderAddress): boolean {
+  return address.ref !== null && address.ref !== DEFAULT_REF;
+}
+
 /** Where in a binder its screen is. Empty on the binder's own contents. */
 function binderPath(
   org: string,
@@ -95,6 +101,15 @@ function binderPath(
     label: "Change requests",
     href: buildBinderUrl({ org, binder, tab: "changes" }),
   };
+
+  // **The binder at a branch is the binder**, at its root, and the trail says
+  // so. It said "Change requests / Change 22 / Proposed files" — the change's
+  // view of a branch, with no step back up to the binder the files are in. A
+  // file lives on a branch; which branch is the file panel's version picker's
+  // to say, and it says it with the way back to the change beside it.
+  if (onBranch(address) && tab === "documents") {
+    return [];
+  }
 
   if (change !== null) {
     const changeLabel = `Change ${change}`;
@@ -147,14 +162,18 @@ function documentPath(
   binder: string,
   address: string,
   change: number | null,
+  atBranch: boolean,
 ): TrailStep[] {
   const segments = address.split("/").filter(Boolean);
   const filename = segments.pop() ?? address;
 
   // Read on a change's branch: the change is where the reader came from, and
   // the way back to it is worth a step. The path under it is the file's own.
+  // **Not when the address names the branch**: a file on a branch is filed in
+  // that branch's folders, and the version picker beside it says which branch
+  // and is the way back to the change.
   const changeSteps: TrailStep[] =
-    change === null
+    change === null || atBranch
       ? []
       : [
           {
@@ -204,11 +223,14 @@ export function buildLocationTrail(
             route.binder,
             route.documentPath,
             address.change,
+            onBranch(address),
           );
     const label = formatDocumentName(route.binder);
+    // At its root on a branch is not at its root on the record: the binder's
+    // name is the way back to the record.
     return {
       binder:
-        path.length === 0
+        path.length === 0 && !onBranch(address)
           ? here(label)
           : {
               label,

@@ -134,6 +134,13 @@ place by its author**: Edit on its Proposed version card opens the editor at
 `?edit=write&change=N`, which reads the change's branch and saves with
 `changeNumber` (the server's `resolveChangeToJoin`) — no draft, no Propose,
 and Close returns to the change.
+**A proposed draft is still its owner's draft**, like a branch with a pull
+request open on it: `listBinderDrafts({ proposed: true })` keeps it, with its
+`changeNumber`, in the owner's picker and in `?draft=` reads; a save into it
+lands in the change; it keeps its name, which the change's branch chip shows
+(`branchLabel`) and links back to. It cannot be proposed again or discarded —
+the bar and the editor offer "Change N" instead. Publishing deletes a draft
+branch. Other people's proposed drafts are change requests, not "others".
 
 **Pictures are embedded, not linked** (`packages/editor/imageFiles.ts`): chosen,
 pasted or dropped, a picture is scaled to at most 1600px and written into the
