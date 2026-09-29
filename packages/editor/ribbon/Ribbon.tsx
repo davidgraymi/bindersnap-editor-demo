@@ -26,10 +26,12 @@ import {
   IndentDecrease,
   IndentIncrease,
   Italic,
+  ImageMinus,
   Link as LinkIcon,
   List,
   ListChecks,
   ListOrdered,
+  MessageSquareText,
   Minus,
   MoveHorizontal,
   PanelLeft,
@@ -38,7 +40,9 @@ import {
   Redo2,
   RemoveFormatting,
   Replace,
+  RotateCcw,
   Rows3,
+  Scaling,
   ScanText,
   Scissors,
   Pilcrow,
@@ -94,10 +98,11 @@ import {
 /**
  * Word's ribbon: Home, Insert and View, and a Table tab that appears while the
  * cursor is in one — Word's contextual tab, and the only way to reach table
- * commands without a right-click menu.
+ * commands without a right-click menu. A Picture tab appears the same way
+ * while a picture is selected.
  */
 
-export type RibbonTab = "home" | "insert" | "view" | "table";
+export type RibbonTab = "home" | "insert" | "view" | "table" | "picture";
 
 export type PageLayout = "print" | "web";
 
@@ -129,6 +134,7 @@ const TAB_LABELS: Record<RibbonTab, string> = {
   insert: "Insert",
   view: "View",
   table: "Table",
+  picture: "Picture",
 };
 
 export function Ribbon({
@@ -170,10 +176,14 @@ export function Ribbon({
     return () => observer.disconnect();
   }, [collapsed]);
 
-  const tabs: RibbonTab[] = format.inTable
-    ? ["home", "insert", "view", "table"]
-    : ["home", "insert", "view"];
-  // Leaving a table takes its tab with it, and lands back on Home.
+  const tabs: RibbonTab[] = [
+    "home",
+    "insert",
+    "view",
+    ...(format.inTable ? (["table"] as const) : []),
+    ...(format.picture ? (["picture"] as const) : []),
+  ];
+  // Leaving a table or a picture takes its tab with it, and lands on Home.
   const tab = tabs.includes(chosen) ? chosen : "home";
 
   useLayoutEffect(() => {
@@ -220,7 +230,9 @@ export function Ribbon({
               aria-selected={tab === id && !collapsed}
               aria-controls="bs-ribbon-panel"
               className={`bs-ribbon-tab${tab === id ? " is-on" : ""}${
-                id === "table" ? " bs-ribbon-tab--context" : ""
+                id === "table" || id === "picture"
+                  ? " bs-ribbon-tab--context"
+                  : ""
               }`}
               onMouseDown={keepSelection}
               onClick={() => pickTab(id)}
@@ -263,8 +275,10 @@ export function Ribbon({
               onViewChange={onViewChange}
               onPrint={onPrint}
             />
-          ) : (
+          ) : tab === "table" ? (
             <TableTab editor={editor} format={format} />
+          ) : (
+            <PictureTab editor={editor} format={format} />
           )}
 
           <button
@@ -1385,5 +1399,156 @@ function TableTab({ editor, format }: { editor: Editor; format: FormatState }) {
         </div>
       </RibbonGroup>
     </>
+  );
+}
+
+/* ─── Picture (contextual) ──────────────────────────────────────────────── */
+
+/** The text's width on a Letter page with one-inch margins, at 96 dpi. */
+export const TEXT_WIDTH_PX = 6.5 * 96;
+
+/**
+ * Word's Size group, in the words a policy author uses: a quarter, a half,
+ * three quarters or the whole width of the text. Dragging a corner sets any
+ * width in between.
+ */
+export const PICTURE_SIZES = [
+  { label: "Small", width: Math.round(TEXT_WIDTH_PX / 4) },
+  { label: "Medium", width: Math.round(TEXT_WIDTH_PX / 2) },
+  { label: "Large", width: Math.round((TEXT_WIDTH_PX * 3) / 4) },
+  { label: "Full width", width: TEXT_WIDTH_PX },
+] as const;
+
+function PictureTab({
+  editor,
+  format,
+}: {
+  editor: Editor;
+  format: FormatState;
+}) {
+  /** Change the selected picture, and keep it selected so this tab stays. */
+  const setPicture = (attrs: Record<string, unknown>) => {
+    const at = editor.state.selection.from;
+    editor
+      .chain()
+      .focus()
+      .updateAttributes("image", attrs)
+      .setNodeSelection(at)
+      .run();
+  };
+
+  return (
+    <>
+      <RibbonGroup label="Size">
+        <div className="bs-rstack">
+          {PICTURE_SIZES.slice(0, 2).map((size) => (
+            <RibbonButton
+              key={size.label}
+              icon={Scaling}
+              label={size.label}
+              showLabel
+              active={format.pictureWidth === size.width}
+              onClick={() => setPicture({ width: size.width, height: null })}
+            />
+          ))}
+        </div>
+        <div className="bs-rstack">
+          {PICTURE_SIZES.slice(2).map((size) => (
+            <RibbonButton
+              key={size.label}
+              icon={Scaling}
+              label={size.label}
+              showLabel
+              active={format.pictureWidth === size.width}
+              onClick={() => setPicture({ width: size.width, height: null })}
+            />
+          ))}
+        </div>
+        <RibbonButton
+          icon={RotateCcw}
+          label="Original size"
+          large
+          active={format.pictureWidth === null}
+          onClick={() => setPicture({ width: null, height: null })}
+        />
+      </RibbonGroup>
+
+      <RibbonGroup label="Accessibility">
+        <DropButton
+          label="Alt text"
+          className="bs-rdrop--large"
+          role="dialog"
+          panelClassName="bs-rpanel--form"
+          panel={(close) => (
+            <AltTextForm
+              alt={format.pictureAlt}
+              onSave={(alt) => {
+                setPicture({ alt: alt === "" ? null : alt });
+                close();
+              }}
+              onCancel={close}
+            />
+          )}
+        >
+          <MessageSquareText size={22} strokeWidth={1.75} aria-hidden="true" />
+          <span className="bs-rb-label">Alt text</span>
+        </DropButton>
+      </RibbonGroup>
+
+      <RibbonGroup label="Delete">
+        <RibbonButton
+          icon={ImageMinus}
+          label="Remove picture"
+          large
+          onClick={() => editor.chain().focus().deleteSelection().run()}
+        />
+      </RibbonGroup>
+    </>
+  );
+}
+
+function AltTextForm({
+  alt,
+  onSave,
+  onCancel,
+}: {
+  alt: string;
+  onSave: (alt: string) => void;
+  onCancel: () => void;
+}) {
+  const [text, setText] = useState(alt);
+  return (
+    <form
+      className="bs-rform"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSave(text.trim());
+      }}
+    >
+      <label className="bs-rform-field">
+        <span>Description, for screen readers</span>
+        <input
+          type="text"
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+        />
+      </label>
+      <p className="bs-rform-note">
+        Say what the picture shows and why it is here, in a sentence. Leave it
+        empty only for a picture that is decoration.
+      </p>
+      <div className="bs-rform-actions">
+        <button
+          type="button"
+          className="bs-btn bs-btn--sm bs-btn-secondary"
+          onClick={onCancel}
+        >
+          Cancel
+        </button>
+        <button type="submit" className="bs-btn bs-btn--sm bs-btn-primary">
+          Save
+        </button>
+      </div>
+    </form>
   );
 }
