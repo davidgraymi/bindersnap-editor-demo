@@ -1209,12 +1209,15 @@ export async function reviseBinderDocument(
   documentPath: string,
   /** An open change or a draft to put it in, instead of opening one. */
   target?: ActTarget,
+  /** Written in the editor, so recorded as an edit rather than an upload. */
+  source?: "editor",
 ): Promise<CreatedWorkspaceDocumentPayload> {
   try {
     const response = await BindersClient.reviseBinderDocument(org, binder, {
       file,
       documentPath,
       ...multipartTarget(target),
+      ...(source ? { source } : {}),
     });
     return response.data;
   } catch (error) {
@@ -1640,6 +1643,9 @@ export async function downloadBinderDocument(
     binder,
     documentPath,
     ref ? { ref } : undefined,
+    // A branch moves with every save; a copy the browser kept from before one
+    // showed the words the save replaced. See `downloadHeaders` in the API.
+    { cache: "no-store" },
   );
   return response.data;
 }

@@ -1,0 +1,2095 @@
+/**
+ * The document editor: a policy written in Bindersnap opens in a word
+ * processor, and Save puts it in your draft.
+ *
+ * **What this is proving.** That the editor's Save is the same act as every
+ * other edit to a binder — a commit to the author's draft, and nothing on the
+ * record moves until the draft is proposed and published. The formatting and
+ * find-and-replace are unit-tested in `packages/editor`; what a mock cannot
+ * say is whether the words typed here are the words in the file on the
+ * branch, and whether the version on record is untouched.
+ *
+ * Each test signs up its own person, organization and binder, so it owns the
+ * draft it writes into.
+ *
+ * Requires the full Docker Compose stack — run via `bun run test:integration`.
+ */
+
+import { randomUUID } from "node:crypto";
+
+import { expect, test, type Page } from "@playwright/test";
+
+import { API_BASE_URL, APP_BASE_URL } from "./helpers";
+
+test.describe.configure({ mode: "parallel", timeout: 240_000 });
+
+// A desktop window, wide enough that the ribbon shows its Styles gallery:
+// several tests read the gallery's "Normal" to know the click has landed, and
+// how much of the gallery fits at 1280 depends on the machine's fonts. The
+// tablet test sets its own size, and is where the folding is tested.
+test.use({ viewport: { width: 1440, height: 900 } });
+
+interface Credentials {
+  username: string;
+  email: string;
+  password: string;
+}
+
+function buildCredentials(): Credentials {
+  const suffix = randomUUID().slice(0, 12);
+  return {
+    username: `write-${suffix}`,
+    email: `write-${suffix}@users.bindersnap.local`,
+    password: `Bindersnap-${suffix}!`,
+  };
+}
+
+function sessionFrom(response: Response): string {
+  const match = (response.headers.get("set-cookie") ?? "").match(
+    /bindersnap_session=([^;]+)/,
+  );
+  expect(match?.[1], "no session cookie in the response").toBeTruthy();
+  return match![1]!;
+}
+
+function authHeaders(session: string): Record<string, string> {
+  return {
+    Cookie: `bindersnap_session=${session}`,
+    "Content-Type": "application/json",
+    Origin: APP_BASE_URL,
+  };
+}
+
+async function signUp(credentials: Credentials): Promise<string> {
+  const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
+    body: JSON.stringify(credentials),
+  });
+  expect(response.status, await response.clone().text()).toBe(200);
+  return sessionFrom(response);
+}
+
+/** A policy the editor wrote: its JSON, as the seed and the editor store it. */
+const POLICY = {
+  type: "doc",
+  content: [
+    {
+      type: "heading",
+      attrs: { level: 1 },
+      content: [{ type: "text", text: "Hand Hygiene" }],
+    },
+    {
+      type: "paragraph",
+      content: [
+        { type: "text", text: "Clean your hands before and after contact." },
+      ],
+    },
+  ],
+};
+
+/**
+ * A binder holding one policy written in the editor, published — so there is
+ * a version on record for the draft to differ from.
+ */
+async function provision(): Promise<{
+  session: string;
+  org: string;
+  binder: string;
+}> {
+  const session = await signUp(buildCredentials());
+
+  const orgResponse = await fetch(`${API_BASE_URL}/api/app/organizations`, {
+    method: "POST",
+    headers: authHeaders(session),
+    body: JSON.stringify({ name: `Writers ${randomUUID().slice(0, 6)}` }),
+  });
+  const orgBody = await orgResponse.text();
+  expect(orgResponse.status, orgBody).toBe(201);
+  const org = (JSON.parse(orgBody) as { organization: { name: string } })
+    .organization.name;
+
+  const binderResponse = await fetch(
+    `${API_BASE_URL}/api/app/orgs/${org}/binders`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({ name: "Clinical Policies" }),
+    },
+  );
+  const binderBody = await binderResponse.text();
+  expect(binderResponse.status, binderBody).toBe(201);
+  const binder = (JSON.parse(binderBody) as { workspace: { name: string } })
+    .workspace.name;
+
+  const form = new FormData();
+  form.set(
+    "file",
+    new Blob([JSON.stringify(POLICY, null, 2)], { type: "application/json" }),
+    "document.json",
+  );
+  form.set("name", "Hand Hygiene");
+  const added = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents`,
+    {
+      method: "POST",
+      headers: {
+        Cookie: `bindersnap_session=${session}`,
+        Origin: APP_BASE_URL,
+      },
+      body: form,
+    },
+  );
+  const addedBody = await added.text();
+  expect(added.status, addedBody).toBe(201);
+  const change = (JSON.parse(addedBody) as { pullRequestNumber: number })
+    .pullRequestNumber;
+
+  // A second person approves, and the author publishes. Retried because
+  // Gitea can dismiss an approval recorded against a head it is still
+  // processing — see `binder-edit-mode.pw.ts`.
+  const approver = buildCredentials();
+  const approverSession = await signUp(approver);
+  const joined = await fetch(`${API_BASE_URL}/api/app/orgs/${org}/people`, {
+    method: "POST",
+    headers: authHeaders(session),
+    body: JSON.stringify({ username: approver.username, owner: false }),
+  });
+  expect(joined.status, await joined.text()).toBeLessThan(300);
+
+  let published: Response | null = null;
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    const review = await fetch(
+      `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes/${change}/reviews`,
+      {
+        method: "POST",
+        headers: authHeaders(approverSession),
+        body: JSON.stringify({ event: "APPROVE" }),
+      },
+    );
+    expect(review.status, await review.text()).toBe(200);
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    published = await fetch(
+      `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes/${change}/publish`,
+      { method: "POST", headers: authHeaders(session), body: "{}" },
+    );
+    if (published.status === 200) break;
+  }
+  expect(published?.status, await published?.text()).toBe(200);
+
+  return { session, org, binder };
+}
+
+async function signInBrowser(page: Page, session: string): Promise<void> {
+  await page
+    .context()
+    .addCookies([
+      { name: "bindersnap_session", value: session, url: APP_BASE_URL },
+    ]);
+}
+
+/** The policy's text on a ref, read the way a download reads it. */
+async function policyText(
+  session: string,
+  org: string,
+  binder: string,
+  ref?: string,
+): Promise<string> {
+  const query = ref ? `?ref=${encodeURIComponent(ref)}` : "";
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/raw/hand-hygiene${query}`,
+    { headers: authHeaders(session) },
+  );
+  expect(response.status, await response.clone().text()).toBe(200);
+  return response.text();
+}
+
+test("a policy written here opens in the editor, and Save puts it in your draft", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+
+  // The document's own address, in edit mode, naming the draft.
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write&draft=draft%2F/);
+  const draft = new URL(page.url()).searchParams.get("draft")!;
+
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await expect(text).toContainText("Clean your hands");
+  await expect(page.getByText("No changes yet")).toBeVisible();
+  // The draft's files are beside the page, and this one is marked.
+  await expect(
+    page
+      .getByRole("complementary", { name: `Files in Clinical Policies` })
+      .getByRole("button", { name: /^Hand Hygiene/ }),
+  ).toHaveAttribute("aria-current", "page");
+  const row = page
+    .getByRole("complementary", { name: `Files in Clinical Policies` })
+    .getByRole("button", { name: /^Hand Hygiene/ });
+  // Nothing in the draft yet, so nothing is marked as changed in it.
+  await expect(row).not.toHaveAttribute("title", /changed in this draft/);
+
+  await text.getByText("Clean your hands").click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("Alcohol rub is enough unless hands are soiled.");
+  await expect(page.getByText("Unsaved changes")).toBeVisible();
+
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.getByText(/Saved just now/)).toBeVisible({
+    timeout: 20_000,
+  });
+  // Saved, the row says the draft has changed it.
+  await expect(row).toHaveAttribute("title", /changed in this draft/);
+  await expect(row.locator(".doc-files-changed")).toBeVisible();
+
+  // The words are in the draft, and the record has not moved.
+  expect(await policyText(session, org, binder, draft)).toContain(
+    "Alcohol rub is enough",
+  );
+  expect(await policyText(session, org, binder)).not.toContain("Alcohol rub");
+
+  // Close is the way back to the document, still in the draft.
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=1&draft=/);
+  await expect(page.locator(".doc-preview-prose")).toContainText(
+    "Alcohol rub is enough",
+  );
+});
+
+test("after a save, every page reads the draft as it now is, not a copy kept from before", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  // Every read of a file on a branch, and what it told the browser to keep.
+  const kept: string[] = [];
+  page.on("response", (response) => {
+    if (/\/raw\//.test(response.url())) {
+      kept.push(response.headers()["cache-control"] ?? "");
+    }
+  });
+
+  // Read the policy on the draft first, as the draft picker does, so the
+  // browser holds a copy of it from before the save.
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/edit=write/);
+  const draft = new URL(page.url()).searchParams.get("draft")!;
+  const onDraft = `${APP_BASE_URL}/${org}/${binder}/hand-hygiene?ref=${encodeURIComponent(draft)}`;
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await expect(text).toContainText("before and after contact");
+  await page.goto(onDraft);
+  await expect(page.locator(".doc-preview-prose")).toContainText(
+    "before and after contact",
+  );
+
+  // Take a word out, and save.
+  await page.goBack();
+  await expect(text).toContainText("before and after contact");
+  const word = await wordBox(page, "and after");
+  await page.mouse.dblclick(word.x - 20, word.y);
+  await expect(page.getByRole("button", { name: "Cut" })).toBeEnabled();
+  await page.keyboard.press("Backspace");
+  await page.keyboard.press("Backspace");
+  await expect(text).toContainText("before after contact");
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.getByText(/Saved just now/)).toBeVisible({
+    timeout: 20_000,
+  });
+
+  // The draft, from the picker: the words as saved.
+  await page.goto(onDraft);
+  await expect(page.locator(".doc-preview-prose")).toContainText(
+    "before after contact",
+  );
+
+  // And the change it becomes shows the word gone.
+  await page.goto(
+    `${APP_BASE_URL}/${org}/${binder}?edit=propose&draft=${encodeURIComponent(draft)}`,
+  );
+  await page
+    .getByRole("textbox", { name: "What you are asking for" })
+    .fill("Shorter wording");
+  await page.getByRole("button", { name: "Open the change request" }).click();
+  await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
+  await page.goto(`${page.url()}&view=compare`);
+  await expect(page.locator("del", { hasText: "and" }).first()).toBeVisible({
+    timeout: 20_000,
+  });
+
+  // Nothing read on a branch was ever kept.
+  expect(kept.length).toBeGreaterThan(0);
+  for (const header of kept) expect(header).toBe("no-store");
+});
+
+test("the draft is chosen, proposed and read from the editor, with no trip through the binder", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/edit=write/);
+  const first = new URL(page.url()).searchParams.get("draft")!;
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await expect(text).toContainText("Clean your hands");
+
+  // Which draft Save goes into is a control in the title bar.
+  const picker = page.locator(".doc-editor-where .bs-draftpick");
+  await expect(picker).toContainText("Draft of");
+  const firstName = (await picker.innerText()).split("·")[0]!.trim();
+
+  // Nothing to propose until there is something in the draft.
+  const propose = page.getByRole("button", { name: "Propose", exact: true });
+  await expect(propose).toBeDisabled();
+
+  await text.getByText("Clean your hands").click();
+  await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Every time.");
+
+  // Propose from here: unsaved words are saved first, into this draft.
+  await expect(propose).toBeEnabled();
+  await propose.click();
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Save and propose" })
+    .click();
+  await expect(page).toHaveURL(
+    new RegExp(`edit=propose&draft=${encodeURIComponent(first)}`),
+  );
+  expect(await policyText(session, org, binder, first)).toContain(
+    "Every time.",
+  );
+
+  // Back to editing lands back in the policy, not on the binder.
+  await page.getByRole("button", { name: "Back to editing" }).click();
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write/);
+  await expect(text).toContainText("Every time.");
+
+  // Another draft, started here: the same policy, as the record has it.
+  await picker.click();
+  await page.getByRole("button", { name: "Start another draft" }).click();
+  const naming = page.getByRole("textbox", {
+    name: "What to call the new draft",
+  });
+  await naming.fill("Gloves wording");
+  await naming.press("Enter");
+  await expect(picker).toContainText("Gloves wording");
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write/);
+  expect(new URL(page.url()).searchParams.get("draft")).not.toBe(first);
+  await expect(text).toContainText("Clean your hands");
+  await expect(text).not.toContainText("Every time.");
+
+  // And back to the first, where the words are.
+  await picker.click();
+  await page.getByRole("button", { name: new RegExp(`^${firstName}`) }).click();
+  await expect(text).toContainText("Every time.");
+
+  // Close reads the policy in that draft, and says so.
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/hand-hygiene\\?edit=1&draft=${encodeURIComponent(first)}`),
+  );
+  await expect(page.locator(".doc-version-pill")).toHaveText(`In ${firstName}`);
+  await expect(page.locator(".doc-preview-prose")).toContainText("Every time.");
+
+  // The binder's own page, read on the record, is the way into either draft.
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  const binderPicker = page.locator(".bs-draftpick");
+  await expect(binderPicker).toContainText("On the record");
+  await binderPicker.click();
+  await expect(
+    page.getByRole("button", { name: /^Gloves wording/ }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: new RegExp(`^${firstName}`) }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`edit=1&draft=${encodeURIComponent(first)}`),
+  );
+  await expect(page.locator(".bs-draftpick")).toContainText(firstName);
+});
+
+test("Edit on a binder opens the editor, and its files are renamed and refiled there", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+
+  // Straight into the words, with the draft's files beside them.
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write&draft=/);
+  const draft = new URL(page.url()).searchParams.get("draft")!;
+  await expect(
+    page.getByRole("textbox", { name: "Hand Hygiene" }),
+  ).toContainText("Clean your hands");
+
+  // Words typed and not saved yet.
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+  await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Always.");
+
+  const files = page.getByRole("complementary", {
+    name: "Files in Clinical Policies",
+  });
+
+  // A folder, made from the panel, without leaving the page.
+  await files.getByRole("button", { name: "New folder" }).click();
+  await page.getByLabel("What to call it").fill("Nursing");
+  await page.getByRole("button", { name: "Add folder" }).click();
+  await expect(
+    files.getByRole("button", { name: "Nursing", exact: true }),
+  ).toBeVisible({
+    timeout: 20_000,
+  });
+  // Still writing, and the words still unsaved.
+  await expect(text).toContainText("Always.");
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write/);
+
+  // Renaming the open policy keeps its words, unsaved, and the editor follows
+  // it to its new name — in the same draft. It is the same open file.
+  await files.getByRole("button", { name: /^Hand Hygiene/ }).hover();
+  await files.getByRole("button", { name: "Rename Hand Hygiene" }).click();
+  const box = files.getByRole("textbox", { name: "New name" });
+  await box.fill("Hand Washing");
+  await box.press("Enter");
+  await expect(page).toHaveURL(
+    new RegExp(`/hand-washing\\?edit=write&draft=${encodeURIComponent(draft)}`),
+    { timeout: 20_000 },
+  );
+  const renamed = page.getByRole("textbox", { name: "Hand Washing" });
+  await expect(renamed).toContainText("Clean your hands");
+  await expect(renamed).toContainText("Always.");
+
+  // Refiled from its row's Move, into the folder just made.
+  await files.getByRole("button", { name: /^Hand Washing/ }).hover();
+  await files.getByRole("button", { name: "Move Hand Washing" }).click();
+  await page.getByLabel("Where it goes").selectOption({ label: "Nursing" });
+  await page.getByRole("button", { name: "Move", exact: true }).click();
+  await expect(page).toHaveURL(
+    new RegExp(
+      `/nursing/hand-washing\\?edit=write&draft=${encodeURIComponent(draft)}`,
+      "i",
+    ),
+    { timeout: 20_000 },
+  );
+  await expect(
+    page.getByRole("textbox", { name: "Hand Washing" }),
+  ).toContainText("Always.");
+
+  // Closing asks for the words, saves them at the new address, and lands on
+  // the policy there, in the draft.
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Save and close" })
+    .click();
+  await expect(page).toHaveURL(/\/nursing\/hand-washing\?edit=1/i);
+  await expect(page.locator(".doc-preview-prose")).toContainText("Always.");
+
+  // And from the binder's own page, Organize is still the whole tree.
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Organize", exact: true }).click();
+  await expect(page.locator(".bs-draftbar")).toBeVisible();
+  await expect(page).toHaveURL(/edit=1/);
+});
+
+test("the policy is renamed from its title, and its unsaved words stay with it", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write&draft=/);
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+  await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Every time.");
+
+  await page
+    .getByRole("heading", { level: 1, name: "Hand Hygiene" })
+    .getByRole("button")
+    .click();
+  const box = page.getByRole("textbox", { name: "New name" });
+  await expect(box).toHaveValue("Hand Hygiene");
+  await box.fill("Hand Care");
+  await box.press("Enter");
+
+  await expect(page).toHaveURL(/\/hand-care\?edit=write&draft=/, {
+    timeout: 20_000,
+  });
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Hand Care" }),
+  ).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Hand Care" })).toContainText(
+    "Every time.",
+  );
+  // The same open file under its new name: the words are still unsaved, and
+  // Save puts them in at the new address.
+  await expect(page.locator(".doc-editor-status")).toHaveText(
+    "Unsaved changes",
+  );
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.locator(".doc-editor-status")).toHaveText(/^Saved/);
+
+  // Escape leaves the name as it was.
+  await page
+    .getByRole("heading", { level: 1, name: "Hand Care" })
+    .getByRole("button")
+    .click();
+  await box.fill("Something else");
+  await box.press("Escape");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Hand Care" }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/\/hand-care\?edit=write/);
+});
+
+test("a row's menu in the file panel acts on it: a folder takes a new document and a new folder", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write&draft=/);
+  const files = page.getByRole("complementary", {
+    name: "Files in Clinical Policies",
+  });
+
+  // A folder, from the panel's head.
+  await files.getByRole("button", { name: "New folder" }).click();
+  await page.getByLabel("What to call it").fill("Nursing");
+  await page.getByRole("button", { name: "Add folder" }).click();
+  const nursing = files.getByRole("button", { name: "Nursing", exact: true });
+  await expect(nursing).toBeVisible({ timeout: 20_000 });
+
+  // Right-click the folder: a folder inside it starts with its path.
+  await nursing.click({ button: "right" });
+  const menu = page.getByRole("menu", { name: "Nursing: actions" });
+  await expect(menu.getByRole("menuitem").first()).toBeFocused();
+  await menu.getByRole("menuitem", { name: "New folder here" }).click();
+  await expect(page.getByLabel("What to call it")).toHaveValue(/^nursing\//i);
+  await page.getByRole("button", { name: "Cancel" }).click();
+
+  // And a new document from the same menu is filed in it.
+  await nursing.click({ button: "right" });
+  await menu.getByRole("menuitem", { name: "New document here" }).click();
+  await page.getByLabel("What it is called").fill("Night Rounds");
+  await page.getByRole("button", { name: "Start writing" }).click();
+  await expect(page).toHaveURL(/\/nursing\/night-rounds\?edit=write/i, {
+    timeout: 20_000,
+  });
+
+  // From the keyboard: Shift+F10 on a row opens its menu, Escape closes it
+  // and gives the row its focus back.
+  const hand = files.getByRole("button", { name: /^Hand Hygiene/ });
+  await hand.focus();
+  await page.keyboard.press("Shift+F10");
+  const handMenu = page.getByRole("menu", { name: "Hand Hygiene: actions" });
+  await expect(handMenu.getByRole("menuitem", { name: "Open" })).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(
+    handMenu.getByRole("menuitem", { name: /^Rename/ }),
+  ).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(handMenu).toHaveCount(0);
+  await expect(hand).toBeFocused();
+
+  // Rename from the menu turns the row into a text box.
+  await hand.click({ button: "right" });
+  await handMenu.getByRole("menuitem", { name: /^Rename/ }).click();
+  await expect(files.getByRole("textbox", { name: "New name" })).toHaveValue(
+    "Hand Hygiene",
+  );
+});
+
+test("a policy archived from the editor's panel comes back by Undo, or from the archive at its foot", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write&draft=/);
+  const files = page.getByRole("complementary", {
+    name: "Files in Clinical Policies",
+  });
+
+  // A second policy to be in while the first is archived.
+  await files.getByRole("button", { name: "New document" }).click();
+  await page.getByLabel("What it is called").fill("Visitor Policy");
+  await page.getByRole("button", { name: "Start writing" }).click();
+  await expect(page).toHaveURL(/\/visitor-policy\?edit=write/);
+
+  const hand = files.getByRole("button", { name: /^Hand Hygiene/ });
+  await hand.hover();
+  await files.getByRole("button", { name: "Archive Hand Hygiene" }).click();
+  await expect(hand).toHaveCount(0, { timeout: 20_000 });
+
+  // Undo, straight away, puts it back — in the same draft.
+  const notice = files.getByRole("status").filter({ hasText: "archived" });
+  await expect(notice).toContainText("Hand Hygiene archived in this draft.");
+  await notice.getByRole("button", { name: "Undo" }).click();
+  await expect(hand).toBeVisible({ timeout: 20_000 });
+  await expect(notice).toHaveCount(0);
+  await expect(page).toHaveURL(/\/visitor-policy\?edit=write/);
+
+  // Archived again, it is in the archive at the panel's foot, and Restore
+  // there brings it back too.
+  await hand.hover();
+  await files.getByRole("button", { name: "Archive Hand Hygiene" }).click();
+  await expect(hand).toHaveCount(0, { timeout: 20_000 });
+  const archive = files.getByRole("button", { name: /^Archived/ });
+  await expect(archive).toContainText("1");
+  await archive.click();
+  await files.getByRole("button", { name: "Restore Hand Hygiene" }).click();
+  await expect(hand).toBeVisible({ timeout: 20_000 });
+  await expect(archive).toHaveCount(0);
+});
+
+test("the title bar says where the policy is filed, and moves it from there", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write&draft=/);
+  const files = page.getByRole("complementary", {
+    name: "Files in Clinical Policies",
+  });
+  await files.getByRole("button", { name: "New folder" }).click();
+  await page.getByLabel("What to call it").fill("Nursing");
+  await page.getByRole("button", { name: "Add folder" }).click();
+  await expect(
+    files.getByRole("button", { name: "Nursing", exact: true }),
+  ).toBeVisible({ timeout: 20_000 });
+
+  const filed = page.getByRole("button", {
+    name: "Move Hand Hygiene, filed at the top level",
+  });
+  await expect(filed).toHaveText("Top level");
+  await filed.click();
+  await page.getByLabel("Where it goes").selectOption({ label: "Nursing" });
+  await page.getByRole("button", { name: "Move", exact: true }).click();
+
+  await expect(page).toHaveURL(/\/nursing\/hand-hygiene\?edit=write/i, {
+    timeout: 20_000,
+  });
+  await expect(
+    page.getByRole("button", { name: "Move Hand Hygiene, filed in Nursing" }),
+  ).toHaveText("Nursing");
+});
+
+test("Ctrl+/ lists the keyboard shortcuts, and Escape goes back to the words", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+
+  await page.keyboard.press("ControlOrMeta+/");
+  const sheet = page.getByRole("dialog", { name: "Keyboard shortcuts" });
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Close" })).toBeFocused();
+  await expect(sheet).toContainText("Page break");
+  await expect(sheet).toContainText("Change case");
+
+  await page.keyboard.press("Escape");
+  await expect(sheet).toHaveCount(0);
+  await expect(text).toBeFocused();
+
+  // And from the View tab.
+  await page.getByRole("tab", { name: "View" }).click();
+  await page.getByRole("button", { name: /^Keyboard shortcuts/ }).click();
+  await expect(sheet).toBeVisible();
+  await sheet.getByRole("button", { name: "Close" }).click();
+  await expect(sheet).toHaveCount(0);
+});
+
+test("Ctrl+K links the selected words from anywhere, as Word's does", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await expect(text).toContainText("Clean your hands");
+
+  // Double-click selects the word; Ctrl+K asks only for the address.
+  const at = await wordBox(page, "hands");
+  await page.mouse.dblclick(at.x, at.y);
+  await page.keyboard.press("ControlOrMeta+k");
+  const form = page.getByRole("dialog", { name: "Link" });
+  const address = form.getByLabel("Address");
+  await expect(address).toBeFocused();
+  await expect(form.getByLabel("Text to display")).toHaveCount(0);
+  await address.fill("https://www.who.int/hand-hygiene");
+  await address.press("Enter");
+
+  await expect(form).toHaveCount(0);
+  await expect(text.locator("a", { hasText: "hands" })).toHaveAttribute(
+    "href",
+    "https://www.who.int/hand-hygiene",
+  );
+  await expect(text).toBeFocused();
+
+  // Escape leaves without a link.
+  await page.keyboard.press("End");
+  await page.keyboard.press("ControlOrMeta+k");
+  await expect(form).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(form).toHaveCount(0);
+  await expect(text.locator("a")).toHaveCount(1);
+});
+
+test("the arrow keys walk the file panel's tree, as in a file explorer", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write&draft=/);
+  const files = page.getByRole("complementary", {
+    name: "Files in Clinical Policies",
+  });
+
+  // A folder with a policy in it, above the one open.
+  await files.getByRole("button", { name: "New folder" }).click();
+  await page.getByLabel("What to call it").fill("Nursing");
+  await page.getByRole("button", { name: "Add folder" }).click();
+  const nursing = files.getByRole("button", { name: "Nursing", exact: true });
+  await expect(nursing).toBeVisible({ timeout: 20_000 });
+  await nursing.click({ button: "right" });
+  await page
+    .getByRole("menu", { name: "Nursing: actions" })
+    .getByRole("menuitem", { name: "New document here" })
+    .click();
+  await page.getByLabel("What it is called").fill("Night Rounds");
+  await page.getByRole("button", { name: "Start writing" }).click();
+  await expect(page).toHaveURL(/\/nursing\/night-rounds\?edit=write/i, {
+    timeout: 20_000,
+  });
+
+  const night = files.getByRole("button", { name: /^Night Rounds/ });
+  const hand = files.getByRole("button", { name: /^Hand Hygiene/ });
+  await expect(nursing).toHaveAttribute("aria-expanded", "true");
+  // A new policy opens with the cursor in it; the walk starts after that.
+  await expect(
+    page.getByRole("textbox", { name: "Night Rounds" }),
+  ).toBeFocused();
+
+  // Left from a row in a folder goes to the folder; Left again shuts it.
+  await night.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(nursing).toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await expect(nursing).toHaveAttribute("aria-expanded", "false");
+  await expect(night).toHaveCount(0);
+
+  // Down past the shut folder to the next row; Up and Right open it again.
+  await page.keyboard.press("ArrowDown");
+  await expect(hand).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(nursing).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  await expect(nursing).toHaveAttribute("aria-expanded", "true");
+  await page.keyboard.press("ArrowRight");
+  await expect(night).toBeFocused();
+  await page.keyboard.press("End");
+  await expect(hand).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect(nursing).toBeFocused();
+
+  // Enter opens what has focus.
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write/);
+});
+
+test("Go to file opens the first match on Enter, and Down steps into the matches", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write&draft=/);
+  const files = page.getByRole("complementary", {
+    name: "Files in Clinical Policies",
+  });
+  await files.getByRole("button", { name: "New document" }).click();
+  await page.getByLabel("What it is called").fill("Visitor Policy");
+  await page.getByRole("button", { name: "Start writing" }).click();
+  await expect(page).toHaveURL(/\/visitor-policy\?edit=write/);
+
+  const find = files.getByRole("searchbox", {
+    name: "Find a document in Clinical Policies",
+  });
+  await find.fill("hygi");
+  await expect(
+    files.getByRole("button", { name: /^Visitor Policy/ }),
+  ).toHaveCount(0);
+  await find.press("Enter");
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write/);
+  await expect(find).toHaveValue("");
+
+  // Down from the box is the first row; Up from the first row is the box.
+  await find.focus();
+  await page.keyboard.press("ArrowDown");
+  const first = files.getByRole("button", { name: /^Hand Hygiene/ });
+  await expect(first).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(find).toBeFocused();
+
+  // Escape clears what was typed.
+  await find.fill("visit");
+  await find.press("Escape");
+  await expect(find).toHaveValue("");
+});
+
+test("Make a copy starts a policy from another one, and opens the copy", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write&draft=/);
+  const draft = new URL(page.url()).searchParams.get("draft")!;
+
+  // Words not saved yet go into the copy too.
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+  await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Twenty seconds.");
+
+  const files = page.getByRole("complementary", {
+    name: "Files in Clinical Policies",
+  });
+  await files
+    .getByRole("button", { name: /^Hand Hygiene/ })
+    .click({ button: "right" });
+  await page
+    .getByRole("menu", { name: "Hand Hygiene: actions" })
+    .getByRole("menuitem", { name: "Make a copy" })
+    .click();
+
+  await expect(page).toHaveURL(
+    new RegExp(
+      `/hand-hygiene-copy\\?edit=write&draft=${encodeURIComponent(draft)}`,
+    ),
+    { timeout: 20_000 },
+  );
+  await expect(
+    page.getByRole("textbox", { name: "Hand Hygiene Copy" }),
+  ).toContainText("Twenty seconds.");
+  await expect(
+    files.getByRole("button", { name: /^Hand Hygiene Copy/ }),
+  ).toHaveAttribute("aria-current", "page");
+  // The original is still there, with the words saved into it.
+  await expect(
+    files.getByRole("button", { name: /^Hand Hygiene$/ }),
+  ).toBeVisible();
+  expect(await policyText(session, org, binder, draft)).toContain(
+    "Twenty seconds.",
+  );
+});
+
+test("closing with unsaved words asks first, and Cancel keeps them", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+
+  // The Home tab folds to fit beside the file panel rather than hiding
+  // Find off the end of a sideways scroll.
+  await page.setViewportSize({ width: 1280, height: 720 });
+  const panel = page.locator(".bs-ribbon-panel");
+  await expect
+    .poll(() => panel.evaluate((node) => node.scrollWidth - node.clientWidth))
+    .toBeLessThanOrEqual(1);
+  await expect(
+    panel.getByRole("button", { name: /^Find/ }).first(),
+  ).toBeInViewport();
+
+  await text.getByText("Clean your hands").click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Every time.");
+  // Unsaved, and said so where somebody with several tabs open will look:
+  // the browser tab, and the policy's row in the file panel.
+  await expect(page).toHaveTitle(/^• Hand Hygiene/);
+  await expect(
+    page.getByRole("img", { name: "Unsaved changes" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  const ask = page.getByRole("alertdialog");
+  await expect(ask).toContainText("Save your changes to Hand Hygiene?");
+  await ask.getByRole("button", { name: "Cancel" }).click();
+
+  await expect(ask).toHaveCount(0);
+  await expect(text).toContainText("Every time.");
+  await expect(page).toHaveURL(/edit=write/);
+});
+
+test("on a tablet the ribbon folds its groups and the files open over the page", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+  await page.setViewportSize({ width: 700, height: 1000 });
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await expect(text).toBeVisible();
+
+  // The files start as a rail, so the page has the width.
+  const files = page.getByRole("complementary", {
+    name: "Files in Clinical Policies",
+  });
+  await expect(files).toHaveCount(0);
+  const show = page.getByRole("button", { name: "Show the draft's files" });
+  await show.click();
+  await expect(files).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(files).toHaveCount(0);
+
+  // Every command fits, folded into its group's button, with no sideways
+  // scroll; the Font group's commands are one press away.
+  const panel = page.locator(".bs-ribbon-panel");
+  await expect
+    .poll(() => panel.evaluate((node) => node.scrollWidth - node.clientWidth))
+    .toBeLessThanOrEqual(1);
+  const foldedFont = page
+    .getByRole("group", { name: "Font" })
+    .getByRole("button", { name: "Font", exact: true });
+  await expect(foldedFont).toHaveAttribute("aria-haspopup", "dialog");
+  await text
+    .getByText("Clean your hands")
+    .dblclick({ position: { x: 8, y: 5 } });
+  // Cut lights up once the editor has the selected word.
+  await expect(page.getByRole("button", { name: "Cut" })).toBeEnabled();
+  await foldedFont.click();
+  const font = page.getByRole("dialog", { name: "Font" });
+  await font.getByRole("button", { name: "Bold" }).click();
+  await expect(text.locator("strong")).toHaveCount(1);
+
+  // A menu inside the fold opens and closes without taking the fold with it.
+  await font.getByRole("button", { name: "Font color" }).click();
+  await expect(page.getByRole("menu", { name: "Font color" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu", { name: "Font color" })).toHaveCount(0);
+  await expect(font).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(font).toHaveCount(0);
+});
+
+test("a new policy can be written here instead of uploaded", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Add a document" }).click();
+  await page.getByRole("radio", { name: /Write it here/ }).check();
+  await page.getByLabel("What it is called").fill("Visitor Policy");
+  await page.getByRole("button", { name: "Start writing" }).click();
+
+  // Straight into the editor, in the draft it was started in, with the title
+  // written and the cursor on the line under it.
+  await expect(page).toHaveURL(/\/visitor-policy\?edit=write&draft=draft%2F/);
+  const draft = new URL(page.url()).searchParams.get("draft")!;
+  const text = page.getByRole("textbox", { name: "Visitor Policy" });
+  await expect(text.locator("h1")).toHaveText("Visitor Policy");
+  await expect(text).toBeFocused();
+
+  await page.keyboard.type("Visitors sign in at reception.");
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.getByText(/Saved just now/)).toBeVisible({
+    timeout: 20_000,
+  });
+
+  const saved = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/raw/visitor-policy?ref=${encodeURIComponent(draft)}`,
+    { headers: authHeaders(session) },
+  );
+  expect(saved.status).toBe(200);
+  expect(await saved.text()).toContain("Visitors sign in at reception.");
+});
+
+test("the editor's file panel starts a policy, and moves between policies keeping the words in each", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/edit=write/);
+  const files = page.getByRole("complementary", {
+    name: "Files in Clinical Policies",
+  });
+
+  // New, from inside the editor: the dialog opens on Write.
+  await files.getByRole("button", { name: "New document" }).click();
+  await expect(
+    page.getByRole("radio", { name: /Write it here/ }),
+  ).toBeChecked();
+  await page.getByLabel("What it is called").fill("Visitor Policy");
+  await page.getByRole("button", { name: "Start writing" }).click();
+  await expect(page).toHaveURL(/\/visitor-policy\?edit=write&draft=draft%2F/);
+  const draft = new URL(page.url()).searchParams.get("draft")!;
+  const visitor = page.getByRole("textbox", { name: "Visitor Policy" });
+  await expect(visitor).toBeFocused();
+  const visitorRow = files.getByRole("button", { name: /^Visitor Policy/ });
+  await expect(visitorRow).toBeVisible();
+
+  // **Back to the first policy with unsaved words: no question.** Several
+  // policies are open at once, as files are in any editor; each keeps what
+  // was typed in it, and its row says so.
+  await page.keyboard.type("Visitors sign in at reception.");
+  await files.getByRole("button", { name: /^Hand Hygiene/ }).click();
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write&draft=/);
+  const hand = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await expect(hand).toContainText("Clean your hands");
+  await expect(visitorRow.locator(".doc-files-unsaved")).toBeVisible();
+  await expect(page.locator(".doc-editor-status")).toHaveText(
+    "No changes yet · 1 other policy unsaved",
+  );
+
+  // Words in this one too, then back: the first is as it was left, at once.
+  await hand.getByText("Clean your hands").click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Every time.");
+  await visitorRow.click();
+  await expect(visitor).toContainText("Visitors sign in at reception.");
+  await expect(
+    files
+      .getByRole("button", { name: /^Hand Hygiene/ })
+      .locator(".doc-files-unsaved"),
+  ).toBeVisible();
+
+  // Save all commits both, each into the draft.
+  await page.getByRole("button", { name: "Save all (2)" }).click();
+  await expect(page.getByRole("button", { name: /^Save all/ })).toHaveCount(0);
+  await expect(page.locator(".doc-files-unsaved")).toHaveCount(0);
+  const raw = async (slug: string) =>
+    (
+      await fetch(
+        `${API_BASE_URL}/api/app/binders/${org}/${binder}/raw/${slug}?ref=${encodeURIComponent(draft)}`,
+        { headers: authHeaders(session) },
+      )
+    ).text();
+  expect(await raw("visitor-policy")).toContain(
+    "Visitors sign in at reception.",
+  );
+  expect(await raw("hand-hygiene")).toContain("Every time.");
+});
+
+test("each open policy keeps its own undo, across a move to another and back", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const files = page.getByRole("complementary", {
+    name: "Files in Clinical Policies",
+  });
+  await files.getByRole("button", { name: "New document" }).click();
+  await page.getByLabel("What it is called").fill("Visitor Policy");
+  await page.getByRole("button", { name: "Start writing" }).click();
+  const visitor = page.getByRole("textbox", { name: "Visitor Policy" });
+  await expect(visitor).toBeFocused();
+
+  // Words in the new one, then over to Hand Hygiene and words there.
+  await page.keyboard.type("Visitors sign in.");
+  await files.getByRole("button", { name: /^Hand Hygiene/ }).click();
+  const hand = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await expect(hand).toBeFocused();
+  await expect(hand).toContainText("Clean your hands");
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.type(" Always.");
+  await expect(hand).toContainText("Always.");
+
+  // Back to Visitor Policy: its words, and Ctrl+Z still takes them back —
+  // not Hand Hygiene's, and not nothing.
+  await files.getByRole("button", { name: /^Visitor Policy/ }).click();
+  await expect(visitor).toContainText("Visitors sign in.");
+  await expect(visitor).toBeFocused();
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(visitor).not.toContainText("Visitors sign in.");
+
+  // And Hand Hygiene's undo is its own, still there.
+  await files.getByRole("button", { name: /^Hand Hygiene/ }).click();
+  await expect(hand).toContainText("Always.");
+  await expect(hand).toBeFocused();
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(hand).not.toContainText("Always.");
+  await expect(hand).toContainText("Clean your hands");
+});
+
+test("a policy pointed at in the file panel is read ahead, and opens from what was read", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+
+  // A second policy in a draft, never opened in the editor.
+  const opened = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/draft`,
+    { method: "POST", headers: authHeaders(session) },
+  );
+  const draft = ((await opened.json()) as { draft: { branch: string } }).draft
+    .branch;
+  const form = new FormData();
+  form.set(
+    "file",
+    new Blob([JSON.stringify(POLICY, null, 2)], { type: "application/json" }),
+    "document.json",
+  );
+  form.set("name", "Visitor Policy");
+  form.set("draft", draft);
+  const added = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents`,
+    {
+      method: "POST",
+      headers: {
+        Cookie: `bindersnap_session=${session}`,
+        Origin: APP_BASE_URL,
+      },
+      body: form,
+    },
+  );
+  expect(added.status, await added.text()).toBe(201);
+
+  await signInBrowser(page, session);
+  const reads: string[] = [];
+  page.on("request", (request) => {
+    const url = request.url();
+    if (url.includes("/raw/") && url.includes("visitor-policy")) {
+      reads.push(url);
+    }
+  });
+  await page.goto(
+    `${APP_BASE_URL}/${org}/${binder}/hand-hygiene?edit=write&draft=${encodeURIComponent(draft)}`,
+  );
+  await expect(
+    page.getByRole("textbox", { name: "Hand Hygiene" }),
+  ).toContainText("Clean your hands");
+
+  // Pointing at the row reads it; opening it reads nothing more.
+  const files = page.getByRole("complementary", {
+    name: "Files in Clinical Policies",
+  });
+  const row = files.getByRole("button", { name: /^Visitor Policy/ });
+  await row.hover();
+  await expect.poll(() => reads.length).toBe(1);
+  await row.click();
+  await expect(
+    page.getByRole("textbox", { name: "Visitor Policy" }),
+  ).toContainText("Clean your hands");
+  expect(reads).toHaveLength(1);
+});
+
+test("a picture from this device is kept inside the policy, in the draft", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/edit=write/);
+  const draft = new URL(page.url()).searchParams.get("draft")!;
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+  await page.keyboard.press("End");
+
+  await page.getByRole("tab", { name: "Insert" }).click();
+  await page.getByRole("button", { name: "Picture" }).click();
+  // A 1×1 PNG: small enough to be kept byte for byte.
+  await page.locator(".bs-rform input[type=file]").setInputFiles({
+    name: "Hand_Wash-Poster.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+      "base64",
+    ),
+  });
+
+  // In the page, described from its file name, with the cursor back in the
+  // text so the next keystroke — here, Save — lands where it should.
+  await expect(
+    text.getByRole("img", { name: "Hand Wash Poster" }),
+  ).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.getByText(/Saved just now/)).toBeVisible({
+    timeout: 20_000,
+  });
+
+  const saved = await policyText(session, org, binder, draft);
+  expect(saved).toContain('"type": "image"');
+  expect(saved).toContain("data:image/png;base64,");
+  // And the reader shows it.
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(
+    page.locator(".doc-preview-prose").getByRole("img", {
+      name: "Hand Wash Poster",
+    }),
+  ).toBeVisible();
+});
+
+test("a picture is sized by its corners or the Picture tab, and keeps its size", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/edit=write/);
+  const draft = new URL(page.url()).searchParams.get("draft")!;
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  // At 100%, so a pixel dragged on screen is a pixel on the page.
+  await page.getByRole("tab", { name: "View" }).click();
+  await page
+    .getByRole("tabpanel")
+    .getByRole("button", { name: "100%", exact: true })
+    .click();
+  await text.getByText("Clean your hands").click();
+  await page.keyboard.press("End");
+
+  // A 400×200 picture, drawn here so the test carries no binary file.
+  const png = await page.evaluate(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 400;
+    canvas.height = 200;
+    const context = canvas.getContext("2d")!;
+    context.fillStyle = "#2f6f5e";
+    context.fillRect(0, 0, 400, 200);
+    return canvas.toDataURL("image/png").split(",")[1]!;
+  });
+  await page.getByRole("tab", { name: "Insert" }).click();
+  await page.getByRole("button", { name: "Picture" }).click();
+  await page.locator(".bs-rform input[type=file]").setInputFiles({
+    name: "Sink.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(png, "base64"),
+  });
+  const picture = text.getByRole("img", { name: "Sink" });
+  await expect(picture).toBeVisible();
+  // No Picture tab until the picture is chosen, as in Word.
+  await expect(page.getByRole("tab", { name: "Picture" })).toHaveCount(0);
+
+  await picture.click();
+  await page.getByRole("tab", { name: "Picture" }).click();
+  await page.getByRole("button", { name: "Medium" }).click();
+  await expect(picture).toHaveAttribute("width", "312");
+  await expect(page.getByRole("button", { name: "Medium" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+
+  // Arrange: centred in its line, and still chosen, so the tab stays.
+  const arrange = page.getByRole("tabpanel");
+  await arrange.getByRole("button", { name: "Center" }).click();
+  await expect(text.locator("p:has(img[alt='Sink'])")).toHaveCSS(
+    "text-align",
+    "center",
+  );
+  await expect(page.getByRole("tab", { name: "Picture" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await arrange.getByRole("button", { name: "Align left" }).click();
+  await expect(text.locator("p:has(img[alt='Sink'])")).toHaveCSS(
+    "text-align",
+    "left",
+  );
+
+  // Drag the bottom-right corner 112 pixels left: 312 → 200 wide.
+  const corner = page.locator(".bs-picture-handle--bottom-right");
+  const box = (await corner.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 - 60, box.y + 10, { steps: 4 });
+  await page.mouse.move(box.x + box.width / 2 - 112, box.y + 20, {
+    steps: 4,
+  });
+  await page.mouse.up();
+  await expect(picture).toHaveAttribute("width", "200");
+  // Stored, not only drawn: the ribbon no longer calls it Medium.
+  await expect(
+    page.getByRole("button", { name: "Medium" }),
+  ).not.toHaveAttribute("aria-pressed", "true");
+  // It keeps its shape: the height follows the width.
+  await expect
+    .poll(async () => (await picture.boundingBox())?.height)
+    .toBeCloseTo(100, 0);
+
+  await page.getByRole("button", { name: "Alt text" }).click();
+  const altText = page.getByRole("dialog", { name: "Alt text" });
+  await altText
+    .getByRole("textbox", { name: "Description, for screen readers" })
+    .fill("The sink by the ward door");
+  await altText.getByRole("button", { name: "Save" }).click();
+  const described = text.getByRole("img", {
+    name: "The sink by the ward door",
+  });
+  await expect(described).toBeVisible();
+
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.getByText(/Saved just now/)).toBeVisible({
+    timeout: 20_000,
+  });
+  const saved = await policyText(session, org, binder, draft);
+  expect(saved).toContain('"width": 200');
+
+  // The reader draws it at the same size.
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(
+    page.locator(".doc-preview-prose").getByRole("img", {
+      name: "The sink by the ward door",
+    }),
+  ).toHaveAttribute("width", "200");
+});
+
+test("a table of contents lists the headings and keeps up with them", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/edit=write/);
+  const draft = new URL(page.url()).searchParams.get("draft")!;
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+
+  // A section to list: a Heading 2 after the opening paragraph. The ribbon
+  // saying Normal is the editor having taken the click, not the title.
+  await text.getByText("Clean your hands").click();
+  await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("ControlOrMeta+Alt+2");
+  await page.keyboard.type("Gloves");
+
+  // The contents go at the top, under the title, as Word's usually do.
+  await text.getByText("Clean your hands").click({ position: { x: 1, y: 5 } });
+  await page.getByRole("tab", { name: "Insert" }).click();
+  await page.getByRole("button", { name: "Table of contents" }).click();
+  const contents = text.locator(".bs-toc");
+  await expect(contents.locator(".bs-toc-entry")).toHaveText([
+    "Hand Hygiene",
+    "Gloves",
+  ]);
+
+  // Renaming a section renames its entry, with nothing to update by hand.
+  await text.getByRole("heading", { name: "Gloves" }).click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" and aprons");
+  await expect(contents.locator(".bs-toc-entry").nth(1)).toHaveText(
+    "Gloves and aprons",
+  );
+
+  // An entry goes to its section.
+  await contents.getByText("Gloves and aprons").click();
+  await page.keyboard.type("Wearing ");
+  await expect(
+    text.getByRole("heading", { name: "Wearing Gloves and aprons" }),
+  ).toBeVisible();
+  await expect(contents.locator(".bs-toc-entry").nth(1)).toHaveText(
+    "Wearing Gloves and aprons",
+  );
+
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.getByText(/Saved just now/)).toBeVisible({
+    timeout: 20_000,
+  });
+  const saved = await policyText(session, org, binder, draft);
+  expect(saved).toContain('"type": "tableOfContents"');
+
+  // The reader shows the list the author saw.
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  const read = page.locator(".doc-preview-prose .bs-toc");
+  await expect(read.getByText("Contents")).toBeVisible();
+  await expect(read.getByText("Wearing Gloves and aprons")).toBeVisible();
+
+  // And follows it: each entry is a link to its section, as in the editor.
+  // A short window, so the section starts out of sight.
+  await page.setViewportSize({ width: 1440, height: 420 });
+  const section = page
+    .locator(".doc-preview-prose")
+    .getByRole("heading", { name: "Wearing Gloves and aprons" });
+  await expect(section).not.toBeInViewport();
+  await read.getByRole("link", { name: "Wearing Gloves and aprons" }).click();
+  await expect(section).toBeInViewport();
+});
+
+test("sections are numbered from the Styles menu, in the editor and the reader", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+  await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("ControlOrMeta+Alt+2");
+  await page.keyboard.type("Gloves");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("ControlOrMeta+Alt+3");
+  await page.keyboard.type("Sizes");
+
+  await page.getByRole("button", { name: "More styles" }).click();
+  await page
+    .getByRole("menuitemradio", { name: /Number the headings/ })
+    .click();
+
+  /** The number drawn before a heading: CSS, not words in the policy. */
+  const drawn = (heading: import("@playwright/test").Locator) =>
+    heading.evaluate(
+      (element) => getComputedStyle(element, "::before").content,
+    );
+  await expect
+    .poll(() => drawn(text.getByRole("heading", { name: "Gloves" })))
+    .toContain("counter(bs-section)");
+  expect(await drawn(text.getByRole("heading", { name: "Sizes" }))).toContain(
+    "counter(bs-subsection)",
+  );
+  // The title is the policy's name, not its first section.
+  await expect(
+    text.getByRole("heading", { name: "Hand Hygiene" }),
+  ).not.toHaveClass(/bs-numbered/);
+
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Save", exact: true }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  const read = page.locator(".doc-preview-prose");
+  await expect(read.getByRole("heading", { name: "Gloves" })).toHaveClass(
+    /bs-numbered/,
+  );
+  await expect(read.getByRole("heading", { name: "Sizes" })).toHaveClass(
+    /bs-numbered/,
+  );
+});
+
+/** Where a word is drawn on screen, to click it as a person would. */
+async function wordBox(page: Page, word: string) {
+  return page.evaluate((target) => {
+    const content = document.querySelector(".bs-doc-content")!;
+    const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const at = node.textContent!.indexOf(target);
+      if (at === -1) continue;
+      const range = document.createRange();
+      range.setStart(node, at);
+      range.setEnd(node, at + target.length);
+      const rect = range.getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    }
+    throw new Error(`"${target}" is not on the page`);
+  }, word);
+}
+
+test("the Format Painter brushes one word's look onto others", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await expect(text).toBeVisible();
+
+  // "Clean" in bold and underlined: the look to copy.
+  const clean = await wordBox(page, "Clean");
+  await page.mouse.dblclick(clean.x, clean.y);
+  const cut = page.getByRole("button", { name: "Cut" });
+  await expect(cut).toBeEnabled();
+  await page.keyboard.press("ControlOrMeta+b");
+  await page.keyboard.press("ControlOrMeta+u");
+  await expect(text.locator("u strong, strong u")).toHaveText("Clean");
+
+  // Pick it up, then click a word: that word takes it, and the brush is put
+  // down, as Word's is after one stroke. (The cursor is still in "Clean".)
+  const painter = page.getByRole("button", { name: "Format Painter" });
+  await painter.click();
+  await expect(painter).toHaveAttribute("aria-pressed", "true");
+  await expect(text).toHaveClass(/is-painting/);
+  const hands = await wordBox(page, "hands");
+  await page.mouse.click(hands.x, hands.y);
+  await expect(text.locator("u strong, strong u")).toHaveText([
+    "Clean",
+    "hands",
+  ]);
+  await expect(painter).not.toHaveAttribute("aria-pressed", "true");
+
+  // Double-click keeps it on for more than one stroke, until Escape. The
+  // cursor is in "hands" now, which has the same look.
+  await painter.dblclick();
+  await expect(painter).toHaveAttribute("aria-pressed", "true");
+  for (const word of ["before", "contact"]) {
+    const box = await wordBox(page, word);
+    await page.mouse.click(box.x, box.y);
+  }
+  await expect(text.locator("u strong, strong u")).toHaveText([
+    "Clean",
+    "hands",
+    "before",
+    "contact",
+  ]);
+  await expect(painter).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("Escape");
+  await expect(painter).not.toHaveAttribute("aria-pressed", "true");
+  await expect(text).not.toHaveClass(/is-painting/);
+});
+
+test("Change Case recases a word from the ribbon, and Shift+F3 cycles it", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await expect(text).toBeVisible();
+
+  const clean = await wordBox(page, "Clean");
+  await page.mouse.dblclick(clean.x, clean.y);
+  await expect(page.getByRole("button", { name: "Cut" })).toBeEnabled();
+
+  await page.getByRole("button", { name: "Change case" }).click();
+  await page.getByRole("menuitem", { name: "UPPERCASE" }).click();
+  await expect(text).toContainText("CLEAN your hands");
+
+  // Back in the page, the words still selected: Shift+F3 goes on to
+  // Capitalize Each Word, then lowercase, as Word's does.
+  await text.focus();
+  await page.keyboard.press("Shift+F3");
+  await expect(text).toContainText("Clean your hands");
+  await page.keyboard.press("Shift+F3");
+  await expect(text).toContainText("clean your hands");
+});
+
+test("Paste keeps what was copied, and Keep Text Only keeps just the words", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], {
+    origin: APP_BASE_URL,
+  });
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+  await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+
+  // Two paragraphs, one word of them bold — as a page or an email copies.
+  await page.evaluate(async () => {
+    const html = "<p><strong>Gloves</strong> first</p><p>Then wash</p>";
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        "text/html": new Blob([html], { type: "text/html" }),
+        "text/plain": new Blob(["Gloves first\nThen wash"], {
+          type: "text/plain",
+        }),
+      }),
+    ]);
+  });
+
+  await page.getByRole("button", { name: "Paste", exact: true }).click();
+  await expect(text.locator("strong")).toHaveText("Gloves");
+  await expect(text.locator("p", { hasText: "Then wash" })).toHaveText(
+    "Then wash",
+  );
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(text).not.toContainText("Gloves");
+
+  // The words alone: no bold, and still two paragraphs, not one run-on.
+  await page.getByRole("button", { name: "Paste options" }).click();
+  await page.getByRole("menuitem", { name: "Keep Text Only" }).click();
+  await expect(text).toContainText("Gloves first");
+  await expect(text.locator("strong")).toHaveCount(0);
+  await expect(text.locator("p", { hasText: "Then wash" })).toHaveText(
+    "Then wash",
+  );
+});
+
+test("Insert > Date & Time writes today's date where the cursor is", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+  await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Effective ");
+
+  const iso = await page.evaluate(() => {
+    const now = new Date();
+    return [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, "0"),
+      String(now.getDate()).padStart(2, "0"),
+    ].join("-");
+  });
+  await page.getByRole("tab", { name: "Insert" }).click();
+  await page.getByRole("button", { name: "Date & Time" }).click();
+  await page.getByRole("menuitem", { name: iso }).click();
+  await expect(text).toContainText(`Effective ${iso}`);
+});
+
+test("a table cell is shaded from the Table tab, and reads shaded once saved", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+  await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("End");
+
+  await page.getByRole("tab", { name: "Insert" }).click();
+  await page.getByRole("button", { name: "Table", exact: true }).click();
+  await page.getByRole("button", { name: "2 by 2 table" }).click();
+  await page.keyboard.type("Owner");
+
+  // The cursor is in the header cell: shade it.
+  await page.getByRole("tab", { name: "Table" }).click();
+  await page.getByRole("button", { name: "Shading" }).click();
+  await page.getByRole("menuitemradio", { name: "Blue" }).click();
+  const blue = "rgb(219, 234, 254)";
+  await expect(text.locator("th").first()).toHaveCSS("background-color", blue);
+
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Save", exact: true }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page.locator(".doc-preview-prose th").first()).toHaveCSS(
+    "background-color",
+    blue,
+  );
+});
+
+test("the status bar counts the selected words out of the whole", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const count = page.getByRole("button", { name: "Word count" });
+  await expect(count).toHaveText("9 words");
+
+  const clean = await wordBox(page, "Clean");
+  await page.mouse.dblclick(clean.x, clean.y);
+  await expect(count).toHaveText("1 of 9 words");
+
+  await page.keyboard.press("ArrowRight");
+  await expect(count).toHaveText("9 words");
+});
+
+test("typing curls quotes and makes dashes, and Backspace takes one back", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+  await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("End");
+  await page.keyboard.type(` "Always"--it's policy (c)`);
+  await expect(text).toContainText(
+    "\u201CAlways\u201D\u2014it\u2019s policy \u00A9",
+  );
+
+  // Word's own undo for an AutoCorrect: straight back to what was typed.
+  await page.keyboard.press("Backspace");
+  await expect(text).toContainText("it\u2019s policy (c)");
+});
+
+test("closing the editor lands on the policy with the draft bar, and Propose is there", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+  await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Every time.");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Save", exact: true }),
+  ).toBeDisabled();
+  // Not over the editor, which has a Propose of its own.
+  await expect(page.locator(".bs-draftbar")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=1&draft=/);
+  const bar = page.locator(".bs-draftbar");
+  await expect(bar).toContainText("1 change", { timeout: 30_000 });
+  await bar.getByRole("button", { name: "Propose" }).click();
+  await expect(page).toHaveURL(/edit=propose&draft=/);
+});
+
+test("the author edits an open change request in the editor, and saves into it", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+  await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Every time.");
+  await page.getByRole("button", { name: "Propose", exact: true }).click();
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Save and propose" })
+    .click();
+  await page
+    .getByRole("textbox", { name: "What you are asking for" })
+    .fill("Say when to wash");
+  await page.getByRole("button", { name: "Open the change request" }).click();
+  await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
+  const change = new URL(page.url()).searchParams.get("change")!;
+
+  // A reviewer asks for more. The author goes back in from the change itself.
+  await page.getByRole("button", { name: "Edit Hand Hygiene" }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/hand-hygiene\\?edit=write&change=${change}`),
+  );
+  await expect(page.locator(".doc-editor-where")).toContainText(
+    new RegExp(`Saving to\\s*Change ${change}\\b`),
+  );
+  await expect(
+    page.getByRole("button", { name: "Propose", exact: true }),
+  ).toHaveCount(0);
+  await expect(text).toContainText("Every time.");
+
+  // At the end of the line, where the words go: a click in the middle and
+  // End can race the editor catching up with the click.
+  const line = (await text.locator("p").first().boundingBox())!;
+  await page.mouse.click(line.x + line.width - 4, line.y + line.height / 2);
+  await expect(page.getByRole("button", { name: "Word count" })).toBeVisible();
+  await page.keyboard.type(" With soap.");
+  await expect(text).toContainText("Every time. With soap.");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Save", exact: true }),
+  ).toBeDisabled();
+
+  // Close lands back on the change, which now carries both — no second one.
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`tab=changes&change=${change}`));
+  await page.goto(`${page.url()}&view=compare`);
+  await expect(page.locator(".doc-compare-prose ins").first()).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.locator(".doc-compare-prose")).toContainText(
+    "Every time. With soap.",
+  );
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}?tab=changes`);
+  await expect(page.getByText("Say when to wash")).toHaveCount(1);
+});
+
+/**
+ * **A proposed draft is still its author's**, the way a branch is still a
+ * branch once a pull request opens on it. Its change request's chip names it
+ * — not "Bob's draft" — and goes back to it, where it is still editable and
+ * the bar says a save is one its reviewers see.
+ */
+test("a proposed draft keeps its name, and its change's chip goes back into it", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const picker = page.locator(".doc-editor-where .bs-draftpick");
+  await picker.click();
+  await page.getByRole("button", { name: "Start another draft" }).click();
+  const naming = page.getByRole("textbox", {
+    name: "What to call the new draft",
+  });
+  await naming.fill("Say when to wash");
+  await naming.press("Enter");
+  await expect(picker).toContainText("Say when to wash");
+  const branch = new URL(page.url()).searchParams.get("draft")!;
+
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+  await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Every time.");
+  await page.getByRole("button", { name: "Propose", exact: true }).click();
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Save and propose" })
+    .click();
+  await page
+    .getByRole("textbox", { name: "What you are asking for" })
+    .fill("Wash every time");
+  await page.getByRole("button", { name: "Open the change request" }).click();
+  await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
+  const change = new URL(page.url()).searchParams.get("change")!;
+
+  // The chip names the draft, and it is a way back into it.
+  const chip = page.locator("a.cmp-branch");
+  await expect(chip).toHaveText("Say when to wash");
+  await chip.click();
+  await expect(page).toHaveURL(
+    new RegExp(`edit=1&draft=${encodeURIComponent(branch)}`),
+  );
+  const bar = page.locator(".bs-draftbar");
+  await expect(bar).toContainText(`Proposed as change ${change}`);
+  await expect(bar.getByRole("button", { name: "Discard" })).toHaveCount(0);
+
+  // Still listed among your drafts, and still editable in the editor.
+  await page.goto(
+    `${APP_BASE_URL}/${org}/${binder}/hand-hygiene?edit=write&draft=${encodeURIComponent(branch)}`,
+  );
+  await expect(page.locator(".doc-editor-where")).toContainText(
+    `proposed as change ${change}`,
+  );
+  await expect(text).toContainText("Every time.");
+  await expect(
+    page.getByRole("button", { name: "Propose", exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: `Change ${change}` }).click();
+  await expect(page).toHaveURL(new RegExp(`tab=changes&change=${change}`));
+});
+
+test("a change that only makes a word bold still shows in its comparison", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await expect(text).toBeVisible();
+
+  const clean = await wordBox(page, "Clean");
+  await page.mouse.dblclick(clean.x, clean.y);
+  await expect(page.getByRole("button", { name: "Cut" })).toBeEnabled();
+  await page.keyboard.press("ControlOrMeta+b");
+  await expect(text.locator("strong")).toHaveText("Clean");
+
+  await page.getByRole("button", { name: "Propose", exact: true }).click();
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Save and propose" })
+    .click();
+  await page
+    .getByRole("textbox", { name: "What you are asking for" })
+    .fill("Make the first word stand out");
+  await page.getByRole("button", { name: "Open the change request" }).click();
+  await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
+
+  // Not a word moved, and the comparison still says what did — rather than
+  // drawing nothing under a document the list calls edited.
+  await page.goto(`${page.url()}&view=compare`);
+  await expect(page.locator(".cmp-counts-note")).toHaveText("Formatting", {
+    timeout: 30_000,
+  });
+  // Said in the bar, and only there: a note inside the sheet read as a
+  // paragraph the change had added.
+  await expect(page.locator(".doc-compare-body")).not.toContainText(
+    "the formatting did",
+  );
+  await expect(page.locator(".doc-compare-prose strong")).toHaveText("Clean");
+});
+
+test("words never saved are kept on this device and offered back", async ({
+  context,
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/edit=write/);
+  const address = page.url();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Nails kept short.");
+  await expect(page.getByText("Unsaved changes")).toBeVisible();
+  // Kept a moment after the last keystroke.
+  await page.waitForTimeout(1500);
+
+  // The tab goes away with the words unsaved — a crash, as far as the page
+  // can tell.
+  await page.close();
+  const again = await context.newPage();
+  await again.goto(address);
+
+  const offer = again.getByRole("status").filter({
+    hasText: "were kept on this device",
+  });
+  await expect(offer).toBeVisible({ timeout: 20_000 });
+  const reopened = again.getByRole("textbox", { name: "Hand Hygiene" });
+  await expect(reopened).not.toContainText("Nails kept short.");
+  await offer.getByRole("button", { name: "Restore" }).click();
+  await expect(reopened).toContainText("Nails kept short.");
+  await expect(again.getByText("Unsaved changes")).toBeVisible();
+
+  // Saved, the copy is gone: the next visit offers nothing.
+  await again.keyboard.press("ControlOrMeta+s");
+  await expect(again.getByText(/Saved just now/)).toBeVisible({
+    timeout: 20_000,
+  });
+  await again.reload();
+  // The editor is loaded on demand, which on a slow runner is past the
+  // default five seconds after a reload.
+  await expect(
+    again.getByRole("textbox", { name: "Hand Hygiene" }),
+  ).toContainText("Nails kept short.", { timeout: 20_000 });
+  await expect(again.getByText("were kept on this device")).toHaveCount(0);
+});
+
+test("printing prints the policy, not the app around it", async ({ page }) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(
+    page.getByRole("textbox", { name: "Hand Hygiene" }),
+  ).toContainText("Clean your hands");
+
+  // What Ctrl+P and the View tab's Print both set off.
+  await page.evaluate(() => window.dispatchEvent(new Event("beforeprint")));
+  await page.emulateMedia({ media: "print" });
+  const copy = page.locator("body > .bs-print-root");
+  await expect(copy).toBeVisible();
+  await expect(copy).toContainText("Clean your hands");
+  await expect(page.locator(".bs-ribbon")).toBeHidden();
+  await expect(page.locator(".doc-files")).toBeHidden();
+  // The policy's name is the running header.
+  expect(
+    await page
+      .locator("#bs-print-margins")
+      .evaluate((node) => node.textContent),
+  ).toContain('content: "Hand Hygiene"');
+
+  await page.emulateMedia({ media: "screen" });
+  await page.evaluate(() => window.dispatchEvent(new Event("afterprint")));
+  await expect(page.locator(".bs-print-root")).toHaveCount(0);
+  await expect(page.locator(".bs-ribbon")).toBeVisible();
+});

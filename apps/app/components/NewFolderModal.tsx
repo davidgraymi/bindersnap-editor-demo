@@ -28,6 +28,8 @@ interface NewFolderModalProps {
    * this is the old behaviour — a change request, opened now.
    */
   draft?: string;
+  /** Made inside this folder: the name starts with its path. */
+  parent?: string;
   onClose: () => void;
   /** Null when the folder went into a draft, which has no change request. */
   onProposed: (changeNumber: number | null) => void;
@@ -37,10 +39,11 @@ export function NewFolderModal({
   org,
   binder,
   draft,
+  parent = "",
   onClose,
   onProposed,
 }: NewFolderModalProps) {
-  const [folder, setFolder] = useState("");
+  const [folder, setFolder] = useState(parent === "" ? "" : `${parent}/`);
   const [changeNumber, setChangeNumber] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);

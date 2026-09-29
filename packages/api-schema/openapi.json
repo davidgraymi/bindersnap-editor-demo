@@ -7940,6 +7940,12 @@
                   },
                   "draft": {
                     "type": "string"
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "editor"
+                    ]
                   }
                 },
                 "required": [
@@ -8339,6 +8345,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "changeNumber": {
+                          "type": "number",
+                          "nullable": true
+                        },
                         "acts": {
                           "type": "array",
                           "items": {
@@ -8376,6 +8386,7 @@
                         "named",
                         "owner",
                         "updatedAt",
+                        "changeNumber",
                         "acts"
                       ]
                     },
@@ -8400,6 +8411,10 @@
                           "lastAct": {
                             "type": "string",
                             "nullable": true
+                          },
+                          "changeNumber": {
+                            "type": "number",
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -8407,7 +8422,8 @@
                           "name",
                           "updatedAt",
                           "actCount",
-                          "lastAct"
+                          "lastAct",
+                          "changeNumber"
                         ]
                       }
                     },
@@ -8525,6 +8541,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "changeNumber": {
+                          "type": "number",
+                          "nullable": true
+                        },
                         "acts": {
                           "type": "array",
                           "items": {
@@ -8562,6 +8582,7 @@
                         "named",
                         "owner",
                         "updatedAt",
+                        "changeNumber",
                         "acts"
                       ]
                     },
@@ -8586,6 +8607,10 @@
                           "lastAct": {
                             "type": "string",
                             "nullable": true
+                          },
+                          "changeNumber": {
+                            "type": "number",
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -8593,7 +8618,8 @@
                           "name",
                           "updatedAt",
                           "actCount",
-                          "lastAct"
+                          "lastAct",
+                          "changeNumber"
                         ]
                       }
                     },
@@ -8718,6 +8744,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "changeNumber": {
+                          "type": "number",
+                          "nullable": true
+                        },
                         "acts": {
                           "type": "array",
                           "items": {
@@ -8755,6 +8785,7 @@
                         "named",
                         "owner",
                         "updatedAt",
+                        "changeNumber",
                         "acts"
                       ]
                     },
@@ -8779,6 +8810,10 @@
                           "lastAct": {
                             "type": "string",
                             "nullable": true
+                          },
+                          "changeNumber": {
+                            "type": "number",
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -8786,7 +8821,8 @@
                           "name",
                           "updatedAt",
                           "actCount",
-                          "lastAct"
+                          "lastAct",
+                          "changeNumber"
                         ]
                       }
                     },
@@ -9557,6 +9593,10 @@
                         "approvalState"
                       ]
                     },
+                    "branchLabel": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "documents": {
                       "type": "array",
                       "items": {
@@ -9766,6 +9806,7 @@
                     "organization",
                     "workspace",
                     "change",
+                    "branchLabel",
                     "documents",
                     "removedDocuments",
                     "isBehind",

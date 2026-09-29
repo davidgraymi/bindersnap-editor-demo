@@ -8,6 +8,7 @@ import {
   buildDocumentUrl,
   describeVersionState,
   downloadFileName,
+  isEditorDocumentFile,
   parseRequestedVersion,
   resolveDocumentRef,
 } from "../binderDocument";
@@ -48,6 +49,10 @@ interface BinderDocumentPageProps {
    * where the name it was clicked under exists. Null on the record.
    */
   draft?: string | null;
+  /** What that draft is called, to say so over the page. */
+  draftName?: string | null;
+  /** Your drafts in this binder, for the file panel's "What you are reading". */
+  drafts?: readonly { branch: string; name: string }[];
   /**
    * The change request this document is being read on, from `?change=`.
    *
@@ -85,10 +90,19 @@ interface BinderDocumentPageProps {
    * branch the user is viewing. We should do the same."*
    */
   onRefsChange?: (view: DocumentRefView | null) => void;
+  /**
+   * Open it in the editor, in your draft. Offered only for a document the
+   * editor wrote; absent where the page has nowhere to put an edit.
+   */
+  onEditDocument?: (slugPath: string) => void;
+  /** The draft is being opened for an edit. */
+  editing?: boolean;
   onOpenBinder: () => void;
   /** Open one of this document's open changes, on the binder. */
   onOpenChange: (changeNumber: number) => void;
 }
+
+const NO_DRAFTS: readonly { branch: string; name: string }[] = [];
 
 function triggerBrowserDownload(blob: Blob, fileName: string): void {
   const objectUrl = URL.createObjectURL(blob);
@@ -107,10 +121,14 @@ export function BinderDocumentPage({
   binder,
   documentPath,
   draft = null,
+  draftName = null,
+  drafts = NO_DRAFTS,
   change = null,
   documentRef = null,
   onBackToChange = null,
   onRefsChange,
+  onEditDocument,
+  editing = false,
   onOpenBinder,
   onOpenChange,
 }: BinderDocumentPageProps) {
@@ -201,10 +219,12 @@ export function BinderDocumentPage({
         openChanges: detail.openChanges,
         ref: documentRef,
         change,
+        draft,
+        drafts,
       }),
       address: detail.document.path,
     });
-  }, [detail, documentRef, change, onRefsChange]);
+  }, [detail, documentRef, change, draft, drafts, onRefsChange]);
 
   const loadFile = useCallback(
     (gitRef: string) =>
@@ -277,6 +297,16 @@ export function BinderDocumentPage({
   // the one in the change. Showing the "nothing published" panel over it would
   // hide the very thing somebody came to look at.
   const nothingToShow = latestVersion === null && state === "published";
+  // Written in the editor, read as it now stands — on the record or in your
+  // draft — and not on somebody's change request, which is theirs to edit.
+  const canRevise = !isReadOnly && isViewingRecord && state !== "proposed";
+  const canWrite =
+    onEditDocument !== undefined &&
+    isEditorDocumentFile(document.path) &&
+    isViewingRecord &&
+    state !== "proposed" &&
+    documentRef === null &&
+    change === null;
 
   return (
     <div className="binder-pane">
@@ -308,19 +338,31 @@ export function BinderDocumentPage({
         <div className="bs-pagehead-body">
           <h1 className="bs-title">{formatDocumentName(document.name)}</h1>
           <div className="bs-facts">
-            <span
-              className={`doc-version-pill ${
-                latestVersion === null
-                  ? "doc-version-pill--none"
-                  : isViewingRecord
-                    ? "doc-version-pill--current"
-                    : "doc-version-pill--past"
-              }`}
-            >
-              {isViewingRecord
-                ? describeVersionState(latestVersion, state)
-                : `Version ${viewing.version?.version} — an earlier version`}
-            </span>
+            {/* **In a draft, the page says so.** It said "Version 1 on
+                record" over the words the editor had just saved into a draft,
+                so a saved edit read as a lost one. */}
+            {draft !== null && change === null && documentRef === null ? (
+              <span
+                className="doc-version-pill doc-version-pill--draft"
+                title="Your words as saved in this draft. Nothing on record changes until it is proposed and approved."
+              >
+                In {draftName ?? "your draft"}
+              </span>
+            ) : (
+              <span
+                className={`doc-version-pill ${
+                  latestVersion === null
+                    ? "doc-version-pill--none"
+                    : isViewingRecord
+                      ? "doc-version-pill--current"
+                      : "doc-version-pill--past"
+                }`}
+              >
+                {isViewingRecord
+                  ? describeVersionState(latestVersion, state)
+                  : `Version ${viewing.version?.version} — an earlier version`}
+              </span>
+            )}
 
             {!isViewingRecord ? (
               <button
@@ -345,24 +387,44 @@ export function BinderDocumentPage({
               right, or ending up with two policies instead of two versions.
               Only offered on the record: revising an earlier version would
               silently discard everything published since. */}
-        {!isReadOnly && isViewingRecord && state !== "proposed" ? (
+        {canRevise || canWrite ? (
           <div className="bs-pagehead-actions">
-            <button
-              type="button"
-              className="bs-btn bs-btn-secondary"
-              onClick={() => setRenaming(true)}
-            >
-              Rename or move
-            </button>
-            <button
-              type="button"
-              className="bs-btn bs-btn-primary"
-              onClick={() => setRevising(true)}
-            >
-              {/* **What it asks of you.** "New version" read as though it
-                  made one; what it does is take a file and propose it. */}
-              Upload new version
-            </button>
+            {canRevise ? (
+              <>
+                <button
+                  type="button"
+                  className="bs-btn bs-btn-secondary"
+                  onClick={() => setRenaming(true)}
+                >
+                  Rename or move
+                </button>
+                <button
+                  type="button"
+                  className={`bs-btn ${canWrite ? "bs-btn-secondary" : "bs-btn-primary"}`}
+                  onClick={() => setRevising(true)}
+                >
+                  {/* **What it asks of you.** "New version" read as though it
+                      made one; what it does is take a file and propose it. */}
+                  Upload new version
+                </button>
+              </>
+            ) : null}
+            {/* **A policy written here is edited here.** Uploading a new
+                version of one meant exporting nothing, because there was
+                nothing to export it to — the editor was the only program
+                that had ever opened it. Edit is the page's one filled button
+                when there is something to type into, and it is drawn while
+                the organization is read-only so the paywall can say why. */}
+            {canWrite ? (
+              <button
+                type="button"
+                className="bs-btn bs-btn-primary"
+                disabled={editing}
+                onClick={() => onEditDocument?.(document.slugPath)}
+              >
+                {editing ? "Opening your draft…" : "Edit"}
+              </button>
+            ) : null}
           </div>
         ) : null}
       </header>

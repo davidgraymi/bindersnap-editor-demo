@@ -9,7 +9,11 @@ import {
 } from "../api";
 import { followInApp } from "../appLink";
 import { describeChangedDocument, describeMove } from "../binderChange";
-import { buildDocumentUrl, downloadFileName } from "../binderDocument";
+import {
+  buildDocumentUrl,
+  downloadFileName,
+  isEditorDocumentFile,
+} from "../binderDocument";
 import { buildBinderUrl } from "../binderShell";
 import { buildChangedDocumentRows } from "../changedDocuments";
 import type { ChangeScope } from "../changeScope";
@@ -52,8 +56,19 @@ interface BinderChangePageProps {
    * "read what this proposes" is a navigation rather than a panel.
    */
   onOpenOnBranch: (slugPath: string, branch: string) => void;
+  /**
+   * Open a document in the editor, saving into this change: the author
+   * answering a reviewer without starting a second change to do it.
+   */
+  onEditInEditor?: (slugPath: string) => void;
   /** Open the whole binder on this change's branch, at its root. */
   onOpenBranch: (branch: string) => void;
+  /**
+   * Where the branch chip goes when the branch is one of your drafts: the
+   * draft itself, where you can keep working, rather than a read of it filed
+   * under the change. Null when it is not yours.
+   */
+  ownDraftHref?: (branch: string) => string | null;
   /** Something about the change moved: the binder's own counts have too. */
   onChanged: () => void;
   /** Where the required reviewers come from, for the reader who asks. */
@@ -85,6 +100,8 @@ export function BinderChangePage({
   onOpenSignOffRules,
   onOpenOnBranch,
   onOpenBranch,
+  ownDraftHref,
+  onEditInEditor,
 }: BinderChangePageProps) {
   const names = usePeopleNames(org);
   const [detail, setDetail] = useState<WorkspaceChangeDetailPayload | null>(
@@ -290,12 +307,15 @@ export function BinderChangePage({
   const isOpen = detail.change.state === "open";
   const nameOf = (login: string) => nameFor(names, login);
   const branchName = detail.change.branchName || null;
-  const branchHref = buildBinderUrl({
-    org,
-    binder,
-    ref: branchName,
-    change: changeNumber,
-  });
+  const branchLabel = detail.branchLabel ?? null;
+  const branchHref =
+    (branchName ? ownDraftHref?.(branchName) : null) ??
+    buildBinderUrl({
+      org,
+      binder,
+      ref: branchName,
+      change: changeNumber,
+    });
   const openBranch = () => {
     if (branchName) onOpenBranch(branchName);
   };
@@ -410,6 +430,7 @@ export function BinderChangePage({
           focusDocument={shown?.slugPath ?? null}
           /* The branch's root: the binder as this change would leave it. */
           branchHref={branchHref}
+          branchLabel={branchLabel}
           onOpenBranch={openBranch}
           /* The same address `onOpenOnBranch` goes to, so View is a real link:
              it opens in a new tab and can be sent to somebody. */
@@ -512,6 +533,7 @@ export function BinderChangePage({
             open={isOpen}
             documents={documents.length}
             branch={branchName}
+            branchLabel={branchLabel}
             branchHref={branchHref}
             onOpenBranch={openBranch}
             openedAt={record.submittedAt}
@@ -612,6 +634,18 @@ export function BinderChangePage({
         /* A rename is a change even when not a word of the document changed,
            and the comparison cannot show it. */
         documentMove={shown ? describeMove(shown) : null}
+        /* Only its author, only while it is open, and only a policy the
+           editor writes — a Word file is revised in Word and uploaded. */
+        onEditInEditor={
+          onEditInEditor &&
+          shown &&
+          record.open &&
+          detail.change.branchName !== "" &&
+          record.submittedBy === currentUser &&
+          isEditorDocumentFile(shown.path)
+            ? () => onEditInEditor(shown.slugPath)
+            : null
+        }
         onOpenOnBranch={
           shown && detail.change.branchName
             ? () => onOpenOnBranch(shown.slugPath, detail.change.branchName)

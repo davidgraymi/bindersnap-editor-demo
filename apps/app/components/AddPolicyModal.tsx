@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FileText, Upload } from "lucide-react";
+import { FilePen, FileText, Upload } from "lucide-react";
 
 import {
   buildDocumentDisplayPath,
@@ -51,6 +51,42 @@ interface AddPolicyModalProps {
    * one act more.
    */
   onAdded: (changeNumber: number | null) => void;
+  /**
+   * A document started in the editor rather than uploaded: where it is, and
+   * the draft it was started in, so the editor can open it there.
+   *
+   * Absent, and the dialog only uploads.
+   */
+  onWrite?: (slugPath: string, draft: string) => void;
+  /**
+   * Which choice the dialog opens on. The editor's New asks to write, since
+   * somebody already in the word processor is not about to upload; the folder
+   * is the one the open policy is in, where a sibling most likely goes.
+   */
+  initialMode?: "upload" | "write";
+  initialFolder?: string;
+}
+
+/**
+ * A new policy written here starts as its title and an empty paragraph to
+ * type into — Word's blank document, with the one line every policy has.
+ */
+function blankPolicy(name: string): string {
+  return JSON.stringify(
+    {
+      type: "doc",
+      content: [
+        {
+          type: "heading",
+          attrs: { level: 1 },
+          content: [{ type: "text", text: name }],
+        },
+        { type: "paragraph" },
+      ],
+    },
+    null,
+    2,
+  );
 }
 
 /** `Infection_Control_Policy_v3.docx` → `Infection Control Policy v3`. */
@@ -90,10 +126,23 @@ export function AddPolicyModal({
   draft,
   onClose,
   onAdded,
+  onWrite,
+  initialMode = "upload",
+  initialFolder = "",
 }: AddPolicyModalProps) {
+  /**
+   * Upload a file written elsewhere, or write a new one here.
+   *
+   * Upload stays first because it is what a binder is mostly filled with —
+   * the Word files and PDFs a team already has. Writing here is the other
+   * half of the product, and it is one click away rather than a separate
+   * menu somebody has to find.
+   */
+  const [mode, setMode] = useState<"upload" | "write">(initialMode);
+  const writing = mode === "write" && onWrite !== undefined;
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState("");
-  const [folder, setFolder] = useState("");
+  const [folder, setFolder] = useState(initialFolder);
   /** What to call the folder, when the picker's answer is "a new one". */
   const [newFolder, setNewFolder] = useState("");
   /** The folders this binder has, so "where it goes" is a pick, not a path. */
@@ -178,12 +227,16 @@ export function AddPolicyModal({
   );
 
   const canSubmit =
-    file !== null &&
+    (writing || file !== null) &&
     slugPath !== "" &&
     !submitting &&
     (folder !== NEW_FOLDER || newFolder.trim() !== "");
 
   const handleSubmit = async () => {
+    if (writing) {
+      await startWriting();
+      return;
+    }
     if (!file) return;
     setSubmitting(true);
     setError(null);
@@ -208,6 +261,40 @@ export function AddPolicyModal({
     }
   };
 
+  /**
+   * Start it in your draft and open it in the editor.
+   *
+   * **Always a draft, never a change request of its own.** A blank page is
+   * not something to ask three colleagues to approve; it is somewhere to
+   * start. The draft is the one you are in, or the one editing opens.
+   */
+  const startWriting = async () => {
+    if (!onWrite) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const title = name.trim();
+      const created = await createBinderDocument(
+        org,
+        binder,
+        new File([blankPolicy(title)], "document.json", {
+          type: "application/json",
+        }),
+        title,
+        filedIn || undefined,
+        { draft: draft ?? true },
+      );
+      onWrite(created.slugPath, created.branch);
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message.trim() !== ""
+          ? err.message
+          : "Unable to start this document.",
+      );
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div
       className="upload-modal-backdrop"
@@ -222,6 +309,60 @@ export function AddPolicyModal({
         <h2>Add a document</h2>
 
         <div className="create-document-form bs-fields">
+          {onWrite ? (
+            <div
+              className="bs-fields add-policy-mode"
+              role="radiogroup"
+              aria-label="How to add it"
+            >
+              <label className="bs-choice">
+                <input
+                  type="radio"
+                  name="add-policy-mode"
+                  checked={mode === "upload"}
+                  disabled={submitting}
+                  onChange={() => setMode("upload")}
+                />
+                <Upload
+                  className="bs-choice-icon"
+                  size={16}
+                  strokeWidth={1.75}
+                  aria-hidden="true"
+                />
+                <span>
+                  <span className="bs-choice-name">Upload a file</span>
+                  <span className="bs-choice-note">
+                    A Word document, PDF or spreadsheet you already have.
+                  </span>
+                </span>
+              </label>
+              <label className="bs-choice">
+                <input
+                  type="radio"
+                  name="add-policy-mode"
+                  checked={mode === "write"}
+                  disabled={submitting}
+                  onChange={() => {
+                    setMode("write");
+                    setError(null);
+                  }}
+                />
+                <FilePen
+                  className="bs-choice-icon"
+                  size={16}
+                  strokeWidth={1.75}
+                  aria-hidden="true"
+                />
+                <span>
+                  <span className="bs-choice-name">Write it here</span>
+                  <span className="bs-choice-note">
+                    A blank page in the editor, saved as you go into your draft.
+                  </span>
+                </span>
+              </label>
+            </div>
+          ) : null}
+
           {/* The file input is behind the zone: the zone is the control, and
               clicking it opens the picker for somebody who would rather
               browse. */}
@@ -234,7 +375,7 @@ export function AddPolicyModal({
             disabled={submitting}
           />
 
-          {file ? (
+          {writing ? null : file ? (
             <div className="bs-dropzone bs-dropzone--filled">
               <span className="bs-dropzone-icon" aria-hidden="true">
                 <AppIcon icon={FileText} size="lg" />
@@ -301,9 +442,11 @@ export function AddPolicyModal({
                 the file is already named, and retyping its name is work the
                 screen can do. */}
             <p className="bs-field-hint">
-              {file
-                ? "Taken from the file name. This is what people will look for it under."
-                : "Taken from the file name once you choose one."}
+              {writing
+                ? "Its title, and what people will look for it under."
+                : file
+                  ? "Taken from the file name. This is what people will look for it under."
+                  : "Taken from the file name once you choose one."}
             </p>
           </div>
 
@@ -355,7 +498,7 @@ export function AddPolicyModal({
 
           {/* Not while editing: a draft is already the answer to "where does
               this go", and offering a change request as well would be two. */}
-          {draft ? null : (
+          {draft || writing ? null : (
             <ChangeTargetField
               org={org}
               binder={binder}
@@ -384,11 +527,13 @@ export function AddPolicyModal({
               the whole product makes, said where somebody is about to make a
               change rather than only in the marketing. */}
           <p className="bs-field-hint">
-            {draft
-              ? "This goes into your draft. Nobody is asked to look at it until you propose it."
-              : changeNumber === null
-                ? "This opens a change request. The document joins the binder once it is approved and published."
-                : "This goes into that change request. The document joins the binder once the change is approved and published."}
+            {writing
+              ? "This starts it in your draft and opens it in the editor. Nobody is asked to look at it until you propose the draft."
+              : draft
+                ? "This goes into your draft. Nobody is asked to look at it until you propose it."
+                : changeNumber === null
+                  ? "This opens a change request. The document joins the binder once it is approved and published."
+                  : "This goes into that change request. The document joins the binder once the change is approved and published."}
           </p>
 
           <div className="upload-modal-actions">
@@ -398,7 +543,13 @@ export function AddPolicyModal({
               onClick={() => void handleSubmit()}
               disabled={!canSubmit}
             >
-              {submitting ? "Adding…" : "Add document"}
+              {writing
+                ? submitting
+                  ? "Starting…"
+                  : "Start writing"
+                : submitting
+                  ? "Adding…"
+                  : "Add document"}
             </button>
             <button
               className="bs-btn bs-btn-secondary"

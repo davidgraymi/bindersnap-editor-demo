@@ -90,22 +90,22 @@ function binderPath(org: string, binder: string, search: string): TrailStep[] {
     href: buildBinderUrl({ org, binder, tab: "changes" }),
   };
 
+  // **The binder at a branch is the binder**, at its root, and the trail says
+  // so. It said "Change requests / Change 22 / Proposed files" — the change's
+  // view of a branch, with no step back up to the binder the files are in. A
+  // file lives on a branch; which branch is the file panel's version picker's
+  // to say, and it says it with the way back to the change beside it.
+  if (params.get("ref") !== null && tab === "documents") {
+    return [];
+  }
+
   if (change !== null) {
     const view = params.get("view");
     const changeLabel = `Change ${change}`;
-    // The binder as a change would leave it, from the branch link on a
-    // comparison. Still inside that change, so still under it.
-    const onBranch = params.get("ref") !== null && tab === "documents";
     // Named for the tab that opens it — Overview · Changes, the way a code
     // host names a merge request's — so the trail and the tab agree.
     const subpage =
-      view === "compare"
-        ? "Changes"
-        : view === "preview"
-          ? "Preview"
-          : onBranch
-            ? "Proposed files"
-            : null;
+      view === "compare" ? "Changes" : view === "preview" ? "Preview" : null;
 
     return [
       changesStep,
@@ -158,8 +158,12 @@ function documentPath(
 
   // Read on a change's branch: the change is where the reader came from, and
   // the way back to it is worth a step. The path under it is the file's own.
+  // **Not when the address names the branch**: a file on a branch is filed in
+  // that branch's folders, and the version picker beside it says which branch
+  // and is the way back to the change.
+  const onBranch = new URLSearchParams(search).get("ref") !== null;
   const changeSteps: TrailStep[] =
-    change === null
+    change === null || onBranch
       ? []
       : [
           {
@@ -199,9 +203,12 @@ export function buildLocationTrail(
         ? binderPath(route.org, route.binder, search)
         : documentPath(route.org, route.binder, route.documentPath, search);
     const label = formatDocumentName(route.binder);
+    // At its root on a branch is not at its root on the record: the binder's
+    // name is the way back to the record.
+    const onBranch = new URLSearchParams(search).get("ref") !== null;
     return {
       binder:
-        path.length === 0
+        path.length === 0 && !onBranch
           ? here(label)
           : {
               label,

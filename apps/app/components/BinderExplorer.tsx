@@ -222,6 +222,7 @@ export function BinderExplorer({ binder, onNavigate }: BinderExplorerProps) {
               // another name, and a picker that could get you there but not
               // back is worse than no picker.
               documentPath: contents.reading!.address,
+              ...(picked.draft ? { draft: picked.draft } : {}),
               ...(picked.ref ? { ref: picked.ref } : {}),
               ...(picked.change !== null ? { change: picked.change } : {}),
             });

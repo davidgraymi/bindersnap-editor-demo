@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { JSDOM } from "jsdom";
 
-import { sanitizeHtml, sanitizeProseMirrorJson } from "./sanitizer";
+import { safeStyle, sanitizeHtml, sanitizeProseMirrorJson } from "./sanitizer";
 
 const { window } = new JSDOM("<!doctype html><html><body></body></html>");
 
@@ -85,6 +85,45 @@ describe("sanitizeHtml", () => {
 
     expect(sanitizeHtml(input)).toBe(input);
   });
+
+  test("keeps the typography an author set in the editor", () => {
+    const input =
+      '<p style="text-align: center; line-height: 1.5; margin-left: 0.5in">' +
+      '<span style="color: #e85d26; font-family: Georgia, serif; font-size: 14pt">Red</span> ' +
+      '<mark style="background-color: #fef08a">marked</mark> H<sub>2</sub>O x<sup>2</sup></p>' +
+      '<div class="bs-page-break"></div><hr>';
+
+    expect(sanitizeHtml(input)).toBe(input);
+  });
+
+  test("keeps only typographic style values, and nothing that could load or run", () => {
+    const output = sanitizeHtml(
+      '<p style="position: fixed; top: 0; color: red; background-image: url(https://x.test/a.png)">' +
+        '<span style="color: expression(alert(1))">a</span>' +
+        '<span style="font-family: x; width: calc(100%)">b</span>' +
+        '<span style="background-color: url(javascript:alert(1))">c</span></p>',
+    );
+
+    expect(output).toBe(
+      '<p style="color: red"><span>a</span><span style="font-family: x">b</span><span>c</span></p>',
+    );
+  });
+});
+
+describe("safeStyle", () => {
+  test("drops properties outside the list, and values of the wrong shape", () => {
+    expect(safeStyle("color: #fff; behavior: url(x.htc)")).toBe("color: #fff");
+    expect(safeStyle("font-size: 12pt; font-size: 12 pt")).toBe(
+      "font-size: 12pt",
+    );
+    expect(safeStyle("line-height: 1.15")).toBe("line-height: 1.15");
+    expect(safeStyle("line-height: normal")).toBe("");
+    expect(safeStyle("color: var(--brand-coral)")).toBe(
+      "color: var(--brand-coral)",
+    );
+    expect(safeStyle("font-family: a\\62 c")).toBe("");
+    expect(safeStyle("")).toBe("");
+  });
 });
 
 describe("sanitizeProseMirrorJson", () => {
@@ -145,6 +184,71 @@ describe("sanitizeProseMirrorJson", () => {
           content: [{ type: "text", text: "Stay" }],
         },
       ],
+    });
+  });
+});
+
+describe("pictures embedded by the editor", () => {
+  const png =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
+  test("a raster picture in a document survives the reader", () => {
+    expect(sanitizeHtml(`<p><img src="${png}" alt="Map"></p>`)).toContain(
+      `src="${png}"`,
+    );
+    const json = sanitizeProseMirrorJson({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [{ type: "image", attrs: { src: png, alt: "Map" } }],
+        },
+      ],
+    });
+    expect(JSON.stringify(json)).toContain(png);
+  });
+
+  test("an SVG or any other data address is dropped", () => {
+    const svg = "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=";
+    const html = "data:text/html;base64,PHNjcmlwdD48L3NjcmlwdD4=";
+    expect(sanitizeHtml(`<img src="${svg}">`)).not.toContain("data:");
+    expect(sanitizeHtml(`<img src="${html}">`)).not.toContain("data:");
+    expect(sanitizeHtml(`<a href="${png}">x</a>`)).not.toContain("data:");
+    const json = sanitizeProseMirrorJson({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [{ type: "image", attrs: { src: svg } }],
+        },
+      ],
+    });
+    expect(JSON.stringify(json)).not.toContain("svg");
+  });
+
+  test("a picture keeps the width it was sized to, in whole pixels only", () => {
+    expect(sanitizeHtml(`<img src="${png}" width="312">`)).toContain(
+      'width="312"',
+    );
+    expect(sanitizeHtml(`<img src="${png}" width="50%">`)).not.toContain(
+      "width",
+    );
+    expect(
+      sanitizeHtml(`<img src="${png}" width="1 onerror=alert(1)">`),
+    ).not.toContain("width");
+  });
+});
+
+describe("a table of contents", () => {
+  test("is kept, with the entries it stored", () => {
+    const entries = [{ level: 1, text: "Scope" }];
+    const json = sanitizeProseMirrorJson({
+      type: "doc",
+      content: [{ type: "tableOfContents", attrs: { entries } }],
+    });
+    expect(json.content?.[0]).toEqual({
+      type: "tableOfContents",
+      attrs: { entries },
     });
   });
 });

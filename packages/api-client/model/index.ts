@@ -399,6 +399,7 @@ export * from './reviewBinderChangeBody.ts';
 export * from './reviewBinderChangeBodyEvent.ts';
 export * from './reviseBinderDocument201.ts';
 export * from './reviseBinderDocumentBody.ts';
+export * from './reviseBinderDocumentBodySource.ts';
 export * from './revokeBinderGroup200.ts';
 export * from './revokeBinderGroup200TeamsItem.ts';
 export * from './revokeBinderGroup200TeamsItemMembersItem.ts';
