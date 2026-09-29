@@ -1005,14 +1005,16 @@ function isRenaming(renaming: Renaming | null, node: BinderTreeNode): boolean {
  * input, which fires blur, which would otherwise commit the very edit that was
  * just abandoned. The ref is what makes "one of the two, once" true.
  */
-function InlineRename({
+export function InlineRename({
   initial,
   onCommit,
   onCancel,
+  className = "binder-tree-rename",
 }: {
   initial: string;
   onCommit: (value: string) => void;
   onCancel: () => void;
+  className?: string;
 }) {
   const [value, setValue] = useState(initial);
   const settled = useRef(false);
@@ -1025,7 +1027,7 @@ function InlineRename({
 
   return (
     <input
-      className="binder-tree-rename"
+      className={className}
       type="text"
       value={value}
       autoFocus

@@ -4,17 +4,22 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type DragEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import {
+  Archive,
   ChevronDown,
   ChevronRight,
   File,
   FilePlus,
   FileText,
-  FolderTree,
   Folder,
+  FolderInput,
+  FolderPlus,
   PanelLeftClose,
   PanelLeftOpen,
+  Pencil,
 } from "lucide-react";
 
 import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
@@ -24,9 +29,17 @@ import {
   folderPaths,
   type BinderTreeNode,
 } from "../binderTree";
+import {
+  acceptsDrop,
+  isManaged,
+  planMove,
+  type DragSubject,
+} from "../binderMove";
 import { formatDocumentName } from "../documentDisplay";
 import { useOpenFolders } from "../useOpenFolders";
 import { useRememberedToggle } from "../useRememberedToggle";
+import { InlineRename } from "./BinderPage";
+import { MoveToFolderModal } from "./MoveToFolderModal";
 
 /**
  * The draft's files, inside the editor.
@@ -37,12 +50,25 @@ import { useRememberedToggle } from "../useRememberedToggle";
  * were in, in the same draft, and a new one starts from the same panel — Word's
  * Open and New, with GitLab's Web IDE's file tree as the shape.
  *
+ * **And it is where the draft's files are organized.** Renaming a policy,
+ * refiling it and making a folder meant Organize, which closed the editor and
+ * opened the binder's tree — so renaming the policy you were writing was a
+ * trip out and back, and a chance to leave words unsaved on the way. Here each
+ * row renames in place (the pencil, a double-click, or F2, as in Explorer and
+ * VS Code), moves by dragging onto a folder or by its Move button, and a
+ * policy archives from its row. Every act goes into the same draft the words
+ * do.
+ *
  * The same tree the binder's own page and the file panel build, from the same
  * `buildBinderTree`, read at the draft: a policy added a minute ago is here,
  * and one the draft renamed is under its new name. A Word file or a PDF is
  * listed — it is in the binder — but drawn as a file, not a page, because the
  * editor cannot open it.
  */
+
+/** A row being acted on, by its address. */
+export type DraftFileTarget =
+  { kind: "folder"; path: string } | { kind: "document"; slugPath: string };
 
 interface DraftFilesProps {
   org: string;
@@ -57,8 +83,19 @@ interface DraftFilesProps {
   onOpen: (slugPath: string) => void;
   /** Start a new policy in this draft. Absent, and there is no New button. */
   onNew?: () => void;
-  /** Rename, refile and make folders — the binder's tree, in this draft. */
-  onOrganize?: () => void;
+  /** Make a folder in this draft. Absent, and there is no New folder button. */
+  onNewFolder?: () => void;
+  /**
+   * Rename a row, in this draft. Absent, the tree only opens things — as it
+   * does on a change request, which is revised here and not reshaped.
+   */
+  onRename?: (target: DraftFileTarget, name: string) => void;
+  /** File a row somewhere else, `""` being the binder's top level. */
+  onMove?: (subject: DragSubject, folder: string) => void;
+  /** Take a policy off the record, in this draft. */
+  onArchive?: (slugPath: string) => void;
+  /** An act is being saved: nothing else starts until it lands. */
+  busy?: boolean;
 }
 
 const STORAGE_KEY = "bindersnap.editor.files.collapsed";
@@ -84,6 +121,29 @@ function isNarrow(): boolean {
     : false;
 }
 
+/** A row as something that can be picked up and dropped. */
+function subjectOf(node: BinderTreeNode): DragSubject {
+  return node.kind === "folder"
+    ? { kind: "folder", path: node.path }
+    : {
+        kind: "document",
+        slugPath: node.document.slugPath,
+        folder: node.document.folder,
+      };
+}
+
+function targetOf(node: BinderTreeNode): DraftFileTarget {
+  return node.kind === "folder"
+    ? { kind: "folder", path: node.path }
+    : { kind: "document", slugPath: node.document.slugPath };
+}
+
+function keyOf(node: BinderTreeNode): string {
+  return node.kind === "folder"
+    ? `folder:${node.path}`
+    : `document:${node.document.slugPath}`;
+}
+
 export function DraftFiles({
   org,
   binder,
@@ -94,19 +154,33 @@ export function DraftFiles({
   unsaved = false,
   onOpen,
   onNew,
-  onOrganize,
+  onNewFolder,
+  onRename,
+  onMove,
+  onArchive,
+  busy = false,
 }: DraftFilesProps) {
   const remembered = useRememberedToggle(STORAGE_KEY);
   const narrow = useSyncExternalStore(subscribeNarrow, isNarrow, () => false);
   const [floating, setFloating] = useState(false);
   const floatRef = useRef<HTMLElement>(null);
   const railRef = useRef<HTMLDivElement>(null);
+  /** The row whose name is a text box, by {@link keyOf}. One at a time. */
+  const [renaming, setRenaming] = useState<string | null>(null);
+  /** The row whose Move was pressed: the keyboard's way to refile. */
+  const [moving, setMoving] = useState<{
+    subject: DragSubject;
+    label: string;
+  } | null>(null);
+  const [dragging, setDragging] = useState<DragSubject | null>(null);
+  const [over, setOver] = useState<string | null>(null);
   useEffect(() => {
     if (!narrow) setFloating(false);
   }, [narrow]);
-  // Over the page, it goes as a menu does: Escape, or a press elsewhere.
+  // Over the page, it goes as a menu does: Escape, or a press elsewhere. Not
+  // while a name is being typed or a folder picked: Escape is theirs then.
   useEffect(() => {
-    if (!floating) return;
+    if (!floating || renaming !== null || moving !== null) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") setFloating(false);
     };
@@ -123,7 +197,7 @@ export function DraftFiles({
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("pointerdown", onPointer);
     };
-  }, [floating]);
+  }, [floating, renaming, moving]);
   const shut = narrow ? !floating : remembered.on;
   const toggle = narrow ? () => setFloating((was) => !was) : remembered.toggle;
   const openPolicy = (slugPath: string) => {
@@ -158,6 +232,11 @@ export function DraftFiles({
     );
   }, [documents, needle, tree]);
   const everyFolder = useMemo(() => folderPaths(shown), [shown]);
+  // Every folder in the binder, not only the ones a filter left on screen:
+  // the move picker offers where a policy can go, not where it can be seen.
+  const allFolders = useMemo(() => folderPaths(tree), [tree]);
+
+  const organizing = !!(onRename || onMove || onArchive);
 
   const rail = (
     <div className="doc-files doc-files--shut" ref={railRef}>
@@ -186,69 +265,254 @@ export function DraftFiles({
   );
   if (shut) return rail;
 
+  const labelOf = (node: BinderTreeNode) =>
+    formatDocumentName(node.kind === "folder" ? node.name : node.document.name);
+
+  const commitRename = (node: BinderTreeNode, typed: string) => {
+    setRenaming(null);
+    const next = typed.trim();
+    if (!onRename || next === "" || next === labelOf(node)) return;
+    onRename(targetOf(node), next);
+  };
+
+  const canAct = (node: BinderTreeNode) =>
+    organizing && isManaged(node) && !busy;
+
+  /** F2 renames the row with focus, as Explorer and VS Code do. */
+  const onRowKey = (event: ReactKeyboardEvent, node: BinderTreeNode) => {
+    if (event.key !== "F2" || !onRename || !canAct(node)) return;
+    event.preventDefault();
+    setRenaming(keyOf(node));
+  };
+
+  /**
+   * The drag attributes for a row. Only a folder takes a drop — there is no
+   * "inside" a policy — and the top level has its own zone below the tree.
+   */
+  const dragProps = (node: BinderTreeNode) => {
+    if (!onMove || !canAct(node) || renaming === keyOf(node)) return {};
+    const folder = node.kind === "folder" ? node.path : null;
+    const willTake =
+      folder !== null && dragging !== null && acceptsDrop(dragging, folder);
+    return {
+      draggable: true,
+      onDragStart: (event: DragEvent<HTMLDivElement>) => {
+        // A folder row holds its children's rows: the drag is the innermost.
+        event.stopPropagation();
+        const subject = subjectOf(node);
+        setDragging(subject);
+        event.dataTransfer.effectAllowed = "move";
+        // Firefox starts no drag without data.
+        event.dataTransfer.setData(
+          "text/plain",
+          subject.kind === "folder" ? subject.path : subject.slugPath,
+        );
+      },
+      onDragEnd: () => {
+        setDragging(null);
+        setOver(null);
+      },
+      onDragOver: (event: DragEvent<HTMLDivElement>) => {
+        if (!willTake) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.dataTransfer.dropEffect = "move";
+        setOver(folder);
+      },
+      onDragLeave: () => {
+        if (over === folder) setOver(null);
+      },
+      onDrop: (event: DragEvent<HTMLDivElement>) => {
+        if (!willTake || dragging === null || folder === null) return;
+        event.preventDefault();
+        event.stopPropagation();
+        drop(dragging, folder);
+      },
+    };
+  };
+
+  const drop = (subject: DragSubject, folder: string) => {
+    setDragging(null);
+    setOver(null);
+    setMoving(null);
+    const plan = planMove(subject, folder);
+    if (plan === null || plan.kind === "refused" || !onMove) return;
+    onMove(subject, folder);
+  };
+
+  /** Rename, Move and Archive, on the row they act on. */
+  const rowActions = (node: BinderTreeNode) => {
+    if (!organizing || !isManaged(node) || renaming === keyOf(node)) {
+      return null;
+    }
+    const label = labelOf(node);
+    return (
+      <span className="doc-files-acts">
+        {onRename ? (
+          <button
+            type="button"
+            className="bs-rowact"
+            aria-label={`Rename ${label}`}
+            title="Rename (F2)"
+            disabled={busy}
+            onClick={() => setRenaming(keyOf(node))}
+          >
+            <Pencil size={13} strokeWidth={1.6} aria-hidden="true" />
+          </button>
+        ) : null}
+        {onMove ? (
+          <button
+            type="button"
+            className="bs-rowact"
+            aria-label={`Move ${label}`}
+            title="Move to a folder"
+            disabled={busy}
+            onClick={() => setMoving({ subject: subjectOf(node), label })}
+          >
+            <FolderInput size={13} strokeWidth={1.6} aria-hidden="true" />
+          </button>
+        ) : null}
+        {/* A folder is emptied by moving what is in it, not archived whole. */}
+        {onArchive && node.kind === "document" ? (
+          <button
+            type="button"
+            className="bs-rowact bs-rowact--danger"
+            aria-label={`Archive ${label}`}
+            title="Archive — it leaves the binder when this draft is published"
+            disabled={busy}
+            onClick={() => onArchive(node.document.slugPath)}
+          >
+            <Archive size={13} strokeWidth={1.6} aria-hidden="true" />
+          </button>
+        ) : null}
+      </span>
+    );
+  };
+
   const renderNode = (node: BinderTreeNode, depth: number) => {
+    const indent = { paddingLeft: `${8 + depth * 14}px` };
+    const key = keyOf(node);
+    const isRenaming = renaming === key;
+
     if (node.kind === "document") {
-      const { slugPath, path, name } = node.document;
+      const { slugPath, path } = node.document;
       const on = slugPath === active;
-      const label = formatDocumentName(name);
+      const label = labelOf(node);
       const writable = isEditorDocumentFile(path);
+      const icon = writable ? (
+        <FileText size={14} strokeWidth={1.6} aria-hidden="true" />
+      ) : (
+        <File size={14} strokeWidth={1.6} aria-hidden="true" />
+      );
       return (
-        <button
-          key={slugPath}
-          type="button"
-          className={`app-explorer-item doc-files-item${
-            on ? " app-explorer-item--active" : ""
-          }${writable ? "" : " doc-files-item--file"}`}
-          style={{ paddingLeft: `${8 + depth * 14}px` }}
-          aria-current={on ? "page" : undefined}
-          title={
-            writable
-              ? label
-              : `${label} — uploaded as a file, so it is edited in the program that made it`
-          }
-          onClick={() => {
-            if (!on) openPolicy(slugPath);
-            else setFloating(false);
-          }}
+        <div
+          key={key}
+          className={`doc-files-row${
+            dragging &&
+            dragging.kind === "document" &&
+            dragging.slugPath === slugPath
+              ? " doc-files-row--dragging"
+              : ""
+          }`}
+          {...dragProps(node)}
         >
-          {writable ? (
-            <FileText size={14} strokeWidth={1.6} aria-hidden="true" />
-          ) : (
-            <File size={14} strokeWidth={1.6} aria-hidden="true" />
-          )}
-          <span className="app-explorer-name">{label}</span>
-          {on && unsaved ? (
+          {isRenaming ? (
             <span
-              className="doc-files-unsaved"
-              role="img"
-              aria-label="Unsaved changes"
-              title="Unsaved changes"
-            />
-          ) : null}
-        </button>
+              className="app-explorer-item doc-files-item doc-files-item--renaming"
+              style={indent}
+            >
+              {icon}
+              <InlineRename
+                className="doc-files-rename"
+                initial={label}
+                onCommit={(typed) => commitRename(node, typed)}
+                onCancel={() => setRenaming(null)}
+              />
+            </span>
+          ) : (
+            <button
+              type="button"
+              className={`app-explorer-item doc-files-item${
+                on ? " app-explorer-item--active" : ""
+              }${writable ? "" : " doc-files-item--file"}`}
+              style={indent}
+              aria-current={on ? "page" : undefined}
+              title={
+                writable
+                  ? label
+                  : `${label} — uploaded as a file, so it is edited in the program that made it`
+              }
+              onClick={() => {
+                if (!on) openPolicy(slugPath);
+                else setFloating(false);
+              }}
+              onDoubleClick={() => {
+                // The open one: a second click names it, as in a file list.
+                if (on && onRename && canAct(node)) setRenaming(key);
+              }}
+              onKeyDown={(event) => onRowKey(event, node)}
+            >
+              {icon}
+              <span className="app-explorer-name">{label}</span>
+              {on && unsaved ? (
+                <span
+                  className="doc-files-unsaved"
+                  role="img"
+                  aria-label="Unsaved changes"
+                  title="Unsaved changes"
+                />
+              ) : null}
+            </button>
+          )}
+          {rowActions(node)}
+        </div>
       );
     }
 
     const open = needle !== "" || isOpen(node.path);
+    const label = labelOf(node);
     return (
-      <div className="app-explorer-group" key={`folder:${node.path}`}>
-        <button
-          type="button"
-          className="app-explorer-folder"
-          style={{ paddingLeft: `${8 + depth * 14}px` }}
-          aria-expanded={open}
-          onClick={() => toggleFolder(node.path)}
-        >
-          {open ? (
-            <ChevronDown size={13} strokeWidth={1.75} aria-hidden="true" />
+      <div
+        className={`app-explorer-group${
+          over === node.path ? " doc-files-group--drop" : ""
+        }`}
+        key={key}
+        {...dragProps(node)}
+      >
+        <div className="doc-files-row">
+          {isRenaming ? (
+            <span
+              className="app-explorer-folder doc-files-item--renaming"
+              style={indent}
+            >
+              <Folder size={14} strokeWidth={1.6} aria-hidden="true" />
+              <InlineRename
+                className="doc-files-rename"
+                initial={label}
+                onCommit={(typed) => commitRename(node, typed)}
+                onCancel={() => setRenaming(null)}
+              />
+            </span>
           ) : (
-            <ChevronRight size={13} strokeWidth={1.75} aria-hidden="true" />
+            <button
+              type="button"
+              className="app-explorer-folder"
+              style={indent}
+              aria-expanded={open}
+              onClick={() => toggleFolder(node.path)}
+              onKeyDown={(event) => onRowKey(event, node)}
+            >
+              {open ? (
+                <ChevronDown size={13} strokeWidth={1.75} aria-hidden="true" />
+              ) : (
+                <ChevronRight size={13} strokeWidth={1.75} aria-hidden="true" />
+              )}
+              <Folder size={14} strokeWidth={1.6} aria-hidden="true" />
+              <span className="app-explorer-name">{label}</span>
+            </button>
           )}
-          <Folder size={14} strokeWidth={1.6} aria-hidden="true" />
-          <span className="app-explorer-name">
-            {formatDocumentName(node.name)}
-          </span>
-        </button>
+          {rowActions(node)}
+        </div>
         {open
           ? node.children.map((child) => renderNode(child, depth + 1))
           : null}
@@ -261,9 +525,12 @@ export function DraftFiles({
       ref={floatRef}
       className={`doc-files${narrow ? " doc-files--floating" : ""}`}
       aria-label={`Files in ${binderName}`}
+      aria-busy={busy || undefined}
     >
       <div className="app-explorer-head">
-        <span className="app-explorer-heading">Files</span>
+        <span className="app-explorer-heading">
+          {busy ? "Saving…" : "Files"}
+        </span>
         {startNew ? (
           <button
             type="button"
@@ -275,18 +542,19 @@ export function DraftFiles({
             <FilePlus size={15} strokeWidth={1.75} aria-hidden="true" />
           </button>
         ) : null}
-        {onOrganize ? (
+        {onNewFolder ? (
           <button
             type="button"
             className="app-explorer-toggle"
-            aria-label="Organize: rename, move and make folders"
-            title="Organize: rename, move and make folders"
+            aria-label="New folder"
+            title="New folder"
+            disabled={busy}
             onClick={() => {
               setFloating(false);
-              onOrganize();
+              onNewFolder();
             }}
           >
-            <FolderTree size={15} strokeWidth={1.75} aria-hidden="true" />
+            <FolderPlus size={15} strokeWidth={1.75} aria-hidden="true" />
           </button>
         ) : null}
         <button
@@ -323,7 +591,41 @@ export function DraftFiles({
         ) : (
           shown.map((node) => renderNode(node, 0))
         )}
+
+        {/* Out of a folder: the top level is otherwise no target at all. Only
+            while something is in the air. */}
+        {dragging !== null && acceptsDrop(dragging, "") ? (
+          <div
+            className={`doc-files-root-drop${
+              over === "" ? " doc-files-root-drop--over" : ""
+            }`}
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "move";
+              setOver("");
+            }}
+            onDragLeave={() => {
+              if (over === "") setOver(null);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              if (dragging) drop(dragging, "");
+            }}
+          >
+            Drop here for the top level
+          </div>
+        ) : null}
       </div>
+
+      {moving ? (
+        <MoveToFolderModal
+          subject={moving.subject}
+          label={moving.label}
+          folders={allFolders}
+          onClose={() => setMoving(null)}
+          onMove={(folder) => drop(moving.subject, folder)}
+        />
+      ) : null}
     </aside>
   );
 
