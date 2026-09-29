@@ -5,6 +5,7 @@ import {
   useState,
   useSyncExternalStore,
   type DragEvent,
+  type MouseEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import {
@@ -20,6 +21,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Pencil,
+  type LucideIcon,
 } from "lucide-react";
 
 import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
@@ -82,9 +84,10 @@ interface DraftFilesProps {
   unsaved?: boolean;
   onOpen: (slugPath: string) => void;
   /** Start a new policy in this draft. Absent, and there is no New button. */
-  onNew?: () => void;
+  /** In `folder`, when started from a folder's menu; else beside the open one. */
+  onNew?: (folder?: string) => void;
   /** Make a folder in this draft. Absent, and there is no New folder button. */
-  onNewFolder?: () => void;
+  onNewFolder?: (parent?: string) => void;
   /**
    * Rename a row, in this draft. Absent, the tree only opens things — as it
    * does on a change request, which is revised here and not reshaped.
@@ -173,6 +176,14 @@ export function DraftFiles({
     label: string;
   } | null>(null);
   const [dragging, setDragging] = useState<DragSubject | null>(null);
+  /** A row's menu, from a right-click or the keyboard's menu key. */
+  const [menu, setMenu] = useState<{
+    node: BinderTreeNode;
+    x: number;
+    y: number;
+    /** Where focus goes back to when it closes without acting. */
+    from: HTMLElement | null;
+  } | null>(null);
   const [over, setOver] = useState<string | null>(null);
   useEffect(() => {
     if (!narrow) setFloating(false);
@@ -180,7 +191,9 @@ export function DraftFiles({
   // Over the page, it goes as a menu does: Escape, or a press elsewhere. Not
   // while a name is being typed or a folder picked: Escape is theirs then.
   useEffect(() => {
-    if (!floating || renaming !== null || moving !== null) return;
+    if (!floating || renaming !== null || moving !== null || menu !== null) {
+      return;
+    }
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") setFloating(false);
     };
@@ -197,7 +210,7 @@ export function DraftFiles({
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("pointerdown", onPointer);
     };
-  }, [floating, renaming, moving]);
+  }, [floating, renaming, moving, menu]);
   const shut = narrow ? !floating : remembered.on;
   const toggle = narrow ? () => setFloating((was) => !was) : remembered.toggle;
   const openPolicy = (slugPath: string) => {
@@ -280,9 +293,109 @@ export function DraftFiles({
 
   /** F2 renames the row with focus, as Explorer and VS Code do. */
   const onRowKey = (event: ReactKeyboardEvent, node: BinderTreeNode) => {
+    // The keyboard's menu key, or Shift+F10: the row's menu, under the row.
+    if (
+      event.key === "ContextMenu" ||
+      (event.key === "F10" && event.shiftKey)
+    ) {
+      const row = event.currentTarget as HTMLElement;
+      const box = row.getBoundingClientRect();
+      event.preventDefault();
+      openMenu(node, box.left + 24, box.bottom, row);
+      return;
+    }
     if (event.key !== "F2" || !onRename || !canAct(node)) return;
     event.preventDefault();
     setRenaming(keyOf(node));
+  };
+
+  const openMenu = (
+    node: BinderTreeNode,
+    x: number,
+    y: number,
+    from: HTMLElement | null,
+  ) => {
+    if (renaming === keyOf(node) || menuItems(node).length === 0) return;
+    setMenu({ node, x, y, from });
+  };
+
+  /** Right-click: the row's menu at the pointer, as a file explorer's is. */
+  const onRowMenu = (event: MouseEvent<HTMLElement>, node: BinderTreeNode) => {
+    if (renaming === keyOf(node)) return;
+    event.preventDefault();
+    // A folder's row sits inside its group, which holds its children's rows.
+    event.stopPropagation();
+    const row = event.currentTarget.querySelector<HTMLElement>(
+      "button.app-explorer-item, button.app-explorer-folder",
+    );
+    openMenu(node, event.clientX, event.clientY, row);
+  };
+
+  /** What a row's menu offers: its acts, and for a folder, what goes in it. */
+  const menuItems = (node: BinderTreeNode): RowMenuItem[] => {
+    const items: RowMenuItem[] = [];
+    const acts = canAct(node);
+    const label = labelOf(node);
+    if (node.kind === "document") {
+      if (node.document.slugPath !== active) {
+        items.push({
+          label: "Open",
+          icon: FileText,
+          run: () => openPolicy(node.document.slugPath),
+        });
+      }
+    } else {
+      if (onNew) {
+        items.push({
+          label: "New document here",
+          icon: FilePlus,
+          run: () => {
+            setFloating(false);
+            onNew(node.path);
+          },
+        });
+      }
+      if (onNewFolder) {
+        items.push({
+          label: "New folder here",
+          icon: FolderPlus,
+          disabled: busy,
+          run: () => {
+            setFloating(false);
+            onNewFolder(node.path);
+          },
+        });
+      }
+    }
+    if (onRename && isManaged(node)) {
+      items.push({
+        label: "Rename",
+        hint: "F2",
+        icon: Pencil,
+        disabled: !acts,
+        separated: items.length > 0,
+        run: () => setRenaming(keyOf(node)),
+      });
+    }
+    if (onMove && isManaged(node)) {
+      items.push({
+        label: "Move to…",
+        icon: FolderInput,
+        disabled: !acts,
+        run: () => setMoving({ subject: subjectOf(node), label }),
+      });
+    }
+    if (onArchive && node.kind === "document" && isManaged(node)) {
+      items.push({
+        label: "Archive",
+        icon: Archive,
+        danger: true,
+        disabled: !acts,
+        separated: true,
+        run: () => onArchive(node.document.slugPath),
+      });
+    }
+    return items;
   };
 
   /**
@@ -413,8 +526,9 @@ export function DraftFiles({
             dragging.slugPath === slugPath
               ? " doc-files-row--dragging"
               : ""
-          }`}
+          }${menu && keyOf(menu.node) === key ? " doc-files-row--menu" : ""}`}
           {...dragProps(node)}
+          onContextMenu={(event) => onRowMenu(event, node)}
         >
           {isRenaming ? (
             <span
@@ -479,7 +593,12 @@ export function DraftFiles({
         key={key}
         {...dragProps(node)}
       >
-        <div className="doc-files-row">
+        <div
+          className={`doc-files-row${
+            menu && keyOf(menu.node) === key ? " doc-files-row--menu" : ""
+          }`}
+          onContextMenu={(event) => onRowMenu(event, node)}
+        >
           {isRenaming ? (
             <span
               className="app-explorer-folder doc-files-item--renaming"
@@ -617,6 +736,20 @@ export function DraftFiles({
         ) : null}
       </div>
 
+      {menu ? (
+        <RowMenu
+          x={menu.x}
+          y={menu.y}
+          label={`${labelOf(menu.node)}: actions`}
+          items={menuItems(menu.node)}
+          onClose={(acted) => {
+            const from = menu.from;
+            setMenu(null);
+            if (!acted) from?.focus();
+          }}
+        />
+      ) : null}
+
       {moving ? (
         <MoveToFolderModal
           subject={moving.subject}
@@ -639,4 +772,133 @@ export function DraftFiles({
     );
   }
   return panel;
+}
+
+interface RowMenuItem {
+  label: string;
+  icon: LucideIcon;
+  run: () => void;
+  /** The key that does it without the menu, said at the end of the line. */
+  hint?: string;
+  disabled?: boolean;
+  danger?: boolean;
+  /** A rule above it, between one kind of act and the next. */
+  separated?: boolean;
+}
+
+/**
+ * A row's menu, where the pointer was — or under the row, from the keyboard.
+ *
+ * **The way a file explorer answers a right-click**, so the acts on a row are
+ * where people look for them first, rather than only in icons that appear on
+ * hover. Arrow keys move through it, Enter acts, Escape and a press anywhere
+ * else close it, and it keeps inside the window.
+ */
+function RowMenu({
+  x,
+  y,
+  label,
+  items,
+  onClose,
+}: {
+  x: number;
+  y: number;
+  label: string;
+  items: readonly RowMenuItem[];
+  onClose: (acted: boolean) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [at, setAt] = useState({ left: x, top: y });
+
+  useEffect(() => {
+    const box = ref.current;
+    if (!box) return;
+    const { width, height } = box.getBoundingClientRect();
+    const margin = 8;
+    setAt({
+      left: Math.max(margin, Math.min(x, window.innerWidth - width - margin)),
+      top: Math.max(margin, Math.min(y, window.innerHeight - height - margin)),
+    });
+    box.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+  }, [x, y]);
+
+  useEffect(() => {
+    const onPointer = (event: PointerEvent) => {
+      if (event.target instanceof Node && ref.current?.contains(event.target)) {
+        return;
+      }
+      onClose(true);
+    };
+    const onScroll = () => onClose(true);
+    document.addEventListener("pointerdown", onPointer, true);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer, true);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [onClose]);
+
+  const onKey = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const buttons = Array.from(
+      ref.current?.querySelectorAll<HTMLButtonElement>(
+        "button:not(:disabled)",
+      ) ?? [],
+    );
+    const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      onClose(false);
+    } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      buttons[(at + step + buttons.length) % buttons.length]?.focus();
+    } else if (event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      buttons[event.key === "Home" ? 0 : buttons.length - 1]?.focus();
+    } else if (event.key === "Tab") {
+      event.preventDefault();
+      onClose(false);
+    }
+  };
+
+  return (
+    <div
+      ref={ref}
+      className="doc-files-menu"
+      role="menu"
+      aria-label={label}
+      style={{ left: at.left, top: at.top }}
+      onKeyDown={onKey}
+      onContextMenu={(event) => event.preventDefault()}
+    >
+      {items.map((item) => (
+        <div key={item.label} role="none">
+          {item.separated ? (
+            <div className="doc-files-menu-sep" role="separator" />
+          ) : null}
+          <button
+            type="button"
+            role="menuitem"
+            className={`doc-files-menu-item${
+              item.danger ? " doc-files-menu-item--danger" : ""
+            }`}
+            disabled={item.disabled}
+            onClick={() => {
+              onClose(true);
+              item.run();
+            }}
+          >
+            <item.icon size={14} strokeWidth={1.6} aria-hidden="true" />
+            <span>{item.label}</span>
+            {item.hint ? (
+              <kbd className="doc-files-menu-hint">{item.hint}</kbd>
+            ) : null}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
 }
