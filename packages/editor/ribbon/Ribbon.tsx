@@ -384,13 +384,44 @@ function HomeTab({
   return (
     <>
       <RibbonGroup label="Clipboard">
-        <RibbonButton
-          icon={ClipboardPaste}
-          label="Paste"
-          shortcut="Ctrl+V"
-          large
-          onClick={() => void pasteText(editor)}
-        />
+        {/* Word's split button: the top pastes, the arrow asks how. */}
+        <div className="bs-rsplit">
+          <RibbonButton
+            icon={ClipboardPaste}
+            label="Paste"
+            shortcut="Ctrl+V"
+            large
+            onClick={() => void paste(editor, "source")}
+          />
+          <DropButton
+            label="Paste options"
+            className="bs-rdrop--split"
+            panelClassName="bs-rpanel--list"
+            panel={(close) => (
+              <>
+                <MenuChoice
+                  hint="Ctrl+V"
+                  onPick={() => {
+                    close();
+                    void paste(editor, "source");
+                  }}
+                >
+                  Keep Source Formatting
+                </MenuChoice>
+                <MenuChoice
+                  onPick={() => {
+                    close();
+                    void paste(editor, "text");
+                  }}
+                >
+                  Keep Text Only
+                </MenuChoice>
+              </>
+            )}
+          >
+            {null}
+          </DropButton>
+        </div>
         <div className="bs-rstack">
           <RibbonButton
             icon={Scissors}
@@ -855,12 +886,50 @@ export function outdent(editor: Editor): boolean {
  * button, so this pastes text — Ctrl+V still pastes with formatting, which is
  * what the tooltip says.
  */
-async function pasteText(editor: Editor): Promise<void> {
+/**
+ * The Paste button, as Word's: what was copied, as it was copied — or, from
+ * its menu, the words alone.
+ *
+ * Both go through the editor's own paste, the one Ctrl+V takes, so what is
+ * pasted is held to the document's schema and a line break is a new
+ * paragraph. A picture on the clipboard is handed to the page as a paste,
+ * where the picture handling that Ctrl+V reaches says why one did not go in.
+ */
+async function paste(editor: Editor, how: "source" | "text"): Promise<void> {
+  editor.commands.focus();
+  const { view } = editor;
   try {
+    if (how === "source" && typeof navigator.clipboard.read === "function") {
+      for (const item of await navigator.clipboard.read()) {
+        if (item.types.includes("text/html")) {
+          const html = await (await item.getType("text/html")).text();
+          if (view.pasteHTML(html)) return;
+        }
+        const picture = item.types.find((type) => type.startsWith("image/"));
+        if (picture) {
+          const blob = await item.getType(picture);
+          const data = new DataTransfer();
+          data.items.add(
+            new File([blob], `Pasted picture.${picture.slice(6)}`, {
+              type: picture,
+            }),
+          );
+          view.dom.dispatchEvent(
+            new ClipboardEvent("paste", {
+              clipboardData: data,
+              bubbles: true,
+              cancelable: true,
+            }),
+          );
+          return;
+        }
+      }
+    }
     const text = await navigator.clipboard.readText();
-    if (text) editor.chain().focus().insertContent(text).run();
+    if (text) view.pasteText(text);
   } catch {
-    editor.commands.focus();
+    // The browser said no to reading the clipboard. Ctrl+V still works, and
+    // the cursor is back in the page for it.
   }
 }
 

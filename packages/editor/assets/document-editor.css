@@ -267,6 +267,34 @@
   margin-top: calc(-1 * var(--brand-space-1));
 }
 
+/* A split button, as Word's Paste: the top half acts, the strip under it
+   drops the choices. One outline around both on hover, so they read as one
+   control with two parts. */
+.bs-rsplit {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.bs-rsplit > .bs-rb--large {
+  height: 48px;
+  padding-bottom: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.bs-rdrop--split {
+  height: 16px;
+  min-width: 0;
+  padding: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.bs-rdrop--split .bs-rdrop-chevron {
+  margin: 0;
+}
+
 .bs-rb-icon {
   position: relative;
   display: inline-grid;
