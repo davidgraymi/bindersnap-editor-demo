@@ -695,6 +695,36 @@ test("the title bar says where the policy is filed, and moves it from there", as
   ).toHaveText("Nursing");
 });
 
+test("Ctrl+/ lists the keyboard shortcuts, and Escape goes back to the words", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+
+  await page.keyboard.press("ControlOrMeta+/");
+  const sheet = page.getByRole("dialog", { name: "Keyboard shortcuts" });
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Close" })).toBeFocused();
+  await expect(sheet).toContainText("Page break");
+  await expect(sheet).toContainText("Change case");
+
+  await page.keyboard.press("Escape");
+  await expect(sheet).toHaveCount(0);
+  await expect(text).toBeFocused();
+
+  // And from the View tab.
+  await page.getByRole("tab", { name: "View" }).click();
+  await page.getByRole("button", { name: /^Keyboard shortcuts/ }).click();
+  await expect(sheet).toBeVisible();
+  await sheet.getByRole("button", { name: "Close" }).click();
+  await expect(sheet).toHaveCount(0);
+});
+
 test("closing with unsaved words asks first, and Cancel keeps them", async ({
   page,
 }) => {
