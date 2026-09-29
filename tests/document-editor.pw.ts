@@ -962,6 +962,59 @@ test("Change Case recases a word from the ribbon, and Shift+F3 cycles it", async
   await expect(text).toContainText("clean your hands");
 });
 
+test("Paste keeps what was copied, and Keep Text Only keeps just the words", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], {
+    origin: APP_BASE_URL,
+  });
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+  await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+
+  // Two paragraphs, one word of them bold — as a page or an email copies.
+  await page.evaluate(async () => {
+    const html = "<p><strong>Gloves</strong> first</p><p>Then wash</p>";
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        "text/html": new Blob([html], { type: "text/html" }),
+        "text/plain": new Blob(["Gloves first\nThen wash"], {
+          type: "text/plain",
+        }),
+      }),
+    ]);
+  });
+
+  await page.getByRole("button", { name: "Paste", exact: true }).click();
+  await expect(text.locator("strong")).toHaveText("Gloves");
+  await expect(text.locator("p", { hasText: "Then wash" })).toHaveText(
+    "Then wash",
+  );
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(text).not.toContainText("Gloves");
+
+  // The words alone: no bold, and still two paragraphs, not one run-on.
+  await page.getByRole("button", { name: "Paste options" }).click();
+  await page.getByRole("menuitem", { name: "Keep Text Only" }).click();
+  await expect(text).toContainText("Gloves first");
+  await expect(text.locator("strong")).toHaveCount(0);
+  await expect(text.locator("p", { hasText: "Then wash" })).toHaveText(
+    "Then wash",
+  );
+});
+
 test("the status bar counts the selected words out of the whole", async ({
   page,
 }) => {
