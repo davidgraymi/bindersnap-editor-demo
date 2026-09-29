@@ -34,6 +34,7 @@ import {
   ListTree,
   MessageSquareText,
   Minus,
+  Paintbrush,
   MoveHorizontal,
   PanelLeft,
   Printer,
@@ -385,6 +386,20 @@ function HomeTab({
               editor.commands.focus();
               document.execCommand("copy");
             }}
+          />
+          <RibbonButton
+            icon={Paintbrush}
+            label="Format Painter"
+            shortcut="Ctrl+Shift+C"
+            tip="Format Painter: click, then select the words to give this look to. Double-click to keep it on; Escape stops."
+            showLabel={!compactClipboard}
+            active={format.painting}
+            onClick={() =>
+              format.painting
+                ? chain().putDownFormatPainter().run()
+                : chain().pickUpFormatting("once").run()
+            }
+            onDoubleClick={() => chain().pickUpFormatting("sticky").run()}
           />
         </div>
       </RibbonGroup>

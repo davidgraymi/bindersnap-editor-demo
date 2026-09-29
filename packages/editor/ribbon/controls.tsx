@@ -62,6 +62,9 @@ interface RibbonButtonProps {
   showLabel?: boolean;
   /** A colour bar under the icon, for text colour and highlight. */
   swatch?: string | null;
+  /** A longer tooltip than the label, for a command that needs explaining. */
+  tip?: string;
+  onDoubleClick?: () => void;
 }
 
 export function RibbonButton({
@@ -74,8 +77,11 @@ export function RibbonButton({
   large = false,
   showLabel = false,
   swatch,
+  tip: explain,
+  onDoubleClick,
 }: RibbonButtonProps) {
-  const tip = shortcut ? `${label} (${shortcutLabel(shortcut)})` : label;
+  const named = explain ?? label;
+  const tip = shortcut ? `${named} (${shortcutLabel(shortcut)})` : named;
   return (
     <button
       type="button"
@@ -88,6 +94,7 @@ export function RibbonButton({
       disabled={disabled}
       onMouseDown={keepSelection}
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
     >
       <span className="bs-rb-icon" aria-hidden="true">
         <Icon size={large ? 22 : 16} strokeWidth={1.75} />
