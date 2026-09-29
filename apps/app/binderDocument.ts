@@ -180,6 +180,12 @@ export function buildDocumentUrl(params: {
    * policy renamed a moment ago actually has the name it was clicked under.
    */
   edit?: boolean;
+  /**
+   * Read it in one of your drafts: the binder in edit mode, on that draft,
+   * where Edit carries on in it. Wins over everything else, because a draft is
+   * a place you work rather than a version you look at.
+   */
+  draft?: string | null;
 }): string {
   const {
     org,
@@ -189,10 +195,14 @@ export function buildDocumentUrl(params: {
     change = null,
     ref = null,
     edit = false,
+    draft = null,
   } = params;
   const base = `/${org}/${binder}/-/blob/${encodeURIComponent(
     ref ?? "main",
   )}/${documentPath}`;
+  if (draft) {
+    return `${base}?${new URLSearchParams({ edit: "1", draft }).toString()}`;
+  }
 
   const query = new URLSearchParams();
   if (edit) query.set("edit", "1");

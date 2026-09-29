@@ -80,6 +80,8 @@ export type AppRoute =
        * arrived from a change keeps the way back.
        */
       ref?: string;
+      /** In one of your drafts, as the editor saves into. */
+      draft?: string;
     };
 export type DocumentChangeView = "discussion" | "preview" | "compare";
 /** The organization's own tabs. Binders is the one it opens on. */
@@ -306,6 +308,7 @@ export function routeToPath(route: AppRoute): string {
         version: route.version ?? null,
         change: route.change ?? null,
         ref: route.ref ?? null,
+        draft: route.draft ?? null,
       });
     case "home":
     case "workspace":

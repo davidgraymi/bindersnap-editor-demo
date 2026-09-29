@@ -49,6 +49,10 @@ interface BinderDocumentPageProps {
    * where the name it was clicked under exists. Null on the record.
    */
   draft?: string | null;
+  /** What that draft is called, to say so over the page. */
+  draftName?: string | null;
+  /** Your drafts in this binder, for the file panel's "What you are reading". */
+  drafts?: readonly { branch: string; name: string }[];
   /**
    * The change request this document is being read on, from `?change=`.
    *
@@ -96,6 +100,8 @@ interface BinderDocumentPageProps {
   onOpenChange: (changeNumber: number) => void;
 }
 
+const NO_DRAFTS: readonly { branch: string; name: string }[] = [];
+
 function triggerBrowserDownload(blob: Blob, fileName: string): void {
   const objectUrl = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -113,6 +119,8 @@ export function BinderDocumentPage({
   binder,
   documentPath,
   draft = null,
+  draftName = null,
+  drafts = NO_DRAFTS,
   change = null,
   documentRef = null,
   onRefsChange,
@@ -208,10 +216,12 @@ export function BinderDocumentPage({
         openChanges: detail.openChanges,
         ref: documentRef,
         change,
+        draft,
+        drafts,
       }),
       address: detail.document.path,
     });
-  }, [detail, documentRef, change, onRefsChange]);
+  }, [detail, documentRef, change, draft, drafts, onRefsChange]);
 
   const loadFile = useCallback(
     (gitRef: string) =>
@@ -301,19 +311,31 @@ export function BinderDocumentPage({
         <div className="bs-pagehead-body">
           <h1 className="bs-title">{formatDocumentName(document.name)}</h1>
           <div className="bs-facts">
-            <span
-              className={`doc-version-pill ${
-                latestVersion === null
-                  ? "doc-version-pill--none"
-                  : isViewingRecord
-                    ? "doc-version-pill--current"
-                    : "doc-version-pill--past"
-              }`}
-            >
-              {isViewingRecord
-                ? describeVersionState(latestVersion, state)
-                : `Version ${viewing.version?.version} — an earlier version`}
-            </span>
+            {/* **In a draft, the page says so.** It said "Version 1 on
+                record" over the words the editor had just saved into a draft,
+                so a saved edit read as a lost one. */}
+            {draft !== null && change === null && documentRef === null ? (
+              <span
+                className="doc-version-pill doc-version-pill--draft"
+                title="Your words as saved in this draft. Nothing on record changes until it is proposed and approved."
+              >
+                In {draftName ?? "your draft"}
+              </span>
+            ) : (
+              <span
+                className={`doc-version-pill ${
+                  latestVersion === null
+                    ? "doc-version-pill--none"
+                    : isViewingRecord
+                      ? "doc-version-pill--current"
+                      : "doc-version-pill--past"
+                }`}
+              >
+                {isViewingRecord
+                  ? describeVersionState(latestVersion, state)
+                  : `Version ${viewing.version?.version} — an earlier version`}
+              </span>
+            )}
 
             {!isViewingRecord ? (
               <button
