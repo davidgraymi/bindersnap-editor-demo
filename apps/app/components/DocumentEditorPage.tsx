@@ -67,6 +67,17 @@ type SaveState =
   | { kind: "saved"; at: string }
   | { kind: "failed"; message: string };
 
+/** Nothing written yet but a title — what "Write it here" starts with. */
+function isBlankPolicy(doc: JSONContent): boolean {
+  const blocks = doc.content ?? [];
+  const last = blocks[blocks.length - 1];
+  return (
+    blocks.length <= 2 &&
+    last?.type === "paragraph" &&
+    (last.content ?? []).length === 0
+  );
+}
+
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error && err.message.trim() !== ""
     ? err.message
@@ -325,6 +336,10 @@ export function DocumentEditorPage({
           <DocumentEditor
             label={name}
             initialContent={load.doc}
+            // A policy just started is its title and an empty line: the
+            // cursor goes on the empty line, ready to type, as Word's does.
+            // Anything longer opens at the top, where it starts.
+            autoFocus={isBlankPolicy(load.doc) ? "end" : "start"}
             onChange={handleChange}
             onSave={() => void saveNow()}
             onReady={(editor) => {

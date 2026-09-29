@@ -266,3 +266,37 @@ test("closing with unsaved words asks first, and Cancel keeps them", async ({
   await expect(text).toContainText("Every time.");
   await expect(page).toHaveURL(/edit=write/);
 });
+
+test("a new policy can be written here instead of uploaded", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Add a document" }).click();
+  await page.getByRole("radio", { name: /Write it here/ }).check();
+  await page.getByLabel("What it is called").fill("Visitor Policy");
+  await page.getByRole("button", { name: "Start writing" }).click();
+
+  // Straight into the editor, in the draft it was started in, with the title
+  // written and the cursor on the line under it.
+  await expect(page).toHaveURL(/\/visitor-policy\?edit=write&draft=draft%2F/);
+  const draft = new URL(page.url()).searchParams.get("draft")!;
+  const text = page.getByRole("textbox", { name: "Visitor Policy" });
+  await expect(text.locator("h1")).toHaveText("Visitor Policy");
+  await expect(text).toBeFocused();
+
+  await page.keyboard.type("Visitors sign in at reception.");
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.getByText(/Saved just now/)).toBeVisible({
+    timeout: 20_000,
+  });
+
+  const saved = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/raw/visitor-policy?ref=${encodeURIComponent(draft)}`,
+    { headers: authHeaders(session) },
+  );
+  expect(saved.status).toBe(200);
+  expect(await saved.text()).toContain("Visitors sign in at reception.");
+});

@@ -1171,6 +1171,21 @@ export function BinderShell({
           binder={binder}
           draft={draft?.draft?.branch}
           onClose={() => setAdding(false)}
+          onWrite={(slugPath, branch) => {
+            // Straight into the editor, in the draft it was started in.
+            setAdding(false);
+            loadOverview();
+            setDraftBranch(branch);
+            moveTo(
+              buildDocumentEditUrl({
+                org,
+                binder,
+                documentPath: slugPath,
+                draft: branch,
+              }),
+            );
+            setEditMode("writing");
+          }}
           onAdded={(changeNumber) => {
             setAdding(false);
             loadOverview();
