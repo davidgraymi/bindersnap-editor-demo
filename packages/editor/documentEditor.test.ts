@@ -4,6 +4,7 @@ import { Editor, generateHTML } from "@tiptap/core";
 import { documentContentExtensions } from "./documentSchema";
 import {
   countDocument,
+  countSelectedWords,
   countWords,
   documentOutline,
   paginate,
@@ -256,6 +257,14 @@ describe("document statistics", () => {
       characters: 22,
       paragraphs: 3,
     });
+  });
+
+  test("counts the selected words, apart across paragraphs", () => {
+    const editor = editorWith("<p>Wash your</p><p>hands now</p>");
+    const { doc } = editor.state;
+    expect(countSelectedWords(doc, 3, 3)).toBeNull();
+    // "sh your" + "hands": the paragraph boundary is a gap between words.
+    expect(countSelectedWords(doc, 4, doc.content.size - 5)).toBe(3);
   });
 
   test("the outline is every heading with text, in order", () => {
