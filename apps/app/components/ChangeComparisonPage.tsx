@@ -176,13 +176,42 @@ function WordCounts({
   summary: ComparisonSummary | null | undefined;
 }) {
   if (!summary || summary.identical) return null;
+  // Same words, different look: a count of +0 −0 would read as nothing.
+  if (summary.restyled) {
+    return <span className="cmp-counts cmp-counts-note">Formatting</span>;
+  }
+  const words = summary.additions + summary.deletions > 0;
+  const pictures = (count: number) =>
+    `${count} ${count === 1 ? "picture" : "pictures"}`;
+  const said = [
+    words
+      ? `${summary.additions} words added, ${summary.deletions} removed`
+      : null,
+    summary.picturesAdded > 0
+      ? `${pictures(summary.picturesAdded)} added`
+      : null,
+    summary.picturesRemoved > 0
+      ? `${pictures(summary.picturesRemoved)} removed`
+      : null,
+  ].filter(Boolean);
   return (
-    <span
-      className="cmp-counts"
-      aria-label={`${summary.additions} words added, ${summary.deletions} removed`}
-    >
-      <span className="cmp-counts-add">+{summary.additions}</span>
-      <span className="cmp-counts-del">−{summary.deletions}</span>
+    <span className="cmp-counts" aria-label={said.join(", ")}>
+      {words ? (
+        <>
+          <span className="cmp-counts-add">+{summary.additions}</span>
+          <span className="cmp-counts-del">−{summary.deletions}</span>
+        </>
+      ) : null}
+      {summary.picturesAdded > 0 ? (
+        <span className="cmp-counts-add">
+          +{pictures(summary.picturesAdded)}
+        </span>
+      ) : null}
+      {summary.picturesRemoved > 0 ? (
+        <span className="cmp-counts-del">
+          −{pictures(summary.picturesRemoved)}
+        </span>
+      ) : null}
     </span>
   );
 }
