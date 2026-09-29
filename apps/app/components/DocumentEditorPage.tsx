@@ -259,6 +259,9 @@ export function DocumentEditorPage({
   const savedJson = useRef<string>("");
   const [, setTick] = useState(0);
 
+  // By number: the shell builds `change` afresh on every render.
+  const changeNumber = change?.number ?? null;
+
   /** Every policy opened in this draft this sitting, by {@link openKey}. */
   const opened = useRef(new Map<string, OpenPolicy>());
   /** Which of them is on screen. */
@@ -272,6 +275,74 @@ export function DocumentEditorPage({
   /** The panel's list, for finding an open policy after it moved. */
   const filesRef = useRef(files);
   filesRef.current = files;
+
+  /**
+   * A policy read ahead of the click that opens it, by address.
+   *
+   * **The pointer arriving on a row is the click's warning.** Reading a policy
+   * is two requests — its details, then its file — and they were only asked
+   * for once it was chosen, so every first open waited on both. A row hovered
+   * or focused starts them, and the open that follows takes what came back.
+   */
+  const readAhead = useRef(
+    new Map<
+      string,
+      Promise<{ detail: WorkspaceDocumentDetailPayload; text: string }>
+    >(),
+  );
+  const readPolicy = useCallback(
+    (path: string) => {
+      const known = readAhead.current.get(path);
+      if (known) return known;
+      const reading = (async () => {
+        // Read in the draft: a policy edited a minute ago is only there. On a
+        // change request, at its branch.
+        const detail =
+          changeNumber !== null
+            ? await fetchBinderDocument(
+                org,
+                binder,
+                path,
+                undefined,
+                changeNumber,
+                draft ?? undefined,
+              )
+            : await fetchBinderDocument(org, binder, path, draft ?? undefined);
+        const blob = await downloadBinderDocument(
+          org,
+          binder,
+          detail.document.path,
+          draft ?? undefined,
+        );
+        return { detail, text: await blob.text() };
+      })();
+      readAhead.current.set(path, reading);
+      // A failed read is not kept: the open that follows asks again, and
+      // says why if it fails too.
+      reading.catch(() => readAhead.current.delete(path));
+      return reading;
+    },
+    [org, binder, draft, changeNumber],
+  );
+  // What was read ahead is about the files as they were: an act, a save or
+  // another draft makes it stale.
+  const listing = files?.documents;
+  useEffect(() => {
+    readAhead.current.clear();
+  }, [listing, draft, changeNumber]);
+  const readAheadOf = useCallback(
+    (path: string) => {
+      if (!draft || path === documentPath) return;
+      const listed = filesRef.current?.documents.find(
+        (entry) => entry.slugPath === path,
+      );
+      if (listed?.uid != null && opened.current.has(listed.uid)) {
+        return;
+      }
+      readPolicy(path).catch(() => undefined);
+    },
+    [draft, documentPath, readPolicy],
+  );
 
   /** Where an open policy is now: moved or renamed since, the panel knows. */
   const addressOf = useCallback((policy: OpenPolicy): string => {
@@ -317,9 +388,6 @@ export function DocumentEditorPage({
     html.classList.add("bs-writing");
     return () => html.classList.remove("bs-writing");
   }, []);
-
-  // By number: the shell builds `change` afresh on every render.
-  const changeNumber = change?.number ?? null;
 
   useEffect(() => {
     if (!draft) return;
@@ -405,27 +473,11 @@ export function DocumentEditorPage({
     recountElsewhere();
 
     (async () => {
-      // Read in the draft: a policy edited a minute ago is only there. On a
-      // change request, at its branch — a proposed draft is not a draft any
-      // more, and the server says so when asked for one.
-      const detail =
-        changeNumber !== null
-          ? await fetchBinderDocument(
-              org,
-              binder,
-              documentPath,
-              undefined,
-              changeNumber,
-              draft,
-            )
-          : await fetchBinderDocument(org, binder, documentPath, draft);
-      const blob = await downloadBinderDocument(
-        org,
-        binder,
-        detail.document.path,
-        draft,
-      );
-      const doc = parseEditorDocument(await blob.text());
+      // Taken from a read ahead when the row was pointed at; once taken it is
+      // this policy's, and the next read of it is a fresh one.
+      const { detail, text } = await readPolicy(documentPath);
+      readAhead.current.delete(documentPath);
+      const doc = parseEditorDocument(text);
       if (cancelled) return;
       if (doc === null) {
         setLoad({ kind: "foreign", detail });
@@ -470,7 +522,8 @@ export function DocumentEditorPage({
     return () => {
       cancelled = true;
     };
-    // `recountElsewhere` is stable; `isUnsaved` reads only its argument.
+    // `recountElsewhere` is stable; `isUnsaved` reads only its argument;
+    // `readPolicy` changes only with the draft, which is in the list.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [org, binder, documentPath, draft, changeNumber]);
 
@@ -1208,6 +1261,7 @@ export function DocumentEditorPage({
             active={documentPath}
             unsaved={dirty}
             unsavedElsewhere={unsavedElsewhere}
+            onReadAhead={readAheadOf}
             onOpen={(slugPath) => leave({ kind: "open", slugPath })}
             // A change request is revised, not added to or reshaped, here.
             onNew={
