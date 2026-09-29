@@ -3,12 +3,19 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
 import type { Editor, JSONContent } from "@tiptap/core";
-import { GitBranch, GitPullRequest, History, Pencil } from "lucide-react";
+import {
+  Folder,
+  GitBranch,
+  GitPullRequest,
+  History,
+  Pencil,
+} from "lucide-react";
 
 import type {
   BinderArchivePayload,
@@ -32,6 +39,8 @@ import {
   type RecoveredWords,
 } from "../editorRecovery";
 import type { DragSubject } from "../binderMove";
+import { buildBinderTree, folderPaths } from "../binderTree";
+import { MoveToFolderModal } from "./MoveToFolderModal";
 import { BinderDraftPicker } from "./BinderDraftPicker";
 import { InlineRename } from "./BinderPage";
 import { DraftFiles, type DraftFileTarget } from "./DraftFiles";
@@ -154,6 +163,11 @@ function isBlankPolicy(doc: JSONContent): boolean {
     last?.type === "paragraph" &&
     (last.content ?? []).length === 0
   );
+}
+
+/** `nursing/night` as the tree names it: Nursing / Night. */
+function folderLabel(folder: string): string {
+  return folder.split("/").map(formatDocumentName).join(" / ");
 }
 
 function errorMessage(err: unknown, fallback: string): string {
@@ -403,6 +417,15 @@ export function DocumentEditorPage({
    * identity for its history to follow (ADR 0005).
    */
   const [titling, setTitling] = useState(false);
+  /** The Move picker, opened from where the title says it is filed. */
+  const [refiling, setRefiling] = useState(false);
+  const everyFolder = useMemo(
+    () =>
+      files
+        ? folderPaths(buildBinderTree(files.documents, [...files.folders]))
+        : [],
+    [files],
+  );
   const renamable =
     !change &&
     files !== null &&
@@ -595,6 +618,33 @@ export function DocumentEditorPage({
               name
             )}
           </h1>
+          {/* **Where it is filed, beside what it is called** — and the way
+              to file it somewhere else, as the folder beside a Google Doc's
+              title is. The folder was only in the panel's tree, which is
+              shut on a tablet. */}
+          {renamable &&
+          !titling &&
+          (load.kind === "ready" || load.kind === "foreign") ? (
+            <button
+              type="button"
+              className="doc-editor-folder"
+              title="Move to another folder"
+              aria-label={`Move ${name}, filed ${
+                load.detail.document.folder === ""
+                  ? "at the top level"
+                  : `in ${folderLabel(load.detail.document.folder)}`
+              }`}
+              disabled={filesBusy}
+              onClick={() => setRefiling(true)}
+            >
+              <Folder size={13} strokeWidth={1.75} aria-hidden="true" />
+              <span>
+                {load.detail.document.folder === ""
+                  ? "Top level"
+                  : folderLabel(load.detail.document.folder)}
+              </span>
+            </button>
+          ) : null}
           {/* Where Save puts things, said before it is pressed. */}
           {change ? (
             <p
@@ -806,6 +856,35 @@ export function DocumentEditorPage({
           {body}
         </div>
       </div>
+
+      {refiling && (load.kind === "ready" || load.kind === "foreign") ? (
+        <MoveToFolderModal
+          subject={{
+            kind: "document",
+            slugPath: documentPath,
+            folder: load.detail.document.folder,
+          }}
+          label={name}
+          folders={everyFolder}
+          onClose={() => setRefiling(false)}
+          onMove={(folder) => {
+            setRefiling(false);
+            void actOnFiles(
+              true,
+              () =>
+                onMoveFile(
+                  {
+                    kind: "document",
+                    slugPath: documentPath,
+                    folder: load.detail.document.folder,
+                  },
+                  folder,
+                ),
+              "Unable to move this document.",
+            );
+          }}
+        />
+      ) : null}
 
       {leaving && ask ? (
         <div
