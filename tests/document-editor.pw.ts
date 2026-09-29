@@ -945,6 +945,25 @@ test("Change Case recases a word from the ribbon, and Shift+F3 cycles it", async
   await expect(text).toContainText("clean your hands");
 });
 
+test("the status bar counts the selected words out of the whole", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const count = page.getByRole("button", { name: "Word count" });
+  await expect(count).toHaveText("9 words");
+
+  const clean = await wordBox(page, "Clean");
+  await page.mouse.dblclick(clean.x, clean.y);
+  await expect(count).toHaveText("1 of 9 words");
+
+  await page.keyboard.press("ArrowRight");
+  await expect(count).toHaveText("9 words");
+});
+
 test("typing curls quotes and makes dashes, and Backspace takes one back", async ({
   page,
 }) => {
