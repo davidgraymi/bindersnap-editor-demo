@@ -1520,6 +1520,22 @@ input {
   font-weight: 600;
 }
 
+/* An entry with its heading still in the document is a link to it. */
+.doc-preview-prose .bs-toc-entry[role="link"] {
+  cursor: pointer;
+  border-radius: var(--brand-radius-xs);
+}
+
+.doc-preview-prose .bs-toc-entry[role="link"]:hover {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+}
+
+.doc-preview-prose .bs-toc-entry[role="link"]:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 2px;
+}
+
 .doc-preview-prose .bs-toc-entry--2 {
   padding-left: 1.5em;
 }
