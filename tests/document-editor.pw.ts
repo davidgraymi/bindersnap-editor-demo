@@ -23,6 +23,12 @@ import { API_BASE_URL, APP_BASE_URL } from "./helpers";
 
 test.describe.configure({ mode: "parallel", timeout: 240_000 });
 
+// A desktop window, wide enough that the ribbon shows its Styles gallery:
+// several tests read the gallery's "Normal" to know the click has landed, and
+// how much of the gallery fits at 1280 depends on the machine's fonts. The
+// tablet test sets its own size, and is where the folding is tested.
+test.use({ viewport: { width: 1440, height: 900 } });
+
 interface Credentials {
   username: string;
   email: string;
@@ -909,6 +915,34 @@ test("the Format Painter brushes one word's look onto others", async ({
   await page.keyboard.press("Escape");
   await expect(painter).not.toHaveAttribute("aria-pressed", "true");
   await expect(text).not.toHaveClass(/is-painting/);
+});
+
+test("Change Case recases a word from the ribbon, and Shift+F3 cycles it", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await expect(text).toBeVisible();
+
+  const clean = await wordBox(page, "Clean");
+  await page.mouse.dblclick(clean.x, clean.y);
+  await expect(page.getByRole("button", { name: "Cut" })).toBeEnabled();
+
+  await page.getByRole("button", { name: "Change case" }).click();
+  await page.getByRole("menuitem", { name: "UPPERCASE" }).click();
+  await expect(text).toContainText("CLEAN your hands");
+
+  // Back in the page, the words still selected: Shift+F3 goes on to
+  // Capitalize Each Word, then lowercase, as Word's does.
+  await text.focus();
+  await page.keyboard.press("Shift+F3");
+  await expect(text).toContainText("Clean your hands");
+  await page.keyboard.press("Shift+F3");
+  await expect(text).toContainText("clean your hands");
 });
 
 test("a change that only makes a word bold still shows in its comparison", async ({
