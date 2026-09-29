@@ -183,6 +183,52 @@ test("a member files a policy from the binder's own page", async ({ page }) => {
   });
 });
 
+test("a new change is sent to the binder's people as it is opened", async ({
+  page,
+}) => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(
+    sessionCookie,
+    `Riverbend ${randomUUID().slice(0, 6)}`,
+  );
+  const binder = await createBinder(sessionCookie, org, "Clinical Policies");
+
+  // A colleague in the organization, which the binder is open to.
+  const colleague = buildCredentials();
+  await signUp(colleague);
+  const added = await fetch(`${API_BASE_URL}/api/app/orgs/${org}/people`, {
+    method: "POST",
+    headers: authHeaders(sessionCookie),
+    body: JSON.stringify({ username: colleague.username, owner: false }),
+  });
+  expect(added.status, await added.text()).toBeLessThan(300);
+
+  await signInBrowser(page, sessionCookie);
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Add a document" }).click();
+
+  // In a binder this small everyone else is asked, and never the author.
+  const chooser = page.getByRole("group", { name: "Who should review it" });
+  await expect(
+    chooser.getByRole("checkbox", { name: colleague.username }),
+  ).toBeChecked({ timeout: 30_000 });
+  await expect(
+    chooser.getByRole("checkbox", { name: credentials.username }),
+  ).toHaveCount(0);
+
+  await fileAPolicy(page, "Fire Safety Plan", "");
+  await expect(page).toHaveURL(/\/-\/changes\/\d+/, { timeout: 30_000 });
+
+  // The change is on their desk, not waiting on nobody.
+  await expect(
+    page.locator(".rev-reviewer-list").getByText(colleague.username).first(),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(
+    page.getByText("Nobody has been asked to review this yet."),
+  ).toHaveCount(0);
+});
+
 /**
  * Approve and publish the one open change in a binder, as somebody else.
  *
