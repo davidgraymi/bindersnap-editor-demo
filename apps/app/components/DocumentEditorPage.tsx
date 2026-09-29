@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Editor, JSONContent } from "@tiptap/core";
+import type { EditorState } from "@tiptap/pm/state";
 import {
   Folder,
   GitBranch,
@@ -30,6 +31,10 @@ import {
 } from "../api";
 import { formatAge, formatDocumentName } from "../documentDisplay";
 import { parseEditorDocument } from "../editorDocumentHtml";
+import {
+  createDocumentState,
+  showDocumentState,
+} from "../../../packages/editor/documentState";
 import {
   dropWords,
   keepWords,
@@ -178,6 +183,13 @@ interface OpenPolicy {
    * comparing against the raw file called an untouched policy unsaved.
    */
   saved: string | null;
+  /**
+   * Its words, cursor and undo history as the page's one editor last held
+   * them — see `packages/editor/documentState.ts`. Absent until it has been
+   * shown, and dropped when the editor is made afresh, whose plugins it would
+   * not match.
+   */
+  state?: EditorState;
 }
 
 /**
@@ -316,8 +328,12 @@ export function DocumentEditorPage({
     // **The one on screen keeps its words as the next one opens.** The editor
     // still holds it here — the next render is what replaces it.
     const editor = editorRef.current;
+    const live = editor && !editor.isDestroyed ? editor : null;
     const was = shownKey.current ? opened.current.get(shownKey.current) : null;
-    if (was && editor && !editor.isDestroyed) was.doc = editor.getJSON();
+    if (was && live) {
+      was.doc = live.getJSON();
+      was.state = live.state;
+    }
 
     // Another draft is another set of files: what was open was open there.
     const place = `${draft}|${changeNumber ?? ""}`;
@@ -346,6 +362,15 @@ export function DocumentEditorPage({
       shownKey.current = key;
       savedJson.current = policy.saved ?? "";
       setDirty(isUnsaved(policy));
+      // **In the same editor, as it was left** — words, cursor and undo.
+      if (live && policy.saved !== null) {
+        showDocumentState(
+          live,
+          policy.state ?? createDocumentState(live, policy.doc),
+        );
+        policy.state = live.state;
+        live.commands.focus();
+      }
       setLoad({ kind: "ready", detail: policy.detail, doc: policy.doc });
       recountElsewhere();
       const reread =
@@ -404,8 +429,22 @@ export function DocumentEditorPage({
       }
       savedJson.current = JSON.stringify(doc);
       const key = openKey(detail);
-      opened.current.set(key, { detail, doc, saved: null });
+      const policy: OpenPolicy = { detail, doc, saved: null };
+      opened.current.set(key, policy);
       shownKey.current = key;
+      // The page's editor, when it has one, takes the policy in: a state of
+      // its own, so its undo starts here and the last policy's is kept.
+      const now = editorRef.current;
+      if (now && !now.isDestroyed) {
+        showDocumentState(now, createDocumentState(now, doc));
+        policy.state = now.state;
+        policy.doc = now.getJSON();
+        policy.saved = JSON.stringify(policy.doc);
+        savedJson.current = policy.saved;
+        setDirty(false);
+        offerKept(policy.saved);
+        now.commands.focus(isBlankPolicy(doc) ? "end" : "start");
+      }
       setLoad({ kind: "ready", detail, doc });
     })().catch((err: unknown) => {
       if (!cancelled) {
@@ -452,6 +491,17 @@ export function DocumentEditorPage({
     if (keyRef.current) dropWords(keyRef.current);
   }, []);
   useEffect(() => () => window.clearTimeout(keepTimer.current), []);
+
+  /** Words that never reached a save, from last time: offered, or let go. */
+  const offerKept = (baseline: string) => {
+    const key = keyRef.current;
+    const kept = key ? readWords(key) : null;
+    if (worthOffering(kept, baseline)) setRecovered(kept);
+    else {
+      setRecovered(null);
+      if (key) dropWords(key);
+    }
+  };
 
   const handleChange = useCallback((doc: JSONContent) => {
     const changed = JSON.stringify(doc) !== savedJson.current;
@@ -739,8 +789,22 @@ export function DocumentEditorPage({
           unsavedElsewhere.size === 1 ? "policy" : "policies"
         } unsaved`;
 
+  // **One editor for the whole sitting.** While the next policy is read, the
+  // last one stays on the page — still, and not editable — rather than the
+  // page blanking to a skeleton between two policies; then the editor takes
+  // the next one in (`documentState.ts`).
+  const lastReady = useRef<Extract<LoadState, { kind: "ready" }> | null>(null);
+  if (load.kind === "ready") lastReady.current = load;
+  else if (load.kind !== "loading") lastReady.current = null;
+  const frame =
+    load.kind === "ready"
+      ? load
+      : load.kind === "loading"
+        ? lastReady.current
+        : null;
+
   let body: ReactNode;
-  if (!draft || load.kind === "loading") {
+  if (!draft || (load.kind === "loading" && !frame)) {
     body = (
       <div className="doc-editor-state">
         <SkeletonGroup label="Opening the editor">
@@ -777,9 +841,14 @@ export function DocumentEditorPage({
         </div>
       </div>
     );
-  } else {
+  } else if (frame) {
     body = (
-      <div className="doc-editor-frame">
+      <div
+        className={`doc-editor-frame${
+          load.kind === "loading" ? " doc-editor-frame--opening" : ""
+        }`}
+        aria-busy={load.kind === "loading"}
+      >
         <Suspense
           fallback={
             <SkeletonGroup label="Loading the editor">
@@ -788,19 +857,25 @@ export function DocumentEditorPage({
           }
         >
           <DocumentEditor
-            // A policy opened from the file panel is a new document, not an
-            // edit to this one: a fresh editor. By identity, not address, so
-            // renaming or moving the open one keeps its editor and its undo.
-            key={openKey(load.detail)}
             label={name}
-            initialContent={load.doc}
+            // Read when the editor is made; every policy after the first is
+            // swapped in as a state of its own, undo and all.
+            initialContent={frame.doc}
+            editable={load.kind === "ready"}
             // A policy just started is its title and an empty line: the
             // cursor goes on the empty line, ready to type, as Word's does.
             // Anything longer opens at the top, where it starts.
-            autoFocus={isBlankPolicy(load.doc) ? "end" : "start"}
+            autoFocus={isBlankPolicy(frame.doc) ? "end" : "start"}
             onChange={handleChange}
             onSave={() => void saveNow()}
             onReady={(editor) => {
+              // A new editor: states made by the one before carry its plugins,
+              // not these, so each open policy starts again from its words.
+              if (editorRef.current !== editor) {
+                for (const policy of opened.current.values()) {
+                  policy.state = undefined;
+                }
+              }
               editorRef.current = editor;
               // The baseline is the document as the editor holds it, not as
               // the file had it: loading normalises it (an empty paragraph at
@@ -812,6 +887,7 @@ export function DocumentEditorPage({
                 ? opened.current.get(shownKey.current)
                 : undefined;
               const now = JSON.stringify(editor.getJSON());
+              if (shown) shown.state = editor.state;
               if (shown && shown.saved !== null) {
                 savedJson.current = shown.saved;
                 setDirty(now !== shown.saved);
@@ -823,14 +899,7 @@ export function DocumentEditorPage({
                 shown.doc = editor.getJSON();
               }
               setDirty(false);
-              // Words that never reached a save, from last time.
-              const key = keyRef.current;
-              const kept = key ? readWords(key) : null;
-              if (worthOffering(kept, savedJson.current)) setRecovered(kept);
-              else {
-                setRecovered(null);
-                if (key) dropWords(key);
-              }
+              offerKept(now);
             }}
             statusStart={
               <span
@@ -872,6 +941,7 @@ export function DocumentEditorPage({
       if (!isUnsaved(policy) || !draft) continue;
       dropWords(recoveryKey(org, binder, draft, addressOf(policy)));
       policy.doc = JSON.parse(policy.saved!) as JSONContent;
+      policy.state = undefined;
     }
     setUnsavedElsewhere(new Map());
   };
