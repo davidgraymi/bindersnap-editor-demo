@@ -109,6 +109,13 @@ draft: a policy opens beside the last one, and New starts one, without leaving
 the editor. Leaving a policy with unsaved words asks first, whatever the way
 out.
 
+**Pictures are embedded, not linked** (`packages/editor/imageFiles.ts`): chosen,
+pasted or dropped, a picture is scaled to at most 1600px and written into the
+document as a `data:image/…;base64` source, so it is versioned with the words
+in the same commit and cannot change under an approved version. Raster types
+only; the sanitizer (`isSafeImageSrc`) refuses SVG and every other `data:`
+address. Limit 1.5 MB per picture after scaling.
+
 `documentSchema.ts` is the one list of Tiptap extensions both the editor and
 the reader (`apps/app/editorDocumentHtml.ts`) load. Add a node or an attribute
 there, never to one side: ProseMirror drops what its schema does not declare,
