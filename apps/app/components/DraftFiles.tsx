@@ -94,6 +94,11 @@ interface DraftFilesProps {
    */
   unsavedElsewhere?: ReadonlyMap<string, string>;
   onOpen: (slugPath: string) => void;
+  /**
+   * A policy row was pointed at or focused: the click that opens it is likely
+   * next, and reading it now makes that open immediate.
+   */
+  onReadAhead?: (slugPath: string) => void;
   /** Start a new policy in this draft. Absent, and there is no New button. */
   /** In `folder`, when started from a folder's menu; else beside the open one. */
   onNew?: (folder?: string) => void;
@@ -195,6 +200,7 @@ export function DraftFiles({
   active,
   unsaved = false,
   unsavedElsewhere,
+  onReadAhead,
   onOpen,
   onNew,
   onNewFolder,
@@ -764,6 +770,12 @@ export function DraftFiles({
                 if (on && onRename && canAct(node)) setRenaming(key);
               }}
               onKeyDown={(event) => onRowKey(event, node)}
+              onPointerEnter={
+                writable && !on ? () => onReadAhead?.(slugPath) : undefined
+              }
+              onFocus={
+                writable && !on ? () => onReadAhead?.(slugPath) : undefined
+              }
             >
               {icon}
               <span className="app-explorer-name">{label}</span>
