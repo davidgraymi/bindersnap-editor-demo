@@ -754,6 +754,12 @@ export function BinderShell({
   const archiveInEditor = (slugPath: string) =>
     actInEditor((into) => archiveBinderDocument(org, binder, slugPath, into));
 
+  /** Every file the draft has written, for the editor's panel to mark. */
+  const draftTouched = useMemo(
+    () => (draft?.draft?.acts ?? []).flatMap((act) => act.paths),
+    [draft],
+  );
+
   /** Move to another of your drafts. The address is what carries it. */
   const switchDraft = (branch: string) => {
     setDraft(null);
@@ -1233,7 +1239,11 @@ export function BinderShell({
           /* The draft's files, which a change request is not. */
           files={
             contents && writingChange === null
-              ? { documents: contents.documents, folders: contents.folders }
+              ? {
+                  documents: contents.documents,
+                  folders: contents.folders,
+                  touched: draftTouched,
+                }
               : null
           }
           onOpenDocument={(slugPath) => void writeDocument(slugPath)}
