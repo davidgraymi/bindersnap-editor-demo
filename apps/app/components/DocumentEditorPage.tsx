@@ -491,18 +491,20 @@ export function DocumentEditorPage({
       const file = new File([JSON.stringify(doc, null, 2)], "document.json", {
         type: "application/json",
       });
+      const shown = shownKey.current
+        ? opened.current.get(shownKey.current)
+        : undefined;
       await reviseBinderDocument(
         org,
         binder,
         file,
-        load.detail.document.slugPath,
+        // Where it is now: renamed or moved since it was opened, the details
+        // read then name an address the draft no longer has.
+        shown ? addressOf(shown) : load.detail.document.slugPath,
         change ? { changeNumber: change.number } : { draft },
         "editor",
       );
       savedJson.current = json;
-      const shown = shownKey.current
-        ? opened.current.get(shownKey.current)
-        : undefined;
       if (shown) shown.saved = json;
       // Anything typed while the save was in flight is still unsaved.
       const still = JSON.stringify(editor.getJSON()) !== json;
@@ -521,7 +523,17 @@ export function DocumentEditorPage({
       });
       return false;
     }
-  }, [binder, change, draft, forgetKept, load, onSaved, org, save.kind]);
+  }, [
+    addressOf,
+    binder,
+    change,
+    draft,
+    forgetKept,
+    load,
+    onSaved,
+    org,
+    save.kind,
+  ]);
 
   /**
    * Save every open policy with unsaved words: this one, then the others.
