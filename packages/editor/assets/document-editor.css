@@ -389,6 +389,13 @@
   visibility: hidden;
 }
 
+/* Between a menu's choices and a setting that is not one of them. */
+.bs-rmenu-sep {
+  height: 1px;
+  margin: var(--brand-space-1) var(--brand-space-2);
+  background: var(--bs-rule);
+}
+
 .bs-rmenu-item {
   appearance: none;
   display: flex;
@@ -1579,4 +1586,28 @@
   .bs-print-root tr {
     break-inside: avoid;
   }
+}
+
+/* Numbered sections: 1. Purpose, 2.1 Wards. Drawn, never typed, so they
+   cannot fall out of step when a section is added in the middle. See
+   `NumberedHeadings.ts`. */
+.bs-doc-content {
+  counter-reset: bs-section bs-subsection;
+}
+
+.bs-doc-content h2.bs-numbered {
+  counter-increment: bs-section;
+  counter-reset: bs-subsection;
+}
+
+.bs-doc-content h3.bs-numbered {
+  counter-increment: bs-subsection;
+}
+
+.bs-doc-content h2.bs-numbered::before {
+  content: counter(bs-section) ".\00a0\00a0";
+}
+
+.bs-doc-content h3.bs-numbered::before {
+  content: counter(bs-section) "." counter(bs-subsection) "\00a0\00a0";
 }

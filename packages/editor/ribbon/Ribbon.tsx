@@ -766,25 +766,40 @@ function HomeTab({
             PARAGRAPH_STYLES.findIndex((style) => style.id === format.style) >=
               gallery
           }
-          panel={(close) =>
-            PARAGRAPH_STYLES.map((style) => (
+          panel={(close) => (
+            <>
+              {PARAGRAPH_STYLES.map((style) => (
+                <MenuChoice
+                  key={style.id}
+                  checked={format.style === style.id}
+                  hint={
+                    style.shortcut ? shortcutLabel(style.shortcut) : undefined
+                  }
+                  onPick={() => {
+                    applyStyle(style.id);
+                    close();
+                  }}
+                >
+                  <span className={`bs-style-menu bs-style--${style.id}`}>
+                    <span className="bs-style-sample">{style.label}</span>
+                  </span>
+                </MenuChoice>
+              ))}
+              {/* Word links numbering to the heading styles; so does this,
+                  from the same menu, for the whole document at once. */}
+              <div className="bs-rmenu-sep" role="separator" />
               <MenuChoice
-                key={style.id}
-                checked={format.style === style.id}
-                hint={
-                  style.shortcut ? shortcutLabel(style.shortcut) : undefined
-                }
+                checked={format.numberedHeadings}
+                hint="1. 1.1"
                 onPick={() => {
-                  applyStyle(style.id);
+                  chain().toggleHeadingNumbers().run();
                   close();
                 }}
               >
-                <span className={`bs-style-menu bs-style--${style.id}`}>
-                  <span className="bs-style-sample">{style.label}</span>
-                </span>
+                Number the headings
               </MenuChoice>
-            ))
-          }
+            </>
+          )}
         >
           {gallery > 0 ? (
             <span className="sr-only">More styles</span>
