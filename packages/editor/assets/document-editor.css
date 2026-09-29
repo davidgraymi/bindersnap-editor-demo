@@ -80,7 +80,19 @@
 /* Word colours a contextual tab so it reads as belonging to the thing you
    are in, not as a fifth permanent tab. */
 .bs-ribbon-tab--context {
-  color: var(--bs-status-info-fg);
+  position: relative;
+  color: var(--bs-coral-text);
+}
+
+/* The band Word puts over its contextual tabs, as a hairline: this tab is the
+   table's, and goes when the cursor leaves it. */
+.bs-ribbon-tab--context::before {
+  content: "";
+  position: absolute;
+  inset: 0 var(--brand-space-1) auto;
+  height: 3px;
+  border-radius: 0 0 var(--brand-radius-sm) var(--brand-radius-sm);
+  background: var(--bs-coral-border-soft);
 }
 
 .bs-ribbon-tab:focus-visible,

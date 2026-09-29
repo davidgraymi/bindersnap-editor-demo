@@ -299,6 +299,16 @@ export function DocumentEditorPage({
       ? formatDocumentName(load.detail.document.name)
       : formatDocumentName(documentPath.split("/").pop() ?? documentPath);
 
+  // The browser tab says which policy is open, and — as Word's title bar
+  // does — when it has changes not saved yet.
+  useEffect(() => {
+    const was = document.title;
+    document.title = `${dirty ? "• " : ""}${name} · Bindersnap`;
+    return () => {
+      document.title = was;
+    };
+  }, [dirty, name]);
+
   const status =
     save.kind === "saving"
       ? "Saving…"
@@ -507,6 +517,7 @@ export function DocumentEditorPage({
             documents={files.documents}
             folders={files.folders}
             active={documentPath}
+            unsaved={dirty}
             onOpen={(slugPath) => leave({ kind: "open", slugPath })}
             onNew={() => leave({ kind: "new" })}
           />

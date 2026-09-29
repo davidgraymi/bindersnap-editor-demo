@@ -342,8 +342,13 @@ function SearchResults({ editor }: { editor: Editor }) {
       !!b &&
       a.length === b.length &&
       a.every(
+        // `to` as well as `from`: typing "pat" on to "patient" keeps every
+        // match where it starts, and a list compared on starts alone went on
+        // highlighting "pat".
         (entry, index) =>
-          entry.from === b[index]?.from && entry.current === b[index]?.current,
+          entry.from === b[index]?.from &&
+          entry.to === b[index]?.to &&
+          entry.current === b[index]?.current,
       ),
   });
 
