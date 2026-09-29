@@ -6489,6 +6489,37 @@ a.bs-knot {
   white-space: pre-wrap;
 }
 
+/* A picture has no text to tint or strike, so the mark is drawn around it:
+   green for one this change put in, coral and faded for one it took out. */
+.doc-compare-prose ins:has(img),
+.doc-compare-prose del:has(img) {
+  display: inline-block;
+  padding: var(--brand-space-0-5);
+  background: none;
+}
+
+.doc-compare-prose ins img {
+  outline: 3px solid var(--bs-status-ok-fg);
+  outline-offset: 2px;
+}
+
+.doc-compare-prose del img {
+  outline: 3px solid var(--bs-coral-text);
+  outline-offset: 2px;
+  opacity: 0.5;
+}
+
+/* Same words, different look: said once, above the document it is about. */
+.doc-compare-restyled {
+  margin: 0 0 var(--brand-space-3);
+  padding: var(--brand-space-2) var(--brand-space-3);
+  border-left: 3px solid var(--bs-status-info-border);
+  border-radius: var(--brand-radius-xs);
+  background: var(--bs-status-info-bg);
+  font-size: var(--brand-text-sm);
+  color: var(--bs-text-primary);
+}
+
 /* Before and after, side by side — the only comparison a picture allows. */
 .doc-compare-columns {
   display: grid;
@@ -6783,6 +6814,12 @@ a.cmp-branch:focus-visible {
 
 .cmp-counts-del {
   color: var(--bs-coral-text);
+}
+
+.cmp-counts-note {
+  font-family: inherit;
+  font-weight: var(--brand-weight-medium);
+  color: var(--bs-status-info-fg);
 }
 
 /* ── One document's panel ──────────────────────────────────────────────── */
