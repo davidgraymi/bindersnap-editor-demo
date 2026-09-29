@@ -118,6 +118,8 @@ interface DocumentEditorPageProps {
   onRenameFile: (target: DraftFileTarget, name: string) => Promise<void>;
   onMoveFile: (subject: DragSubject, folder: string) => Promise<void>;
   onArchiveFile: (slugPath: string) => Promise<void>;
+  /** A copy of a policy, in the draft, opened in the editor. */
+  onCopyFile: (slugPath: string) => Promise<void>;
   /** Bring an archived policy back, into the draft. */
   onRestoreFile: (uid: string) => Promise<void>;
   /** What is archived, as the draft stands. */
@@ -200,6 +202,7 @@ export function DocumentEditorPage({
   onArchiveFile,
   onRestoreFile,
   onReadArchive,
+  onCopyFile,
   onNewFolder,
 }: DocumentEditorPageProps) {
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
@@ -828,6 +831,18 @@ export function DocumentEditorPage({
                       slugPath === documentPath,
                       () => onArchiveFile(slugPath),
                       "Unable to archive that.",
+                    )
+            }
+            onCopy={
+              change
+                ? undefined
+                : (slugPath) =>
+                    void actOnFiles(
+                      // The copy opens in place of this one: its words go
+                      // first, into the copy too if it is this one.
+                      true,
+                      () => onCopyFile(slugPath),
+                      "Unable to copy that.",
                     )
             }
             archivedCount={files.archivedCount ?? 0}
