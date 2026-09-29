@@ -515,6 +515,72 @@ test("a picture is sized by its corners or the Picture tab, and keeps its size",
   ).toHaveAttribute("width", "200");
 });
 
+test("a table of contents lists the headings and keeps up with them", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/edit=write/);
+  const draft = new URL(page.url()).searchParams.get("draft")!;
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+
+  // A section to list: a Heading 2 after the opening paragraph. The ribbon
+  // saying Normal is the editor having taken the click, not the title.
+  await text.getByText("Clean your hands").click();
+  await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("ControlOrMeta+Alt+2");
+  await page.keyboard.type("Gloves");
+
+  // The contents go at the top, under the title, as Word's usually do.
+  await text.getByText("Clean your hands").click({ position: { x: 1, y: 5 } });
+  await page.getByRole("tab", { name: "Insert" }).click();
+  await page.getByRole("button", { name: "Table of contents" }).click();
+  const contents = text.locator(".bs-toc");
+  await expect(contents.locator(".bs-toc-entry")).toHaveText([
+    "Hand Hygiene",
+    "Gloves",
+  ]);
+
+  // Renaming a section renames its entry, with nothing to update by hand.
+  await text.getByRole("heading", { name: "Gloves" }).click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" and aprons");
+  await expect(contents.locator(".bs-toc-entry").nth(1)).toHaveText(
+    "Gloves and aprons",
+  );
+
+  // An entry goes to its section.
+  await contents.getByText("Gloves and aprons").click();
+  await page.keyboard.type("Wearing ");
+  await expect(
+    text.getByRole("heading", { name: "Wearing Gloves and aprons" }),
+  ).toBeVisible();
+  await expect(contents.locator(".bs-toc-entry").nth(1)).toHaveText(
+    "Wearing Gloves and aprons",
+  );
+
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.getByText(/Saved just now/)).toBeVisible({
+    timeout: 20_000,
+  });
+  const saved = await policyText(session, org, binder, draft);
+  expect(saved).toContain('"type": "tableOfContents"');
+
+  // The reader shows the list the author saw.
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  const read = page.locator(".doc-preview-prose .bs-toc");
+  await expect(read.getByText("Contents")).toBeVisible();
+  await expect(read.getByText("Wearing Gloves and aprons")).toBeVisible();
+});
+
 test("words never saved are kept on this device and offered back", async ({
   context,
   page,

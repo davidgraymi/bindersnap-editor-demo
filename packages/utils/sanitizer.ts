@@ -84,6 +84,7 @@ const ALLOWED_NODE_TYPES = new Set([
   "taskList",
   "taskItem",
   "pageBreak",
+  "tableOfContents",
   "conflict",
 ]);
 
