@@ -825,6 +825,48 @@ test("the arrow keys walk the file panel's tree, as in a file explorer", async (
   await expect(page).toHaveURL(/\/hand-hygiene\?edit=write/);
 });
 
+test("Go to file opens the first match on Enter, and Down steps into the matches", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write&draft=/);
+  const files = page.getByRole("complementary", {
+    name: "Files in Clinical Policies",
+  });
+  await files.getByRole("button", { name: "New document" }).click();
+  await page.getByLabel("What it is called").fill("Visitor Policy");
+  await page.getByRole("button", { name: "Start writing" }).click();
+  await expect(page).toHaveURL(/\/visitor-policy\?edit=write/);
+
+  const find = files.getByRole("searchbox", {
+    name: "Find a document in Clinical Policies",
+  });
+  await find.fill("hygi");
+  await expect(
+    files.getByRole("button", { name: /^Visitor Policy/ }),
+  ).toHaveCount(0);
+  await find.press("Enter");
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write/);
+  await expect(find).toHaveValue("");
+
+  // Down from the box is the first row; Up from the first row is the box.
+  await find.focus();
+  await page.keyboard.press("ArrowDown");
+  const first = files.getByRole("button", { name: /^Hand Hygiene/ });
+  await expect(first).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(find).toBeFocused();
+
+  // Escape clears what was typed.
+  await find.fill("visit");
+  await find.press("Escape");
+  await expect(find).toHaveValue("");
+});
+
 test("closing with unsaved words asks first, and Cancel keeps them", async ({
   page,
 }) => {

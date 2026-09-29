@@ -143,6 +143,18 @@ function isNarrow(): boolean {
     : false;
 }
 
+/** The first document in the tree's order, folders first as drawn. */
+function firstDocument(
+  nodes: readonly BinderTreeNode[],
+): WorkspaceDocumentListEntry | null {
+  for (const node of nodes) {
+    if (node.kind === "document") return node.document;
+    const inside = firstDocument(node.children);
+    if (inside) return inside;
+  }
+  return null;
+}
+
 /** A row as something that can be picked up and dropped. */
 function subjectOf(node: BinderTreeNode): DragSubject {
   return node.kind === "folder"
@@ -191,6 +203,8 @@ export function DraftFiles({
   const [floating, setFloating] = useState(false);
   const floatRef = useRef<HTMLElement>(null);
   const railRef = useRef<HTMLDivElement>(null);
+  const treeRef = useRef<HTMLDivElement>(null);
+  const filterRef = useRef<HTMLInputElement>(null);
   /** The row whose name is a text box, by {@link keyOf}. One at a time. */
   const [renaming, setRenaming] = useState<string | null>(null);
   /** The row whose Move was pressed: the keyboard's way to refile. */
@@ -418,7 +432,11 @@ export function DraftFiles({
         focusRow(at + 1);
         break;
       case "ArrowUp":
-        focusRow(at - 1);
+        // From the first row, back up into Go to file.
+        if (at === 0) {
+          event.preventDefault();
+          filterRef.current?.focus();
+        } else focusRow(at - 1);
         break;
       case "Home":
         focusRow(0);
@@ -862,6 +880,7 @@ export function DraftFiles({
       <div className="app-explorer-filter">
         <input
           className="bs-input bs-input--sm"
+          ref={filterRef}
           type="search"
           value={filter}
           placeholder="Go to file"
@@ -870,10 +889,32 @@ export function DraftFiles({
             setFilter(event.target.value);
             if (event.target.value.trim() !== "") openFolders(everyFolder);
           }}
+          onKeyDown={(event) => {
+            // VS Code's Go to File: Enter opens the first match, Down steps
+            // into the matches, Escape clears what was typed.
+            if (event.key === "Enter" && needle !== "") {
+              const first = firstDocument(shown);
+              if (!first) return;
+              event.preventDefault();
+              setFilter("");
+              if (first.slugPath !== active) openPolicy(first.slugPath);
+            } else if (event.key === "ArrowDown") {
+              const row = treeRef.current?.querySelector<HTMLElement>(
+                "button.app-explorer-item, button.app-explorer-folder",
+              );
+              if (!row) return;
+              event.preventDefault();
+              row.focus();
+            } else if (event.key === "Escape" && filter !== "") {
+              event.preventDefault();
+              event.stopPropagation();
+              setFilter("");
+            }
+          }}
         />
       </div>
 
-      <div className="app-explorer-tree" onKeyDown={onTreeKey}>
+      <div className="app-explorer-tree" ref={treeRef} onKeyDown={onTreeKey}>
         {shown.length === 0 ? (
           <p className="app-explorer-empty">
             {needle === "" ? "Nothing filed yet." : "No document matches that."}
