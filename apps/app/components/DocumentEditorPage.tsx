@@ -82,8 +82,8 @@ interface DocumentEditorPageProps {
   } | null;
   /** Open another policy in the editor, in the same draft. */
   onOpenDocument: (slugPath: string) => void;
-  /** Start a new policy in the draft. */
-  onNewDocument: () => void;
+  /** Start a new policy in the draft: in `folder`, or beside this one. */
+  onNewDocument: (folder?: string) => void;
   /** Your drafts in this binder, for the picker in the title bar. */
   drafts: BinderDraftPayload | null;
   /** A draft is being started or renamed. */
@@ -105,7 +105,7 @@ interface DocumentEditorPageProps {
   onMoveFile: (subject: DragSubject, folder: string) => Promise<void>;
   onArchiveFile: (slugPath: string) => Promise<void>;
   /** Make a folder in the draft. */
-  onNewFolder: () => void;
+  onNewFolder: (parent?: string) => void;
   /**
    * Saving into an open change request rather than a draft. `draft` is then
    * the change's branch, read from and saved to; there is nothing to propose,
@@ -118,7 +118,7 @@ interface DocumentEditorPageProps {
 type Leaving =
   | { kind: "close" }
   | { kind: "open"; slugPath: string }
-  | { kind: "new" }
+  | { kind: "new"; folder?: string }
   | { kind: "draft"; branch: string }
   | { kind: "start"; name: string }
   | { kind: "propose" };
@@ -346,7 +346,7 @@ export function DocumentEditorPage({
     else if (to.kind === "draft") onSwitchDraft(to.branch);
     else if (to.kind === "start") void onStartDraft(to.name);
     else if (to.kind === "propose") onPropose();
-    else onNewDocument();
+    else onNewDocument(to.folder);
   };
 
   /**
@@ -727,7 +727,9 @@ export function DocumentEditorPage({
             unsaved={dirty}
             onOpen={(slugPath) => leave({ kind: "open", slugPath })}
             // A change request is revised, not added to or reshaped, here.
-            onNew={change ? undefined : () => leave({ kind: "new" })}
+            onNew={
+              change ? undefined : (folder) => leave({ kind: "new", folder })
+            }
             onNewFolder={change ? undefined : onNewFolder}
             busy={filesBusy || save.kind === "saving"}
             onRename={

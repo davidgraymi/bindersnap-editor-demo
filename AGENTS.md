@@ -118,7 +118,9 @@ binder opens the editor** (`pickPolicyToWrite`: the policy last written in the
 draft, else the first) — only a binder with nothing the editor writes opens
 the tree. **The editor's file panel organizes the draft in place**: each row
 renames (pencil, double-click on the open one, or F2), moves (drag onto a
-folder, or Move), and a policy archives; New folder is in its head. Every act
+folder, or Move), and a policy archives; New folder is in its head. A
+right-click, the menu key or Shift+F10 on a row opens the same acts as a
+menu, and a folder's adds "New document here" and "New folder here". Every act
 goes into the same draft. When one moves the open policy — renaming it,
 refiling it, or renaming a folder above it — its unsaved words are saved first
 and the editor follows it by identity (`uid`) to its new address; archived, it
