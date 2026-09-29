@@ -1134,6 +1134,50 @@ test("the editor's file panel starts a policy, and moves between policies keepin
   expect(await raw("hand-hygiene")).toContain("Every time.");
 });
 
+test("each open policy keeps its own undo, across a move to another and back", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const files = page.getByRole("complementary", {
+    name: "Files in Clinical Policies",
+  });
+  await files.getByRole("button", { name: "New document" }).click();
+  await page.getByLabel("What it is called").fill("Visitor Policy");
+  await page.getByRole("button", { name: "Start writing" }).click();
+  const visitor = page.getByRole("textbox", { name: "Visitor Policy" });
+  await expect(visitor).toBeFocused();
+
+  // Words in the new one, then over to Hand Hygiene and words there.
+  await page.keyboard.type("Visitors sign in.");
+  await files.getByRole("button", { name: /^Hand Hygiene/ }).click();
+  const hand = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await expect(hand).toBeFocused();
+  await expect(hand).toContainText("Clean your hands");
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.type(" Always.");
+  await expect(hand).toContainText("Always.");
+
+  // Back to Visitor Policy: its words, and Ctrl+Z still takes them back —
+  // not Hand Hygiene's, and not nothing.
+  await files.getByRole("button", { name: /^Visitor Policy/ }).click();
+  await expect(visitor).toContainText("Visitors sign in.");
+  await expect(visitor).toBeFocused();
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(visitor).not.toContainText("Visitors sign in.");
+
+  // And Hand Hygiene's undo is its own, still there.
+  await files.getByRole("button", { name: /^Hand Hygiene/ }).click();
+  await expect(hand).toContainText("Always.");
+  await expect(hand).toBeFocused();
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(hand).not.toContainText("Always.");
+  await expect(hand).toContainText("Clean your hands");
+});
+
 test("a picture from this device is kept inside the policy, in the draft", async ({
   page,
 }) => {
