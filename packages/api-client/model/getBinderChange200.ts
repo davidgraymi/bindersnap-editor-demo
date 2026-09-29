@@ -18,6 +18,7 @@ export type GetBinderChange200 = {
   documents: GetBinderChange200DocumentsItem[];
   removedDocuments: GetBinderChange200RemovedDocumentsItem[];
   isBehind: boolean;
+  hasConflicts: boolean;
   blockOnUnresolvedThreads: boolean;
   unresolvedThreadCount: number;
   canManage: boolean;
