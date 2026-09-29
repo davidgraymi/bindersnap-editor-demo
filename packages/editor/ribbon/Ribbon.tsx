@@ -69,6 +69,7 @@ import {
   ZoomIn,
   ZoomOut,
   Upload,
+  Keyboard,
 } from "lucide-react";
 
 import { LINE_SPACINGS } from "../documentSchema";
@@ -134,6 +135,8 @@ interface RibbonProps {
   /** Open the navigation pane on Find, or on Replace. */
   onFind: (replace: boolean) => void;
   onPrint: () => void;
+  /** Every keyboard shortcut, on one sheet (Ctrl+/). */
+  onShortcuts?: () => void;
   /** Anything the page puts at the end of the tab row — Save, in practice. */
   end?: ReactNode;
 }
@@ -153,6 +156,7 @@ export function Ribbon({
   onViewChange,
   onFind,
   onPrint,
+  onShortcuts,
   end,
 }: RibbonProps) {
   const format = useFormatState(editor);
@@ -308,6 +312,7 @@ export function Ribbon({
               zoom={zoom}
               onViewChange={onViewChange}
               onPrint={onPrint}
+              onShortcuts={onShortcuts}
             />
           ) : tab === "table" ? (
             <TableTab editor={editor} format={format} />
@@ -1419,11 +1424,13 @@ function ViewTab({
   zoom,
   onViewChange,
   onPrint,
+  onShortcuts,
 }: {
   view: ViewSettings;
   zoom: number;
   onViewChange: (next: ViewSettings) => void;
   onPrint: () => void;
+  onShortcuts?: () => void;
 }) {
   const zoomTo = (next: number) =>
     onViewChange({ ...view, zoom: clampZoom(next) });
@@ -1499,6 +1506,18 @@ function ViewTab({
           onClick={onPrint}
         />
       </RibbonGroup>
+
+      {onShortcuts ? (
+        <RibbonGroup label="Help">
+          <RibbonButton
+            icon={Keyboard}
+            label="Keyboard shortcuts"
+            shortcut="Ctrl+/"
+            large
+            onClick={onShortcuts}
+          />
+        </RibbonGroup>
+      ) : null}
     </>
   );
 }
