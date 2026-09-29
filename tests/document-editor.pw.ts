@@ -547,6 +547,66 @@ test("the policy is renamed from its title, and its unsaved words go with it", a
   await expect(page).toHaveURL(/\/hand-care\?edit=write/);
 });
 
+test("a row's menu in the file panel acts on it: a folder takes a new document and a new folder", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write&draft=/);
+  const files = page.getByRole("complementary", {
+    name: "Files in Clinical Policies",
+  });
+
+  // A folder, from the panel's head.
+  await files.getByRole("button", { name: "New folder" }).click();
+  await page.getByLabel("What to call it").fill("Nursing");
+  await page.getByRole("button", { name: "Add folder" }).click();
+  const nursing = files.getByRole("button", { name: "Nursing", exact: true });
+  await expect(nursing).toBeVisible({ timeout: 20_000 });
+
+  // Right-click the folder: a folder inside it starts with its path.
+  await nursing.click({ button: "right" });
+  const menu = page.getByRole("menu", { name: "Nursing: actions" });
+  await expect(menu.getByRole("menuitem").first()).toBeFocused();
+  await menu.getByRole("menuitem", { name: "New folder here" }).click();
+  await expect(page.getByLabel("What to call it")).toHaveValue(/^nursing\//i);
+  await page.getByRole("button", { name: "Cancel" }).click();
+
+  // And a new document from the same menu is filed in it.
+  await nursing.click({ button: "right" });
+  await menu.getByRole("menuitem", { name: "New document here" }).click();
+  await page.getByLabel("What it is called").fill("Night Rounds");
+  await page.getByRole("button", { name: "Start writing" }).click();
+  await expect(page).toHaveURL(/\/nursing\/night-rounds\?edit=write/i, {
+    timeout: 20_000,
+  });
+
+  // From the keyboard: Shift+F10 on a row opens its menu, Escape closes it
+  // and gives the row its focus back.
+  const hand = files.getByRole("button", { name: /^Hand Hygiene/ });
+  await hand.focus();
+  await page.keyboard.press("Shift+F10");
+  const handMenu = page.getByRole("menu", { name: "Hand Hygiene: actions" });
+  await expect(handMenu.getByRole("menuitem", { name: "Open" })).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(
+    handMenu.getByRole("menuitem", { name: /^Rename/ }),
+  ).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(handMenu).toHaveCount(0);
+  await expect(hand).toBeFocused();
+
+  // Rename from the menu turns the row into a text box.
+  await hand.click({ button: "right" });
+  await handMenu.getByRole("menuitem", { name: /^Rename/ }).click();
+  await expect(files.getByRole("textbox", { name: "New name" })).toHaveValue(
+    "Hand Hygiene",
+  );
+});
+
 test("closing with unsaved words asks first, and Cancel keeps them", async ({
   page,
 }) => {

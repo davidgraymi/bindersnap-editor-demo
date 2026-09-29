@@ -175,6 +175,8 @@ export function BinderShell({
   /** Opened from the editor's New: start on Write, in the open policy's folder. */
   const [addingFromEditor, setAddingFromEditor] = useState(false);
   const [addingFolder, setAddingFolder] = useState(false);
+  /** The folder a new document or folder goes in, from a folder's menu. */
+  const [addingIn, setAddingIn] = useState<string | null>(null);
 
   // Back and forward are how somebody leaves a tab or a change, so the shell
   // follows the address bar rather than its own memory of what was clicked.
@@ -1235,7 +1237,8 @@ export function BinderShell({
               : null
           }
           onOpenDocument={(slugPath) => void writeDocument(slugPath)}
-          onNewDocument={() => {
+          onNewDocument={(folder) => {
+            setAddingIn(folder ?? null);
             setAddingFromEditor(true);
             setAdding(true);
           }}
@@ -1248,7 +1251,10 @@ export function BinderShell({
           onRenameFile={renameInEditor}
           onMoveFile={moveInEditor}
           onArchiveFile={archiveInEditor}
-          onNewFolder={() => setAddingFolder(true)}
+          onNewFolder={(parent) => {
+            setAddingIn(parent ?? null);
+            setAddingFolder(true);
+          }}
         />
       ) : documentPath ? (
         <BinderDocumentPage
@@ -1513,9 +1519,14 @@ export function BinderShell({
           org={org}
           binder={binder}
           draft={draft?.draft?.branch}
-          onClose={() => setAddingFolder(false)}
+          parent={addingIn ?? ""}
+          onClose={() => {
+            setAddingFolder(false);
+            setAddingIn(null);
+          }}
           onProposed={(changeNumber) => {
             setAddingFolder(false);
+            setAddingIn(null);
             loadOverview();
             // Null means it went into the draft, where there is no change
             // request to send anybody to: the folder is in the tree already,
@@ -1538,19 +1549,23 @@ export function BinderShell({
           {...(addingFromEditor
             ? {
                 initialMode: "write" as const,
-                initialFolder: documentPath?.includes("/")
-                  ? documentPath.slice(0, documentPath.lastIndexOf("/"))
-                  : "",
+                initialFolder:
+                  addingIn ??
+                  (documentPath?.includes("/")
+                    ? documentPath.slice(0, documentPath.lastIndexOf("/"))
+                    : ""),
               }
             : {})}
           onClose={() => {
             setAdding(false);
             setAddingFromEditor(false);
+            setAddingIn(null);
           }}
           onWrite={(slugPath, branch) => {
             // Straight into the editor, in the draft it was started in.
             setAdding(false);
             setAddingFromEditor(false);
+            setAddingIn(null);
             loadOverview();
             setDraftBranch(branch);
             moveTo(
@@ -1566,6 +1581,7 @@ export function BinderShell({
           onAdded={(changeNumber) => {
             setAdding(false);
             setAddingFromEditor(false);
+            setAddingIn(null);
             loadOverview();
             // Into the draft: the policy is in the tree, nothing has been
             // proposed, and there is nowhere to navigate to.
