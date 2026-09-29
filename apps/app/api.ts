@@ -1656,6 +1656,40 @@ export async function downloadBinderDocument(
   return response.data;
 }
 
+/**
+ * A document as a PDF or a Word document, and what to call the file.
+ *
+ * A policy written in Bindersnap is laid out on the server; an uploaded file
+ * that is already a PDF or a Word document comes back as itself. The server
+ * names the file — `hand-hygiene-v3.pdf` — because it is the one that knows
+ * which version it is.
+ */
+export async function exportBinderDocument(
+  org: string,
+  binder: string,
+  documentPath: string,
+  format: "pdf" | "docx",
+  ref?: string,
+): Promise<{ blob: Blob; fileName: string }> {
+  const response = await BindersClient.exportBinderDocument(
+    org,
+    binder,
+    documentPath,
+    { format, ...(ref ? { ref } : {}) },
+    { cache: "no-store" },
+  );
+  const disposition =
+    (response as { headers?: Headers }).headers?.get("content-disposition") ??
+    "";
+  const named = disposition.match(/filename="([^"]+)"/)?.[1];
+  const leaf =
+    documentPath
+      .split("/")
+      .pop()
+      ?.replace(/\.[^.]+$/, "") || "document";
+  return { blob: response.data, fileName: named ?? `${leaf}.${format}` };
+}
+
 // Billing functions
 
 /**

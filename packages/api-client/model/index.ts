@@ -151,6 +151,8 @@ export * from './documentSearchResultsPayloadDocumentsItemOwner.ts';
 export * from './downloadBinderDocumentParams.ts';
 export * from './editBinderChange200.ts';
 export * from './editBinderChangeBody.ts';
+export * from './exportBinderDocumentFormat.ts';
+export * from './exportBinderDocumentParams.ts';
 export * from './getBillingStatus200.ts';
 export * from './getBillingStatus200AccessSource.ts';
 export * from './getBillingStatus200Organization.ts';

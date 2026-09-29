@@ -53,27 +53,9 @@ export function numbersHeadings(doc: ProseMirrorNode): boolean {
   return doc.attrs.numberedHeadings === true;
 }
 
-/**
- * "1." and "2.1" for a list of heading levels in order, as the counters draw
- * them; null for a level that is not numbered. A subsection before any
- * section is "0.1", as Word's would be.
- */
-export function headingNumbers(levels: readonly number[]): (string | null)[] {
-  let section = 0;
-  let sub = 0;
-  return levels.map((level) => {
-    if (level === 2) {
-      section += 1;
-      sub = 0;
-      return `${section}.`;
-    }
-    if (level === 3) {
-      sub += 1;
-      return `${section}.${sub}`;
-    }
-    return null;
-  });
-}
+// Shared with the export, which numbers a printed copy's sections the same way.
+export { headingNumbers } from "../../utils/headingNumbers";
+import { headingNumbers } from "../../utils/headingNumbers";
 
 export const numberedHeadingsKey = new PluginKey("numberedHeadings");
 

@@ -24,6 +24,7 @@ import type {
   DownloadBinderDocumentParams,
   EditBinderChange200,
   EditBinderChangeBody,
+  ExportBinderDocumentParams,
   GetBinder200,
   GetBinderArchive200,
   GetBinderArchiveParams,
@@ -858,6 +859,51 @@ export const downloadBinderDocument = async (org: string,
     params?: DownloadBinderDocumentParams, options?: Parameters<typeof customFetch>[1]): Promise<downloadBinderDocumentResponse> => {
 
   return customFetch<downloadBinderDocumentResponse>(getDownloadBinderDocumentUrl(org,binder,documentPath,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type exportBinderDocumentResponse200 = {
+  data: Blob
+  status: 200
+}
+
+export type exportBinderDocumentResponseSuccess = (exportBinderDocumentResponse200) & {
+  headers: Headers;
+};
+;
+
+export type exportBinderDocumentResponse = (exportBinderDocumentResponseSuccess)
+
+export const getExportBinderDocumentUrl = (org: string,
+    binder: string,
+    documentPath: string,
+    params: ExportBinderDocumentParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/app/binders/${org}/${binder}/export/${documentPath}?${stringifiedParams}` : `/api/app/binders/${org}/${binder}/export/${documentPath}`
+}
+
+export const exportBinderDocument = async (org: string,
+    binder: string,
+    documentPath: string,
+    params: ExportBinderDocumentParams, options?: Parameters<typeof customFetch>[1]): Promise<exportBinderDocumentResponse> => {
+
+  return customFetch<exportBinderDocumentResponse>(getExportBinderDocumentUrl(org,binder,documentPath,params),
   {
     ...options,
     method: 'GET'
