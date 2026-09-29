@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Editor, JSONContent } from "@tiptap/core";
-import { GitBranch, GitPullRequest, History } from "lucide-react";
+import { GitBranch, GitPullRequest, History, Pencil } from "lucide-react";
 
 import type {
   BinderDraftPayload,
@@ -32,6 +32,7 @@ import {
 } from "../editorRecovery";
 import type { DragSubject } from "../binderMove";
 import { BinderDraftPicker } from "./BinderDraftPicker";
+import { InlineRename } from "./BinderPage";
 import { DraftFiles, type DraftFileTarget } from "./DraftFiles";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
@@ -382,6 +383,19 @@ export function DocumentEditorPage({
   };
   const holdsOpen = (folder: string) => documentPath.startsWith(`${folder}/`);
 
+  /**
+   * The title is the name, and the name is changed there — as a Google Doc's
+   * or a Word file's online is. Not on a change request (revised here, never
+   * reshaped), and not on a file this product did not write, which has no
+   * identity for its history to follow (ADR 0005).
+   */
+  const [titling, setTitling] = useState(false);
+  const renamable =
+    !change &&
+    files !== null &&
+    (load.kind === "ready" || load.kind === "foreign") &&
+    load.detail.document.uid !== null;
+
   /** Anywhere but here asks first while there are unsaved words. */
   const leave = (to: Leaving) => {
     if (dirty) setLeaving(to);
@@ -532,7 +546,42 @@ export function DocumentEditorPage({
     <div className="doc-editor-page">
       <header className="doc-editor-head">
         <div className="doc-editor-head-body">
-          <h1 className="doc-editor-title">{name}</h1>
+          <h1 className="doc-editor-title">
+            {titling ? (
+              <InlineRename
+                className="doc-editor-title-input"
+                initial={name}
+                onCancel={() => setTitling(false)}
+                onCommit={(typed) => {
+                  setTitling(false);
+                  const next = typed.trim();
+                  if (next === "" || next === name) return;
+                  void actOnFiles(
+                    true,
+                    () =>
+                      onRenameFile(
+                        { kind: "document", slugPath: documentPath },
+                        next,
+                      ),
+                    "Unable to rename this document.",
+                  );
+                }}
+              />
+            ) : renamable ? (
+              <button
+                type="button"
+                className="doc-editor-title-button"
+                title="Rename this document"
+                disabled={filesBusy}
+                onClick={() => setTitling(true)}
+              >
+                <span className="doc-editor-title-text">{name}</span>
+                <Pencil size={13} strokeWidth={1.75} aria-hidden="true" />
+              </button>
+            ) : (
+              name
+            )}
+          </h1>
           {/* Where Save puts things, said before it is pressed. */}
           {change ? (
             <p
