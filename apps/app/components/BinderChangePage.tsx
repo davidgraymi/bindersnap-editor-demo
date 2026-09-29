@@ -22,6 +22,7 @@ import type { DocumentChangeView } from "../routes";
 import { nameFor, usePeopleNames } from "../usePeopleNames";
 import { ChangeByline } from "./ChangeByline";
 import { ChangeComparisonPage } from "./ChangeComparisonPage";
+import { ChangeConflictsPage } from "./ChangeConflictsPage";
 import { ChangeStateBadge, ChangeTabs } from "./ChangeTabs";
 import { DocumentChangeDetail } from "./DocumentChangeDetail";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
@@ -371,6 +372,44 @@ export function BinderChangePage({
    * which documents are folded, which are ticked, where the reader had got to
    * — is about *this* change and must not survive into the next one.
    */
+  const conflictsHref = buildBinderUrl({
+    org,
+    binder,
+    tab: "changes",
+    change: changeNumber,
+    view: "conflicts",
+  });
+
+  /**
+   * The documents that clash with the binder, and resolving them.
+   *
+   * Its own screen, like the comparison: resolving is reading two versions of
+   * each document side by side, which a panel beside a discussion cannot hold.
+   */
+  if (view === "conflicts") {
+    return (
+      <ChangeConflictsPage
+        key={changeNumber}
+        org={org}
+        binder={binder}
+        changeNumber={changeNumber}
+        title={record.summary}
+        changeHref={buildBinderUrl({
+          org,
+          binder,
+          tab: "changes",
+          change: changeNumber,
+        })}
+        onBack={() => onViewChange("discussion")}
+        onResolved={() => {
+          onChanged();
+          onViewChange("discussion");
+          void load();
+        }}
+      />
+    );
+  }
+
   if (view === "compare") {
     return (
       <div className="binder-pane">
@@ -426,31 +465,62 @@ export function BinderChangePage({
    * told you you were in. It is drawn inside the review now, where the reader
    * has the change's own name first.
    */
+  /* **A clash is not a dead end.** A change whose documents were also
+     changed in the binder cannot be merged by pressing a button, and saying
+     only "Bring up to date" led straight to Gitea's refusal. When Gitea
+     already knows it will clash, the way offered is the resolver; when it
+     does not know yet and the update fails, the error offers it too. */
+  const resolveLink = (
+    <a
+      className="bs-btn bs-btn--sm bs-btn-secondary"
+      href={conflictsHref}
+      onClick={(event) => followInApp(event, () => onViewChange("conflicts"))}
+    >
+      Resolve conflicts
+    </a>
+  );
   const behind =
     detail.isBehind && isOpen ? (
       <div className="bs-note bs-note--warn change-behind" role="status">
-        <p>
-          <strong>The binder has moved on since this change was made.</strong>{" "}
-          Updating it pulls in everything published since. Approvals already
-          given are dismissed, because they were for different content.
-        </p>
-        <button
-          className="bs-btn bs-btn--sm bs-btn-secondary"
-          type="button"
-          disabled={catchingUp}
-          onClick={() => void runCatchUp()}
-        >
-          {catchingUp ? "Bringing up to date…" : "Bring up to date"}
-        </button>
+        {detail.hasConflicts ? (
+          <p>
+            <strong>
+              The binder has moved on, and some of the same documents changed
+              there too.
+            </strong>{" "}
+            Choose what each clash should say to bring this change up to date.
+            Approvals already given are dismissed, because they were for
+            different content.
+          </p>
+        ) : (
+          <p>
+            <strong>The binder has moved on since this change was made.</strong>{" "}
+            Updating it pulls in everything published since. Approvals already
+            given are dismissed, because they were for different content.
+          </p>
+        )}
+        {detail.hasConflicts ? (
+          resolveLink
+        ) : (
+          <button
+            className="bs-btn bs-btn--sm bs-btn-secondary"
+            type="button"
+            disabled={catchingUp}
+            onClick={() => void runCatchUp()}
+          >
+            {catchingUp ? "Bringing up to date…" : "Bring up to date"}
+          </button>
+        )}
       </div>
     ) : null;
 
   return (
     <div className="binder-pane">
       {catchUpError ? (
-        <p className="bs-note bs-note--danger" role="alert">
-          {catchUpError}
-        </p>
+        <div className="bs-note bs-note--danger change-behind" role="alert">
+          <p>{catchUpError}</p>
+          {resolveLink}
+        </div>
       ) : null}
 
       <DocumentChangeDetail

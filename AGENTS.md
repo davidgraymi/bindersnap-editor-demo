@@ -269,6 +269,29 @@ actually keeps a policy manual in.
 Added text is green and removed text is coral, and both carry an underline or
 a strike as well as a colour, so the comparison still reads without one.
 
+### Resolving a change's conflicts
+
+A change that is behind `main` and would not merge — a document changed both
+in the change and in the binder since it began — offers **Resolve conflicts**
+where it would offer Bring up to date. The resolver is
+`apps/app/components/ChangeConflictsPage.tsx` at
+`/{org}/{binder}?tab=changes&change=N&view=conflicts`.
+
+The server (`services/api/gitea-client/conflicts.ts`) reads the three trees —
+the merge base, the change, and `main` — and lists every file changed on both
+sides, **paired by identity** (ADR 0005) so a policy renamed on one side and
+edited on the other settles itself instead of reading as a deletion. The page
+merges a document the editor wrote a block at a time and a text file a line at
+a time (`apps/app/threeWayMerge.ts`, git's diff3), asks only about the places
+both sides changed, and offers a Word file or a PDF as a whole choice.
+
+Gitea cannot write a merge commit with chosen contents, so a resolution is
+three steps on the change's branch: commit the published version of each
+conflicting file, run the ordinary update merge (which now has nothing to
+disagree about), then commit what the person chose. A failed merge is undone
+with a commit restoring the change's own versions. The request names the heads
+the page read, and is refused if either has moved.
+
 ### The BFF (`services/api`)
 
 All browser-to-data calls go through the BFF. The browser never contacts Gitea
@@ -298,6 +321,8 @@ directly.
 - `POST /api/app/documents/:owner/:repo/pull-requests/:n/discussions/:threadId/resolve` — resolve/unresolve
 - `PUT /api/app/documents/:owner/:repo/pull-requests/:n/discussions/:threadId/comments/:commentId/reactions` — leave or take back a reaction
 - `POST /api/app/documents/:owner/:repo/pull-requests/:n/publish` — merge + tag
+- `GET/POST /api/app/binders/:org/:binder/changes/:n/conflicts` — what clashes
+  with the binder, read three ways; and resolving it
 - `GET /api/app/documents/:owner/:repo/download` — proxy file download
 - `GET/PUT/DELETE /api/app/documents/:owner/:repo/collaborators/:user` — manage access
 - `GET /api/app/users/search` — user search
