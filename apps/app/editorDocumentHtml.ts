@@ -77,53 +77,18 @@ let renderer: Promise<Renderer> | null = null;
 function loadRenderer(): Promise<Renderer> {
   if (renderer === null) {
     renderer = (async () => {
-      const [
-        { generateHTML, getSchema },
-        { default: StarterKit },
-        { default: Image },
-        { default: TextAlign },
-        { TextStyle, Color, FontFamily, FontSize, LineHeight },
-        { default: Highlight },
-        { default: TaskList },
-        { default: TaskItem },
-        { default: Subscript },
-        { default: Superscript },
-        { Table, TableRow, TableCell, TableHeader },
-      ] = await Promise.all([
-        import("@tiptap/core"),
-        import("@tiptap/starter-kit"),
-        import("@tiptap/extension-image"),
-        import("@tiptap/extension-text-align"),
-        import("@tiptap/extension-text-style"),
-        import("@tiptap/extension-highlight"),
-        import("@tiptap/extension-task-list"),
-        import("@tiptap/extension-task-item"),
-        import("@tiptap/extension-subscript"),
-        import("@tiptap/extension-superscript"),
-        import("@tiptap/extension-table"),
-      ]);
+      const [{ generateHTML, getSchema }, { documentContentExtensions }] =
+        await Promise.all([
+          import("@tiptap/core"),
+          import("../../packages/editor/documentSchema"),
+        ]);
 
-      // The editor's list (`packages/editor/Editor.tsx`), less what only
-      // matters while typing: placeholders, comment anchors, conflicts.
-      const extensions = [
-        StarterKit.configure({ heading: { levels: [1, 2, 3, 4, 5, 6] } }),
-        Image.configure({ inline: true }),
-        TextStyle,
-        Color,
-        FontFamily,
-        FontSize,
-        LineHeight,
-        Highlight.configure({ multicolor: true }),
-        TextAlign.configure({ types: ["heading", "paragraph"] }),
-        TaskList,
-        TaskItem.configure({ nested: true }),
-        Subscript,
-        Superscript,
-        Table,
-        TableRow,
-        TableCell,
-        TableHeader,
-      ];
+      // **The editor's own list, not a copy of it.** This used to repeat the
+      // editor's extensions "less what only matters while typing", and a copy
+      // is a list that drifts: the day the editor learned paragraph spacing,
+      // the reader would have dropped it silently, because ProseMirror ignores
+      // an attribute its schema does not declare.
+      const extensions = documentContentExtensions();
 
       const schema = getSchema(extensions);
       const nodeTypes = new Set(Object.keys(schema.nodes));
