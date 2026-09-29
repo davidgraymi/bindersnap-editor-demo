@@ -1862,7 +1862,9 @@ test("a change that only makes a word bold still shows in its comparison", async
   await expect(page.locator(".cmp-counts-note")).toHaveText("Formatting", {
     timeout: 30_000,
   });
-  await expect(page.locator(".doc-compare-restyled")).toContainText(
+  // Said in the bar, and only there: a note inside the sheet read as a
+  // paragraph the change had added.
+  await expect(page.locator(".doc-compare-body")).not.toContainText(
     "the formatting did",
   );
   await expect(page.locator(".doc-compare-prose strong")).toHaveText("Clean");
