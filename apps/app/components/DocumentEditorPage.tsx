@@ -288,6 +288,7 @@ export function DocumentEditorPage({
         file,
         load.detail.document.slugPath,
         { draft },
+        "editor",
       );
       savedJson.current = json;
       // Anything typed while the save was in flight is still unsaved.
