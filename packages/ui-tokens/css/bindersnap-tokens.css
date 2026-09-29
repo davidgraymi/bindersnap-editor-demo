@@ -189,7 +189,6 @@
   --brand-on-dark-primary: #f5f0e8;
   --brand-on-dark-secondary: rgba(245, 240, 232, 0.6);
   --brand-on-dark-quote: rgba(245, 240, 232, 0.5); /* pull-quote emphasis */
-  --brand-on-dark-faint: rgba(245, 240, 232, 0.3);
   --brand-on-dark-rule: rgba(255, 255, 255, 0.08);
   --brand-on-dark-wash: rgba(245, 240, 232, 0.08); /* footer logo mark fill */
   --brand-on-dark-wash-border: rgba(245, 240, 232, 0.12);
@@ -355,7 +354,9 @@
   --brand-nav-height: 64px;
   --brand-page-padding-x: 40px;
   --brand-page-padding-x-sm: 20px;
-  --brand-section-padding-y: 120px;
+  /* A section's vertical padding is a step on the spacing scale, not a
+     number of its own. */
+  --brand-section-padding-y: var(--brand-space-30);
   --brand-section-padding-y-sm: 72px;
 }
 

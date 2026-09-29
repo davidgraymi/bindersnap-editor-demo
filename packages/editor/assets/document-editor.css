@@ -1,0 +1,1333 @@
+/*
+ * The document editor — Word's layout, Bindersnap's hand.
+ *
+ * Ribbon over the page, the page a sheet of paper on a desk, the navigation
+ * pane on the left and the status bar along the bottom. Chrome takes the app's
+ * semantic tokens and flips with the theme; the page does not. A page is
+ * paper in both themes, the way Word's is, because the colours an author
+ * gives their text were chosen against white and are stored in the document —
+ * so it takes the fixed mockup tokens, which exist for exactly this.
+ */
+
+.bs-doc-editor {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  background: var(--bs-page-bg);
+  color: var(--bs-text-secondary);
+  font-family: var(--brand-font-sans);
+}
+
+/* ─── Ribbon ─────────────────────────────────────────────────────────────── */
+
+.bs-ribbon {
+  flex: none;
+  background: var(--bs-surface-1);
+  border-bottom: 1px solid var(--bs-rule);
+}
+
+.bs-ribbon-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  min-height: 40px;
+  padding: 0 var(--brand-space-2);
+  border-bottom: 1px solid var(--bs-rule-warm);
+}
+
+.bs-ribbon-quick {
+  display: flex;
+  gap: var(--brand-space-0-5);
+  padding-right: var(--brand-space-2);
+  border-right: 1px solid var(--bs-rule-warm);
+}
+
+.bs-ribbon-tabs {
+  display: flex;
+  align-self: stretch;
+  gap: var(--brand-space-1);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.bs-ribbon-tab {
+  appearance: none;
+  flex: none;
+  padding: 0 var(--brand-space-3);
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--bs-text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-medium);
+  transition:
+    color var(--brand-transition-fast),
+    border-color var(--brand-transition-fast);
+}
+
+.bs-ribbon-tab:hover {
+  color: var(--bs-text-primary);
+}
+
+.bs-ribbon-tab.is-on {
+  color: var(--bs-text-primary);
+  border-bottom-color: var(--brand-coral);
+}
+
+/* Word colours a contextual tab so it reads as belonging to the thing you
+   are in, not as a fifth permanent tab. */
+.bs-ribbon-tab--context {
+  color: var(--bs-status-info-fg);
+}
+
+.bs-ribbon-tab:focus-visible,
+.bs-rb:focus-visible,
+.bs-rdrop:focus-visible,
+.bs-style:focus-visible,
+.bs-ribbon-collapse:focus-visible,
+.bs-rmenu-item:focus-visible,
+.bs-palette-swatch:focus-visible,
+.bs-tablegrid-cell:focus-visible,
+.bs-symbol:focus-visible,
+.bs-outline-item:focus-visible,
+.bs-result:focus-visible,
+.bs-doc-status-icon:focus-visible,
+.bs-doc-zoom-value:focus-visible,
+.bs-navpane-close:focus-visible,
+.bs-navpane-tab:focus-visible,
+.bs-navpane-link:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: -2px;
+  border-radius: var(--brand-radius-sm);
+}
+
+.bs-ribbon-end {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  margin-left: auto;
+  padding: var(--brand-space-1) 0;
+}
+
+.bs-ribbon-panel {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  min-height: 92px;
+  padding: var(--brand-space-1-5) var(--brand-space-8) var(--brand-space-0-5)
+    var(--brand-space-1);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.bs-ribbon-collapse {
+  position: absolute;
+  right: var(--brand-space-1);
+  bottom: var(--brand-space-1);
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--brand-radius-sm);
+  background: none;
+  color: var(--bs-text-muted);
+  cursor: pointer;
+}
+
+.bs-ribbon-collapse:hover {
+  background: var(--bs-surface-2);
+  color: var(--bs-text-primary);
+}
+
+.bs-rgroup {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  padding: 0 var(--brand-space-2-5);
+  border-right: 1px solid var(--bs-rule-warm);
+}
+
+.bs-rgroup:last-of-type {
+  border-right: none;
+}
+
+.bs-rgroup-body {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--brand-space-0-5);
+}
+
+.bs-rgroup--font .bs-rgroup-body,
+.bs-rgroup:has(.bs-rrow) .bs-rgroup-body {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--brand-space-1);
+}
+
+.bs-rgroup-label {
+  padding: var(--brand-space-0-5) 0 var(--brand-space-1);
+  color: var(--bs-text-faint);
+  font-size: var(--brand-text-ui-xs);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.bs-rrow {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-0-5);
+}
+
+.bs-rstack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+}
+
+/* A ribbon button: icon only, icon and label, or large with the label under. */
+.bs-rb,
+.bs-rdrop {
+  appearance: none;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--brand-space-1-5);
+  min-width: 28px;
+  height: 28px;
+  padding: 0 var(--brand-space-1-5);
+  border: 1px solid transparent;
+  border-radius: var(--brand-radius-sm);
+  background: none;
+  color: var(--bs-text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--brand-text-ui-sm);
+  line-height: 1;
+  white-space: nowrap;
+  transition:
+    background var(--brand-transition-fast),
+    color var(--brand-transition-fast);
+}
+
+.bs-rb:hover:not(:disabled),
+.bs-rdrop:hover:not(:disabled) {
+  background: var(--bs-surface-2);
+  color: var(--bs-text-primary);
+}
+
+.bs-rb.is-on,
+.bs-rdrop.is-on {
+  background: var(--bs-coral-dim);
+  border-color: var(--bs-coral-border-soft);
+  color: var(--bs-coral-text);
+}
+
+.bs-rb:disabled,
+.bs-rdrop:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.bs-rb--labelled {
+  justify-content: flex-start;
+  height: 24px;
+}
+
+.bs-rb--large,
+.bs-rdrop--large {
+  flex-direction: column;
+  gap: var(--brand-space-1);
+  min-width: 52px;
+  height: 64px;
+  padding: var(--brand-space-1) var(--brand-space-1-5);
+}
+
+.bs-rdrop--large .bs-rdrop-chevron {
+  margin-top: calc(-1 * var(--brand-space-1));
+}
+
+.bs-rb-icon {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+}
+
+.bs-rb-label {
+  font-size: var(--brand-text-ui-xs);
+}
+
+.bs-rb--labelled .bs-rb-label {
+  font-size: var(--brand-text-ui-sm);
+}
+
+/* The colour a Font Color or Highlight button will apply, as Word draws it. */
+.bs-rb-swatch {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 3px;
+  border-radius: 1px;
+  box-shadow: inset 0 0 0 1px var(--bs-rule);
+}
+
+.bs-rdrop-chevron {
+  flex: none;
+  color: var(--bs-text-muted);
+}
+
+/* The font and size boxes read as fields, the way Word's do. */
+.bs-rdrop--font,
+.bs-rdrop--size {
+  justify-content: space-between;
+  border-color: var(--bs-rule);
+  background: var(--bs-surface-1);
+}
+
+.bs-rdrop--font {
+  width: 150px;
+}
+
+.bs-rdrop--size {
+  width: 56px;
+}
+
+.bs-rdrop-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--bs-text-primary);
+}
+
+/* ─── Dropped panels ─────────────────────────────────────────────────────── */
+
+.bs-rpanel {
+  position: fixed;
+  z-index: var(--brand-z-overlay);
+  min-width: 180px;
+  max-height: min(360px, 70vh);
+  overflow: auto;
+  padding: var(--brand-space-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-1);
+  box-shadow: var(--bs-elevation-menu);
+  color: var(--bs-text-secondary);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.bs-rpanel--narrow {
+  min-width: 80px;
+}
+
+.bs-rmenu-item {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--brand-space-3);
+  width: 100%;
+  padding: var(--brand-space-1-5) var(--brand-space-2);
+  border: none;
+  border-radius: var(--brand-radius-sm);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.bs-rmenu-item:hover {
+  background: var(--bs-surface-2);
+}
+
+.bs-rmenu-item.is-on,
+.bs-rmenu-item[aria-checked="true"] {
+  background: var(--bs-coral-dim);
+  color: var(--bs-coral-text);
+}
+
+.bs-rmenu-text {
+  font-size: var(--brand-text-ui-md);
+}
+
+.bs-rmenu-hint {
+  color: var(--bs-text-faint);
+  font-size: var(--brand-text-ui-xs);
+}
+
+.bs-palette {
+  display: grid;
+  grid-template-columns: repeat(6, 24px);
+  gap: var(--brand-space-1);
+  padding: var(--brand-space-2);
+}
+
+.bs-palette-swatch {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-xs);
+  cursor: pointer;
+}
+
+.bs-palette-swatch:hover,
+.bs-palette-swatch.is-on {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 1px;
+}
+
+.bs-palette-none {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: var(--brand-space-2);
+  border: 1px solid var(--bs-rule);
+  background: linear-gradient(
+    to top right,
+    transparent calc(50% - 1px),
+    var(--bs-status-danger-fg) 50%,
+    transparent calc(50% + 1px)
+  );
+}
+
+.bs-tablegrid {
+  padding: var(--brand-space-2);
+}
+
+.bs-tablegrid-label {
+  margin: 0 0 var(--brand-space-2);
+  color: var(--bs-text-muted);
+}
+
+.bs-tablegrid-cells {
+  display: grid;
+  gap: 2px;
+}
+
+.bs-tablegrid-cell {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--bs-rule);
+  background: var(--bs-surface-1);
+  cursor: pointer;
+}
+
+.bs-tablegrid-cell.is-on {
+  border-color: var(--bs-coral-border);
+  background: var(--bs-coral-dim);
+}
+
+.bs-symbols {
+  display: grid;
+  grid-template-columns: repeat(6, 32px);
+  gap: var(--brand-space-1);
+  padding: var(--brand-space-1);
+}
+
+.bs-symbol {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--bs-rule-warm);
+  border-radius: var(--brand-radius-xs);
+  background: var(--bs-surface-1);
+  color: var(--bs-text-primary);
+  cursor: pointer;
+  font-size: var(--brand-text-body);
+}
+
+.bs-symbol:hover {
+  background: var(--bs-surface-2);
+}
+
+.bs-rform {
+  display: grid;
+  gap: var(--brand-space-3);
+  width: 300px;
+  max-width: calc(100vw - 32px);
+  padding: var(--brand-space-2);
+}
+
+.bs-rform-field {
+  display: grid;
+  gap: var(--brand-space-1);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.bs-rform-field input {
+  height: 32px;
+  padding: 0 var(--brand-space-2);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-sm);
+  background: var(--bs-surface-1);
+  color: var(--bs-text-primary);
+  font: inherit;
+  font-size: var(--brand-text-ui-md);
+}
+
+.bs-rform-field input:focus {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: -1px;
+}
+
+.bs-rform-note {
+  margin: 0;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-xs);
+  line-height: var(--brand-leading-normal);
+}
+
+.bs-rform-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--brand-space-2);
+}
+
+/* ─── Styles gallery ─────────────────────────────────────────────────────── */
+
+.bs-styles {
+  display: flex;
+  gap: var(--brand-space-1);
+}
+
+.bs-style {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  width: 78px;
+  height: 58px;
+  padding: var(--brand-space-1-5) var(--brand-space-2);
+  overflow: hidden;
+  border: 1px solid var(--bs-rule-warm);
+  border-radius: var(--brand-radius-sm);
+  background: var(--brand-mockup-bg);
+  color: var(--brand-mockup-ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.bs-style:hover {
+  border-color: var(--bs-rule);
+}
+
+.bs-style.is-on {
+  border-color: var(--brand-coral);
+  box-shadow: inset 0 0 0 1px var(--brand-coral);
+}
+
+.bs-rdrop--gallery {
+  align-self: stretch;
+  height: auto;
+  min-width: 20px;
+  padding: 0 var(--brand-space-0-5);
+  border-color: var(--bs-rule-warm);
+}
+
+.bs-style-menu .bs-style-sample {
+  font-size: inherit;
+}
+
+.bs-style-sample {
+  max-width: 100%;
+  overflow: hidden;
+  font-family: var(--brand-font-sans);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.bs-style-name {
+  color: var(--brand-mockup-muted);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-xs);
+}
+
+.bs-style--heading1 .bs-style-sample {
+  font-family: var(--brand-font-serif);
+  font-size: 18px;
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-style--heading2 .bs-style-sample {
+  font-family: var(--brand-font-serif);
+  font-size: 15px;
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-style--heading3 .bs-style-sample {
+  font-family: var(--brand-font-serif);
+  font-size: 13px;
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-style--heading4 .bs-style-sample {
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-style--quote .bs-style-sample {
+  font-style: italic;
+  color: var(--brand-mockup-ink-soft);
+}
+
+.bs-style--code .bs-style-sample {
+  font-family: var(--brand-font-mono);
+  font-size: 12px;
+}
+
+/* ─── Body: navigation pane, and the desk the page sits on ───────────────── */
+
+.bs-doc-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.bs-navpane {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 260px;
+  min-height: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--bs-rule);
+  background: var(--bs-surface-1);
+}
+
+.bs-navpane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--brand-space-3) var(--brand-space-3) var(--brand-space-2);
+}
+
+.bs-navpane-title {
+  margin: 0;
+  color: var(--bs-text-primary);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-navpane-close {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--brand-radius-sm);
+  background: none;
+  color: var(--bs-text-muted);
+  cursor: pointer;
+}
+
+.bs-navpane-close:hover {
+  background: var(--bs-surface-2);
+}
+
+.bs-navpane-search {
+  display: grid;
+  gap: var(--brand-space-2);
+  padding: 0 var(--brand-space-3) var(--brand-space-3);
+}
+
+.bs-navpane-input {
+  width: 100%;
+  height: 32px;
+  padding: 0 var(--brand-space-2);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-sm);
+  background: var(--bs-surface-1);
+  color: var(--bs-text-primary);
+  font: inherit;
+  font-size: var(--brand-text-ui-md);
+}
+
+.bs-navpane-input:focus {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: -1px;
+}
+
+.bs-navpane-found {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.bs-navpane-steps {
+  display: flex;
+  gap: var(--brand-space-0-5);
+}
+
+.bs-navpane-steps button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-sm);
+  background: var(--bs-surface-1);
+  color: var(--bs-text-secondary);
+  cursor: pointer;
+}
+
+.bs-navpane-steps button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.bs-navpane-check {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.bs-navpane-replace {
+  display: grid;
+  gap: var(--brand-space-2);
+}
+
+.bs-navpane-replace-actions {
+  display: flex;
+  gap: var(--brand-space-2);
+}
+
+.bs-navpane-link {
+  justify-self: start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--bs-coral-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--brand-text-ui-sm);
+}
+
+.bs-navpane-tabs {
+  display: flex;
+  gap: var(--brand-space-4);
+  padding: 0 var(--brand-space-3);
+  border-bottom: 1px solid var(--bs-rule-warm);
+}
+
+.bs-navpane-tab {
+  padding: var(--brand-space-2) 0;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--bs-text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--brand-text-ui-sm);
+  font-weight: var(--brand-weight-medium);
+}
+
+.bs-navpane-tab.is-on {
+  color: var(--bs-text-primary);
+  border-bottom-color: var(--brand-coral);
+}
+
+.bs-navpane-empty {
+  margin: 0;
+  padding: var(--brand-space-4) var(--brand-space-3);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+  line-height: var(--brand-leading-normal);
+}
+
+.bs-outline,
+.bs-results {
+  margin: 0;
+  padding: var(--brand-space-2) 0;
+  list-style: none;
+}
+
+.bs-outline-item,
+.bs-result {
+  display: block;
+  width: 100%;
+  padding: var(--brand-space-1-5) var(--brand-space-3);
+  border: none;
+  border-left: 3px solid transparent;
+  background: none;
+  color: var(--bs-text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--brand-text-ui-md);
+  line-height: var(--brand-leading-snug);
+  text-align: left;
+}
+
+.bs-outline-item:hover,
+.bs-result:hover {
+  background: var(--bs-surface-2);
+}
+
+.bs-outline-item.is-on,
+.bs-result.is-on {
+  border-left-color: var(--brand-coral);
+  background: var(--bs-coral-glow);
+  color: var(--bs-text-primary);
+}
+
+.bs-outline-item--h1 {
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-outline-item--h2 {
+  padding-left: calc(var(--brand-space-3) + var(--brand-space-3));
+}
+
+.bs-outline-item--h3 {
+  padding-left: calc(var(--brand-space-3) + var(--brand-space-6));
+  font-size: var(--brand-text-ui-sm);
+}
+
+.bs-outline-item--h4 {
+  padding-left: calc(var(--brand-space-3) + var(--brand-space-8));
+  font-size: var(--brand-text-ui-sm);
+  color: var(--bs-text-muted);
+}
+
+.bs-result {
+  font-size: var(--brand-text-ui-sm);
+}
+
+.bs-result mark {
+  background: var(--bs-status-warn-bg);
+  color: inherit;
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-doc-desk {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  /* Room below the last page to scroll its last line up off the bottom
+     edge, as Word leaves. */
+  padding: var(--brand-space-6) var(--brand-space-6) var(--brand-space-24);
+  background: var(--bs-surface-3);
+}
+
+.bs-doc-sheetwrap {
+  position: relative;
+  width: max-content;
+  margin: 0 auto;
+}
+
+/* The sheet: US Letter with Word's one-inch margins. */
+.bs-doc-page {
+  position: relative;
+  box-sizing: border-box;
+  width: 8.5in;
+  min-height: 11in;
+  padding: 1in;
+  background: var(--brand-mockup-bg);
+  color: var(--brand-mockup-ink);
+  box-shadow:
+    0 0 0 1px var(--brand-mockup-rule),
+    var(--bs-shadow-md);
+  cursor: text;
+}
+
+.bs-doc-page-probe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Where a new page would begin: a mark in the margin and a hairline across
+   the gap between two blocks, never across a line of text. */
+.bs-doc-pagemark {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px dashed var(--brand-mockup-rule);
+  pointer-events: none;
+}
+
+.bs-doc-pagemark span {
+  position: absolute;
+  right: calc(100% + var(--brand-space-2));
+  top: -0.6em;
+  color: var(--bs-text-faint);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-xs);
+  white-space: nowrap;
+}
+
+/* Web layout: the text reflows to the window, as Word's does. */
+.bs-doc-editor--web .bs-doc-sheetwrap {
+  width: 100%;
+  max-width: 880px;
+}
+
+.bs-doc-editor--web .bs-doc-page {
+  width: 100%;
+  min-height: 100%;
+  padding: var(--brand-space-8) var(--brand-space-10);
+  box-shadow: 0 0 0 1px var(--brand-mockup-rule);
+}
+
+/* ─── The text itself ────────────────────────────────────────────────────── */
+
+.bs-doc-content {
+  min-height: 9in;
+  outline: none;
+  font-family: var(--brand-font-sans);
+  font-size: 11pt;
+  line-height: 1.15;
+  overflow-wrap: break-word;
+  caret-color: var(--brand-coral);
+}
+
+.bs-doc-editor--web .bs-doc-content {
+  min-height: 60vh;
+}
+
+.bs-doc-content > * + * {
+  margin-top: 0;
+}
+
+.bs-doc-content p {
+  margin: 0 0 8pt;
+}
+
+.bs-doc-content h1,
+.bs-doc-content h2,
+.bs-doc-content h3,
+.bs-doc-content h4,
+.bs-doc-content h5,
+.bs-doc-content h6 {
+  margin: 12pt 0 6pt;
+  color: var(--brand-mockup-ink);
+  font-family: var(--brand-font-serif);
+  font-weight: var(--brand-weight-semibold);
+  line-height: 1.2;
+}
+
+.bs-doc-content > :first-child {
+  margin-top: 0;
+}
+
+.bs-doc-content h1 {
+  font-size: 20pt;
+}
+
+.bs-doc-content h2 {
+  font-size: 16pt;
+}
+
+.bs-doc-content h3 {
+  font-size: 13pt;
+}
+
+.bs-doc-content h4,
+.bs-doc-content h5,
+.bs-doc-content h6 {
+  font-family: var(--brand-font-sans);
+  font-size: 11pt;
+}
+
+.bs-doc-content ul,
+.bs-doc-content ol {
+  margin: 0 0 8pt;
+  padding-left: 0.35in;
+}
+
+.bs-doc-content li > p {
+  margin-bottom: 2pt;
+}
+
+.bs-doc-content ul[data-type="taskList"] {
+  padding-left: 0;
+  list-style: none;
+}
+
+.bs-doc-content ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+}
+
+.bs-doc-content ul[data-type="taskList"] li > label {
+  flex: none;
+  margin-top: 0.15em;
+}
+
+.bs-doc-content ul[data-type="taskList"] li > div {
+  flex: 1;
+}
+
+.bs-doc-content blockquote {
+  margin: 0 0 8pt;
+  padding-left: 0.2in;
+  border-left: 3px solid var(--brand-mockup-rule);
+  color: var(--brand-mockup-ink-soft);
+  font-style: italic;
+}
+
+.bs-doc-content code {
+  padding: 0 0.2em;
+  border-radius: var(--brand-radius-xs);
+  background: var(--brand-mockup-bg-alt);
+  font-family: var(--brand-font-mono);
+  font-size: 0.92em;
+}
+
+.bs-doc-content pre {
+  margin: 0 0 8pt;
+  padding: 0.12in 0.16in;
+  border-radius: var(--brand-radius-sm);
+  background: var(--brand-mockup-bg-alt);
+  white-space: pre-wrap;
+}
+
+.bs-doc-content pre code {
+  padding: 0;
+  background: none;
+}
+
+.bs-doc-content a {
+  color: var(--bs-status-info-fg);
+  text-decoration: underline;
+  cursor: text;
+}
+
+.bs-doc-content hr {
+  margin: 12pt 0;
+  border: none;
+  border-top: 1px solid var(--brand-mockup-rule);
+}
+
+.bs-doc-content hr.ProseMirror-selectednode,
+.bs-doc-content img.ProseMirror-selectednode,
+.bs-doc-content .bs-page-break.ProseMirror-selectednode {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 2px;
+}
+
+.bs-doc-content img {
+  max-width: 100%;
+  height: auto;
+}
+
+.bs-doc-content table {
+  width: 100%;
+  margin: 0 0 8pt;
+  border-collapse: collapse;
+  table-layout: fixed;
+  overflow: hidden;
+}
+
+.bs-doc-content th,
+.bs-doc-content td {
+  position: relative;
+  min-width: 1em;
+  padding: 4pt 6pt;
+  border: 1px solid var(--brand-mockup-faint);
+  vertical-align: top;
+}
+
+.bs-doc-content th {
+  background: var(--brand-mockup-bg-alt);
+  font-weight: var(--brand-weight-semibold);
+  text-align: left;
+}
+
+.bs-doc-content td > p,
+.bs-doc-content th > p {
+  margin: 0;
+}
+
+.bs-doc-content .selectedCell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--brand-mockup-highlight);
+  box-shadow: inset 0 0 0 2px var(--bs-coral-border-soft);
+  pointer-events: none;
+}
+
+.bs-doc-content .column-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: -2px;
+  width: 4px;
+  background: var(--brand-coral);
+  pointer-events: none;
+}
+
+.bs-doc-content.resize-cursor {
+  cursor: col-resize;
+}
+
+.bs-doc-content .tableWrapper {
+  overflow-x: auto;
+}
+
+/* A page break on screen: a labelled rule the width of the text. */
+.bs-page-break {
+  position: relative;
+  height: 0;
+  margin: 16pt 0;
+  border-top: 1px dashed var(--brand-mockup-faint);
+  break-after: page;
+}
+
+.bs-page-break::after {
+  content: "Page break";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  padding: 0 0.6em;
+  transform: translate(-50%, -50%);
+  background: var(--brand-mockup-bg);
+  color: var(--brand-mockup-muted);
+  font-family: var(--brand-font-mono);
+  font-size: 8pt;
+  letter-spacing: var(--brand-tracking-wide);
+  text-transform: uppercase;
+}
+
+.bs-doc-content p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--brand-mockup-faint);
+  pointer-events: none;
+}
+
+.bs-search-match {
+  background: var(--bs-status-warn-bg);
+  box-shadow: 0 0 0 1px var(--bs-status-warn-border);
+  border-radius: 1px;
+}
+
+.bs-search-match--current {
+  background: var(--bs-coral-dim);
+  box-shadow: 0 0 0 2px var(--brand-coral);
+}
+
+/* ─── Status bar ─────────────────────────────────────────────────────────── */
+
+.bs-doc-status {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--brand-space-4);
+  min-height: 30px;
+  padding: 0 var(--brand-space-3);
+  border-top: 1px solid var(--bs-rule);
+  background: var(--bs-surface-1);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.bs-doc-status-start,
+.bs-doc-status-end {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-3);
+  min-width: 0;
+}
+
+.bs-doc-status-item {
+  white-space: nowrap;
+}
+
+.bs-doc-status-button {
+  height: 22px;
+  padding: 0 var(--brand-space-1-5);
+  color: inherit;
+  font-size: inherit;
+}
+
+.bs-doc-status-button .bs-rdrop-chevron {
+  display: none;
+}
+
+.bs-doc-status-views,
+.bs-doc-zoom {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+}
+
+.bs-doc-status-icon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: var(--brand-radius-sm);
+  background: none;
+  color: var(--bs-text-muted);
+  cursor: pointer;
+}
+
+.bs-doc-status-icon:hover:not(:disabled) {
+  background: var(--bs-surface-2);
+  color: var(--bs-text-primary);
+}
+
+.bs-doc-status-icon.is-on {
+  background: var(--bs-surface-2);
+  color: var(--bs-text-primary);
+}
+
+.bs-doc-status-icon:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.bs-doc-zoom-slider {
+  width: 100px;
+  accent-color: var(--brand-coral);
+}
+
+.bs-doc-zoom-value {
+  min-width: 42px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.bs-wordcount {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--brand-space-2) var(--brand-space-6);
+  margin: 0;
+  padding: var(--brand-space-2);
+  font-size: var(--brand-text-ui-md);
+}
+
+.bs-wordcount dt {
+  color: var(--bs-text-muted);
+}
+
+.bs-wordcount dd {
+  margin: 0;
+  color: var(--bs-text-primary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* ─── Narrow screens ─────────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .bs-navpane {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .bs-doc-desk {
+    padding: var(--brand-space-3);
+  }
+
+  /* A phone has no room for a sheet of Letter; the text reflows instead. */
+  .bs-doc-editor .bs-doc-sheetwrap {
+    width: 100%;
+  }
+
+  .bs-doc-editor .bs-doc-page {
+    width: 100%;
+    min-height: 60vh;
+    padding: var(--brand-space-5) var(--brand-space-4);
+    zoom: 1 !important;
+  }
+
+  .bs-doc-pagemark,
+  .bs-doc-status-views,
+  .bs-doc-zoom {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bs-rb,
+  .bs-rdrop,
+  .bs-ribbon-tab {
+    transition: none;
+  }
+}
+
+/* ─── Print: the page, and nothing around it ─────────────────────────────── */
+
+@media print {
+  html.bs-printing-document body * {
+    visibility: hidden;
+  }
+
+  html.bs-printing-document .bs-doc-page,
+  html.bs-printing-document .bs-doc-page * {
+    visibility: visible;
+  }
+
+  html.bs-printing-document .bs-doc-page {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: auto;
+    min-height: 0;
+    padding: 0;
+    box-shadow: none;
+    zoom: 1 !important;
+  }
+
+  html.bs-printing-document .bs-doc-page-probe {
+    visibility: hidden;
+  }
+
+  html.bs-printing-document .bs-search-match {
+    background: none;
+    box-shadow: none;
+  }
+
+  html.bs-printing-document .bs-page-break {
+    border: none;
+    margin: 0;
+  }
+
+  html.bs-printing-document .bs-page-break::after {
+    content: none;
+  }
+
+  @page {
+    size: letter;
+    margin: 1in;
+  }
+}

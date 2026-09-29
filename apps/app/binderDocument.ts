@@ -209,3 +209,33 @@ export function buildDocumentUrl(params: {
   const search = query.toString();
   return search === "" ? base : `${base}?${search}`;
 }
+
+/**
+ * Whether a document is one the editor writes — its file is the editor's JSON.
+ *
+ * By extension, which is what the file is on disk: a policy written here is
+ * `hand-hygiene.<uid>.json`, and a Word file or a PDF is edited in the program
+ * that made it. The editor still checks the contents when it opens one.
+ */
+export function isEditorDocumentFile(path: string): boolean {
+  return /\.json$/i.test(path);
+}
+
+/**
+ * A document open in the editor: `/{org}/{binder}/-/blob/main/{path}?edit=write&draft=…`.
+ *
+ * The document's own address, in edit mode, naming the draft the editor saves
+ * into — so a reload lands back in the same words in the same draft, and the
+ * way out is the address without `edit`.
+ */
+export function buildDocumentEditUrl(params: {
+  org: string;
+  binder: string;
+  documentPath: string;
+  draft: string | null;
+}): string {
+  const { org, binder, documentPath, draft } = params;
+  const query = new URLSearchParams({ edit: "write" });
+  if (draft) query.set("draft", draft);
+  return `${buildDocumentUrl({ org, binder, documentPath, version: null })}?${query.toString()}`;
+}

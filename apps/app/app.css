@@ -10026,3 +10026,59 @@ a.binder-latest-title:focus-visible {
 .bs-btn[aria-busy="true"]::before {
   margin-right: 0;
 }
+
+/* ─── A document open in the editor ──────────────────────────────────────
+   The editor takes the canvas's full width: a page of Letter at 100% and a
+   navigation pane beside it do not fit in the 1080px every reading page
+   keeps to, and a word processor squeezed into a reading column is one that
+   scrolls sideways. The header above it is the ordinary page head, so the
+   policy's name and Save sit where every other page's title and action do. */
+.docw-page--writing {
+  max-width: none;
+  padding: var(--brand-space-5) var(--brand-space-5) 0;
+}
+
+.doc-editor-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--brand-space-4);
+  min-width: 0;
+}
+
+.doc-editor-where {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--brand-space-1-5);
+  margin: var(--brand-space-1) 0 0;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+  line-height: var(--brand-leading-normal);
+}
+
+.doc-editor-where svg {
+  flex: none;
+  margin-top: 3px;
+}
+
+.doc-editor-where strong {
+  color: var(--bs-text-secondary);
+  font-weight: var(--brand-weight-medium);
+}
+
+/* Tall enough to write in, and never taller than the window: the page
+   scrolls inside the editor, so the ribbon and the status bar stay put. */
+.doc-editor-frame {
+  height: max(520px, calc(100dvh - 210px));
+  overflow: hidden;
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg) var(--brand-radius-lg) 0 0;
+  border-bottom: none;
+}
+
+.doc-editor-status {
+  white-space: nowrap;
+}
+
+.doc-editor-status--unsaved {
+  color: var(--bs-status-warn-fg);
+}
