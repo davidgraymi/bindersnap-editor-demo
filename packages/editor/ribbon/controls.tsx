@@ -1,4 +1,6 @@
 import {
+  createContext,
+  useContext,
   useEffect,
   useId,
   useLayoutEffect,
@@ -101,16 +103,56 @@ export function RibbonButton({
   );
 }
 
-/** A named cluster of commands, the way Word groups Font and Paragraph. */
+/**
+ * A named cluster of commands, the way Word groups Font and Paragraph.
+ *
+ * Folded, it is one large button that drops the whole group — what Word's
+ * ribbon does to a group when the window is too narrow for it. The commands
+ * are the same ones, so nothing is out of reach at any width.
+ */
 export function RibbonGroup({
   label,
   children,
   className = "",
+  icon: Icon,
+  folded = false,
 }: {
   label: string;
   children: ReactNode;
   className?: string;
+  /** Drawn on the button the group folds into. */
+  icon?: LucideIcon;
+  folded?: boolean;
 }) {
+  if (folded && Icon) {
+    return (
+      <div
+        className={`bs-rgroup bs-rgroup--folded ${className}`}
+        role="group"
+        aria-label={label}
+      >
+        <div className="bs-rgroup-body">
+          <DropButton
+            label={label}
+            className="bs-rdrop--large"
+            role="dialog"
+            panelClassName="bs-rpanel--flyout"
+            panel={() => (
+              <div className={`bs-rgroup-flyout ${className}`}>
+                <div className="bs-rgroup-body">{children}</div>
+              </div>
+            )}
+          >
+            <Icon size={22} strokeWidth={1.75} aria-hidden="true" />
+            <span className="bs-rb-label">{label}</span>
+          </DropButton>
+        </div>
+        <div className="bs-rgroup-label" aria-hidden="true">
+          {label}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className={`bs-rgroup ${className}`} role="group" aria-label={label}>
       <div className="bs-rgroup-body">{children}</div>
@@ -171,6 +213,15 @@ function useAnchoredPosition(
   return style;
 }
 
+type PanelRef = React.RefObject<HTMLElement | null>;
+
+/**
+ * The panels opened from inside a panel — the font list in a folded Font
+ * group — which count as inside it: a press in one must not close the panel
+ * it came from, and Escape closes the innermost first.
+ */
+const NestedPanels = createContext<Set<PanelRef> | null>(null);
+
 /**
  * Close on Escape and on a press anywhere else — every menu in the app does,
  * and one that only closes by its own button is a trap.
@@ -178,15 +229,18 @@ function useAnchoredPosition(
 function useDismiss(
   open: boolean,
   onClose: () => void,
-  inside: Array<React.RefObject<HTMLElement | null>>,
+  inside: PanelRef[],
+  nested: Set<PanelRef>,
 ) {
   const close = useRef(onClose);
   close.current = onClose;
 
   useEffect(() => {
     if (!open) return;
+    const nestedOpen = () =>
+      Array.from(nested).some((ref) => ref.current !== null);
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !nestedOpen()) {
         event.stopPropagation();
         close.current();
       }
@@ -194,7 +248,8 @@ function useDismiss(
     const onPointer = (event: PointerEvent) => {
       const target = event.target;
       if (!(target instanceof Node)) return;
-      if (inside.some((ref) => ref.current?.contains(target))) return;
+      const within = [...inside, ...nested];
+      if (within.some((ref) => ref.current?.contains(target))) return;
       close.current();
     };
     document.addEventListener("keydown", onKey, true);
@@ -244,7 +299,18 @@ export function DropButton({
   const id = useId();
   const style = useAnchoredPosition(open, buttonRef, panelRef);
   const close = () => setOpen(false);
-  useDismiss(open, close, [buttonRef, panelRef]);
+  const [nested] = useState(() => new Set<PanelRef>());
+  useDismiss(open, close, [buttonRef, panelRef], nested);
+
+  // Opened from inside another panel, this one counts as inside that one.
+  const parent = useContext(NestedPanels);
+  useEffect(() => {
+    if (!parent) return;
+    parent.add(panelRef);
+    return () => {
+      parent.delete(panelRef);
+    };
+  }, [parent]);
 
   useEffect(() => {
     if (!open) return;
@@ -303,20 +369,22 @@ export function DropButton({
                 }
               }}
             >
-              {panel(() => {
-                // Back to the button only if focus would otherwise be lost
-                // with the panel. A command that put something in the page
-                // has already focused the page, and that is where the next
-                // keystroke belongs — taking it back to the button left a
-                // picture inserted and Ctrl+S, or typing, going nowhere.
-                const active = document.activeElement;
-                const lost =
-                  active === null ||
-                  active === document.body ||
-                  (panelRef.current?.contains(active) ?? false);
-                close();
-                if (lost) buttonRef.current?.focus({ preventScroll: true });
-              })}
+              <NestedPanels.Provider value={nested}>
+                {panel(() => {
+                  // Back to the button only if focus would otherwise be lost
+                  // with the panel. A command that put something in the page
+                  // has already focused the page, and that is where the next
+                  // keystroke belongs — taking it back to the button left a
+                  // picture inserted and Ctrl+S, or typing, going nowhere.
+                  const active = document.activeElement;
+                  const lost =
+                    active === null ||
+                    active === document.body ||
+                    (panelRef.current?.contains(active) ?? false);
+                  close();
+                  if (lost) buttonRef.current?.focus({ preventScroll: true });
+                })}
+              </NestedPanels.Provider>
             </div>,
             document.body,
           )

@@ -58,6 +58,7 @@ import {
   TableCellsMerge,
   TableCellsSplit,
   Trash2,
+  Type,
   Underline as UnderlineIcon,
   Undo2,
   WrapText,
@@ -303,8 +304,11 @@ export function Ribbon({
 /** How many styles the gallery shows before folding the rest into a menu. */
 const GALLERY_SIZE = 4;
 
-/** Gallery 4 → 0 is four folds; then Styles, Editing and Clipboard. */
-const MAX_FOLD = GALLERY_SIZE + 2;
+/**
+ * Gallery 4 → 0 is four folds; then Editing and Clipboard grow compact; then
+ * Paragraph and then Font fold into one button each, as Word's groups do.
+ */
+const MAX_FOLD = GALLERY_SIZE + 4;
 
 function HomeTab({
   editor,
@@ -321,6 +325,8 @@ function HomeTab({
   const gallery = Math.max(0, GALLERY_SIZE - fold);
   const compactEditing = fold > GALLERY_SIZE;
   const compactClipboard = fold > GALLERY_SIZE + 1;
+  const foldParagraph = fold > GALLERY_SIZE + 2;
+  const foldFont = fold > GALLERY_SIZE + 3;
   const chain = () => editor.chain().focus();
   const size = format.fontSizePt;
 
@@ -383,7 +389,12 @@ function HomeTab({
         </div>
       </RibbonGroup>
 
-      <RibbonGroup label="Font" className="bs-rgroup--font">
+      <RibbonGroup
+        label="Font"
+        className="bs-rgroup--font"
+        icon={Type}
+        folded={foldFont}
+      >
         <RibbonRow>
           <DropButton
             label="Font"
@@ -522,7 +533,7 @@ function HomeTab({
         </RibbonRow>
       </RibbonGroup>
 
-      <RibbonGroup label="Paragraph">
+      <RibbonGroup label="Paragraph" icon={AlignLeft} folded={foldParagraph}>
         <RibbonRow>
           <RibbonButton
             icon={List}

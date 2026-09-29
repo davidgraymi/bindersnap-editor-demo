@@ -1,4 +1,10 @@
-import { useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -54,6 +60,27 @@ interface DraftFilesProps {
 
 const STORAGE_KEY = "bindersnap.editor.files.collapsed";
 
+/**
+ * Narrower than this, a tree beside the page leaves the page too small to
+ * read: at 768px it drew the text at half size. So the panel starts shut
+ * there, whatever was remembered from a wider window, and opens over the page
+ * rather than beside it — Word's navigation pane on a tablet.
+ */
+const NARROW = "(max-width: 1099px)";
+
+function subscribeNarrow(onChange: () => void): () => void {
+  if (typeof window === "undefined" || !window.matchMedia) return () => {};
+  const query = window.matchMedia(NARROW);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+function isNarrow(): boolean {
+  return typeof window !== "undefined" && !!window.matchMedia
+    ? window.matchMedia(NARROW).matches
+    : false;
+}
+
 export function DraftFiles({
   org,
   binder,
@@ -65,7 +92,46 @@ export function DraftFiles({
   onOpen,
   onNew,
 }: DraftFilesProps) {
-  const { on: shut, toggle } = useRememberedToggle(STORAGE_KEY);
+  const remembered = useRememberedToggle(STORAGE_KEY);
+  const narrow = useSyncExternalStore(subscribeNarrow, isNarrow, () => false);
+  const [floating, setFloating] = useState(false);
+  const floatRef = useRef<HTMLElement>(null);
+  const railRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!narrow) setFloating(false);
+  }, [narrow]);
+  // Over the page, it goes as a menu does: Escape, or a press elsewhere.
+  useEffect(() => {
+    if (!floating) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setFloating(false);
+    };
+    const onPointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (floatRef.current?.contains(target)) return;
+      if (railRef.current?.contains(target)) return;
+      setFloating(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointer);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointer);
+    };
+  }, [floating]);
+  const shut = narrow ? !floating : remembered.on;
+  const toggle = narrow ? () => setFloating((was) => !was) : remembered.toggle;
+  const openPolicy = (slugPath: string) => {
+    setFloating(false);
+    onOpen(slugPath);
+  };
+  const startNew = onNew
+    ? () => {
+        setFloating(false);
+        onNew();
+      }
+    : undefined;
   const {
     isOpen,
     toggle: toggleFolder,
@@ -89,33 +155,32 @@ export function DraftFiles({
   }, [documents, needle, tree]);
   const everyFolder = useMemo(() => folderPaths(shown), [shown]);
 
-  if (shut) {
-    return (
-      <div className="doc-files doc-files--shut">
+  const rail = (
+    <div className="doc-files doc-files--shut" ref={railRef}>
+      <button
+        type="button"
+        className="app-explorer-toggle"
+        aria-expanded={false}
+        aria-label="Show the draft's files"
+        title="Show the draft's files"
+        onClick={toggle}
+      >
+        <PanelLeftOpen size={15} strokeWidth={1.75} aria-hidden="true" />
+      </button>
+      {startNew ? (
         <button
           type="button"
           className="app-explorer-toggle"
-          aria-expanded={false}
-          aria-label="Show the draft's files"
-          title="Show the draft's files"
-          onClick={toggle}
+          aria-label="New document"
+          title="New document"
+          onClick={startNew}
         >
-          <PanelLeftOpen size={15} strokeWidth={1.75} aria-hidden="true" />
+          <FilePlus size={15} strokeWidth={1.75} aria-hidden="true" />
         </button>
-        {onNew ? (
-          <button
-            type="button"
-            className="app-explorer-toggle"
-            aria-label="New document"
-            title="New document"
-            onClick={onNew}
-          >
-            <FilePlus size={15} strokeWidth={1.75} aria-hidden="true" />
-          </button>
-        ) : null}
-      </div>
-    );
-  }
+      ) : null}
+    </div>
+  );
+  if (shut) return rail;
 
   const renderNode = (node: BinderTreeNode, depth: number) => {
     if (node.kind === "document") {
@@ -138,7 +203,8 @@ export function DraftFiles({
               : `${label} — uploaded as a file, so it is edited in the program that made it`
           }
           onClick={() => {
-            if (!on) onOpen(slugPath);
+            if (!on) openPolicy(slugPath);
+            else setFloating(false);
           }}
         >
           {writable ? (
@@ -186,17 +252,21 @@ export function DraftFiles({
     );
   };
 
-  return (
-    <aside className="doc-files" aria-label={`Files in ${binderName}`}>
+  const panel = (
+    <aside
+      ref={floatRef}
+      className={`doc-files${narrow ? " doc-files--floating" : ""}`}
+      aria-label={`Files in ${binderName}`}
+    >
       <div className="app-explorer-head">
         <span className="app-explorer-heading">Files</span>
-        {onNew ? (
+        {startNew ? (
           <button
             type="button"
             className="app-explorer-toggle"
             aria-label="New document"
             title="New document"
-            onClick={onNew}
+            onClick={startNew}
           >
             <FilePlus size={15} strokeWidth={1.75} aria-hidden="true" />
           </button>
@@ -238,4 +308,15 @@ export function DraftFiles({
       </div>
     </aside>
   );
+
+  // Over the page, the rail stays where it was so the page does not move.
+  if (narrow) {
+    return (
+      <>
+        {rail}
+        {panel}
+      </>
+    );
+  }
+  return panel;
 }
