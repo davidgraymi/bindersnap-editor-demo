@@ -16,5 +16,7 @@ export type GetBinderDraft200Draft = {
   owner: string;
   /** @nullable */
   updatedAt: string | null;
+  /** @nullable */
+  changeNumber: number | null;
   acts: GetBinderDraft200DraftActsItem[];
 } | null;

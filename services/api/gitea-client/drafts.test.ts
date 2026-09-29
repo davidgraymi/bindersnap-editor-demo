@@ -77,7 +77,7 @@ test("a branch that is not ours is left alone", () => {
   }
 });
 
-test("a draft with a change request open on it is no longer a draft", async () => {
+test("a draft with a change request open on it is left out unless asked for", async () => {
   // The whole point of the subtraction. A proposed draft belongs in the
   // changes list; offering "propose this" against it a second time would open
   // a second change request for the same branch.
@@ -119,7 +119,23 @@ test("a draft with a change request open on it is no longer a draft", async () =
       updatedAt: "2026-09-12T14:40:00Z",
       // The subject alone: a list of drafts reads as a list of work.
       lastAct: "Make the folder nursing",
+      changeNumber: null,
     },
+  ]);
+
+  // Its owner's own list keeps it — a branch is still a branch once a pull
+  // request opens on it — and says which change it is waiting in.
+  const withProposed = await listBinderDrafts({
+    client,
+    org: "riverside-health",
+    workspace: "clinical",
+    proposed: true,
+  });
+  expect(
+    withProposed.map((draft) => [draft.branch, draft.changeNumber]),
+  ).toEqual([
+    ["draft/alice/20260912143522000", null],
+    ["draft/alice/20260910090000", 7],
   ]);
 });
 
@@ -211,6 +227,7 @@ test("a person with no draft gets one made from main", async () => {
     owner: "alice",
     updatedAt: null,
     lastAct: null,
+    changeNumber: null,
   });
   expect(mockPost.mock.calls[0]?.[1]).toMatchObject({
     body: {

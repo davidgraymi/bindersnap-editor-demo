@@ -16,5 +16,7 @@ export type RenameBinderDraft200Draft = {
   owner: string;
   /** @nullable */
   updatedAt: string | null;
+  /** @nullable */
+  changeNumber: number | null;
   acts: RenameBinderDraft200DraftActsItem[];
 } | null;

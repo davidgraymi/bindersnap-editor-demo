@@ -87,6 +87,8 @@ interface ChangeComparisonPageProps {
    * change would leave it. Where the branch under the title links to.
    */
   branchHref: string;
+  /** What its author called the draft it came from, for the chip. */
+  branchLabel?: string | null;
   /** Go to the branch's root, in the app. */
   onOpenBranch: () => void;
   /**
@@ -252,6 +254,7 @@ export function ChangeComparisonPage({
   headRef,
   focusDocument = null,
   branchHref,
+  branchLabel = null,
   onOpenBranch,
   fileHref,
   onReadFile,
@@ -560,6 +563,7 @@ export function ChangeComparisonPage({
               open={open}
               documents={rows.length}
               branch={headRef}
+              branchLabel={branchLabel}
               branchHref={branchHref}
               onOpenBranch={onOpenBranch}
               openedAt={openedAt}

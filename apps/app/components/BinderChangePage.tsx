@@ -57,6 +57,12 @@ interface BinderChangePageProps {
   onEditInEditor?: (slugPath: string) => void;
   /** Open the whole binder on this change's branch, at its root. */
   onOpenBranch: (branch: string) => void;
+  /**
+   * Where the branch chip goes when the branch is one of your drafts: the
+   * draft itself, where you can keep working, rather than a read of it filed
+   * under the change. Null when it is not yours.
+   */
+  ownDraftHref?: (branch: string) => string | null;
   /** Something about the change moved: the binder's own counts have too. */
   onChanged: () => void;
   /** Where the required reviewers come from, for the reader who asks. */
@@ -87,6 +93,7 @@ export function BinderChangePage({
   onOpenSignOffRules,
   onOpenOnBranch,
   onOpenBranch,
+  ownDraftHref,
   onEditInEditor,
 }: BinderChangePageProps) {
   const names = usePeopleNames(org);
@@ -264,12 +271,15 @@ export function BinderChangePage({
   const isOpen = detail.change.state === "open";
   const nameOf = (login: string) => nameFor(names, login);
   const branchName = detail.change.branchName || null;
-  const branchHref = buildBinderUrl({
-    org,
-    binder,
-    ref: branchName,
-    change: changeNumber,
-  });
+  const branchLabel = detail.branchLabel ?? null;
+  const branchHref =
+    (branchName ? ownDraftHref?.(branchName) : null) ??
+    buildBinderUrl({
+      org,
+      binder,
+      ref: branchName,
+      change: changeNumber,
+    });
   const openBranch = () => {
     if (branchName) onOpenBranch(branchName);
   };
@@ -346,6 +356,7 @@ export function BinderChangePage({
           focusDocument={shown?.slugPath ?? null}
           /* The branch's root: the binder as this change would leave it. */
           branchHref={branchHref}
+          branchLabel={branchLabel}
           onOpenBranch={openBranch}
           /* The same address `onOpenOnBranch` goes to, so View is a real link:
              it opens in a new tab and can be sent to somebody. */
@@ -417,6 +428,7 @@ export function BinderChangePage({
             open={isOpen}
             documents={documents.length}
             branch={branchName}
+            branchLabel={branchLabel}
             branchHref={branchHref}
             onOpenBranch={openBranch}
             openedAt={record.submittedAt}

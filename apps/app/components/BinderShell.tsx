@@ -434,6 +434,21 @@ export function BinderShell({
     [knownDrafts],
   );
 
+  /**
+   * Whether a branch is one of your drafts — read from its name, which says
+   * whose it is (`draft/<login>/<stamp>`), so the answer does not wait on a
+   * list of drafts still being fetched. The server checks it again.
+   */
+  const isOwnDraft = (branch: string) => {
+    const [kind, owner, stamp, ...rest] = branch.split("/");
+    return (
+      kind === "draft" &&
+      owner === currentUser &&
+      Boolean(stamp) &&
+      rest.length === 0
+    );
+  };
+
   const goToEdit = (
     next: BinderEditMode,
     branch: string | null = draftBranch,
@@ -1317,6 +1332,7 @@ export function BinderShell({
           onStartDraft={startDraftInEditor}
           onRenameDraft={renameDraft}
           onPropose={proposeFromEditor}
+          onOpenChange={(changeNumber) => openChangeNumber(changeNumber)}
           onRenameFile={renameInEditor}
           onMoveFile={moveInEditor}
           onArchiveFile={archiveInEditor}
@@ -1388,9 +1404,24 @@ export function BinderShell({
               }),
             )
           }
-          onOpenBranch={(branch) =>
-            moveTo(buildBinderUrl({ org, binder, ref: branch }))
+          /* **Your draft is a place, not a read of a change.** The chip on a
+             change you proposed went to "Change requests / Change 22 /
+             Proposed files" — the change's view of your branch, read-only,
+             with no way back up the tree. It goes to the draft, where you can
+             keep working and every save lands in the change. Somebody else's
+             branch is still read under the change. */
+          ownDraftHref={(branch) =>
+            isOwnDraft(branch)
+              ? buildBinderUrl({ org, binder, edit: "editing", draft: branch })
+              : null
           }
+          onOpenBranch={(branch) => {
+            if (isOwnDraft(branch)) {
+              goToEdit("editing", branch);
+              return;
+            }
+            moveTo(buildBinderUrl({ org, binder, ref: branch }));
+          }}
           onChanged={loadOverview}
         />
       ) : activeTab === "changes" ? (
@@ -1581,8 +1612,10 @@ export function BinderShell({
           acts={draft.draft.acts}
           others={draft.others.map((other) => other.owner)}
           busy={startingEdit}
+          changeNumber={draft.draft.changeNumber}
           onPropose={() => goToEdit("proposing")}
           onDiscard={() => void discard()}
+          onOpenChange={(changeNumber) => openChangeNumber(changeNumber)}
         />
       ) : null}
 
