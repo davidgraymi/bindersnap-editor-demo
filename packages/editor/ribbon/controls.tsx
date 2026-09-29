@@ -351,7 +351,8 @@ export function MenuChoice({
   style,
   hint,
 }: {
-  checked: boolean;
+  /** Left out for a command, as against one choice of several. */
+  checked?: boolean;
   onPick: () => void;
   children: ReactNode;
   style?: CSSProperties;
@@ -360,7 +361,7 @@ export function MenuChoice({
   return (
     <button
       type="button"
-      role="menuitemradio"
+      role={checked === undefined ? "menuitem" : "menuitemradio"}
       aria-checked={checked}
       className={`bs-rmenu-item${checked ? " is-on" : ""}`}
       onClick={onPick}
