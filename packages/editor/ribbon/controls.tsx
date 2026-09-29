@@ -304,8 +304,18 @@ export function DropButton({
               }}
             >
               {panel(() => {
+                // Back to the button only if focus would otherwise be lost
+                // with the panel. A command that put something in the page
+                // has already focused the page, and that is where the next
+                // keystroke belongs — taking it back to the button left a
+                // picture inserted and Ctrl+S, or typing, going nowhere.
+                const active = document.activeElement;
+                const lost =
+                  active === null ||
+                  active === document.body ||
+                  (panelRef.current?.contains(active) ?? false);
                 close();
-                buttonRef.current?.focus({ preventScroll: true });
+                if (lost) buttonRef.current?.focus({ preventScroll: true });
               })}
             </div>,
             document.body,

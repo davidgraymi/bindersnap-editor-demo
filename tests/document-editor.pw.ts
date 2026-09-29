@@ -349,3 +349,51 @@ test("the editor's file panel starts a policy and moves between them, saving fir
   expect(saved.status).toBe(200);
   expect(await saved.text()).toContain("Visitors sign in at reception.");
 });
+
+test("a picture from this device is kept inside the policy, in the draft", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/edit=write/);
+  const draft = new URL(page.url()).searchParams.get("draft")!;
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+  await page.keyboard.press("End");
+
+  await page.getByRole("tab", { name: "Insert" }).click();
+  await page.getByRole("button", { name: "Picture" }).click();
+  // A 1×1 PNG: small enough to be kept byte for byte.
+  await page.locator(".bs-rform input[type=file]").setInputFiles({
+    name: "Hand_Wash-Poster.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+      "base64",
+    ),
+  });
+
+  // In the page, described from its file name, with the cursor back in the
+  // text so the next keystroke — here, Save — lands where it should.
+  await expect(
+    text.getByRole("img", { name: "Hand Wash Poster" }),
+  ).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.getByText(/Saved just now/)).toBeVisible({
+    timeout: 20_000,
+  });
+
+  const saved = await policyText(session, org, binder, draft);
+  expect(saved).toContain('"type": "image"');
+  expect(saved).toContain("data:image/png;base64,");
+  // And the reader shows it.
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(
+    page.locator(".doc-preview-prose").getByRole("img", {
+      name: "Hand Wash Poster",
+    }),
+  ).toBeVisible();
+});

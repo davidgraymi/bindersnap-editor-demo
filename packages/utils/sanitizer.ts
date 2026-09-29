@@ -115,6 +115,17 @@ function hasForbiddenScheme(value: string): boolean {
   return /^\s*(?:javascript|vbscript|data):/i.test(value);
 }
 
+/**
+ * A picture embedded in a document by the editor: raster kinds only, base64.
+ * SVG stays out, because an SVG can carry script.
+ */
+const EMBEDDED_PICTURE =
+  /^data:image\/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
+
+export function isSafeImageSrc(value: string): boolean {
+  return EMBEDDED_PICTURE.test(value.trim()) || isSafeUrl(value);
+}
+
 function isSafeUrl(value: string): boolean {
   const trimmed = value.trim();
   if (trimmed === "") {
@@ -221,7 +232,7 @@ function sanitizeNodeOrFragment(value: unknown): JSONContent[] {
     const attrs: Record<string, unknown> = isPlainObject(value.attrs)
       ? { ...value.attrs }
       : {};
-    if (typeof attrs.src !== "string" || !isSafeUrl(attrs.src)) {
+    if (typeof attrs.src !== "string" || !isSafeImageSrc(attrs.src)) {
       return [];
     }
     sanitizedNode.attrs = attrs;
@@ -300,7 +311,7 @@ export function safeStyle(style: string): string {
 export function sanitizeHtml(html: string): string {
   const DOMPurify = createDOMPurify(window);
 
-  DOMPurify.addHook("uponSanitizeAttribute", (_node, data) => {
+  DOMPurify.addHook("uponSanitizeAttribute", (node, data) => {
     const attrName = data.attrName.toLowerCase();
 
     if (attrName.startsWith("on") || attrName.startsWith("data-")) {
@@ -320,7 +331,11 @@ export function sanitizeHtml(html: string): string {
       (attrName === "href" || attrName === "src") &&
       typeof data.attrValue === "string"
     ) {
-      if (!isSafeUrl(data.attrValue)) {
+      const safe =
+        attrName === "src" && node.nodeName.toLowerCase() === "img"
+          ? isSafeImageSrc(data.attrValue)
+          : isSafeUrl(data.attrValue);
+      if (!safe) {
         data.keepAttr = false;
       }
     }
