@@ -24,6 +24,7 @@ import { FormatPainter } from "./extensions/FormatPainter";
 import { preparePrintCopy, removePrintCopy } from "./printCopy";
 import { SearchAndReplace } from "./extensions/SearchAndReplace";
 import { WordKeymap } from "./extensions/WordKeymap";
+import { ChangeCase } from "./extensions/ChangeCase";
 import { NavigationPane } from "./NavigationPane";
 import { DropButton, shortcutLabel } from "./ribbon/controls";
 import { Ribbon, type ViewSettings } from "./ribbon/Ribbon";
@@ -159,6 +160,7 @@ export function DocumentEditor({
       }),
       PictureSize,
       FormatPainter,
+      ChangeCase,
     ],
     content,
     editable,

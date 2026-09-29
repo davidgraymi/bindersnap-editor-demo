@@ -282,6 +282,8 @@ interface DropButtonProps {
   role?: "menu" | "listbox" | "dialog";
   disabled?: boolean;
   active?: boolean;
+  /** The tooltip, when it says more than the label: a shortcut, say. */
+  tip?: string;
 }
 
 /**
@@ -299,6 +301,7 @@ export function DropButton({
   role = "menu",
   disabled = false,
   active = false,
+  tip,
 }: DropButtonProps) {
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -341,7 +344,7 @@ export function DropButton({
         aria-expanded={open}
         aria-controls={open ? id : undefined}
         aria-label={label}
-        title={label}
+        title={tip ?? label}
         disabled={disabled}
         onMouseDown={keepSelection}
         onClick={() => setOpen((was) => !was)}
