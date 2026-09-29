@@ -1015,6 +1015,37 @@ test("Paste keeps what was copied, and Keep Text Only keeps just the words", asy
   );
 });
 
+test("Insert > Date & Time writes today's date where the cursor is", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+  await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Effective ");
+
+  const iso = await page.evaluate(() => {
+    const now = new Date();
+    return [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, "0"),
+      String(now.getDate()).padStart(2, "0"),
+    ].join("-");
+  });
+  await page.getByRole("tab", { name: "Insert" }).click();
+  await page.getByRole("button", { name: "Date & Time" }).click();
+  await page.getByRole("menuitem", { name: iso }).click();
+  await expect(text).toContainText(`Effective ${iso}`);
+});
+
 test("the status bar counts the selected words out of the whole", async ({
   page,
 }) => {
