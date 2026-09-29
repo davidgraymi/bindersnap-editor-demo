@@ -6,14 +6,20 @@ import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
 import { routeToPath } from "../routes";
 
 import {
+  archiveBinderDocument,
   discardBinderDraft,
   fetchBinder,
   fetchBinderDocuments,
   fetchBinderChange,
   fetchBinderDraft,
   openBinderDraft,
+  renameBinderDocument,
   renameBinderDraft,
+  renameBinderFolder,
+  type ActTarget,
 } from "../api";
+import type { DragSubject } from "../binderMove";
+import type { DraftFileTarget } from "./DraftFiles";
 import type {
   BinderDraftPayload,
   WorkspaceOverviewPayload,
@@ -631,6 +637,100 @@ export function BinderShell({
     goToEdit("proposing", branch);
   };
 
+  /**
+   * One act on the draft's files from the editor's panel, then the panel
+   * re-read — and the editor after the policy it has open.
+   *
+   * **Followed by identity, not by address.** A rename or a move gives the
+   * open policy a new address, and a folder renamed above it does too, without
+   * the act naming it; its identity is the one thing that stays (ADR 0005). So
+   * the policy is found again by `uid` in what the draft now holds, and the
+   * address bar replaced rather than pushed: the old address is gone from the
+   * draft, and Back to it would open nothing. Archived, it is gone altogether,
+   * and the editor goes on to the policy {@link pickPolicyToWrite} picks — the
+   * binder's tree only when there is none left to write.
+   */
+  const actInEditor = async (act: (target: ActTarget) => Promise<unknown>) => {
+    const branch = draft?.draft?.branch ?? draftBranch;
+    if (!branch || !documentPath) return;
+    const was = contents?.documents.find(
+      (entry) => entry.slugPath === documentPath,
+    );
+    await act({ draft: branch });
+    refreshDraft();
+    const listing = await fetchBinderDocuments(org, binder, branch);
+    setContents((before) => ({
+      documents: listing.documents,
+      folders: listing.folders,
+      active: null,
+      change: before?.change ?? null,
+    }));
+    const now = was?.uid
+      ? listing.documents.find((entry) => entry.uid === was.uid)
+      : listing.documents.find((entry) => entry.slugPath === documentPath);
+    const next =
+      now?.slugPath ??
+      pickPolicyToWrite(listing.documents, draft?.draft?.acts ?? []);
+    if (next === documentPath) return;
+    if (!next) {
+      goToEdit("editing", branch);
+      return;
+    }
+    window.history.replaceState(
+      {},
+      "",
+      buildDocumentEditUrl({ org, binder, documentPath: next, draft: branch }),
+    );
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
+
+  const renameInEditor = (target: DraftFileTarget, name: string) =>
+    actInEditor((into) => {
+      if (target.kind === "document") {
+        return renameBinderDocument(
+          org,
+          binder,
+          target.slugPath,
+          { name },
+          into,
+        );
+      }
+      // Renaming a folder is moving it within its own parent.
+      const cut = target.path.lastIndexOf("/");
+      const parent = cut === -1 ? "" : target.path.slice(0, cut);
+      return renameBinderFolder(
+        org,
+        binder,
+        target.path,
+        parent === "" ? name : `${parent}/${name}`,
+        into,
+      );
+    });
+
+  const moveInEditor = (subject: DragSubject, folder: string) =>
+    actInEditor((into) => {
+      if (subject.kind === "document") {
+        return renameBinderDocument(
+          org,
+          binder,
+          subject.slugPath,
+          { folder },
+          into,
+        );
+      }
+      const name = subject.path.slice(subject.path.lastIndexOf("/") + 1);
+      return renameBinderFolder(
+        org,
+        binder,
+        subject.path,
+        folder === "" ? name : `${folder}/${name}`,
+        into,
+      );
+    });
+
+  const archiveInEditor = (slugPath: string) =>
+    actInEditor((into) => archiveBinderDocument(org, binder, slugPath, into));
+
   /** Move to another of your drafts. The address is what carries it. */
   const switchDraft = (branch: string) => {
     setDraft(null);
@@ -1108,9 +1208,10 @@ export function BinderShell({
           onStartDraft={startDraftInEditor}
           onRenameDraft={renameDraft}
           onPropose={proposeFromEditor}
-          onOrganize={() =>
-            goToEdit("editing", draft?.draft?.branch ?? draftBranch)
-          }
+          onRenameFile={renameInEditor}
+          onMoveFile={moveInEditor}
+          onArchiveFile={archiveInEditor}
+          onNewFolder={() => setAddingFolder(true)}
         />
       ) : documentPath ? (
         <BinderDocumentPage

@@ -30,8 +30,9 @@ import {
   worthOffering,
   type RecoveredWords,
 } from "../editorRecovery";
+import type { DragSubject } from "../binderMove";
 import { BinderDraftPicker } from "./BinderDraftPicker";
-import { DraftFiles } from "./DraftFiles";
+import { DraftFiles, type DraftFileTarget } from "./DraftFiles";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 /**
@@ -93,8 +94,17 @@ interface DocumentEditorPageProps {
   onRenameDraft: (branch: string, name: string) => void | Promise<void>;
   /** Ask for the draft to be approved: the propose step, for this draft. */
   onPropose: () => void;
-  /** Rename, refile and make folders: the binder's tree, in this draft. */
-  onOrganize: () => void;
+  /**
+   * Organize the draft's files from the editor's own panel. Each resolves
+   * once the act is in the draft and the panel re-read — and, when the act
+   * moved or archived the policy that is open, once the editor has followed
+   * it. They reject with the server's reason.
+   */
+  onRenameFile: (target: DraftFileTarget, name: string) => Promise<void>;
+  onMoveFile: (subject: DragSubject, folder: string) => Promise<void>;
+  onArchiveFile: (slugPath: string) => Promise<void>;
+  /** Make a folder in the draft. */
+  onNewFolder: () => void;
   /**
    * Saving into an open change request rather than a draft. `draft` is then
    * the change's branch, read from and saved to; there is nothing to propose,
@@ -110,8 +120,7 @@ type Leaving =
   | { kind: "new" }
   | { kind: "draft"; branch: string }
   | { kind: "start"; name: string }
-  | { kind: "propose" }
-  | { kind: "organize" };
+  | { kind: "propose" };
 
 type LoadState =
   | { kind: "loading" }
@@ -162,7 +171,10 @@ export function DocumentEditorPage({
   onRenameDraft,
   onPropose,
   change = null,
-  onOrganize,
+  onRenameFile,
+  onMoveFile,
+  onArchiveFile,
+  onNewFolder,
 }: DocumentEditorPageProps) {
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
   const [save, setSave] = useState<SaveState>({ kind: "idle" });
@@ -333,9 +345,42 @@ export function DocumentEditorPage({
     else if (to.kind === "draft") onSwitchDraft(to.branch);
     else if (to.kind === "start") void onStartDraft(to.name);
     else if (to.kind === "propose") onPropose();
-    else if (to.kind === "organize") onOrganize();
     else onNewDocument();
   };
+
+  /**
+   * One act on the draft's files, from the panel.
+   *
+   * **The open policy's words go first when the act moves it.** Renaming or
+   * refiling it — or the folder it is in — gives it a new address, and the
+   * editor follows it there by reading it again; archiving it closes it.
+   * Either way what was typed and not saved would be read over, so it is saved
+   * into the draft first, without a question: the act was asked for, and
+   * saving is what the draft is for. Other rows' acts leave the words alone.
+   */
+  const [filesBusy, setFilesBusy] = useState(false);
+  const [filesError, setFilesError] = useState<string | null>(null);
+  const actOnFiles = async (
+    movesOpen: boolean,
+    act: () => Promise<void>,
+    failed: string,
+  ) => {
+    if (filesBusy) return;
+    setFilesError(null);
+    if (movesOpen && dirty) {
+      const saved = await saveNow();
+      if (!saved) return;
+    }
+    setFilesBusy(true);
+    try {
+      await act();
+    } catch (err) {
+      setFilesError(errorMessage(err, failed));
+    } finally {
+      setFilesBusy(false);
+    }
+  };
+  const holdsOpen = (folder: string) => documentPath.startsWith(`${folder}/`);
 
   /** Anywhere but here asks first while there are unsaved words. */
   const leave = (to: Leaving) => {
@@ -471,13 +516,11 @@ export function DocumentEditorPage({
       ? { save: "Save and close", drop: "Close without saving" }
       : leaving.kind === "open"
         ? { save: "Save and open", drop: "Open without saving" }
-        : leaving.kind === "organize"
-          ? { save: "Save and organize", drop: "Organize without saving" }
-          : leaving.kind === "propose"
-            ? { save: "Save and propose", drop: "Propose without them" }
-            : leaving.kind === "draft" || leaving.kind === "start"
-              ? { save: "Save and switch", drop: "Switch without saving" }
-              : { save: "Save first", drop: "Don't save" }
+        : leaving.kind === "propose"
+          ? { save: "Save and propose", drop: "Propose without them" }
+          : leaving.kind === "draft" || leaving.kind === "start"
+            ? { save: "Save and switch", drop: "Switch without saving" }
+            : { save: "Save first", drop: "Don't save" }
     : null;
 
   // Something to propose: words not saved yet, or anything already in the
@@ -636,10 +679,55 @@ export function DocumentEditorPage({
             onOpen={(slugPath) => leave({ kind: "open", slugPath })}
             // A change request is revised, not added to or reshaped, here.
             onNew={change ? undefined : () => leave({ kind: "new" })}
-            onOrganize={change ? undefined : () => leave({ kind: "organize" })}
+            onNewFolder={change ? undefined : onNewFolder}
+            busy={filesBusy || save.kind === "saving"}
+            onRename={
+              change
+                ? undefined
+                : (target, name) =>
+                    void actOnFiles(
+                      target.kind === "document"
+                        ? target.slugPath === documentPath
+                        : holdsOpen(target.path),
+                      () => onRenameFile(target, name),
+                      "Unable to rename that.",
+                    )
+            }
+            onMove={
+              change
+                ? undefined
+                : (subject, folder) =>
+                    void actOnFiles(
+                      subject.kind === "document"
+                        ? subject.slugPath === documentPath
+                        : holdsOpen(subject.path),
+                      () => onMoveFile(subject, folder),
+                      "Unable to move that.",
+                    )
+            }
+            onArchive={
+              change
+                ? undefined
+                : (slugPath) =>
+                    void actOnFiles(
+                      slugPath === documentPath,
+                      () => onArchiveFile(slugPath),
+                      "Unable to archive that.",
+                    )
+            }
           />
         ) : null}
-        <div className="doc-editor-main">{body}</div>
+        <div className="doc-editor-main">
+          {filesError ? (
+            <p
+              className="bs-note bs-note--danger doc-editor-alert"
+              role="alert"
+            >
+              {filesError}
+            </p>
+          ) : null}
+          {body}
+        </div>
       </div>
 
       {leaving && ask ? (
