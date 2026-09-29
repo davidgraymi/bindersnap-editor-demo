@@ -106,21 +106,54 @@ function countWords(value: string): number {
 }
 
 /**
- * How much moved, in words.
+ * How much moved, in words — and in pictures, and whether anything else did.
  *
  * Numbers only: the file's bar draws them as `+12 −3`, the way every diff
  * does, and a document whose words did not move shows no count at all rather
  * than a sentence announcing it — a pure rename is already told by the path
  * above it.
+ *
+ * **Words are not the whole of a policy.** A picture added, a heading made of
+ * a paragraph, a word made bold: each changes the file and not one word of
+ * it. Counted in words alone, that change read as "identical" and the screen
+ * drew nothing under a document the list said was edited.
  */
 export interface ComparisonSummary {
   additions: number;
   deletions: number;
+  /** Pictures this change put in, and took out. */
+  picturesAdded: number;
+  picturesRemoved: number;
+  /**
+   * The same words and pictures, laid out differently: formatting, a style,
+   * a picture's size. Never true alongside a counted change.
+   */
+  restyled: boolean;
   identical: boolean;
+}
+
+/** Pictures inside the runs htmldiff marked with `tag`. */
+function countMarkedPictures(diffed: string, tag: "ins" | "del"): number {
+  const runs = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)</${tag}>`, "gi");
+  let count = 0;
+  for (const match of diffed.matchAll(runs)) {
+    count += (match[1]?.match(/<img\b/gi) ?? []).length;
+  }
+  return count;
+}
+
+/** Markup with the whitespace between tags gone, which no reader sees. */
+function settleMarkup(html: string): string {
+  return html.replace(/>\s+</g, "><").trim();
 }
 
 export function summarizeSegments(
   segments: readonly DiffSegment[],
+  /**
+   * Both rendered sides and their diff, for a comparison drawn as a
+   * document. Without them only words are counted.
+   */
+  markup?: { before: string; after: string; diffed: string },
 ): ComparisonSummary {
   let additions = 0;
   let deletions = 0;
@@ -130,10 +163,23 @@ export function summarizeSegments(
     if (segment.kind === "removed") deletions += countWords(segment.value);
   }
 
+  const picturesAdded = markup ? countMarkedPictures(markup.diffed, "ins") : 0;
+  const picturesRemoved = markup
+    ? countMarkedPictures(markup.diffed, "del")
+    : 0;
+  const counted = additions + deletions + picturesAdded + picturesRemoved > 0;
+  const restyled =
+    !counted &&
+    markup !== undefined &&
+    settleMarkup(markup.before) !== settleMarkup(markup.after);
+
   return {
     additions,
     deletions,
-    identical: additions === 0 && deletions === 0,
+    picturesAdded,
+    picturesRemoved,
+    restyled,
+    identical: !counted && !restyled,
   };
 }
 

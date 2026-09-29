@@ -207,6 +207,9 @@ function summary(additions: number, deletions: number): ComparisonSummary {
   return {
     additions,
     deletions,
+    picturesAdded: 0,
+    picturesRemoved: 0,
+    restyled: false,
     identical: additions === 0 && deletions === 0,
   };
 }

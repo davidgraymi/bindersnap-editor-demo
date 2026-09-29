@@ -911,6 +911,46 @@ test("the Format Painter brushes one word's look onto others", async ({
   await expect(text).not.toHaveClass(/is-painting/);
 });
 
+test("a change that only makes a word bold still shows in its comparison", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await expect(text).toBeVisible();
+
+  const clean = await wordBox(page, "Clean");
+  await page.mouse.dblclick(clean.x, clean.y);
+  await expect(page.getByRole("button", { name: "Cut" })).toBeEnabled();
+  await page.keyboard.press("ControlOrMeta+b");
+  await expect(text.locator("strong")).toHaveText("Clean");
+
+  await page.getByRole("button", { name: "Propose", exact: true }).click();
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Save and propose" })
+    .click();
+  await page
+    .getByRole("textbox", { name: "What you are asking for" })
+    .fill("Make the first word stand out");
+  await page.getByRole("button", { name: "Open the change request" }).click();
+  await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
+
+  // Not a word moved, and the comparison still says what did — rather than
+  // drawing nothing under a document the list calls edited.
+  await page.goto(`${page.url()}&view=compare`);
+  await expect(page.locator(".cmp-counts-note")).toHaveText("Formatting", {
+    timeout: 30_000,
+  });
+  await expect(page.locator(".doc-compare-restyled")).toContainText(
+    "the formatting did",
+  );
+  await expect(page.locator(".doc-compare-prose strong")).toHaveText("Clean");
+});
+
 test("words never saved are kept on this device and offered back", async ({
   context,
   page,
