@@ -496,6 +496,57 @@ test("Edit on a binder opens the editor, and its files are renamed and refiled t
   await expect(page).toHaveURL(/edit=1/);
 });
 
+test("the policy is renamed from its title, and its unsaved words go with it", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write&draft=/);
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+  await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Every time.");
+
+  await page
+    .getByRole("heading", { level: 1, name: "Hand Hygiene" })
+    .getByRole("button")
+    .click();
+  const box = page.getByRole("textbox", { name: "New name" });
+  await expect(box).toHaveValue("Hand Hygiene");
+  await box.fill("Hand Care");
+  await box.press("Enter");
+
+  await expect(page).toHaveURL(/\/hand-care\?edit=write&draft=/, {
+    timeout: 20_000,
+  });
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Hand Care" }),
+  ).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Hand Care" })).toContainText(
+    "Every time.",
+  );
+  await expect(page.getByText("No changes yet")).toBeVisible();
+
+  // Escape leaves the name as it was.
+  await page
+    .getByRole("heading", { level: 1, name: "Hand Care" })
+    .getByRole("button")
+    .click();
+  await box.fill("Something else");
+  await box.press("Escape");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Hand Care" }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/\/hand-care\?edit=write/);
+});
+
 test("closing with unsaved words asks first, and Cancel keeps them", async ({
   page,
 }) => {
