@@ -2,6 +2,7 @@ import type { Editor } from "@tiptap/core";
 import { NodeSelection } from "@tiptap/pm/state";
 import { useEditorState } from "@tiptap/react";
 
+import { formatPainterState } from "../extensions/FormatPainter";
 import { pictureWidth } from "../imageFiles";
 
 import type { ParagraphStyleId } from "./options";
@@ -40,6 +41,8 @@ export interface FormatState {
   inTable: boolean;
   canMergeCells: boolean;
   canSplitCell: boolean;
+  /** The Format Painter's brush is loaded. */
+  painting: boolean;
   /** A picture is selected, by clicking it: the Picture tab's cue. */
   picture: boolean;
   /** Its width in pixels, or null at its own size. */
@@ -140,6 +143,7 @@ export function readFormatState(editor: Editor): FormatState {
     inTable: editor.isActive("table"),
     canMergeCells: editor.can().mergeCells(),
     canSplitCell: editor.can().splitCell(),
+    painting: formatPainterState(editor.state).brush !== "off",
     picture: picture !== null,
     pictureWidth: picture ? pictureWidth(picture.attrs.width) : null,
     pictureAlt:
@@ -172,6 +176,7 @@ const EMPTY: FormatState = {
   inTable: false,
   canMergeCells: false,
   canSplitCell: false,
+  painting: false,
   picture: false,
   pictureWidth: null,
   pictureAlt: "",

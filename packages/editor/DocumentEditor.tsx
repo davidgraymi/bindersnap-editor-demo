@@ -20,6 +20,7 @@ import { countDocument, paginate } from "./documentStats";
 import { EnterOverSelection } from "./extensions/EnterOverSelection";
 import { PictureFiles } from "./extensions/PictureFiles";
 import { PictureSize } from "./extensions/PictureSize";
+import { FormatPainter } from "./extensions/FormatPainter";
 import { preparePrintCopy, removePrintCopy } from "./printCopy";
 import { SearchAndReplace } from "./extensions/SearchAndReplace";
 import { WordKeymap } from "./extensions/WordKeymap";
@@ -157,6 +158,7 @@ export function DocumentEditor({
         onError: (message) => noticeRef.current(message),
       }),
       PictureSize,
+      FormatPainter,
     ],
     content,
     editable,
