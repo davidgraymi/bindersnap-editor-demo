@@ -18,6 +18,7 @@ import { sanitizeProseMirrorJson } from "../utils/sanitizer";
 import { EMPTY_DOCUMENT, documentContentExtensions } from "./documentSchema";
 import { countDocument, paginate } from "./documentStats";
 import { EnterOverSelection } from "./extensions/EnterOverSelection";
+import { PictureFiles } from "./extensions/PictureFiles";
 import { SearchAndReplace } from "./extensions/SearchAndReplace";
 import { WordKeymap } from "./extensions/WordKeymap";
 import { NavigationPane } from "./NavigationPane";
@@ -133,6 +134,16 @@ export function DocumentEditor({
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
 
+  // Why a picture did not go in, said over the page for a few seconds.
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeRef = useRef(setNotice);
+  noticeRef.current = setNotice;
+  useEffect(() => {
+    if (notice === null) return;
+    const timer = window.setTimeout(() => setNotice(null), 8000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
   const editor = useEditor({
     extensions: [
       ...documentContentExtensions(),
@@ -140,6 +151,9 @@ export function DocumentEditor({
       SearchAndReplace,
       WordKeymap,
       EnterOverSelection,
+      PictureFiles.configure({
+        onError: (message) => noticeRef.current(message),
+      }),
     ],
     content,
     editable,
@@ -218,7 +232,9 @@ export function DocumentEditor({
     };
     root.addEventListener("keydown", onKey);
     return () => root.removeEventListener("keydown", onKey);
-  }, [openFind]);
+    // `editor`: the root is only drawn once there is one, and a listener
+    // attached before then was attached to nothing.
+  }, [openFind, editor]);
 
   const print = useCallback(() => {
     // Everything but the page is hidden while printing — see the print rules
@@ -262,6 +278,20 @@ export function DocumentEditor({
           onPrint={print}
           end={ribbonEnd}
         />
+      ) : null}
+
+      {notice ? (
+        <div className="bs-doc-notice" role="alert">
+          <span>{notice}</span>
+          <button
+            type="button"
+            className="bs-doc-notice-close"
+            aria-label="Dismiss"
+            onClick={() => setNotice(null)}
+          >
+            ×
+          </button>
+        </div>
       ) : null}
 
       <div className="bs-doc-body">

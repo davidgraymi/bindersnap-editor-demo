@@ -490,6 +490,33 @@
   line-height: var(--brand-leading-normal);
 }
 
+/* From this device, first: it is what somebody reaching for a picture means. */
+.bs-rform-device {
+  justify-self: start;
+}
+
+.bs-rform-error {
+  margin: 0;
+  color: var(--bs-status-danger-fg);
+  font-size: var(--brand-text-ui-sm);
+  line-height: var(--brand-leading-normal);
+}
+
+.bs-rform-or {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  color: var(--bs-text-faint);
+  font-size: var(--brand-text-ui-xs);
+}
+
+.bs-rform-or::before,
+.bs-rform-or::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--bs-rule);
+}
+
 .bs-rform-actions {
   display: flex;
   justify-content: flex-end;
@@ -589,6 +616,38 @@
 }
 
 /* ─── Body: navigation pane, and the desk the page sits on ───────────────── */
+
+/* Why a pasted or dropped picture did not go in: a strip under the ribbon,
+   gone on its own after a few seconds. */
+.bs-doc-notice {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  padding: var(--brand-space-1-5) var(--brand-space-3);
+  border-bottom: 1px solid var(--bs-status-danger-border);
+  background: var(--bs-status-danger-bg);
+  color: var(--bs-status-danger-fg);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.bs-doc-notice span {
+  flex: 1;
+}
+
+.bs-doc-notice-close {
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: var(--brand-text-body);
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* A picture is never wider than the page it is on. */
+.bs-doc-content img {
+  max-width: 100%;
+  height: auto;
+}
 
 .bs-doc-body {
   display: flex;

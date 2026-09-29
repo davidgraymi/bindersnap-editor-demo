@@ -239,7 +239,8 @@ export function documentContentExtensions(): AnyExtension[] {
     }),
     // In line with the text, as Word places a picture by default — and as
     // every document written before this list existed already stores them.
-    Image.configure({ inline: true }),
+    // Pictures from the author's computer are embedded — see `imageFiles.ts`.
+    Image.configure({ inline: true, allowBase64: true }),
     TextStyle,
     Color,
     FontFamily,

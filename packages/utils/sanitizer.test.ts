@@ -187,3 +187,42 @@ describe("sanitizeProseMirrorJson", () => {
     });
   });
 });
+
+describe("pictures embedded by the editor", () => {
+  const png =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
+  test("a raster picture in a document survives the reader", () => {
+    expect(sanitizeHtml(`<p><img src="${png}" alt="Map"></p>`)).toContain(
+      `src="${png}"`,
+    );
+    const json = sanitizeProseMirrorJson({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [{ type: "image", attrs: { src: png, alt: "Map" } }],
+        },
+      ],
+    });
+    expect(JSON.stringify(json)).toContain(png);
+  });
+
+  test("an SVG or any other data address is dropped", () => {
+    const svg = "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=";
+    const html = "data:text/html;base64,PHNjcmlwdD48L3NjcmlwdD4=";
+    expect(sanitizeHtml(`<img src="${svg}">`)).not.toContain("data:");
+    expect(sanitizeHtml(`<img src="${html}">`)).not.toContain("data:");
+    expect(sanitizeHtml(`<a href="${png}">x</a>`)).not.toContain("data:");
+    const json = sanitizeProseMirrorJson({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [{ type: "image", attrs: { src: svg } }],
+        },
+      ],
+    });
+    expect(JSON.stringify(json)).not.toContain("svg");
+  });
+});

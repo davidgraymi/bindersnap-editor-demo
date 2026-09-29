@@ -1489,6 +1489,13 @@ input {
   line-height: var(--brand-leading-relaxed);
 }
 
+/* A picture written into a policy is at most the width of the page it is on,
+   here as in the editor — it is stored at up to 1600px wide. */
+.doc-preview-prose img {
+  max-width: 100%;
+  height: auto;
+}
+
 .doc-preview-prose > :first-child {
   margin-top: 0;
 }

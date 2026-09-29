@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import type { Editor } from "@tiptap/core";
 import {
   AArrowDown,
@@ -51,9 +51,16 @@ import {
   WrapText,
   ZoomIn,
   ZoomOut,
+  Upload,
 } from "lucide-react";
 
 import { LINE_SPACINGS } from "../documentSchema";
+import {
+  PICTURE_TYPES,
+  PictureError,
+  describeFromFileName,
+  pictureToDataUrl,
+} from "../imageFiles";
 import {
   DropButton,
   MenuChoice,
@@ -894,7 +901,28 @@ function PictureForm({
 }) {
   const [src, setSrc] = useState("");
   const [alt, setAlt] = useState("");
+  const [reading, setReading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const valid = /^https?:\/\/\S+$/i.test(src.trim());
+
+  // Word's Insert > Pictures > This Device: the picture goes into the
+  // document itself, scaled to fit, so it is versioned with the policy.
+  const fromDevice = async (file: File) => {
+    setReading(true);
+    setError(null);
+    try {
+      const url = await pictureToDataUrl(file);
+      onInsert(url, alt.trim() || describeFromFileName(file.name));
+    } catch (err) {
+      setError(
+        err instanceof PictureError
+          ? err.message
+          : "That picture could not be put in the document.",
+      );
+      setReading(false);
+    }
+  };
 
   return (
     <form
@@ -904,6 +932,40 @@ function PictureForm({
         if (valid) onInsert(src.trim(), alt.trim());
       }}
     >
+      <input
+        ref={fileRef}
+        type="file"
+        accept={PICTURE_TYPES.join(",")}
+        hidden
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) void fromDevice(file);
+        }}
+      />
+      <button
+        type="button"
+        className="bs-btn bs-btn--sm bs-btn-secondary bs-rform-device"
+        disabled={reading}
+        onClick={() => fileRef.current?.click()}
+      >
+        <Upload size={14} strokeWidth={1.75} aria-hidden="true" />
+        {reading ? "Putting it in…" : "From this device…"}
+      </button>
+      <p className="bs-rform-note">
+        Or paste a picture, or drag one onto the page. It is kept inside the
+        policy, so it reads the same in every version.
+      </p>
+      {error ? (
+        <p className="bs-rform-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      <div className="bs-rform-or" aria-hidden="true">
+        <span>or from the web</span>
+      </div>
+
       <label className="bs-rform-field">
         <span>Picture address</span>
         <input
@@ -921,11 +983,6 @@ function PictureForm({
           onChange={(event) => setAlt(event.target.value)}
         />
       </label>
-      {/* Said, because the obvious thing to try is a file from the desktop. */}
-      <p className="bs-rform-note">
-        A picture is linked by its web address, so it has to be somewhere
-        everyone reading the policy can open.
-      </p>
       <div className="bs-rform-actions">
         <button
           type="button"
