@@ -1100,6 +1100,7 @@ function InsertTab({
       <RibbonGroup label="Links">
         <DropButton
           label="Link"
+          tip={`Link (${shortcutLabel("Ctrl+K")})`}
           className="bs-rdrop--large"
           role="dialog"
           panelClassName="bs-rpanel--form"
@@ -1340,7 +1341,13 @@ function PictureForm({
   );
 }
 
-function LinkForm({ editor, onDone }: { editor: Editor; onDone: () => void }) {
+export function LinkForm({
+  editor,
+  onDone,
+}: {
+  editor: Editor;
+  onDone: () => void;
+}) {
   const existing = editor.getAttributes("link").href as string | undefined;
   const [href, setHref] = useState(existing ?? "");
   const empty = editor.state.selection.empty && !existing;

@@ -29,7 +29,7 @@ import { AutoFormat } from "./extensions/AutoFormat";
 import { NavigationPane } from "./NavigationPane";
 import { ShortcutsDialog } from "./ShortcutsDialog";
 import { DropButton, shortcutLabel } from "./ribbon/controls";
-import { Ribbon, type ViewSettings } from "./ribbon/Ribbon";
+import { LinkForm, Ribbon, type ViewSettings } from "./ribbon/Ribbon";
 import { ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, clampZoom } from "./ribbon/options";
 
 /**
@@ -220,6 +220,19 @@ export function DocumentEditor({
 
   const rootRef = useRef<HTMLDivElement>(null);
   const [shortcuts, setShortcuts] = useState(false);
+  /** Ctrl+K's link form, where the cursor is. */
+  const [linkAt, setLinkAt] = useState<{ left: number; top: number } | null>(
+    null,
+  );
+  const openLink = useCallback(() => {
+    if (!editor || editor.isDestroyed || !editor.isEditable) return;
+    const at = editor.view.coordsAtPos(editor.state.selection.from);
+    setLinkAt({ left: at.left, top: at.bottom + 6 });
+  }, [editor]);
+  const closeLink = useCallback(() => {
+    setLinkAt(null);
+    editor?.commands.focus();
+  }, [editor]);
   const closeShortcuts = useCallback(() => {
     setShortcuts(false);
     editor?.commands.focus();
@@ -243,6 +256,11 @@ export function DocumentEditor({
       } else if (key === "h" && !event.shiftKey) {
         event.preventDefault();
         openFind(true);
+      } else if (key === "k" && !event.shiftKey) {
+        // Word's Insert Hyperlink, from anywhere, and not the browser's
+        // search box.
+        event.preventDefault();
+        openLink();
       } else if (key === "/" || event.code === "Slash") {
         event.preventDefault();
         setShortcuts(true);
@@ -252,7 +270,7 @@ export function DocumentEditor({
     return () => root.removeEventListener("keydown", onKey);
     // `editor`: the root is only drawn once there is one, and a listener
     // attached before then was attached to nothing.
-  }, [openFind, editor]);
+  }, [openFind, openLink, editor]);
 
   // Printing prints the policy, not the app around it — from Print on the
   // View tab and from the browser's own Ctrl+P alike. See `printCopy.ts`.
@@ -305,6 +323,11 @@ export function DocumentEditor({
       ) : null}
 
       {shortcuts ? <ShortcutsDialog onClose={closeShortcuts} /> : null}
+      {linkAt && editor ? (
+        <LinkPopover at={linkAt} onClose={closeLink}>
+          <LinkForm editor={editor} onDone={closeLink} />
+        </LinkPopover>
+      ) : null}
 
       {notice ? (
         <div className="bs-doc-notice" role="alert">
@@ -672,5 +695,61 @@ function StatusBar({
         </div>
       </div>
     </footer>
+  );
+}
+
+/**
+ * The link form, under the cursor: Ctrl+K from anywhere, as Word's Insert
+ * Hyperlink is — not only from the Insert tab. Kept inside the window, first
+ * field focused, and gone on Escape or a press outside.
+ */
+function LinkPopover({
+  at,
+  onClose,
+  children,
+}: {
+  at: { left: number; top: number };
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [place, setPlace] = useState(at);
+  useEffect(() => {
+    const box = ref.current;
+    if (!box) return;
+    const { width, height } = box.getBoundingClientRect();
+    setPlace({
+      left: Math.max(8, Math.min(at.left, window.innerWidth - width - 8)),
+      top: Math.max(8, Math.min(at.top, window.innerHeight - height - 8)),
+    });
+    box.querySelector<HTMLInputElement>("input")?.focus();
+  }, [at]);
+  useEffect(() => {
+    const onPointer = (event: PointerEvent) => {
+      if (event.target instanceof Node && ref.current?.contains(event.target)) {
+        return;
+      }
+      onClose();
+    };
+    document.addEventListener("pointerdown", onPointer, true);
+    return () => document.removeEventListener("pointerdown", onPointer, true);
+  }, [onClose]);
+  return (
+    <div
+      ref={ref}
+      className="bs-rpanel bs-rpanel--form"
+      role="dialog"
+      aria-label="Link"
+      style={{ left: place.left, top: place.top }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          onClose();
+        }
+      }}
+    >
+      {children}
+    </div>
   );
 }
