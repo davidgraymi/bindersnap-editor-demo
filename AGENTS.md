@@ -110,7 +110,8 @@ the editor. Leaving a policy with unsaved words asks first, whatever the way
 out. **The editor owns the draft**: "Saving to" is the `BinderDraftPicker`
 (switch or start a draft on the same policy) and Propose opens the propose
 step for that draft, returning to the policy on Back. Close lands on the
-document at `?edit=1&draft=`, which says "In <draft>" and lists your drafts
+document at `?edit=1&draft=`, with the draft bar (Propose, Discard) at the foot
+as on the binder's own page. It says "In <draft>" and lists your drafts
 in the file panel's "What you are reading". The binder's own page offers the
 same picker while reading, with "On the record" as a place. **Edit on a
 binder opens the editor** (`pickPolicyToWrite`: the policy last written in the

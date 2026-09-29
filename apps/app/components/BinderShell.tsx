@@ -1392,8 +1392,11 @@ export function BinderShell({
           reachable at any scroll depth and never between you and the tree.
           Not on the propose screen — that step owns its own page, and a
           disabled Propose above a Propose button is two of one control with
-          the nearer one dead. */}
-      {draft?.draft && editMode === "editing" && !documentPath && !archive ? (
+          the nearer one dead. On a document read in the draft as well: Close
+          in the editor lands there, and proposing what was just saved meant
+          finding the binder's own page first. Not in the editor, which has
+          its own Propose. */}
+      {draft?.draft && editMode === "editing" && !archive ? (
         <BinderDraftBar
           name={draft.draft.name}
           acts={draft.draft.acts}
