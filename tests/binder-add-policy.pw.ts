@@ -19,6 +19,9 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { expect, test, type Page } from "@playwright/test";
 
@@ -227,6 +230,49 @@ test("a new change is sent to the binder's people as it is opened", async ({
   await expect(
     page.getByText("Nobody has been asked to review this yet."),
   ).toHaveCount(0);
+});
+
+test("a whole folder goes in as one change request, keeping its shape", async ({
+  page,
+}) => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(
+    sessionCookie,
+    `Riverbend ${randomUUID().slice(0, 6)}`,
+  );
+  const binder = await createBinder(sessionCookie, org, "Clinical Policies");
+
+  const root = mkdtempSync(join(tmpdir(), "bindersnap-bulk-"));
+  const manual = join(root, "Manual");
+  mkdirSync(join(manual, "Nursing"), { recursive: true });
+  const pdf = "%PDF-1.4\n%%EOF\n";
+  writeFileSync(join(manual, "Fire_safety_plan.pdf"), pdf);
+  writeFileSync(join(manual, "Nursing", "Hand hygiene.pdf"), pdf);
+  writeFileSync(join(manual, ".DS_Store"), "x");
+  writeFileSync(join(manual, "rota.xlsx"), "x");
+
+  await signInBrowser(page, sessionCookie);
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Add a document" }).click();
+  await page.locator("#add-policy-folder-input").setInputFiles(manual);
+
+  // What will go in, and what will not, before anything is sent.
+  await expect(
+    page.getByRole("heading", { name: "Add documents" }),
+  ).toBeVisible();
+  await expect(page.getByText("2 files left out")).toBeVisible();
+  await page.getByRole("button", { name: "Add 2 documents" }).click();
+
+  await expect(page).toHaveURL(/\/-\/changes\/\d+/, { timeout: 60_000 });
+  await expect(
+    page.getByRole("heading", { name: "Add 2 documents" }),
+  ).toBeVisible({ timeout: 30_000 });
+  const does = page.locator(".change-does");
+  await expect(does.getByText("manual/fire-safety-plan")).toBeVisible();
+  await expect(does.getByText("manual/nursing/hand-hygiene")).toBeVisible();
+  // Opened once, whole — not opened and then updated file by file.
+  await expect(page.getByText("updated the proposed version")).toHaveCount(0);
 });
 
 /**

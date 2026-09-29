@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FilePen, FileText, Upload } from "lucide-react";
+import { FilePen, FileText, FolderUp, Upload, X } from "lucide-react";
 
 import {
   buildDocumentDisplayPath,
@@ -7,9 +7,20 @@ import {
 } from "../../../packages/utils/documentPath";
 import {
   createBinderDocument,
+  discardBinderDraft,
   fetchBinderDocuments,
+  openBinderDraft,
+  proposeBinderDraft,
   validateUploadFile,
 } from "../api";
+import {
+  describeBulkChange,
+  filesFromDrop,
+  filesFromInput,
+  nameFromFile,
+  planBulkUpload,
+  type BulkSource,
+} from "../bulkUpload";
 import { formatFileSize } from "../documentFile";
 import { formatDocumentName } from "../documentDisplay";
 import { AppIcon } from "./AppIcon";
@@ -93,16 +104,6 @@ function blankPolicy(name: string): string {
   );
 }
 
-/** `Infection_Control_Policy_v3.docx` → `Infection Control Policy v3`. */
-function suggestName(fileName: string): string {
-  const base = fileName.split(/[\\/]/).pop() ?? fileName;
-  const lastDot = base.lastIndexOf(".");
-  return (lastDot <= 0 ? base : base.slice(0, lastDot))
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 /**
  * The picker's answer when somebody wants a folder the binder does not have.
  *
@@ -157,13 +158,30 @@ export function AddPolicyModal({
   /** True while a file is over the zone, so it says it will take it. */
   const [over, setOver] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const folderInput = useRef<HTMLInputElement>(null);
+  /**
+   * Several files, or a folder: everything goes into one change request.
+   * Null for the ordinary one file.
+   */
+  const [sources, setSources] = useState<BulkSource[] | null>(null);
+  /** How far a bulk upload has got, while it runs. */
+  const [progress, setProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
+  /** The files a bulk upload could not add, and why. */
+  const [failures, setFailures] = useState<{ name: string; reason: string }[]>(
+    [],
+  );
+  /** The change a bulk upload opened, once some of it has landed. */
+  const [bulkChange, setBulkChange] = useState<number | null>(null);
   const [changeNumber, setChangeNumber] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!file) return;
-    setName(suggestName(file.name));
+    setName(nameFromFile(file.name));
     setError(null);
   }, [file]);
 
@@ -207,6 +225,19 @@ export function AddPolicyModal({
     setFile(chosen);
   };
 
+  /** One file is the ordinary dialog; more than one, or a folder, is a batch. */
+  const takeSources = (found: BulkSource[], fromFolder: boolean) => {
+    setError(null);
+    if (found.length === 0) return;
+    if (found.length === 1 && !fromFolder) {
+      setSources(null);
+      takeFile(found[0]!.file as File);
+      return;
+    }
+    setFile(null);
+    setSources(found);
+  };
+
   // Where it will land, worked out by the same functions the server commits
   // with — so the address promised here is the address written.
   //
@@ -216,6 +247,14 @@ export function AddPolicyModal({
   // of somebody being asked to confirm where their policy is going, and it is
   // not a thing they can act on.
   const filedIn = folder === NEW_FOLDER ? newFolder.trim() : folder;
+
+  const plan = useMemo(
+    () =>
+      sources
+        ? planBulkUpload(sources as (BulkSource & { file: File })[], filedIn)
+        : null,
+    [sources, filedIn],
+  );
 
   const slugPath = useMemo(
     () => buildDocumentSlugPath(name, filedIn || null),
@@ -233,15 +272,131 @@ export function AddPolicyModal({
     [file, name, filedIn],
   );
 
-  const canSubmit =
-    (writing || file !== null) &&
-    slugPath !== "" &&
-    !submitting &&
-    (folder !== NEW_FOLDER || newFolder.trim() !== "");
+  const canSubmit = plan
+    ? plan.items.length > 0 &&
+      !submitting &&
+      (folder !== NEW_FOLDER || newFolder.trim() !== "")
+    : (writing || file !== null) &&
+      slugPath !== "" &&
+      !submitting &&
+      (folder !== NEW_FOLDER || newFolder.trim() !== "");
+
+  /**
+   * Add every planned file, one after another, then open one change.
+   *
+   * **Into a draft of their own first.** Added straight into an open change,
+   * each file after the first was an "update" to it — the timeline said so a
+   * hundred times, and said earlier approvals were reset when there were none.
+   * Staged in a fresh draft and proposed once, the change opens whole, with
+   * one line saying it did.
+   *
+   * **One at a time, on purpose.** Each is a commit on the same branch, and
+   * two sent at once would race for the branch head. A file that is refused
+   * does not stop the rest: the person is told which, and the change that
+   * holds the others is still theirs to open.
+   */
+  const submitBatch = async () => {
+    if (!plan) return;
+    setSubmitting(true);
+    setError(null);
+    setFailures([]);
+    const failed: { name: string; reason: string }[] = [];
+    const added: typeof plan.items = [];
+    const subject = describeBulkChange(plan.items);
+
+    let target: { draft: string } | { changeNumber: number };
+    let staged: string | null = null;
+    try {
+      if (draft) {
+        target = { draft };
+      } else if (changeNumber !== null) {
+        target = { changeNumber };
+      } else {
+        const opened = await openBinderDraft(org, binder, subject.title);
+        staged = opened.draft?.branch ?? null;
+        if (!staged)
+          throw new Error("A draft to add them to could not be started.");
+        target = { draft: staged };
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message.trim() !== ""
+          ? err.message
+          : "Unable to add these documents.",
+      );
+      setSubmitting(false);
+      return;
+    }
+
+    for (const [index, item] of plan.items.entries()) {
+      setProgress({ done: index, total: plan.items.length });
+      try {
+        await createBinderDocument(
+          org,
+          binder,
+          item.file,
+          item.name,
+          item.folder || undefined,
+          target,
+        );
+        added.push(item);
+      } catch (err) {
+        failed.push({
+          name: item.relativePath,
+          reason:
+            err instanceof Error && err.message.trim() !== ""
+              ? err.message
+              : "It could not be added.",
+        });
+      }
+    }
+    setProgress({ done: plan.items.length, total: plan.items.length });
+
+    let opened: number | null = changeNumber;
+    if (staged) {
+      if (added.length === 0) {
+        await discardBinderDraft(org, binder, staged).catch(() => undefined);
+      } else {
+        try {
+          const done = describeBulkChange(added);
+          const proposed = await proposeBinderDraft(
+            org,
+            binder,
+            done.title,
+            done.body,
+            staged,
+          );
+          opened = proposed.changeNumber;
+          setBulkChange(opened);
+          await askReviewers(org, binder, opened, reviewers);
+        } catch (err) {
+          failed.push({
+            name: "The change request",
+            reason:
+              err instanceof Error && err.message.trim() !== ""
+                ? `${err.message} The documents are in your draft “${subject.title}”.`
+                : `It could not be opened. The documents are in your draft “${subject.title}”.`,
+          });
+        }
+      }
+    }
+    setProgress(null);
+
+    if (failed.length === 0) {
+      onAdded(draft ? null : opened);
+      return;
+    }
+    setFailures(failed);
+    setSubmitting(false);
+  };
 
   const handleSubmit = async () => {
     if (writing) {
       await startWriting();
+      return;
+    }
+    if (plan) {
+      await submitBatch();
       return;
     }
     if (!file) return;
@@ -318,7 +473,7 @@ export function AddPolicyModal({
         className="upload-modal create-document-modal"
         onClick={(event) => event.stopPropagation()}
       >
-        <h2>Add a document</h2>
+        <h2>{plan ? "Add documents" : "Add a document"}</h2>
 
         <div className="create-document-form bs-fields">
           {onWrite ? (
@@ -382,12 +537,47 @@ export function AddPolicyModal({
             id="add-policy-file"
             ref={fileInput}
             type="file"
+            multiple
             className="bs-hidden-file"
-            onChange={(event) => takeFile(event.target.files?.[0] ?? null)}
+            onChange={(event) => {
+              takeSources(filesFromInput(event.target.files), false);
+              event.target.value = "";
+            }}
+            disabled={submitting}
+          />
+          <input
+            id="add-policy-folder-input"
+            ref={folderInput}
+            type="file"
+            className="bs-hidden-file"
+            // Not in React's types, and every browser we support has it.
+            {...{ webkitdirectory: "", directory: "" }}
+            onChange={(event) => {
+              takeSources(filesFromInput(event.target.files), true);
+              event.target.value = "";
+            }}
             disabled={submitting}
           />
 
-          {writing ? null : file ? (
+          {writing ? null : plan ? (
+            <BulkList
+              plan={plan}
+              progress={progress}
+              disabled={submitting}
+              onRemove={(relativePath) =>
+                setSources(
+                  (current) =>
+                    current?.filter(
+                      (entry) => entry.relativePath !== relativePath,
+                    ) ?? null,
+                )
+              }
+              onClear={() => {
+                setSources(null);
+                setFailures([]);
+              }}
+            />
+          ) : file ? (
             <div className="bs-dropzone bs-dropzone--filled">
               <span className="bs-dropzone-icon" aria-hidden="true">
                 <AppIcon icon={FileText} size="lg" />
@@ -421,50 +611,76 @@ export function AddPolicyModal({
               onDrop={(event) => {
                 event.preventDefault();
                 setOver(false);
+                const items = event.dataTransfer.items;
+                const hasFolder = Array.from(items ?? []).some(
+                  (item) => item.webkitGetAsEntry?.()?.isDirectory,
+                );
+                if (items && (hasFolder || items.length > 1)) {
+                  void filesFromDrop(items).then((found) =>
+                    takeSources(found, hasFolder),
+                  );
+                  return;
+                }
                 takeFile(event.dataTransfer.files?.[0] ?? null);
               }}
             >
               <AppIcon icon={Upload} size="lg" aria-hidden="true" />
               <span className="bs-dropzone-lead">
-                Drop the document here, or choose a file
+                Drop documents or a folder here, or choose files
               </span>
               <span className="bs-field-hint">
-                Word, PDF, Excel — whatever it is written in, up to 25 MB.
+                Word, PDF, Excel — whatever it is written in, up to 25 MB each.
               </span>
             </button>
           )}
 
-          <div className="bs-field">
-            <label className="bs-field-label" htmlFor="add-policy-name">
-              What it is called
-            </label>
-            <input
-              id="add-policy-name"
-              className="bs-input"
-              type="text"
-              value={name}
-              onChange={(event) => {
-                setName(event.target.value);
-                setError(null);
-              }}
-              placeholder="Infection Control"
+          {writing || file || plan ? null : (
+            <button
+              type="button"
+              className="bs-btn bs-btn--sm bs-btn--quiet add-policy-folder-pick"
               disabled={submitting}
-            />
-            {/* Derived rather than demanded, and editable rather than fixed:
+              onClick={() => folderInput.current?.click()}
+            >
+              <AppIcon icon={FolderUp} size="sm" aria-hidden="true" />
+              Add a whole folder
+            </button>
+          )}
+
+          {plan ? null : (
+            <>
+              <div className="bs-field">
+                <label className="bs-field-label" htmlFor="add-policy-name">
+                  What it is called
+                </label>
+                <input
+                  id="add-policy-name"
+                  className="bs-input"
+                  type="text"
+                  value={name}
+                  onChange={(event) => {
+                    setName(event.target.value);
+                    setError(null);
+                  }}
+                  placeholder="Infection Control"
+                  disabled={submitting}
+                />
+                {/* Derived rather than demanded, and editable rather than fixed:
                 the file is already named, and retyping its name is work the
                 screen can do. */}
-            <p className="bs-field-hint">
-              {writing
-                ? "Its title, and what people will look for it under."
-                : file
-                  ? "Taken from the file name. This is what people will look for it under."
-                  : "Taken from the file name once you choose one."}
-            </p>
-          </div>
+                <p className="bs-field-hint">
+                  {writing
+                    ? "Its title, and what people will look for it under."
+                    : file
+                      ? "Taken from the file name. This is what people will look for it under."
+                      : "Taken from the file name once you choose one."}
+                </p>
+              </div>
+            </>
+          )}
 
           <div className="bs-field">
             <label className="bs-field-label" htmlFor="add-policy-folder">
-              Where it goes
+              {plan ? "Where they go" : "Where it goes"}
             </label>
             {/* A picker of folders that exist, not a free-text path: a typo
                 filed a policy in a folder nobody else would ever look in. */}
@@ -534,7 +750,7 @@ export function AddPolicyModal({
           {/* Where it lands, before they commit to it. Folders nest as deep as
               anyone wants, and a customer who types one is entitled to see
               what the binder will actually call it. */}
-          {filePath ? (
+          {!plan && filePath ? (
             <p className="bs-field-hint">
               Files as <code className="bs-filename">{filePath}</code>
             </p>
@@ -544,6 +760,32 @@ export function AddPolicyModal({
             <p className="bs-note bs-note--danger" role="alert">
               {error}
             </p>
+          ) : null}
+
+          {failures.length > 0 ? (
+            <div className="bs-note bs-note--danger" role="alert">
+              <p>
+                {failures.length === 1
+                  ? "One file could not be added:"
+                  : `${failures.length} files could not be added:`}
+              </p>
+              <ul className="bulk-failures">
+                {failures.map((failure) => (
+                  <li key={failure.name}>
+                    <strong>{failure.name}</strong> — {failure.reason}
+                  </li>
+                ))}
+              </ul>
+              {bulkChange !== null ? (
+                <button
+                  type="button"
+                  className="bs-btn bs-btn--sm bs-btn-secondary"
+                  onClick={() => onAdded(bulkChange)}
+                >
+                  Open the change request with the others
+                </button>
+              ) : null}
+            </div>
           ) : null}
 
           {/* Nothing reaches the record without a decision — the same promise
@@ -570,9 +812,15 @@ export function AddPolicyModal({
                 ? submitting
                   ? "Starting…"
                   : "Start writing"
-                : submitting
-                  ? "Adding…"
-                  : "Add document"}
+                : plan
+                  ? progress
+                    ? `Adding ${progress.done + 1} of ${progress.total}…`
+                    : plan.items.length === 1
+                      ? "Add 1 document"
+                      : `Add ${plan.items.length} documents`
+                  : submitting
+                    ? "Adding…"
+                    : "Add document"}
             </button>
             <button
               className="bs-btn bs-btn-secondary"
@@ -585,6 +833,98 @@ export function AddPolicyModal({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * What a batch will add, and what it will leave out, before anything is sent.
+ *
+ * Every row can be taken out: a dropped folder is somebody's shared drive, and
+ * the thing they did not mean to include is always in it.
+ */
+function BulkList({
+  plan,
+  progress,
+  disabled,
+  onRemove,
+  onClear,
+}: {
+  plan: ReturnType<typeof planBulkUpload<File>>;
+  progress: { done: number; total: number } | null;
+  disabled: boolean;
+  onRemove: (relativePath: string) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="bs-panel bulk-list">
+      <div className="bs-panel-bar">
+        <h3 className="bs-panel-bar-title">
+          {plan.items.length === 1
+            ? "1 document"
+            : `${plan.items.length} documents`}
+        </h3>
+        <button
+          type="button"
+          className="bs-btn bs-btn--sm bs-btn--quiet"
+          disabled={disabled}
+          onClick={onClear}
+        >
+          Choose again
+        </button>
+      </div>
+      {progress ? (
+        <progress
+          className="bulk-progress"
+          value={progress.done}
+          max={progress.total}
+          aria-label="Documents added"
+        />
+      ) : null}
+      <ul className="bs-row-list bulk-rows">
+        {plan.items.map((item) => (
+          <li className="bs-row" key={item.relativePath}>
+            <span className="bs-row-icon" aria-hidden="true">
+              <AppIcon icon={FileText} size="sm" />
+            </span>
+            <span className="bs-row-body">
+              <span className="bs-row-name">{item.name}</span>
+              <span className="bs-row-meta">
+                {item.folder
+                  ? item.folder.replace(/\//g, " › ")
+                  : "The top level of the binder"}
+                {" · "}
+                {formatFileSize(item.file.size)}
+              </span>
+            </span>
+            <button
+              type="button"
+              className="bs-rowact"
+              aria-label={`Leave out ${item.name}`}
+              disabled={disabled}
+              onClick={() => onRemove(item.relativePath)}
+            >
+              <AppIcon icon={X} size="sm" />
+            </button>
+          </li>
+        ))}
+      </ul>
+      {plan.skipped.length > 0 ? (
+        <details className="bulk-skipped">
+          <summary>
+            {plan.skipped.length === 1
+              ? "1 file left out"
+              : `${plan.skipped.length} files left out`}
+          </summary>
+          <ul>
+            {plan.skipped.map((skip) => (
+              <li key={skip.relativePath}>
+                {skip.relativePath} — {skip.reason}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </div>
   );
 }
