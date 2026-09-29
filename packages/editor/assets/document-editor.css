@@ -341,6 +341,26 @@
   min-width: 80px;
 }
 
+/* A folded group's commands, dropped from its button, laid out as the group
+   was: rows of small buttons. */
+.bs-rpanel--flyout {
+  min-width: 0;
+  max-height: none;
+  padding: var(--brand-space-2);
+}
+
+.bs-rgroup-flyout .bs-rgroup-body {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--brand-space-1);
+}
+
+/* Folded, the button says the group's name; the name under it would say it
+   twice. Kept for its height, so the groups still line up. */
+.bs-rgroup--folded .bs-rgroup-label {
+  visibility: hidden;
+}
+
 .bs-rmenu-item {
   appearance: none;
   display: flex;
