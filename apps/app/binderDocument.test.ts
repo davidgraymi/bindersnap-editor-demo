@@ -6,6 +6,7 @@ import {
   describeVersionState,
   downloadFileName,
   parseRequestedVersion,
+  pickPolicyToWrite,
   resolveDocumentRef,
 } from "./binderDocument";
 
@@ -222,4 +223,36 @@ test("a published version still wins over the proposed wording", () => {
       "proposed",
     ),
   ).toBe("Version 2 on record");
+});
+
+test("Edit on a binder opens the policy last written in the draft", () => {
+  const documents = [
+    { path: "code-of-conduct.A.json", slugPath: "code-of-conduct" },
+    { path: "nursing/hand-hygiene.B.json", slugPath: "nursing/hand-hygiene" },
+    { path: "nursing/gloves.C.json", slugPath: "nursing/gloves" },
+    { path: "admin/leave.D.docx", slugPath: "admin/leave" },
+  ];
+  const acts = [
+    { at: "2026-09-27T10:00:00Z", paths: ["nursing/gloves.C.json"] },
+    { at: "2026-09-27T11:00:00Z", paths: ["nursing/hand-hygiene.B.json"] },
+    // Newest, but a Word file: not the editor's to open.
+    { at: "2026-09-27T12:00:00Z", paths: ["admin/leave.D.docx"] },
+  ];
+  expect(pickPolicyToWrite(documents, acts)).toBe("nursing/hand-hygiene");
+});
+
+test("with nothing written yet, Edit opens the binder's first policy", () => {
+  expect(
+    pickPolicyToWrite(
+      [
+        { path: "nursing/a.B.json", slugPath: "nursing/a" },
+        { path: "zeta.A.json", slugPath: "zeta" },
+      ],
+      [],
+    ),
+  ).toBe("zeta");
+  // Nothing the editor writes: the tree is the place.
+  expect(
+    pickPolicyToWrite([{ path: "leave.D.pdf", slugPath: "leave" }], []),
+  ).toBeNull();
 });

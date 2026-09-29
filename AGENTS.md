@@ -112,7 +112,11 @@ out. **The editor owns the draft**: "Saving to" is the `BinderDraftPicker`
 step for that draft, returning to the policy on Back. Close lands on the
 document at `?edit=1&draft=`, which says "In <draft>" and lists your drafts
 in the file panel's "What you are reading". The binder's own page offers the
-same picker while reading, with "On the record" as a place.
+same picker while reading, with "On the record" as a place. **Edit on a
+binder opens the editor** (`pickPolicyToWrite`: the policy last written in the
+draft, else the first) — only a binder with nothing the editor writes opens
+the tree. Renaming, refiling and folders are **Organize**, on the binder's
+header and in the editor's file panel.
 
 **Pictures are embedded, not linked** (`packages/editor/imageFiles.ts`): chosen,
 pasted or dropped, a picture is scaled to at most 1600px and written into the

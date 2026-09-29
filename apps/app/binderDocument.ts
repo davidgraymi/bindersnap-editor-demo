@@ -218,6 +218,41 @@ export function isEditorDocumentFile(path: string): boolean {
 }
 
 /**
+ * Which policy Edit on a binder opens in the editor.
+ *
+ * **The one you were last writing**, from the draft's own acts — Edit on a
+ * binder you were halfway through a policy in picks up there, as Word opens on
+ * the file you had last. Otherwise the first the binder lists: at its root
+ * before inside a folder, then by name. Null when nothing in the binder is
+ * one the editor writes — all Word files and PDFs — and the tree is the only
+ * place to be.
+ */
+export function pickPolicyToWrite(
+  documents: readonly { path: string; slugPath: string }[],
+  acts: readonly { at: string | null; paths: readonly string[] }[],
+): string | null {
+  const writable = documents.filter((entry) =>
+    isEditorDocumentFile(entry.path),
+  );
+  const newestFirst = [...acts].sort(
+    (a, b) => Date.parse(b.at ?? "") - Date.parse(a.at ?? "") || 0,
+  );
+  for (const act of newestFirst) {
+    for (const path of act.paths) {
+      const hit = writable.find((entry) => entry.path === path);
+      if (hit) return hit.slugPath;
+    }
+  }
+  const depth = (slugPath: string) => slugPath.split("/").length;
+  const first = [...writable].sort(
+    (a, b) =>
+      depth(a.slugPath) - depth(b.slugPath) ||
+      a.slugPath.localeCompare(b.slugPath),
+  )[0];
+  return first?.slugPath ?? null;
+}
+
+/**
  * A document open in the editor: `/{org}/{binder}/{path}?edit=write&draft=…`.
  *
  * The document's own address, in edit mode, naming the draft the editor saves
