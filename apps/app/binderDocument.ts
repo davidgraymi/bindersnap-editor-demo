@@ -171,6 +171,12 @@ export function buildDocumentUrl(params: {
    * a change has the way back — it says where you came from, not what to read.
    */
   ref?: string | null;
+  /**
+   * Read it in one of your drafts: the binder in edit mode, on that draft,
+   * where Edit carries on in it. Wins over everything else, because a draft is
+   * a place you work rather than a version you look at.
+   */
+  draft?: string | null;
 }): string {
   const {
     org,
@@ -179,8 +185,12 @@ export function buildDocumentUrl(params: {
     version,
     change = null,
     ref = null,
+    draft = null,
   } = params;
   const base = `/${org}/${binder}/${documentPath}`;
+  if (draft) {
+    return `${base}?${new URLSearchParams({ edit: "1", draft }).toString()}`;
+  }
 
   const query = new URLSearchParams();
   if (ref) query.set("ref", ref);

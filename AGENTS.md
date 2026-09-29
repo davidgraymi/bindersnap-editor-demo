@@ -107,7 +107,12 @@ sidebar and the binder's file panel so Letter fits at 100% on a laptop. The
 editor has **its own file panel** (`components/DraftFiles.tsx`), read at the
 draft: a policy opens beside the last one, and New starts one, without leaving
 the editor. Leaving a policy with unsaved words asks first, whatever the way
-out.
+out. **The editor owns the draft**: "Saving to" is the `BinderDraftPicker`
+(switch or start a draft on the same policy) and Propose opens the propose
+step for that draft, returning to the policy on Back. Close lands on the
+document at `?edit=1&draft=`, which says "In <draft>" and lists your drafts
+in the file panel's "What you are reading". The binder's own page offers the
+same picker while reading, with "On the record" as a place.
 
 **Pictures are embedded, not linked** (`packages/editor/imageFiles.ts`): chosen,
 pasted or dropped, a picture is scaled to at most 1600px and written into the

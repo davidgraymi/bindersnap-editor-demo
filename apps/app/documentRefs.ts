@@ -26,6 +26,11 @@ export interface ReadableRef {
   change: number | null;
   /** The branch it reads at. Null on the record, which needs no ref. */
   ref: string | null;
+  /**
+   * One of your drafts: read there in the draft, where Edit keeps working in
+   * it, rather than as a branch somebody is looking at.
+   */
+  draft?: string | null;
   /** On the control itself, so it has to be short. */
   label: string;
   /** The line under it in the menu — what this version is. */
@@ -68,13 +73,18 @@ export function buildReadableRefs(params: {
   ref: string | null;
   /** The change on screen, from the address. */
   change: number | null;
+  /** The draft on screen, from the address, when it is one of yours. */
+  draft?: string | null;
+  /** Your drafts in this binder, each somewhere you can be. */
+  drafts?: readonly { branch: string; name: string }[];
 }): ReadableRef[] {
-  const { openChanges, ref, change } = params;
+  const { openChanges, ref, change, draft = null, drafts = [] } = params;
 
   // On the record when the address names neither. A ref that is `main` is the
   // record too: the page reads there either way, and an address that happens
   // to spell it out should not produce a second entry saying so.
-  const onRecord = change === null && (ref === null || ref === "main");
+  const onRecord =
+    change === null && draft === null && (ref === null || ref === "main");
 
   const refs: ReadableRef[] = [
     {
@@ -86,6 +96,21 @@ export function buildReadableRefs(params: {
     },
   ];
 
+  // **Your drafts are places too.** The editor saves into one, and the only
+  // way to read what it saved was to know to go back into edit mode on the
+  // binder — so after Close the control said "On the record" over a page
+  // that was not the record, which is the one thing it exists to prevent.
+  for (const own of drafts) {
+    refs.push({
+      change: null,
+      ref: null,
+      draft: own.branch,
+      label: own.name,
+      detail: "Your draft — not proposed yet",
+      current: change === null && draft === own.branch,
+    });
+  }
+
   for (const entry of openChanges) {
     refs.push({
       change: entry.number,
@@ -93,7 +118,9 @@ export function buildReadableRefs(params: {
       label: `Change #${entry.number}`,
       detail: entry.title,
       current:
-        !onRecord && (change === entry.number || ref === entry.branchName),
+        !onRecord &&
+        draft === null &&
+        (change === entry.number || ref === entry.branchName),
     });
   }
 
@@ -105,6 +132,7 @@ export function buildReadableRefs(params: {
     refs.push({
       change,
       ref,
+      ...(draft !== null && change === null ? { draft } : {}),
       label: change === null ? "Your draft" : `Change #${change}`,
       detail: change === null ? "Not proposed yet" : "Proposed",
       current: true,

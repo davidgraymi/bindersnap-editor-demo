@@ -691,6 +691,9 @@ export function BinderDocuments({
             </>
           ) : (
             <>
+              {/* On the record, and the way into your drafts from it. Not on
+                  a change's branch, which says which branch it is instead. */}
+              {onChange ? null : draftPicker}
               {/* Which branch this is, in the tree's own bar — the list reads
                   like the record otherwise, and is not it. */}
               {onChange ? (
