@@ -12,6 +12,7 @@ import {
   Archive,
   ChevronDown,
   ChevronRight,
+  Copy,
   File,
   FilePlus,
   FileText,
@@ -108,6 +109,8 @@ interface DraftFilesProps {
    * the same draft, so an archiving done here a moment ago is undone by it.
    */
   archivedCount?: number;
+  /** A copy of a policy, beside it in the same folder, opened. */
+  onCopy?: (slugPath: string) => void;
   onReadArchive?: () => Promise<BinderArchivePayload["documents"]>;
   onRestore?: (uid: string) => Promise<boolean>;
   /** An act is being saved: nothing else starts until it lands. */
@@ -193,6 +196,7 @@ export function DraftFiles({
   onMove,
   onArchive,
   archivedCount = 0,
+  onCopy,
   onReadArchive,
   onRestore,
   busy = false,
@@ -547,6 +551,21 @@ export function DraftFiles({
         disabled: !acts,
         separated: items.length > 0,
         run: () => setRenaming(keyOf(node)),
+      });
+    }
+    if (
+      onCopy &&
+      node.kind === "document" &&
+      isEditorDocumentFile(node.document.path)
+    ) {
+      items.push({
+        label: "Make a copy",
+        icon: Copy,
+        disabled: busy,
+        run: () => {
+          setFloating(false);
+          onCopy(node.document.slugPath);
+        },
       });
     }
     if (onMove && isManaged(node)) {
@@ -1106,7 +1125,9 @@ function RowMenu({
       left: Math.max(margin, Math.min(x, window.innerWidth - width - margin)),
       top: Math.max(margin, Math.min(y, window.innerHeight - height - margin)),
     });
-    box.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+    box
+      .querySelector<HTMLButtonElement>("button:not(:disabled)")
+      ?.focus({ preventScroll: true });
   }, [x, y]);
 
   useEffect(() => {
@@ -1116,14 +1137,28 @@ function RowMenu({
       }
       onClose(true);
     };
-    const onScroll = () => onClose(true);
+    // Only a scroll that carries the row away: the page beside the panel
+    // scrolling (the editor bringing its cursor into view as it loses focus)
+    // leaves the row, and the menu, where they were.
+    const onScroll = (event: Event) => {
+      const scrolled = event.target;
+      const menu = ref.current;
+      if (
+        menu &&
+        (scrolled === document ||
+          (scrolled instanceof Node && scrolled.contains(menu)))
+      ) {
+        onClose(true);
+      }
+    };
+    const onResize = () => onClose(true);
     document.addEventListener("pointerdown", onPointer, true);
     window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", onScroll);
+    window.addEventListener("resize", onResize);
     return () => {
       document.removeEventListener("pointerdown", onPointer, true);
       window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", onScroll);
+      window.removeEventListener("resize", onResize);
     };
   }, [onClose]);
 
