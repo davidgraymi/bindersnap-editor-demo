@@ -5,11 +5,15 @@ import {
   useEffect,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import type { Editor, JSONContent } from "@tiptap/core";
 import { GitBranch } from "lucide-react";
 
-import type { WorkspaceDocumentDetailPayload } from "../../../packages/api-schema/schemas/workspaces";
+import type {
+  WorkspaceDocumentDetailPayload,
+  WorkspaceDocumentListEntry,
+} from "../../../packages/api-schema/schemas/workspaces";
 import {
   downloadBinderDocument,
   fetchBinderDocument,
@@ -17,6 +21,7 @@ import {
 } from "../api";
 import { formatAge, formatDocumentName } from "../documentDisplay";
 import { parseEditorDocument } from "../editorDocumentHtml";
+import { DraftFiles } from "./DraftFiles";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 /**
@@ -52,7 +57,25 @@ interface DocumentEditorPageProps {
   onClose: () => void;
   /** A save landed: the draft has one more act to count. */
   onSaved: () => void;
+  /** The binder's name, for the file panel. */
+  binderName: string;
+  /**
+   * The draft's files, for the panel beside the page. Null while they are
+   * read, or when they cannot be — the editor still opens.
+   */
+  files: {
+    documents: readonly WorkspaceDocumentListEntry[];
+    folders: readonly string[];
+  } | null;
+  /** Open another policy in the editor, in the same draft. */
+  onOpenDocument: (slugPath: string) => void;
+  /** Start a new policy in the draft. */
+  onNewDocument: () => void;
 }
+
+/** Where the person was going when unsaved words stopped them. */
+type Leaving =
+  { kind: "close" } | { kind: "open"; slugPath: string } | { kind: "new" };
 
 type LoadState =
   | { kind: "loading" }
@@ -92,11 +115,15 @@ export function DocumentEditorPage({
   draftName,
   onClose,
   onSaved,
+  binderName,
+  files,
+  onOpenDocument,
+  onNewDocument,
 }: DocumentEditorPageProps) {
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
   const [save, setSave] = useState<SaveState>({ kind: "idle" });
   const [dirty, setDirty] = useState(false);
-  const [closing, setClosing] = useState(false);
+  const [leaving, setLeaving] = useState<Leaving | null>(null);
   const editorRef = useRef<Editor | null>(null);
   /** The document as last saved, to tell a real change from an undo back. */
   const savedJson = useRef<string>("");
@@ -116,6 +143,8 @@ export function DocumentEditorPage({
     if (!draft) return;
     let cancelled = false;
     setLoad({ kind: "loading" });
+    // "Saved 2 minutes ago" was about the policy before this one.
+    setSave({ kind: "idle" });
 
     (async () => {
       // Read in the draft: a policy edited a minute ago is only there.
@@ -219,64 +248,24 @@ export function DocumentEditorPage({
     }
   }, [binder, draft, load, onSaved, org, save.kind]);
 
-  const requestClose = () => {
-    if (dirty) setClosing(true);
-    else onClose();
+  const go = (to: Leaving) => {
+    if (to.kind === "close") onClose();
+    else if (to.kind === "open") onOpenDocument(to.slugPath);
+    else onNewDocument();
   };
 
-  if (!draft || load.kind === "loading") {
-    return (
-      <div className="doc-editor-page">
-        <SkeletonGroup label="Opening the editor">
-          <SkeletonLine width="medium" />
-          <SkeletonLine width="short" />
-        </SkeletonGroup>
-      </div>
-    );
-  }
+  /** Anywhere but here asks first while there are unsaved words. */
+  const leave = (to: Leaving) => {
+    if (dirty) setLeaving(to);
+    else go(to);
+  };
 
-  if (load.kind === "error") {
-    return (
-      <div className="doc-editor-page">
-        <p className="bs-note bs-note--danger" role="alert">
-          {load.message}
-        </p>
-        <p>
-          <button
-            type="button"
-            className="bs-btn bs-btn-secondary"
-            onClick={onClose}
-          >
-            Back to the document
-          </button>
-        </p>
-      </div>
-    );
-  }
-
-  const name = formatDocumentName(load.detail.document.name);
-
-  if (load.kind === "foreign") {
-    return (
-      <div className="doc-editor-page">
-        <div className="bs-empty">
-          <h1 className="bs-title">{name} is not a Bindersnap document</h1>
-          <p>
-            It was uploaded as a file, so it is edited in the program that made
-            it. Make your changes there, then use Upload new version on the
-            document's page.
-          </p>
-          <button
-            type="button"
-            className="bs-btn bs-btn-secondary bs-btn--sm"
-            onClick={onClose}
-          >
-            Back to the document
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // The name the address gives, until the document itself has been read, so
+  // the title bar does not blink out between one policy and the next.
+  const name =
+    load.kind === "ready" || load.kind === "foreign"
+      ? formatDocumentName(load.detail.document.name)
+      : formatDocumentName(documentPath.split("/").pop() ?? documentPath);
 
   const status =
     save.kind === "saving"
@@ -289,52 +278,46 @@ export function DocumentEditorPage({
             ? `Saved ${formatAge(save.at)}`
             : "No changes yet";
 
-  return (
-    <div className="doc-editor-page">
-      <header className="doc-editor-head">
-        <div className="doc-editor-head-body">
-          <h1 className="doc-editor-title">{name}</h1>
-          {/* Where Save puts things, said before it is pressed. */}
-          <p
-            className="doc-editor-where"
-            title="The version on record does not change until the draft is proposed and approved."
-          >
-            <GitBranch size={14} strokeWidth={1.75} aria-hidden="true" />
-            <span>
-              Saving to{" "}
-              {draftName ? <strong>{draftName}</strong> : "your draft"}
-              <span className="doc-editor-where-more">
-                {" "}
-                · nothing on record changes until it is approved
-              </span>
-            </span>
+  let body: ReactNode;
+  if (!draft || load.kind === "loading") {
+    body = (
+      <div className="doc-editor-state">
+        <SkeletonGroup label="Opening the editor">
+          <SkeletonLine width="medium" />
+          <SkeletonLine width="short" />
+        </SkeletonGroup>
+      </div>
+    );
+  } else if (load.kind === "error") {
+    body = (
+      <div className="doc-editor-state">
+        <p className="bs-note bs-note--danger" role="alert">
+          {load.message}
+        </p>
+      </div>
+    );
+  } else if (load.kind === "foreign") {
+    body = (
+      <div className="doc-editor-state">
+        <div className="bs-empty">
+          <h2 className="bs-title">{name} is not a Bindersnap document</h2>
+          <p>
+            It was uploaded as a file, so it is edited in the program that made
+            it. Make your changes there, then use Upload new version on the
+            document's page.
           </p>
-        </div>
-        <div className="doc-editor-head-actions">
           <button
             type="button"
             className="bs-btn bs-btn-secondary bs-btn--sm"
-            onClick={requestClose}
+            onClick={onClose}
           >
-            Close
-          </button>
-          <button
-            type="button"
-            className="bs-btn bs-btn-primary bs-btn--sm"
-            disabled={!dirty || save.kind === "saving"}
-            onClick={() => void saveNow()}
-          >
-            {save.kind === "saving" ? "Saving…" : "Save"}
+            Go to the document's page
           </button>
         </div>
-      </header>
-
-      {save.kind === "failed" ? (
-        <p className="bs-note bs-note--danger" role="alert">
-          {save.message}
-        </p>
-      ) : null}
-
+      </div>
+    );
+  } else {
+    body = (
       <div className="doc-editor-frame">
         <Suspense
           fallback={
@@ -344,6 +327,9 @@ export function DocumentEditorPage({
           }
         >
           <DocumentEditor
+            // A policy opened from the file panel is a new document, not an
+            // edit to this one: a fresh editor, a fresh undo history.
+            key={load.detail.document.slugPath}
             label={name}
             initialContent={load.doc}
             // A policy just started is its title and an empty line: the
@@ -376,12 +362,84 @@ export function DocumentEditorPage({
           />
         </Suspense>
       </div>
+    );
+  }
 
-      {closing ? (
+  const ask = leaving
+    ? leaving.kind === "close"
+      ? { save: "Save and close", drop: "Close without saving" }
+      : leaving.kind === "open"
+        ? { save: "Save and open", drop: "Open without saving" }
+        : { save: "Save first", drop: "Don't save" }
+    : null;
+
+  return (
+    <div className="doc-editor-page">
+      <header className="doc-editor-head">
+        <div className="doc-editor-head-body">
+          <h1 className="doc-editor-title">{name}</h1>
+          {/* Where Save puts things, said before it is pressed. */}
+          <p
+            className="doc-editor-where"
+            title="The version on record does not change until the draft is proposed and approved."
+          >
+            <GitBranch size={14} strokeWidth={1.75} aria-hidden="true" />
+            <span>
+              Saving to{" "}
+              {draftName ? <strong>{draftName}</strong> : "your draft"}
+              <span className="doc-editor-where-more">
+                {" "}
+                · nothing on record changes until it is approved
+              </span>
+            </span>
+          </p>
+        </div>
+        <div className="doc-editor-head-actions">
+          <button
+            type="button"
+            className="bs-btn bs-btn-secondary bs-btn--sm"
+            onClick={() => leave({ kind: "close" })}
+          >
+            Close
+          </button>
+          <button
+            type="button"
+            className="bs-btn bs-btn-primary bs-btn--sm"
+            disabled={load.kind !== "ready" || !dirty || save.kind === "saving"}
+            onClick={() => void saveNow()}
+          >
+            {save.kind === "saving" ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </header>
+
+      {save.kind === "failed" ? (
+        <p className="bs-note bs-note--danger doc-editor-alert" role="alert">
+          {save.message}
+        </p>
+      ) : null}
+
+      <div className="doc-editor-workspace">
+        {files ? (
+          <DraftFiles
+            org={org}
+            binder={binder}
+            binderName={binderName}
+            documents={files.documents}
+            folders={files.folders}
+            active={documentPath}
+            onOpen={(slugPath) => leave({ kind: "open", slugPath })}
+            onNew={() => leave({ kind: "new" })}
+          />
+        ) : null}
+        <div className="doc-editor-main">{body}</div>
+      </div>
+
+      {leaving && ask ? (
         <div
           className="upload-modal-backdrop"
           onClick={(event) => {
-            if (event.target === event.currentTarget) setClosing(false);
+            if (event.target === event.currentTarget) setLeaving(null);
           }}
         >
           <div
@@ -393,7 +451,7 @@ export function DocumentEditorPage({
           >
             <h2 id="doc-editor-close-title">Save your changes to {name}?</h2>
             <p id="doc-editor-close-body" className="add-policy-note">
-              They go into your draft. Closing without saving loses everything
+              They go into your draft. Leaving without saving loses everything
               since the last save.
             </p>
             <div className="upload-modal-actions">
@@ -403,28 +461,31 @@ export function DocumentEditorPage({
                 autoFocus
                 disabled={save.kind === "saving"}
                 onClick={() => {
+                  const to = leaving;
                   void saveNow().then((saved) => {
-                    if (saved) onClose();
-                    else setClosing(false);
+                    setLeaving(null);
+                    if (saved) go(to);
                   });
                 }}
               >
-                {save.kind === "saving" ? "Saving…" : "Save and close"}
+                {save.kind === "saving" ? "Saving…" : ask.save}
               </button>
               <button
                 type="button"
                 className="bs-btn bs-btn-secondary"
                 onClick={() => {
+                  const to = leaving;
+                  setLeaving(null);
                   setDirty(false);
-                  onClose();
+                  go(to);
                 }}
               >
-                Close without saving
+                {ask.drop}
               </button>
               <button
                 type="button"
                 className="bs-btn bs-btn-secondary"
-                onClick={() => setClosing(false)}
+                onClick={() => setLeaving(null)}
               >
                 Cancel
               </button>

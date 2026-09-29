@@ -214,10 +214,12 @@ test("a policy written here opens in the editor, and Save puts it in your draft"
   const text = page.getByRole("textbox", { name: "Hand Hygiene" });
   await expect(text).toContainText("Clean your hands");
   await expect(page.getByText("No changes yet")).toBeVisible();
-  // The headings are the way around the document.
+  // The draft's files are beside the page, and this one is marked.
   await expect(
-    page.getByRole("complementary", { name: "Navigation" }),
-  ).toContainText("Hand Hygiene");
+    page
+      .getByRole("complementary", { name: `Files in Clinical Policies` })
+      .getByRole("button", { name: "Hand Hygiene" }),
+  ).toHaveAttribute("aria-current", "page");
 
   await text.getByText("Clean your hands").click();
   await page.keyboard.press("End");
@@ -293,6 +295,53 @@ test("a new policy can be written here instead of uploaded", async ({
     timeout: 20_000,
   });
 
+  const saved = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/raw/visitor-policy?ref=${encodeURIComponent(draft)}`,
+    { headers: authHeaders(session) },
+  );
+  expect(saved.status).toBe(200);
+  expect(await saved.text()).toContain("Visitors sign in at reception.");
+});
+
+test("the editor's file panel starts a policy and moves between them, saving first", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/edit=write/);
+  const files = page.getByRole("complementary", {
+    name: "Files in Clinical Policies",
+  });
+
+  // New, from inside the editor: the dialog opens on Write.
+  await files.getByRole("button", { name: "New document" }).click();
+  await expect(
+    page.getByRole("radio", { name: /Write it here/ }),
+  ).toBeChecked();
+  await page.getByLabel("What it is called").fill("Visitor Policy");
+  await page.getByRole("button", { name: "Start writing" }).click();
+  await expect(page).toHaveURL(/\/visitor-policy\?edit=write&draft=draft%2F/);
+  const draft = new URL(page.url()).searchParams.get("draft")!;
+  const visitor = page.getByRole("textbox", { name: "Visitor Policy" });
+  await expect(visitor).toBeFocused();
+  await expect(
+    files.getByRole("button", { name: "Visitor Policy" }),
+  ).toBeVisible();
+
+  // Back to the first policy with unsaved words: asked, and saved on the way.
+  await page.keyboard.type("Visitors sign in at reception.");
+  await files.getByRole("button", { name: "Hand Hygiene" }).click();
+  const ask = page.getByRole("alertdialog");
+  await expect(ask).toContainText("Save your changes to Visitor Policy?");
+  await ask.getByRole("button", { name: "Save and open" }).click();
+
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write&draft=/);
+  await expect(
+    page.getByRole("textbox", { name: "Hand Hygiene" }),
+  ).toContainText("Clean your hands");
   const saved = await fetch(
     `${API_BASE_URL}/api/app/binders/${org}/${binder}/raw/visitor-policy?ref=${encodeURIComponent(draft)}`,
     { headers: authHeaders(session) },

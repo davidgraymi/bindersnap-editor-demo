@@ -161,6 +161,8 @@ export function BinderShell({
    */
   const [reading, setReading] = useState<DocumentRefView | null>(null);
   const [adding, setAdding] = useState(false);
+  /** Opened from the editor's New: start on Write, in the open policy's folder. */
+  const [addingFromEditor, setAddingFromEditor] = useState(false);
   const [addingFolder, setAddingFolder] = useState(false);
 
   // Back and forward are how somebody leaves a tab or a change, so the shell
@@ -888,13 +890,17 @@ export function BinderShell({
           After the strip, so a phone reads binder, then where in it, then the
           title. Only the screens that title themselves are deep enough to
           draw one, so on a wide screen it is always straight above a title. */}
-      <PagePath
-        route={
-          documentPath
-            ? { kind: "binderDocument", org, binder, documentPath }
-            : { kind: "binder", org, binder }
-        }
-      />
+      {/* Not over the editor: its title bar names the policy and its file
+          panel shows where it is filed. */}
+      {documentPath && editMode === "writing" ? null : (
+        <PagePath
+          route={
+            documentPath
+              ? { kind: "binderDocument", org, binder, documentPath }
+              : { kind: "binder", org, binder }
+          }
+        />
+      )}
 
       {/* Between the header and whatever is under it, because it is about the
           binder rather than about the list: the propose screen replaces the
@@ -920,6 +926,17 @@ export function BinderShell({
           draftName={draft?.draft?.name ?? null}
           onClose={closeEditor}
           onSaved={refreshDraft}
+          binderName={binderName}
+          files={
+            contents
+              ? { documents: contents.documents, folders: contents.folders }
+              : null
+          }
+          onOpenDocument={(slugPath) => void writeDocument(slugPath)}
+          onNewDocument={() => {
+            setAddingFromEditor(true);
+            setAdding(true);
+          }}
         />
       ) : documentPath ? (
         <BinderDocumentPage
@@ -1170,10 +1187,22 @@ export function BinderShell({
           org={org}
           binder={binder}
           draft={draft?.draft?.branch}
-          onClose={() => setAdding(false)}
+          {...(addingFromEditor
+            ? {
+                initialMode: "write" as const,
+                initialFolder: documentPath?.includes("/")
+                  ? documentPath.slice(0, documentPath.lastIndexOf("/"))
+                  : "",
+              }
+            : {})}
+          onClose={() => {
+            setAdding(false);
+            setAddingFromEditor(false);
+          }}
           onWrite={(slugPath, branch) => {
             // Straight into the editor, in the draft it was started in.
             setAdding(false);
+            setAddingFromEditor(false);
             loadOverview();
             setDraftBranch(branch);
             moveTo(
@@ -1188,6 +1217,7 @@ export function BinderShell({
           }}
           onAdded={(changeNumber) => {
             setAdding(false);
+            setAddingFromEditor(false);
             loadOverview();
             // Into the draft: the policy is in the tree, nothing has been
             // proposed, and there is nowhere to navigate to.

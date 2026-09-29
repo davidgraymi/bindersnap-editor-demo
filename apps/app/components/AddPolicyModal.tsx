@@ -58,6 +58,13 @@ interface AddPolicyModalProps {
    * Absent, and the dialog only uploads.
    */
   onWrite?: (slugPath: string, draft: string) => void;
+  /**
+   * Which choice the dialog opens on. The editor's New asks to write, since
+   * somebody already in the word processor is not about to upload; the folder
+   * is the one the open policy is in, where a sibling most likely goes.
+   */
+  initialMode?: "upload" | "write";
+  initialFolder?: string;
 }
 
 /**
@@ -120,6 +127,8 @@ export function AddPolicyModal({
   onClose,
   onAdded,
   onWrite,
+  initialMode = "upload",
+  initialFolder = "",
 }: AddPolicyModalProps) {
   /**
    * Upload a file written elsewhere, or write a new one here.
@@ -129,11 +138,11 @@ export function AddPolicyModal({
    * half of the product, and it is one click away rather than a separate
    * menu somebody has to find.
    */
-  const [mode, setMode] = useState<"upload" | "write">("upload");
+  const [mode, setMode] = useState<"upload" | "write">(initialMode);
   const writing = mode === "write" && onWrite !== undefined;
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState("");
-  const [folder, setFolder] = useState("");
+  const [folder, setFolder] = useState(initialFolder);
   /** What to call the folder, when the picker's answer is "a new one". */
   const [newFolder, setNewFolder] = useState("");
   /** The folders this binder has, so "where it goes" is a pick, not a path. */

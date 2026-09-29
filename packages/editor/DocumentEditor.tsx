@@ -71,10 +71,11 @@ function readSavedView(): ViewSettings {
   const fallback: ViewSettings = {
     layout: "print",
     zoom: "page-width",
-    // Open where it leaves the page at full size, and shut on a tablet,
-    // where it would cost the page a quarter of its width. Once somebody
-    // opens or shuts it, their choice is what is remembered.
-    navigationPane: window.innerWidth >= 1200,
+    // Open where it leaves the page at full size beside the app's file panel,
+    // and shut on a laptop or a tablet, where it would cost the page a
+    // quarter of its width. Once somebody opens or shuts it, their choice is
+    // what is remembered.
+    navigationPane: window.innerWidth >= 1500,
   };
   try {
     const raw = window.localStorage.getItem(VIEW_KEY);
