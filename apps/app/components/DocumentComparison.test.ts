@@ -165,7 +165,7 @@ test("two identical versions draw nothing rather than announce it", async () => 
   unmount();
 });
 
-test("the same words made bold are a change, said above the document", async () => {
+test("the same words made bold are a change, and only the document is drawn", async () => {
   files["v3"] = "Wash your hands.";
   files["change-4"] = "Wash your **hands**.";
 
@@ -179,9 +179,9 @@ test("the same words made bold are a change, said above the document", async () 
 
   await settled(summaries);
   expect(summaries.at(-1)).toMatchObject({ restyled: true, identical: false });
-  expect(container.querySelector('[role="note"]')?.textContent).toContain(
-    "the formatting did",
-  );
+  // The file's bar says "Formatting"; a note inside the frame read as a
+  // paragraph the change had added.
+  expect(container.querySelector('[role="note"]')).toBeNull();
   expect(container.querySelector("strong")?.textContent).toBe("hands");
 
   unmount();

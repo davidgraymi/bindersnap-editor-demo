@@ -379,23 +379,18 @@ export function DocumentComparison({
             <SkeletonLine width="short" />
           </SkeletonGroup>
         ) : state.status === "rendered" && !state.empty ? (
-          <>
-            {summary?.restyled ? (
-              <p className="doc-compare-restyled" role="note">
-                Not a word or picture changed — the formatting did: a style,
-                bold or italic, a list, or a picture&rsquo;s size. Shown as it
-                reads now.
-              </p>
-            ) : null}
-            <article
-              className="doc-preview-sheet doc-preview-prose doc-compare-prose"
-              // Every side of this went through a renderer of ours that escapes
-              // its input — our Markdown renderer, the block renderer, or
-              // mammoth's own subset — and the whole result went through the
-              // sanitizer before it landed here.
-              dangerouslySetInnerHTML={{ __html: state.html }}
-            />
-          </>
+          /* **Only the document inside the frame.** A formatting-only change
+             drew a sentence about itself above the policy, in the sheet —
+             where it read as a paragraph the change had added. The file's bar
+             already says "Formatting", which is where a status belongs. */
+          <article
+            className="doc-preview-sheet doc-preview-prose doc-compare-prose"
+            // Every side of this went through a renderer of ours that escapes
+            // its input — our Markdown renderer, the block renderer, or
+            // mammoth's own subset — and the whole result went through the
+            // sanitizer before it landed here.
+            dangerouslySetInnerHTML={{ __html: state.html }}
+          />
         ) : state.status === "text" ? (
           <article className="doc-preview-sheet">
             <pre className="doc-preview-plain doc-compare-plain">
