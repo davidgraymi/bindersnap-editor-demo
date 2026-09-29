@@ -317,9 +317,12 @@ test("the fields in a form are one size, picker included", async ({ page }) => {
   // measures a form that is still one field short.
   await expect(page.locator("#change-target")).toBeVisible({ timeout: 30_000 });
 
+  // Text fields and pickers, the controls that sit in a column together. A
+  // radio button is a mark inside a choice card, not a field, and is its own
+  // size everywhere in the app.
   const heights = await page
     .locator(
-      ".create-document-form input:not([type='file']), .create-document-form select",
+      ".create-document-form input:not([type='file']):not([type='radio']):not([type='checkbox']), .create-document-form select",
     )
     .evaluateAll((elements) =>
       elements.map(

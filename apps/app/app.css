@@ -10082,3 +10082,14 @@ a.binder-latest-title:focus-visible {
 .doc-editor-status--unsaved {
   color: var(--bs-status-warn-fg);
 }
+
+/* How a document is added: two choices, side by side where there is room. */
+.add-policy-mode {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--brand-space-2);
+}
+
+.add-policy-mode .bs-choice + .bs-choice {
+  margin-top: 0;
+}

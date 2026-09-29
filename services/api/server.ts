@@ -9043,14 +9043,31 @@ async function handleReviseWorkspaceDocument(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    // Read from `main`, deliberately. A revision revises what is on the record;
-    // a document that only exists inside somebody else's open change is not
-    // something to build a second change on top of.
+    const target = await resolveWorkTarget({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      username: session.username,
+      changeRaw: joinRaw,
+      draftRaw,
+    });
+    if (target && "error" in target) {
+      return json(409, { error: target.error }, baseHeaders);
+    }
+
+    // **Read where the new version is going.** Opening a change of its own, a
+    // revision revises what is on the record, so it reads `main` — a document
+    // that only exists inside somebody else's open change is not something to
+    // build a second change on top of. Into your draft or a change you are
+    // joining, it reads that branch: a policy started in a draft is only
+    // there, and the editor saving it a second time is revising it, not
+    // adding it again.
     const existing = await findWorkspaceDocument({
       client,
       org: orgName,
       workspace: workspaceName,
       documentPath,
+      ...(target ? { ref: target.branch } : {}),
     });
 
     if (!existing) {
@@ -9099,18 +9116,6 @@ async function handleReviseWorkspaceDocument(
             { kind: "remove", path: existing.path },
             { kind: "write", path: nextPath, base64Content },
           ];
-
-    const target = await resolveWorkTarget({
-      client,
-      org: orgName,
-      workspace: workspaceName,
-      username: session.username,
-      changeRaw: joinRaw,
-      draftRaw,
-    });
-    if (target && "error" in target) {
-      return json(409, { error: target.error }, baseHeaders);
-    }
 
     const branch = buildUploadBranchName(
       existing.slugPath,

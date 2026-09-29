@@ -58,6 +58,8 @@ export interface DocumentEditorProps {
   label: string;
   /** Read-only: the page and the panes, no ribbon. */
   editable?: boolean;
+  /** Put the cursor in the page on open: at its start, or at its end. */
+  autoFocus?: "start" | "end" | false;
 }
 
 /** US Letter at 96 CSS pixels to the inch, less Word's one-inch margins. */
@@ -111,6 +113,7 @@ export function DocumentEditor({
   statusStart,
   label,
   editable = true,
+  autoFocus = false,
 }: DocumentEditorProps) {
   const content = useMemo(
     () =>
@@ -134,6 +137,7 @@ export function DocumentEditor({
     ],
     content,
     editable,
+    autofocus: autoFocus,
     immediatelyRender: true,
     shouldRerenderOnTransaction: false,
     editorProps: {
