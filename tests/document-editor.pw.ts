@@ -872,6 +872,63 @@ test("a table of contents lists the headings and keeps up with them", async ({
   await expect(section).toBeInViewport();
 });
 
+test("sections are numbered from the Styles menu, in the editor and the reader", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+  await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("ControlOrMeta+Alt+2");
+  await page.keyboard.type("Gloves");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("ControlOrMeta+Alt+3");
+  await page.keyboard.type("Sizes");
+
+  await page.getByRole("button", { name: "More styles" }).click();
+  await page
+    .getByRole("menuitemradio", { name: /Number the headings/ })
+    .click();
+
+  /** The number drawn before a heading: CSS, not words in the policy. */
+  const drawn = (heading: import("@playwright/test").Locator) =>
+    heading.evaluate(
+      (element) => getComputedStyle(element, "::before").content,
+    );
+  await expect
+    .poll(() => drawn(text.getByRole("heading", { name: "Gloves" })))
+    .toContain("counter(bs-section)");
+  expect(await drawn(text.getByRole("heading", { name: "Sizes" }))).toContain(
+    "counter(bs-subsection)",
+  );
+  // The title is the policy's name, not its first section.
+  await expect(
+    text.getByRole("heading", { name: "Hand Hygiene" }),
+  ).not.toHaveClass(/bs-numbered/);
+
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Save", exact: true }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  const read = page.locator(".doc-preview-prose");
+  await expect(read.getByRole("heading", { name: "Gloves" })).toHaveClass(
+    /bs-numbered/,
+  );
+  await expect(read.getByRole("heading", { name: "Sizes" })).toHaveClass(
+    /bs-numbered/,
+  );
+});
+
 /** Where a word is drawn on screen, to click it as a person would. */
 async function wordBox(page: Page, word: string) {
   return page.evaluate((target) => {

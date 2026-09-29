@@ -3,6 +3,7 @@ import { NodeSelection } from "@tiptap/pm/state";
 import { useEditorState } from "@tiptap/react";
 
 import { formatPainterState } from "../extensions/FormatPainter";
+import { numbersHeadings } from "../extensions/NumberedHeadings";
 import { pictureWidth } from "../imageFiles";
 
 import type { ParagraphStyleId } from "./options";
@@ -41,6 +42,8 @@ export interface FormatState {
   inTable: boolean;
   canMergeCells: boolean;
   canSplitCell: boolean;
+  /** Whether the document's sections are numbered. */
+  numberedHeadings: boolean;
   /** The shading of the cell the cursor is in, or null for none. */
   cellShading: string | null;
   /** The Format Painter's brush is loaded. */
@@ -145,6 +148,7 @@ export function readFormatState(editor: Editor): FormatState {
     inTable: editor.isActive("table"),
     canMergeCells: editor.can().mergeCells(),
     canSplitCell: editor.can().splitCell(),
+    numberedHeadings: numbersHeadings(editor.state.doc),
     cellShading: shadingColor(
       editor.getAttributes("tableCell").background ??
         editor.getAttributes("tableHeader").background,
@@ -182,6 +186,7 @@ const EMPTY: FormatState = {
   inTable: false,
   canMergeCells: false,
   canSplitCell: false,
+  numberedHeadings: false,
   cellShading: null,
   painting: false,
   picture: false,

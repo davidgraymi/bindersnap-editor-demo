@@ -2,6 +2,7 @@ import { Node, mergeAttributes } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey, Selection, TextSelection } from "@tiptap/pm/state";
 
+import { headingNumbers, numbersHeadings } from "./NumberedHeadings";
 import { documentOutline } from "../documentStats";
 
 /**
@@ -39,9 +40,18 @@ declare module "@tiptap/core" {
 
 /** The entries a document's headings make, in order. */
 export function contentsEntries(doc: ProseMirrorNode): ContentsEntry[] {
-  return documentOutline(doc)
-    .filter((entry) => entry.level <= CONTENTS_LEVELS)
-    .map(({ level, text }) => ({ level, text }));
+  const outline = documentOutline(doc);
+  // Numbered sections are listed with their numbers, as Word's contents are.
+  // Counted over every heading, as the page's counters are, so a section's
+  // number here is the one printed beside it.
+  const numbers = numbersHeadings(doc)
+    ? headingNumbers(outline.map((entry) => entry.level))
+    : [];
+  return outline.flatMap(({ level, text }, index) => {
+    if (level > CONTENTS_LEVELS) return [];
+    const number = numbers[index];
+    return [{ level, text: number ? `${number} ${text}` : text }];
+  });
 }
 
 /** An entries attribute as stored, made safe to draw whatever it holds. */
