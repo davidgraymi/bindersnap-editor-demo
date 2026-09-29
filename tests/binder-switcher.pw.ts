@@ -11,6 +11,8 @@ import { signInAsAlice } from "./helpers";
 test("the top bar's binder switches to any binder in the organization", async ({
   page,
 }) => {
+  // Sign-in and two binder loads; the default 10s ran out on a loaded runner.
+  test.setTimeout(30_000);
   await signInAsAlice(page);
   await page.goto("/riverside-health/corporate?tab=history");
 
