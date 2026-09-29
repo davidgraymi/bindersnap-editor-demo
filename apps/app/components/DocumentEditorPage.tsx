@@ -398,6 +398,10 @@ export function DocumentEditorPage({
 
     shownKey.current = null;
     setLoad({ kind: "loading" });
+    // Where focus was when the policy was asked for. If it has moved by the
+    // time the policy arrives — to the file panel, a menu, a dialog — the
+    // person has gone on to something else, and the editor does not take it.
+    const focusAtOpen = document.activeElement;
     recountElsewhere();
 
     (async () => {
@@ -443,7 +447,15 @@ export function DocumentEditorPage({
         savedJson.current = policy.saved;
         setDirty(false);
         offerKept(policy.saved);
-        now.commands.focus(isBlankPolicy(doc) ? "end" : "start");
+        const here = document.activeElement;
+        if (
+          here === focusAtOpen ||
+          here === null ||
+          here === document.body ||
+          now.view.dom.contains(here)
+        ) {
+          now.commands.focus(isBlankPolicy(doc) ? "end" : "start");
+        }
       }
       setLoad({ kind: "ready", detail, doc });
     })().catch((err: unknown) => {
