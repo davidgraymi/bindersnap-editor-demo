@@ -1503,6 +1503,12 @@ export const PICTURE_SIZES = [
   { label: "Full width", width: TEXT_WIDTH_PX },
 ] as const;
 
+const PICTURE_ALIGNS = [
+  { align: "left", label: "Align left", icon: AlignLeft },
+  { align: "center", label: "Center", icon: AlignCenter },
+  { align: "right", label: "Align right", icon: AlignRight },
+] as const;
+
 function PictureTab({
   editor,
   format,
@@ -1555,6 +1561,32 @@ function PictureTab({
           active={format.pictureWidth === null}
           onClick={() => setPicture({ width: null, height: null })}
         />
+      </RibbonGroup>
+
+      {/* Word's Arrange > Align. A picture sits in its line, so this is its
+          paragraph's alignment — the same as Home's, but here beside the
+          picture, and the picture stays selected. */}
+      <RibbonGroup label="Arrange">
+        <div className="bs-rstack">
+          {PICTURE_ALIGNS.map((choice) => (
+            <RibbonButton
+              key={choice.align}
+              icon={choice.icon}
+              label={choice.label}
+              showLabel
+              active={format.align === choice.align}
+              onClick={() => {
+                const at = editor.state.selection.from;
+                editor
+                  .chain()
+                  .focus()
+                  .setTextAlign(choice.align)
+                  .setNodeSelection(at)
+                  .run();
+              }}
+            />
+          ))}
+        </div>
       </RibbonGroup>
 
       <RibbonGroup label="Accessibility">
