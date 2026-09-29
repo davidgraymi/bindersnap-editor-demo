@@ -19,6 +19,7 @@ import { EMPTY_DOCUMENT, documentContentExtensions } from "./documentSchema";
 import { countDocument, paginate } from "./documentStats";
 import { EnterOverSelection } from "./extensions/EnterOverSelection";
 import { PictureFiles } from "./extensions/PictureFiles";
+import { preparePrintCopy, removePrintCopy } from "./printCopy";
 import { SearchAndReplace } from "./extensions/SearchAndReplace";
 import { WordKeymap } from "./extensions/WordKeymap";
 import { NavigationPane } from "./NavigationPane";
@@ -236,18 +237,23 @@ export function DocumentEditor({
     // attached before then was attached to nothing.
   }, [openFind, editor]);
 
-  const print = useCallback(() => {
-    // Everything but the page is hidden while printing — see the print rules
-    // in the stylesheet — and the class comes off once the dialog closes.
-    const html = document.documentElement;
-    html.classList.add("bs-printing-document");
-    const done = () => {
-      html.classList.remove("bs-printing-document");
-      window.removeEventListener("afterprint", done);
+  // Printing prints the policy, not the app around it — from Print on the
+  // View tab and from the browser's own Ctrl+P alike. See `printCopy.ts`.
+  useEffect(() => {
+    if (!editor) return;
+    const before = () => {
+      if (!editor.isDestroyed) preparePrintCopy(editor.getHTML(), label);
     };
-    window.addEventListener("afterprint", done);
-    window.print();
-  }, []);
+    window.addEventListener("beforeprint", before);
+    window.addEventListener("afterprint", removePrintCopy);
+    return () => {
+      window.removeEventListener("beforeprint", before);
+      window.removeEventListener("afterprint", removePrintCopy);
+      removePrintCopy();
+    };
+  }, [editor, label]);
+
+  const print = useCallback(() => window.print(), []);
 
   const deskRef = useRef<HTMLDivElement>(null);
   const deskWidth = useElementWidth(deskRef, editor);
