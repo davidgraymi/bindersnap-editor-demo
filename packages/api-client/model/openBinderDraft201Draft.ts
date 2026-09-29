@@ -16,5 +16,7 @@ export type OpenBinderDraft201Draft = {
   owner: string;
   /** @nullable */
   updatedAt: string | null;
+  /** @nullable */
+  changeNumber: number | null;
   acts: OpenBinderDraft201DraftActsItem[];
 } | null;

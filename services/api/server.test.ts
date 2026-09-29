@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 
 import { config } from "./config";
 import { OrganizationStore, organizationStore } from "./organizations";
-import { corsHeaders, createApiServer } from "./server";
+import { corsHeaders, createApiServer, downloadHeaders } from "./server";
 import { SessionStore, sessionStore } from "./sessions";
 import { resetStripeClientForTests } from "./stripe/client";
 import {
@@ -1802,5 +1802,36 @@ describe("CORS headers and caches", () => {
     const headers = corsHeaders(new Request("http://api.test/api/app/x"));
     expect(headers.get("Access-Control-Allow-Origin")).toBeNull();
     expect(headers.get("Vary")).toBe("Origin");
+  });
+});
+
+describe("a document's bytes and the browser's cache", () => {
+  const gitea = () =>
+    new Response("{}", {
+      headers: {
+        "content-type": "application/json",
+        "cache-control": "private, max-age=21600",
+        etag: '"0be6a65b"',
+        "last-modified": "Sun, 27 Sep 2026 17:14:43 GMT",
+      },
+    });
+
+  test("a file on a branch is never kept: the next save moves it", () => {
+    for (const ref of ["draft/alice/20260927", "main", "v3"]) {
+      const headers = downloadHeaders(new Headers(), gitea(), ref);
+      expect(headers.get("cache-control")).toBe("no-store");
+      expect(headers.get("etag")).toBeNull();
+      expect(headers.get("content-type")).toBe("application/json");
+    }
+  });
+
+  test("a file at a commit keeps Gitea's caching, since it cannot change", () => {
+    const headers = downloadHeaders(
+      new Headers(),
+      gitea(),
+      "0be6a65b18248f5c31eb93afe1f700c9550f4e7f",
+    );
+    expect(headers.get("cache-control")).toBe("private, max-age=21600");
+    expect(headers.get("etag")).toBe('"0be6a65b"');
   });
 });

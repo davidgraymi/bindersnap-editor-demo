@@ -16,6 +16,11 @@ interface ChangeBylineProps {
   documents: number;
   /** The branch it came from, or null when that is gone. */
   branch: string | null;
+  /**
+   * What its author called the draft, when it came from a named one. Said in
+   * place of "Bob's draft", which is the branch's shape rather than its name.
+   */
+  branchLabel?: string | null;
   branchHref: string;
   onOpenBranch: () => void;
   /** When it was opened. */
@@ -41,6 +46,7 @@ export function ChangeByline({
   open,
   documents,
   branch,
+  branchLabel = null,
   branchHref,
   onOpenBranch,
   openedAt,
@@ -71,7 +77,7 @@ export function ChangeByline({
               onClick={(event) => followInApp(event, onOpenBranch)}
             >
               <GitBranch size={12} strokeWidth={1.75} aria-hidden="true" />
-              {describeBranch(branch, nameOf)}
+              {branchLabel ?? describeBranch(branch, nameOf)}
             </a>
           </>
         ) : null}

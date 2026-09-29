@@ -13,6 +13,8 @@ export type GetBinderChange200 = {
   organization: string;
   workspace: string;
   change: GetBinderChange200Change;
+  /** @nullable */
+  branchLabel: string | null;
   documents: GetBinderChange200DocumentsItem[];
   removedDocuments: GetBinderChange200RemovedDocumentsItem[];
   isBehind: boolean;

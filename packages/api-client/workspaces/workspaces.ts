@@ -900,6 +900,9 @@ if(reviseBinderDocumentBody.changeNumber !== undefined) {
 if(reviseBinderDocumentBody.draft !== undefined) {
  formData.append(`draft`, reviseBinderDocumentBody.draft);
  }
+if(reviseBinderDocumentBody.source !== undefined) {
+ formData.append(`source`, reviseBinderDocumentBody.source);
+ }
 
   return customFetch<reviseBinderDocumentResponse>(getReviseBinderDocumentUrl(org,binder),
   {

@@ -439,6 +439,13 @@ export const WorkspaceChangeDetailPayloadSchema = z.object({
   organization: z.string(),
   workspace: z.string(),
   change: PullRequestWithApprovalStateSchema,
+  /**
+   * What its author called the draft this change was proposed from, or null
+   * when the branch is not a named draft.
+   *
+   * The branch chip under the title reads it in place of "Bob's draft".
+   */
+  branchLabel: z.string().nullable(),
   /** Every document this change would version, in path order. */
   documents: z.array(WorkspaceChangedDocumentSchema),
   /**
@@ -1247,6 +1254,11 @@ export const OwnDraftSchema = z.object({
   /** How many acts are in it. What the picker's "3 changes" counts. */
   actCount: z.number(),
   lastAct: z.string().nullable(),
+  /**
+   * The change request open on it, once proposed. Still yours, still
+   * editable — a save into it is a save that change's reviewers see.
+   */
+  changeNumber: z.number().nullable(),
 });
 export type OwnDraft = z.infer<typeof OwnDraftSchema>;
 
@@ -1267,6 +1279,8 @@ export const BinderDraftPayloadSchema = z.object({
       named: z.boolean(),
       owner: z.string(),
       updatedAt: z.string().nullable(),
+      /** The change request open on it, once proposed. */
+      changeNumber: z.number().nullable(),
       acts: z.array(DraftActSchema),
     })
     .nullable(),

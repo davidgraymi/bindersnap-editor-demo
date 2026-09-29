@@ -13,4 +13,6 @@ export type GetBinderDraft200DraftsItem = {
   actCount: number;
   /** @nullable */
   lastAct: string | null;
+  /** @nullable */
+  changeNumber: number | null;
 };

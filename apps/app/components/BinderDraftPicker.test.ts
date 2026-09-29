@@ -8,6 +8,7 @@ const draft = (over: Partial<Parameters<typeof describeDraft>[0]> = {}) => ({
   updatedAt: "2026-09-19T10:00:00Z",
   actCount: 3,
   lastAct: "Rename Nursing to Nursing and Midwifery",
+  changeNumber: null,
   ...over,
 });
 
@@ -37,4 +38,12 @@ test("one change is one change", () => {
  */
 test("a draft with nothing in it has never been edited", () => {
   expect(describeDraft(draft({ actCount: 0 }))).toBe("Nothing in it yet");
+});
+
+test("a proposed draft says which change it is waiting in", () => {
+  // Still yours and still editable — a branch with a pull request open on it —
+  // so it stays in the list, and the row says a save into it is seen.
+  expect(describeDraft(draft({ changeNumber: 22 }))).toBe(
+    "Proposed as change 22 · 3 changes",
+  );
 });

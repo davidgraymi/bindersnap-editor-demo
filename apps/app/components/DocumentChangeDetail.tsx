@@ -77,6 +77,8 @@ interface DocumentChangeDetailProps {
    * does and what a reader already knows how to use.
    */
   onOpenOnBranch?: (() => void) | null;
+  /** Open it in the editor, saving into this change. Its author's, while open. */
+  onEditInEditor?: (() => void) | null;
   /**
    * What this change is about, when it is **not** a document.
    *
@@ -275,6 +277,7 @@ export function DocumentChangeDetail({
   documentCount = 1,
   documentMove = null,
   onOpenOnBranch = null,
+  onEditInEditor = null,
   byline,
   subject = null,
   documentName,
@@ -674,6 +677,20 @@ export function DocumentChangeDetail({
                       else. */}
                     View file
                   </button>
+                  {/* **Back into the words, in this change.** A reviewer's
+                      "please reword step 3" meant a new draft, the edit, and
+                      a second change for the same policy. Saving here adds
+                      to this one, and the reviewers see it. */}
+                  {onEditInEditor ? (
+                    <button
+                      className="bs-btn bs-btn--sm bs-btn-primary"
+                      type="button"
+                      aria-label={`Edit ${documentName}`}
+                      onClick={() => onEditInEditor()}
+                    >
+                      Edit
+                    </button>
+                  ) : null}
                   <span className="bs-panel-bar-spacer" />
                   {/* A download arrow with the word "Download" beside it is the
                     word twice. */}

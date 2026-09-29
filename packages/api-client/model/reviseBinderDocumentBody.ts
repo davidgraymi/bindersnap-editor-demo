@@ -4,6 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { ReviseBinderDocumentBodySource } from './reviseBinderDocumentBodySource.ts';
 
 export type ReviseBinderDocumentBody = {
   /** File upload */
@@ -11,4 +12,5 @@ export type ReviseBinderDocumentBody = {
   documentPath: string;
   changeNumber?: string;
   draft?: string;
+  source?: ReviseBinderDocumentBodySource;
 };

@@ -101,7 +101,14 @@ test("summarizeSegments counts words, not characters", () => {
 
 test("summarizeSegments reports two identical versions as identical", () => {
   const summary = summarizeSegments(diffWords("Same words.", "Same words."));
-  expect(summary).toEqual({ additions: 0, deletions: 0, identical: true });
+  expect(summary).toEqual({
+    additions: 0,
+    deletions: 0,
+    picturesAdded: 0,
+    picturesRemoved: 0,
+    restyled: false,
+    identical: true,
+  });
 });
 
 test("a PDF's headings survive as headings, not as run-on prose", () => {
@@ -205,4 +212,65 @@ test("a heading that was rewritten is marked inside the heading", () => {
   expect(html).toContain("<h2>");
   expect(html).toContain("<ins");
   expect(html).toContain("Retention");
+});
+
+test("a picture put in is counted, though not a word moved", () => {
+  const before = "<p>Wash your hands.</p>";
+  const after =
+    '<p>Wash your hands.</p><p><img src="data:image/png;base64,AA" alt="Sink"></p>';
+  const diffed = diffRenderedHtml(before, after);
+  const summary = summarizeSegments(
+    diffWords("Wash your hands.", "Wash your hands."),
+    {
+      before,
+      after,
+      diffed,
+    },
+  );
+
+  expect(summary).toMatchObject({
+    additions: 0,
+    deletions: 0,
+    picturesAdded: 1,
+    picturesRemoved: 0,
+    restyled: false,
+    identical: false,
+  });
+});
+
+test("a picture taken out is counted as removed", () => {
+  const before =
+    '<p>Steps</p><p><img src="data:image/png;base64,AA" alt="Sink"></p>';
+  const after = "<p>Steps</p>";
+  const summary = summarizeSegments(diffWords("Steps", "Steps"), {
+    before,
+    after,
+    diffed: diffRenderedHtml(before, after),
+  });
+
+  expect(summary.picturesRemoved).toBe(1);
+  expect(summary.identical).toBe(false);
+});
+
+test("the same words with a new look are restyled, not identical", () => {
+  const before = "<p>Wash your hands.</p>";
+  const after = "<h2>Wash your <strong>hands</strong>.</h2>";
+  const summary = summarizeSegments(
+    diffWords("Wash your hands.", "Wash your hands."),
+    { before, after, diffed: diffRenderedHtml(before, after) },
+  );
+
+  expect(summary).toMatchObject({ restyled: true, identical: false });
+});
+
+test("whitespace between tags is not a new look", () => {
+  const before = "<p>One</p>\n<p>Two</p>";
+  const after = "<p>One</p><p>Two</p>";
+  const summary = summarizeSegments(diffWords("One Two", "One Two"), {
+    before,
+    after,
+    diffed: diffRenderedHtml(before, after),
+  });
+
+  expect(summary.identical).toBe(true);
 });
