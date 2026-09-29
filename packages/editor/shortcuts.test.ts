@@ -46,6 +46,7 @@ describe("keyboard shortcuts", () => {
       "Mod-h",
       "Mod-p",
       "Mod-/",
+      "Mod-k",
       "Mod-a",
       "Mod-y",
     ]);

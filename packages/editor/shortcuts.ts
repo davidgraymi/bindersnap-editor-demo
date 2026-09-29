@@ -71,6 +71,7 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
   {
     title: "Insert",
     items: [
+      { keys: "Ctrl+K", does: "Link" },
       { keys: "Ctrl+Enter", does: "Page break" },
       { keys: "Shift+Enter", does: "Line break" },
     ],
