@@ -93,17 +93,15 @@ test("a change's comparison is one step under the change, which becomes a link",
   expect(trail.path[2]!.href).toBeNull();
 });
 
-test("a policy read on a change's branch keeps the way back to the change", () => {
+test("a branch is the binder somewhere else, not a screen of a change", () => {
+  // Its path is the file's own, and the tree at it is the binder's page: the
+  // branch is the primitive, and says which change sits on it by itself.
   expect(
     path(
       "/riverside-health/clinical/nursing/hand-hygiene?ref=upload%2Fx&change=7",
     ),
-  ).toEqual(["Change requests", "Change 7", "Nursing", "Hand Hygiene"]);
-  expect(path("/riverside-health/clinical?ref=upload%2Fx&change=7")).toEqual([
-    "Change requests",
-    "Change 7",
-    "Proposed files",
-  ]);
+  ).toEqual(["Nursing", "Hand Hygiene"]);
+  expect(path("/riverside-health/clinical/-/tree/upload%2Fx")).toEqual([]);
 });
 
 test("each of a binder's screens is one step into the binder", () => {

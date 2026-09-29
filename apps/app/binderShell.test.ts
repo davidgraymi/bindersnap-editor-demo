@@ -46,7 +46,8 @@ test("a branch is one segment, however many slashes its name has", () => {
   ).toMatchObject({
     ref: "upload/x",
     documentPath: "nursing/hand-hygiene",
-    change: 7,
+    // A branch is the whole address: nothing on it is a way back.
+    change: null,
   });
 });
 
@@ -183,5 +184,5 @@ test("the binder read at a branch is that branch's tree", () => {
       ref: "draft/alice-1",
       change: 4,
     }),
-  ).toBe("/riverside/clinical/-/tree/draft%2Falice-1?change=4");
+  ).toBe("/riverside/clinical/-/tree/draft%2Falice-1");
 });
