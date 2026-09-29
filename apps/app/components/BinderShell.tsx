@@ -9,6 +9,7 @@ import {
   discardBinderDraft,
   fetchBinder,
   fetchBinderDocuments,
+  fetchBinderChange,
   fetchBinderDraft,
   openBinderDraft,
   renameBinderDraft,
@@ -313,8 +314,55 @@ export function BinderShell({
    * the address is wrong about this binder, and the answer is to leave edit
    * mode rather than to invent a state to match it.
    */
+  /**
+   * The open change request the editor is saving into, when it is one rather
+   * than a draft: its author, back in the words a reviewer asked about.
+   */
+  const writingChange =
+    documentPath && editMode === "writing" && openChange !== null
+      ? openChange
+      : null;
+  const [changeTarget, setChangeTarget] = useState<{
+    number: number;
+    branch: string;
+    title: string;
+  } | null>(null);
+
   useEffect(() => {
-    if (editMode === "off") {
+    if (writingChange === null) {
+      setChangeTarget(null);
+      return;
+    }
+    let cancelled = false;
+    fetchBinderChange(org, binder, writingChange)
+      .then((detail) => {
+        if (cancelled) return;
+        // Decided, or its branch pruned: nothing to save into, so the change
+        // itself, which says what became of it.
+        if (detail.change.state !== "open" || detail.change.branchName === "") {
+          openChangeNumber(writingChange);
+          return;
+        }
+        setChangeTarget({
+          number: writingChange,
+          branch: detail.change.branchName,
+          title: detail.change.title,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) openChangeNumber(writingChange);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // `openChangeNumber` closes over org and binder, both listed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [org, binder, writingChange]);
+
+  useEffect(() => {
+    // Writing on a change request is not being in a draft: asking for one
+    // would find none on that branch and leave edit mode.
+    if (editMode === "off" || writingChange !== null) {
       setDraft(null);
       return;
     }
@@ -336,7 +384,7 @@ export function BinderShell({
     // `leaveEditMode` is stable for the life of a binder: it closes over org,
     // binder and the setters, all of which are in this list already.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [org, binder, editMode, draftBranch]);
+  }, [org, binder, editMode, draftBranch, writingChange]);
 
   /**
    * Your drafts while reading, so the binder's page and a document's can offer
@@ -1061,13 +1109,28 @@ export function BinderShell({
           org={org}
           binder={binder}
           documentPath={documentPath}
-          draft={draft?.draft?.branch ?? null}
+          draft={
+            writingChange !== null
+              ? (changeTarget?.branch ?? null)
+              : (draft?.draft?.branch ?? null)
+          }
           draftName={draft?.draft?.name ?? null}
-          onClose={closeEditor}
-          onSaved={refreshDraft}
+          change={
+            changeTarget
+              ? { number: changeTarget.number, title: changeTarget.title }
+              : null
+          }
+          /* Back to the change it was opened from, where the save shows. */
+          onClose={
+            writingChange !== null
+              ? () => openChangeNumber(writingChange)
+              : closeEditor
+          }
+          onSaved={writingChange !== null ? () => undefined : refreshDraft}
           binderName={binderName}
+          /* The draft's files, which a change request is not. */
           files={
-            contents
+            contents && writingChange === null
               ? { documents: contents.documents, folders: contents.folders }
               : null
           }
@@ -1123,6 +1186,18 @@ export function BinderShell({
           /* **The branch, not the change.** A file lives on a branch, which
              is the address every code host gives it; the change rides along
              so the reader keeps the way back to where they came from. */
+          onEditInEditor={(slugPath) => {
+            moveTo(
+              buildDocumentEditUrl({
+                org,
+                binder,
+                documentPath: slugPath,
+                draft: null,
+                change: openChange,
+              }),
+            );
+            setEditMode("writing");
+          }}
           onOpenOnBranch={(slugPath, branch) =>
             moveTo(
               buildDocumentUrl({
