@@ -11,6 +11,7 @@ import type { Editor, JSONContent } from "@tiptap/core";
 import { GitBranch, History } from "lucide-react";
 
 import type {
+  BinderDraftPayload,
   WorkspaceDocumentDetailPayload,
   WorkspaceDocumentListEntry,
 } from "../../../packages/api-schema/schemas/workspaces";
@@ -29,6 +30,7 @@ import {
   worthOffering,
   type RecoveredWords,
 } from "../editorRecovery";
+import { BinderDraftPicker } from "./BinderDraftPicker";
 import { DraftFiles } from "./DraftFiles";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
@@ -40,8 +42,9 @@ import { SkeletonGroup, SkeletonLine } from "./Skeleton";
  * mean something here. It commits the document to the draft you are editing
  * the binder in, as you, and nothing more — the version on record does not
  * move, nobody is asked to review anything, and the draft bar counts one more
- * act. Proposing is still the draft's job, from the binder, when the author
- * is ready.
+ * act. The draft is chosen here too — the picker in the title bar — and
+ * proposed from here when the author is ready, so writing a policy and asking
+ * for it to be approved never needs a trip back through the binder.
  *
  * The editor is loaded on demand: Tiptap, ProseMirror and the ribbon are a
  * large download that most visits to a policy never need.
@@ -79,11 +82,27 @@ interface DocumentEditorPageProps {
   onOpenDocument: (slugPath: string) => void;
   /** Start a new policy in the draft. */
   onNewDocument: () => void;
+  /** Your drafts in this binder, for the picker in the title bar. */
+  drafts: BinderDraftPayload | null;
+  /** A draft is being started or renamed. */
+  draftBusy?: boolean;
+  /** Carry on in another of your drafts, on this same policy. */
+  onSwitchDraft: (branch: string) => void;
+  /** Start a new draft, called something, on this same policy. */
+  onStartDraft: (name: string) => void | Promise<void>;
+  onRenameDraft: (branch: string, name: string) => void | Promise<void>;
+  /** Ask for the draft to be approved: the propose step, for this draft. */
+  onPropose: () => void;
 }
 
 /** Where the person was going when unsaved words stopped them. */
 type Leaving =
-  { kind: "close" } | { kind: "open"; slugPath: string } | { kind: "new" };
+  | { kind: "close" }
+  | { kind: "open"; slugPath: string }
+  | { kind: "new" }
+  | { kind: "draft"; branch: string }
+  | { kind: "start"; name: string }
+  | { kind: "propose" };
 
 type LoadState =
   | { kind: "loading" }
@@ -127,6 +146,12 @@ export function DocumentEditorPage({
   files,
   onOpenDocument,
   onNewDocument,
+  drafts,
+  draftBusy = false,
+  onSwitchDraft,
+  onStartDraft,
+  onRenameDraft,
+  onPropose,
 }: DocumentEditorPageProps) {
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
   const [save, setSave] = useState<SaveState>({ kind: "idle" });
@@ -283,6 +308,9 @@ export function DocumentEditorPage({
   const go = (to: Leaving) => {
     if (to.kind === "close") onClose();
     else if (to.kind === "open") onOpenDocument(to.slugPath);
+    else if (to.kind === "draft") onSwitchDraft(to.branch);
+    else if (to.kind === "start") void onStartDraft(to.name);
+    else if (to.kind === "propose") onPropose();
     else onNewDocument();
   };
 
@@ -420,8 +448,17 @@ export function DocumentEditorPage({
       ? { save: "Save and close", drop: "Close without saving" }
       : leaving.kind === "open"
         ? { save: "Save and open", drop: "Open without saving" }
-        : { save: "Save first", drop: "Don't save" }
+        : leaving.kind === "propose"
+          ? { save: "Save and propose", drop: "Propose without them" }
+          : leaving.kind === "draft" || leaving.kind === "start"
+            ? { save: "Save and switch", drop: "Switch without saving" }
+            : { save: "Save first", drop: "Don't save" }
     : null;
+
+  // Something to propose: words not saved yet, or anything already in the
+  // draft. An empty draft proposed is a change request with nothing in it.
+  const current = drafts?.draft ?? null;
+  const proposable = dirty || (current?.acts.length ?? 0) > 0;
 
   return (
     <div className="doc-editor-page">
@@ -434,13 +471,28 @@ export function DocumentEditorPage({
             title="The version on record does not change until the draft is proposed and approved."
           >
             <GitBranch size={14} strokeWidth={1.75} aria-hidden="true" />
-            <span>
-              Saving to{" "}
-              {draftName ? <strong>{draftName}</strong> : "your draft"}
-              <span className="doc-editor-where-more">
-                {" "}
-                · nothing on record changes until it is approved
-              </span>
+            <span className="doc-editor-where-label">Saving to</span>
+            {/* **Which draft, and the way to the others, here.** Changing
+                drafts meant closing the policy, finding the binder's own page
+                and its picker, and opening the policy again — and with two
+                drafts called "Draft of 27 September", saving into one and
+                proposing the other. */}
+            {drafts && current ? (
+              <BinderDraftPicker
+                org={org}
+                drafts={drafts.drafts}
+                others={drafts.others}
+                current={current.branch}
+                busy={draftBusy}
+                onSwitch={(branch) => leave({ kind: "draft", branch })}
+                onStart={(name) => leave({ kind: "start", name })}
+                onRename={onRenameDraft}
+              />
+            ) : (
+              <strong>{draftName ?? "your draft"}</strong>
+            )}
+            <span className="doc-editor-where-more">
+              · nothing on record changes until it is approved
             </span>
           </p>
         </div>
@@ -454,11 +506,28 @@ export function DocumentEditorPage({
           </button>
           <button
             type="button"
-            className="bs-btn bs-btn-primary bs-btn--sm"
+            className="bs-btn bs-btn-secondary bs-btn--sm"
             disabled={load.kind !== "ready" || !dirty || save.kind === "saving"}
+            title="Save into your draft (Ctrl+S)"
             onClick={() => void saveNow()}
           >
             {save.kind === "saving" ? "Saving…" : "Save"}
+          </button>
+          {/* **Proposed from where it was written.** It meant Close, the
+              binder, Edit, and the bar's Propose — four steps, and a chance at
+              each to land in a different draft from the one just saved. */}
+          <button
+            type="button"
+            className="bs-btn bs-btn-primary bs-btn--sm"
+            disabled={!proposable || save.kind === "saving"}
+            title={
+              proposable
+                ? "Ask for this draft to be approved"
+                : "Nothing in this draft to propose yet"
+            }
+            onClick={() => leave({ kind: "propose" })}
+          >
+            Propose
           </button>
         </div>
       </header>

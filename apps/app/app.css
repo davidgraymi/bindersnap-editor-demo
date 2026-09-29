@@ -1050,6 +1050,13 @@ input {
   box-shadow: inset 0 0 0 1px var(--brand-coral);
 }
 
+/* Read in one of your drafts: not the record, and not somebody's proposal. */
+.doc-version-pill--draft {
+  background: var(--bs-status-warn-bg);
+  color: var(--bs-status-warn-fg);
+  box-shadow: inset 0 0 0 1px var(--bs-status-warn-border);
+}
+
 /* The pill is also the version picker. */
 .doc-version-picker {
   position: relative;
@@ -9187,6 +9194,13 @@ a.bs-row:focus-visible {
   font-size: var(--brand-text-ui-sm);
 }
 
+.bs-draftmenu-empty {
+  margin: 0;
+  padding: var(--brand-space-2) var(--brand-space-3);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
 /* ── Which version of the binder the tree is ──────────────────────────────
    GitLab's branch selector, first in the tree's bar. Quiet on the record,
    where it is a choice nobody has made yet; tinted the branch chip's blue
@@ -10161,6 +10175,18 @@ html.bs-writing .app-main {
 .doc-editor-where > span {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* The draft picker, where Save says where it puts things: the binder bar's
+   control, a size down to sit in a line of text. */
+.doc-editor-where .bs-draftpick {
+  min-height: 26px;
+  font-size: var(--brand-text-ui-sm);
+}
+
+.doc-editor-where-label,
+.doc-editor-where-more {
+  flex: none;
 }
 
 .doc-editor-where svg {
