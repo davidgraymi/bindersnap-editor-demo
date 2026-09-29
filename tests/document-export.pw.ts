@@ -208,3 +208,49 @@ test("the document page offers PDF and Word for a policy written here", async ({
     page.getByRole("button", { name: "Word", exact: true }),
   ).toBeVisible();
 });
+
+test("a document's audit packet is one zip, holding the record of every version", async () => {
+  const session = await signUp();
+  const { organization } = await post(session, "/api/app/organizations", {
+    name: `Audit ${randomUUID().slice(0, 6)}`,
+  });
+  const org = organization.name as string;
+  const { workspace } = await post(session, `/api/app/orgs/${org}/binders`, {
+    name: "Policies",
+  });
+  const binder = workspace.name as string;
+  await post(session, `/api/app/binders/${org}/${binder}/rules`, {
+    requiredApprovals: 0,
+  });
+  const written = await publishFile(
+    session,
+    org,
+    binder,
+    "Fire Safety",
+    new Blob([JSON.stringify(POLICY)], { type: "application/json" }),
+    "document.json",
+  );
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/audit/${written}`,
+    { headers: authHeaders(session) },
+  );
+  expect(response.status).toBe(200);
+  expect(response.headers.get("content-type")).toBe("application/zip");
+  expect(response.headers.get("content-disposition")).toContain(
+    "fire-safety-audit-packet-",
+  );
+  const zip = Buffer.from(await response.arrayBuffer());
+  expect([zip[0], zip[1]]).toEqual([0x50, 0x4b]);
+  // Stored, not compressed, so the names and the record are in the bytes.
+  const text = zip.toString("latin1");
+  for (const name of [
+    "audit-packet.pdf",
+    "approvals.csv",
+    "record.json",
+    "README.txt",
+  ]) {
+    expect(text).toContain(name);
+  }
+  expect(text).toContain('"version": 1');
+});
