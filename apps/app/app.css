@@ -10371,6 +10371,111 @@ html.bs-writing .app-main {
   color: var(--bs-text-muted);
 }
 
+/* A row and its acts: Rename, Move, Archive. The acts sit over the end of
+   the name on hover or focus — a narrow panel has no spare column for them,
+   and three icons on every row at rest made the tree a toolbar. */
+.doc-files-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.doc-files-row > .app-explorer-item,
+.doc-files-row > .app-explorer-folder {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.doc-files-acts {
+  position: absolute;
+  top: 50%;
+  right: var(--brand-space-1);
+  display: flex;
+  gap: var(--brand-space-0-5);
+  padding-left: var(--brand-space-2);
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--bs-surface-2) var(--brand-space-2)
+  );
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.doc-files-row:hover > .doc-files-acts,
+.doc-files-row:focus-within > .doc-files-acts {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.doc-files-acts .bs-rowact {
+  width: 24px;
+  height: 24px;
+}
+
+/* Touch has no hover: the acts are always there, at the row's end. */
+@media (hover: none) {
+  .doc-files-acts {
+    position: static;
+    background: none;
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+  }
+}
+
+.doc-files-item--renaming {
+  cursor: default;
+}
+
+.doc-files-item--renaming:hover {
+  background: transparent;
+}
+
+.doc-files-rename {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  color: var(--bs-text-primary);
+  background: var(--bs-surface-1);
+  border: 1.5px solid var(--brand-coral);
+  border-radius: var(--brand-radius-sm);
+  padding: 1px var(--brand-space-1-5);
+}
+
+.doc-files-rename:focus {
+  outline: none;
+}
+
+.doc-files-row--dragging {
+  opacity: 0.4;
+}
+
+/* A folder a drop would land in: inset, so aiming at it moves nothing. */
+.doc-files-group--drop {
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-coral-dim);
+  box-shadow: inset 0 0 0 2px var(--brand-coral);
+}
+
+.doc-files-root-drop {
+  margin: var(--brand-space-2) var(--brand-space-1);
+  padding: var(--brand-space-3);
+  border: 1.5px dashed var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  text-align: center;
+  font-size: var(--brand-text-ui-xs);
+  color: var(--bs-text-muted);
+}
+
+.doc-files-root-drop--over {
+  border-color: var(--brand-coral);
+  border-style: solid;
+  background: var(--bs-coral-dim);
+  color: var(--bs-text-primary);
+}
+
 .doc-editor-main {
   display: flex;
   flex: 1 1 0;
