@@ -10028,36 +10028,112 @@ a.binder-latest-title:focus-visible {
 }
 
 /* ─── A document open in the editor ──────────────────────────────────────
-   The editor takes the canvas's full width: a page of Letter at 100% and a
-   navigation pane beside it do not fit in the 1080px every reading page
-   keeps to, and a word processor squeezed into a reading column is one that
-   scrolls sideways. The header above it is the ordinary page head, so the
-   policy's name and Save sit where every other page's title and action do. */
+   **Full page, the way Word opens a file.** The product's map and the binder's
+   files go while a document is open — beside a ribbon and a navigation pane
+   they left Letter at half size on a laptop — and the sheet fills the window
+   under the top bar. The header is one line, a title bar rather than a page
+   title: the policy's name, where Save goes, Close and Save. Everything under
+   it is the editor, sized to the window so the page scrolls inside it and the
+   ribbon and status bar stay put. `bs-writing` is set on <html> by the editor
+   page while it is mounted. */
+html.bs-writing .app-sidebar,
+html.bs-writing .app-explorer {
+  display: none;
+}
+
+html.bs-writing .app-canvas {
+  margin-left: var(--brand-space-2);
+}
+
+html.bs-writing .app-main-area {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  scrollbar-gutter: auto;
+}
+
+html.bs-writing .app-main {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .docw-page--writing {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
   max-width: none;
-  padding: var(--brand-space-5) var(--brand-space-5) 0;
+  padding: 0;
+  gap: 0;
 }
 
 .doc-editor-page {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--brand-space-4);
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
   min-width: 0;
+  min-height: 0;
+}
+
+/* The loading, failed and not-ours states are ordinary pages. */
+.doc-editor-page:not(:has(.doc-editor-frame)) {
+  padding: var(--brand-space-8);
+  gap: var(--brand-space-4);
+}
+
+.doc-editor-head {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-4);
+  min-height: 52px;
+  padding: var(--brand-space-2) var(--brand-space-3) var(--brand-space-2)
+    var(--brand-space-5);
+  border-bottom: 1px solid var(--bs-rule);
+}
+
+.doc-editor-head-body {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  gap: var(--brand-space-3);
+  min-width: 0;
+}
+
+.doc-editor-title {
+  flex: none;
+  max-width: 50%;
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-body-lg);
+  font-weight: var(--brand-weight-semibold);
+  line-height: var(--brand-leading-snug);
+  color: var(--bs-text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .doc-editor-where {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--brand-space-1-5);
-  margin: var(--brand-space-1) 0 0;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
   color: var(--bs-text-muted);
   font-size: var(--brand-text-ui-md);
-  line-height: var(--brand-leading-normal);
+  white-space: nowrap;
+}
+
+.doc-editor-where > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .doc-editor-where svg {
   flex: none;
-  margin-top: 3px;
 }
 
 .doc-editor-where strong {
@@ -10065,14 +10141,55 @@ a.binder-latest-title:focus-visible {
   font-weight: var(--brand-weight-medium);
 }
 
-/* Tall enough to write in, and never taller than the window: the page
-   scrolls inside the editor, so the ribbon and the status bar stay put. */
+.doc-editor-head-actions {
+  display: flex;
+  flex: none;
+  gap: var(--brand-space-2);
+}
+
+.doc-editor-page > .bs-note {
+  margin: var(--brand-space-2) var(--brand-space-5) 0;
+}
+
 .doc-editor-frame {
-  height: max(520px, calc(100dvh - 210px));
+  flex: 1 1 0;
+  min-height: 420px;
   overflow: hidden;
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-lg) var(--brand-radius-lg) 0 0;
-  border-bottom: none;
+}
+
+@media (max-width: 900px) {
+  .doc-editor-where-more {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  /* A phone's shell is in block flow, so the editor takes a height of its
+     own: the window, less the top bar, the title bar and the tab bar. */
+  html.bs-writing .app-main-area,
+  html.bs-writing .app-main,
+  .docw-page--writing,
+  .doc-editor-page {
+    display: block;
+  }
+
+  .doc-editor-head {
+    padding-left: var(--brand-space-4);
+  }
+
+  .doc-editor-head-body {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+
+  .doc-editor-title {
+    max-width: 100%;
+  }
+
+  .doc-editor-frame {
+    height: calc(100dvh - var(--brand-nav-height) - 196px);
+  }
 }
 
 .doc-editor-status {
