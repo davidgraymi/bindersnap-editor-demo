@@ -7202,6 +7202,14 @@
             "required": false,
             "name": "change",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "ref",
+            "in": "query"
           }
         ],
         "responses": {

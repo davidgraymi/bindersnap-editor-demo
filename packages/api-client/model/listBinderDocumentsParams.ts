@@ -8,4 +8,5 @@
 export type ListBinderDocumentsParams = {
 draft?: string;
 change?: string;
+ref?: string;
 };

@@ -958,10 +958,16 @@ export async function fetchBinderDocuments(
    * policy under the name the change renamed it away from.
    */
   change?: number,
+  /**
+   * Read the binder at a branch, named: `/-/tree/{ref}`. Somebody else's
+   * unproposed draft is refused by the server.
+   */
+  ref?: string,
 ): Promise<WorkspaceDocumentListPayload> {
   const response = await BindersClient.listBinderDocuments(org, binder, {
     ...(draft ? { draft } : {}),
     ...(change ? { change: String(change) } : {}),
+    ...(ref ? { ref } : {}),
   });
   return response.data;
 }
