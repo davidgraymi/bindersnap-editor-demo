@@ -9,7 +9,7 @@ import {
 } from "../api";
 import { followInApp } from "../appLink";
 import { describeChangedDocument } from "../binderChange";
-import { buildDocumentUrl } from "../binderDocument";
+import { buildDocumentUrl, isEditorDocumentFile } from "../binderDocument";
 import { buildBinderUrl } from "../binderShell";
 import { buildChangedDocumentRows } from "../changedDocuments";
 import type { ChangeScope } from "../changeScope";
@@ -50,6 +50,11 @@ interface BinderChangePageProps {
    * "read what this proposes" is a navigation rather than a panel.
    */
   onOpenOnBranch: (slugPath: string, branch: string) => void;
+  /**
+   * Open a document in the editor, saving into this change: the author
+   * answering a reviewer without starting a second change to do it.
+   */
+  onEditInEditor?: (slugPath: string) => void;
   /** Open the whole binder on this change's branch, at its root. */
   onOpenBranch: (branch: string) => void;
   /** Something about the change moved: the binder's own counts have too. */
@@ -82,6 +87,7 @@ export function BinderChangePage({
   onOpenSignOffRules,
   onOpenOnBranch,
   onOpenBranch,
+  onEditInEditor,
 }: BinderChangePageProps) {
   const names = usePeopleNames(org);
   const [detail, setDetail] = useState<WorkspaceChangeDetailPayload | null>(
@@ -443,8 +449,20 @@ export function BinderChangePage({
                     (row) => row.slugPath === document.slugPath,
                   )?.anchor;
 
+                  /* **Back into the words, in this change.** A reviewer's
+                     "please reword step 3" meant a new draft, the edit, and a
+                     second change for the same policy. Only its author, only
+                     while it is open, and only a policy the editor writes — a
+                     Word file is revised in Word and uploaded. */
+                  const editable =
+                    onEditInEditor &&
+                    record.open &&
+                    detail.change.branchName !== "" &&
+                    record.submittedBy === currentUser &&
+                    isEditorDocumentFile(document.path);
+
                   return (
-                    <li key={document.slugPath}>
+                    <li key={document.slugPath} className="change-does-item">
                       {/* **A way into its diff, not a selector.** Picking a
                           row used to repoint the rail at that document, so
                           seeing what changed was pick, then Compare — when
@@ -477,6 +495,16 @@ export function BinderChangePage({
                           <span className="bs-ver">{facts.effect}</span>
                         </span>
                       </a>
+                      {editable ? (
+                        <button
+                          className="bs-btn bs-btn--sm bs-btn-secondary"
+                          type="button"
+                          aria-label={`Edit ${facts.title}`}
+                          onClick={() => onEditInEditor?.(document.slugPath)}
+                        >
+                          Edit
+                        </button>
+                      ) : null}
                     </li>
                   );
                 })}

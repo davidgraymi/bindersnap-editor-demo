@@ -9390,6 +9390,24 @@ a.bs-row:focus-visible {
   gap: var(--brand-space-2);
 }
 
+/* Its author's way back into a policy's words sits beside the row, not in
+   it: the row is a link to the diff, and a button inside a link is neither. */
+.change-does-item {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+}
+
+.change-does-item > .bs-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.change-does-item > .bs-btn {
+  flex-shrink: 0;
+  margin-right: var(--brand-space-3);
+}
+
 /* ── A change request in a list ────────────────────────────────────────────
    Four facts: what it asks for, who asked and when, where it stands, how much
    conversation is on it. Everything else belongs on the change's own page,

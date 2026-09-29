@@ -1129,6 +1129,73 @@ test("typing curls quotes and makes dashes, and Backspace takes one back", async
   await expect(text).toContainText("it\u2019s policy (c)");
 });
 
+test("the author edits an open change request in the editor, and saves into it", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+  await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Every time.");
+  await page.getByRole("button", { name: "Propose", exact: true }).click();
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Save and propose" })
+    .click();
+  await page
+    .getByRole("textbox", { name: "What you are asking for" })
+    .fill("Say when to wash");
+  await page.getByRole("button", { name: "Open the change request" }).click();
+  await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
+  const change = new URL(page.url()).searchParams.get("change")!;
+
+  // A reviewer asks for more. The author goes back in from the change itself.
+  await page.getByRole("button", { name: "Edit Hand Hygiene" }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/hand-hygiene\\?edit=write&change=${change}`),
+  );
+  await expect(page.locator(".doc-editor-where")).toContainText(
+    new RegExp(`Saving to\\s*Change ${change}\\b`),
+  );
+  await expect(
+    page.getByRole("button", { name: "Propose", exact: true }),
+  ).toHaveCount(0);
+  await expect(text).toContainText("Every time.");
+
+  // At the end of the line, where the words go: a click in the middle and
+  // End can race the editor catching up with the click.
+  const line = (await text.locator("p").first().boundingBox())!;
+  await page.mouse.click(line.x + line.width - 4, line.y + line.height / 2);
+  await expect(page.getByRole("button", { name: "Word count" })).toBeVisible();
+  await page.keyboard.type(" With soap.");
+  await expect(text).toContainText("Every time. With soap.");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Save", exact: true }),
+  ).toBeDisabled();
+
+  // Close lands back on the change, which now carries both — no second one.
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`tab=changes&change=${change}`));
+  await page.goto(`${page.url()}&view=compare`);
+  await expect(page.locator(".doc-compare-prose ins").first()).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.locator(".doc-compare-prose")).toContainText(
+    "Every time. With soap.",
+  );
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}?tab=changes`);
+  await expect(page.getByText("Say when to wash")).toHaveCount(1);
+});
+
 test("a change that only makes a word bold still shows in its comparison", async ({
   page,
 }) => {

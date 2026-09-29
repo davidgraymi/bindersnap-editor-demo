@@ -278,9 +278,15 @@ export function buildDocumentEditUrl(params: {
   binder: string;
   documentPath: string;
   draft: string | null;
+  /**
+   * An open change request to save into instead of a draft: the author
+   * answering a reviewer, in the words under review. Wins over `draft`.
+   */
+  change?: number | null;
 }): string {
-  const { org, binder, documentPath, draft } = params;
+  const { org, binder, documentPath, draft, change = null } = params;
   const query = new URLSearchParams({ edit: "write" });
-  if (draft) query.set("draft", draft);
+  if (change !== null) query.set("change", String(change));
+  else if (draft) query.set("draft", draft);
   return `${buildDocumentUrl({ org, binder, documentPath, version: null })}?${query.toString()}`;
 }
