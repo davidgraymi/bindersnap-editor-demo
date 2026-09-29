@@ -1347,10 +1347,16 @@ test("Open on a change lands on the document's own page", async ({ page }) => {
   };
   const number = body.changeNumber ?? body.pullRequestNumber;
 
+  // The file is read from the change's Changes tab, where every document it
+  // touches has its own View.
   await page.goto(
-    `${APP_BASE_URL}/${org}/${binder}?tab=changes&change=${number}`,
+    `${APP_BASE_URL}/${org}/${binder}?tab=changes&change=${number}&view=compare`,
   );
-  await page.getByRole("button", { name: "View file", exact: true }).click();
+  await page
+    .locator(".cmp-file")
+    .first()
+    .getByRole("link", { name: "View", exact: true })
+    .click();
 
   // The document's address, and the document's own name as the page's title.
   // The branch is the address and the change rides along as the way back —
@@ -1756,10 +1762,16 @@ test("Open on a change lands on the branch, and browsing stays there", async ({
   };
   const number = body.changeNumber ?? body.pullRequestNumber;
 
+  // The file is read from the change's Changes tab, where every document it
+  // touches has its own View.
   await page.goto(
-    `${APP_BASE_URL}/${org}/${binder}?tab=changes&change=${number}`,
+    `${APP_BASE_URL}/${org}/${binder}?tab=changes&change=${number}&view=compare`,
   );
-  await page.getByRole("button", { name: "View file", exact: true }).click();
+  await page
+    .locator(".cmp-file")
+    .first()
+    .getByRole("link", { name: "View", exact: true })
+    .click();
 
   // The branch is the address, and the change rides along as the way back.
   await expect(page).toHaveURL(/[?&]ref=/, { timeout: 30_000 });
