@@ -123,6 +123,8 @@ goes into the same draft. When one moves the open policy — renaming it,
 refiling it, or renaming a folder above it — its unsaved words are saved first
 and the editor follows it by identity (`uid`) to its new address; archived, it
 goes on to the next policy to write (`actInEditor` in `BinderShell.tsx`).
+The title in the editor's header is the open policy's name and renames it
+the same way.
 Organize on the binder's header is the same tree on the binder's own page,
 with the archive and restore. **An open change request is edited in
 place by its author**: Edit on its Proposed version card opens the editor at
