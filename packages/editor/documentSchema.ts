@@ -43,6 +43,10 @@ import {
 } from "@tiptap/extension-table";
 
 import { TableOfContents } from "./extensions/TableOfContents";
+import {
+  NumberedHeadings,
+  PolicyDocument,
+} from "./extensions/NumberedHeadings";
 import { pictureWidth } from "./imageFiles";
 import { shadingColor } from "./ribbon/options";
 
@@ -248,7 +252,11 @@ export const PageBreak = Node.create({
  */
 export function documentContentExtensions(): AnyExtension[] {
   return [
+    // The document node is ours: it carries whether sections are numbered.
+    PolicyDocument,
+    NumberedHeadings,
     StarterKit.configure({
+      document: false,
       heading: { levels: [1, 2, 3, 4, 5, 6] },
       // Links are for following in the reader and for editing in the editor:
       // a click that navigates away mid-sentence loses somebody's place.
