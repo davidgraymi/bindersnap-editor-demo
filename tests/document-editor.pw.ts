@@ -316,8 +316,8 @@ test("after a save, every page reads the draft as it now is, not a copy kept fro
     .getByRole("textbox", { name: "What you are asking for" })
     .fill("Shorter wording");
   await page.getByRole("button", { name: "Open the change request" }).click();
-  await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
-  await page.goto(`${page.url()}&view=compare`);
+  await expect(page).toHaveURL(/\/-\/changes\/\d+/, { timeout: 30_000 });
+  await page.goto(`${page.url()}/diffs`);
   await expect(page.locator("del", { hasText: "and" }).first()).toBeVisible({
     timeout: 20_000,
   });
@@ -405,13 +405,15 @@ test("the draft is chosen, proposed and read from the editor, with no trip throu
 
   // The binder's own page, read on the record, is the way into either draft.
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-  const binderPicker = page.locator(".bs-draftpick");
-  await expect(binderPicker).toContainText("On the record");
+  const binderPicker = page.locator(".bs-refpick");
+  await expect(binderPicker).toHaveText("Published");
   await binderPicker.click();
   await expect(
-    page.getByRole("button", { name: /^Gloves wording/ }),
+    page.getByRole("menuitemradio", { name: /^Gloves wording/ }),
   ).toBeVisible();
-  await page.getByRole("button", { name: new RegExp(`^${firstName}`) }).click();
+  await page
+    .getByRole("menuitemradio", { name: new RegExp(`^${firstName}`) })
+    .click();
   await expect(page).toHaveURL(
     new RegExp(`edit=1&draft=${encodeURIComponent(first)}`),
   );
@@ -1859,8 +1861,8 @@ test("the author edits an open change request in the editor, and saves into it",
     .getByRole("textbox", { name: "What you are asking for" })
     .fill("Say when to wash");
   await page.getByRole("button", { name: "Open the change request" }).click();
-  await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
-  const change = new URL(page.url()).searchParams.get("change")!;
+  await expect(page).toHaveURL(/\/-\/changes\/\d+/, { timeout: 30_000 });
+  const change = page.url().match(/\/-\/changes\/(\d+)/)![1]!;
 
   // A reviewer asks for more. The author goes back in from the change itself.
   await page.getByRole("button", { name: "Edit Hand Hygiene" }).click();
@@ -1889,8 +1891,8 @@ test("the author edits an open change request in the editor, and saves into it",
 
   // Close lands back on the change, which now carries both — no second one.
   await page.getByRole("button", { name: "Close", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`tab=changes&change=${change}`));
-  await page.goto(`${page.url()}&view=compare`);
+  await expect(page).toHaveURL(new RegExp(`/-/changes/${change}(?:[?#]|$)`));
+  await page.goto(`${page.url()}/diffs`);
   await expect(page.locator(".doc-compare-prose ins").first()).toBeVisible({
     timeout: 30_000,
   });
@@ -1943,8 +1945,8 @@ test("a proposed draft keeps its name, and its change's chip goes back into it",
     .getByRole("textbox", { name: "What you are asking for" })
     .fill("Wash every time");
   await page.getByRole("button", { name: "Open the change request" }).click();
-  await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
-  const change = new URL(page.url()).searchParams.get("change")!;
+  await expect(page).toHaveURL(/\/-\/changes\/\d+/, { timeout: 30_000 });
+  const change = page.url().match(/\/-\/changes\/(\d+)/)![1]!;
 
   // The chip names the draft, and it is a way back into it.
   const chip = page.locator("a.cmp-branch");
@@ -1969,7 +1971,7 @@ test("a proposed draft keeps its name, and its change's chip goes back into it",
     page.getByRole("button", { name: "Propose", exact: true }),
   ).toHaveCount(0);
   await page.getByRole("button", { name: `Change ${change}` }).click();
-  await expect(page).toHaveURL(new RegExp(`tab=changes&change=${change}`));
+  await expect(page).toHaveURL(new RegExp(`/-/changes/${change}(?:[?#]|$)`));
 });
 
 test("a change that only makes a word bold still shows in its comparison", async ({
@@ -1998,11 +2000,11 @@ test("a change that only makes a word bold still shows in its comparison", async
     .getByRole("textbox", { name: "What you are asking for" })
     .fill("Make the first word stand out");
   await page.getByRole("button", { name: "Open the change request" }).click();
-  await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/-\/changes\/\d+/, { timeout: 30_000 });
 
   // Not a word moved, and the comparison still says what did — rather than
   // drawing nothing under a document the list calls edited.
-  await page.goto(`${page.url()}&view=compare`);
+  await page.goto(`${page.url()}/diffs`);
   await expect(page.locator(".cmp-counts-note")).toHaveText("Formatting", {
     timeout: 30_000,
   });
