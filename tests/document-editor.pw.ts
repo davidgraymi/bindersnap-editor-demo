@@ -246,6 +246,73 @@ test("a policy written here opens in the editor, and Save puts it in your draft"
   );
 });
 
+test("after a save, every page reads the draft as it now is, not a copy kept from before", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  // Every read of a file on a branch, and what it told the browser to keep.
+  const kept: string[] = [];
+  page.on("response", (response) => {
+    if (/\/raw\//.test(response.url())) {
+      kept.push(response.headers()["cache-control"] ?? "");
+    }
+  });
+
+  // Read the policy on the draft first, as the draft picker does, so the
+  // browser holds a copy of it from before the save.
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/edit=write/);
+  const draft = new URL(page.url()).searchParams.get("draft")!;
+  const onDraft = `${APP_BASE_URL}/${org}/${binder}/hand-hygiene?ref=${encodeURIComponent(draft)}`;
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await expect(text).toContainText("before and after contact");
+  await page.goto(onDraft);
+  await expect(page.locator(".doc-preview-prose")).toContainText(
+    "before and after contact",
+  );
+
+  // Take a word out, and save.
+  await page.goBack();
+  await expect(text).toContainText("before and after contact");
+  const word = await wordBox(page, "and after");
+  await page.mouse.dblclick(word.x - 20, word.y);
+  await expect(page.getByRole("button", { name: "Cut" })).toBeEnabled();
+  await page.keyboard.press("Backspace");
+  await page.keyboard.press("Backspace");
+  await expect(text).toContainText("before after contact");
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.getByText(/Saved just now/)).toBeVisible({
+    timeout: 20_000,
+  });
+
+  // The draft, from the picker: the words as saved.
+  await page.goto(onDraft);
+  await expect(page.locator(".doc-preview-prose")).toContainText(
+    "before after contact",
+  );
+
+  // And the change it becomes shows the word gone.
+  await page.goto(
+    `${APP_BASE_URL}/${org}/${binder}?edit=propose&draft=${encodeURIComponent(draft)}`,
+  );
+  await page
+    .getByRole("textbox", { name: "What you are asking for" })
+    .fill("Shorter wording");
+  await page.getByRole("button", { name: "Open the change request" }).click();
+  await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
+  await page.goto(`${page.url()}&view=compare`);
+  await expect(page.locator("del", { hasText: "and" }).first()).toBeVisible({
+    timeout: 20_000,
+  });
+
+  // Nothing read on a branch was ever kept.
+  expect(kept.length).toBeGreaterThan(0);
+  for (const header of kept) expect(header).toBe("no-store");
+});
+
 test("closing with unsaved words asks first, and Cancel keeps them", async ({
   page,
 }) => {
