@@ -1,5 +1,8 @@
 import type { Editor } from "@tiptap/core";
+import { NodeSelection } from "@tiptap/pm/state";
 import { useEditorState } from "@tiptap/react";
+
+import { pictureWidth } from "../imageFiles";
 
 import type { ParagraphStyleId } from "./options";
 import { HIGHLIGHT_COLORS, parseFontSizePt } from "./options";
@@ -37,6 +40,12 @@ export interface FormatState {
   inTable: boolean;
   canMergeCells: boolean;
   canSplitCell: boolean;
+  /** A picture is selected, by clicking it: the Picture tab's cue. */
+  picture: boolean;
+  /** Its width in pixels, or null at its own size. */
+  pictureWidth: number | null;
+  /** Its description, for screen readers. */
+  pictureAlt: string;
   /** Something is selected — what Cut and Copy need. */
   hasSelection: boolean;
   canUndo: boolean;
@@ -80,7 +89,16 @@ function currentStyle(editor: Editor): ParagraphStyleId | null {
   return "normal";
 }
 
+function selectedPicture(editor: Editor) {
+  const { selection } = editor.state;
+  return selection instanceof NodeSelection &&
+    selection.node.type.name === "image"
+    ? selection.node
+    : null;
+}
+
 export function readFormatState(editor: Editor): FormatState {
+  const picture = selectedPicture(editor);
   const family = uniformTextStyle(editor, (attrs) => attrs.fontFamily);
   const size = uniformTextStyle(editor, (attrs) => attrs.fontSize);
   const color = uniformTextStyle(editor, (attrs) => attrs.color);
@@ -122,6 +140,10 @@ export function readFormatState(editor: Editor): FormatState {
     inTable: editor.isActive("table"),
     canMergeCells: editor.can().mergeCells(),
     canSplitCell: editor.can().splitCell(),
+    picture: picture !== null,
+    pictureWidth: picture ? pictureWidth(picture.attrs.width) : null,
+    pictureAlt:
+      picture && typeof picture.attrs.alt === "string" ? picture.attrs.alt : "",
     hasSelection: !editor.state.selection.empty,
     canUndo: editor.can().undo(),
     canRedo: editor.can().redo(),
@@ -150,6 +172,9 @@ const EMPTY: FormatState = {
   inTable: false,
   canMergeCells: false,
   canSplitCell: false,
+  picture: false,
+  pictureWidth: null,
+  pictureAlt: "",
   hasSelection: false,
   canUndo: false,
   canRedo: false,
