@@ -3424,6 +3424,68 @@ test("a binder's thread rule is changed immediately, and read back", async () =>
   ).toBe(false);
 });
 
+test("an owner working alone sets approvals to none and publishes their own policy", async () => {
+  // A clinic trying Bindersnap on its own has nobody else to approve its first
+  // policy. The approval count is Gitea branch protection, and the binder's
+  // administrator changes it — as themselves, so Gitea is what allows it.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const before = await readSettings(sessionCookie, org.name, "clinical");
+  expect(before.rules.requiredApprovals).toBe(1);
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org.name}/clinical/rules`,
+    {
+      method: "PATCH",
+      headers: authHeaders(sessionCookie),
+      body: JSON.stringify({ requiredApprovals: 0 }),
+    },
+  );
+  const changed = (await response.json()) as {
+    requiredApprovals: number | null;
+    blockOnUnresolvedThreads: boolean;
+  };
+  expect(response.status).toBe(200);
+  expect(changed.requiredApprovals).toBe(0);
+  // One rule changed; the others are left as they were.
+  expect(changed.blockOnUnresolvedThreads).toBe(false);
+  expect(
+    (await readSettings(sessionCookie, org.name, "clinical")).rules
+      .requiredApprovals,
+  ).toBe(0);
+
+  const added = await addDocument(sessionCookie, org.name, "clinical", {
+    name: "Fire Safety",
+  });
+  expect(added.status, added.body).toBe(201);
+  const { pullRequestNumber } = JSON.parse(added.body) as {
+    pullRequestNumber: number;
+  };
+  const published = await publishChange(
+    sessionCookie,
+    org.name,
+    "clinical",
+    pullRequestNumber,
+  );
+  expect(published.status, published.body).toBe(200);
+
+  // Out of range is refused, not clamped.
+  const tooMany = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org.name}/clinical/rules`,
+    {
+      method: "PATCH",
+      headers: authHeaders(sessionCookie),
+      body: JSON.stringify({ requiredApprovals: 99 }),
+    },
+  );
+  expect(tooMany.status).toBe(400);
+});
+
 test("changing a binder's rules needs an answer, a real binder, and admin", async () => {
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);

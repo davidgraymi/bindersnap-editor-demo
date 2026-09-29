@@ -99,6 +99,16 @@ export interface WorkspaceSettingsBackend {
     changedBy: string;
     now?: number;
   }): Promise<SettingsEventRecord[]>;
+  /**
+   * Record a change to a rule that lives somewhere else.
+   *
+   * The approval count and "a new version clears the approvals" are Gitea
+   * branch protection, not rows here — Gitea enforces them, so Gitea holds
+   * them. Who changed one, and when, is still this table's question: the
+   * administrative trail should not have a hole shaped like the rules that
+   * matter most.
+   */
+  record(events: SettingsEventRecord[]): Promise<void>;
   /** Newest first. For the administrative view, not for any gate. */
   history(giteaRepoId: number, limit?: number): Promise<SettingsEventRecord[]>;
 }
@@ -180,6 +190,11 @@ export class WorkspaceSettingsStore implements WorkspaceSettingsBackend {
     return [event];
   }
 
+  async record(events: SettingsEventRecord[]): Promise<void> {
+    if (events.length === 0) return;
+    this.db.insert(settingsEvents).values(events).run();
+  }
+
   async history(
     giteaRepoId: number,
     limit = 50,
@@ -245,6 +260,10 @@ class LazyWorkspaceSettingsStore implements WorkspaceSettingsBackend {
     params: Parameters<WorkspaceSettingsBackend["set"]>[0],
   ): Promise<SettingsEventRecord[]> {
     return this.store.set(params);
+  }
+
+  record(events: SettingsEventRecord[]): Promise<void> {
+    return this.store.record(events);
   }
 
   history(giteaRepoId: number, limit?: number): Promise<SettingsEventRecord[]> {

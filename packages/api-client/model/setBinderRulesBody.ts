@@ -6,5 +6,11 @@
  */
 
 export type SetBinderRulesBody = {
-  blockOnUnresolvedThreads: boolean;
+  blockOnUnresolvedThreads?: boolean;
+  /**
+     * @minimum 0
+     * @maximum 10
+     */
+  requiredApprovals?: number;
+  dismissStaleApprovals?: boolean;
 };

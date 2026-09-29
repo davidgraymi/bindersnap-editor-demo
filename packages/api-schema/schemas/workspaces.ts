@@ -865,13 +865,15 @@ export type WorkspaceSignOff = z.infer<typeof WorkspaceSignOffSchema>;
 /**
  * Changing a binder's rules.
  *
- * Immediate, unlike a sign-off rule: this decides whether the binder waits for
- * every discussion to be resolved, which gates nobody out and changes no
- * permission. The change is still recorded — `settings_events` says who
- * relaxed the requirement and when.
+ * Immediate, unlike a sign-off rule, and any one of them on its own. The
+ * approval count and whether a new version clears approvals are Gitea branch
+ * protection; whether discussions must be resolved is ours. Every change is
+ * recorded — `settings_events` says who changed what, and when.
  */
 export const BinderRulesRequestSchema = z.object({
-  blockOnUnresolvedThreads: z.boolean(),
+  blockOnUnresolvedThreads: z.boolean().optional(),
+  requiredApprovals: z.number().int().min(0).max(10).optional(),
+  dismissStaleApprovals: z.boolean().optional(),
 });
 export type BinderRulesRequest = z.infer<typeof BinderRulesRequestSchema>;
 
@@ -879,6 +881,9 @@ export const BinderRulesPayloadSchema = z.object({
   organization: z.string(),
   workspace: z.string(),
   blockOnUnresolvedThreads: z.boolean(),
+  /** Null when the rule could not be read back. */
+  requiredApprovals: z.number().nullable(),
+  dismissStaleApprovals: z.boolean().nullable(),
 });
 export type BinderRulesPayload = z.infer<typeof BinderRulesPayloadSchema>;
 
