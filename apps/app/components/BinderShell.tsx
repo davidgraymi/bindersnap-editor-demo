@@ -415,6 +415,21 @@ export function BinderShell({
     [knownDrafts],
   );
 
+  /**
+   * Whether a branch is one of your drafts — read from its name, which says
+   * whose it is (`draft/<login>/<stamp>`), so the answer does not wait on a
+   * list of drafts still being fetched. The server checks it again.
+   */
+  const isOwnDraft = (branch: string) => {
+    const [kind, owner, stamp, ...rest] = branch.split("/");
+    return (
+      kind === "draft" &&
+      owner === currentUser &&
+      Boolean(stamp) &&
+      rest.length === 0
+    );
+  };
+
   const goToEdit = (
     next: BinderEditMode,
     branch: string | null = draftBranch,
@@ -1377,12 +1392,12 @@ export function BinderShell({
              keep working and every save lands in the change. Somebody else's
              branch is still read under the change. */
           ownDraftHref={(branch) =>
-            draftChoices.some((entry) => entry.branch === branch)
+            isOwnDraft(branch)
               ? buildBinderUrl({ org, binder, edit: "editing", draft: branch })
               : null
           }
           onOpenBranch={(branch) => {
-            if (draftChoices.some((entry) => entry.branch === branch)) {
+            if (isOwnDraft(branch)) {
               goToEdit("editing", branch);
               return;
             }
