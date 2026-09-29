@@ -945,6 +945,31 @@ test("Change Case recases a word from the ribbon, and Shift+F3 cycles it", async
   await expect(text).toContainText("clean your hands");
 });
 
+test("typing curls quotes and makes dashes, and Backspace takes one back", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+  await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("End");
+  await page.keyboard.type(` "Always"--it's policy (c)`);
+  await expect(text).toContainText(
+    "\u201CAlways\u201D\u2014it\u2019s policy \u00A9",
+  );
+
+  // Word's own undo for an AutoCorrect: straight back to what was typed.
+  await page.keyboard.press("Backspace");
+  await expect(text).toContainText("it\u2019s policy (c)");
+});
+
 test("a change that only makes a word bold still shows in its comparison", async ({
   page,
 }) => {
