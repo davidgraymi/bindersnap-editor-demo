@@ -404,6 +404,38 @@ test("the draft is chosen, proposed and read from the editor, with no trip throu
   await expect(page.locator(".bs-draftpick")).toContainText(firstName);
 });
 
+test("Edit on a binder opens the editor; Organize is the tree", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+
+  // Straight into the words, with the draft's files beside them.
+  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write&draft=/);
+  const draft = new URL(page.url()).searchParams.get("draft")!;
+  await expect(
+    page.getByRole("textbox", { name: "Hand Hygiene" }),
+  ).toContainText("Clean your hands");
+
+  // Renaming and refiling are the tree's, one press away, in the same draft.
+  await page
+    .getByRole("button", { name: "Organize: rename, move and make folders" })
+    .click();
+  await expect(page).toHaveURL(
+    new RegExp(`/${binder}\\?edit=1&draft=${encodeURIComponent(draft)}`),
+  );
+  await expect(page.locator(".bs-draftbar")).toBeVisible();
+
+  // And from the binder's own page, Organize goes there directly.
+  await page.getByRole("button", { name: "Done" }).click();
+  await page.getByRole("button", { name: "Organize", exact: true }).click();
+  await expect(page.locator(".bs-draftbar")).toBeVisible();
+  await expect(page).toHaveURL(/edit=1/);
+});
+
 test("closing with unsaved words asks first, and Cancel keeps them", async ({
   page,
 }) => {

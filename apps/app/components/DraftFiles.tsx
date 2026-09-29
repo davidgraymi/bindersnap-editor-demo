@@ -11,6 +11,7 @@ import {
   File,
   FilePlus,
   FileText,
+  FolderTree,
   Folder,
   PanelLeftClose,
   PanelLeftOpen,
@@ -56,6 +57,8 @@ interface DraftFilesProps {
   onOpen: (slugPath: string) => void;
   /** Start a new policy in this draft. Absent, and there is no New button. */
   onNew?: () => void;
+  /** Rename, refile and make folders — the binder's tree, in this draft. */
+  onOrganize?: () => void;
 }
 
 const STORAGE_KEY = "bindersnap.editor.files.collapsed";
@@ -91,6 +94,7 @@ export function DraftFiles({
   unsaved = false,
   onOpen,
   onNew,
+  onOrganize,
 }: DraftFilesProps) {
   const remembered = useRememberedToggle(STORAGE_KEY);
   const narrow = useSyncExternalStore(subscribeNarrow, isNarrow, () => false);
@@ -269,6 +273,20 @@ export function DraftFiles({
             onClick={startNew}
           >
             <FilePlus size={15} strokeWidth={1.75} aria-hidden="true" />
+          </button>
+        ) : null}
+        {onOrganize ? (
+          <button
+            type="button"
+            className="app-explorer-toggle"
+            aria-label="Organize: rename, move and make folders"
+            title="Organize: rename, move and make folders"
+            onClick={() => {
+              setFloating(false);
+              onOrganize();
+            }}
+          >
+            <FolderTree size={15} strokeWidth={1.75} aria-hidden="true" />
           </button>
         ) : null}
         <button
