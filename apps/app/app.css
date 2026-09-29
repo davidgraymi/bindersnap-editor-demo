@@ -10148,6 +10148,42 @@ html.bs-writing .app-main {
   gap: var(--brand-space-2);
 }
 
+/* AutoRecover's offer: a strip under the title bar, where Word puts its
+   Document Recovery pane's one question. */
+.doc-editor-recover {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-2) var(--brand-space-3) var(--brand-space-2)
+    var(--brand-space-5);
+  border-bottom: 1px solid var(--bs-status-warn-border);
+  background: var(--bs-status-warn-bg);
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-md);
+  line-height: var(--brand-leading-normal);
+}
+
+.doc-editor-recover > svg {
+  flex: none;
+  color: var(--bs-status-warn-fg);
+}
+
+.doc-editor-recover p {
+  flex: 1;
+  margin: 0;
+}
+
+.doc-editor-recover strong {
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.doc-editor-recover-actions {
+  display: flex;
+  flex: none;
+  gap: var(--brand-space-2);
+}
+
 .doc-editor-alert {
   margin: var(--brand-space-2) var(--brand-space-5);
 }
