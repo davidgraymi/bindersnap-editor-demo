@@ -725,6 +725,44 @@ test("Ctrl+/ lists the keyboard shortcuts, and Escape goes back to the words", a
   await expect(sheet).toHaveCount(0);
 });
 
+test("Ctrl+K links the selected words from anywhere, as Word's does", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await expect(text).toContainText("Clean your hands");
+
+  // Double-click selects the word; Ctrl+K asks only for the address.
+  const at = await wordBox(page, "hands");
+  await page.mouse.dblclick(at.x, at.y);
+  await page.keyboard.press("ControlOrMeta+k");
+  const form = page.getByRole("dialog", { name: "Link" });
+  const address = form.getByLabel("Address");
+  await expect(address).toBeFocused();
+  await expect(form.getByLabel("Text to display")).toHaveCount(0);
+  await address.fill("https://www.who.int/hand-hygiene");
+  await address.press("Enter");
+
+  await expect(form).toHaveCount(0);
+  await expect(text.locator("a", { hasText: "hands" })).toHaveAttribute(
+    "href",
+    "https://www.who.int/hand-hygiene",
+  );
+  await expect(text).toBeFocused();
+
+  // Escape leaves without a link.
+  await page.keyboard.press("End");
+  await page.keyboard.press("ControlOrMeta+k");
+  await expect(form).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(form).toHaveCount(0);
+  await expect(text.locator("a")).toHaveCount(1);
+});
+
 test("closing with unsaved words asks first, and Cancel keeps them", async ({
   page,
 }) => {

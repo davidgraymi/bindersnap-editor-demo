@@ -109,6 +109,9 @@ export function NavSearch({
       const isSlash =
         event.key === "/" && !event.metaKey && !event.ctrlKey && !event.altKey;
       if (!isCommandK && !isSlash) return;
+      // Claimed nearer the focus: in the editor ⌘K is Insert Link, as it is
+      // in Word, and the editor says so by handling it first.
+      if (event.defaultPrevented) return;
 
       const target = event.target as HTMLElement | null;
       const tag = target?.tagName;
@@ -117,7 +120,7 @@ export function NavSearch({
         tag === "TEXTAREA" ||
         tag === "SELECT" ||
         target?.isContentEditable === true;
-      // ⌘K is a chord nothing else claims, so it works mid-sentence too.
+      // ⌘K works mid-sentence too, wherever nothing nearer claims it.
       if (typing && !isCommandK) return;
 
       event.preventDefault();
