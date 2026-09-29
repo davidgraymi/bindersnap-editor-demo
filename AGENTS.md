@@ -127,8 +127,9 @@ and the editor follows it by identity (`uid`) to its new address; archived, it
 goes on to the next policy to write (`actInEditor` in `BinderShell.tsx`).
 The title in the editor's header is the open policy's name and renames it
 the same way.
-Organize on the binder's header is the same tree on the binder's own page,
-with the archive and restore. **An open change request is edited in
+Archiving from the panel offers Undo, and the panel's foot lists the archive
+with Restore, both into the same draft. Organize on the binder's header is the
+same tree on the binder's own page. **An open change request is edited in
 place by its author**: Edit on its Proposed version card opens the editor at
 `?edit=write&change=N`, which reads the change's branch and saves with
 `changeNumber` (the server's `resolveChangeToJoin`) — no draft, no Propose,

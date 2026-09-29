@@ -10636,3 +10636,56 @@ html.bs-writing .app-main {
   border-radius: var(--brand-radius-full);
   background: var(--brand-coral);
 }
+
+/* Archived in this draft, with the way back, for as long as it is news. */
+.doc-files-undo {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  margin: var(--brand-space-2);
+  padding: var(--brand-space-1-5) var(--brand-space-2);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-2);
+  font-size: var(--brand-text-ui-sm);
+  color: var(--bs-text-secondary);
+}
+
+.doc-files-undo > span {
+  min-width: 0;
+}
+
+.doc-files-undo > button {
+  flex: none;
+  margin-left: auto;
+}
+
+/* The archive, at the foot of the files. */
+.doc-files-archive {
+  margin-top: auto;
+  padding: var(--brand-space-1) 0;
+  border-top: 1px solid var(--bs-rule);
+}
+
+.doc-files-archive-count {
+  margin-left: auto;
+  padding-right: var(--brand-space-2);
+  color: var(--bs-text-faint);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-xs);
+}
+
+.doc-files-item--archived {
+  color: var(--bs-text-muted);
+  cursor: default;
+}
+
+.doc-files-item--archived:hover {
+  background: transparent;
+  color: var(--bs-text-muted);
+}
+
+.doc-files-restore {
+  flex: none;
+  margin-right: var(--brand-space-1);
+}

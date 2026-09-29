@@ -8,6 +8,8 @@ import { routeToPath } from "../routes";
 import {
   archiveBinderDocument,
   discardBinderDraft,
+  fetchBinderArchive,
+  restoreBinderDocument,
   fetchBinder,
   fetchBinderDocuments,
   fetchBinderChange,
@@ -152,6 +154,8 @@ export function BinderShell({
   const [contents, setContents] = useState<SidebarBinder["contents"] | null>(
     null,
   );
+  /** How many policies the binder has archived, read with the contents. */
+  const [archivedCount, setArchivedCount] = useState(0);
   /**
    * Which version of this document is on screen, told by the page reading it.
    *
@@ -667,6 +671,7 @@ export function BinderShell({
       active: null,
       change: before?.change ?? null,
     }));
+    setArchivedCount(listing.archivedCount ?? 0);
     const now = was?.uid
       ? listing.documents.find((entry) => entry.uid === was.uid)
       : listing.documents.find((entry) => entry.slugPath === documentPath);
@@ -729,6 +734,15 @@ export function BinderShell({
         into,
       );
     });
+
+  const restoreInEditor = (uid: string) =>
+    actInEditor((into) => restoreBinderDocument(org, binder, uid, into));
+
+  const readArchiveInEditor = async () => {
+    const branch = draft?.draft?.branch ?? draftBranch;
+    return (await fetchBinderArchive(org, binder, branch ?? undefined))
+      .documents;
+  };
 
   const archiveInEditor = (slugPath: string) =>
     actInEditor((into) => archiveBinderDocument(org, binder, slugPath, into));
@@ -864,6 +878,7 @@ export function BinderShell({
           active: null,
           change: openChange,
         });
+        setArchivedCount(payload.archivedCount ?? 0);
       })
       // Navigation beside the page, not the page: a binder whose contents
       // cannot be read still shows the policy somebody opened.
@@ -1206,6 +1221,7 @@ export function BinderShell({
                   documents: contents.documents,
                   folders: contents.folders,
                   touched: draftTouched,
+                  archivedCount,
                 }
               : null
           }
@@ -1224,6 +1240,8 @@ export function BinderShell({
           onRenameFile={renameInEditor}
           onMoveFile={moveInEditor}
           onArchiveFile={archiveInEditor}
+          onRestoreFile={restoreInEditor}
+          onReadArchive={readArchiveInEditor}
           onNewFolder={(parent) => {
             setAddingIn(parent ?? null);
             setAddingFolder(true);

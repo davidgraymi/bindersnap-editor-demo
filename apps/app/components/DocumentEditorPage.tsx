@@ -11,6 +11,7 @@ import type { Editor, JSONContent } from "@tiptap/core";
 import { GitBranch, GitPullRequest, History, Pencil } from "lucide-react";
 
 import type {
+  BinderArchivePayload,
   BinderDraftPayload,
   WorkspaceDocumentDetailPayload,
   WorkspaceDocumentListEntry,
@@ -81,6 +82,8 @@ interface DocumentEditorPageProps {
     folders: readonly string[];
     /** What the draft has written, so the panel can mark those rows. */
     touched?: readonly string[];
+    /** How many policies are archived, as the draft stands. */
+    archivedCount?: number;
   } | null;
   /** Open another policy in the editor, in the same draft. */
   onOpenDocument: (slugPath: string) => void;
@@ -106,6 +109,10 @@ interface DocumentEditorPageProps {
   onRenameFile: (target: DraftFileTarget, name: string) => Promise<void>;
   onMoveFile: (subject: DragSubject, folder: string) => Promise<void>;
   onArchiveFile: (slugPath: string) => Promise<void>;
+  /** Bring an archived policy back, into the draft. */
+  onRestoreFile: (uid: string) => Promise<void>;
+  /** What is archived, as the draft stands. */
+  onReadArchive: () => Promise<BinderArchivePayload["documents"]>;
   /** Make a folder in the draft. */
   onNewFolder: (parent?: string) => void;
   /**
@@ -177,6 +184,8 @@ export function DocumentEditorPage({
   onRenameFile,
   onMoveFile,
   onArchiveFile,
+  onRestoreFile,
+  onReadArchive,
   onNewFolder,
 }: DocumentEditorPageProps) {
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
@@ -367,18 +376,20 @@ export function DocumentEditorPage({
     movesOpen: boolean,
     act: () => Promise<void>,
     failed: string,
-  ) => {
-    if (filesBusy) return;
+  ): Promise<boolean> => {
+    if (filesBusy) return false;
     setFilesError(null);
     if (movesOpen && dirty) {
       const saved = await saveNow();
-      if (!saved) return;
+      if (!saved) return false;
     }
     setFilesBusy(true);
     try {
       await act();
+      return true;
     } catch (err) {
       setFilesError(errorMessage(err, failed));
+      return false;
     } finally {
       setFilesBusy(false);
     }
@@ -763,10 +774,22 @@ export function DocumentEditorPage({
               change
                 ? undefined
                 : (slugPath) =>
-                    void actOnFiles(
+                    actOnFiles(
                       slugPath === documentPath,
                       () => onArchiveFile(slugPath),
                       "Unable to archive that.",
+                    )
+            }
+            archivedCount={files.archivedCount ?? 0}
+            onReadArchive={change ? undefined : onReadArchive}
+            onRestore={
+              change
+                ? undefined
+                : (uid) =>
+                    actOnFiles(
+                      false,
+                      () => onRestoreFile(uid),
+                      "Unable to restore that document.",
                     )
             }
           />

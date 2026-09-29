@@ -24,7 +24,10 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
+import type {
+  BinderArchivePayload,
+  WorkspaceDocumentListEntry,
+} from "../../../packages/api-schema/schemas/workspaces";
 import { isEditorDocumentFile } from "../binderDocument";
 import {
   buildBinderTree,
@@ -98,7 +101,15 @@ interface DraftFilesProps {
   /** File a row somewhere else, `""` being the binder's top level. */
   onMove?: (subject: DragSubject, folder: string) => void;
   /** Take a policy off the record, in this draft. */
-  onArchive?: (slugPath: string) => void;
+  onArchive?: (slugPath: string) => Promise<boolean>;
+  /**
+   * What this binder has taken off the record, as the draft stands — the
+   * count, the list when it is opened, and the way back. Restore goes into
+   * the same draft, so an archiving done here a moment ago is undone by it.
+   */
+  archivedCount?: number;
+  onReadArchive?: () => Promise<BinderArchivePayload["documents"]>;
+  onRestore?: (uid: string) => Promise<boolean>;
   /** An act is being saved: nothing else starts until it lands. */
   busy?: boolean;
   /**
@@ -169,6 +180,9 @@ export function DraftFiles({
   onRename,
   onMove,
   onArchive,
+  archivedCount = 0,
+  onReadArchive,
+  onRestore,
   busy = false,
   touched = NOTHING,
 }: DraftFilesProps) {
@@ -186,6 +200,38 @@ export function DraftFiles({
   } | null>(null);
   const [dragging, setDragging] = useState<DragSubject | null>(null);
   /** A row's menu, from a right-click or the keyboard's menu key. */
+  /** The policy just archived here, and the way to take it back. */
+  const [undo, setUndo] = useState<{ uid: string; label: string } | null>(null);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archived, setArchived] = useState<
+    BinderArchivePayload["documents"] | null
+  >(null);
+  const [archiveError, setArchiveError] = useState(false);
+  // Read when opened, and again whenever the count moves: an archiving or a
+  // restore changes what is in it.
+  useEffect(() => {
+    if (!archiveOpen || !onReadArchive) return;
+    let cancelled = false;
+    setArchiveError(false);
+    onReadArchive()
+      .then((entries) => {
+        if (!cancelled) setArchived(entries);
+      })
+      .catch(() => {
+        if (!cancelled) setArchiveError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // `onReadArchive` is made afresh each render; the count is what changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [archiveOpen, archivedCount]);
+  // The Undo is for the act just done; a later act is a new "just now".
+  useEffect(() => {
+    if (!undo) return;
+    const timer = window.setTimeout(() => setUndo(null), 12_000);
+    return () => window.clearTimeout(timer);
+  }, [undo]);
   const [menu, setMenu] = useState<{
     node: BinderTreeNode;
     x: number;
@@ -259,6 +305,26 @@ export function DraftFiles({
   const allFolders = useMemo(() => folderPaths(tree), [tree]);
 
   const organizing = !!(onRename || onMove || onArchive);
+
+  /**
+   * Archive a row, and offer it back. **No "are you sure"**, as on the
+   * binder's tree: it goes into the draft, which is undoable as a whole — and
+   * here, straight away, by Undo.
+   */
+  const archiveRow = async (node: BinderTreeNode) => {
+    if (!onArchive || node.kind !== "document") return;
+    setUndo(null);
+    const done = await onArchive(node.document.slugPath);
+    if (done && node.document.uid && onRestore) {
+      setUndo({ uid: node.document.uid, label: labelOf(node) });
+    }
+  };
+
+  const restore = async (uid: string) => {
+    if (!onRestore) return;
+    setUndo(null);
+    await onRestore(uid);
+  };
 
   const touchedPaths = useMemo(() => new Set(touched), [touched]);
   /**
@@ -418,7 +484,7 @@ export function DraftFiles({
         danger: true,
         disabled: !acts,
         separated: true,
-        run: () => onArchive(node.document.slugPath),
+        run: () => void archiveRow(node),
       });
     }
     return items;
@@ -519,7 +585,7 @@ export function DraftFiles({
             aria-label={`Archive ${label}`}
             title="Archive — it leaves the binder when this draft is published"
             disabled={busy}
-            onClick={() => onArchive(node.document.slugPath)}
+            onClick={() => void archiveRow(node)}
           >
             <Archive size={13} strokeWidth={1.6} aria-hidden="true" />
           </button>
@@ -771,6 +837,81 @@ export function DraftFiles({
           </div>
         ) : null}
       </div>
+
+      {undo ? (
+        <div className="doc-files-undo" role="status">
+          <span>
+            <strong>{undo.label}</strong> archived in this draft.
+          </span>
+          <button
+            type="button"
+            className="bs-btn bs-btn--sm bs-btn--quiet"
+            disabled={busy}
+            onClick={() => void restore(undo.uid)}
+          >
+            Undo
+          </button>
+        </div>
+      ) : null}
+
+      {/* **The archive, at the foot of the files**, as on the binder's tree:
+          what the draft or the record has taken off, and Restore — into this
+          draft, as the binder's next version of it rather than a new v1. */}
+      {archivedCount > 0 && onReadArchive ? (
+        <div className="doc-files-archive">
+          <button
+            type="button"
+            className="app-explorer-folder"
+            aria-expanded={archiveOpen}
+            onClick={() => setArchiveOpen((was) => !was)}
+          >
+            {archiveOpen ? (
+              <ChevronDown size={13} strokeWidth={1.75} aria-hidden="true" />
+            ) : (
+              <ChevronRight size={13} strokeWidth={1.75} aria-hidden="true" />
+            )}
+            <Archive size={14} strokeWidth={1.6} aria-hidden="true" />
+            <span className="app-explorer-name">Archived</span>
+            <span className="doc-files-archive-count">{archivedCount}</span>
+          </button>
+          {archiveOpen ? (
+            archiveError ? (
+              <p className="app-explorer-empty">Unable to read the archive.</p>
+            ) : archived === null ? (
+              <p className="app-explorer-empty">Reading the archive…</p>
+            ) : (
+              archived.map((entry) => (
+                <div className="doc-files-row" key={entry.uid}>
+                  <span
+                    className="app-explorer-item doc-files-item doc-files-item--archived"
+                    style={{ paddingLeft: "22px" }}
+                    title={
+                      entry.slugPath
+                        ? `Was filed at ${entry.slugPath}`
+                        : "Its folder is gone"
+                    }
+                  >
+                    <FileText size={14} strokeWidth={1.6} aria-hidden="true" />
+                    <span className="app-explorer-name">{entry.title}</span>
+                  </span>
+                  {onRestore ? (
+                    <button
+                      type="button"
+                      className="bs-btn bs-btn--sm bs-btn--quiet doc-files-restore"
+                      aria-label={`Restore ${entry.title}`}
+                      title={`Restore as v${entry.lastVersion + 1}, in this draft`}
+                      disabled={busy}
+                      onClick={() => void restore(entry.uid)}
+                    >
+                      Restore
+                    </button>
+                  ) : null}
+                </div>
+              ))
+            )
+          ) : null}
+        </div>
+      ) : null}
 
       {menu ? (
         <RowMenu
