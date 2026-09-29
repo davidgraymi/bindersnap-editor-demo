@@ -15,6 +15,7 @@ import {
   AlignRight,
   Baseline,
   Bold,
+  CalendarDays,
   CaseSensitive,
   ChevronUp,
   ClipboardPaste,
@@ -96,6 +97,7 @@ import {
   TEXT_COLORS,
   ZOOM_STEP,
   clampZoom,
+  dateChoices,
   stepFontSize,
   type ParagraphStyleId,
 } from "./options";
@@ -1108,6 +1110,27 @@ function InsertTab({
             onClick={() => chain().toggleCodeBlock().run()}
           />
         </div>
+        <DropButton
+          label="Date & Time"
+          className="bs-rdrop--large"
+          panelClassName="bs-rpanel--list"
+          panel={(close) =>
+            dateChoices(new Date()).map((text) => (
+              <MenuChoice
+                key={text}
+                onPick={() => {
+                  chain().insertContent({ type: "text", text }).run();
+                  close();
+                }}
+              >
+                {text}
+              </MenuChoice>
+            ))
+          }
+        >
+          <CalendarDays size={22} strokeWidth={1.75} aria-hidden="true" />
+          <span className="bs-rb-label">Date &amp; Time</span>
+        </DropButton>
       </RibbonGroup>
 
       <RibbonGroup label="Symbols">

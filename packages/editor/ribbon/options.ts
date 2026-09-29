@@ -162,3 +162,30 @@ export function clampZoom(value: number): number {
   if (!Number.isFinite(value)) return 100;
   return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(value)));
 }
+
+/**
+ * Today, in the ways a policy writes a date — Word's Insert > Date & Time.
+ *
+ * In the reader's own language, except the last: ISO is the one form that
+ * reads the same on both sides of the Atlantic, which is what a date in a
+ * record needs when "03/04" is March to one reader and April to another.
+ * Written as text, not a field: a policy's effective date is the day it was
+ * written, and must not move when it is opened a year later.
+ */
+export function dateChoices(now: Date, locale?: string): string[] {
+  const format = (options: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat(locale, options).format(now);
+  const iso = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("-");
+  const choices = [
+    format({ day: "numeric", month: "long", year: "numeric" }),
+    format({ weekday: "long", day: "numeric", month: "long", year: "numeric" }),
+    format({ day: "numeric", month: "short", year: "numeric" }),
+    format({ month: "long", year: "numeric" }),
+    iso,
+  ];
+  return [...new Set(choices)];
+}
