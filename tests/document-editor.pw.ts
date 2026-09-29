@@ -1757,6 +1757,77 @@ test("the author edits an open change request in the editor, and saves into it",
   await expect(page.getByText("Say when to wash")).toHaveCount(1);
 });
 
+/**
+ * **A proposed draft is still its author's**, the way a branch is still a
+ * branch once a pull request opens on it. Its change request's chip names it
+ * — not "Bob's draft" — and goes back to it, where it is still editable and
+ * the bar says a save is one its reviewers see.
+ */
+test("a proposed draft keeps its name, and its change's chip goes back into it", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const picker = page.locator(".doc-editor-where .bs-draftpick");
+  await picker.click();
+  await page.getByRole("button", { name: "Start another draft" }).click();
+  const naming = page.getByRole("textbox", {
+    name: "What to call the new draft",
+  });
+  await naming.fill("Say when to wash");
+  await naming.press("Enter");
+  await expect(picker).toContainText("Say when to wash");
+  const branch = new URL(page.url()).searchParams.get("draft")!;
+
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+  await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Every time.");
+  await page.getByRole("button", { name: "Propose", exact: true }).click();
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Save and propose" })
+    .click();
+  await page
+    .getByRole("textbox", { name: "What you are asking for" })
+    .fill("Wash every time");
+  await page.getByRole("button", { name: "Open the change request" }).click();
+  await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
+  const change = new URL(page.url()).searchParams.get("change")!;
+
+  // The chip names the draft, and it is a way back into it.
+  const chip = page.locator("a.cmp-branch");
+  await expect(chip).toHaveText("Say when to wash");
+  await chip.click();
+  await expect(page).toHaveURL(
+    new RegExp(`edit=1&draft=${encodeURIComponent(branch)}`),
+  );
+  const bar = page.locator(".bs-draftbar");
+  await expect(bar).toContainText(`Proposed as change ${change}`);
+  await expect(bar.getByRole("button", { name: "Discard" })).toHaveCount(0);
+
+  // Still listed among your drafts, and still editable in the editor.
+  await page.goto(
+    `${APP_BASE_URL}/${org}/${binder}/hand-hygiene?edit=write&draft=${encodeURIComponent(branch)}`,
+  );
+  await expect(page.locator(".doc-editor-where")).toContainText(
+    `proposed as change ${change}`,
+  );
+  await expect(text).toContainText("Every time.");
+  await expect(
+    page.getByRole("button", { name: "Propose", exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: `Change ${change}` }).click();
+  await expect(page).toHaveURL(new RegExp(`tab=changes&change=${change}`));
+});
+
 test("a change that only makes a word bold still shows in its comparison", async ({
   page,
 }) => {

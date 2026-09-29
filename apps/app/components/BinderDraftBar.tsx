@@ -44,8 +44,11 @@ interface BinderDraftBarProps {
   others: readonly string[];
   /** True while an act is being committed, so the bar can say "saving". */
   busy?: boolean;
+  /** The change request open on this draft, once it has been proposed. */
+  changeNumber?: number | null;
   onPropose: () => void;
   onDiscard: () => void;
+  onOpenChange: (changeNumber: number) => void;
 }
 
 export function BinderDraftBar({
@@ -53,8 +56,10 @@ export function BinderDraftBar({
   acts,
   others,
   busy = false,
+  changeNumber = null,
   onPropose,
   onDiscard,
+  onOpenChange,
 }: BinderDraftBarProps) {
   const [showAll, setShowAll] = useState(false);
 
@@ -89,9 +94,11 @@ export function BinderDraftBar({
               that prefills the change request. Newest first, because the
               thing just done is the thing being checked. */}
           <p className="bs-draftbar-note">
-            {acts.length > 0
-              ? acts.map((act) => act.summary).join(" · ")
-              : "Rename something, make a folder, or add a document. Nobody is asked to look until you propose it."}
+            {changeNumber !== null
+              ? `Proposed as change ${changeNumber} — its reviewers see every change you make here.`
+              : acts.length > 0
+                ? acts.map((act) => act.summary).join(" · ")
+                : "Rename something, make a folder, or add a document. Nobody is asked to look until you propose it."}
           </p>
 
           {/* Other people's drafts: that they exist, and nothing more. Knowing
@@ -118,22 +125,38 @@ export function BinderDraftBar({
           </button>
         ) : null}
 
-        <button
-          type="button"
-          className="bs-btn bs-btn--sm bs-btn--quiet draft-bar-discard"
-          onClick={onDiscard}
-          disabled={busy}
-        >
-          Discard
-        </button>
-        <button
-          type="button"
-          className="bs-btn bs-btn--sm bs-btn-primary"
-          onClick={onPropose}
-          disabled={busy || acts.length === 0}
-        >
-          Propose
-        </button>
+        {/* Proposed already: still yours to edit, as a branch with a pull
+            request open on it is, and its change is where Propose was.
+            Discard is gone — deleting the branch would take the change
+            request with it. */}
+        {changeNumber !== null ? (
+          <button
+            type="button"
+            className="bs-btn bs-btn--sm bs-btn-primary"
+            onClick={() => onOpenChange(changeNumber)}
+          >
+            View change {changeNumber}
+          </button>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="bs-btn bs-btn--sm bs-btn--quiet draft-bar-discard"
+              onClick={onDiscard}
+              disabled={busy}
+            >
+              Discard
+            </button>
+            <button
+              type="button"
+              className="bs-btn bs-btn--sm bs-btn-primary"
+              onClick={onPropose}
+              disabled={busy || acts.length === 0}
+            >
+              Propose
+            </button>
+          </>
+        )}
       </div>
 
       {showAll && acts.length > 0 ? (

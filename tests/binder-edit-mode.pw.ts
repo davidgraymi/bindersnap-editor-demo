@@ -1131,12 +1131,22 @@ test("proposing sends the draft it was asked to send", async () => {
     },
   );
   expect(proposed.status, await proposed.clone().text()).toBe(201);
-  expect(((await proposed.json()) as { branch: string }).branch).toBe(first);
+  const sent = (await proposed.json()) as {
+    branch: string;
+    changeNumber: number;
+  };
+  expect(sent.branch).toBe(first);
 
-  // The proposed one stops being a draft; the other is untouched.
-  const { drafts } = await readDrafts(session, org, binder);
-  expect(drafts.map((entry) => entry.branch)).not.toContain(first);
-  expect(drafts).toHaveLength(1);
+  // The proposed one is still its author's, and says which change it is in;
+  // the other is untouched and still unproposed.
+  const { drafts } = (await readDrafts(session, org, binder)) as {
+    drafts: Array<{ branch: string; changeNumber: number | null }>;
+  };
+  expect(drafts).toHaveLength(2);
+  expect(drafts.find((entry) => entry.branch === first)?.changeNumber).toBe(
+    sent.changeNumber,
+  );
+  expect(drafts.filter((entry) => entry.changeNumber === null)).toHaveLength(1);
 });
 
 /**

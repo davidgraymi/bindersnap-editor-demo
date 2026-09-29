@@ -1280,6 +1280,7 @@ export function BinderShell({
           onStartDraft={startDraftInEditor}
           onRenameDraft={renameDraft}
           onPropose={proposeFromEditor}
+          onOpenChange={(changeNumber) => openChangeNumber(changeNumber)}
           onRenameFile={renameInEditor}
           onMoveFile={moveInEditor}
           onArchiveFile={archiveInEditor}
@@ -1369,7 +1370,22 @@ export function BinderShell({
               }),
             )
           }
-          onOpenBranch={(branch) =>
+          /* **Your draft is a place, not a read of a change.** The chip on a
+             change you proposed went to "Change requests / Change 22 /
+             Proposed files" — the change's view of your branch, read-only,
+             with no way back up the tree. It goes to the draft, where you can
+             keep working and every save lands in the change. Somebody else's
+             branch is still read under the change. */
+          ownDraftHref={(branch) =>
+            draftChoices.some((entry) => entry.branch === branch)
+              ? buildBinderUrl({ org, binder, edit: "editing", draft: branch })
+              : null
+          }
+          onOpenBranch={(branch) => {
+            if (draftChoices.some((entry) => entry.branch === branch)) {
+              goToEdit("editing", branch);
+              return;
+            }
             moveTo(
               buildBinderUrl({
                 org,
@@ -1377,8 +1393,8 @@ export function BinderShell({
                 ref: branch,
                 change: openChange,
               }),
-            )
-          }
+            );
+          }}
           onChanged={loadOverview}
         />
       ) : activeTab === "changes" ? (
@@ -1549,8 +1565,10 @@ export function BinderShell({
           acts={draft.draft.acts}
           others={draft.others.map((other) => other.owner)}
           busy={startingEdit}
+          changeNumber={draft.draft.changeNumber}
           onPropose={() => goToEdit("proposing")}
           onDiscard={() => void discard()}
+          onOpenChange={(changeNumber) => openChangeNumber(changeNumber)}
         />
       ) : null}
 
