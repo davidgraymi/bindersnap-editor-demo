@@ -9,7 +9,11 @@ import {
 } from "../api";
 import { followInApp } from "../appLink";
 import { describeChangedDocument, describeMove } from "../binderChange";
-import { buildDocumentUrl, downloadFileName } from "../binderDocument";
+import {
+  buildDocumentUrl,
+  downloadFileName,
+  isEditorDocumentFile,
+} from "../binderDocument";
 import { buildBinderUrl } from "../binderShell";
 import { buildChangedDocumentRows } from "../changedDocuments";
 import type { ChangeScope } from "../changeScope";
@@ -51,6 +55,11 @@ interface BinderChangePageProps {
    * "read what this proposes" is a navigation rather than a panel.
    */
   onOpenOnBranch: (slugPath: string, branch: string) => void;
+  /**
+   * Open a document in the editor, saving into this change: the author
+   * answering a reviewer without starting a second change to do it.
+   */
+  onEditInEditor?: (slugPath: string) => void;
   /** Open the whole binder on this change's branch, at its root. */
   onOpenBranch: (branch: string) => void;
   /** Something about the change moved: the binder's own counts have too. */
@@ -84,6 +93,7 @@ export function BinderChangePage({
   onOpenSignOffRules,
   onOpenOnBranch,
   onOpenBranch,
+  onEditInEditor,
 }: BinderChangePageProps) {
   const names = usePeopleNames(org);
   const [detail, setDetail] = useState<WorkspaceChangeDetailPayload | null>(
@@ -542,6 +552,18 @@ export function BinderChangePage({
         /* A rename is a change even when not a word of the document changed,
            and the comparison cannot show it. */
         documentMove={shown ? describeMove(shown) : null}
+        /* Only its author, only while it is open, and only a policy the
+           editor writes — a Word file is revised in Word and uploaded. */
+        onEditInEditor={
+          onEditInEditor &&
+          shown &&
+          record.open &&
+          detail.change.branchName !== "" &&
+          record.submittedBy === currentUser &&
+          isEditorDocumentFile(shown.path)
+            ? () => onEditInEditor(shown.slugPath)
+            : null
+        }
         onOpenOnBranch={
           shown && detail.change.branchName
             ? () => onOpenOnBranch(shown.slugPath, detail.change.branchName)

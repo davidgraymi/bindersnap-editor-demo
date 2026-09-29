@@ -116,7 +116,11 @@ same picker while reading, with "On the record" as a place. **Edit on a
 binder opens the editor** (`pickPolicyToWrite`: the policy last written in the
 draft, else the first) — only a binder with nothing the editor writes opens
 the tree. Renaming, refiling and folders are **Organize**, on the binder's
-header and in the editor's file panel.
+header and in the editor's file panel. **An open change request is edited in
+place by its author**: Edit on its Proposed version card opens the editor at
+`?edit=write&change=N`, which reads the change's branch and saves with
+`changeNumber` (the server's `resolveChangeToJoin`) — no draft, no Propose,
+and Close returns to the change.
 
 **Pictures are embedded, not linked** (`packages/editor/imageFiles.ts`): chosen,
 pasted or dropped, a picture is scaled to at most 1600px and written into the
