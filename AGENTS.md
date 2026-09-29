@@ -106,8 +106,12 @@ while it is mounted it sets `bs-writing` on `<html>`, and the shell drops the
 sidebar and the binder's file panel so Letter fits at 100% on a laptop. The
 editor has **its own file panel** (`components/DraftFiles.tsx`), read at the
 draft: a policy opens beside the last one, and New starts one, without leaving
-the editor. Leaving a policy with unsaved words asks first, whatever the way
-out. **The editor owns the draft**: "Saving to" is the `BinderDraftPicker`
+the editor. **Several policies are open at once**: moving to another keeps
+the words typed in each (`OpenPolicy` buffers in `DocumentEditorPage.tsx`,
+keyed by `uid`, so a rename or move keeps the same open file and its
+editor); the panel marks every policy with unsaved words, the status bar
+counts the others, and Save all commits them, one act each. Only leaving
+the editor — Close, Propose, another draft — asks, and offers Save all. **The editor owns the draft**: "Saving to" is the `BinderDraftPicker`
 (switch or start a draft on the same policy) and Propose opens the propose
 step for that draft, returning to the policy on Back. Close lands on the
 document at `?edit=1&draft=`, with the draft bar (Propose, Discard) at the foot
