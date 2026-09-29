@@ -7940,6 +7940,12 @@
                   },
                   "draft": {
                     "type": "string"
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "editor"
+                    ]
                   }
                 },
                 "required": [
