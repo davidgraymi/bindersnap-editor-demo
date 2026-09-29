@@ -45,6 +45,21 @@ export function countDocument(doc: ProseMirrorNode): DocumentCounts {
   return { words, characters, paragraphs };
 }
 
+/**
+ * Words in the selection, or null with nothing selected — the "12 of 340"
+ * Word's status bar shows while some words are selected.
+ */
+export function countSelectedWords(
+  doc: ProseMirrorNode,
+  from: number,
+  to: number,
+): number | null {
+  if (from === to) return null;
+  // Blocks apart, so the last word of one paragraph and the first of the
+  // next are two words, not one.
+  return countWords(doc.textBetween(from, to, " ", " "));
+}
+
 export interface OutlineEntry {
   level: number;
   text: string;
