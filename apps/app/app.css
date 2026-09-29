@@ -10238,6 +10238,20 @@ html.bs-writing .app-main {
   background: var(--bs-surface-1);
 }
 
+/* On a narrow window the panel opens over the page, not beside it. */
+.doc-editor-workspace {
+  position: relative;
+}
+
+.doc-files--floating {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 40px;
+  z-index: var(--brand-z-overlay);
+  box-shadow: var(--bs-elevation-menu);
+}
+
 .doc-files--shut {
   align-items: center;
   gap: var(--brand-space-1);
