@@ -342,7 +342,7 @@ test("Edit opens a draft, and the address says so", async ({ page }) => {
   // Nothing about drafts until somebody asks for one.
   await expect(page.locator(".bs-draftbar")).toBeHidden();
 
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Organize", exact: true }).click();
 
   const bar = page.locator(".bs-draftbar");
   await expect(bar).toBeVisible({ timeout: 30_000 });
@@ -371,7 +371,7 @@ test("a rename in the tree lands in the draft, and the row keeps it", async ({
   // `?edit=1` with no draft drops back out rather than conjuring one — so the
   // draft is opened through the button, the way a person would.
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Organize", exact: true }).click();
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   // Hand Hygiene is filed in Nursing, and folders start shut.
@@ -404,7 +404,7 @@ test("Escape leaves the name alone", async ({ page }) => {
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Organize", exact: true }).click();
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   await page.getByRole("button", { name: "Rename Staff Handbook" }).click();
@@ -426,7 +426,7 @@ test("Propose opens the change request, with the words the author wrote", async 
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Organize", exact: true }).click();
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   // Hand Hygiene is filed in Nursing, and folders start shut.
@@ -476,7 +476,7 @@ test("Discard throws the draft away and leaves the binder as it was", async ({
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Organize", exact: true }).click();
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   // Hand Hygiene is filed in Nursing, and folders start shut.
@@ -555,7 +555,7 @@ test("a policy dragged onto a folder is filed there", async ({ page }) => {
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Organize", exact: true }).click();
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   const handbook = page
@@ -658,7 +658,7 @@ test("the Move button files something without a pointer", async ({ page }) => {
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Organize", exact: true }).click();
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   await page.getByRole("button", { name: "Move Staff Handbook" }).click();
@@ -683,7 +683,7 @@ test("a policy dragged out of its folder lands at the top level", async ({
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Organize", exact: true }).click();
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   await openTreeFolder(page, "Nursing");
@@ -787,7 +787,7 @@ test("clicking a renamed policy in the tree opens it, not an error", async ({
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Organize", exact: true }).click();
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   // Hand Hygiene is filed in Nursing, and folders start shut.

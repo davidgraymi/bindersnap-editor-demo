@@ -93,6 +93,8 @@ interface DocumentEditorPageProps {
   onRenameDraft: (branch: string, name: string) => void | Promise<void>;
   /** Ask for the draft to be approved: the propose step, for this draft. */
   onPropose: () => void;
+  /** Rename, refile and make folders: the binder's tree, in this draft. */
+  onOrganize: () => void;
 }
 
 /** Where the person was going when unsaved words stopped them. */
@@ -102,7 +104,8 @@ type Leaving =
   | { kind: "new" }
   | { kind: "draft"; branch: string }
   | { kind: "start"; name: string }
-  | { kind: "propose" };
+  | { kind: "propose" }
+  | { kind: "organize" };
 
 type LoadState =
   | { kind: "loading" }
@@ -152,6 +155,7 @@ export function DocumentEditorPage({
   onStartDraft,
   onRenameDraft,
   onPropose,
+  onOrganize,
 }: DocumentEditorPageProps) {
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
   const [save, setSave] = useState<SaveState>({ kind: "idle" });
@@ -311,6 +315,7 @@ export function DocumentEditorPage({
     else if (to.kind === "draft") onSwitchDraft(to.branch);
     else if (to.kind === "start") void onStartDraft(to.name);
     else if (to.kind === "propose") onPropose();
+    else if (to.kind === "organize") onOrganize();
     else onNewDocument();
   };
 
@@ -448,11 +453,13 @@ export function DocumentEditorPage({
       ? { save: "Save and close", drop: "Close without saving" }
       : leaving.kind === "open"
         ? { save: "Save and open", drop: "Open without saving" }
-        : leaving.kind === "propose"
-          ? { save: "Save and propose", drop: "Propose without them" }
-          : leaving.kind === "draft" || leaving.kind === "start"
-            ? { save: "Save and switch", drop: "Switch without saving" }
-            : { save: "Save first", drop: "Don't save" }
+        : leaving.kind === "organize"
+          ? { save: "Save and organize", drop: "Organize without saving" }
+          : leaving.kind === "propose"
+            ? { save: "Save and propose", drop: "Propose without them" }
+            : leaving.kind === "draft" || leaving.kind === "start"
+              ? { save: "Save and switch", drop: "Switch without saving" }
+              : { save: "Save first", drop: "Don't save" }
     : null;
 
   // Something to propose: words not saved yet, or anything already in the
@@ -589,6 +596,7 @@ export function DocumentEditorPage({
             unsaved={dirty}
             onOpen={(slugPath) => leave({ kind: "open", slugPath })}
             onNew={() => leave({ kind: "new" })}
+            onOrganize={() => leave({ kind: "organize" })}
           />
         ) : null}
         <div className="doc-editor-main">{body}</div>
