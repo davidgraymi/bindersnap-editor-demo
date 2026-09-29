@@ -1046,6 +1046,45 @@ test("Insert > Date & Time writes today's date where the cursor is", async ({
   await expect(text).toContainText(`Effective ${iso}`);
 });
 
+test("a table cell is shaded from the Table tab, and reads shaded once saved", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+  await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("End");
+
+  await page.getByRole("tab", { name: "Insert" }).click();
+  await page.getByRole("button", { name: "Table", exact: true }).click();
+  await page.getByRole("button", { name: "2 by 2 table" }).click();
+  await page.keyboard.type("Owner");
+
+  // The cursor is in the header cell: shade it.
+  await page.getByRole("tab", { name: "Table" }).click();
+  await page.getByRole("button", { name: "Shading" }).click();
+  await page.getByRole("menuitemradio", { name: "Blue" }).click();
+  const blue = "rgb(219, 234, 254)";
+  await expect(text.locator("th").first()).toHaveCSS("background-color", blue);
+
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Save", exact: true }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page.locator(".doc-preview-prose th").first()).toHaveCSS(
+    "background-color",
+    blue,
+  );
+});
+
 test("the status bar counts the selected words out of the whole", async ({
   page,
 }) => {

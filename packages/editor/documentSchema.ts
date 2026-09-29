@@ -44,6 +44,20 @@ import {
 
 import { TableOfContents } from "./extensions/TableOfContents";
 import { pictureWidth } from "./imageFiles";
+import { shadingColor } from "./ribbon/options";
+
+/** Word's cell Shading, kept on the cell and drawn as its background. */
+const CELL_SHADING = {
+  background: {
+    default: null,
+    parseHTML: (element: HTMLElement) =>
+      shadingColor(element.style.backgroundColor),
+    renderHTML: (attributes: Record<string, unknown>) => {
+      const color = shadingColor(attributes.background);
+      return color ? { style: `background-color: ${color}` } : {};
+    },
+  },
+};
 
 /** Line spacing a paragraph may take — Word's own menu, as multiples. */
 export const LINE_SPACINGS = ["1", "1.15", "1.5", "2", "2.5", "3"] as const;
@@ -273,8 +287,16 @@ export function documentContentExtensions(): AnyExtension[] {
     Superscript,
     Table.configure({ resizable: true }),
     TableRow,
-    TableCell,
-    TableHeader,
+    TableCell.extend({
+      addAttributes() {
+        return { ...this.parent?.(), ...CELL_SHADING };
+      },
+    }),
+    TableHeader.extend({
+      addAttributes() {
+        return { ...this.parent?.(), ...CELL_SHADING };
+      },
+    }),
     ParagraphFormat,
     PageBreak,
     TableOfContents,

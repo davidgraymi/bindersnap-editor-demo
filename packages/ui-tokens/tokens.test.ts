@@ -38,6 +38,10 @@ const LITERAL_EXEMPT_FILES: ReadonlyArray<{ file: string; why: string }> = [
     file: "packages/editor/ribbon/options.ts",
     why: "the text and highlight colours an author can give their words — written into the document itself, so they must be literal and must not change with the reader's theme",
   },
+  {
+    file: "packages/editor/ribbon/options.test.ts",
+    why: "the tests of those same document colours, which have to name them",
+  },
 ];
 
 // Custom properties set at runtime via an inline style (React `style={{}}`),
