@@ -1496,6 +1496,36 @@ input {
   height: auto;
 }
 
+.doc-preview-prose .bs-toc {
+  margin: 0 0 1.25em;
+  padding: 0.5em 0;
+  border-top: 1px solid var(--brand-mockup-rule);
+  border-bottom: 1px solid var(--brand-mockup-rule);
+}
+
+.doc-preview-prose .bs-toc p {
+  margin: 0;
+  padding-block: 0.1em;
+}
+
+.doc-preview-prose .bs-toc .bs-toc-title {
+  margin-bottom: 0.3em;
+  font-weight: 600;
+}
+
+.doc-preview-prose .bs-toc-entry--2 {
+  padding-left: 1.5em;
+}
+
+.doc-preview-prose .bs-toc-entry--3 {
+  padding-left: 3em;
+}
+
+.doc-preview-prose .bs-toc-empty {
+  color: var(--bs-text-muted);
+  font-style: italic;
+}
+
 .doc-preview-prose > :first-child {
   margin-top: 0;
 }
