@@ -36,6 +36,7 @@ import {
   ListTree,
   MessageSquareText,
   Minus,
+  PaintBucket,
   Paintbrush,
   MoveHorizontal,
   PanelLeft,
@@ -93,6 +94,7 @@ import {
   FONT_SIZES_PT,
   HIGHLIGHT_COLORS,
   PARAGRAPH_STYLES,
+  SHADING_COLORS,
   SYMBOLS,
   TEXT_COLORS,
   ZOOM_STEP,
@@ -1549,6 +1551,21 @@ function TableTab({ editor, format }: { editor: Editor; format: FormatState }) {
           label="Header row"
           large
           onClick={() => chain().toggleHeaderRow().run()}
+        />
+      </RibbonGroup>
+
+      {/* Word's Table Design > Shading: the cells chosen, or the one the
+          cursor is in. */}
+      <RibbonGroup label="Shading">
+        <ColorDrop
+          label="Shading"
+          icon={PaintBucket}
+          current={format.cellShading}
+          colors={SHADING_COLORS}
+          noneLabel="No color"
+          onPick={(color) =>
+            chain().setCellAttribute("background", color).run()
+          }
         />
       </RibbonGroup>
 
