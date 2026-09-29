@@ -732,6 +732,23 @@ test("a picture is sized by its corners or the Picture tab, and keeps its size",
     "true",
   );
 
+  // Arrange: centred in its line, and still chosen, so the tab stays.
+  const arrange = page.getByRole("tabpanel");
+  await arrange.getByRole("button", { name: "Center" }).click();
+  await expect(text.locator("p:has(img[alt='Sink'])")).toHaveCSS(
+    "text-align",
+    "center",
+  );
+  await expect(page.getByRole("tab", { name: "Picture" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await arrange.getByRole("button", { name: "Align left" }).click();
+  await expect(text.locator("p:has(img[alt='Sink'])")).toHaveCSS(
+    "text-align",
+    "left",
+  );
+
   // Drag the bottom-right corner 112 pixels left: 312 → 200 wide.
   const corner = page.locator(".bs-picture-handle--bottom-right");
   const box = (await corner.boundingBox())!;
