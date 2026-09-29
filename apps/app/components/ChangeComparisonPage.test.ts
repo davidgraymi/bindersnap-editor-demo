@@ -235,7 +235,7 @@ test("the scale line adds up what the whole change does", async () => {
   unmount();
 });
 
-test("a document going into the archive says so instead of drawing a diff", async () => {
+test("a document going into the archive says so in its bar, and draws nothing below", async () => {
   files["change-4"] = "# Hand hygiene\n\nWash for sixty seconds.";
   files["hand-hygiene-v2"] = "# Hand hygiene\n\nWash for thirty seconds.";
 
@@ -243,15 +243,15 @@ test("a document going into the archive says so instead of drawing a diff", asyn
     page([changed("hand-hygiene")], [removed("visitor-policy")]),
   );
 
-  const notice =
-    container.querySelector(".cmp-removed-line")?.textContent ?? "";
-  expect(notice).toContain("Visitor Policy");
-  expect(notice).toContain("archives");
-  // The history is what the product sells, so the page says it survives.
-  expect(notice).toContain("v4");
-  expect(container.querySelector(".cmp-kind--removed")?.textContent).toContain(
+  const section = container
+    .querySelector(".cmp-kind--removed")
+    ?.closest(".cmp-file");
+  expect(section?.querySelector(".cmp-kind--removed")?.textContent).toContain(
     "Archiving",
   );
+  expect(section?.textContent).toContain("visitor-policy");
+  // A status, not a paragraph in the frame where documents are drawn.
+  expect(section?.querySelector(".cmp-file-body")).toBeNull();
 
   unmount();
 });

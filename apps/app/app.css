@@ -6525,17 +6525,6 @@ a.bs-knot {
   opacity: 0.5;
 }
 
-/* Same words, different look: said once, above the document it is about. */
-.doc-compare-restyled {
-  margin: 0 0 var(--brand-space-3);
-  padding: var(--brand-space-2) var(--brand-space-3);
-  border-left: 3px solid var(--bs-status-info-border);
-  border-radius: var(--brand-radius-xs);
-  background: var(--bs-status-info-bg);
-  font-size: var(--brand-text-sm);
-  color: var(--bs-text-primary);
-}
-
 /* Before and after, side by side — the only comparison a picture allows. */
 .doc-compare-columns {
   display: grid;
@@ -7057,7 +7046,8 @@ a.cmp-file-act {
   display: none;
 }
 
-.cmp-file-head:has(+ .cmp-file-body:empty) {
+.cmp-file-head:has(+ .cmp-file-body:empty),
+.cmp-file-head:last-child {
   border-bottom: none;
   border-radius: var(--brand-radius-lg);
 }
@@ -7067,17 +7057,6 @@ a.cmp-file-act {
   max-width: var(--brand-measure);
   color: var(--bs-text-muted);
   font-size: var(--brand-text-ui-md);
-}
-
-/* ── What is coming off the record ─────────────────────────────────────── */
-
-.cmp-removed-line {
-  margin: 0;
-  max-width: var(--brand-measure);
-}
-
-.cmp-removed-line strong {
-  font-weight: var(--brand-weight-semibold);
 }
 
 @media (max-width: 900px) {
