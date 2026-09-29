@@ -110,10 +110,14 @@ test("a document going into the archive says so, and offers what is going", asyn
 
   // The change publishes no version at all, so the old screen — which was
   // scoped to one versioned document — had nothing to show for it.
+  // A status in the file's bar, and nothing in a frame below it: a sentence
+  // there read as words in the document.
   await expect(page.locator(".cmp-kind--removed")).toContainText("Archiv");
-  await expect(page.locator(".cmp-removed-line")).toContainText(
-    "Nothing is lost",
-  );
+  await expect(
+    page
+      .locator(".cmp-file", { has: page.locator(".cmp-kind--removed") })
+      .locator(".cmp-file-body"),
+  ).toHaveCount(0);
 
   // Not a diff: a removal has no file on the branch. What it has is the last
   // version on record, which is the honest thing to offer instead.
