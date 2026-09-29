@@ -17,6 +17,7 @@ import { FileText, Columns3, Minus, Plus } from "lucide-react";
 import { sanitizeProseMirrorJson } from "../utils/sanitizer";
 import { EMPTY_DOCUMENT, documentContentExtensions } from "./documentSchema";
 import { countDocument, paginate } from "./documentStats";
+import { EnterOverSelection } from "./extensions/EnterOverSelection";
 import { SearchAndReplace } from "./extensions/SearchAndReplace";
 import { WordKeymap } from "./extensions/WordKeymap";
 import { NavigationPane } from "./NavigationPane";
@@ -138,6 +139,7 @@ export function DocumentEditor({
       Placeholder.configure({ placeholder }),
       SearchAndReplace,
       WordKeymap,
+      EnterOverSelection,
     ],
     content,
     editable,
