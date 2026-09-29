@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { JSDOM } from "jsdom";
 
-import { sanitizeHtml, sanitizeProseMirrorJson } from "./sanitizer";
+import { safeStyle, sanitizeHtml, sanitizeProseMirrorJson } from "./sanitizer";
 
 const { window } = new JSDOM("<!doctype html><html><body></body></html>");
 
@@ -84,6 +84,45 @@ describe("sanitizeHtml", () => {
       '<p class="intro">Hello <strong>world</strong></p><h2>Heading</h2><ul><li>Item</li></ul>';
 
     expect(sanitizeHtml(input)).toBe(input);
+  });
+
+  test("keeps the typography an author set in the editor", () => {
+    const input =
+      '<p style="text-align: center; line-height: 1.5; margin-left: 0.5in">' +
+      '<span style="color: #e85d26; font-family: Georgia, serif; font-size: 14pt">Red</span> ' +
+      '<mark style="background-color: #fef08a">marked</mark> H<sub>2</sub>O x<sup>2</sup></p>' +
+      '<div class="bs-page-break"></div><hr>';
+
+    expect(sanitizeHtml(input)).toBe(input);
+  });
+
+  test("keeps only typographic style values, and nothing that could load or run", () => {
+    const output = sanitizeHtml(
+      '<p style="position: fixed; top: 0; color: red; background-image: url(https://x.test/a.png)">' +
+        '<span style="color: expression(alert(1))">a</span>' +
+        '<span style="font-family: x; width: calc(100%)">b</span>' +
+        '<span style="background-color: url(javascript:alert(1))">c</span></p>',
+    );
+
+    expect(output).toBe(
+      '<p style="color: red"><span>a</span><span style="font-family: x">b</span><span>c</span></p>',
+    );
+  });
+});
+
+describe("safeStyle", () => {
+  test("drops properties outside the list, and values of the wrong shape", () => {
+    expect(safeStyle("color: #fff; behavior: url(x.htc)")).toBe("color: #fff");
+    expect(safeStyle("font-size: 12pt; font-size: 12 pt")).toBe(
+      "font-size: 12pt",
+    );
+    expect(safeStyle("line-height: 1.15")).toBe("line-height: 1.15");
+    expect(safeStyle("line-height: normal")).toBe("");
+    expect(safeStyle("color: var(--brand-coral)")).toBe(
+      "color: var(--brand-coral)",
+    );
+    expect(safeStyle("font-family: a\\62 c")).toBe("");
+    expect(safeStyle("")).toBe("");
   });
 });
 

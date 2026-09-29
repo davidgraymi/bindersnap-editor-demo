@@ -89,13 +89,30 @@ Routes:
 - `/activity` — audit log (`/inbox` was folded into `/`, which now lists the
   change requests the reader is part of)
 
-### The shared editor
+### The document editor
 
-`packages/editor/` is imported by the SPA.
+`packages/editor/` is a word processor for policies, imported by the SPA and
+laid out the way Word is: a ribbon (Home, Insert, View, and a Table tab while
+the cursor is in one) over a sheet of Letter on a desk, the headings and find
+and replace in a navigation pane, page and word counts and zoom in a status
+bar. `apps/app/components/DocumentEditorPage.tsx` is the page around it, at
+`/{org}/{binder}/-/blob/main/{path}?edit=write&draft=…`: **Save commits the document to
+the author's draft** through the ordinary revise endpoint, so the version on
+record does not move until the draft is proposed and published. Edit on a
+document's page opens (or resumes) that draft first. Only a file the editor
+writes — `*.json` — is offered it; a Word file or a PDF is edited in the
+program that made it and uploaded as a new version.
+
+`documentSchema.ts` is the one list of Tiptap extensions both the editor and
+the reader (`apps/app/editorDocumentHtml.ts`) load. Add a node or an attribute
+there, never to one side: ProseMirror drops what its schema does not declare,
+so formatting added only to the editor vanishes for every reviewer. The
+sanitizer keeps a filtered set of inline styles (`safeStyle` in
+`packages/utils/sanitizer.ts`) for the same reason.
 
 If you change anything in `packages/editor/` that affects visual appearance, note it
 in your PR description. The landing page no longer embeds the editor, so there is
-nothing to re-sync — but the editor is still the authoring surface inside the app.
+nothing to re-sync.
 
 ### The change comparison
 

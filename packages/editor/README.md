@@ -1,33 +1,44 @@
-# `src/editor/` — Bindersnap Editor Component
+# `packages/editor/` — the document editor
 
-The core Tiptap-based rich text editor. **This is shared code used by both the landing page demo and the real application.**
+A word processor for policies, built on Tiptap. Word's layout — a ribbon of
+commands over a sheet of paper, the document's headings in a navigation pane,
+page and word counts in a status bar — in Bindersnap's type and colour.
 
 ## Boundary rules
 
-- This directory contains **only the editor itself** — no app shell, no routing, no auth
-- It must remain importable standalone (the landing page imports it without any Gitea dependency)
-- All Gitea integration is wired at the `src/app/` level, not here
-- Editor behavior that requires a Gitea client receives it as a **prop** — never imports from `src/services/gitea/` directly
+- This directory is **only the editor**: no routing, no auth, no API calls.
+- It never saves. It reports changes through `onChange` and asks for a save
+  through `onSave` (Ctrl+S); the page around it decides what those mean. In
+  the app that page is `apps/app/components/DocumentEditorPage.tsx`, which
+  commits into the author's draft.
+- Visual changes here need a note in the PR (CLAUDE.md, decision 5).
 
 ## Structure
 
 ```
-Editor.tsx                  — root component, exported as <BindersnapEditor>
-components/                 — toolbar, menus, dialogs
-extensions/                 — custom Tiptap extensions
-  TrackedChanges/           — transaction interceptor + accept/reject
-  ApprovalStatus/           — PR state banner (React component, not a ProseMirror node)
-services/                   — editor-internal utilities (diff, serialization)
-assets/                     — editor-specific CSS
-  bindersnap-editor.css     — editor stylesheet (imports tokens from src/assets/css/)
-sidebar/                    — sidebar panel components
+documentSchema.ts        — what a document may contain: the one extension list
+                           the editor and the reader (editorDocumentHtml.ts)
+                           both load, plus paragraph spacing, indent and page
+                           breaks
+documentStats.ts         — word counts, the heading outline, pagination
+DocumentEditor.tsx       — the editor: ribbon, page, panes, status bar
+NavigationPane.tsx       — headings, and find and replace
+ribbon/                  — Home, Insert, View and the contextual Table tab
+extensions/
+  SearchAndReplace.ts    — find and replace, with every match marked
+  WordKeymap.ts          — Tab to indent, Ctrl+] / Ctrl+[, Ctrl+Alt+1…3
+  CommentAnchor/         — anchors for inline review comments (not yet wired)
+assets/document-editor.css
 ```
 
-## Demo vs. real usage
+## Two rules worth knowing before changing anything
 
-| Context      | How editor is used                                             |
-| ------------ | -------------------------------------------------------------- |
-| Landing page | `<BindersnapEditor readOnly initialContent={DEMO_SNAPSHOT} />` |
-| Real app     | `<BindersnapEditor documentId={id} giteaClient={client} />`    |
+**One schema.** `documentContentExtensions()` is what a document is. Add a
+node or an attribute there and the reader renders it too; add it only to the
+editor and it vanishes the moment somebody who is not editing opens the
+policy, because ProseMirror drops what its schema does not declare.
 
-The `giteaClient` prop being absent puts the editor into demo mode — no saves, no PRs, no collaboration. This is intentional and must be preserved.
+**The page is paper.** Chrome takes the app's `--bs-*` tokens and flips with
+the theme; the page uses the fixed `--brand-mockup-*` tokens and stays white.
+The colours an author gives their text are stored in the document and were
+chosen against white.

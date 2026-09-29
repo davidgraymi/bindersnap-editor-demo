@@ -28,7 +28,7 @@ import {
 } from "../binderShell";
 import type { DocumentChangeView } from "../routes";
 import { followInApp } from "../appLink";
-import { buildDocumentUrl } from "../binderDocument";
+import { buildDocumentEditUrl, buildDocumentUrl } from "../binderDocument";
 import { formatDocumentName } from "../documentDisplay";
 import { AddPolicyModal } from "./AddPolicyModal";
 import { NewFolderModal } from "./NewFolderModal";
@@ -42,6 +42,7 @@ import { BinderHistory } from "./BinderHistory";
 import { BinderSettings } from "./BinderSettings";
 import { BinderDocumentPage } from "./BinderDocumentPage";
 import { BinderBranchSummary } from "./BinderBranchSummary";
+import { DocumentEditorPage } from "./DocumentEditorPage";
 import { BinderLatestChange } from "./BinderLatestChange";
 import { BinderRefPicker } from "./BinderRefPicker";
 import { BinderDocuments } from "./BinderPage";
@@ -411,6 +412,68 @@ export function BinderShell({
     }
   };
 
+  /**
+   * Open a document in the editor, in your draft.
+   *
+   * **Edit is the same act on a policy as on the binder**: it opens your draft
+   * (or resumes it — the server is idempotent) and the editor saves into it.
+   * Already editing, it stays in the draft you are in rather than asking the
+   * server for the newest, which might be a different one.
+   */
+  const writeDocument = async (slugPath: string) => {
+    const open = editMode !== "off" ? draft?.draft?.branch : undefined;
+    if (open) {
+      moveTo(
+        buildDocumentEditUrl({
+          org,
+          binder,
+          documentPath: slugPath,
+          draft: open,
+        }),
+      );
+      setEditMode("writing");
+      return;
+    }
+
+    setStartingEdit(true);
+    setDraftError(null);
+    try {
+      const payload = await openBinderDraft(org, binder);
+      const branch = payload.draft?.branch ?? null;
+      setDraft(payload);
+      setDraftBranch(branch);
+      moveTo(
+        buildDocumentEditUrl({
+          org,
+          binder,
+          documentPath: slugPath,
+          draft: branch,
+        }),
+      );
+      setEditMode("writing");
+    } catch (err) {
+      setDraftError(
+        err instanceof Error && err.message.trim() !== ""
+          ? err.message
+          : "Unable to open your draft to edit this document.",
+      );
+    } finally {
+      setStartingEdit(false);
+    }
+  };
+
+  /** Out of the editor, back to the document — still in the draft. */
+  const closeEditor = () => {
+    if (!documentPath) return;
+    const branch = draft?.draft?.branch ?? draftBranch;
+    const query = new URLSearchParams({ edit: "1" });
+    if (branch) query.set("draft", branch);
+    moveTo(
+      `${buildDocumentUrl({ org, binder, documentPath, version: null })}?${query.toString()}`,
+    );
+    setEditMode("editing");
+  };
+
   /** Move to another of your drafts. The address is what carries it. */
   const switchDraft = (branch: string) => {
     setDraft(null);
@@ -684,6 +747,9 @@ export function BinderShell({
   // paywall: a missing button explains nothing, an offer does.
   const addDocument = useWriteAction(() => setAdding(true));
   const editBinder = useWriteAction(() => void startEditing());
+  const editDocument = useWriteAction(
+    (slugPath: string) => void writeDocument(slugPath),
+  );
 
   if (missing) {
     const orgHref = routeToPath({ kind: "organization", org });
@@ -714,7 +780,9 @@ export function BinderShell({
 
   return (
     <section
-      className={`docw-page${documentPath ? " docw-page--document" : ""}`}
+      className={`docw-page${documentPath ? " docw-page--document" : ""}${
+        documentPath && editMode === "writing" ? " docw-page--writing" : ""
+      }`}
     >
       {/* A phone has no sidebar, so the binder's screens are a strip — the
           shape the tab bar had, which already worked at that width. Above
@@ -843,7 +911,17 @@ export function BinderShell({
           document; `?change=` says which ref to read it at, the way `?draft=`
           and `?version=` do. The other way round, `/{org}/{binder}/{path}
           ?change=7` rendered the change's page and the path was ignored. */}
-      {documentPath ? (
+      {documentPath && editMode === "writing" ? (
+        <DocumentEditorPage
+          org={org}
+          binder={binder}
+          documentPath={documentPath}
+          draft={draft?.draft?.branch ?? null}
+          draftName={draft?.draft?.name ?? null}
+          onClose={closeEditor}
+          onSaved={refreshDraft}
+        />
+      ) : documentPath ? (
         <BinderDocumentPage
           org={org}
           binder={binder}
@@ -858,6 +936,8 @@ export function BinderShell({
           /* Opened from the tree while editing, so it is read where the name
              it was clicked under actually exists. */
           draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
+          onEditDocument={editDocument}
+          editing={startingEdit}
           onOpenBinder={onOpenBinder}
           onOpenChange={openChangeNumber}
         />

@@ -1,0 +1,198 @@
+import { afterEach, describe, expect, test } from "bun:test";
+import { Editor, generateHTML } from "@tiptap/core";
+
+import { documentContentExtensions } from "./documentSchema";
+import {
+  countDocument,
+  countWords,
+  documentOutline,
+  paginate,
+} from "./documentStats";
+import {
+  SearchAndReplace,
+  findMatches,
+  getSearchState,
+} from "./extensions/SearchAndReplace";
+
+const editors: Editor[] = [];
+
+function editorWith(content: string): Editor {
+  const editor = new Editor({
+    element: document.createElement("div"),
+    extensions: [...documentContentExtensions(), SearchAndReplace],
+    content,
+  });
+  editors.push(editor);
+  return editor;
+}
+
+afterEach(() => {
+  while (editors.length > 0) editors.pop()!.destroy();
+});
+
+describe("the document schema", () => {
+  test("line spacing is the paragraph's, and survives the round trip", () => {
+    const editor = editorWith("<p>One</p><p>Two</p>");
+    editor.chain().selectAll().setLineSpacing("1.5").run();
+
+    const json = editor.getJSON();
+    expect(json.content?.[0]?.attrs?.lineSpacing).toBe("1.5");
+    expect(json.content?.[1]?.attrs?.lineSpacing).toBe("1.5");
+
+    // What the reader draws, from the same list.
+    const html = generateHTML(json, documentContentExtensions());
+    expect(html).toContain('style="line-height: 1.5;"');
+  });
+
+  test("a spacing that is not on the menu is refused", () => {
+    const editor = editorWith("<p>One</p>");
+    expect(editor.chain().selectAll().setLineSpacing("9").run()).toBe(false);
+    expect(editor.getJSON().content?.[0]?.attrs?.lineSpacing).toBeNull();
+  });
+
+  test("indent moves a paragraph in half an inch a step, and never below zero", () => {
+    const editor = editorWith("<p>Body</p>");
+    editor.commands.setTextSelection(2);
+    editor.commands.indentParagraph();
+    editor.commands.indentParagraph();
+    expect(editor.getJSON().content?.[0]?.attrs?.indent).toBe(2);
+    expect(editor.getHTML()).toContain("margin-left: 1in");
+
+    editor.commands.outdentParagraph();
+    editor.commands.outdentParagraph();
+    expect(editor.commands.outdentParagraph()).toBe(false);
+    expect(editor.getJSON().content?.[0]?.attrs?.indent).toBe(0);
+  });
+
+  test("a list item is indented by nesting, not by a margin", () => {
+    const editor = editorWith("<ul><li><p>Item</p></li></ul>");
+    editor.commands.setTextSelection(3);
+    expect(editor.commands.indentParagraph()).toBe(false);
+  });
+
+  test("a page break is a node of its own, and prints as one", () => {
+    const editor = editorWith("<p>Before</p>");
+    editor.commands.setTextSelection(7);
+    editor.commands.setPageBreak();
+
+    const types = editor.getJSON().content?.map((node) => node.type);
+    expect(types).toEqual(["paragraph", "pageBreak", "paragraph"]);
+    expect(editor.getHTML()).toContain('class="bs-page-break"');
+  });
+});
+
+describe("find and replace", () => {
+  test("finds every match, ignoring case unless asked", () => {
+    const editor = editorWith(
+      "<p>Hand hygiene is hand washing.</p><p>HAND rub</p>",
+    );
+    expect(findMatches(editor.state.doc, "hand", false)).toHaveLength(3);
+    expect(findMatches(editor.state.doc, "hand", true)).toHaveLength(1);
+    expect(findMatches(editor.state.doc, "", false)).toHaveLength(0);
+  });
+
+  test("never matches across two paragraphs", () => {
+    const editor = editorWith("<p>end of one</p><p>start of two</p>");
+    expect(findMatches(editor.state.doc, "onestart", false)).toHaveLength(0);
+    expect(findMatches(editor.state.doc, "one start", false)).toHaveLength(0);
+  });
+
+  test("steps through matches, wrapping at the end", () => {
+    const editor = editorWith("<p>a b a b a</p>");
+    editor.commands.setTextSelection(1);
+    editor.commands.setSearchQuery("a");
+    expect(getSearchState(editor.state)?.current).toBe(0);
+
+    editor.commands.nextSearchMatch();
+    editor.commands.nextSearchMatch();
+    expect(getSearchState(editor.state)?.current).toBe(2);
+    const { from, to } = editor.state.selection;
+    expect(editor.state.doc.textBetween(from, to)).toBe("a");
+
+    editor.commands.nextSearchMatch();
+    expect(getSearchState(editor.state)?.current).toBe(0);
+    editor.commands.previousSearchMatch();
+    expect(getSearchState(editor.state)?.current).toBe(2);
+  });
+
+  test("replaces one, then all, and keeps the formatting around them", () => {
+    const editor = editorWith(
+      "<p><strong>thirty</strong> days, then thirty more</p>",
+    );
+    editor.commands.setTextSelection(1);
+    editor.commands.setSearchQuery("thirty");
+    editor.commands.replaceSearchMatch("sixty");
+    expect(editor.getText()).toBe("sixty days, then thirty more");
+    expect(editor.getHTML()).toContain("<strong>sixty</strong>");
+
+    editor.commands.setSearchQuery("then thirty");
+    editor.commands.replaceAllSearchMatches("then sixty");
+    expect(editor.getText()).toBe("sixty days, then sixty more");
+    expect(getSearchState(editor.state)?.matches).toHaveLength(0);
+  });
+});
+
+describe("document statistics", () => {
+  test("counts words the way Word does", () => {
+    expect(countWords("")).toBe(0);
+    expect(countWords("   ")).toBe(0);
+    expect(countWords("A follow-up in 3.5 days.")).toBe(5);
+  });
+
+  test("counts words, characters and non-empty paragraphs", () => {
+    const editor = editorWith(
+      "<h1>Title</h1><p>Two words</p><p></p><ul><li><p>one more</p></li></ul>",
+    );
+    expect(countDocument(editor.state.doc)).toEqual({
+      words: 5,
+      characters: 22,
+      paragraphs: 3,
+    });
+  });
+
+  test("the outline is every heading with text, in order", () => {
+    const editor = editorWith(
+      "<h1>Policy</h1><p>x</p><h2>Scope</h2><h2></h2><blockquote><h3>Note</h3></blockquote>",
+    );
+    expect(
+      documentOutline(editor.state.doc).map(({ level, text }) => [level, text]),
+    ).toEqual([
+      [1, "Policy"],
+      [2, "Scope"],
+      [3, "Note"],
+    ]);
+  });
+});
+
+describe("pagination", () => {
+  test("one page until the blocks overflow it", () => {
+    expect(paginate([], 100)).toEqual({ starts: [], pages: 1 });
+    expect(paginate([{ height: 40 }, { height: 60 }], 100)).toEqual({
+      starts: [],
+      pages: 1,
+    });
+    expect(
+      paginate([{ height: 40 }, { height: 40 }, { height: 40 }], 100),
+    ).toEqual({ starts: [2], pages: 2 });
+  });
+
+  test("a page break starts the next page, and a trailing one adds nothing", () => {
+    expect(
+      paginate(
+        [{ height: 10 }, { height: 0, pageBreak: true }, { height: 10 }],
+        100,
+      ),
+    ).toEqual({ starts: [2], pages: 2 });
+    expect(
+      paginate([{ height: 10 }, { height: 0, pageBreak: true }], 100),
+    ).toEqual({ starts: [], pages: 1 });
+  });
+
+  test("a block taller than a page fills the pages it needs", () => {
+    expect(paginate([{ height: 250 }], 100)).toEqual({ starts: [], pages: 3 });
+    expect(paginate([{ height: 50 }, { height: 250 }], 100)).toEqual({
+      starts: [1],
+      pages: 4,
+    });
+  });
+});
