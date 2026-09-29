@@ -384,6 +384,68 @@ export function DraftFiles({
     organizing && isManaged(node) && !busy;
 
   /** F2 renames the row with focus, as Explorer and VS Code do. */
+  /**
+   * The arrow keys walk the tree, as they do in Explorer and in VS Code's:
+   * Up and Down move between rows, Right opens a folder (or steps into it),
+   * Left closes it (or steps out to the folder a row is in), Home and End go
+   * to the ends. Not in a text box: a name being typed keeps its arrows.
+   */
+  const onTreeKey = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+      return;
+    }
+    const target = event.target as HTMLElement;
+    if (
+      !target.matches("button.app-explorer-item, button.app-explorer-folder")
+    ) {
+      return;
+    }
+    const rows = Array.from(
+      event.currentTarget.querySelectorAll<HTMLElement>(
+        "button.app-explorer-item, button.app-explorer-folder",
+      ),
+    );
+    const at = rows.indexOf(target);
+    if (at === -1) return;
+    const focusRow = (index: number) => {
+      event.preventDefault();
+      rows[Math.max(0, Math.min(rows.length - 1, index))]?.focus();
+    };
+    const folder = target.dataset.folder;
+    const open = target.getAttribute("aria-expanded") === "true";
+    switch (event.key) {
+      case "ArrowDown":
+        focusRow(at + 1);
+        break;
+      case "ArrowUp":
+        focusRow(at - 1);
+        break;
+      case "Home":
+        focusRow(0);
+        break;
+      case "End":
+        focusRow(rows.length - 1);
+        break;
+      case "ArrowRight":
+        if (folder === undefined) return;
+        event.preventDefault();
+        if (open) focusRow(at + 1);
+        else toggleFolder(folder);
+        break;
+      case "ArrowLeft": {
+        event.preventDefault();
+        if (folder !== undefined && open) {
+          toggleFolder(folder);
+          return;
+        }
+        const parent = target.dataset.parent;
+        if (!parent) return;
+        rows.find((row) => row.dataset.folder === parent)?.focus();
+        break;
+      }
+    }
+  };
+
   const onRowKey = (event: ReactKeyboardEvent, node: BinderTreeNode) => {
     // The keyboard's menu key, or Shift+F10: the row's menu, under the row.
     if (
@@ -644,6 +706,7 @@ export function DraftFiles({
               }${writable ? "" : " doc-files-item--file"}`}
               style={indent}
               aria-current={on ? "page" : undefined}
+              data-parent={node.document.folder}
               title={`${
                 writable
                   ? label
@@ -714,6 +777,12 @@ export function DraftFiles({
               className="app-explorer-folder"
               style={indent}
               aria-expanded={open}
+              data-folder={node.path}
+              data-parent={
+                node.path.includes("/")
+                  ? node.path.slice(0, node.path.lastIndexOf("/"))
+                  : ""
+              }
               title={
                 isTouched(node) ? `${label} · changed in this draft` : undefined
               }
@@ -804,7 +873,7 @@ export function DraftFiles({
         />
       </div>
 
-      <div className="app-explorer-tree">
+      <div className="app-explorer-tree" onKeyDown={onTreeKey}>
         {shown.length === 0 ? (
           <p className="app-explorer-empty">
             {needle === "" ? "Nothing filed yet." : "No document matches that."}
