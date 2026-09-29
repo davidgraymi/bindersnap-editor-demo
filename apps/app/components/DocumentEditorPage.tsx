@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Editor, JSONContent } from "@tiptap/core";
-import { GitBranch } from "lucide-react";
+import { GitBranch, History } from "lucide-react";
 
 import type {
   WorkspaceDocumentDetailPayload,
@@ -21,6 +21,14 @@ import {
 } from "../api";
 import { formatAge, formatDocumentName } from "../documentDisplay";
 import { parseEditorDocument } from "../editorDocumentHtml";
+import {
+  dropWords,
+  keepWords,
+  readWords,
+  recoveryKey,
+  worthOffering,
+  type RecoveredWords,
+} from "../editorRecovery";
 import { DraftFiles } from "./DraftFiles";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
@@ -200,8 +208,30 @@ export function DocumentEditorPage({
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [dirty]);
 
+  // AutoRecover: unsaved words kept on this device — see `editorRecovery.ts`.
+  const keyRef = useRef<string | null>(null);
+  keyRef.current = draft ? recoveryKey(org, binder, draft, documentPath) : null;
+  const keepTimer = useRef<number | undefined>(undefined);
+  const [recovered, setRecovered] = useState<RecoveredWords | null>(null);
+  const forgetKept = useCallback(() => {
+    window.clearTimeout(keepTimer.current);
+    if (keyRef.current) dropWords(keyRef.current);
+  }, []);
+  useEffect(() => () => window.clearTimeout(keepTimer.current), []);
+
   const handleChange = useCallback((doc: JSONContent) => {
-    setDirty(JSON.stringify(doc) !== savedJson.current);
+    const changed = JSON.stringify(doc) !== savedJson.current;
+    setDirty(changed);
+    window.clearTimeout(keepTimer.current);
+    const key = keyRef.current;
+    if (!key) return;
+    if (!changed) {
+      // Undone back to what is saved: nothing to recover.
+      dropWords(key);
+      return;
+    }
+    const base = savedJson.current;
+    keepTimer.current = window.setTimeout(() => keepWords(key, doc, base), 800);
   }, []);
 
   const saveNow = useCallback(async (): Promise<boolean> => {
@@ -232,7 +262,9 @@ export function DocumentEditorPage({
       );
       savedJson.current = json;
       // Anything typed while the save was in flight is still unsaved.
-      setDirty(JSON.stringify(editor.getJSON()) !== json);
+      const still = JSON.stringify(editor.getJSON()) !== json;
+      setDirty(still);
+      if (!still) forgetKept();
       setSave({ kind: "saved", at: new Date().toISOString() });
       onSaved();
       return true;
@@ -246,7 +278,7 @@ export function DocumentEditorPage({
       });
       return false;
     }
-  }, [binder, draft, load, onSaved, org, save.kind]);
+  }, [binder, draft, forgetKept, load, onSaved, org, save.kind]);
 
   const go = (to: Leaving) => {
     if (to.kind === "close") onClose();
@@ -346,6 +378,14 @@ export function DocumentEditorPage({
               // called a document nobody had touched "unsaved".
               savedJson.current = JSON.stringify(editor.getJSON());
               setDirty(false);
+              // Words that never reached a save, from last time.
+              const key = keyRef.current;
+              const kept = key ? readWords(key) : null;
+              if (worthOffering(kept, savedJson.current)) setRecovered(kept);
+              else {
+                setRecovered(null);
+                if (key) dropWords(key);
+              }
             }}
             statusStart={
               <span
@@ -413,6 +453,45 @@ export function DocumentEditorPage({
         </div>
       </header>
 
+      {recovered && load.kind === "ready" ? (
+        <div className="doc-editor-recover" role="status">
+          <History size={15} strokeWidth={1.75} aria-hidden="true" />
+          <p>
+            <strong>Unsaved changes from {formatAge(recovered.at)}</strong> were
+            kept on this device.
+            {recovered.base !== savedJson.current
+              ? " The policy has been saved differently since; restoring puts those words back in place of what is saved."
+              : " Restore them to carry on where you left off."}
+          </p>
+          <div className="doc-editor-recover-actions">
+            <button
+              type="button"
+              className="bs-btn bs-btn-primary bs-btn--sm"
+              onClick={() => {
+                const editor = editorRef.current;
+                if (!editor || editor.isDestroyed) return;
+                editor.commands.setContent(recovered.doc as JSONContent);
+                handleChange(editor.getJSON());
+                setRecovered(null);
+                editor.commands.focus("end");
+              }}
+            >
+              Restore
+            </button>
+            <button
+              type="button"
+              className="bs-btn bs-btn-secondary bs-btn--sm"
+              onClick={() => {
+                forgetKept();
+                setRecovered(null);
+              }}
+            >
+              Discard
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {save.kind === "failed" ? (
         <p className="bs-note bs-note--danger doc-editor-alert" role="alert">
           {save.message}
@@ -477,6 +556,8 @@ export function DocumentEditorPage({
                   const to = leaving;
                   setLeaving(null);
                   setDirty(false);
+                  // Thrown away on purpose: not offered back next time.
+                  forgetKept();
                   go(to);
                 }}
               >

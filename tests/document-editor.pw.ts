@@ -397,3 +397,52 @@ test("a picture from this device is kept inside the policy, in the draft", async
     }),
   ).toBeVisible();
 });
+
+test("words never saved are kept on this device and offered back", async ({
+  context,
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/edit=write/);
+  const address = page.url();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Nails kept short.");
+  await expect(page.getByText("Unsaved changes")).toBeVisible();
+  // Kept a moment after the last keystroke.
+  await page.waitForTimeout(1500);
+
+  // The tab goes away with the words unsaved — a crash, as far as the page
+  // can tell.
+  await page.close();
+  const again = await context.newPage();
+  await again.goto(address);
+
+  const offer = again.getByRole("status").filter({
+    hasText: "were kept on this device",
+  });
+  await expect(offer).toBeVisible({ timeout: 20_000 });
+  const reopened = again.getByRole("textbox", { name: "Hand Hygiene" });
+  await expect(reopened).not.toContainText("Nails kept short.");
+  await offer.getByRole("button", { name: "Restore" }).click();
+  await expect(reopened).toContainText("Nails kept short.");
+  await expect(again.getByText("Unsaved changes")).toBeVisible();
+
+  // Saved, the copy is gone: the next visit offers nothing.
+  await again.keyboard.press("ControlOrMeta+s");
+  await expect(again.getByText(/Saved just now/)).toBeVisible({
+    timeout: 20_000,
+  });
+  await again.reload();
+  // The editor is loaded on demand, which on a slow runner is past the
+  // default five seconds after a reload.
+  await expect(
+    again.getByRole("textbox", { name: "Hand Hygiene" }),
+  ).toContainText("Nails kept short.", { timeout: 20_000 });
+  await expect(again.getByText("were kept on this device")).toHaveCount(0);
+});
