@@ -860,6 +860,16 @@ test("a table of contents lists the headings and keeps up with them", async ({
   const read = page.locator(".doc-preview-prose .bs-toc");
   await expect(read.getByText("Contents")).toBeVisible();
   await expect(read.getByText("Wearing Gloves and aprons")).toBeVisible();
+
+  // And follows it: each entry is a link to its section, as in the editor.
+  // A short window, so the section starts out of sight.
+  await page.setViewportSize({ width: 1440, height: 420 });
+  const section = page
+    .locator(".doc-preview-prose")
+    .getByRole("heading", { name: "Wearing Gloves and aprons" });
+  await expect(section).not.toBeInViewport();
+  await read.getByRole("link", { name: "Wearing Gloves and aprons" }).click();
+  await expect(section).toBeInViewport();
 });
 
 /** Where a word is drawn on screen, to click it as a person would. */
