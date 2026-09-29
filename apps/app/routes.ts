@@ -83,7 +83,12 @@ export type AppRoute =
       /** In one of your drafts, as the editor saves into. */
       draft?: string;
     };
-export type DocumentChangeView = "discussion" | "preview" | "compare";
+export type DocumentChangeView =
+  | "discussion"
+  | "preview"
+  | "compare"
+  /** The documents that conflict with the binder, and resolving them. */
+  | "conflicts";
 /** The organization's own tabs. Binders is the one it opens on. */
 export type OrganizationTab = "binders" | "people";
 

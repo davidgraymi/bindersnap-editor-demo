@@ -10128,6 +10128,231 @@ a.binder-latest-title:focus-visible {
   margin-right: 0;
 }
 
+/* ─── Resolving a change's conflicts ─────────────────────────────────────
+   GitLab's merge-conflict page in the binder's grammar: one panel per
+   document, a bar with its path and what happened to it, and inside only the
+   places the two sides disagree — this change's wording beside the published
+   wording, a button under each. The side chosen takes the coral border the
+   radio cards use for a choice, so "which one did I pick" reads the same way
+   everywhere. */
+.conflicts-page {
+  padding-bottom: var(--brand-space-24);
+}
+
+.conflicts-lede {
+  max-width: var(--brand-measure-wide);
+  margin: 0;
+  color: var(--bs-text-secondary);
+  line-height: var(--brand-leading-normal);
+}
+
+.conflict-file-bar {
+  gap: var(--brand-space-2);
+}
+
+.conflict-file-path {
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-md);
+  color: var(--bs-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.conflict-file-count {
+  margin-left: auto;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.conflict-file--decided .conflict-file-badge {
+  background: var(--bs-status-ok-bg);
+  color: var(--bs-status-ok-fg);
+}
+
+.conflict-note {
+  margin: 0;
+  padding: var(--brand-space-3) var(--brand-space-4);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+  line-height: var(--brand-leading-normal);
+}
+
+.conflict-whole {
+  display: grid;
+  gap: var(--brand-space-2);
+  padding-bottom: var(--brand-space-4);
+}
+
+.conflict-whole-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--brand-space-2);
+  padding: 0 var(--brand-space-4);
+}
+
+.conflict-whole-options .bs-choice + .bs-choice {
+  margin-top: 0;
+}
+
+.conflict-whole-body {
+  flex: 1;
+}
+
+.conflict-download {
+  align-self: flex-start;
+}
+
+.conflict-pieces {
+  display: grid;
+  gap: var(--brand-space-3);
+  margin: 0;
+  padding: var(--brand-space-4);
+  list-style: none;
+}
+
+.conflict-settled {
+  padding: var(--brand-space-1-5) var(--brand-space-3);
+  border-left: 2px solid var(--bs-rule);
+  color: var(--bs-text-faint);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.conflict-hunk {
+  display: grid;
+  gap: var(--brand-space-2);
+}
+
+.conflict-sides {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--brand-space-2);
+}
+
+.conflict-side {
+  min-width: 0;
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-1);
+  overflow: hidden;
+}
+
+.conflict-side--picked {
+  border-color: var(--bs-coral-border);
+  box-shadow: inset 0 0 0 1px var(--bs-coral-border);
+}
+
+.conflict-side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--brand-space-2);
+  padding: var(--brand-space-1-5) var(--brand-space-2) var(--brand-space-1-5)
+    var(--brand-space-3);
+  border-bottom: 1px solid var(--bs-rule-warm);
+  background: var(--bs-surface-2);
+}
+
+.conflict-side-label {
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-sm);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.conflict-side-prose {
+  padding: var(--brand-space-3) var(--brand-space-4);
+}
+
+.conflict-side-text {
+  margin: 0;
+  padding: var(--brand-space-3) var(--brand-space-4);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.conflict-side-empty {
+  margin: 0;
+  padding: var(--brand-space-3) var(--brand-space-4);
+  color: var(--bs-text-muted);
+  font-style: italic;
+}
+
+.conflict-hunk-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--brand-space-1);
+}
+
+.conflict-hunk-state {
+  margin-left: auto;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.conflict-side-head .bs-btn[aria-pressed="true"],
+.conflict-hunk-more .bs-btn[aria-pressed="true"] {
+  border-color: var(--bs-coral-border);
+  background: var(--bs-coral-glow);
+  color: var(--bs-coral-text);
+}
+
+/* The decision, kept in reach however long the list of documents is. */
+.conflicts-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: var(--brand-z-raised);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--brand-space-2) var(--brand-space-4);
+  padding: var(--brand-space-3) var(--brand-space-4);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  box-shadow: var(--bs-elevation-card);
+}
+
+.conflicts-bar-text {
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+  line-height: var(--brand-leading-normal);
+}
+
+.conflicts-bar-text strong {
+  color: var(--bs-text-primary);
+}
+
+.conflicts-bar .bs-note {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.conflicts-bar-actions {
+  display: flex;
+  gap: var(--brand-space-2);
+}
+
+@media (max-width: 720px) {
+  .conflicts-bar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The change a resolution belongs to, named under the title as a way back. */
+.conflicts-page .bs-subtitle a {
+  color: var(--bs-text-secondary);
+  font-weight: var(--brand-weight-medium);
+  text-decoration: underline;
+  text-decoration-color: var(--bs-rule);
+  text-underline-offset: 3px;
+}
+
+.conflicts-page .bs-subtitle a:hover {
+  color: var(--bs-coral-text);
+  text-decoration-color: currentColor;
+}
+
 /* ─── A document open in the editor ──────────────────────────────────────
    **Full page, the way Word opens a file.** The product's map and the binder's
    files go while a document is open — beside a ribbon and a navigation pane

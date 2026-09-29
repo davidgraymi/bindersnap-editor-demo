@@ -111,7 +111,9 @@ export function parseBinderAddress(
           ? "compare"
           : parts[1] === "preview"
             ? "preview"
-            : "discussion";
+            : parts[1] === "conflicts"
+              ? "conflicts"
+              : "discussion";
       return { ...HOME, tab: "changes", change: number, view };
     }
     case "history":
@@ -151,7 +153,10 @@ export function parseLegacyBinderQuery(search: string): BinderAddress {
   return {
     tab: BINDER_TABS.find((tab) => tab === raw) ?? "documents",
     change: parsePositiveIntParam(search, "change"),
-    view: view === "preview" || view === "compare" ? view : "discussion",
+    view:
+      view === "preview" || view === "compare" || view === "conflicts"
+        ? view
+        : "discussion",
     ref: ref === "" ? null : ref,
     documentPath: null,
     archive: params.get("archive") === "1",
@@ -250,7 +255,13 @@ export function buildBinderUrl(params: {
       change === undefined
         ? "/-/changes"
         : `/-/changes/${change}${
-            view === "compare" ? "/diffs" : view === "preview" ? "/preview" : ""
+            view === "compare"
+              ? "/diffs"
+              : view === "preview"
+                ? "/preview"
+                : view === "conflicts"
+                  ? "/conflicts"
+                  : ""
           }`;
   } else if (tab === "history") {
     path = "/-/history";

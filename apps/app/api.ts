@@ -13,6 +13,7 @@ import * as BindersClient from "../../packages/api-client/workspaces/workspaces"
 import type {
   BinderArchivePayload,
   BinderDraftPayload,
+  ChangeConflictsPayload,
   BinderShapeChangePayload,
   CreatedWorkspaceDocumentPayload,
   BinderGroupsPayload,
@@ -1090,6 +1091,60 @@ export async function updateBinderChange(
   } catch (error) {
     handlePaymentRequired(
       `/api/app/binders/${org}/${binder}/changes/${changeNumber}/update`,
+      error,
+    );
+  }
+}
+
+/**
+ * What conflicts between a change and the binder: every document both
+ * changed since the change began, read at all three points.
+ */
+export async function fetchBinderChangeConflicts(
+  org: string,
+  binder: string,
+  changeNumber: number,
+): Promise<ChangeConflictsPayload> {
+  const response = await BindersClient.getBinderChangeConflicts(
+    org,
+    binder,
+    String(changeNumber),
+  );
+  return response.data as ChangeConflictsPayload;
+}
+
+export interface ConflictResolution {
+  key: string;
+  take: "ours" | "theirs" | "none" | "content";
+  base64Content?: string;
+}
+
+/**
+ * Resolve a change's conflicts as decided, and bring it up to date.
+ *
+ * Names the heads the page read the files at, so a resolution is never
+ * applied to versions nobody looked at.
+ */
+export async function resolveBinderChangeConflicts(
+  org: string,
+  binder: string,
+  changeNumber: number,
+  body: {
+    headSha: string;
+    baseSha: string;
+    resolutions: ConflictResolution[];
+  },
+): Promise<void> {
+  try {
+    await BindersClient.resolveBinderChangeConflicts(
+      org,
+      binder,
+      String(changeNumber),
+      body,
+    );
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/changes/${changeNumber}/conflicts`,
       error,
     );
   }
