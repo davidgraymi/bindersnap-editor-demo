@@ -70,6 +70,20 @@ describe("the document schema", () => {
     expect(editor.commands.indentParagraph()).toBe(false);
   });
 
+  test("a picture keeps its width, never a height that could squash it", () => {
+    const png = "https://example.com/map.png";
+    const editor = editorWith(
+      `<p><img src="${png}" width="312" height="90"><img src="${png}" width="40%"></p>`,
+    );
+    const [sized, relative] = editor.getJSON().content?.[0]?.content ?? [];
+    expect(sized?.attrs?.width).toBe(312);
+    expect(sized?.attrs?.height).toBeNull();
+    expect(relative?.attrs?.width).toBeNull();
+    const html = editor.getHTML();
+    expect(html).toContain('width="312"');
+    expect(html).not.toContain("height=");
+  });
+
   test("a page break is a node of its own, and prints as one", () => {
     const editor = editorWith("<p>Before</p>");
     editor.commands.setTextSelection(7);

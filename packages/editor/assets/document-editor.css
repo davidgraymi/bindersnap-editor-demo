@@ -661,6 +661,64 @@
   height: auto;
 }
 
+/* A picture in the editor: a frame with four corner handles when clicked,
+   as Word draws one. The handles resize it (see PictureSize.ts). */
+.bs-picture {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  line-height: 0;
+  vertical-align: bottom;
+}
+
+.bs-picture.is-selected img,
+.bs-picture.is-resizing img {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 1px;
+}
+
+.bs-picture-handle {
+  position: absolute;
+  z-index: 1;
+  display: none;
+  width: 10px;
+  height: 10px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--brand-coral);
+  border-radius: 2px;
+  background: var(--brand-mockup-bg);
+  touch-action: none;
+}
+
+.ProseMirror[contenteditable="true"] .bs-picture.is-selected .bs-picture-handle,
+.bs-picture.is-resizing .bs-picture-handle {
+  display: block;
+}
+
+.bs-picture-handle--top-left {
+  top: -5px;
+  left: -5px;
+  cursor: nwse-resize;
+}
+
+.bs-picture-handle--top-right {
+  top: -5px;
+  right: -5px;
+  cursor: nesw-resize;
+}
+
+.bs-picture-handle--bottom-left {
+  bottom: -5px;
+  left: -5px;
+  cursor: nesw-resize;
+}
+
+.bs-picture-handle--bottom-right {
+  right: -5px;
+  bottom: -5px;
+  cursor: nwse-resize;
+}
+
 .bs-doc-body {
   display: flex;
   flex: 1;

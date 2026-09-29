@@ -225,4 +225,16 @@ describe("pictures embedded by the editor", () => {
     });
     expect(JSON.stringify(json)).not.toContain("svg");
   });
+
+  test("a picture keeps the width it was sized to, in whole pixels only", () => {
+    expect(sanitizeHtml(`<img src="${png}" width="312">`)).toContain(
+      'width="312"',
+    );
+    expect(sanitizeHtml(`<img src="${png}" width="50%">`)).not.toContain(
+      "width",
+    );
+    expect(
+      sanitizeHtml(`<img src="${png}" width="1 onerror=alert(1)">`),
+    ).not.toContain("width");
+  });
 });
