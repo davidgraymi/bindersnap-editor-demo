@@ -166,11 +166,12 @@ test("a member files a policy from the binder's own page", async ({ page }) => {
   // on the document's page made the act look finished; a change request is
   // what actually happened and what has to be decided next.
   await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
-  // The change's own screen: the file it proposes, and the way back to the
-  // list. Not "Publish", which a change with no approvals yet does not offer.
-  await expect(page.getByText("Proposed version")).toBeVisible({
-    timeout: 30_000,
-  });
+  // The change's own screen: the document it proposes, and the way back to
+  // the list. Not "Publish", which a change with no approvals yet does not
+  // offer.
+  await expect(
+    page.locator(".change-does").getByText("Infection Control Policy"),
+  ).toBeVisible({ timeout: 30_000 });
   await expect(
     page.locator(".page-path").getByRole("link", { name: "Change requests" }),
   ).toBeVisible();

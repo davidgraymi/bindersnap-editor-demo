@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 
 import {
-  buildProposedVersionFacts,
   describeChangeBody,
   buildReviewTimeline,
   buildThreadFacts,
@@ -117,52 +116,6 @@ test("a description that says something new is kept", () => {
 });
 
 // --- the proposed version card --------------------------------------------
-
-test("one update needs no update count", () => {
-  const facts = buildProposedVersionFacts({
-    fileName: "vendor-agreement.docx",
-    branchName: "upload/v4",
-    submittedAt: "2026-08-20T09:14:00Z",
-    updates: [update(1, "aaa", "2026-08-20T09:14:00Z")],
-  });
-
-  expect(facts.updateLabel).toBeNull();
-  expect(facts.hasHistory).toBe(false);
-  expect(facts.fileName).toBe("vendor-agreement.docx");
-  expect(facts.date).toBe("Aug 20");
-});
-
-test("a corrected change says which update is on show", () => {
-  const facts = buildProposedVersionFacts({
-    fileName: "vendor-agreement.docx",
-    branchName: "upload/v4",
-    submittedAt: "2026-08-20T09:14:00Z",
-    updates: [
-      update(1, "aaa", "2026-08-20T09:14:00Z"),
-      update(2, "bbb", "2026-08-21T15:00:00Z"),
-    ],
-  });
-
-  expect(facts.updateLabel).toBe("update 2 of 2");
-  expect(facts.hasHistory).toBe(true);
-  expect(facts.date).toBe("Aug 21");
-});
-
-test("with no updates loaded the card still names the file and the date", () => {
-  const facts = buildProposedVersionFacts({
-    fileName: null,
-    branchName: "upload/v4",
-    submittedAt: "2026-08-20T09:14:00Z",
-    updates: [],
-  });
-
-  expect(facts.fileName).toBe("The submitted file");
-  expect(facts.updateLabel).toBeNull();
-  expect(facts.date).toBe("Aug 20");
-  expect(facts.ref).toBe("upload/v4");
-});
-
-// --- threads ---------------------------------------------------------------
 
 test("a lone comment is not collapsible — there is nothing to hide", () => {
   const facts = buildThreadFacts(thread(), false);
