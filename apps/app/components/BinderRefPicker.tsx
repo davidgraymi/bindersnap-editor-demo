@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BookCheck, Check, ChevronDown, GitBranch } from "lucide-react";
 
 import { fetchBinderChanges, fetchBinderDraft } from "../api";
@@ -64,30 +64,34 @@ export function BinderRefPicker({
   );
 
   // Read when opened: most visits never open it, and the tree is what they
-  // came for.
+  // came for. **Both lists in one wait**: with the change requests as the
+  // effect's own trigger, their arrival re-ran it and cancelled the drafts'
+  // read still in flight, and the menu said you had none.
+  const loaded = useRef(false);
   useEffect(() => {
-    if (!open || changes !== null) return;
+    if (!open || loaded.current) return;
     let cancelled = false;
 
-    fetchBinderChanges(org, binder, "open")
-      .then((payload) => {
-        if (!cancelled) setChanges(payload.changes);
-      })
-      .catch(() => {
-        if (!cancelled) setChanges([]);
-      });
-    fetchBinderDraft(org, binder)
-      .then((payload) => {
-        if (!cancelled) setDrafts(payload.drafts);
-      })
-      // No drafts to offer is an ordinary answer; failing to list them is not
-      // worth a message inside a menu about something else.
-      .catch(() => undefined);
+    void Promise.all([
+      fetchBinderChanges(org, binder, "open")
+        .then((payload) => payload.changes)
+        .catch(() => [] as WorkspaceChangeSummary[]),
+      fetchBinderDraft(org, binder)
+        .then((payload) => payload.drafts)
+        // No drafts to offer is an ordinary answer; failing to list them is
+        // not worth a message inside a menu about something else.
+        .catch(() => [] as OwnDraft[]),
+    ]).then(([openChanges, ownDrafts]) => {
+      if (cancelled) return;
+      loaded.current = true;
+      setChanges(openChanges);
+      setDrafts(ownDrafts);
+    });
 
     return () => {
       cancelled = true;
     };
-  }, [open, changes, org, binder]);
+  }, [open, org, binder]);
 
   const label = describeRef(current, nameOf);
   const branches = (changes ?? []).filter((change) => change.branchName);
