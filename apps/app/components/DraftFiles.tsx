@@ -45,6 +45,8 @@ interface DraftFilesProps {
   folders: readonly string[];
   /** The policy open in the editor, so its row is marked. */
   active: string;
+  /** It has words not saved yet: its row says so, as a tab in an IDE does. */
+  unsaved?: boolean;
   onOpen: (slugPath: string) => void;
   /** Start a new policy in this draft. Absent, and there is no New button. */
   onNew?: () => void;
@@ -59,6 +61,7 @@ export function DraftFiles({
   documents,
   folders,
   active,
+  unsaved = false,
   onOpen,
   onNew,
 }: DraftFilesProps) {
@@ -144,6 +147,14 @@ export function DraftFiles({
             <File size={14} strokeWidth={1.6} aria-hidden="true" />
           )}
           <span className="app-explorer-name">{label}</span>
+          {on && unsaved ? (
+            <span
+              className="doc-files-unsaved"
+              role="img"
+              aria-label="Unsaved changes"
+              title="Unsaved changes"
+            />
+          ) : null}
         </button>
       );
     }

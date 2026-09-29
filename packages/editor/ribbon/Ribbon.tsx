@@ -203,7 +203,12 @@ export function Ribbon({
           {tab === "home" ? (
             <HomeTab editor={editor} format={format} onFind={onFind} />
           ) : tab === "insert" ? (
-            <InsertTab editor={editor} />
+            <InsertTab
+              editor={editor}
+              // Word goes to Table Design the moment a table goes in: the
+              // next thing anybody does to a new table is shape it.
+              onTableInserted={() => setChosen("table")}
+            />
           ) : tab === "view" ? (
             <ViewTab
               view={view}
@@ -725,7 +730,13 @@ function ColorDrop({
 
 /* ─── Insert ────────────────────────────────────────────────────────────── */
 
-function InsertTab({ editor }: { editor: Editor }) {
+function InsertTab({
+  editor,
+  onTableInserted,
+}: {
+  editor: Editor;
+  onTableInserted: () => void;
+}) {
   const chain = () => editor.chain().focus();
 
   return (
@@ -750,6 +761,7 @@ function InsertTab({ editor }: { editor: Editor }) {
             <TableGridPicker
               onPick={(rows, cols) => {
                 chain().insertTable({ rows, cols, withHeaderRow: true }).run();
+                onTableInserted();
                 close();
               }}
             />
