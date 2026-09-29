@@ -68,6 +68,8 @@ import { MoveToFolderModal } from "./MoveToFolderModal";
  * editor cannot open it.
  */
 
+const NOTHING: readonly string[] = [];
+
 /** A row being acted on, by its address. */
 export type DraftFileTarget =
   { kind: "folder"; path: string } | { kind: "document"; slugPath: string };
@@ -99,6 +101,12 @@ interface DraftFilesProps {
   onArchive?: (slugPath: string) => void;
   /** An act is being saved: nothing else starts until it lands. */
   busy?: boolean;
+  /**
+   * The files this draft has written — every act's paths. A row among them
+   * carries a quiet mark, so what the draft has done is seen in the tree
+   * rather than read in the draft bar, as an IDE marks a changed file.
+   */
+  touched?: readonly string[];
 }
 
 const STORAGE_KEY = "bindersnap.editor.files.collapsed";
@@ -162,6 +170,7 @@ export function DraftFiles({
   onMove,
   onArchive,
   busy = false,
+  touched = NOTHING,
 }: DraftFilesProps) {
   const remembered = useRememberedToggle(STORAGE_KEY);
   const narrow = useSyncExternalStore(subscribeNarrow, isNarrow, () => false);
@@ -250,6 +259,23 @@ export function DraftFiles({
   const allFolders = useMemo(() => folderPaths(tree), [tree]);
 
   const organizing = !!(onRename || onMove || onArchive);
+
+  const touchedPaths = useMemo(() => new Set(touched), [touched]);
+  /**
+   * Whether the draft changed this row. A folder counts when something was
+   * written directly in it — made, moved in, renamed — not anywhere below
+   * it, which would mark every ancestor of every edit (the binder tree's rule).
+   */
+  const isTouched = (node: BinderTreeNode): boolean => {
+    if (node.kind === "document") return touchedPaths.has(node.document.path);
+    const prefix = `${node.path}/`;
+    for (const path of touchedPaths) {
+      if (path.startsWith(prefix) && !path.slice(prefix.length).includes("/")) {
+        return true;
+      }
+    }
+    return false;
+  };
 
   const rail = (
     <div className="doc-files doc-files--shut" ref={railRef}>
@@ -512,6 +538,7 @@ export function DraftFiles({
       const on = slugPath === active;
       const label = labelOf(node);
       const writable = isEditorDocumentFile(path);
+      const changed = isTouched(node);
       const icon = writable ? (
         <FileText size={14} strokeWidth={1.6} aria-hidden="true" />
       ) : (
@@ -551,11 +578,11 @@ export function DraftFiles({
               }${writable ? "" : " doc-files-item--file"}`}
               style={indent}
               aria-current={on ? "page" : undefined}
-              title={
+              title={`${
                 writable
                   ? label
                   : `${label} — uploaded as a file, so it is edited in the program that made it`
-              }
+              }${changed ? " · changed in this draft" : ""}`}
               onClick={() => {
                 if (!on) openPolicy(slugPath);
                 else setFloating(false);
@@ -568,6 +595,9 @@ export function DraftFiles({
             >
               {icon}
               <span className="app-explorer-name">{label}</span>
+              {changed ? (
+                <span className="doc-files-changed" aria-hidden="true" />
+              ) : null}
               {on && unsaved ? (
                 <span
                   className="doc-files-unsaved"
@@ -618,6 +648,9 @@ export function DraftFiles({
               className="app-explorer-folder"
               style={indent}
               aria-expanded={open}
+              title={
+                isTouched(node) ? `${label} · changed in this draft` : undefined
+              }
               onClick={() => toggleFolder(node.path)}
               onKeyDown={(event) => onRowKey(event, node)}
             >
@@ -628,6 +661,9 @@ export function DraftFiles({
               )}
               <Folder size={14} strokeWidth={1.6} aria-hidden="true" />
               <span className="app-explorer-name">{label}</span>
+              {isTouched(node) ? (
+                <span className="doc-files-changed" aria-hidden="true" />
+              ) : null}
             </button>
           )}
           {rowActions(node)}

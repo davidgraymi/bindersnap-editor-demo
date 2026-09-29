@@ -226,6 +226,11 @@ test("a policy written here opens in the editor, and Save puts it in your draft"
       .getByRole("complementary", { name: `Files in Clinical Policies` })
       .getByRole("button", { name: /^Hand Hygiene/ }),
   ).toHaveAttribute("aria-current", "page");
+  const row = page
+    .getByRole("complementary", { name: `Files in Clinical Policies` })
+    .getByRole("button", { name: /^Hand Hygiene/ });
+  // Nothing in the draft yet, so nothing is marked as changed in it.
+  await expect(row).not.toHaveAttribute("title", /changed in this draft/);
 
   await text.getByText("Clean your hands").click();
   await page.keyboard.press("End");
@@ -237,6 +242,9 @@ test("a policy written here opens in the editor, and Save puts it in your draft"
   await expect(page.getByText(/Saved just now/)).toBeVisible({
     timeout: 20_000,
   });
+  // Saved, the row says the draft has changed it.
+  await expect(row).toHaveAttribute("title", /changed in this draft/);
+  await expect(row.locator(".doc-files-changed")).toBeVisible();
 
   // The words are in the draft, and the record has not moved.
   expect(await policyText(session, org, binder, draft)).toContain(

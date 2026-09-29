@@ -79,6 +79,8 @@ interface DocumentEditorPageProps {
   files: {
     documents: readonly WorkspaceDocumentListEntry[];
     folders: readonly string[];
+    /** What the draft has written, so the panel can mark those rows. */
+    touched?: readonly string[];
   } | null;
   /** Open another policy in the editor, in the same draft. */
   onOpenDocument: (slugPath: string) => void;
@@ -722,6 +724,7 @@ export function DocumentEditorPage({
             binder={binder}
             binderName={binderName}
             documents={files.documents}
+            touched={files.touched}
             folders={files.folders}
             active={documentPath}
             unsaved={dirty}
