@@ -26,7 +26,7 @@ test("billing opens inside the app and says where the organization stands", asyn
     .click();
 
   // This organization's billing: the entry sits under its name.
-  await expect(page).toHaveURL(/\/billing\/riverside-health$/);
+  await expect(page).toHaveURL(/\/riverside-health\/-\/billing$/);
   await expect(page.getByRole("heading", { name: "Billing" })).toBeVisible();
   const plan = page.getByRole("region", { name: "Plan" });
   await expect(plan).toBeVisible();
@@ -49,6 +49,6 @@ test("the old /billing address says which organization it is showing", async ({
   await signInAsAlice(page);
   await page.goto("/billing");
 
-  await expect(page).toHaveURL(/\/billing\/[^/?]+$/);
+  await expect(page).toHaveURL(/\/[^/?]+\/-\/billing$/);
   await expect(page.getByRole("region", { name: "Plan" })).toBeVisible();
 });

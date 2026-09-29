@@ -211,14 +211,14 @@ test("the top bar names the binder; the page names where in it", async ({
   // path above its title.
   await page.goto(`${APP_BASE_URL}/riverside-health/clinical?tab=changes`);
   await page.locator(".change-row-open").first().click();
-  await expect(page).toHaveURL(/change=\d+/, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/-\/changes\/\d+$/, { timeout: 30_000 });
   await expect(path.locator("[aria-current='page']")).toHaveText(
     /^Change \d+$/,
   );
   await expect(page.locator(".app-main .bs-crumbs")).toHaveCount(0);
 
   await path.getByRole("link", { name: "Change requests" }).click();
-  await expect(page).toHaveURL(/tab=changes$/, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/-\/changes$/, { timeout: 30_000 });
 });
 
 test("sidebar entries are links, so they open in a new tab", async ({
@@ -234,7 +234,7 @@ test("sidebar entries are links, so they open in a new tab", async ({
   );
   await expect(sidebar.getByRole("link", { name: /^History/ })).toHaveAttribute(
     "href",
-    "/riverside-health/clinical?tab=history",
+    "/riverside-health/clinical/-/history",
   );
 
   // The organization's People tab is the sidebar's People & access — it used

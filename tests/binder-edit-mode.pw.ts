@@ -460,7 +460,7 @@ test("Propose opens the change request, with the words the author wrote", async 
   await page.getByRole("button", { name: "Open the change request" }).click();
 
   // Straight to the change request it became, under the author's own title.
-  await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/-\/changes\/\d+/, { timeout: 30_000 });
   await expect(
     page.getByText(
       "Bring the hand hygiene policy in line with the PPE guidance",
@@ -1362,7 +1362,7 @@ test("Open on a change lands on the document's own page", async ({ page }) => {
   // The branch is the address and the change rides along as the way back —
   // a file lives on a branch, which is how every code host addresses one.
   await expect(page).toHaveURL(
-    new RegExp(`/${org}/${binder}/nursing/hand-hygiene\\?ref=`),
+    new RegExp(`/${org}/${binder}/-/blob/[^/?]+/nursing/hand-hygiene`),
     { timeout: 30_000 },
   );
   await expect(page).toHaveURL(new RegExp(`[?&]change=${number}`));
@@ -1401,7 +1401,7 @@ test("Open on a change lands on the document's own page", async ({ page }) => {
   // The branch is the address and the change rides along as the way back —
   // a file lives on a branch, which is how every code host addresses one.
   await expect(page).toHaveURL(
-    new RegExp(`/${org}/${binder}/nursing/hand-hygiene\\?ref=`),
+    new RegExp(`/${org}/${binder}/-/blob/[^/?]+/nursing/hand-hygiene`),
     { timeout: 30_000 },
   );
   await expect(page).toHaveURL(new RegExp(`[?&]change=${number}`));
@@ -1449,7 +1449,7 @@ test("the binder's files sit in a panel beside an open policy", async ({
     .locator(".app-explorer-item", { hasText: "Staff Handbook" })
     .click();
   await expect(page).toHaveURL(
-    new RegExp(`/${org}/${binder}/staff-handbook$`),
+    new RegExp(`/${org}/${binder}/-/blob/main/staff-handbook$`),
     {
       timeout: 30_000,
     },
@@ -1506,7 +1506,9 @@ test("the contents beside a change's policy are the change's", async ({
     .locator(".app-explorer-item", { hasText: "Staff Handbook" })
     .click();
   await expect(page).toHaveURL(
-    new RegExp(`/${org}/${binder}/staff-handbook\\?change=${changeNumber}$`),
+    new RegExp(
+      `/${org}/${binder}/-/blob/[^/?]+/staff-handbook\\?change=${changeNumber}$`,
+    ),
     { timeout: 30_000 },
   );
 });
@@ -1774,7 +1776,7 @@ test("Open on a change lands on the branch, and browsing stays there", async ({
     .click();
 
   // The branch is the address, and the change rides along as the way back.
-  await expect(page).toHaveURL(/[?&]ref=/, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/-\/blob\/(?!main\/)/, { timeout: 30_000 });
   await expect(page).toHaveURL(new RegExp(`[?&]change=${number}`));
   // The file panel names the version its rows are addresses on.
   await expect(page.locator(".app-explorer-versionbtn")).toHaveText(
@@ -1787,7 +1789,7 @@ test("Open on a change lands on the branch, and browsing stays there", async ({
     .locator(".app-explorer-item", { hasText: "Staff Handbook" })
     .click();
   await expect(page).toHaveURL(
-    new RegExp(`/${org}/${binder}/staff-handbook\\?ref=`),
+    new RegExp(`/${org}/${binder}/-/blob/(?!main/)[^/?]+/staff-handbook`),
     { timeout: 30_000 },
   );
 });

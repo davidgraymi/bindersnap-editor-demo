@@ -1,12 +1,20 @@
 import { expect, test } from "bun:test";
 
 import { buildLocationTrail } from "./locationTrail";
-import { getRoute } from "./routes";
+import { canonicalLocation, getRoute } from "./routes";
 
-/** The trail for an address, the way the shell computes it. */
+/**
+ * The trail for an address, the way the shell computes it — after the app has
+ * put an older address into its `/-/` form, which it does before anything
+ * reads it.
+ */
 function trailFor(address: string) {
-  const url = new URL(address, "http://app.test");
-  return buildLocationTrail(getRoute(url.pathname), url.search);
+  const first = new URL(address, "http://app.test");
+  const url = new URL(
+    canonicalLocation(first.pathname, first.search) ?? address,
+    "http://app.test",
+  );
+  return buildLocationTrail(getRoute(url.pathname), url.pathname, url.search);
 }
 
 const path = (address: string) =>
@@ -33,6 +41,20 @@ test("a policy's path is its folders, then itself", () => {
   expect(trail.organizationIsCurrent).toBe(false);
 });
 
+test("the current addresses read the same as the ones they replaced", () => {
+  expect(path("/riverside-health/clinical/-/changes/4/diffs")).toEqual([
+    "Change requests",
+    "Change 4",
+    "Changes",
+  ]);
+  expect(
+    path("/riverside-health/clinical/-/blob/main/nursing/wards/handover"),
+  ).toEqual(["Nursing", "Wards", "Handover"]);
+  expect(path("/riverside-health/clinical/-/settings/people")).toEqual([
+    "Settings",
+  ]);
+});
+
 test("a policy's name loses its extension and its identity segment", () => {
   expect(
     path("/riverside-health/clinical/training/hipaa-training-policy.docx"),
@@ -51,7 +73,7 @@ test("a change request is under its binder's change requests, and links back up"
   expect(trail.path).toEqual([
     {
       label: "Change requests",
-      href: "/riverside-health/clinical?tab=changes",
+      href: "/riverside-health/clinical/-/changes",
     },
     { label: "Change 4", href: null },
   ]);
@@ -67,9 +89,7 @@ test("a change's comparison is one step under the change, which becomes a link",
     "Change 4",
     "Changes",
   ]);
-  expect(trail.path[1]!.href).toBe(
-    "/riverside-health/clinical?tab=changes&change=4",
-  );
+  expect(trail.path[1]!.href).toBe("/riverside-health/clinical/-/changes/4");
   expect(trail.path[2]!.href).toBeNull();
 });
 

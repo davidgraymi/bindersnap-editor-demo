@@ -1,37 +1,62 @@
 import { expect, test } from "bun:test";
 
 import {
-  archiveFromSearch,
-  binderTabFromSearch,
   buildBinderUrl,
-  changeViewFromSearch,
   editModeFromSearch,
+  parseBinderAddress,
+  parseLegacyBinderQuery,
 } from "./binderShell";
 
-// ── the tab in the address bar ─────────────────────────────────────
+const tabOf = (rest: string) => parseBinderAddress(rest)?.tab;
+const viewOf = (rest: string) => parseBinderAddress(rest)?.view;
 
-test("no tab in the query opens the documents", () => {
-  expect(binderTabFromSearch("")).toBe("documents");
-  expect(binderTabFromSearch("?change=3")).toBe("documents");
+// ── the screen in the address bar ──────────────────────────────────
+
+test("nothing after the binder opens the documents", () => {
+  expect(tabOf("")).toBe("documents");
+  expect(tabOf("/")).toBe("documents");
 });
 
-test("a tab in the query is the tab", () => {
-  expect(binderTabFromSearch("?tab=changes")).toBe("changes");
+test("every screen the binder has is addressable", () => {
+  expect(tabOf("/-/changes")).toBe("changes");
+  expect(tabOf("/-/history")).toBe("history");
+  expect(tabOf("/-/settings")).toBe("settings");
+  expect(tabOf("/-/settings/people")).toBe("people");
+  expect(tabOf("/-/settings/sign-off")).toBe("sign-off");
+  expect(parseBinderAddress("/-/archive")?.archive).toBe(true);
 });
 
-test("every tab the binder has is addressable", () => {
-  expect(binderTabFromSearch("?tab=people")).toBe("people");
-  expect(binderTabFromSearch("?tab=history")).toBe("history");
-  expect(binderTabFromSearch("?tab=settings")).toBe("settings");
-});
-
-test("a tab nobody has opens the documents rather than nothing", () => {
+test("a screen nobody has opens the documents rather than nothing", () => {
   // A mangled or out-of-date link should show the binder, not a blank pane.
-  // `people` was the example here and became a real tab; `sign-off` replaced it
-  // and became one too. That is the fallback doing its job twice — an old link
-  // keeps working — so the example is deliberately something no tab will be.
-  expect(binderTabFromSearch("?tab=nonesuch")).toBe("documents");
-  expect(binderTabFromSearch("?tab=")).toBe("documents");
+  expect(tabOf("/-/nonesuch")).toBe("documents");
+  expect(tabOf("/-/changes/zero")).toBe("changes");
+});
+
+test("a path that is not one of ours is left for the rewrite", () => {
+  // `/{org}/{binder}/{path}` from before files sat at a branch.
+  expect(parseBinderAddress("/nursing/hand-hygiene")).toBeNull();
+});
+
+test("a branch is one segment, however many slashes its name has", () => {
+  expect(parseBinderAddress("/-/tree/upload%2Fnursing%2Fx")?.ref).toBe(
+    "upload/nursing/x",
+  );
+  expect(
+    parseBinderAddress("/-/blob/upload%2Fx/nursing/hand-hygiene", "?change=7"),
+  ).toMatchObject({
+    ref: "upload/x",
+    documentPath: "nursing/hand-hygiene",
+    change: 7,
+  });
+});
+
+test("the older query form reads as the same screen", () => {
+  expect(
+    parseLegacyBinderQuery("?tab=changes&change=3&view=compare"),
+  ).toMatchObject({ tab: "changes", change: 3, view: "compare" });
+  expect(parseLegacyBinderQuery("?tab=nonesuch").tab).toBe("documents");
+  expect(parseLegacyBinderQuery("?archive=1").archive).toBe(true);
+  expect(parseLegacyBinderQuery("?archive=yes").archive).toBe(false);
 });
 
 // ── building the address ───────────────────────────────────────────
@@ -49,7 +74,7 @@ test("the binder's own address is the short one", () => {
 test("another tab names itself, so it can be sent to somebody", () => {
   expect(
     buildBinderUrl({ org: "riverside", binder: "clinical", tab: "changes" }),
-  ).toBe("/riverside/clinical?tab=changes");
+  ).toBe("/riverside/clinical/-/changes");
 });
 
 test("one change is addressed inside its tab", () => {
@@ -60,19 +85,19 @@ test("one change is addressed inside its tab", () => {
       tab: "changes",
       change: 3,
     }),
-  ).toBe("/riverside/clinical?tab=changes&change=3");
+  ).toBe("/riverside/clinical/-/changes/3");
 });
 
 // ── which screen of a change ───────────────────────────────────────
 
 test("a bare change link opens the discussion, where the decision is made", () => {
-  expect(changeViewFromSearch("?change=3")).toBe("discussion");
-  expect(changeViewFromSearch("?change=3&view=nonsense")).toBe("discussion");
+  expect(viewOf("/-/changes/3")).toBe("discussion");
+  expect(viewOf("/-/changes/3/nonsense")).toBe("discussion");
 });
 
-test("the file and the comparison each have their own address", () => {
-  expect(changeViewFromSearch("?view=preview")).toBe("preview");
-  expect(changeViewFromSearch("?view=compare")).toBe("compare");
+test("the comparison has its own address, GitLab's `diffs`", () => {
+  expect(viewOf("/-/changes/3/diffs")).toBe("compare");
+  expect(viewOf("/-/changes/3/preview")).toBe("preview");
 });
 
 test("the discussion carries no view, so a change's own link stays short", () => {
@@ -84,7 +109,7 @@ test("the discussion carries no view, so a change's own link stays short", () =>
       change: 3,
       view: "discussion",
     }),
-  ).toBe("/riverside/clinical?tab=changes&change=3");
+  ).toBe("/riverside/clinical/-/changes/3");
 });
 
 test("another screen names itself", () => {
@@ -96,14 +121,14 @@ test("another screen names itself", () => {
       change: 3,
       view: "compare",
     }),
-  ).toBe("/riverside/clinical?tab=changes&change=3&view=compare");
+  ).toBe("/riverside/clinical/-/changes/3/diffs");
 });
 
 // ── editing the binder ─────────────────────────────────────────────
 
 test("a binder nobody is editing says nothing about editing", () => {
   expect(editModeFromSearch("")).toBe("off");
-  expect(editModeFromSearch("?tab=changes")).toBe("off");
+  expect(editModeFromSearch("?draft=x")).toBe("off");
   expect(buildBinderUrl({ org: "riverside", binder: "clinical" })).toBe(
     "/riverside/clinical",
   );
@@ -138,30 +163,19 @@ test("an edit value nobody set is not editing, rather than half-editing", () => 
 // ── the archive ────────────────────────────────────────────────────
 
 test("a binder that is not showing its archive says nothing about it", () => {
-  expect(archiveFromSearch("")).toBe(false);
-  expect(archiveFromSearch("?edit=1")).toBe(false);
-  expect(buildBinderUrl({ org: "riverside", binder: "clinical" })).toBe(
-    "/riverside/clinical",
-  );
+  expect(parseBinderAddress("")?.archive).toBe(false);
   expect(
     buildBinderUrl({ org: "riverside", binder: "clinical", archive: false }),
   ).toBe("/riverside/clinical");
 });
 
 test("the archive has an address, because it is a thing people send", () => {
-  expect(archiveFromSearch("?archive=1")).toBe(true);
   expect(
     buildBinderUrl({ org: "riverside", binder: "clinical", archive: true }),
-  ).toBe("/riverside/clinical?archive=1");
+  ).toBe("/riverside/clinical/-/archive");
 });
 
-test("an archive value nobody set is not the archive", () => {
-  expect(archiveFromSearch("?archive=")).toBe(false);
-  expect(archiveFromSearch("?archive=yes")).toBe(false);
-  expect(archiveFromSearch("?archive=0")).toBe(false);
-});
-
-test("the binder read at a change's branch keeps the documents tab's short address", () => {
+test("the binder read at a branch is that branch's tree", () => {
   expect(
     buildBinderUrl({
       org: "riverside",
@@ -169,5 +183,5 @@ test("the binder read at a change's branch keeps the documents tab's short addre
       ref: "draft/alice-1",
       change: 4,
     }),
-  ).toBe("/riverside/clinical?ref=draft%2Falice-1&change=4");
+  ).toBe("/riverside/clinical/-/tree/draft%2Falice-1?change=4");
 });

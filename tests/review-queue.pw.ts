@@ -127,9 +127,7 @@ test("a row opens the change it names", async ({ page }) => {
   await expect(page.getByRole("heading", { name: title })).toBeVisible({
     timeout: 30_000,
   });
-  const url = new URL(page.url());
-  expect(url.searchParams.get("tab")).toBe("changes");
-  expect(url.searchParams.get("change")).not.toBeNull();
+  expect(new URL(page.url()).pathname).toMatch(/\/-\/changes\/\d+$/);
 });
 
 test("a row's standing is one word, and the row says nothing else", async ({

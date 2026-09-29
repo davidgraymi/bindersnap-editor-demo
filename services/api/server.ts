@@ -9934,7 +9934,7 @@ async function resolveBillingOrganization(
 
 /** Where Stripe sends someone back to: that organization's billing page. */
 function billingPageUrl(organization: { name: string }): string {
-  return `${config.appOrigin}/billing/${encodeURIComponent(organization.name)}`;
+  return `${config.appOrigin}/${encodeURIComponent(organization.name)}/-/billing`;
 }
 
 async function handleBillingStatus(

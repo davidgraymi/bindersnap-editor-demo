@@ -104,7 +104,7 @@ change does to a binder, on one page.** A change is the unit of approval and
 may touch several documents, so the question a reviewer opens it with is what
 the _change_ does — not what it does to whichever document a selector happens
 to be pointing at. It is reached from the change at
-`?tab=changes&change=3&view=compare`, and each document's section carries an
+`/{org}/{binder}/-/changes/3/diffs`, and each document's section carries an
 anchor (`#cmp-nursing-hand-hygiene`) so "look at the hand hygiene diff" is a
 link somebody can send.
 
@@ -117,7 +117,7 @@ What is in the list and what each row says lives in
 
 **It is laid out the way a code review is.** Under the title, one line says
 who wants to publish how many documents from which branch, and the branch is
-a link to the binder's root read at that branch (`/{org}/{binder}?ref=…&change=N`
+a link to the binder's root read at that branch (`/{org}/{binder}/-/tree/{ref}?change=N`
 — the whole tree as the change would leave it, not its first file). Below it, a tree of only what changed —
 grouped by folder — sits on the **left**, and one panel per document on the
 right, in the same order. **Every fact and control about a document is in

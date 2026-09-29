@@ -113,7 +113,7 @@ test("picking a person opens the organization's people", async ({ page }) => {
     .getByRole("option", { name: /Carol/ })
     .click();
 
-  await expect(page).toHaveURL(/\/riverside-health\?tab=people$/, {
+  await expect(page).toHaveURL(/\/riverside-health\/-\/people$/, {
     timeout: 30_000,
   });
 });
