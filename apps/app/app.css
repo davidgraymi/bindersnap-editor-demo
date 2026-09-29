@@ -10783,3 +10783,41 @@ html.bs-writing .app-main {
   flex: none;
   margin-right: var(--brand-space-1);
 }
+
+/* Where the open policy is filed, beside its title, and the way to move it. */
+.doc-editor-folder {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--brand-space-1);
+  min-width: 0;
+  max-width: 14rem;
+  padding: var(--brand-space-0-5) var(--brand-space-1-5);
+  border: 1px solid transparent;
+  border-radius: var(--brand-radius-sm);
+  background: none;
+  color: var(--bs-text-muted);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-sm);
+  cursor: pointer;
+}
+
+.doc-editor-folder > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-editor-folder svg {
+  flex: none;
+}
+
+.doc-editor-folder:hover:not(:disabled) {
+  border-color: var(--bs-rule);
+  color: var(--bs-text-primary);
+}
+
+.doc-editor-folder:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 1px;
+}
