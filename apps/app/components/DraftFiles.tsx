@@ -88,6 +88,11 @@ interface DraftFilesProps {
   active: string;
   /** It has words not saved yet: its row says so, as a tab in an IDE does. */
   unsaved?: boolean;
+  /**
+   * Other open policies with words not saved, by address: their rows say so
+   * too, since moving between policies keeps what was typed in each.
+   */
+  unsavedElsewhere?: ReadonlyMap<string, string>;
   onOpen: (slugPath: string) => void;
   /** Start a new policy in this draft. Absent, and there is no New button. */
   /** In `folder`, when started from a folder's menu; else beside the open one. */
@@ -189,6 +194,7 @@ export function DraftFiles({
   folders,
   active,
   unsaved = false,
+  unsavedElsewhere,
   onOpen,
   onNew,
   onNewFolder,
@@ -764,7 +770,7 @@ export function DraftFiles({
               {changed ? (
                 <span className="doc-files-changed" aria-hidden="true" />
               ) : null}
-              {on && unsaved ? (
+              {(on && unsaved) || unsavedElsewhere?.has(slugPath) ? (
                 <span
                   className="doc-files-unsaved"
                   role="img"

@@ -159,6 +159,35 @@ type SaveState =
   | { kind: "saved"; at: string }
   | { kind: "failed"; message: string };
 
+/**
+ * A policy opened in this sitting, and what has been typed in it.
+ *
+ * **Several policies are open at once, as files are in any editor.** Moving
+ * to another policy asked "Save your changes?" first, every time — a word
+ * processor that would not let you leave a file without committing it. Now
+ * the words stay here, in memory, and the file panel marks each policy with
+ * unsaved words until Save (this one) or Save all (every one) commits them.
+ */
+interface OpenPolicy {
+  detail: WorkspaceDocumentDetailPayload;
+  /** What the editor holds now, saved or not. */
+  doc: JSONContent;
+  /**
+   * The document as last saved, as the editor normalises it. Null until an
+   * editor has read it — loading fills in attributes the file left out, and
+   * comparing against the raw file called an untouched policy unsaved.
+   */
+  saved: string | null;
+}
+
+/**
+ * What an open policy is known by: its identity, so a rename or a move in
+ * this sitting — which changes its address — is still the same open file.
+ */
+function openKey(detail: WorkspaceDocumentDetailPayload): string {
+  return detail.document.uid ?? detail.document.slugPath;
+}
+
 /** Nothing written yet but a title — what "Write it here" starts with. */
 function isBlankPolicy(doc: JSONContent): boolean {
   const blocks = doc.content ?? [];
@@ -218,6 +247,55 @@ export function DocumentEditorPage({
   const savedJson = useRef<string>("");
   const [, setTick] = useState(0);
 
+  /** Every policy opened in this draft this sitting, by {@link openKey}. */
+  const opened = useRef(new Map<string, OpenPolicy>());
+  /** Which of them is on screen. */
+  const shownKey = useRef<string | null>(null);
+  /** The draft (or change) they were opened in; another one starts afresh. */
+  const openedIn = useRef<string | null>(null);
+  /** The other open policies with words not saved, by address. */
+  const [unsavedElsewhere, setUnsavedElsewhere] = useState<
+    ReadonlyMap<string, string>
+  >(new Map());
+  /** The panel's list, for finding an open policy after it moved. */
+  const filesRef = useRef(files);
+  filesRef.current = files;
+
+  /** Where an open policy is now: moved or renamed since, the panel knows. */
+  const addressOf = useCallback((policy: OpenPolicy): string => {
+    const uid = policy.detail.document.uid;
+    const listed = uid
+      ? filesRef.current?.documents.find((entry) => entry.uid === uid)
+      : undefined;
+    return listed?.slugPath ?? policy.detail.document.slugPath;
+  }, []);
+
+  const isUnsaved = (policy: OpenPolicy) =>
+    policy.saved !== null && JSON.stringify(policy.doc) !== policy.saved;
+
+  /** Recount the open policies other than this one with unsaved words. */
+  const recountElsewhere = useCallback(() => {
+    const next = new Map<string, string>();
+    for (const [key, policy] of opened.current) {
+      if (key === shownKey.current) continue;
+      if (
+        policy.saved !== null &&
+        JSON.stringify(policy.doc) !== policy.saved
+      ) {
+        next.set(
+          addressOf(policy),
+          formatDocumentName(policy.detail.document.name),
+        );
+      }
+    }
+    setUnsavedElsewhere(next);
+  }, [addressOf]);
+  // A rename or a move in the panel gives an open policy a new address; its
+  // mark follows it there.
+  useEffect(() => {
+    recountElsewhere();
+  }, [files, recountElsewhere]);
+
   // **The whole window is the desk.** Word does not keep your file browser
   // open beside the page, and here the product's map and the binder's files
   // squeezed Letter to half size on a laptop. While a document is open in the
@@ -234,9 +312,68 @@ export function DocumentEditorPage({
   useEffect(() => {
     if (!draft) return;
     let cancelled = false;
-    setLoad({ kind: "loading" });
-    // "Saved 2 minutes ago" was about the policy before this one.
+
+    // **The one on screen keeps its words as the next one opens.** The editor
+    // still holds it here — the next render is what replaces it.
+    const editor = editorRef.current;
+    const was = shownKey.current ? opened.current.get(shownKey.current) : null;
+    if (was && editor && !editor.isDestroyed) was.doc = editor.getJSON();
+
+    // Another draft is another set of files: what was open was open there.
+    const place = `${draft}|${changeNumber ?? ""}`;
+    if (openedIn.current !== place) {
+      opened.current.clear();
+      openedIn.current = place;
+    }
+
+    // "Saved 2 minutes ago" was about the policy before this one, and so
+    // were words kept on this device from last time.
     setSave({ kind: "idle" });
+    setRecovered(null);
+
+    // Open already: back at once, words and all, and its details read again
+    // quietly — an act in the panel may have renamed or moved it since.
+    const listed = filesRef.current?.documents.find(
+      (entry) => entry.slugPath === documentPath,
+    );
+    const kept = [...opened.current.entries()].find(
+      ([key, policy]) =>
+        policy.detail.document.slugPath === documentPath ||
+        (listed?.uid != null && key === listed.uid),
+    );
+    if (kept) {
+      const [key, policy] = kept;
+      shownKey.current = key;
+      savedJson.current = policy.saved ?? "";
+      setDirty(isUnsaved(policy));
+      setLoad({ kind: "ready", detail: policy.detail, doc: policy.doc });
+      recountElsewhere();
+      const reread =
+        changeNumber !== null
+          ? fetchBinderDocument(
+              org,
+              binder,
+              documentPath,
+              undefined,
+              changeNumber,
+              draft,
+            )
+          : fetchBinderDocument(org, binder, documentPath, draft);
+      reread
+        .then((detail) => {
+          if (cancelled || shownKey.current !== key) return;
+          policy.detail = detail;
+          setLoad((now) => (now.kind === "ready" ? { ...now, detail } : now));
+        })
+        .catch(() => undefined);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    shownKey.current = null;
+    setLoad({ kind: "loading" });
+    recountElsewhere();
 
     (async () => {
       // Read in the draft: a policy edited a minute ago is only there. On a
@@ -266,6 +403,9 @@ export function DocumentEditorPage({
         return;
       }
       savedJson.current = JSON.stringify(doc);
+      const key = openKey(detail);
+      opened.current.set(key, { detail, doc, saved: null });
+      shownKey.current = key;
       setLoad({ kind: "ready", detail, doc });
     })().catch((err: unknown) => {
       if (!cancelled) {
@@ -279,6 +419,8 @@ export function DocumentEditorPage({
     return () => {
       cancelled = true;
     };
+    // `recountElsewhere` is stable; `isUnsaved` reads only its argument.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [org, binder, documentPath, draft, changeNumber]);
 
   // "Saved 3 minutes ago" has to keep counting while nobody types.
@@ -290,14 +432,15 @@ export function DocumentEditorPage({
 
   // Leaving with unsaved words asks first, as every word processor does. The
   // browser writes the question; all a page can do is ask for it.
+  const anyUnsaved = dirty || unsavedElsewhere.size > 0;
   useEffect(() => {
-    if (!dirty) return;
+    if (!anyUnsaved) return;
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [dirty]);
+  }, [anyUnsaved]);
 
   // AutoRecover: unsaved words kept on this device — see `editorRecovery.ts`.
   const keyRef = useRef<string | null>(null);
@@ -313,6 +456,10 @@ export function DocumentEditorPage({
   const handleChange = useCallback((doc: JSONContent) => {
     const changed = JSON.stringify(doc) !== savedJson.current;
     setDirty(changed);
+    const shown = shownKey.current
+      ? opened.current.get(shownKey.current)
+      : undefined;
+    if (shown) shown.doc = doc;
     window.clearTimeout(keepTimer.current);
     const key = keyRef.current;
     if (!key) return;
@@ -353,6 +500,10 @@ export function DocumentEditorPage({
         "editor",
       );
       savedJson.current = json;
+      const shown = shownKey.current
+        ? opened.current.get(shownKey.current)
+        : undefined;
+      if (shown) shown.saved = json;
       // Anything typed while the save was in flight is still unsaved.
       const still = JSON.stringify(editor.getJSON()) !== json;
       setDirty(still);
@@ -372,6 +523,100 @@ export function DocumentEditorPage({
     }
   }, [binder, change, draft, forgetKept, load, onSaved, org, save.kind]);
 
+  /**
+   * Save every open policy with unsaved words: this one, then the others.
+   *
+   * Each is its own save — one act in the draft per policy, "Edit Hand
+   * Hygiene", as a save from the editor always is — at the address the policy
+   * has now, which a rename in the panel may have changed since it was opened.
+   */
+  const saveAll = useCallback(async (): Promise<boolean> => {
+    if (save.kind === "saving" || !draft) return false;
+    if (dirty && !(await saveNow())) return false;
+
+    const others = [...opened.current.entries()].filter(
+      ([key, policy]) => key !== shownKey.current && isUnsaved(policy),
+    );
+    if (others.length === 0) return true;
+
+    setSave({ kind: "saving" });
+    for (const [, policy] of others) {
+      const json = JSON.stringify(policy.doc);
+      try {
+        await reviseBinderDocument(
+          org,
+          binder,
+          new File([JSON.stringify(policy.doc, null, 2)], "document.json", {
+            type: "application/json",
+          }),
+          addressOf(policy),
+          change ? { changeNumber: change.number } : { draft },
+          "editor",
+        );
+        policy.saved = json;
+        dropWords(recoveryKey(org, binder, draft, addressOf(policy)));
+      } catch (err) {
+        recountElsewhere();
+        setSave({
+          kind: "failed",
+          message: errorMessage(
+            err,
+            `Unable to save ${formatDocumentName(policy.detail.document.name)}. Its words are still here.`,
+          ),
+        });
+        onSaved();
+        return false;
+      }
+    }
+    recountElsewhere();
+    setSave({ kind: "saved", at: new Date().toISOString() });
+    onSaved();
+    return true;
+    // `isUnsaved` reads only its argument.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    addressOf,
+    binder,
+    change,
+    dirty,
+    draft,
+    onSaved,
+    org,
+    recountElsewhere,
+    save.kind,
+    saveNow,
+  ]);
+
+  /**
+   * Save one policy by its address, open on screen or not — before an act
+   * that reads what is saved (a copy) or takes it away (archive).
+   */
+  const saveOne = async (slugPath: string): Promise<boolean> => {
+    if (slugPath === documentPath) return dirty ? saveNow() : true;
+    const policy = [...opened.current.values()].find(
+      (entry) => addressOf(entry) === slugPath,
+    );
+    if (!policy || !isUnsaved(policy) || !draft) return true;
+    try {
+      await reviseBinderDocument(
+        org,
+        binder,
+        new File([JSON.stringify(policy.doc, null, 2)], "document.json", {
+          type: "application/json",
+        }),
+        slugPath,
+        change ? { changeNumber: change.number } : { draft },
+        "editor",
+      );
+      policy.saved = JSON.stringify(policy.doc);
+      recountElsewhere();
+      return true;
+    } catch (err) {
+      setFilesError(errorMessage(err, "Unable to save that policy first."));
+      return false;
+    }
+  };
+
   const go = (to: Leaving) => {
     if (to.kind === "close") onClose();
     else if (to.kind === "open") onOpenDocument(to.slugPath);
@@ -385,26 +630,24 @@ export function DocumentEditorPage({
   /**
    * One act on the draft's files, from the panel.
    *
-   * **The open policy's words go first when the act moves it.** Renaming or
-   * refiling it — or the folder it is in — gives it a new address, and the
-   * editor follows it there by reading it again; archiving it closes it.
-   * Either way what was typed and not saved would be read over, so it is saved
-   * into the draft first, without a question: the act was asked for, and
-   * saving is what the draft is for. Other rows' acts leave the words alone.
+   * **A rename or a move leaves unsaved words where they are.** An open
+   * policy is known by its identity, so after a rename it is the same open
+   * file at a new address, words and all — they used to be saved first,
+   * because the editor read the policy afresh at the new address. Archiving
+   * and copying read or remove what is saved, so the words of the one they
+   * act on go first, into the draft, without a question.
    */
   const [filesBusy, setFilesBusy] = useState(false);
   const [filesError, setFilesError] = useState<string | null>(null);
   const actOnFiles = async (
-    movesOpen: boolean,
+    /** The policy whose saved words the act reads or removes, if any. */
+    savesFirst: string | null,
     act: () => Promise<void>,
     failed: string,
   ): Promise<boolean> => {
     if (filesBusy) return false;
     setFilesError(null);
-    if (movesOpen && dirty) {
-      const saved = await saveNow();
-      if (!saved) return false;
-    }
+    if (savesFirst !== null && !(await saveOne(savesFirst))) return false;
     setFilesBusy(true);
     try {
       await act();
@@ -416,7 +659,6 @@ export function DocumentEditorPage({
       setFilesBusy(false);
     }
   };
-  const holdsOpen = (folder: string) => documentPath.startsWith(`${folder}/`);
 
   /**
    * The title is the name, and the name is changed there — as a Google Doc's
@@ -440,10 +682,13 @@ export function DocumentEditorPage({
     (load.kind === "ready" || load.kind === "foreign") &&
     load.detail.document.uid !== null;
 
-  /** Anywhere but here asks first while there are unsaved words. */
+  /**
+   * Another policy opens at once, words kept; leaving the editor — or this
+   * draft — asks first while any open policy has words not saved.
+   */
   const leave = (to: Leaving) => {
-    if (dirty) setLeaving(to);
-    else go(to);
+    if (to.kind === "open" || to.kind === "new" || !anyUnsaved) go(to);
+    else setLeaving(to);
   };
 
   // The name the address gives, until the document itself has been read, so
@@ -473,6 +718,14 @@ export function DocumentEditorPage({
           : save.kind === "saved"
             ? `Saved ${formatAge(save.at)}`
             : "No changes yet";
+  // The others are one glance away in the panel's marks; the count is here
+  // too, beside this one's, so the status bar tells the whole story.
+  const statusElsewhere =
+    unsavedElsewhere.size === 0
+      ? ""
+      : ` · ${unsavedElsewhere.size} other ${
+          unsavedElsewhere.size === 1 ? "policy" : "policies"
+        } unsaved`;
 
   let body: ReactNode;
   if (!draft || load.kind === "loading") {
@@ -524,8 +777,9 @@ export function DocumentEditorPage({
         >
           <DocumentEditor
             // A policy opened from the file panel is a new document, not an
-            // edit to this one: a fresh editor, a fresh undo history.
-            key={load.detail.document.slugPath}
+            // edit to this one: a fresh editor. By identity, not address, so
+            // renaming or moving the open one keeps its editor and its undo.
+            key={openKey(load.detail)}
             label={name}
             initialContent={load.doc}
             // A policy just started is its title and an empty line: the
@@ -539,8 +793,23 @@ export function DocumentEditorPage({
               // The baseline is the document as the editor holds it, not as
               // the file had it: loading normalises it (an empty paragraph at
               // the end, attributes filled in), and comparing against the file
-              // called a document nobody had touched "unsaved".
-              savedJson.current = JSON.stringify(editor.getJSON());
+              // called a document nobody had touched "unsaved". A policy open
+              // already keeps the baseline it was first read with, and
+              // whatever was typed in it since.
+              const shown = shownKey.current
+                ? opened.current.get(shownKey.current)
+                : undefined;
+              const now = JSON.stringify(editor.getJSON());
+              if (shown && shown.saved !== null) {
+                savedJson.current = shown.saved;
+                setDirty(now !== shown.saved);
+                return;
+              }
+              savedJson.current = now;
+              if (shown) {
+                shown.saved = now;
+                shown.doc = editor.getJSON();
+              }
               setDirty(false);
               // Words that never reached a save, from last time.
               const key = keyRef.current;
@@ -561,6 +830,7 @@ export function DocumentEditorPage({
                 role="status"
               >
                 {status}
+                {statusElsewhere}
               </span>
             }
           />
@@ -569,22 +839,35 @@ export function DocumentEditorPage({
     );
   }
 
+  /** Every open policy with words not saved, this one first. */
+  const unsavedNames = [...(dirty ? [name] : []), ...unsavedElsewhere.values()];
+  const saveWord = unsavedNames.length > 1 ? "Save all" : "Save";
   const ask = leaving
     ? leaving.kind === "close"
-      ? { save: "Save and close", drop: "Close without saving" }
-      : leaving.kind === "open"
-        ? { save: "Save and open", drop: "Open without saving" }
-        : leaving.kind === "propose"
-          ? { save: "Save and propose", drop: "Propose without them" }
-          : leaving.kind === "draft" || leaving.kind === "start"
-            ? { save: "Save and switch", drop: "Switch without saving" }
-            : { save: "Save first", drop: "Don't save" }
+      ? { save: `${saveWord} and close`, drop: "Close without saving" }
+      : leaving.kind === "propose"
+        ? { save: `${saveWord} and propose`, drop: "Propose without them" }
+        : leaving.kind === "draft" || leaving.kind === "start"
+          ? { save: `${saveWord} and switch`, drop: "Switch without saving" }
+          : { save: `${saveWord} first`, drop: "Don't save" }
     : null;
+
+  /** Thrown away on purpose, every one: not offered back next time either. */
+  const dropUnsaved = () => {
+    setDirty(false);
+    forgetKept();
+    for (const policy of opened.current.values()) {
+      if (!isUnsaved(policy) || !draft) continue;
+      dropWords(recoveryKey(org, binder, draft, addressOf(policy)));
+      policy.doc = JSON.parse(policy.saved!) as JSONContent;
+    }
+    setUnsavedElsewhere(new Map());
+  };
 
   // Something to propose: words not saved yet, or anything already in the
   // draft. An empty draft proposed is a change request with nothing in it.
   const current = drafts?.draft ?? null;
-  const proposable = dirty || (current?.acts.length ?? 0) > 0;
+  const proposable = anyUnsaved || (current?.acts.length ?? 0) > 0;
 
   return (
     <div className="doc-editor-page">
@@ -601,7 +884,7 @@ export function DocumentEditorPage({
                   const next = typed.trim();
                   if (next === "" || next === name) return;
                   void actOnFiles(
-                    true,
+                    null,
                     () =>
                       onRenameFile(
                         { kind: "document", slugPath: documentPath },
@@ -721,6 +1004,21 @@ export function DocumentEditorPage({
           >
             {save.kind === "saving" ? "Saving…" : "Save"}
           </button>
+          {/* The others with unsaved words, saved in one press — shown only
+              while there are any, as an editor's Save All is live only then. */}
+          {unsavedElsewhere.size > 0 ? (
+            <button
+              type="button"
+              className="bs-btn bs-btn-secondary bs-btn--sm"
+              disabled={save.kind === "saving"}
+              title={`Save ${[...unsavedElsewhere.values()].join(", ")}${
+                dirty ? ` and ${name}` : ""
+              }`}
+              onClick={() => void saveAll()}
+            >
+              Save all ({unsavedElsewhere.size + (dirty ? 1 : 0)})
+            </button>
+          ) : null}
           {/* **Proposed from where it was written.** It meant Close, the
               binder, Edit, and the bar's Propose — four steps, and a chance at
               each to land in a different draft from the one just saved. A
@@ -815,6 +1113,7 @@ export function DocumentEditorPage({
             folders={files.folders}
             active={documentPath}
             unsaved={dirty}
+            unsavedElsewhere={unsavedElsewhere}
             onOpen={(slugPath) => leave({ kind: "open", slugPath })}
             // A change request is revised, not added to or reshaped, here.
             onNew={
@@ -827,9 +1126,7 @@ export function DocumentEditorPage({
                 ? undefined
                 : (target, name) =>
                     void actOnFiles(
-                      target.kind === "document"
-                        ? target.slugPath === documentPath
-                        : holdsOpen(target.path),
+                      null,
                       () => onRenameFile(target, name),
                       "Unable to rename that.",
                     )
@@ -839,9 +1136,7 @@ export function DocumentEditorPage({
                 ? undefined
                 : (subject, folder) =>
                     void actOnFiles(
-                      subject.kind === "document"
-                        ? subject.slugPath === documentPath
-                        : holdsOpen(subject.path),
+                      null,
                       () => onMoveFile(subject, folder),
                       "Unable to move that.",
                     )
@@ -851,7 +1146,7 @@ export function DocumentEditorPage({
                 ? undefined
                 : (slugPath) =>
                     actOnFiles(
-                      slugPath === documentPath,
+                      slugPath,
                       () => onArchiveFile(slugPath),
                       "Unable to archive that.",
                     )
@@ -861,9 +1156,9 @@ export function DocumentEditorPage({
                 ? undefined
                 : (slugPath) =>
                     void actOnFiles(
-                      // The copy opens in place of this one: its words go
-                      // first, into the copy too if it is this one.
-                      true,
+                      // The copy is made from what is saved, so the words of
+                      // the one being copied go first.
+                      slugPath,
                       () => onCopyFile(slugPath),
                       "Unable to copy that.",
                     )
@@ -875,7 +1170,7 @@ export function DocumentEditorPage({
                 ? undefined
                 : (uid) =>
                     actOnFiles(
-                      false,
+                      null,
                       () => onRestoreFile(uid),
                       "Unable to restore that document.",
                     )
@@ -908,7 +1203,7 @@ export function DocumentEditorPage({
           onMove={(folder) => {
             setRefiling(false);
             void actOnFiles(
-              true,
+              null,
               () =>
                 onMoveFile(
                   {
@@ -938,8 +1233,15 @@ export function DocumentEditorPage({
             aria-labelledby="doc-editor-close-title"
             aria-describedby="doc-editor-close-body"
           >
-            <h2 id="doc-editor-close-title">Save your changes to {name}?</h2>
+            <h2 id="doc-editor-close-title">
+              {unsavedNames.length > 1
+                ? `Save your changes to ${unsavedNames.length} policies?`
+                : `Save your changes to ${unsavedNames[0] ?? name}?`}
+            </h2>
             <p id="doc-editor-close-body" className="add-policy-note">
+              {unsavedNames.length > 1
+                ? `${unsavedNames.join(", ")} have words not saved yet. `
+                : ""}
               They go into your draft. Leaving without saving loses everything
               since the last save.
             </p>
@@ -951,7 +1253,7 @@ export function DocumentEditorPage({
                 disabled={save.kind === "saving"}
                 onClick={() => {
                   const to = leaving;
-                  void saveNow().then((saved) => {
+                  void saveAll().then((saved) => {
                     setLeaving(null);
                     if (saved) go(to);
                   });
@@ -965,9 +1267,7 @@ export function DocumentEditorPage({
                 onClick={() => {
                   const to = leaving;
                   setLeaving(null);
-                  setDirty(false);
-                  // Thrown away on purpose: not offered back next time.
-                  forgetKept();
+                  dropUnsaved();
                   go(to);
                 }}
               >

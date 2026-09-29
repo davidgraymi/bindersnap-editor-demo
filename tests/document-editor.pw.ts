@@ -461,8 +461,8 @@ test("Edit on a binder opens the editor, and its files are renamed and refiled t
   await expect(text).toContainText("Always.");
   await expect(page).toHaveURL(/\/hand-hygiene\?edit=write/);
 
-  // Renaming the open policy saves its words first, and the editor follows it
-  // to its new name — in the same draft.
+  // Renaming the open policy keeps its words, unsaved, and the editor follows
+  // it to its new name — in the same draft. It is the same open file.
   await files.getByRole("button", { name: /^Hand Hygiene/ }).hover();
   await files.getByRole("button", { name: "Rename Hand Hygiene" }).click();
   const box = files.getByRole("textbox", { name: "New name" });
@@ -492,8 +492,13 @@ test("Edit on a binder opens the editor, and its files are renamed and refiled t
     page.getByRole("textbox", { name: "Hand Washing" }),
   ).toContainText("Always.");
 
-  // Closing lands on the policy, in the draft, at its new address.
+  // Closing asks for the words, saves them at the new address, and lands on
+  // the policy there, in the draft.
   await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Save and close" })
+    .click();
   await expect(page).toHaveURL(/\/nursing\/hand-washing\?edit=1/i);
   await expect(page.locator(".doc-preview-prose")).toContainText("Always.");
 
@@ -504,7 +509,7 @@ test("Edit on a binder opens the editor, and its files are renamed and refiled t
   await expect(page).toHaveURL(/edit=1/);
 });
 
-test("the policy is renamed from its title, and its unsaved words go with it", async ({
+test("the policy is renamed from its title, and its unsaved words stay with it", async ({
   page,
 }) => {
   const { session, org, binder } = await provision();
@@ -540,7 +545,13 @@ test("the policy is renamed from its title, and its unsaved words go with it", a
   await expect(page.getByRole("textbox", { name: "Hand Care" })).toContainText(
     "Every time.",
   );
-  await expect(page.getByText("No changes yet")).toBeVisible();
+  // The same open file under its new name: the words are still unsaved, and
+  // Save puts them in at the new address.
+  await expect(page.locator(".doc-editor-status")).toHaveText(
+    "Unsaved changes",
+  );
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.locator(".doc-editor-status")).toHaveText(/^Saved/);
 
   // Escape leaves the name as it was.
   await page
@@ -796,6 +807,10 @@ test("the arrow keys walk the file panel's tree, as in a file explorer", async (
   const night = files.getByRole("button", { name: /^Night Rounds/ });
   const hand = files.getByRole("button", { name: /^Hand Hygiene/ });
   await expect(nursing).toHaveAttribute("aria-expanded", "true");
+  // A new policy opens with the cursor in it; the walk starts after that.
+  await expect(
+    page.getByRole("textbox", { name: "Night Rounds" }),
+  ).toBeFocused();
 
   // Left from a row in a folder goes to the folder; Left again shuts it.
   await night.focus();
@@ -1049,7 +1064,7 @@ test("a new policy can be written here instead of uploaded", async ({
   expect(await saved.text()).toContain("Visitors sign in at reception.");
 });
 
-test("the editor's file panel starts a policy and moves between them, saving first", async ({
+test("the editor's file panel starts a policy, and moves between policies keeping the words in each", async ({
   page,
 }) => {
   const { session, org, binder } = await provision();
@@ -1073,27 +1088,50 @@ test("the editor's file panel starts a policy and moves between them, saving fir
   const draft = new URL(page.url()).searchParams.get("draft")!;
   const visitor = page.getByRole("textbox", { name: "Visitor Policy" });
   await expect(visitor).toBeFocused();
-  await expect(
-    files.getByRole("button", { name: /^Visitor Policy/ }),
-  ).toBeVisible();
+  const visitorRow = files.getByRole("button", { name: /^Visitor Policy/ });
+  await expect(visitorRow).toBeVisible();
 
-  // Back to the first policy with unsaved words: asked, and saved on the way.
+  // **Back to the first policy with unsaved words: no question.** Several
+  // policies are open at once, as files are in any editor; each keeps what
+  // was typed in it, and its row says so.
   await page.keyboard.type("Visitors sign in at reception.");
   await files.getByRole("button", { name: /^Hand Hygiene/ }).click();
-  const ask = page.getByRole("alertdialog");
-  await expect(ask).toContainText("Save your changes to Visitor Policy?");
-  await ask.getByRole("button", { name: "Save and open" }).click();
-
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
   await expect(page).toHaveURL(/\/hand-hygiene\?edit=write&draft=/);
-  await expect(
-    page.getByRole("textbox", { name: "Hand Hygiene" }),
-  ).toContainText("Clean your hands");
-  const saved = await fetch(
-    `${API_BASE_URL}/api/app/binders/${org}/${binder}/raw/visitor-policy?ref=${encodeURIComponent(draft)}`,
-    { headers: authHeaders(session) },
+  const hand = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await expect(hand).toContainText("Clean your hands");
+  await expect(visitorRow.locator(".doc-files-unsaved")).toBeVisible();
+  await expect(page.locator(".doc-editor-status")).toHaveText(
+    "No changes yet · 1 other policy unsaved",
   );
-  expect(saved.status).toBe(200);
-  expect(await saved.text()).toContain("Visitors sign in at reception.");
+
+  // Words in this one too, then back: the first is as it was left, at once.
+  await hand.getByText("Clean your hands").click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Every time.");
+  await visitorRow.click();
+  await expect(visitor).toContainText("Visitors sign in at reception.");
+  await expect(
+    files
+      .getByRole("button", { name: /^Hand Hygiene/ })
+      .locator(".doc-files-unsaved"),
+  ).toBeVisible();
+
+  // Save all commits both, each into the draft.
+  await page.getByRole("button", { name: "Save all (2)" }).click();
+  await expect(page.getByRole("button", { name: /^Save all/ })).toHaveCount(0);
+  await expect(page.locator(".doc-files-unsaved")).toHaveCount(0);
+  const raw = async (slug: string) =>
+    (
+      await fetch(
+        `${API_BASE_URL}/api/app/binders/${org}/${binder}/raw/${slug}?ref=${encodeURIComponent(draft)}`,
+        { headers: authHeaders(session) },
+      )
+    ).text();
+  expect(await raw("visitor-policy")).toContain(
+    "Visitors sign in at reception.",
+  );
+  expect(await raw("hand-hygiene")).toContain("Every time.");
 });
 
 test("a picture from this device is kept inside the policy, in the draft", async ({
