@@ -8,6 +8,7 @@ import {
   documentOutline,
   paginate,
 } from "./documentStats";
+import { readEntries } from "./extensions/TableOfContents";
 import {
   SearchAndReplace,
   findMatches,
@@ -92,6 +93,99 @@ describe("the document schema", () => {
     const types = editor.getJSON().content?.map((node) => node.type);
     expect(types).toEqual(["paragraph", "pageBreak", "paragraph"]);
     expect(editor.getHTML()).toContain('class="bs-page-break"');
+  });
+});
+
+describe("a table of contents", () => {
+  const entriesOf = (editor: Editor) =>
+    editor.getJSON().content?.find((node) => node.type === "tableOfContents")
+      ?.attrs?.entries;
+
+  test("lists headings 1 to 3, in order, where it is put", () => {
+    const editor = editorWith(
+      "<p></p><h1>Hand Hygiene</h1><h2>Scope</h2><h4>Too deep</h4><h3>Gloves</h3><h2></h2>",
+    );
+    editor.commands.setTextSelection(1);
+    editor.commands.insertTableOfContents();
+    expect(entriesOf(editor)).toEqual([
+      { level: 1, text: "Hand Hygiene" },
+      { level: 2, text: "Scope" },
+      { level: 3, text: "Gloves" },
+    ]);
+    const html = editor.getHTML();
+    expect(html).toContain('class="bs-toc"');
+    expect(html).toContain("bs-toc-entry--2");
+    expect(html).toContain(">Gloves</p>");
+  });
+
+  test("follows the headings as they change, and Undo takes both back", () => {
+    const editor = editorWith("<p></p><h2>Scope</h2>");
+    editor.commands.setTextSelection(1);
+    editor.commands.insertTableOfContents();
+    // Type into the heading: the contents change in the same step.
+    let end = 0;
+    editor.state.doc.forEach((node, offset) => {
+      if (node.type.name === "heading") end = offset + node.nodeSize - 1;
+    });
+    editor.chain().setTextSelection(end).insertContent(" and purpose").run();
+    expect(entriesOf(editor)).toEqual([
+      { level: 2, text: "Scope and purpose" },
+    ]);
+    editor.commands.undo();
+    expect(entriesOf(editor)).toEqual([{ level: 2, text: "Scope" }]);
+  });
+
+  test("goes beside the paragraph the cursor is in, never through it", () => {
+    const editor = editorWith("<h1>Policy</h1><p>Clean your hands.</p>");
+    editor.commands.setTextSelection(13); // "Clean yo|ur"
+    editor.commands.insertTableOfContents();
+    expect(editor.getJSON().content?.map((node) => node.type)).toEqual([
+      "heading",
+      "paragraph",
+      "tableOfContents",
+      "paragraph",
+    ]);
+    expect(editor.getText()).toContain("Clean your hands.");
+    // At the start of a block, it goes before it.
+    editor.commands.setTextSelection(1);
+    editor.commands.insertTableOfContents();
+    expect(editor.getJSON().content?.[0]?.type).toBe("tableOfContents");
+    // And the cursor is after it, so typing does not replace it.
+    editor.commands.insertContent("x");
+    expect(editor.getJSON().content?.[0]?.type).toBe("tableOfContents");
+  });
+
+  test("with no headings it says how to get some", () => {
+    const editor = editorWith("<p>Just words</p>");
+    editor.commands.setTextSelection(1);
+    editor.commands.insertTableOfContents();
+    expect(entriesOf(editor)).toEqual([]);
+    expect(editor.getHTML()).toContain("No headings yet.");
+  });
+
+  test("the reader draws what was stored, and only text", () => {
+    const html = generateHTML(
+      {
+        type: "doc",
+        content: [
+          {
+            type: "tableOfContents",
+            attrs: {
+              entries: [
+                { level: 2, text: "<b>Scope</b>" },
+                { level: 9, text: "Deep" },
+                { text: 5 },
+                "junk",
+              ],
+            },
+          },
+        ],
+      },
+      documentContentExtensions(),
+    );
+    expect(html).toContain("&lt;b&gt;Scope&lt;/b&gt;");
+    expect(html).toContain("bs-toc-entry--3");
+    expect(readEntries("junk")).toEqual([]);
   });
 });
 

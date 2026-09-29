@@ -42,6 +42,7 @@ import {
   TableRow,
 } from "@tiptap/extension-table";
 
+import { TableOfContents } from "./extensions/TableOfContents";
 import { pictureWidth } from "./imageFiles";
 
 /** Line spacing a paragraph may take — Word's own menu, as multiples. */
@@ -276,6 +277,7 @@ export function documentContentExtensions(): AnyExtension[] {
     TableHeader,
     ParagraphFormat,
     PageBreak,
+    TableOfContents,
   ];
 }
 

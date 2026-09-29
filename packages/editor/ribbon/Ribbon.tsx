@@ -31,6 +31,7 @@ import {
   List,
   ListChecks,
   ListOrdered,
+  ListTree,
   MessageSquareText,
   Minus,
   MoveHorizontal,
@@ -875,6 +876,12 @@ function InsertTab({
           shortcut="Ctrl+Enter"
           large
           onClick={() => chain().setPageBreak().run()}
+        />
+        <RibbonButton
+          icon={ListTree}
+          label="Table of contents"
+          large
+          onClick={() => chain().insertTableOfContents().run()}
         />
       </RibbonGroup>
 
