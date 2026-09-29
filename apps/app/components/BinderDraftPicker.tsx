@@ -69,7 +69,12 @@ export function describeDraft(draft: OwnDraft): string {
   const when = draft.updatedAt
     ? `edited ${formatAge(draft.updatedAt)}`
     : "not edited yet";
-  return `${changes} · ${when}`;
+  // **Proposed, and still yours** — a branch with a pull request open on it.
+  // It stays in this list so it stays editable; the row says that a save into
+  // it is one reviewers see.
+  return draft.changeNumber !== null
+    ? `Proposed as change ${draft.changeNumber} · ${changes}`
+    : `${changes} · ${when}`;
 }
 
 /** How wide the floating menu is, and how much room it needs below. */

@@ -109,6 +109,8 @@ interface DocumentEditorPageProps {
   onRenameDraft: (branch: string, name: string) => void | Promise<void>;
   /** Ask for the draft to be approved: the propose step, for this draft. */
   onPropose: () => void;
+  /** The change request a proposed draft is waiting in. */
+  onOpenChange: (changeNumber: number) => void;
   /**
    * Organize the draft's files from the editor's own panel. Each resolves
    * once the act is in the draft and the panel re-read — and, when the act
@@ -141,7 +143,8 @@ type Leaving =
   | { kind: "new"; folder?: string }
   | { kind: "draft"; branch: string }
   | { kind: "start"; name: string }
-  | { kind: "propose" };
+  | { kind: "propose" }
+  | { kind: "change"; number: number };
 
 type LoadState =
   | { kind: "loading" }
@@ -196,6 +199,7 @@ export function DocumentEditorPage({
   onStartDraft,
   onRenameDraft,
   onPropose,
+  onOpenChange,
   change = null,
   onRenameFile,
   onMoveFile,
@@ -374,6 +378,7 @@ export function DocumentEditorPage({
     else if (to.kind === "draft") onSwitchDraft(to.branch);
     else if (to.kind === "start") void onStartDraft(to.name);
     else if (to.kind === "propose") onPropose();
+    else if (to.kind === "change") onOpenChange(to.number);
     else onNewDocument(to.folder);
   };
 
@@ -688,7 +693,9 @@ export function DocumentEditorPage({
                 <strong>{draftName ?? "your draft"}</strong>
               )}
               <span className="doc-editor-where-more">
-                · nothing on record changes until it is approved
+                {current?.changeNumber != null
+                  ? ` · proposed as change ${current.changeNumber} — its reviewers see every save`
+                  : " · nothing on record changes until it is approved"}
               </span>
             </p>
           )}
@@ -718,7 +725,23 @@ export function DocumentEditorPage({
               binder, Edit, and the bar's Propose — four steps, and a chance at
               each to land in a different draft from the one just saved. A
               change request has been proposed already. */}
-          {change ? null : (
+          {change ? null : current?.changeNumber != null ? (
+            /* Proposed already: the way to its change request, where Propose
+               was. A branch with a pull request open on it still takes
+               pushes, and the pull request is one click away. */
+            <button
+              type="button"
+              className="bs-btn bs-btn-secondary bs-btn--sm"
+              disabled={save.kind === "saving"}
+              title="Its discussion, reviewers and sign-off"
+              onClick={() =>
+                leave({ kind: "change", number: current.changeNumber! })
+              }
+            >
+              <GitPullRequest size={14} strokeWidth={1.75} aria-hidden="true" />
+              Change {current.changeNumber}
+            </button>
+          ) : (
             <button
               type="button"
               className="bs-btn bs-btn-primary bs-btn--sm"

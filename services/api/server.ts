@@ -4189,6 +4189,28 @@ async function handlePublishWorkspaceChange(
       }
     }
 
+    // **A published draft is finished**, and its branch goes the way a merged
+    // branch does on a code host. Left behind, it has nothing on it that
+    // `main` lacks, so its owner's picker offered it back as an empty "Draft
+    // of 28 September — Nothing in it yet": work they had just published,
+    // looking like work they had never started. Best effort: the merge and the
+    // tags are the record, and a branch that outlives them costs a picker row.
+    // Its name is kept, so the change it became still says what it was called.
+    const publishedBranch = await getPullRequestHeadBranch({
+      client,
+      owner,
+      repo: workspaceName,
+      pullNumber,
+    }).catch(() => "");
+    if (isDraftBranch(publishedBranch)) {
+      await discardDraft({
+        client,
+        org: owner,
+        workspace: workspaceName,
+        branch: publishedBranch,
+      }).catch(() => {});
+    }
+
     logger.info("Workspace change published", {
       username: session.username,
       organization: owner,
@@ -4400,12 +4422,26 @@ async function handleWorkspaceChangeDetail(
         }),
     );
 
+    // **What its author called the draft it came from.** The branch chip read
+    // "Bob's draft", worked out from the branch's shape, when Bob had called
+    // it "Retire the 2019 supplier terms" — the one sentence about the work
+    // that was his, in the one place it was not shown.
+    const changeRow = buildPendingChangeRow(entry, requiredApprovals);
+    const branchLabel = isDraftBranch(changeRow.branchName)
+      ? ((
+          await draftNameStore
+            .forBranches(workspace.id, [changeRow.branchName])
+            .catch(() => new Map<string, DraftNameRecord>())
+        ).get(changeRow.branchName)?.name ?? null)
+      : null;
+
     return json(
       200,
       {
         organization: orgName,
         workspace: workspaceName,
-        change: buildPendingChangeRow(entry, requiredApprovals),
+        change: changeRow,
+        branchLabel,
         documents: withVersions,
         removedDocuments,
         // `main` has moved on if the change's merge base is no longer the base
@@ -8023,9 +8059,11 @@ async function resolveWorkTarget(params: {
  * able to do to another by guessing a name, and "other people's drafts are
  * visible; their contents are not" is the rule the binder is built on.
  *
- * Three conditions, in the order they get cheaper to be wrong about: it has to
- * be shaped like a draft branch, it has to still be a draft (a proposed one is
- * a change request and has reviewers), and it has to be yours.
+ * Two conditions: it has to be shaped like a draft branch, and it has to be
+ * yours. **A proposed draft is still yours** — it is the change's branch now,
+ * and a save into it is a save its reviewers see, exactly as a push to a pull
+ * request's branch is — so it resolves too, carrying the change's number for
+ * the callers that must not treat it as unproposed (propose, discard).
  *
  * Deliberately does **not** understand `true`. Opening a draft is a write, and
  * the read that shows a binder at its draft must not create one — a person who
@@ -8038,7 +8076,9 @@ async function resolveOwnDraftBranch(params: {
   workspace: string;
   username: string;
   draftRaw: unknown;
-}): Promise<{ branch: string } | { error: string } | null> {
+}): Promise<
+  { branch: string; changeNumber: number | null } | { error: string } | null
+> {
   const { client, org, workspace, username, draftRaw } = params;
 
   // Absent in every shape it can be absent in. A multipart form has no nulls —
@@ -8069,15 +8109,16 @@ async function resolveOwnDraftBranch(params: {
     org,
     workspace,
     owner: username,
+    proposed: true,
   });
-  if (!mine.some((draft) => draft.branch === branch)) {
+  const found = mine.find((draft) => draft.branch === branch);
+  if (!found) {
     return {
-      error:
-        "That draft is not yours, or it has already been proposed as a change request.",
+      error: "That draft is not yours, or it is gone.",
     };
   }
 
-  return { branch };
+  return { branch, changeNumber: found.changeNumber };
 }
 
 /**
@@ -8159,17 +8200,23 @@ async function handleBinderDraft(
       client,
       org: orgName,
       workspace: workspaceName,
+      proposed: true,
     });
     const own = drafts.filter((draft) => draft.owner === session.username);
 
     // **Which one you are in is the address's to say, not this route's to
     // guess.** A person may have several, and the page carries the branch it
-    // is editing in `?draft=`. A branch that is not yours, or that has been
-    // proposed since the link was made, falls back to the newest rather than
-    // failing — this is a read, and landing somebody in their most recent work
-    // is a better answer than an error about a branch name they never typed.
+    // is editing in `?draft=`, proposed or not. A branch that is not yours, or
+    // that is gone, falls back to the newest one nobody has proposed rather
+    // than failing — this is a read, and landing somebody in their most recent
+    // work is a better answer than an error about a branch name they never
+    // typed. Not a proposed one: arriving unasked in work reviewers are
+    // reading is a surprise, where arriving in it by name is the point.
     const asked = new URL(req.url).searchParams.get("draft")?.trim() ?? "";
-    const mine = own.find((draft) => draft.branch === asked) ?? own[0] ?? null;
+    const mine =
+      own.find((draft) => draft.branch === asked) ??
+      own.find((draft) => draft.changeNumber === null) ??
+      null;
 
     return json(
       200,
@@ -8299,6 +8346,7 @@ async function handleOpenBinderDraft(
       client,
       org: orgName,
       workspace: workspaceName,
+      proposed: true,
     });
 
     logger.info("Binder draft opened", {
@@ -8336,9 +8384,9 @@ async function handleOpenBinderDraft(
 /**
  * Throw your draft away.
  *
- * Only your own, and only while it is still a draft: {@link listBinderDrafts}
- * has already subtracted every branch a change request sits on, so a proposed
- * branch is not in the list and cannot be deleted out from under its reviewers.
+ * Only your own, and only while nobody has proposed it: a proposed draft is a
+ * change request's branch, and deleting it would pull the change out from
+ * under its reviewers.
  */
 async function handleDiscardBinderDraft(
   req: Request,
@@ -8387,6 +8435,17 @@ async function handleDiscardBinderDraft(
       return json(
         404,
         { error: "You have no draft in this binder." },
+        baseHeaders,
+      );
+    }
+    // Deleting a proposed draft's branch would take a change request under
+    // review with it. Withdrawing the change is its own act, on the change.
+    if (mine.changeNumber !== null) {
+      return json(
+        409,
+        {
+          error: `This draft is proposed as change ${mine.changeNumber}. Close that change first to throw the draft away.`,
+        },
         baseHeaders,
       );
     }
@@ -8493,6 +8552,7 @@ async function handleRenameBinderDraft(
       client,
       org: orgName,
       workspace: workspaceName,
+      proposed: true,
     });
     const renamed =
       drafts.find((draft) => draft.branch === mine.branch) ?? null;
@@ -8601,6 +8661,15 @@ async function handleProposeBinderDraft(
         baseHeaders,
       );
     }
+    if (mine.changeNumber !== null) {
+      return json(
+        409,
+        {
+          error: `This draft is already proposed, as change ${mine.changeNumber}. Saving into it updates that change.`,
+        },
+        baseHeaders,
+      );
+    }
 
     // A draft with no commits is a branch identical to `main`. Gitea would
     // refuse the pull request with a message about no differences; this says
@@ -8643,11 +8712,11 @@ ${description}`,
       );
     }
 
-    // **It has stopped being a draft**, so it stops having a draft's name: the
-    // title the author just wrote is on the change request now, which is in
-    // Gitea and is the record. Keeping the row would put a proposed branch in
-    // the picker beside work nobody has seen.
-    await draftNameStore.forget(workspace.id, mine.branch).catch(() => {});
+    // **The name stays.** It used to be forgotten here, on the reasoning that
+    // a proposed branch had stopped being a draft — so the change request's
+    // branch chip fell back to "Bob's draft" and the owner's picker lost the
+    // work entirely. A proposed draft is still its owner's, still editable,
+    // and still called what they called it.
 
     logger.info("Binder draft proposed", {
       username: session.username,
@@ -8693,7 +8762,8 @@ ${description}`,
  * - `drafts` is every draft of yours, so the picker has something to pick
  *   between. Each carries the name its author wrote and how many acts are in
  *   it; the mockup's row is "Reorganise nursing · 3 changes · edited 4 minutes
- *   ago" and every word of that comes from here.
+ *   ago" and every word of that comes from here. A proposed one is still
+ *   yours and still listed, with the number of the change open on it.
  * - `others` is everybody else's, **without their contents**. Knowing somebody
  *   is editing the binder is what stops two people making the same folder
  *   twice; reading what they have not proposed yet is not a thing a draft
@@ -8771,6 +8841,7 @@ async function describeDraft(params: {
           named: authoredName(mine),
           owner: mine.owner,
           updatedAt: mine.updatedAt,
+          changeNumber: mine.changeNumber,
           acts: acts.map((act) => ({
             summary: act.summary,
             sha: act.sha,
@@ -8785,9 +8856,15 @@ async function describeDraft(params: {
       updatedAt: draft.updatedAt,
       actCount: (actsByBranch.get(draft.branch) ?? []).length,
       lastAct: draft.lastAct,
+      changeNumber: draft.changeNumber,
     })),
+    // Somebody else's proposed draft is a change request now, readable by
+    // anybody who can read the binder, and it is listed with the changes —
+    // not here, as work nobody may look at.
     others: drafts
-      .filter((draft) => draft.owner !== username)
+      .filter(
+        (draft) => draft.owner !== username && draft.changeNumber === null,
+      )
       .map((draft) => ({
         branch: draft.branch,
         owner: draft.owner,
