@@ -10077,12 +10077,6 @@ html.bs-writing .app-main {
   min-height: 0;
 }
 
-/* The loading, failed and not-ours states are ordinary pages. */
-.doc-editor-page:not(:has(.doc-editor-frame)) {
-  padding: var(--brand-space-8);
-  gap: var(--brand-space-4);
-}
-
 .doc-editor-head {
   display: flex;
   align-items: center;
@@ -10147,8 +10141,52 @@ html.bs-writing .app-main {
   gap: var(--brand-space-2);
 }
 
-.doc-editor-page > .bs-note {
-  margin: var(--brand-space-2) var(--brand-space-5) 0;
+.doc-editor-alert {
+  margin: var(--brand-space-2) var(--brand-space-5);
+}
+
+/* The draft's files beside the page, the way GitLab's Web IDE keeps its
+   tree beside the file: the same rows as the binder's file panel, in a panel
+   of the editor's own so the shell's rule hiding that one does not hide it. */
+.doc-editor-workspace {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.doc-files {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 248px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-right: 1px solid var(--bs-rule);
+  background: var(--bs-surface-1);
+}
+
+.doc-files--shut {
+  align-items: center;
+  gap: var(--brand-space-1);
+  width: 40px;
+  padding-top: var(--brand-space-2);
+}
+
+/* A Word file or a PDF is in the binder but not the editor's to open. */
+.doc-files-item--file {
+  color: var(--bs-text-muted);
+}
+
+.doc-editor-main {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.doc-editor-state {
+  padding: var(--brand-space-8);
 }
 
 .doc-editor-frame {
@@ -10169,8 +10207,16 @@ html.bs-writing .app-main {
   html.bs-writing .app-main-area,
   html.bs-writing .app-main,
   .docw-page--writing,
-  .doc-editor-page {
+  .doc-editor-page,
+  .doc-editor-workspace,
+  .doc-editor-main {
     display: block;
+  }
+
+  /* No room for a tree beside a page on a phone; the binder's own list is
+     one Close away. */
+  .doc-files {
+    display: none;
   }
 
   .doc-editor-head {

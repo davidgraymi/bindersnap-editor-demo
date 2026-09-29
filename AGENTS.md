@@ -103,7 +103,11 @@ document's page opens (or resumes) that draft first. Only a file the editor
 writes — `*.json` — is offered it; a Word file or a PDF is edited in the
 program that made it and uploaded as a new version. It opens **full page**:
 while it is mounted it sets `bs-writing` on `<html>`, and the shell drops the
-sidebar and the binder's file panel so Letter fits at 100% on a laptop.
+sidebar and the binder's file panel so Letter fits at 100% on a laptop. The
+editor has **its own file panel** (`components/DraftFiles.tsx`), read at the
+draft: a policy opens beside the last one, and New starts one, without leaving
+the editor. Leaving a policy with unsaved words asks first, whatever the way
+out.
 
 `documentSchema.ts` is the one list of Tiptap extensions both the editor and
 the reader (`apps/app/editorDocumentHtml.ts`) load. Add a node or an attribute
