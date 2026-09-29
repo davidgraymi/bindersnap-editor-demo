@@ -9044,6 +9044,7 @@ async function handleReviseWorkspaceDocument(
   const documentPath = parseOptionalString(form.get("documentPath"));
   const joinRaw = parseOptionalString(form.get("changeNumber"));
   const draftRaw = parseOptionalString(form.get("draft"));
+  const fromEditor = parseOptionalString(form.get("source")) === "editor";
 
   if (!file || !documentPath) {
     return json(
@@ -9159,6 +9160,11 @@ async function handleReviseWorkspaceDocument(
       uploadBranch: target ? target.branch : branch,
       uploaderSlug: session.username,
       fileHashSha256: fullHash,
+      // Written here, so said as an edit: "Edit Hand Hygiene", which is what
+      // the draft bar lists and the change request's description prefills.
+      ...(fromEditor
+        ? { subject: `Edit ${formatDocumentName(existing.name)}` }
+        : {}),
     });
 
     const proposed = target

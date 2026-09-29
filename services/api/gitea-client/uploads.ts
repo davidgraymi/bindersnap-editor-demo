@@ -16,6 +16,12 @@ export interface UploadCommitMessageParams {
   uploadBranch: string;
   uploaderSlug: string;
   fileHashSha256: string;
+  /**
+   * The commit's first line, when the file name is not what happened. A
+   * policy saved in the editor arrives as `document.json`, a name nobody
+   * chose, and "Edit Hand Hygiene" is what the draft should read back.
+   */
+  subject?: string;
 }
 
 export interface CreateUploadBranchParams {
@@ -164,9 +170,10 @@ export function buildUploadCommitMessage(
     uploadBranch,
     uploaderSlug,
     fileHashSha256,
+    subject,
   } = params;
   return [
-    `Upload: ${sourceFilename}`,
+    subject ?? `Upload: ${sourceFilename}`,
     "",
     `Bindersnap-Document-Id: ${docSlug}`,
     `Bindersnap-Canonical-File: ${canonicalFile}`,

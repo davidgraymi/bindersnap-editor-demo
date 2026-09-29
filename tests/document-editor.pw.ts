@@ -420,6 +420,20 @@ test("Edit on a binder opens the editor; Organize is the tree", async ({
     page.getByRole("textbox", { name: "Hand Hygiene" }),
   ).toContainText("Clean your hands");
 
+  // A save is an edit, and the draft says so in words.
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+  await expect(page.getByRole("option", { name: "Normal" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Always.");
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.getByText(/Saved just now/)).toBeVisible({
+    timeout: 20_000,
+  });
+
   // Renaming and refiling are the tree's, one press away, in the same draft.
   await page
     .getByRole("button", { name: "Organize: rename, move and make folders" })
@@ -427,7 +441,8 @@ test("Edit on a binder opens the editor; Organize is the tree", async ({
   await expect(page).toHaveURL(
     new RegExp(`/${binder}\\?edit=1&draft=${encodeURIComponent(draft)}`),
   );
-  await expect(page.locator(".bs-draftbar")).toBeVisible();
+  await expect(page.locator(".bs-draftbar")).toContainText("Edit Hand Hygiene");
+  await expect(page.locator(".bs-draftbar")).not.toContainText("document.json");
 
   // And from the binder's own page, Organize goes there directly.
   await page.getByRole("button", { name: "Done" }).click();

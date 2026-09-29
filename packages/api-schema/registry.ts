@@ -1020,6 +1020,12 @@ registry.registerPath({
              * boolean looks like on the way in.
              */
             draft: z.string().optional(),
+            /**
+             * `editor` when the new version was written in Bindersnap's own
+             * editor, so the draft reads "Edit Hand Hygiene" rather than
+             * "Upload: document.json" — a file name nobody chose.
+             */
+            source: z.enum(["editor"]).optional(),
           }),
         },
       },

@@ -217,6 +217,22 @@ test("buildUploadCommitMessage includes all required trailers", () => {
   expect(message).toContain("Bindersnap-File-Hash-SHA256: abc123def456789");
 });
 
+test("buildUploadCommitMessage says an edit when the editor wrote it", () => {
+  const message = buildUploadCommitMessage({
+    docSlug: "nursing/hand-hygiene",
+    canonicalFile: "nursing/hand-hygiene.01J8.json",
+    sourceFilename: "document.json",
+    uploadBranch: "draft/alice/20260927",
+    uploaderSlug: "alice",
+    fileHashSha256: "hash123",
+    subject: "Edit Hand Hygiene",
+  });
+
+  expect(message.split("\n")[0]).toBe("Edit Hand Hygiene");
+  // The trailers are the same either way: the record is the file's.
+  expect(message).toContain("Bindersnap-Source-Filename: document.json");
+});
+
 test("buildUploadCommitMessage format", () => {
   const message = buildUploadCommitMessage({
     docSlug: "test-doc",
