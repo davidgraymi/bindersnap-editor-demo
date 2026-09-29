@@ -1178,6 +1178,68 @@ test("each open policy keeps its own undo, across a move to another and back", a
   await expect(hand).toContainText("Clean your hands");
 });
 
+test("a policy pointed at in the file panel is read ahead, and opens from what was read", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+
+  // A second policy in a draft, never opened in the editor.
+  const opened = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/draft`,
+    { method: "POST", headers: authHeaders(session) },
+  );
+  const draft = ((await opened.json()) as { draft: { branch: string } }).draft
+    .branch;
+  const form = new FormData();
+  form.set(
+    "file",
+    new Blob([JSON.stringify(POLICY, null, 2)], { type: "application/json" }),
+    "document.json",
+  );
+  form.set("name", "Visitor Policy");
+  form.set("draft", draft);
+  const added = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents`,
+    {
+      method: "POST",
+      headers: {
+        Cookie: `bindersnap_session=${session}`,
+        Origin: APP_BASE_URL,
+      },
+      body: form,
+    },
+  );
+  expect(added.status, await added.text()).toBe(201);
+
+  await signInBrowser(page, session);
+  const reads: string[] = [];
+  page.on("request", (request) => {
+    const url = request.url();
+    if (url.includes("/raw/") && url.includes("visitor-policy")) {
+      reads.push(url);
+    }
+  });
+  await page.goto(
+    `${APP_BASE_URL}/${org}/${binder}/hand-hygiene?edit=write&draft=${encodeURIComponent(draft)}`,
+  );
+  await expect(
+    page.getByRole("textbox", { name: "Hand Hygiene" }),
+  ).toContainText("Clean your hands");
+
+  // Pointing at the row reads it; opening it reads nothing more.
+  const files = page.getByRole("complementary", {
+    name: "Files in Clinical Policies",
+  });
+  const row = files.getByRole("button", { name: /^Visitor Policy/ });
+  await row.hover();
+  await expect.poll(() => reads.length).toBe(1);
+  await row.click();
+  await expect(
+    page.getByRole("textbox", { name: "Visitor Policy" }),
+  ).toContainText("Clean your hands");
+  expect(reads).toHaveLength(1);
+});
+
 test("a picture from this device is kept inside the policy, in the draft", async ({
   page,
 }) => {
