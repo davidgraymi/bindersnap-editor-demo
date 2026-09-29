@@ -7,7 +7,9 @@ import { routeToPath } from "../routes";
 
 import {
   archiveBinderDocument,
+  createBinderDocument,
   discardBinderDraft,
+  downloadBinderDocument,
   fetchBinderArchive,
   restoreBinderDocument,
   fetchBinder,
@@ -43,6 +45,7 @@ import {
   buildDocumentUrl,
 } from "../binderDocument";
 import { formatDocumentName } from "../documentDisplay";
+import { copyName } from "../copyName";
 import { AddPolicyModal } from "./AddPolicyModal";
 import { NewFolderModal } from "./NewFolderModal";
 import { BinderArchive } from "./BinderArchive";
@@ -756,6 +759,46 @@ export function BinderShell({
       );
     });
 
+  /**
+   * A copy of a policy, beside it, in the draft — and open in the editor, as
+   * Word's Save As leaves the copy on screen. The words as the draft has them;
+   * the editor saves the open one first, so nothing typed is left out.
+   */
+  const copyInEditor = async (slugPath: string) => {
+    const branch = draft?.draft?.branch ?? draftBranch;
+    const entry = contents?.documents.find(
+      (document) => document.slugPath === slugPath,
+    );
+    if (!branch || !entry) return;
+    const words = await (
+      await downloadBinderDocument(org, binder, entry.path, branch)
+    ).text();
+    const name = copyName(
+      formatDocumentName(entry.name),
+      (contents?.documents ?? [])
+        .filter((document) => document.folder === entry.folder)
+        .map((document) => formatDocumentName(document.name)),
+    );
+    const created = await createBinderDocument(
+      org,
+      binder,
+      new File([words], "document.json", { type: "application/json" }),
+      name,
+      entry.folder || undefined,
+      { draft: branch },
+    );
+    refreshDraft();
+    moveTo(
+      buildDocumentEditUrl({
+        org,
+        binder,
+        documentPath: created.slugPath,
+        draft: branch,
+      }),
+    );
+    setEditMode("writing");
+  };
+
   const restoreInEditor = (uid: string) =>
     actInEditor((into) => restoreBinderDocument(org, binder, uid, into));
 
@@ -1278,6 +1321,7 @@ export function BinderShell({
           onMoveFile={moveInEditor}
           onArchiveFile={archiveInEditor}
           onRestoreFile={restoreInEditor}
+          onCopyFile={copyInEditor}
           onReadArchive={readArchiveInEditor}
           onNewFolder={(parent) => {
             setAddingIn(parent ?? null);
