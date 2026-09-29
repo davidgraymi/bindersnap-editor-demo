@@ -1,5 +1,6 @@
 import type { ConflictingFilePayload } from "../../packages/api-schema/schemas/workspaces";
 import { parseDocumentFilename } from "../../packages/utils/documentPath";
+import { formatDocumentName } from "../../packages/utils/documentTitle";
 import type { ConflictResolution } from "./api";
 import {
   applyChoices,
@@ -31,6 +32,33 @@ export function displayConflictPath(path: string): string {
   const folder = slash === -1 ? "" : path.slice(0, slash + 1);
   const { name, extension } = parseDocumentFilename(path.slice(slash + 1));
   return `${folder}${name}${extension ? `.${extension}` : ""}`;
+}
+
+/**
+ * A file as the rest of the app names it: "Access Control Standard", in the
+ * Security folder — not `security/access-control-standard.json`. The
+ * extension is kept only for a file the editor did not write, where it says
+ * what kind of file is being chosen between.
+ */
+export function describeConflictName(path: string): {
+  title: string;
+  folder: string | null;
+  extension: string | null;
+} {
+  const slash = path.lastIndexOf("/");
+  const { name, extension } = parseDocumentFilename(path.slice(slash + 1));
+  return {
+    title: formatDocumentName(name),
+    folder:
+      slash === -1
+        ? null
+        : path
+            .slice(0, slash)
+            .split("/")
+            .map((part) => formatDocumentName(part))
+            .join(" / "),
+    extension: extension && extension !== "json" ? extension : null,
+  };
 }
 
 /** What happened to a file on each side, as the badge in its bar says it. */

@@ -10150,11 +10150,20 @@ a.binder-latest-title:focus-visible {
   gap: var(--brand-space-2);
 }
 
-.conflict-file-path {
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-ui-md);
+.conflict-file-name {
+  min-width: 0;
   color: var(--bs-text-primary);
+  font-size: var(--brand-text-sm);
   overflow-wrap: anywhere;
+}
+
+.conflict-file-name strong {
+  font-weight: var(--brand-weight-semibold);
+}
+
+.conflict-file-folder,
+.conflict-file-ext {
+  color: var(--bs-text-muted);
 }
 
 .conflict-file-count {
@@ -10333,9 +10342,27 @@ a.binder-latest-title:focus-visible {
   gap: var(--brand-space-2);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 768px) {
+  /* Above the tab bar, which is fixed over the foot of the page. */
   .conflicts-bar {
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
     grid-template-columns: minmax(0, 1fr);
+    padding: var(--brand-space-2) var(--brand-space-3);
+  }
+
+  .conflicts-bar-why {
+    display: none;
+  }
+
+  .conflicts-bar-actions {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .conflicts-bar-actions .bs-btn {
+    min-width: 0;
+    justify-content: center;
+    white-space: normal;
   }
 }
 
