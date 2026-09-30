@@ -1105,6 +1105,28 @@ export function BinderShell({
   // Kept on screen while the organization cannot write, and answered with the
   // paywall: a missing button explains nothing, an offer does.
   const addDocument = useWriteAction(() => setAdding(true));
+
+  // `?add=1` is the getting-started guide's "Add documents": the binder opens
+  // with the dialog already up, and the address loses the flag so a reload
+  // does not open it again. Read on arrival and on every in-app navigation,
+  // because the guide's link can be followed from this binder's own page.
+  useEffect(() => {
+    const take = () => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("add") !== "1") return;
+      params.delete("add");
+      const query = params.toString();
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${window.location.pathname}${query ? `?${query}` : ""}`,
+      );
+      addDocument();
+    };
+    take();
+    window.addEventListener("popstate", take);
+    return () => window.removeEventListener("popstate", take);
+  }, [org, binder, addDocument]);
   const editBinder = useWriteAction(() => void startWriting());
   const organizeBinder = useWriteAction(() => void startEditing());
   const editDocument = useWriteAction(

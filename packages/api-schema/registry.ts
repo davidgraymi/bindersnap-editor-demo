@@ -3,6 +3,7 @@ import { OpenAPIRegistry } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
 
 // Import all schemas AFTER calling extendZodWithOpenApi in init-openapi
+import { OnboardingPayloadSchema } from "./schemas/onboarding";
 import {
   NotificationCountPayloadSchema,
   NotificationListPayloadSchema,
@@ -219,6 +220,20 @@ registry.registerPath({
       content: {
         "application/json": { schema: LibraryPayloadSchema },
       },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/onboarding",
+  operationId: "getOnboarding",
+  tags: ["onboarding"],
+  responses: {
+    200: {
+      description:
+        "How far the reader has got with moving in, read from what exists",
+      content: { "application/json": { schema: OnboardingPayloadSchema } },
     },
   },
 });

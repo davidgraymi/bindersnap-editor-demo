@@ -2863,6 +2863,75 @@
         }
       }
     },
+    "/api/app/onboarding": {
+      "get": {
+        "operationId": "getOnboarding",
+        "tags": [
+          "onboarding"
+        ],
+        "responses": {
+          "200": {
+            "description": "How far the reader has got with moving in, read from what exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "steps": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "enum": [
+                              "organization",
+                              "binder",
+                              "documents",
+                              "approvers",
+                              "publish"
+                            ]
+                          },
+                          "done": {
+                            "type": "boolean"
+                          },
+                          "href": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "done",
+                          "href"
+                        ]
+                      }
+                    },
+                    "complete": {
+                      "type": "boolean"
+                    },
+                    "org": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "binder": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "steps",
+                    "complete",
+                    "org",
+                    "binder"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/app/notifications": {
       "get": {
         "operationId": "listNotifications",
