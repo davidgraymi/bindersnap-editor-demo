@@ -872,7 +872,12 @@ export type WorkspaceSignOff = z.infer<typeof WorkspaceSignOffSchema>;
  */
 export const BinderRulesRequestSchema = z.object({
   blockOnUnresolvedThreads: z.boolean().optional(),
-  requiredApprovals: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
+  requiredApprovals: z
+    .number()
+    .int()
+    .min(0)
+    .max(Number.MAX_SAFE_INTEGER)
+    .optional(),
   dismissStaleApprovals: z.boolean().optional(),
 });
 export type BinderRulesRequest = z.infer<typeof BinderRulesRequestSchema>;
