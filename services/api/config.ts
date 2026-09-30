@@ -47,6 +47,8 @@ const REQUIRED_GITEA_TOKEN_SCOPES = [
   // the grants onto the workspace repo all sit behind Gitea's organization
   // scope, so a session token without it cannot provision anything.
   "write:organization",
+  // The bell reads and clears the user's own Gitea notifications.
+  "write:notification",
 ] as const;
 
 // Spec types — every env var must have an entry in one of the three registries below.
