@@ -552,6 +552,10 @@ export function isReadyToPublish(change: {
   requiredApprovals: number | null;
   reviewers: readonly { status: ReviewerStatus }[];
 }): boolean {
+  // The binder's protection says whether an unanswered request holds the
+  // merge, and only the server can read it (see `readMergeRules`). Its answer
+  // arrives as `isApproved` and is preferred where there is one; this is the
+  // stricter reading, for a change that came without it.
   if (change.open === false) return false;
   if (
     change.reviewers.some(
@@ -618,6 +622,8 @@ export interface ChangeStandingInput {
   approvalCount: number;
   requiredApprovals: number | null;
   reviewers: ChangeReviewer[];
+  /** The server's "Gitea would merge it now", when it sent one. */
+  isApproved?: boolean;
 }
 
 export function describeChangeStanding(
@@ -653,11 +659,14 @@ export function describeChangeStanding(
   }
 
   // Somebody asked to review and not yet heard from holds the publish, full
-  // count or none: Gitea will not merge past an unanswered request.
+  // count or none, on a Gitea that blocks on review requests. The server
+  // knows which kind this binder is on; without its word, assume the stricter.
   const waiting = change.reviewers.filter(
     (reviewer) => standingOf(reviewer) === "awaiting",
   );
-  if (waiting.length === 0 && hasEnoughApprovals(change)) {
+  const ready =
+    change.isApproved ?? (waiting.length === 0 && hasEnoughApprovals(change));
+  if (ready) {
     return { tone: "ready", progress, reason: "Ready to publish" };
   }
 
@@ -697,7 +706,9 @@ const CHANGE_OUTCOME_BADGE_TONES: Record<ChangeOutcome, string> = {
 function openChangeState(change: ChangeRecord): string {
   if (change.requiredApprovals !== 0) return change.approvalState;
   if (change.approvalState === "changes_requested") return change.approvalState;
-  return isReadyToPublish(change) ? "ready" : "awaiting_review";
+  return (change.isApproved ?? isReadyToPublish(change))
+    ? "ready"
+    : "awaiting_review";
 }
 
 const OPEN_CHANGE_LABELS: Record<string, string> = {

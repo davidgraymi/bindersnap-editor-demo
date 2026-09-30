@@ -484,6 +484,20 @@ describe("where a change stands when the binder needs no approvals", () => {
     ).toEqual({ tone: "progress", progress: null, reason: "Waiting on Bob" });
   });
 
+  test("a binder that does not hold for requests is ready, by the server's word", () => {
+    // Gitea 28 binders turn `block_on_official_review_requests` off; only the
+    // server can read that, and says so as `isApproved`.
+    expect(
+      describeChangeStanding({
+        open: true,
+        approvalCount: 0,
+        requiredApprovals: 0,
+        reviewers: [reviewer("bob", "awaiting")],
+        isApproved: true,
+      })?.reason,
+    ).toBe("Ready to publish");
+  });
+
   test("a full count still waits on somebody asked and silent", () => {
     expect(
       describeChangeStanding({

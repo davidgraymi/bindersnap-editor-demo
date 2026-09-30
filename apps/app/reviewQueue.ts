@@ -153,6 +153,7 @@ export function buildQueueRows(
         approvalCount: change.approvalCount,
         requiredApprovals: change.requiredApprovals,
         reviewers: change.reviewers,
+        isApproved: change.isApproved,
       });
       const status = statusFromStanding(standing);
       const movedAt = toTime(
