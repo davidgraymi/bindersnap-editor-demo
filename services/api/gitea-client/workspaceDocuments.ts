@@ -196,29 +196,52 @@ export async function listWorkspaceDocuments(
   return (await readWorkspaceTree(params)).documents;
 }
 
+/**
+ * How to name `ref` to Gitea's tree endpoint.
+ *
+ * **A name as long as a commit hash is read as one.** Gitea's
+ * `git/trees/{sha}` takes any 40- or 64-character string for a SHA and never
+ * looks it up as a branch, so it answered "sha not found" for a real branch —
+ * and a draft is `draft/<username>/<17-digit stamp>`, which is exactly 40
+ * characters for every 16-character username. Every press of Edit by such a
+ * person opened an editor that said their draft did not exist. Spelled out in
+ * full, the name is too long to be a hash and Gitea resolves it.
+ */
+export function treeRefCandidates(ref: string): string[] {
+  const hashLength = ref.length === 40 || ref.length === 64;
+  if (!hashLength || /^[0-9a-f]+$/i.test(ref)) return [ref];
+  return [`refs/heads/${ref}`, `refs/tags/${ref}`];
+}
+
 async function readTreeEntries(
   params: ListWorkspaceDocumentsParams,
 ): Promise<GitTreeEntry[]> {
   const { client, org, workspace, ref = "main" } = params;
+  const candidates = treeRefCandidates(ref);
 
-  try {
-    const tree = (await unwrap(
-      client.GET("/repos/{owner}/{repo}/git/trees/{sha}", {
-        params: {
-          path: { owner: org, repo: workspace, sha: ref },
-          query: { recursive: true },
-        },
-      }),
-    )) as { tree?: GitTreeEntry[] };
-    return tree.tree ?? [];
-  } catch (err) {
-    // A binder whose `main` has no commits yet answers 404 for its tree. That
-    // is an empty binder, which is a state, not a problem.
-    if (err instanceof GiteaApiError && err.status === 404) {
-      return [];
+  for (const [index, candidate] of candidates.entries()) {
+    try {
+      const tree = (await unwrap(
+        client.GET("/repos/{owner}/{repo}/git/trees/{sha}", {
+          params: {
+            path: { owner: org, repo: workspace, sha: candidate },
+            query: { recursive: true },
+          },
+        }),
+      )) as { tree?: GitTreeEntry[] };
+      return tree.tree ?? [];
+    } catch (err) {
+      // A branch by that name is not there: it may be a tag.
+      if (index < candidates.length - 1) continue;
+      // A binder whose `main` has no commits yet answers 404 for its tree.
+      // That is an empty binder, which is a state, not a problem.
+      if (err instanceof GiteaApiError && err.status === 404) {
+        return [];
+      }
+      throw err;
     }
-    throw err;
   }
+  return [];
 }
 
 export interface FindWorkspaceDocumentParams {
