@@ -350,3 +350,14 @@ test("billing names the organization it is about", () => {
   expect(getRoute("/billing")).toEqual({ kind: "billing" });
   expect(routeToPath({ kind: "billing" })).toBe("/billing");
 });
+
+test("the help guides have addresses of their own", () => {
+  expect(getRoute("/help")).toEqual({ kind: "help" });
+  expect(getRoute("/help/approvals")).toEqual({
+    kind: "help",
+    topic: "approvals",
+  });
+  expect(routeToPath({ kind: "help", topic: "approvals" })).toBe(
+    "/help/approvals",
+  );
+});

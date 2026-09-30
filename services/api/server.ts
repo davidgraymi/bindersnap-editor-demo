@@ -143,6 +143,7 @@ import {
 } from "./gitea-client/discussions";
 import { isSupportedReaction } from "./gitea-client/reactions";
 import { buildAuditPacket } from "./export/auditPacket";
+import { onboardingState, type OnboardingOrganization } from "./onboarding";
 import { pullKey, readSubjectUrl, toAppNotifications } from "./notifications";
 import type { components } from "./gitea-client/spec/gitea";
 import { gatherAuditRecord } from "./export/auditRecord";
@@ -2595,6 +2596,115 @@ async function readLibrary(params: {
  * Gitea can answer it directly, so the search picks the candidates and the
  * expensive per-change reads are spent only where they can produce a row.
  */
+/**
+ * How far this person has got with moving in — see `onboarding.ts`.
+ *
+ * Read as them, so the guide describes what they can see. Bounded: a person
+ * setting up a first organization has one or two, with a binder or three, and
+ * somebody in fifty organizations finished moving in long ago — the first few
+ * are enough to say so.
+ */
+async function handleOnboarding(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { client, session } = auth;
+
+  const count = async (promise: Promise<{ data?: unknown }>) =>
+    promise
+      .then((response) =>
+        Array.isArray(response.data) ? response.data.length : 0,
+      )
+      .catch(() => 0);
+
+  try {
+    const orgs = ((await unwrap(
+      client.GET("/user/orgs", {
+        params: { query: { limit: ONBOARDING_ORGS } },
+      }),
+    )) ?? []) as { username?: string; name?: string }[];
+
+    // **Somebody who can already see a published version is past setting up**
+    // — they moved in, or were invited into an organization that did. One
+    // search across every change they can see answers that without walking
+    // their organizations.
+    const decided = (await client
+      .GET("/repos/issues/search", {
+        params: { query: { type: "pulls", state: "closed", limit: 10 } },
+      })
+      .then((response) => response.data ?? [])
+      .catch(() => [])) as { pull_request?: { merged?: boolean } | null }[];
+    if (decided.some((entry) => entry.pull_request?.merged === true)) {
+      return json(200, onboardingState([], { published: true }), baseHeaders);
+    }
+
+    // One organization at a time, stopping at the first that is fully set
+    // up: somebody who has finished moving in is answered after one or two,
+    // and only a person still setting up pays for the whole scan.
+    const facts: OnboardingOrganization[] = [];
+    for (const org of orgs.slice(0, ONBOARDING_ORGS)) {
+      const name = org.username ?? org.name ?? "";
+      const [members, repos] = await Promise.all([
+        count(
+          client.GET("/orgs/{org}/members", {
+            params: { path: { org: name }, query: { limit: 2 } },
+          }),
+        ),
+        client
+          .GET("/orgs/{org}/repos", {
+            params: {
+              path: { org: name },
+              query: { limit: ONBOARDING_BINDERS },
+            },
+          })
+          .then((response) => (response.data ?? []) as { name?: string }[])
+          .catch(() => [] as { name?: string }[]),
+      ]);
+      const binders = await Promise.all(
+        repos.slice(0, ONBOARDING_BINDERS).map(async (repo) => {
+          const repoName = repo.name ?? "";
+          const path = { owner: name, repo: repoName };
+          const [tags, pulls, protection] = await Promise.all([
+            count(
+              client.GET("/repos/{owner}/{repo}/tags", {
+                params: { path, query: { limit: 1 } },
+              }),
+            ),
+            count(
+              client.GET("/repos/{owner}/{repo}/pulls", {
+                params: { path, query: { state: "all", limit: 1 } },
+              }),
+            ),
+            readWorkspaceProtection(name, repoName),
+          ]);
+          return {
+            name: repoName,
+            hasDocuments: tags > 0 || pulls > 0,
+            hasPublished: tags > 0,
+            requiredApprovals: protection?.requiredApprovals ?? null,
+          };
+        }),
+      );
+      const entry = { name, hasColleagues: members > 1, binders };
+      facts.push(entry);
+      if (onboardingState([entry]).complete) break;
+    }
+
+    return json(200, onboardingState(facts), baseHeaders);
+  } catch (err) {
+    logger.error("Failed to read onboarding progress", {
+      username: session.username,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to read your progress.");
+  }
+}
+
+const ONBOARDING_ORGS = 20;
+const ONBOARDING_BINDERS = 6;
+
 /**
  * Your notifications: Gitea's threads, each with the reason it is for you.
  *
@@ -11653,6 +11763,8 @@ export function createApiServer() {
         response = await handleLogout(req, baseHeaders);
       } else if (pathname === "/auth/me" && method === "GET") {
         response = await handleAuthMe(req, baseHeaders);
+      } else if (pathname === "/api/app/onboarding" && method === "GET") {
+        response = await handleOnboarding(req, baseHeaders);
       } else if (pathname === "/api/app/notifications" && method === "GET") {
         response = await handleListNotifications(req, baseHeaders);
       } else if (

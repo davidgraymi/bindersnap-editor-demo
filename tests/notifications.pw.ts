@@ -132,15 +132,13 @@ test("a colleague asked to review sees it on the bell, and opening it clears it"
     )
     .toBe("review_requested");
 
-  await page
-    .context()
-    .addCookies([
-      {
-        name: "bindersnap_session",
-        value: colleague.session,
-        url: APP_BASE_URL,
-      },
-    ]);
+  await page.context().addCookies([
+    {
+      name: "bindersnap_session",
+      value: colleague.session,
+      url: APP_BASE_URL,
+    },
+  ]);
   await page.goto(`${APP_BASE_URL}/`);
   const bell = page.locator(".notif-bell");
   await expect(bell).toHaveAttribute("aria-label", /unread/, {

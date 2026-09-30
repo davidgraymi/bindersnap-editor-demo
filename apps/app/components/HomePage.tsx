@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 
 import { getHomeChanges, type HomeOpenDocument } from "../api";
 import {
@@ -26,6 +26,8 @@ interface HomePageProps {
   onBrowseDocuments: () => void;
   /** The organization's binders, where a document is added. */
   onOpenBinders: (() => void) | null;
+  /** The getting-started guide, first thing on the page while it has steps left. */
+  guide?: ReactNode;
 }
 
 /**
@@ -41,6 +43,7 @@ export function HomePage({
   onOpenChange,
   onBrowseDocuments,
   onOpenBinders,
+  guide = null,
 }: HomePageProps) {
   const [documents, setDocuments] = useState<HomeOpenDocument[]>([]);
   const [decided, setDecided] = useState<HomeDecidedRow[]>([]);
@@ -126,6 +129,8 @@ export function HomePage({
           </p>
         </div>
       </div>
+
+      {guide}
 
       {error ? (
         <section className="bs-panel">

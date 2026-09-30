@@ -11,6 +11,8 @@ import * as AdminClient from "../../packages/api-client/admin/admin";
 import * as OrganizationsClient from "../../packages/api-client/organizations/organizations";
 import * as BindersClient from "../../packages/api-client/workspaces/workspaces";
 import * as NotificationsClient from "../../packages/api-client/notifications/notifications";
+import * as OnboardingClient from "../../packages/api-client/onboarding/onboarding";
+import type { OnboardingPayload } from "../../packages/api-schema/schemas/onboarding";
 import type {
   AppNotification,
   NotificationCountPayload,
@@ -1716,6 +1718,16 @@ export async function exportAuditPacket(
     "";
   const named = disposition.match(/filename="([^"]+)"/)?.[1];
   return { blob: response.data, fileName: named ?? "audit-packet.zip" };
+}
+
+// Getting started
+
+export type { OnboardingPayload };
+
+/** How far you have got with moving in: five steps, each read from what exists. */
+export async function fetchOnboarding(): Promise<OnboardingPayload> {
+  const response = await OnboardingClient.getOnboarding({ cache: "no-store" });
+  return response.data;
 }
 
 // Notifications

@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
-import { CreditCard, LogOut, Moon, Shield } from "lucide-react";
+import { CircleHelp, CreditCard, LogOut, Moon, Shield } from "lucide-react";
 import type { SessionUser } from "../api";
 import { buildDocumentsUrl, parseDocumentsViewState } from "../documentsView";
 import { followInApp, navigateToHref } from "../appLink";
 import { NotificationBell } from "./NotificationBell";
+import { GettingStarted, GuideBar } from "./GettingStarted";
+import { HelpPage } from "./HelpPage";
+import { useOnboarding } from "../useOnboarding";
 import { routeToPath, type AppRoute } from "../routes";
 import { BinderShell } from "./BinderShell";
 import { OrganizationPage } from "./OrganizationPage";
@@ -116,6 +119,13 @@ export function AppShell({
   const displayName = user?.fullName ?? user?.username ?? "";
   const username = user?.username ?? displayName;
   const currentUsername = user?.username ?? "";
+  // Where a new customer is in moving in, read from what exists — so it is
+  // right after they leave halfway and come back on another computer.
+  const onboarding = useOnboarding(currentUsername, routeToPath(route));
+  const showGuide =
+    onboarding.state !== null &&
+    !onboarding.state.complete &&
+    !onboarding.hidden;
   const initials = displayName ? getInitials(displayName) : "?";
 
   /**
@@ -210,6 +220,18 @@ export function AppShell({
             onNavigate={onNavigate}
             onSearchLibrary={navigateToSearch}
           />
+
+          <a
+            className="app-topnav-icon-btn"
+            href="/help"
+            title="Help and guides"
+            aria-label="Help and guides"
+            onClick={(event) =>
+              followInApp(event, () => onNavigate({ kind: "help" }))
+            }
+          >
+            <CircleHelp size={16} strokeWidth={1.5} aria-hidden="true" />
+          </a>
 
           {/* What happened on the changes you are part of — Gitea's own
               notifications, with the reason each one is yours. */}
@@ -386,7 +408,27 @@ export function AppShell({
             <main
               className={`app-main${isWorkspace ? " app-main--workspace" : " app-main--page"}`}
             >
-              {route.kind === "changes" ? (
+              {showGuide &&
+              onboarding.state &&
+              route.kind !== "workspace" &&
+              route.kind !== "help" ? (
+                <GuideBar
+                  state={onboarding.state}
+                  onGo={navigateToHref}
+                  onHide={() => onboarding.setHidden(true)}
+                />
+              ) : null}
+              {route.kind === "help" ? (
+                <HelpPage
+                  topic={route.topic}
+                  onOpen={navigateToHref}
+                  guideHidden={onboarding.hidden}
+                  onShowGuide={() => {
+                    onboarding.setHidden(false);
+                    onNavigate({ kind: "workspace" });
+                  }}
+                />
+              ) : route.kind === "changes" ? (
                 <ReviewQueuePage
                   currentUsername={currentUsername}
                   onOpenChange={(org, binder, change) =>
@@ -459,6 +501,15 @@ export function AppShell({
                 />
               ) : (
                 <HomePage
+                  guide={
+                    showGuide && onboarding.state ? (
+                      <GettingStarted
+                        state={onboarding.state}
+                        onGo={navigateToHref}
+                        onHide={() => onboarding.setHidden(true)}
+                      />
+                    ) : null
+                  }
                   currentUsername={currentUsername}
                   currentUserFullName={user?.fullName ?? ""}
                   // A change is on a binder now: Home's rows carry the owning
