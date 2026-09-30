@@ -800,8 +800,8 @@ export function AddPolicyModal({
               : draft
                 ? "This goes into your draft. Nobody is asked to look at it until you propose it."
                 : changeNumber === null
-                  ? "This opens a change request. The document joins the binder once it is approved and published."
-                  : "This goes into that change request. The document joins the binder once the change is approved and published."}
+                  ? "This opens a change request. The document joins the binder once it is published."
+                  : "This goes into that change request. The document joins the binder once the change is published."}
           </p>
 
           <div className="upload-modal-actions">

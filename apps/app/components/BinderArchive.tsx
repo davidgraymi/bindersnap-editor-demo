@@ -136,8 +136,7 @@ export function BinderArchive({
         {/* The one thing restoring does that is not obvious: it waits. */}
         <p className="propose-lede">
           Restoring one opens a change request. It rejoins the binder once that
-          is approved and published, at the next version after the one it left
-          on.
+          is published, at the next version after the one it left on.
         </p>
       </div>
 

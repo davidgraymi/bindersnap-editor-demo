@@ -41,13 +41,13 @@ export const STEP_COPY: Record<OnboardingStepId, StepCopy> = {
   },
   approvers: {
     title: "Decide who approves",
-    why: "Nothing joins a binder until someone signs it off. Add the colleague who approves — or, if you run this alone, set the approvals you need to none.",
+    why: "A new binder needs no approvals, so you can publish straight away. When a colleague should sign things off first, add them and set how many approvals the binder needs.",
     action: "Add a colleague",
     guide: "approvals",
   },
   publish: {
     title: "Publish your first version",
-    why: "Once it is approved, publish it. That version, who approved it, and when are on the record for good.",
+    why: "Open the change request and publish it. That version, who published it and when, and anyone who approved it, are on the record for good.",
     action: "Open your change requests",
     guide: "approvals",
   },

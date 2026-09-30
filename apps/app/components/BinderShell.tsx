@@ -1076,7 +1076,7 @@ export function BinderShell({
             ? {
                 title: "Change requests",
                 subtitle:
-                  "Nothing joins this binder except a change that has been approved and published.",
+                  "Nothing joins this binder except a change that has been published.",
               }
             : activeTab === "history"
               ? {
