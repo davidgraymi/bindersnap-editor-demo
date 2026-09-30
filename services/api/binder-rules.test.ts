@@ -20,8 +20,16 @@ describe("parseBinderRulesRequest", () => {
     expect(typeof parseBinderRulesRequest(null)).toBe("string");
   });
 
-  test("refuses an approval count that is not a whole number from 0 to 10", () => {
-    for (const count of [-1, 11, 1.5, "2", null]) {
+  test("takes any whole number of approvals Gitea can store", () => {
+    for (const count of [0, 11, 99, 1000, Number.MAX_SAFE_INTEGER]) {
+      expect(parseBinderRulesRequest({ requiredApprovals: count })).toEqual({
+        requiredApprovals: count,
+      });
+    }
+  });
+
+  test("refuses an approval count that is not a whole number, 0 or more", () => {
+    for (const count of [-1, 1.5, "2", null, Number.MAX_SAFE_INTEGER + 1]) {
       expect(typeof parseBinderRulesRequest({ requiredApprovals: count })).toBe(
         "string",
       );

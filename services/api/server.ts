@@ -5603,8 +5603,15 @@ async function handleWorkspaceSettings(
   }
 }
 
-/** The most approvals a binder can ask for: more than a team ever has. */
-const MAX_REQUIRED_APPROVALS = 10;
+/**
+ * The most approvals a binder can ask for: whatever Gitea stores.
+ *
+ * Gitea keeps the count as a 64-bit integer and accepts any of it, so the only
+ * limit here is the largest whole number JSON carries exactly. A count nobody
+ * could meet is the administrator's call to make; the settings page says when
+ * a binder has fewer people who can approve than it asks for.
+ */
+const MAX_REQUIRED_APPROVALS = Number.MAX_SAFE_INTEGER;
 
 /**
  * What a request to change a binder's rules asks for, or why it cannot be read.
@@ -5648,7 +5655,7 @@ export function parseBinderRulesRequest(
       count < 0 ||
       count > MAX_REQUIRED_APPROVALS
     ) {
-      return `Approvals needed must be a whole number from 0 to ${MAX_REQUIRED_APPROVALS}.`;
+      return "Approvals needed must be a whole number, 0 or more.";
     }
     out.requiredApprovals = count;
   }

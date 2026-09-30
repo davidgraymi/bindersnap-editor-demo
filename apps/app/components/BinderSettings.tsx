@@ -38,7 +38,13 @@ import type {
   SignOffRuleView,
   WorkspaceSettingsPayload,
 } from "../../../packages/api-schema/schemas/workspaces";
-import { GROUP_LEVELS, groupLevelLabel } from "../binderSettings";
+import {
+  countApprovers,
+  GROUP_LEVELS,
+  groupLevelLabel,
+  parseApprovalCount,
+  unreachableApprovalsNote,
+} from "../binderSettings";
 import { formatDocumentName } from "../documentDisplay";
 import { describeGroupName } from "../../../packages/utils/groupName";
 import { AppIcon } from "./AppIcon";
@@ -1487,8 +1493,60 @@ function RuleRow({
 
 /* ── How changes are approved ─────────────────────────────────────────── */
 
-/** What the approval count can be set to. The API accepts up to ten. */
-const APPROVAL_CHOICES = [0, 1, 2, 3, 4, 5];
+/**
+ * The approval count, typed.
+ *
+ * A number field rather than a menu, because the count is whatever the
+ * binder's administrator says it is — a board of twelve that signs off on
+ * everything needs twelve, and Gitea stores any number. It saves when the
+ * field is left or Enter is pressed, not on every keystroke, so typing "12"
+ * never briefly asks for one approval. Escape puts it back.
+ */
+function ApprovalCountField({
+  value,
+  disabled,
+  onCommit,
+}: {
+  value: number;
+  disabled: boolean;
+  onCommit: (count: number) => void;
+}) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => setText(String(value)), [value]);
+  const count = parseApprovalCount(text);
+
+  function commit() {
+    if (count === null) {
+      setText(String(value));
+      return;
+    }
+    if (count !== value) onCommit(count);
+  }
+
+  return (
+    <input
+      id="binder-approvals"
+      className="bs-input bs-input--sm bs-settings-count"
+      type="number"
+      inputMode="numeric"
+      min={0}
+      step={1}
+      value={text}
+      disabled={disabled}
+      aria-invalid={count === null}
+      onChange={(event) => setText(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          commit();
+        } else if (event.key === "Escape") {
+          setText(String(value));
+        }
+      }}
+    />
+  );
+}
 
 /**
  * The rules every change in the binder meets, as rows rather than a bulleted
@@ -1514,6 +1572,13 @@ function ApprovalSection({
 }) {
   const rules = settings.rules;
   const [saving, setSaving] = useState(false);
+  const unreachable =
+    rules.requiredApprovals === null
+      ? null
+      : unreachableApprovalsNote(
+          rules.requiredApprovals,
+          countApprovers(settings.teams),
+        );
   const [notice, setNotice] = useState<string | null>(null);
 
   async function change(next: {
@@ -1578,28 +1643,26 @@ function ApprovalSection({
                   ? "Anyone who can publish may do so without an approval. Right for a binder only you work in."
                   : "Nobody can approve their own change, so the author never counts toward this."}
               </span>
+              {unreachable ? (
+                <span
+                  className="bs-row-meta bs-row-meta--warning"
+                  role="status"
+                >
+                  {unreachable}
+                </span>
+              ) : null}
             </span>
             <span className="bs-row-right bs-settings-value">
               {rules.requiredApprovals === null ? (
                 "Could not be read"
               ) : canManage ? (
-                <select
-                  id="binder-approvals"
-                  className="bs-input bs-input--sm bs-settings-level"
+                <ApprovalCountField
                   value={rules.requiredApprovals}
                   disabled={saving}
-                  onChange={(event) =>
-                    void change({
-                      requiredApprovals: Number(event.target.value),
-                    })
+                  onCommit={(count) =>
+                    void change({ requiredApprovals: count })
                   }
-                >
-                  {APPROVAL_CHOICES.map((count) => (
-                    <option key={count} value={count}>
-                      {count === 0 ? "None" : count}
-                    </option>
-                  ))}
-                </select>
+                />
               ) : (
                 rules.requiredApprovals
               )}
