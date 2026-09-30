@@ -143,6 +143,8 @@ import {
 } from "./gitea-client/discussions";
 import { isSupportedReaction } from "./gitea-client/reactions";
 import { buildAuditPacket } from "./export/auditPacket";
+import { pullKey, readSubjectUrl, toAppNotifications } from "./notifications";
+import type { components } from "./gitea-client/spec/gitea";
 import { gatherAuditRecord } from "./export/auditRecord";
 import {
   EXPORT_TYPES,
@@ -2593,6 +2595,213 @@ async function readLibrary(params: {
  * Gitea can answer it directly, so the search picks the candidates and the
  * expensive per-change reads are spent only where they can produce a row.
  */
+/**
+ * Your notifications: Gitea's threads, each with the reason it is for you.
+ *
+ * Read with your own token — Gitea's notifications are per user, and that is
+ * the permission check. `?all=1` includes the ones already read.
+ */
+async function handleListNotifications(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { client, session } = auth;
+
+  try {
+    const all = new URL(req.url).searchParams.get("all") === "1";
+    const threads = (await unwrap(
+      client.GET("/notifications", {
+        params: {
+          query: { all, "subject-type": ["pull"], limit: NOTIFICATION_PAGE },
+        },
+      }),
+    )) as components["schemas"]["NotificationThread"][];
+
+    // One read per change, to say why it is here: asked of you, yours,
+    // published. A change that cannot be read keeps its thread, unexplained.
+    const subjects = new Map<
+      string,
+      { org: string; binder: string; number: number }
+    >();
+    for (const thread of threads ?? []) {
+      const subject = readSubjectUrl(thread.subject?.url);
+      if (subject)
+        subjects.set(
+          pullKey(subject.org, subject.binder, subject.number),
+          subject,
+        );
+    }
+    const pulls = new Map(
+      await Promise.all(
+        [...subjects].map(async ([key, subject]) => {
+          const pull = await client
+            .GET("/repos/{owner}/{repo}/pulls/{index}", {
+              params: {
+                path: {
+                  owner: subject.org,
+                  repo: subject.binder,
+                  index: subject.number,
+                },
+              },
+            })
+            .then((response) => response.data ?? null)
+            .catch(() => null);
+          return [key, pull] as const;
+        }),
+      ),
+    );
+
+    return json(
+      200,
+      {
+        notifications: toAppNotifications(
+          threads ?? [],
+          pulls,
+          session.username,
+        ),
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    const scope = notificationScopeMissing(err, baseHeaders);
+    if (scope) return scope;
+    logger.error("Failed to read notifications", {
+      username: session.username,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to read your notifications.",
+    );
+  }
+}
+
+/** How many are unread — what the bell's number is. Cheap: one Gitea call. */
+async function handleNotificationCount(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  try {
+    const counted = (await unwrap(
+      auth.client.GET("/notifications/new", {}),
+    )) as { new?: number };
+    return json(200, { unread: counted?.new ?? 0 }, baseHeaders);
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to count your notifications.",
+    );
+  }
+}
+
+/**
+ * Mark notifications read: one (`id`), every one about a change (`change`),
+ * or, with neither, all of them.
+ *
+ * `change` is what opening a change page sends: having read the change is
+ * having read what the bell was saying about it.
+ */
+async function handleReadNotifications(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { client } = auth;
+
+  try {
+    const body = ((await readJsonBody(req)) ?? {}) as {
+      id?: unknown;
+      change?: { org?: unknown; binder?: unknown; number?: unknown };
+    };
+
+    const markThread = (id: number) =>
+      unwrap(
+        client.PATCH("/notifications/threads/{id}", {
+          params: { path: { id: String(id) }, query: { "to-status": "read" } },
+        }),
+      );
+
+    if (typeof body.id === "number") {
+      await markThread(body.id);
+    } else if (body.change && typeof body.change === "object") {
+      const { org, binder, number } = body.change;
+      if (
+        typeof org !== "string" ||
+        typeof binder !== "string" ||
+        typeof number !== "number"
+      ) {
+        return json(
+          400,
+          { error: "Say which change: org, binder and number." },
+          baseHeaders,
+        );
+      }
+      const unread = (await unwrap(
+        client.GET("/notifications", {
+          params: {
+            query: { "subject-type": ["pull"], limit: NOTIFICATION_PAGE },
+          },
+        }),
+      )) as components["schemas"]["NotificationThread"][];
+      const matching = (unread ?? []).filter((thread) => {
+        const subject = readSubjectUrl(thread.subject?.url);
+        return (
+          subject?.org === org &&
+          subject.binder === binder &&
+          subject.number === number
+        );
+      });
+      await Promise.all(
+        matching.map((thread) =>
+          thread.id === undefined ? null : markThread(thread.id),
+        ),
+      );
+    } else {
+      await unwrap(client.PUT("/notifications", { params: { query: {} } }));
+    }
+
+    const counted = (await unwrap(client.GET("/notifications/new", {}))) as {
+      new?: number;
+    };
+    return json(200, { unread: counted?.new ?? 0 }, baseHeaders);
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to mark notifications read.",
+    );
+  }
+}
+
+/**
+ * A session that began before notifications existed holds a Gitea token
+ * without the scope for them, and Gitea says so in words nobody should see.
+ * Signing in again mints a token that has it.
+ */
+function notificationScopeMissing(
+  err: unknown,
+  baseHeaders: Headers,
+): Response | null {
+  const message = err instanceof Error ? err.message : String(err);
+  if (!/notification/.test(message) || !/scope/.test(message)) return null;
+  return json(
+    409,
+    { error: "Sign out and back in to turn on notifications." },
+    baseHeaders,
+  );
+}
+
+/** A bell is a glance, not an inbox: the newest thirty are enough. */
+const NOTIFICATION_PAGE = 30;
+
 async function handleHomeChanges(
   req: Request,
   baseHeaders: Headers,
@@ -11444,6 +11653,18 @@ export function createApiServer() {
         response = await handleLogout(req, baseHeaders);
       } else if (pathname === "/auth/me" && method === "GET") {
         response = await handleAuthMe(req, baseHeaders);
+      } else if (pathname === "/api/app/notifications" && method === "GET") {
+        response = await handleListNotifications(req, baseHeaders);
+      } else if (
+        pathname === "/api/app/notifications/count" &&
+        method === "GET"
+      ) {
+        response = await handleNotificationCount(req, baseHeaders);
+      } else if (
+        pathname === "/api/app/notifications/read" &&
+        method === "POST"
+      ) {
+        response = await handleReadNotifications(req, baseHeaders);
       } else if (pathname === "/api/app/home/changes" && method === "GET") {
         response = await handleHomeChanges(req, baseHeaders);
       } else if (pathname === "/api/app/documents" && method === "GET") {

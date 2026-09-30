@@ -4,6 +4,7 @@ import { CreditCard, LogOut, Moon, Shield } from "lucide-react";
 import type { SessionUser } from "../api";
 import { buildDocumentsUrl, parseDocumentsViewState } from "../documentsView";
 import { followInApp, navigateToHref } from "../appLink";
+import { NotificationBell } from "./NotificationBell";
 import { routeToPath, type AppRoute } from "../routes";
 import { BinderShell } from "./BinderShell";
 import { OrganizationPage } from "./OrganizationPage";
@@ -209,6 +210,10 @@ export function AppShell({
             onNavigate={onNavigate}
             onSearchLibrary={navigateToSearch}
           />
+
+          {/* What happened on the changes you are part of — Gitea's own
+              notifications, with the reason each one is yours. */}
+          <NotificationBell onOpen={navigateToHref} />
 
           {/* Make something that has no page to be added from: a binder, an
               organization. A document is added on its binder's page. */}

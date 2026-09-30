@@ -4,6 +4,11 @@ import { z } from "zod";
 
 // Import all schemas AFTER calling extendZodWithOpenApi in init-openapi
 import {
+  NotificationCountPayloadSchema,
+  NotificationListPayloadSchema,
+  ReadNotificationsBodySchema,
+} from "./schemas/notifications";
+import {
   SessionAuthStateSchema,
   LoginBodySchema,
   SignupBodySchema,
@@ -213,6 +218,57 @@ registry.registerPath({
       description: "Every document in every binder this person can reach",
       content: {
         "application/json": { schema: LibraryPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/notifications",
+  operationId: "listNotifications",
+  tags: ["notifications"],
+  request: { query: z.object({ all: z.enum(["1"]).optional() }) },
+  responses: {
+    200: {
+      description: "Your newest notifications, with the reason each is yours",
+      content: {
+        "application/json": { schema: NotificationListPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/notifications/count",
+  operationId: "countNotifications",
+  tags: ["notifications"],
+  responses: {
+    200: {
+      description: "How many notifications are unread",
+      content: {
+        "application/json": { schema: NotificationCountPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/notifications/read",
+  operationId: "readNotifications",
+  tags: ["notifications"],
+  request: {
+    body: {
+      content: { "application/json": { schema: ReadNotificationsBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Marked read; how many are still unread",
+      content: {
+        "application/json": { schema: NotificationCountPayloadSchema },
       },
     },
   },

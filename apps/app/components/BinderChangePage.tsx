@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { WorkspaceChangeDetailPayload } from "../../../packages/api-schema/schemas/workspaces";
+import { announceNotificationsChanged } from "../notificationEvents";
 import {
+  markNotificationsRead,
   downloadBinderDocument,
   editBinderChange,
   fetchBinderChange,
@@ -122,6 +124,13 @@ export function BinderChangePage({
       );
     }
   }, [org, binder, changeNumber, onChanged]);
+
+  // Having opened the change is having read what the bell said about it.
+  useEffect(() => {
+    markNotificationsRead({ change: { org, binder, number: changeNumber } })
+      .then((result) => announceNotificationsChanged(result.unread))
+      .catch(() => undefined);
+  }, [org, binder, changeNumber]);
 
   useEffect(() => {
     setDetail(null);
