@@ -136,9 +136,13 @@ test("a policy is exported as a PDF and as a Word document", async () => {
   expect(pdf.headers.get("content-disposition")).toContain(
     "fire-safety-v1.pdf",
   );
-  expect(new TextDecoder().decode((await pdf.arrayBuffer()).slice(0, 5))).toBe(
-    "%PDF-",
-  );
+  const pdfBytes = await pdf.arrayBuffer();
+  expect(new TextDecoder().decode(pdfBytes.slice(0, 5))).toBe("%PDF-");
+  // Set in the editor's own fonts, which the API image carries: Lora for
+  // the heading, Geist for the text.
+  const pdfText = new TextDecoder("latin1").decode(pdfBytes);
+  expect(pdfText).toContain("/BaseFont /Lora-SemiBold");
+  expect(pdfText).toContain("/BaseFont /Geist-Regular");
 
   const docx = await exported("docx");
   expect(docx.status).toBe(200);

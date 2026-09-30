@@ -1,7 +1,7 @@
 import { headingNumbers } from "../../../packages/utils/headingNumbers";
 
 /**
- * A policy written in Bindersnap, as blocks a Word or PDF writer can lay out.
+ * A document written in Bindersnap, as blocks a Word or PDF writer can lay out.
  *
  * **The stored file is ProseMirror JSON**, which is the right format for the
  * editor and the wrong one for anybody outside it: a surveyor handed
@@ -29,22 +29,34 @@ export interface Run {
   color?: string;
   /** `#rrggbb`, when the author highlighted it. */
   highlight?: string;
+  /** The CSS `font-family` the author picked, as the editor stored it. */
+  font?: string;
+  /** Points, when the author set a size. */
+  size?: number;
   /** A line break inside the paragraph, not the end of it. */
   lineBreak?: boolean;
+}
+
+/** How a paragraph or heading is set, beyond its runs. */
+export interface ParagraphFormat {
+  align: Align;
+  /** Steps of Indent, half an inch each, as Word's are. */
+  indent: number;
+  /** A multiple — 1.5 is one and a half lines — or null for the default. */
+  lineSpacing: number | null;
 }
 
 export type Align = "left" | "center" | "right" | "justify";
 
 export type Block =
-  | {
+  | ({
       kind: "heading";
       level: number;
       runs: Run[];
-      /** "2.1" when the policy numbers its sections. */
+      /** "2.1" when the document numbers its sections. */
       number: string | null;
-      align: Align;
-    }
-  | { kind: "paragraph"; runs: Run[]; align: Align }
+    } & ParagraphFormat)
+  | ({ kind: "paragraph"; runs: Run[] } & ParagraphFormat)
   | {
       kind: "list";
       style: "bullet" | "ordered" | "task";
@@ -65,10 +77,13 @@ export type Block =
       /** Pixels at 100%, when the author sized it. */
       width: number | null;
       alt: string;
+      /** The alignment of the paragraph it sits in. */
+      align: Align;
     }
   | {
       kind: "contents";
-      entries: { level: number; text: string; number: string | null }[];
+      /** As the editor lists them: "2.1 Checks" when sections are numbered. */
+      entries: { level: number; text: string }[];
     };
 
 export interface ListItem {
@@ -81,6 +96,8 @@ export interface TableCell {
   blocks: Block[];
   header: boolean;
   colspan: number;
+  /** Pixels, per column it spans, when the author dragged it to a width. */
+  colwidth: (number | null)[] | null;
   /** `#rrggbb`, when the cell is shaded. */
   shade: string | null;
 }
@@ -118,6 +135,35 @@ function alignOf(node: PmNode): Align {
   return value === "center" || value === "right" || value === "justify"
     ? value
     : "left";
+}
+
+/** Word's line-spacing menu, which is all the editor offers. */
+const LINE_SPACINGS = new Set(["1", "1.15", "1.5", "2", "2.5", "3"]);
+
+function formatOf(node: PmNode): ParagraphFormat {
+  const indent = Math.round(Number(node.attrs?.indent ?? 0));
+  const spacing = node.attrs?.lineSpacing;
+  return {
+    align: alignOf(node),
+    indent: Number.isFinite(indent) ? Math.min(8, Math.max(0, indent)) : 0,
+    lineSpacing:
+      typeof spacing === "string" && LINE_SPACINGS.has(spacing)
+        ? Number(spacing)
+        : null,
+  };
+}
+
+/**
+ * Points out of a stored size: `12pt`, or `16px` from older documents — the
+ * editor's own reading (`parseFontSizePt` in the ribbon's options).
+ */
+export function parseFontSize(value: unknown): number | undefined {
+  if (typeof value !== "string") return undefined;
+  const match = value.trim().match(/^(\d+(?:\.\d+)?)(pt|px)$/);
+  if (!match) return undefined;
+  const amount = Number(match[1]);
+  if (!(amount > 0)) return undefined;
+  return match[2] === "px" ? Math.round(amount * 0.75 * 2) / 2 : amount;
 }
 
 /** Every piece of text under a node, joined — for headings in the contents. */
@@ -166,10 +212,15 @@ function runsOf(node: PmNode): Run[] {
           case "textStyle": {
             const color = normalizeColor(mark.attrs?.color);
             if (color) run.color = color;
+            const family = mark.attrs?.fontFamily;
+            if (typeof family === "string" && family.trim()) run.font = family;
+            const size = parseFontSize(mark.attrs?.fontSize);
+            if (size) run.size = size;
             break;
           }
           case "highlight":
-            run.highlight = normalizeColor(mark.attrs?.color) ?? "#fef08a";
+            // A <mark> with no colour is the browser's yellow.
+            run.highlight = normalizeColor(mark.attrs?.color) ?? "#ffff00";
             break;
         }
       }
@@ -194,7 +245,7 @@ function decodeDataUrl(src: string): { data: Uint8Array; mime: string } | null {
   return { data, mime };
 }
 
-function imageOf(node: PmNode): Block {
+function imageOf(node: PmNode, align: Align = "left"): Block {
   const src = typeof node.attrs?.src === "string" ? node.attrs.src : "";
   const decoded = decodeDataUrl(src);
   const width = Number(node.attrs?.width);
@@ -204,6 +255,7 @@ function imageOf(node: PmNode): Block {
     mime: decoded?.mime ?? "",
     width: Number.isFinite(width) && width > 0 ? width : null,
     alt: typeof node.attrs?.alt === "string" ? node.attrs.alt : "",
+    align,
   };
 }
 
@@ -220,7 +272,7 @@ function blocksOf(
           level: Math.min(6, Math.max(1, Number(node.attrs?.level) || 1)),
           runs: runsOf(node),
           number: numbers.get(node) ?? null,
-          align: alignOf(node),
+          ...formatOf(node),
         });
         break;
       case "paragraph": {
@@ -236,10 +288,10 @@ function blocksOf(
           blocks.push({
             kind: "paragraph",
             runs: runsOf({ ...node, content: rest }),
-            align: alignOf(node),
+            ...formatOf(node),
           });
         }
-        for (const image of images) blocks.push(imageOf(image));
+        for (const image of images) blocks.push(imageOf(image, alignOf(node)));
         break;
       }
       case "image":
@@ -285,23 +337,51 @@ function blocksOf(
               blocks: blocksOf(cell.content, numbers),
               header: cell.type === "tableHeader",
               colspan: Math.max(1, Number(cell.attrs?.colspan) || 1),
+              colwidth: Array.isArray(cell.attrs?.colwidth)
+                ? (cell.attrs.colwidth as unknown[]).map((width) =>
+                    typeof width === "number" && width > 0 ? width : null,
+                  )
+                : null,
               shade: normalizeColor(cell.attrs?.background) ?? null,
             })),
           ),
         });
         break;
       case "tableOfContents":
-        // Filled in once every heading is known — see `policyBlocks`.
-        blocks.push({ kind: "contents", entries: [] });
+        // The list the editor stored is the list the author saw. One that
+        // is missing is filled in once every heading is known — see
+        // `documentBlocks`.
+        blocks.push({ kind: "contents", entries: storedEntries(node) });
         break;
       default: {
         const text = plainText(node);
         if (text)
-          blocks.push({ kind: "paragraph", runs: [{ text }], align: "left" });
+          blocks.push({
+            kind: "paragraph",
+            runs: [{ text }],
+            align: "left",
+            indent: 0,
+            lineSpacing: null,
+          });
       }
     }
   }
   return blocks;
+}
+
+/** A contents block's entries as stored, made safe to draw. */
+function storedEntries(node: PmNode): { level: number; text: string }[] {
+  const value = node.attrs?.entries;
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (typeof item !== "object" || item === null) return [];
+    const { level, text } = item as { level?: unknown; text?: unknown };
+    if (typeof text !== "string" || text.trim() === "") return [];
+    const n = Math.round(Number(level));
+    return [
+      { level: Number.isFinite(n) ? Math.min(3, Math.max(1, n)) : 1, text },
+    ];
+  });
 }
 
 function collectHeadings(node: PmNode, into: PmNode[]): void {
@@ -309,8 +389,8 @@ function collectHeadings(node: PmNode, into: PmNode[]): void {
   for (const child of node.content ?? []) collectHeadings(child, into);
 }
 
-/** Parse the stored JSON, or null when the file is not a Bindersnap policy. */
-export function parsePolicyJson(text: string): PmNode | null {
+/** Parse the stored JSON, or null when the file is not a Bindersnap document. */
+export function parseDocumentJson(text: string): PmNode | null {
   try {
     const parsed = JSON.parse(text) as PmNode;
     return parsed && parsed.type === "doc" ? parsed : null;
@@ -320,10 +400,10 @@ export function parsePolicyJson(text: string): PmNode | null {
 }
 
 /**
- * The policy's blocks, with its sections numbered and its contents filled in
+ * The document's blocks, with its sections numbered and its contents filled in
  * the way the editor draws them.
  */
-export function policyBlocks(doc: PmNode): Block[] {
+export function documentBlocks(doc: PmNode): Block[] {
   const headings: PmNode[] = [];
   collectHeadings(doc, headings);
   const numbered = doc.attrs?.numberedHeadings === true;
@@ -336,17 +416,25 @@ export function policyBlocks(doc: PmNode): Block[] {
     headings.map((heading, index) => [heading, labels[index] ?? null]),
   );
 
+  // What the editor would list, for a contents block saved without its
+  // entries: "2.1 Checks", as `contentsEntries` writes them.
   const entries = headings
-    .map((heading, index) => ({
-      level: Number(heading.attrs?.level) || 1,
-      text: plainText(heading).trim(),
-      number: labels[index] ?? null,
-    }))
-    .filter((entry) => entry.text !== "" && entry.level <= 3);
+    .map((heading, index) => {
+      const text = plainText(heading).trim();
+      const number = labels[index];
+      return {
+        level: Number(heading.attrs?.level) || 1,
+        text: number ? `${number} ${text}` : text,
+        empty: text === "",
+      };
+    })
+    .filter((entry) => !entry.empty && entry.level <= 3)
+    .map(({ level, text }) => ({ level, text }));
 
   const fill = (blocks: Block[]): Block[] =>
     blocks.map((block) => {
-      if (block.kind === "contents") return { ...block, entries };
+      if (block.kind === "contents")
+        return block.entries.length > 0 ? block : { ...block, entries };
       if (block.kind === "quote")
         return { ...block, blocks: fill(block.blocks) };
       if (block.kind === "list") {

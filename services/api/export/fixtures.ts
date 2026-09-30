@@ -1,5 +1,5 @@
-/** A policy using every block the editor makes, for the export tests. */
-export const SAMPLE_POLICY = {
+/** A document using every block the editor makes, for the export tests. */
+export const SAMPLE_DOCUMENT = {
   type: "doc",
   attrs: { numberedHeadings: true },
   content: [
@@ -215,6 +215,31 @@ export const SAMPLE_POLICY = {
     {
       type: "codeBlock",
       content: [{ type: "text", text: "LOG-001\nLOG-002" }],
+    },
+    {
+      type: "paragraph",
+      attrs: { indent: 1, lineSpacing: "1.5" },
+      content: [
+        {
+          type: "text",
+          marks: [
+            {
+              type: "textStyle",
+              attrs: {
+                fontFamily: "Calibri, Carlito, Arial, sans-serif",
+                fontSize: "14pt",
+                color: "#b91c1c",
+              },
+            },
+          ],
+          text: "Set in Calibri at 14pt, indented, one and a half lines apart.",
+        },
+      ],
+    },
+    {
+      type: "heading",
+      attrs: { level: 4 },
+      content: [{ type: "text", text: "Signed off by" }],
     },
   ],
 };

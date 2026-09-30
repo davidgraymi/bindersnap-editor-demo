@@ -144,11 +144,10 @@ import {
 import { isSupportedReaction } from "./gitea-client/reactions";
 import {
   EXPORT_TYPES,
-  describeExportStatus,
   exportDocument,
   exportFilename,
   parseExportFormat,
-} from "./export/exportPolicy";
+} from "./export/exportDocument";
 import {
   DEFAULT_WORKSPACE_SETTINGS,
   workspaceSettingsStore,
@@ -8539,11 +8538,8 @@ async function handleWorkspaceDocumentExport(
       path: document.path,
       bytes,
       format,
-      heading: {
-        // The name the product shows, not the slug the file is saved under.
-        title: formatDocumentName(document.name),
-        status: describeExportStatus({ ref, versions }),
-      },
+      // The name the product shows, not the slug the file is saved under.
+      title: formatDocumentName(document.name),
     });
 
     if (result.kind === "refused") {

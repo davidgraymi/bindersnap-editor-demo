@@ -1,13 +1,15 @@
-import { parsePolicyJson, policyBlocks } from "./policyBlocks";
-import { policyToDocx, type ExportHeading } from "./policyDocx";
-import { policyToPdf } from "./policyPdf";
+import { parseDocumentJson, documentBlocks } from "./documentBlocks";
+import { documentToDocx } from "./documentDocx";
+import { documentToPdf } from "./documentPdf";
 
 /**
  * Getting a document out of Bindersnap as Word or PDF.
  *
- * **A policy written here is converted; a file uploaded here is handed back
+ * **A document written here is converted; a file uploaded here is handed back
  * as it came.** The editor stores ProseMirror JSON, which nobody outside the
- * product can use, so it is laid out afresh as a .docx or a PDF. An uploaded
+ * product can use, so it is laid out afresh as a .docx or a PDF — as the page
+ * it is, with nothing added: no header, footer or page number the author did
+ * not put there. An uploaded
  * Word file or PDF is already the thing the person wants, and converting a
  * Word file to PDF faithfully needs Word — so a PDF of an uploaded .docx is
  * refused with a sentence rather than approximated.
@@ -24,49 +26,7 @@ export function parseExportFormat(value: string | null): ExportFormat | null {
   return value === "pdf" || value === "docx" ? value : null;
 }
 
-const DATE = new Intl.DateTimeFormat("en-US", {
-  year: "numeric",
-  month: "long",
-  day: "numeric",
-  timeZone: "UTC",
-});
-
-function formatDate(iso: string): string | null {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? null : DATE.format(date);
-}
-
-/**
- * What the running header says about the copy: which version, and whether it
- * is the one in force. A page that has come loose from the binder on the
- * shelf still has to say whether it is current.
- */
-export function describeExportStatus(params: {
-  ref: string;
-  versions: readonly { tag: string; version: number; publishedAt: string }[];
-}): string {
-  const { ref, versions } = params;
-  const latest = versions[0] ?? null;
-
-  if (ref === "main") {
-    if (!latest) return "Not yet published";
-    const date = formatDate(latest.publishedAt);
-    return `Version ${latest.version} · published${date ? ` ${date}` : ""}`;
-  }
-
-  const tagged = versions.find((entry) => entry.tag === ref);
-  if (tagged) {
-    const date = formatDate(tagged.publishedAt);
-    const current = latest && latest.version === tagged.version;
-    return `Version ${tagged.version} · published${date ? ` ${date}` : ""}${
-      current ? "" : ` · replaced by version ${latest?.version}`
-    }`;
-  }
-
-  return "Proposed — not yet approved";
-}
-
-/** `hand-hygiene-v3.pdf`: what the policy is, and which version. */
+/** `hand-hygiene-v3.pdf`: what the document is, and which version. */
 export function exportFilename(params: {
   slugPath: string;
   version: number | null;
@@ -109,23 +69,24 @@ export async function exportDocument(params: {
   path: string;
   bytes: Uint8Array;
   format: ExportFormat;
-  heading: ExportHeading;
+  /** The document's name, for the file's properties. Never printed on it. */
+  title: string;
 }): Promise<ExportResult> {
   const extension = extensionOf(params.path);
 
   if (extension === "json") {
-    const doc = parsePolicyJson(new TextDecoder().decode(params.bytes));
+    const doc = parseDocumentJson(new TextDecoder().decode(params.bytes));
     if (!doc) {
       return {
         kind: "refused",
         reason: "This document could not be read to export it.",
       };
     }
-    const blocks = policyBlocks(doc);
+    const blocks = documentBlocks(doc);
     const bytes =
       params.format === "pdf"
-        ? await policyToPdf(blocks, params.heading)
-        : await policyToDocx(blocks, params.heading);
+        ? await documentToPdf(blocks, { title: params.title })
+        : await documentToDocx(blocks, { title: params.title });
     return { kind: "converted", bytes };
   }
 

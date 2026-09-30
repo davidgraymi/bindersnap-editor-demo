@@ -342,7 +342,7 @@ export function DocumentPreview({
   );
 }
 
-/** Whether a file is a policy written in Bindersnap, stored as the editor's JSON. */
+/** Whether a file is a document written in Bindersnap, stored as the editor's JSON. */
 export function isWrittenHere(fileName: string | null): boolean {
   return fileName?.toLowerCase().endsWith(".json") ?? false;
 }
