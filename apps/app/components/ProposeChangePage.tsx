@@ -1,7 +1,8 @@
 import { useState } from "react";
 
-import { proposeBinderDraft } from "../api";
+import { proposeBinderDraft, updateChangeAssignments } from "../api";
 import type { DraftAct } from "../../../packages/api-schema/schemas/workspaces";
+import { ReviewerChooser } from "./ReviewerChooser";
 
 /**
  * Writing up a draft, which is the moment it becomes a change request.
@@ -46,8 +47,31 @@ interface ProposeChangePageProps {
   name: string;
   /** Newest first, as the draft returns them. */
   acts: readonly DraftAct[];
+  /** The author, who is never offered as their own reviewer. */
+  currentUser: string;
   onCancel: () => void;
   onProposed: (changeNumber: number) => void;
+}
+
+/**
+ * Put a change that has just opened on its reviewers' desks.
+ *
+ * **Never the reason a change fails to open.** The change exists by the time
+ * this runs; a reviewer who cannot be asked is one the author can still ask
+ * from the change's own page, and losing the change over it would be worse.
+ */
+export async function askReviewers(
+  org: string,
+  binder: string,
+  changeNumber: number,
+  reviewers: readonly string[],
+): Promise<void> {
+  if (reviewers.length === 0) return;
+  await updateChangeAssignments(
+    { org, binder, documentPath: "" },
+    changeNumber,
+    { reviewers: [...reviewers] },
+  ).catch(() => undefined);
 }
 
 /** The acts as a description somebody can edit rather than start from nothing. */
@@ -64,9 +88,11 @@ export function ProposeChangePage({
   draft,
   name,
   acts,
+  currentUser,
   onCancel,
   onProposed,
 }: ProposeChangePageProps) {
+  const [reviewers, setReviewers] = useState<string[]>([]);
   const [title, setTitle] = useState(name);
   const [description, setDescription] = useState(() => describeActs(acts));
   const [submitting, setSubmitting] = useState(false);
@@ -85,6 +111,7 @@ export function ProposeChangePage({
         description,
         draft,
       );
+      await askReviewers(org, binder, proposed.changeNumber, reviewers);
       onProposed(proposed.changeNumber);
     } catch (err) {
       setError(
@@ -148,6 +175,15 @@ export function ProposeChangePage({
               disabled={submitting}
             />
           </div>
+
+          <ReviewerChooser
+            org={org}
+            binder={binder}
+            currentUser={currentUser}
+            selected={reviewers}
+            onChange={setReviewers}
+            disabled={submitting}
+          />
 
           {error ? (
             <p className="bs-note bs-note--danger" role="alert">

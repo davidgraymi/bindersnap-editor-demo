@@ -1482,6 +1482,7 @@ export function BinderShell({
              to put in front of reviewers as what a change is for. */
           name={draft.draft.named ? draft.draft.name : ""}
           acts={draft.draft.acts}
+          currentUser={currentUser}
           onCancel={() => {
             // Back to the policy it was proposed from, still in the editor.
             const from = proposingFrom;
@@ -1650,6 +1651,7 @@ export function BinderShell({
         <AddPolicyModal
           org={org}
           binder={binder}
+          currentUser={currentUser}
           draft={draft?.draft?.branch}
           {...(addingFromEditor
             ? {
