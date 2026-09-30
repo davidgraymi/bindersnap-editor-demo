@@ -12,6 +12,7 @@
  * looking for "how is a document's name decided" goes first.
  */
 export { formatDocumentName } from "../../packages/utils/documentTitle";
+import { formatDocumentName } from "../../packages/utils/documentTitle";
 
 import type {
   ChangeReviewer,
@@ -316,6 +317,11 @@ export function parseChangeTitle(
   const fallback = `Submitted by ${capitalizeFirst(submittedBy || "someone")}`;
   if (!body) return fallback;
 
+  if (body.includes(GENERATED_REVISION)) {
+    const named = generatedDocumentName(body);
+    if (named) return `New version of ${named}`;
+  }
+
   if (!body.includes("Automated upload from Bindersnap")) {
     // **The first line, not the whole body.** The convention has always been a
     // one-line summary, for which this is the same answer — but a change whose
@@ -328,9 +334,27 @@ export function parseChangeTitle(
     return trimmed.split("\n")[0]!.trim() || fallback;
   }
 
+  const named = generatedDocumentName(body);
+  if (named) return `Add ${named}`;
   const file = body.match(/Source file:\s*(\S+)/)?.[1] ?? null;
-  return file ? `New version of ${file}` : fallback;
+  return file ? `Add ${file}` : fallback;
 }
+
+/**
+ * The document a generated change is about, as the product names it.
+ *
+ * Generated bodies carry a `Document: nursing/hand-hygiene` line. The title a
+ * reviewer reads is "Add Hand Hygiene", not the file somebody happened to
+ * upload it from and not the path it is filed at.
+ */
+function generatedDocumentName(body: string): string | null {
+  const slug = body.match(/Document:\s*(\S+)/)?.[1] ?? null;
+  if (!slug) return null;
+  return formatDocumentName(slug.split("/").pop() ?? slug);
+}
+
+/** A new version proposed from an upload, before titles said so in words. */
+const GENERATED_REVISION = "A new version proposed from Bindersnap.";
 
 /**
  * What the submitter said, for the opening post of the discussion.
@@ -342,6 +366,10 @@ export function parseChangeTitle(
  */
 export function describeSubmission(body: string | null | undefined): string {
   if (!body) return "";
+  if (body.includes(GENERATED_REVISION)) {
+    const file = body.match(/Source file:\s*(\S+)/)?.[1] ?? null;
+    return file ? `A new version, uploaded from ${file}.` : "";
+  }
   if (!body.includes("Automated upload from Bindersnap")) {
     // Everything after the first line, which `parseChangeTitle` took as the
     // title. A one-line body — the common case — leaves nothing here, and
@@ -352,7 +380,7 @@ export function describeSubmission(body: string | null | undefined): string {
   }
 
   const file = body.match(/Source file:\s*(\S+)/)?.[1] ?? null;
-  return file ? `Submitted ${file} for review.` : "";
+  return file ? `Uploaded from ${file}.` : "";
 }
 
 export function toChangeRecord(pullRequest: {

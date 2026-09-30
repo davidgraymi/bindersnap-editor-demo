@@ -260,10 +260,16 @@ export function DocumentPreview({
           <span className="doc-preview-filename">
             <FileText size={14} strokeWidth={1.5} aria-hidden="true" />
             <span
-              className="doc-preview-filename-text"
+              className={`doc-preview-filename-text${
+                isWrittenHere(fileName)
+                  ? " doc-preview-filename-text--words"
+                  : ""
+              }`}
               title={fileName ?? undefined}
             >
-              {fileName ?? "No file"}
+              {isWrittenHere(fileName)
+                ? "Written in Bindersnap"
+                : (fileName ?? "No file")}
             </span>
           </span>
           <span className="doc-preview-toolbar-spacer" />

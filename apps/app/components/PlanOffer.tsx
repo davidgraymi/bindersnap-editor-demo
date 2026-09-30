@@ -44,7 +44,7 @@ export function PlanOffer({
           <p className="plan-offer-for">For everyone in {organizationName}</p>
         </div>
         <p className="plan-offer-price">
-          {plan ? plan.formatted : "Price shown at checkout"}
+          {plan ? plan.formatted : "You’ll see the price before you pay"}
         </p>
       </div>
       <ul className="plan-offer-list">

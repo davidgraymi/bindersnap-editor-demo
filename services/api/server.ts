@@ -10316,9 +10316,9 @@ async function handleReviseWorkspaceDocument(
           branch,
           operations,
           message,
-          title: `Update ${existing.slugPath}`,
+          title: `New version of ${formatDocumentName(existing.slugPath.split("/").pop() ?? existing.slugPath)}`,
           body: [
-            `Update ${existing.slugPath}`,
+            `New version of ${formatDocumentName(existing.slugPath.split("/").pop() ?? existing.slugPath)}`,
             "",
             "A new version proposed from Bindersnap.",
             "",
@@ -10488,7 +10488,9 @@ async function handleCreateWorkspaceDocument(
       return json(
         409,
         {
-          error: `An unpublished change already claims "${slugPath}" (${pending}).`,
+          // The branch is how we found it, not something the person can act
+          // on — they need to know it is already waiting, and what to do.
+          error: `${formatDocumentName(slugPath.split("/").pop() ?? slugPath)} is already waiting in a change request. Add this file to that change, or wait until it is decided.`,
         },
         baseHeaders,
       );
@@ -10575,9 +10577,11 @@ async function handleCreateWorkspaceDocument(
           branch: branchName,
           operations,
           message: commitMessage,
-          title: `Add ${slugPath}`,
+          // In words: the reviewer reads "Add Fire Safety Plan", not the path
+          // it is filed at. The path is still on the Document line below.
+          title: `Add ${formatDocumentName(slugPath.split("/").pop() ?? slugPath)}`,
           body: [
-            `Add ${slugPath}`,
+            `Add ${formatDocumentName(slugPath.split("/").pop() ?? slugPath)}`,
             "",
             "Automated upload from Bindersnap.",
             "",
