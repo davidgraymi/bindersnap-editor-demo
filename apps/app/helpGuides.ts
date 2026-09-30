@@ -39,8 +39,8 @@ export const HELP_GUIDES: HelpGuide[] = [
           "Name your organization. You did this when you signed up, or you can do it from the + menu.",
           "Make a binder. Call it what your team already calls it — “Policy manual” works.",
           "Bring in your documents. Drop a whole folder on the binder: its subfolders become the binder's folders.",
-          "Decide who approves. Add the colleague who signs things off. Running it alone? Set the approvals a binder needs to none in its settings.",
-          "Publish. Once a change is approved, publish it. That version is now the record.",
+          "Decide who approves. A new binder needs no approvals, so you can publish on your own while you move in. When a colleague should sign things off, add them and set the approvals the binder needs in its settings.",
+          "Publish. Open the change request and publish it. That version is now the record.",
         ],
       },
       {

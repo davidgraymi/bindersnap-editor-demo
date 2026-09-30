@@ -87,9 +87,9 @@ export function ReviewerChooser({
       <div className="bs-field">
         <span className="bs-field-label">Who should review it</span>
         <p className="bs-field-hint">
-          Nobody else is in this binder yet. Add a colleague from the binder’s
-          settings, or — if you are running it on your own — set the approvals
-          needed to None there, and publish it yourself.
+          Nobody else is in this binder yet. A new binder needs no approvals, so
+          you can publish this yourself — or add a colleague from the binder’s
+          settings to review it first.
         </p>
       </div>
     );
