@@ -936,6 +936,35 @@ registry.registerPath({
 });
 
 registry.registerPath({
+  method: "get",
+  path: "/api/app/binders/{org}/{binder}/export/{documentPath}",
+  operationId: "exportBinderDocument",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({
+      org: z.string(),
+      binder: z.string(),
+      documentPath: z.string(),
+    }),
+    /**
+     * A policy written in Bindersnap is laid out as either; an uploaded file
+     * is handed back as itself when it already is one, and refused with 415
+     * when it is not.
+     */
+    query: z.object({
+      format: z.enum(["pdf", "docx"]),
+      ref: z.string().optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "The document as a PDF or a Word document",
+      content: { "application/octet-stream": { schema: z.string() } },
+    },
+  },
+});
+
+registry.registerPath({
   method: "post",
   path: "/api/app/binders/{org}/{binder}/documents",
   operationId: "createBinderDocument",

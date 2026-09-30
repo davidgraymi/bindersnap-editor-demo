@@ -11128,3 +11128,9 @@ html.bs-writing .app-main {
 .reviewer-chooser label.bs-row-body {
   cursor: pointer;
 }
+
+/* PDF and Word, side by side where a single Download sits for an upload. */
+.doc-preview-exports {
+  display: inline-flex;
+  gap: var(--brand-space-1);
+}

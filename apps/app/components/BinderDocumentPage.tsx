@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { WorkspaceDocumentDetailPayload } from "../../../packages/api-schema/schemas/workspaces";
-import { downloadBinderDocument, fetchBinderDocument } from "../api";
+import {
+  downloadBinderDocument,
+  exportBinderDocument,
+  fetchBinderDocument,
+} from "../api";
 import { followInApp } from "../appLink";
 import {
   buildDocumentCrumbs,
@@ -256,6 +260,30 @@ export function BinderDocumentPage({
     }
   };
 
+  const handleExport = async (format: "pdf" | "docx") => {
+    if (!detail) return;
+    setDownloading(true);
+    setDownloadError(null);
+    try {
+      const { blob, fileName } = await exportBinderDocument(
+        org,
+        binder,
+        fileAddress,
+        format,
+        viewing.ref,
+      );
+      triggerBrowserDownload(blob, fileName);
+    } catch (err) {
+      setDownloadError(
+        err instanceof Error && err.message.trim() !== ""
+          ? err.message
+          : "Unable to download this document.",
+      );
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   if (error) {
     return (
       <div className="binder-pane">
@@ -477,6 +505,7 @@ export function BinderDocumentPage({
               fileName={downloadFileName(document)}
               downloading={downloading}
               onDownload={(loaded) => void handleDownload(loaded)}
+              onExport={(format) => void handleExport(format)}
             />
           )}
         </div>
