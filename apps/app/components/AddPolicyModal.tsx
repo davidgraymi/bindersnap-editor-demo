@@ -750,9 +750,12 @@ export function AddPolicyModal({
           {/* Where it lands, before they commit to it. Folders nest as deep as
               anyone wants, and a customer who types one is entitled to see
               what the binder will actually call it. */}
-          {!plan && filePath ? (
+          {!plan && filePath && name.trim() !== "" ? (
             <p className="bs-field-hint">
-              Files as <code className="bs-filename">{filePath}</code>
+              It goes in as <strong>{name.trim()}</strong>,{" "}
+              {filedIn
+                ? `in ${describeFolderPath(filedIn)}.`
+                : "at the top of the binder."}
             </p>
           ) : null}
 

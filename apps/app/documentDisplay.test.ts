@@ -35,7 +35,7 @@ test("formatDocumentName keeps an initialism upper-case", () => {
     "HIPAA Training Policy",
   );
   expect(formatDocumentName("ppe-and-hand-hygiene")).toBe(
-    "PPE And Hand Hygiene",
+    "PPE and Hand Hygiene",
   );
   expect(formatDocumentName("hr")).toBe("HR");
 });
@@ -150,7 +150,7 @@ test("parseSubmissionSummary keeps a body a person wrote", () => {
   expect(parseSubmissionSummary(null)).toBeNull();
 });
 
-test("a generated upload is named after the file, not its submitter", () => {
+test("a generated upload is named after the document it adds, not its submitter or its file", () => {
   const change = toChangeRecord({
     number: 4,
     body: "Automated upload from Bindersnap file vault. Source file: CHANGELOG.md Document: changelog Uploaded by: bob",
@@ -162,7 +162,7 @@ test("a generated upload is named after the file, not its submitter", () => {
 
   // The row already says "submitted by Bob on 1 Feb"; a title that repeats it
   // is the same sentence twice.
-  expect(change.summary).toBe("New version of CHANGELOG.md");
+  expect(change.summary).toBe("Add Changelog");
 });
 
 test("getInitials handles one and two part names", () => {
@@ -381,4 +381,16 @@ test("a file list says how long ago, at any age", () => {
   expect(formatAge(ago(150 * DAY), now)).toBe("5 months ago");
   expect(formatAge(ago(800 * DAY), now)).toBe("2 years ago");
   expect(formatAge("", now)).toBe("");
+});
+
+test("a generated new version says which document, in the product's words", () => {
+  const change = toChangeRecord({
+    number: 5,
+    body: "Update nursing/hand-hygiene\n\nA new version proposed from Bindersnap.\n\nSource file: hygiene-v4.docx\nDocument: nursing/hand-hygiene",
+    branchName: "upload/v4",
+    created_at: "2026-02-01T00:00:00Z",
+    approvalState: "in_review",
+    user: { login: "bob" },
+  });
+  expect(change.summary).toBe("New version of Hand Hygiene");
 });

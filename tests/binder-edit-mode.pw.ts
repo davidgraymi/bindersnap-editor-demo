@@ -385,7 +385,7 @@ test("a rename in the tree lands in the draft, and the row keeps it", async ({
   // The row says what was written — titled the way the tree titles every
   // name, which is where the stray "And" comes from.
   await expect(
-    page.locator(".binder-tree-label", { hasText: "Hand Hygiene And PPE" }),
+    page.locator(".binder-tree-label", { hasText: "Hand Hygiene and PPE" }),
   ).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(".bs-draftbar")).toContainText("1 change");
 
@@ -798,7 +798,7 @@ test("clicking a renamed policy in the tree opens it, not an error", async ({
   await box.press("Enter");
 
   const row = page.locator(".binder-tree-label", {
-    hasText: "Hand Hygiene And PPE",
+    hasText: "Hand Hygiene and PPE",
   });
   await expect(row).toBeVisible({ timeout: 30_000 });
   await row.click();
@@ -809,7 +809,7 @@ test("clicking a renamed policy in the tree opens it, not an error", async ({
   // `.app-main h1` is a strict-mode violation rather than an assertion.
   await expect(
     page.locator(".app-main h1:not(.doc-preview-prose h1)"),
-  ).toHaveText("Hand Hygiene And PPE", { timeout: 30_000 });
+  ).toHaveText("Hand Hygiene and PPE", { timeout: 30_000 });
   await expect(page.locator(".app-main")).not.toContainText("No such document");
   // Still editing, which is also the way back to what they were doing.
   expect(page.url()).toContain("edit=1");
@@ -1506,7 +1506,7 @@ test("the contents beside a change's policy are the change's", async ({
 
   // The branch's name for it, which `main` has never heard of.
   await expect(
-    page.locator(".app-explorer-item", { hasText: "Hand Hygiene And PPE" }),
+    page.locator(".app-explorer-item", { hasText: "Hand Hygiene and PPE" }),
   ).toBeVisible({ timeout: 30_000 });
 
   // And a row leads somewhere that exists on the branch being read.
