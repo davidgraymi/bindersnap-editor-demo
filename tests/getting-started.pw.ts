@@ -95,11 +95,9 @@ test("the guide picks up where a new customer left off, and stays hidden once hi
   await expect(page.locator("h1.bs-title")).toContainText("Good");
   await expect(page.locator("section.guide")).toHaveCount(0);
 
-  // And it can be brought back from Help.
-  await page.goto(`${APP_BASE_URL}/help`);
-  await page
-    .getByRole("button", { name: "Show the getting-started guide again" })
-    .click();
+  // And it can be brought back from the account menu.
+  await page.locator(".app-topnav-avatar").click();
+  await page.getByRole("menuitem", { name: "Getting-started guide" }).click();
   await expect(page.locator("section.guide")).toBeVisible({ timeout: 30_000 });
 });
 

@@ -136,6 +136,7 @@ jobs:
             --define:process.env.NODE_ENV='\"production\"' \
             --env='BUN_PUBLIC_*'
           cp dist/index.html dist/404.html
+          bun scripts/build-help.ts
 
   integration:
     name: Integration tests

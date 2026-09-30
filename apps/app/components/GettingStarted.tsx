@@ -93,10 +93,9 @@ export function GettingStarted({
                     <a
                       className="bs-btn bs-btn--sm bs-btn--quiet"
                       href={`/help/${copy.guide}`}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        onGo(`/help/${copy.guide}`);
-                      }}
+                      target="_blank"
+                      rel="noopener"
+                      title="Opens in a new tab"
                     >
                       <AppIcon icon={BookOpen} size="sm" />
                       How this works
