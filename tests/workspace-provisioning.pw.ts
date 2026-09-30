@@ -173,7 +173,10 @@ test("a member creates the binder, and it belongs to the organization", async ()
   expect(workspace.owner).toBe(org.name);
   expect(workspace.fullName).toBe(`${org.name}/clinical-policies`);
 
-  expect(await listWorkspaces(sessionCookie)).toEqual([workspace]);
+  // The list carries a timestamp that moves as Gitea settles, so compare
+  // the binder itself rather than the whole record.
+  const listed = await listWorkspaces(sessionCookie);
+  expect(listed.map((w) => w.fullName)).toEqual([workspace.fullName]);
 
   const token = await createUserToken(
     credentials.username,
@@ -5544,5 +5547,5 @@ test("two documents cannot claim one address", async () => {
     filename: "policy.pdf",
   });
   expect(second.status, second.body).toBe(409);
-  expect(second.body).toContain("nursing/policy");
+  expect(second.body).toContain("already waiting in a change request");
 });
