@@ -658,21 +658,21 @@ export async function fetchBinderChanges(
 /**
  * Change a binder's rules. **Immediate**, unlike a sign-off rule.
  *
- * The difference is deliberate: a sign-off rule decides who has to approve a
- * change, so changing one goes through the same approval a policy does. This
- * decides whether the binder waits for every discussion to be resolved — it
- * gates nobody out and changes no permission, so making somebody open a change
- * to tick a checkbox would be ceremony without a reason. It is recorded either
- * way.
+ * Any one of them on its own: the approval count and whether a new version
+ * clears the approvals are Gitea's to enforce, and whether every discussion
+ * must be resolved is ours. A binder's administrator can change all three, and
+ * each change is recorded with who made it.
  */
 export async function setBinderRules(
   org: string,
   binder: string,
-  blockOnUnresolvedThreads: boolean,
+  rules: {
+    blockOnUnresolvedThreads?: boolean;
+    requiredApprovals?: number;
+    dismissStaleApprovals?: boolean;
+  },
 ): Promise<BinderRulesPayload> {
-  const response = await BindersClient.setBinderRules(org, binder, {
-    blockOnUnresolvedThreads,
-  });
+  const response = await BindersClient.setBinderRules(org, binder, rules);
   return response.data;
 }
 

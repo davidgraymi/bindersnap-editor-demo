@@ -146,6 +146,7 @@ import {
   DEFAULT_WORKSPACE_SETTINGS,
   workspaceSettingsStore,
   type ReviewSettings,
+  type SettingsEventRecord,
 } from "./workspace-settings";
 import {
   buildClosedChanges,
@@ -164,6 +165,7 @@ import {
   getCurrentUserRepoPermission,
   getLatestDocTag,
   getRepoBranchProtection,
+  updateRepoBranchProtection,
   findUser,
   getRepoInfo,
   listDocTags,
@@ -5602,7 +5604,80 @@ async function handleWorkspaceSettings(
 }
 
 /**
- * Change a binder's rules.
+ * The most approvals a binder can ask for: whatever Gitea stores.
+ *
+ * Gitea keeps the count as a 64-bit integer and accepts any of it, so the only
+ * limit here is the largest whole number JSON carries exactly. A count nobody
+ * could meet is the administrator's call to make; the settings page says when
+ * a binder has fewer people who can approve than it asks for.
+ */
+const MAX_REQUIRED_APPROVALS = Number.MAX_SAFE_INTEGER;
+
+/**
+ * What a request to change a binder's rules asks for, or why it cannot be read.
+ *
+ * Every field is optional and at least one is required, so the page can change
+ * one rule without restating the others — and a stale copy of one it did not
+ * touch can never be written back over a colleague's change.
+ */
+export function parseBinderRulesRequest(
+  body: {
+    blockOnUnresolvedThreads?: unknown;
+    requiredApprovals?: unknown;
+    dismissStaleApprovals?: unknown;
+  } | null,
+):
+  | {
+      blockOnUnresolvedThreads?: boolean;
+      requiredApprovals?: number;
+      dismissStaleApprovals?: boolean;
+    }
+  | string {
+  if (!body || typeof body !== "object") {
+    return "Say which rule to change.";
+  }
+  const out: {
+    blockOnUnresolvedThreads?: boolean;
+    requiredApprovals?: number;
+    dismissStaleApprovals?: boolean;
+  } = {};
+  if (body.blockOnUnresolvedThreads !== undefined) {
+    if (typeof body.blockOnUnresolvedThreads !== "boolean") {
+      return "Say whether a change must have every discussion resolved before it can be published.";
+    }
+    out.blockOnUnresolvedThreads = body.blockOnUnresolvedThreads;
+  }
+  if (body.requiredApprovals !== undefined) {
+    const count = body.requiredApprovals;
+    if (
+      typeof count !== "number" ||
+      !Number.isInteger(count) ||
+      count < 0 ||
+      count > MAX_REQUIRED_APPROVALS
+    ) {
+      return "Approvals needed must be a whole number, 0 or more.";
+    }
+    out.requiredApprovals = count;
+  }
+  if (body.dismissStaleApprovals !== undefined) {
+    if (typeof body.dismissStaleApprovals !== "boolean") {
+      return "Say whether a new version clears the approvals already given.";
+    }
+    out.dismissStaleApprovals = body.dismissStaleApprovals;
+  }
+  if (Object.keys(out).length === 0) {
+    return "Say which rule to change.";
+  }
+  return out;
+}
+
+/**
+ * Change a binder's rules: the approval count, whether a new version clears
+ * approvals, and whether discussions must be resolved.
+ *
+ * **An administrator of the binder can change every one of them.** A binder
+ * run by one person needs to publish without a second approver, and a binder
+ * whose rules its own administrator cannot change is not theirs.
  *
  * **Immediate, unlike the sign-off rules two functions down, and the difference
  * is worth stating.** A sign-off rule decides *who has to approve* a change, so
@@ -5636,17 +5711,13 @@ async function handleBinderRules(
   try {
     const body = (await req.json().catch(() => null)) as {
       blockOnUnresolvedThreads?: unknown;
+      requiredApprovals?: unknown;
+      dismissStaleApprovals?: unknown;
     } | null;
 
-    if (typeof body?.blockOnUnresolvedThreads !== "boolean") {
-      return json(
-        400,
-        {
-          error:
-            "Say whether a change must have every discussion resolved before it can be published.",
-        },
-        baseHeaders,
-      );
+    const rules = parseBinderRulesRequest(body);
+    if (typeof rules === "string") {
+      return json(400, { error: rules }, baseHeaders);
     }
 
     const workspace = await findWorkspaceRepo({
@@ -5671,13 +5742,81 @@ async function handleBinderRules(
       );
     }
 
-    const events = await workspaceSettingsStore.set({
-      giteaRepoId: workspace.id,
-      organization: orgName,
-      workspace: workspaceName,
-      settings: { blockOnUnresolvedThreads: body.blockOnUnresolvedThreads },
-      changedBy: session.username,
-    });
+    const events: SettingsEventRecord[] = [];
+
+    if (rules.blockOnUnresolvedThreads !== undefined) {
+      events.push(
+        ...(await workspaceSettingsStore.set({
+          giteaRepoId: workspace.id,
+          organization: orgName,
+          workspace: workspaceName,
+          settings: {
+            blockOnUnresolvedThreads: rules.blockOnUnresolvedThreads,
+          },
+          changedBy: session.username,
+        })),
+      );
+    }
+
+    // **Written with the caller's own token.** The approval count is Gitea
+    // branch protection, and Gitea lets only a repository administrator edit
+    // it — so Gitea, not this handler, is what says this person may. The
+    // check above only turns its refusal into a sentence ahead of time.
+    let protection = await readWorkspaceProtection(orgName, workspaceName);
+    if (
+      rules.requiredApprovals !== undefined ||
+      rules.dismissStaleApprovals !== undefined
+    ) {
+      if (!protection) {
+        return json(
+          409,
+          {
+            error:
+              "This binder's approval rules could not be read, so they were not changed. Try again in a moment.",
+          },
+          baseHeaders,
+        );
+      }
+      const before = protection;
+      protection = await updateRepoBranchProtection({
+        client,
+        owner: orgName,
+        repo: workspaceName,
+        ruleName: "main",
+        requiredApprovals: rules.requiredApprovals,
+        dismissStaleApprovals: rules.dismissStaleApprovals,
+      });
+      const now = Math.floor(Date.now() / 1000);
+      const recorded: SettingsEventRecord[] = [];
+      if (
+        rules.requiredApprovals !== undefined &&
+        before.requiredApprovals !== protection.requiredApprovals
+      ) {
+        recorded.push({
+          giteaRepoId: workspace.id,
+          setting: "requiredApprovals",
+          previousValue: String(before.requiredApprovals),
+          newValue: String(protection.requiredApprovals),
+          changedBy: session.username,
+          changedAt: now,
+        });
+      }
+      if (
+        rules.dismissStaleApprovals !== undefined &&
+        before.dismissStaleApprovals !== protection.dismissStaleApprovals
+      ) {
+        recorded.push({
+          giteaRepoId: workspace.id,
+          setting: "dismissStaleApprovals",
+          previousValue: String(before.dismissStaleApprovals),
+          newValue: String(protection.dismissStaleApprovals),
+          changedBy: session.username,
+          changedAt: now,
+        });
+      }
+      await workspaceSettingsStore.record(recorded);
+      events.push(...recorded);
+    }
 
     logger.info("Binder rules changed", {
       username: session.username,
@@ -5686,12 +5825,16 @@ async function handleBinderRules(
       changed: events.map((event) => event.setting),
     });
 
+    const settings = await readBinderSettings(workspace);
+
     return json(
       200,
       {
         organization: orgName,
         workspace: workspaceName,
-        blockOnUnresolvedThreads: body.blockOnUnresolvedThreads,
+        blockOnUnresolvedThreads: settings.blockOnUnresolvedThreads,
+        requiredApprovals: protection?.requiredApprovals ?? null,
+        dismissStaleApprovals: protection?.dismissStaleApprovals ?? null,
       },
       baseHeaders,
     );

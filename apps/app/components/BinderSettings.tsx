@@ -38,7 +38,13 @@ import type {
   SignOffRuleView,
   WorkspaceSettingsPayload,
 } from "../../../packages/api-schema/schemas/workspaces";
-import { GROUP_LEVELS, groupLevelLabel } from "../binderSettings";
+import {
+  countApprovers,
+  GROUP_LEVELS,
+  groupLevelLabel,
+  parseApprovalCount,
+  unreachableApprovalsNote,
+} from "../binderSettings";
 import { formatDocumentName } from "../documentDisplay";
 import { describeGroupName } from "../../../packages/utils/groupName";
 import { AppIcon } from "./AppIcon";
@@ -1488,13 +1494,68 @@ function RuleRow({
 /* ── How changes are approved ─────────────────────────────────────────── */
 
 /**
+ * The approval count, typed.
+ *
+ * A number field rather than a menu, because the count is whatever the
+ * binder's administrator says it is — a board of twelve that signs off on
+ * everything needs twelve, and Gitea stores any number. It saves when the
+ * field is left or Enter is pressed, not on every keystroke, so typing "12"
+ * never briefly asks for one approval. Escape puts it back.
+ */
+function ApprovalCountField({
+  value,
+  disabled,
+  onCommit,
+}: {
+  value: number;
+  disabled: boolean;
+  onCommit: (count: number) => void;
+}) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => setText(String(value)), [value]);
+  const count = parseApprovalCount(text);
+
+  function commit() {
+    if (count === null) {
+      setText(String(value));
+      return;
+    }
+    if (count !== value) onCommit(count);
+  }
+
+  return (
+    <input
+      id="binder-approvals"
+      className="bs-input bs-input--sm bs-settings-count"
+      type="number"
+      inputMode="numeric"
+      min={0}
+      step={1}
+      value={text}
+      disabled={disabled}
+      aria-invalid={count === null}
+      onChange={(event) => setText(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          commit();
+        } else if (event.key === "Escape") {
+          setText(String(value));
+        }
+      }}
+    />
+  );
+}
+
+/**
  * The rules every change in the binder meets, as rows rather than a bulleted
  * paragraph.
  *
- * The approval count and "a new version clears the approvals" are Gitea branch
- * protection, which this page does not edit yet — so they are stated, not
- * drawn as controls that do nothing. Whether discussions must be resolved has
- * no Gitea equivalent and takes effect straight away.
+ * **The binder's administrator can change every one of them.** A clinic
+ * trying Bindersnap on its own has nobody else to approve its first policy, and
+ * a rule its own administrator cannot change leaves them stuck. Each takes
+ * effect straight away and is recorded with who changed it.
  */
 function ApprovalSection({
   org,
@@ -1511,9 +1572,20 @@ function ApprovalSection({
 }) {
   const rules = settings.rules;
   const [saving, setSaving] = useState(false);
+  const unreachable =
+    rules.requiredApprovals === null
+      ? null
+      : unreachableApprovalsNote(
+          rules.requiredApprovals,
+          countApprovers(settings.teams),
+        );
   const [notice, setNotice] = useState<string | null>(null);
 
-  async function toggleThreads(next: boolean) {
+  async function change(next: {
+    blockOnUnresolvedThreads?: boolean;
+    requiredApprovals?: number;
+    dismissStaleApprovals?: boolean;
+  }) {
     setSaving(true);
     setNotice(null);
     try {
@@ -1523,6 +1595,10 @@ function ApprovalSection({
         rules: {
           ...rules,
           blockOnUnresolvedThreads: updated.blockOnUnresolvedThreads,
+          requiredApprovals:
+            updated.requiredApprovals ?? rules.requiredApprovals,
+          dismissStaleApprovals:
+            updated.dismissStaleApprovals ?? rules.dismissStaleApprovals,
         },
       });
     } catch (err: unknown) {
@@ -1559,24 +1635,62 @@ function ApprovalSection({
         <ul className="bs-row-list">
           <li className="bs-row">
             <span className="bs-row-body">
-              <span className="bs-row-name">
+              <label className="bs-row-name" htmlFor="binder-approvals">
                 Approvals needed before publishing
+              </label>
+              <span className="bs-row-meta">
+                {rules.requiredApprovals === 0
+                  ? "Anyone who can publish may do so without an approval. Right for a binder only you work in."
+                  : "Nobody can approve their own change, so the author never counts toward this."}
               </span>
+              {unreachable ? (
+                <span
+                  className="bs-row-meta bs-row-meta--warning"
+                  role="status"
+                >
+                  {unreachable}
+                </span>
+              ) : null}
             </span>
             <span className="bs-row-right bs-settings-value">
-              {rules.requiredApprovals === null
-                ? "Could not be read"
-                : rules.requiredApprovals}
+              {rules.requiredApprovals === null ? (
+                "Could not be read"
+              ) : canManage ? (
+                <ApprovalCountField
+                  value={rules.requiredApprovals}
+                  disabled={saving}
+                  onCommit={(count) =>
+                    void change({ requiredApprovals: count })
+                  }
+                />
+              ) : (
+                rules.requiredApprovals
+              )}
             </span>
           </li>
           <li className="bs-row">
             <span className="bs-row-body">
-              <span className="bs-row-name">
+              <label className="bs-row-name" htmlFor="binder-dismiss-stale">
                 A new version clears the approvals already collected
-              </span>
+              </label>
             </span>
             <span className="bs-row-right bs-settings-value">
-              {rules.dismissStaleApprovals ? "Yes" : "No"}
+              {canManage ? (
+                <input
+                  id="binder-dismiss-stale"
+                  className="bs-checkbox"
+                  type="checkbox"
+                  checked={rules.dismissStaleApprovals}
+                  disabled={saving}
+                  onChange={(event) =>
+                    void change({ dismissStaleApprovals: event.target.checked })
+                  }
+                />
+              ) : rules.dismissStaleApprovals ? (
+                "Yes"
+              ) : (
+                "No"
+              )}
             </span>
           </li>
           <li className="bs-row">
@@ -1593,7 +1707,11 @@ function ApprovalSection({
                   type="checkbox"
                   checked={rules.blockOnUnresolvedThreads}
                   disabled={saving}
-                  onChange={(event) => void toggleThreads(event.target.checked)}
+                  onChange={(event) =>
+                    void change({
+                      blockOnUnresolvedThreads: event.target.checked,
+                    })
+                  }
                 />
               ) : rules.blockOnUnresolvedThreads ? (
                 "Yes"
