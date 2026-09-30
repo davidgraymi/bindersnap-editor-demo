@@ -135,6 +135,7 @@ test("every approval in reads as approved, in one word", () => {
           approvalCount: 1,
           requiredApprovals: 1,
           reviewers: [reviewer("bob", "approved")],
+          isApproved: true,
         }),
       ]),
     ],

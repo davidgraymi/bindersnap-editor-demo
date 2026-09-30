@@ -189,6 +189,7 @@ export function buildQueueRows(
           approvalCount: change.approvalCount,
           requiredApprovals: change.requiredApprovals,
           isRejected: standing?.tone === "blocked",
+          isApproved: change.isApproved,
         }),
         waitingOnYou: isWaitingOnReader(document, change, username, status),
         // Gitea's own count on the pull request, passed through as Home reads it.

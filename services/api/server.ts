@@ -2341,23 +2341,29 @@ function buildPendingChangeRow(
   // already folds each reviewer's latest answer, which is the same rule Gitea
   // merges on, so both answers are here for free.
   const isRejected = entry.pullRequest.approvalState === "changes_requested";
+  const reviewers = buildChangeReviewers({
+    requested: readRequestedReviewers(entry.pullRequest),
+    reviews: entry.reviews,
+    submittedBy: entry.pullRequest.user?.login ?? "",
+  });
 
   return {
     ...entry.pullRequest,
-    reviewers: buildChangeReviewers({
-      requested: readRequestedReviewers(entry.pullRequest),
-      reviews: entry.reviews,
-      submittedBy: entry.pullRequest.user?.login ?? "",
-    }),
+    reviewers,
     assignee: readAssignee(entry.pullRequest),
     approvalCount,
     requiredApprovals,
     isRejected,
+    // **Whether Gitea would merge it now**, by the rules every binder's `main`
+    // is protected with: nobody's latest answer is "changes requested",
+    // nobody asked to review is still silent, and the approvals reach the
+    // binder's number — which may be none. `isReadyToPublish` in the app asks
+    // the same three things of the same fields.
     isApproved:
       !isRejected &&
       requiredApprovals !== null &&
-      requiredApprovals > 0 &&
-      approvalCount >= requiredApprovals,
+      approvalCount >= requiredApprovals &&
+      !reviewers.some((reviewer) => reviewer.status === "awaiting"),
   };
 }
 

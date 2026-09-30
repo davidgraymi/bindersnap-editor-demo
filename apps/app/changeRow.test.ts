@@ -103,10 +103,29 @@ test("a decided change says how it ended", () => {
   });
 });
 
-/** A binder that demands no approvals has nothing to collect, and says so. */
-test("a binder that demands no approvals is still awaiting one", () => {
+/**
+ * A binder that demands no approvals has nothing to collect: its change is
+ * ready as soon as nobody is holding it, and "Approved" would claim a sign-off
+ * nobody gave.
+ */
+test("a binder that demands no approvals is ready, not awaiting one", () => {
+  expect(describeChangeStandingWord(change({ requiredApprovals: 0 }))).toEqual({
+    tone: "approved",
+    standing: "Ready to publish",
+  });
+  // A reviewer asked and not yet heard from still holds it, as Gitea does.
   expect(
-    describeChangeStandingWord(change({ requiredApprovals: 0 })).standing,
+    describeChangeStandingWord(
+      change({ requiredApprovals: 0, isApproved: false }),
+    ),
+  ).toEqual({ tone: "awaiting", standing: "Awaiting review" });
+});
+
+test("the server's readiness outranks a full count", () => {
+  expect(
+    describeChangeStandingWord(
+      change({ approvalCount: 2, requiredApprovals: 2, isApproved: false }),
+    ).standing,
   ).toBe("Awaiting approval");
 });
 

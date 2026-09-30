@@ -19,6 +19,7 @@ import {
   describeChangeOutcome,
   getChangeStateBadgeClass,
   getChangeStateLabel,
+  isReadyToPublish,
 } from "../documentDisplay";
 import type { DocumentChangeView } from "../routes";
 import { ChangeReviewers } from "./ChangeReviewers";
@@ -376,7 +377,7 @@ export function DocumentChangeDetail({
     branchProtection,
   );
   const mergePerms = canUserMerge(currentUser, branchProtection);
-  const mergeReady = change.open && change.approvalState === "approved";
+  const mergeReady = isReadyToPublish(change);
   // The server enforces this too; the disabled button just avoids a pointless
   // round trip that ends in a 409.
   const threadsBlockPublish = blockOnUnresolvedThreads && unresolvedCount > 0;
