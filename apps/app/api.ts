@@ -1690,6 +1690,29 @@ export async function exportBinderDocument(
   return { blob: response.data, fileName: named ?? `${leaf}.${format}` };
 }
 
+/**
+ * A document's audit packet: who approved every version and when, what was
+ * discussed, and the fingerprints that let anybody check it — one zip for a
+ * surveyor, made on the server from Gitea's record.
+ */
+export async function exportAuditPacket(
+  org: string,
+  binder: string,
+  documentPath: string,
+): Promise<{ blob: Blob; fileName: string }> {
+  const response = await BindersClient.exportBinderDocumentAudit(
+    org,
+    binder,
+    documentPath,
+    { cache: "no-store" },
+  );
+  const disposition =
+    (response as { headers?: Headers }).headers?.get("content-disposition") ??
+    "";
+  const named = disposition.match(/filename="([^"]+)"/)?.[1];
+  return { blob: response.data, fileName: named ?? "audit-packet.zip" };
+}
+
 // Billing functions
 
 /**

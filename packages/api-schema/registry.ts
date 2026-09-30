@@ -937,6 +937,27 @@ registry.registerPath({
 
 registry.registerPath({
   method: "get",
+  path: "/api/app/binders/{org}/{binder}/audit/{documentPath}",
+  operationId: "exportBinderDocumentAudit",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({
+      org: z.string(),
+      binder: z.string(),
+      documentPath: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description:
+        "A zip: the audit packet PDF, approvals.csv, record.json, and every version's file",
+      content: { "application/zip": { schema: z.string() } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
   path: "/api/app/binders/{org}/{binder}/export/{documentPath}",
   operationId: "exportBinderDocument",
   tags: ["workspaces"],

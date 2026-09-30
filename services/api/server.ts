@@ -142,6 +142,8 @@ import {
   setDiscussionResolution,
 } from "./gitea-client/discussions";
 import { isSupportedReaction } from "./gitea-client/reactions";
+import { buildAuditPacket } from "./export/auditPacket";
+import { gatherAuditRecord } from "./export/auditRecord";
 import {
   EXPORT_TYPES,
   exportDocument,
@@ -8458,6 +8460,117 @@ async function handleWorkspaceDocumentRaw(
 }
 
 /**
+ * A document's audit packet: every version, who approved it, what was said,
+ * and the fingerprints that let a third party check none of it was changed.
+ *
+ * Read with the caller's own token, so the packet holds exactly what they can
+ * already see — and a packet is available to anybody who can read the
+ * document, because a surveyor's question is not a paid feature (ADR 0004).
+ */
+async function handleWorkspaceDocumentAudit(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+  documentPath: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  try {
+    const document = await findWorkspaceDocument({
+      client: auth.client,
+      org: orgName,
+      workspace: workspaceName,
+      documentPath,
+      ref: "main",
+    });
+    if (!document) {
+      return json(404, { error: "No such document." }, baseHeaders);
+    }
+    if (!document.uid) {
+      return json(
+        409,
+        {
+          error:
+            "This document was not added through Bindersnap, so it has no approval record to export.",
+        },
+        baseHeaders,
+      );
+    }
+
+    const readFile = async (path: string, ref: string) => {
+      const response = await giteaFetch(
+        `/api/v1/repos/${encodeURIComponent(orgName)}/${encodeURIComponent(workspaceName)}/raw/${path
+          .split("/")
+          .map(encodeURIComponent)
+          .join("/")}?ref=${encodeURIComponent(ref)}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: buildTokenAuthHeader(auth.session.giteaToken),
+            Accept: "*/*",
+          },
+        },
+      );
+      if (!response.ok) throw new Error(`Could not read ${path} at ${ref}.`);
+      return new Uint8Array(await response.arrayBuffer());
+    };
+
+    const gathered = await gatherAuditRecord({
+      client: auth.client,
+      readFile,
+      org: orgName,
+      binder: workspaceName,
+      document: {
+        title: formatDocumentName(document.name),
+        slugPath: document.slugPath,
+        uid: document.uid,
+        path: document.path,
+      },
+      exportedBy: auth.session.username,
+    });
+    const packet = await buildAuditPacket(gathered);
+
+    logger.info("Audit packet exported", {
+      username: auth.session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      documentPath: document.path,
+      versions: gathered.record.versions.length,
+    });
+
+    const headers = mergeHeaders(baseHeaders);
+    headers.set("content-type", "application/zip");
+    headers.set(
+      "content-disposition",
+      `attachment; filename="${
+        document.slugPath.split("/").pop() || "document"
+      }-audit-packet-${gathered.record.exportedAt.slice(0, 10)}.zip"`,
+    );
+    headers.set("cache-control", "no-store");
+    headers.set("access-control-expose-headers", "content-disposition");
+    return new Response(new Blob([packet as Uint8Array<ArrayBuffer>]), {
+      status: 200,
+      headers,
+    });
+  } catch (err) {
+    logger.error("Failed to export an audit packet", {
+      username: auth.session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      documentPath,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to export the audit packet.",
+    );
+  }
+}
+
+/**
  * One document as Word or PDF, at whatever ref is asked for.
  *
  * A policy written in the editor is laid out afresh; an uploaded file that is
@@ -11476,6 +11589,9 @@ export function createApiServer() {
         const workspaceDocumentRawMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/raw\/(.+)$/,
         );
+        const workspaceDocumentAuditMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/audit\/(.+)$/,
+        );
         const workspaceDocumentExportMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/export\/(.+)$/,
         );
@@ -11858,6 +11974,14 @@ export function createApiServer() {
             workspaceChangeMatch[1]!,
             workspaceChangeMatch[2]!,
             Number.parseInt(workspaceChangeMatch[3] ?? "", 10),
+          );
+        } else if (workspaceDocumentAuditMatch && method === "GET") {
+          response = await handleWorkspaceDocumentAudit(
+            req,
+            baseHeaders,
+            workspaceDocumentAuditMatch[1]!,
+            workspaceDocumentAuditMatch[2]!,
+            decodeURIComponent(workspaceDocumentAuditMatch[3]!),
           );
         } else if (workspaceDocumentExportMatch && method === "GET") {
           response = await handleWorkspaceDocumentExport(

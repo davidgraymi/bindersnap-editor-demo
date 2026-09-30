@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { FileArchive } from "lucide-react";
 
 import type { WorkspaceDocumentDetailPayload } from "../../../packages/api-schema/schemas/workspaces";
 import {
   downloadBinderDocument,
+  exportAuditPacket,
   exportBinderDocument,
   fetchBinderDocument,
 } from "../api";
 import { followInApp } from "../appLink";
+import { AppIcon } from "./AppIcon";
 import {
   buildDocumentCrumbs,
   buildDocumentUrl,
@@ -138,6 +141,7 @@ export function BinderDocumentPage({
   );
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [exportingAudit, setExportingAudit] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [revising, setRevising] = useState(false);
   const [renaming, setRenaming] = useState(false);
@@ -257,6 +261,27 @@ export function BinderDocumentPage({
       );
     } finally {
       setDownloading(false);
+    }
+  };
+
+  const handleAuditPacket = async () => {
+    setExportingAudit(true);
+    setDownloadError(null);
+    try {
+      const { blob, fileName } = await exportAuditPacket(
+        org,
+        binder,
+        fileAddress,
+      );
+      triggerBrowserDownload(blob, fileName);
+    } catch (err) {
+      setDownloadError(
+        err instanceof Error && err.message.trim() !== ""
+          ? err.message
+          : "Unable to export the audit packet.",
+      );
+    } finally {
+      setExportingAudit(false);
     }
   };
 
@@ -633,6 +658,24 @@ export function BinderDocumentPage({
                 })}
               </ul>
             )}
+            {/* The answer to a surveyor, one click from the versions it
+                describes: every version, who approved it and when, and the
+                fingerprints that let them check it. */}
+            {versions.length > 0 ? (
+              <div className="bs-panel-foot">
+                <button
+                  type="button"
+                  className="bs-btn bs-btn--sm bs-btn-secondary"
+                  disabled={exportingAudit}
+                  onClick={() => void handleAuditPacket()}
+                >
+                  <AppIcon icon={FileArchive} size="sm" aria-hidden="true" />
+                  {exportingAudit
+                    ? "Preparing the audit packet…"
+                    : "Audit packet"}
+                </button>
+              </div>
+            ) : null}
           </section>
         </aside>
       </div>
