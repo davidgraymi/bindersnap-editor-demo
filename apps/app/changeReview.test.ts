@@ -414,6 +414,52 @@ test("an approved change can still be objected to by someone who cannot publish"
   ).toBe("review");
 });
 
+test("a button somebody cannot use is shown dimmed, not hidden", () => {
+  const reading = { open: true, isAnonymous: false, ownSubmission: false };
+
+  // Asked to look, but not somebody whose approval counts here.
+  expect(
+    resolveReviewDecision({
+      ...reading,
+      mergeReady: false,
+      canReview: false,
+      canMerge: false,
+    }),
+  ).toBe("review-locked");
+
+  // Ready to publish, by somebody else.
+  expect(
+    resolveReviewDecision({
+      ...reading,
+      mergeReady: true,
+      canReview: false,
+      canMerge: false,
+    }),
+  ).toBe("publish-locked");
+
+  // A reviewer whose approval is in, on a change somebody else publishes.
+  expect(
+    resolveReviewDecision({
+      ...reading,
+      mergeReady: true,
+      canReview: true,
+      canMerge: false,
+      hasApproved: true,
+    }),
+  ).toBe("publish-locked");
+
+  // Their own approved change, which they cannot publish themselves.
+  expect(
+    resolveReviewDecision({
+      ...reading,
+      ownSubmission: true,
+      mergeReady: true,
+      canReview: false,
+      canMerge: false,
+    }),
+  ).toBe("publish-locked");
+});
+
 test("a closed change has no decision left, and neither has a visitor", () => {
   const settled = {
     ownSubmission: false,

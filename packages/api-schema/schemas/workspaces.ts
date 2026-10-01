@@ -519,6 +519,15 @@ export const WorkspaceChangeDetailPayloadSchema = z.object({
     users: z.array(z.string()),
     teams: z.array(z.string()),
   }),
+  /**
+   * What the person reading may do with this change, by Gitea's own rules:
+   * publishing takes write access, and an approval counts only from somebody
+   * in the binder's approval teams. The page dims what they cannot use.
+   */
+  viewer: z.object({
+    canApprove: z.boolean(),
+    canPublish: z.boolean(),
+  }),
 });
 export type WorkspaceChangeDetailPayload = z.infer<
   typeof WorkspaceChangeDetailPayloadSchema

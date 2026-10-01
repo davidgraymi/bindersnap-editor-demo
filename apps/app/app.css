@@ -11538,3 +11538,11 @@ html.bs-writing .app-main {
   resize: none;
   margin-bottom: var(--brand-space-3);
 }
+
+/* Why a dimmed decision button is dimmed, said beside it. */
+.rev-decision-locked {
+  margin: 0;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+  line-height: 1.45;
+}

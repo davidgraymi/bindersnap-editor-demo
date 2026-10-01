@@ -620,6 +620,7 @@ export function BinderChangePage({
         branchProtection={null}
         blockOnUnresolvedThreads={detail.blockOnUnresolvedThreads}
         canManageAssignments={detail.canManage}
+        decisionRights={detail.viewer}
         nextVersion={shown?.nextVersion ?? 1}
         documentCount={documents.length}
         // A change that touches no document is a change to this binder's
