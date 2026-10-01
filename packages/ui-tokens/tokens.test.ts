@@ -24,6 +24,11 @@ const LITERAL_ALLOWLIST: ReadonlyArray<{ file: string; literal: string }> = [
   // .doc-compare-blend: mix-blend-mode: difference requires a true black
   // ground, not the warm-ink --brand-ink.
   { file: "apps/app/app.css", literal: "#000" },
+  // <meta name="theme-color">: the browser chrome around the page, read from
+  // an attribute that cannot take var(). These are --bs-page-bg, light and
+  // dark.
+  { file: "apps/app/index.html", literal: "#fafaf7" },
+  { file: "apps/app/index.html", literal: "#1c1917" },
 ];
 
 // Files exempt from the literal rule entirely, with the reason. Not a

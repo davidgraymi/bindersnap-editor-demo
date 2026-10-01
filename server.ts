@@ -1,4 +1,7 @@
-import { serve } from "bun";
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
+
+import { file, serve } from "bun";
 import appIndex from "./apps/app/index.html";
 import { HELP_GUIDES } from "./apps/app/helpGuides";
 import { helpContentType, helpFiles } from "./apps/help/renderHelp";
@@ -18,6 +21,18 @@ function serveHelp(req: Request): Response {
       });
 }
 
+/**
+ * The icons and the link-preview image, at the site root where the build
+ * copies them for GitHub Pages: `/favicon.ico`, `/og-image.png` and the rest.
+ */
+const PUBLIC_DIR = join(import.meta.dir, "apps/app/public");
+const publicFiles = Object.fromEntries(
+  readdirSync(PUBLIC_DIR).map((name) => [
+    `/${name}`,
+    () => new Response(file(join(PUBLIC_DIR, name))),
+  ]),
+);
+
 const configuredPort = Number.parseInt(
   process.env.PORT ?? process.env.APP_PORT ?? "5173",
   10,
@@ -28,6 +43,7 @@ const appPort =
 const server = serve({
   port: appPort,
   routes: {
+    ...publicFiles,
     "/help": serveHelp,
     "/help/*": serveHelp,
     "/llms.txt": serveHelp,
