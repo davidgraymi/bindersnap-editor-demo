@@ -40,7 +40,11 @@ import {
 } from "./schemas/documents";
 import { SearchUsersPayloadSchema } from "./schemas/users";
 import {
+  AccountRefusalSchema,
   AccountUserPayloadSchema,
+  ChangePasswordBodySchema,
+  ChangeUsernameBodySchema,
+  DeleteAccountBodySchema,
   ProfileNameBodySchema,
 } from "./schemas/account";
 import {
@@ -124,6 +128,10 @@ registry.register("ChangeUpdatesPayload", ChangeUpdatesPayloadSchema);
 registry.register("SearchUsersPayload", SearchUsersPayloadSchema);
 registry.register("ProfileNameBody", ProfileNameBodySchema);
 registry.register("AccountUserPayload", AccountUserPayloadSchema);
+registry.register("ChangePasswordBody", ChangePasswordBodySchema);
+registry.register("ChangeUsernameBody", ChangeUsernameBodySchema);
+registry.register("DeleteAccountBody", DeleteAccountBodySchema);
+registry.register("AccountRefusal", AccountRefusalSchema);
 registry.register("OrganizationSummary", OrganizationSummarySchema);
 registry.register("OrganizationListPayload", OrganizationListPayloadSchema);
 registry.register("NewOrganizationBody", NewOrganizationBodySchema);
@@ -357,6 +365,74 @@ registry.registerPath({
       content: { "application/json": { schema: AccountUserPayloadSchema } },
     },
     400: { description: "A first or last name is missing or too long" },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/account/password",
+  operationId: "changePassword",
+  tags: ["account"],
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: ChangePasswordBodySchema } },
+    },
+  },
+  responses: {
+    204: { description: "Changed; every other session was signed out" },
+    400: {
+      description: "The new password is too short",
+      content: { "application/json": { schema: AccountRefusalSchema } },
+    },
+    403: {
+      description: "The current password was wrong",
+      content: { "application/json": { schema: AccountRefusalSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/account/username",
+  operationId: "changeUsername",
+  tags: ["account"],
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: ChangeUsernameBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Renamed; drafts and sessions followed",
+      content: { "application/json": { schema: AccountUserPayloadSchema } },
+    },
+    409: {
+      description:
+        "The username is taken, or a binder's sign-off rules name this person",
+      content: { "application/json": { schema: AccountRefusalSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "delete",
+  path: "/api/app/account",
+  operationId: "deleteAccount",
+  tags: ["account"],
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: DeleteAccountBodySchema } },
+    },
+  },
+  responses: {
+    204: { description: "Deleted, and signed out" },
+    409: {
+      description: "This person is the only owner of an organization",
+      content: { "application/json": { schema: AccountRefusalSchema } },
+    },
   },
 });
 

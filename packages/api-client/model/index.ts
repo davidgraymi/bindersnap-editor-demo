@@ -5,6 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 
+export * from './accountRefusal.ts';
 export * from './accountUserPayload.ts';
 export * from './accountUserPayloadUser.ts';
 export * from './addBinderPerson200.ts';
@@ -47,8 +48,15 @@ export * from './billingStatusPayloadOverride.ts';
 export * from './billingStatusPayloadOverrideAccess.ts';
 export * from './billingStatusPayloadOverrideMode.ts';
 export * from './billingStatusPayloadPlan.ts';
+export * from './changePassword400.ts';
+export * from './changePassword403.ts';
+export * from './changePasswordBody.ts';
 export * from './changeUpdatesPayload.ts';
 export * from './changeUpdatesPayloadUpdatesItem.ts';
+export * from './changeUsername200.ts';
+export * from './changeUsername200User.ts';
+export * from './changeUsername409.ts';
+export * from './changeUsernameBody.ts';
 export * from './collaboratorListPayload.ts';
 export * from './collaboratorListPayloadCollaboratorsItem.ts';
 export * from './collaboratorListPayloadCollaboratorsItemAccess.ts';
@@ -91,6 +99,8 @@ export * from './createOrganizationGroup201.ts';
 export * from './createOrganizationGroup201Group.ts';
 export * from './createOrganizationGroup201GroupMembersItem.ts';
 export * from './createOrganizationGroupBody.ts';
+export * from './deleteAccount409.ts';
+export * from './deleteAccountBody.ts';
 export * from './describeBinder200.ts';
 export * from './describeBinderBody.ts';
 export * from './discardBinderDraft200.ts';

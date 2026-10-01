@@ -5,6 +5,14 @@
  * OpenAPI spec version: 1.0.0
  */
 import type {
+  ChangePassword400,
+  ChangePassword403,
+  ChangePasswordBody,
+  ChangeUsername200,
+  ChangeUsername409,
+  ChangeUsernameBody,
+  DeleteAccount409,
+  DeleteAccountBody,
   UpdateProfile200,
   UpdateProfileBody
 } from '../model';
@@ -46,6 +54,128 @@ export const updateProfile = async (updateProfileBody: UpdateProfileBody, option
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(updateProfileBody)
+  }
+);}
+
+
+export type changePasswordResponse204 = {
+  data: void
+  status: 204
+}
+
+export type changePasswordResponse400 = {
+  data: ChangePassword400
+  status: 400
+}
+
+export type changePasswordResponse403 = {
+  data: ChangePassword403
+  status: 403
+}
+
+export type changePasswordResponseSuccess = (changePasswordResponse204) & {
+  headers: Headers;
+};
+export type changePasswordResponseError = (changePasswordResponse400 | changePasswordResponse403) & {
+  headers: Headers;
+};
+
+export type changePasswordResponse = (changePasswordResponseSuccess | changePasswordResponseError)
+
+export const getChangePasswordUrl = () => {
+
+
+
+
+  return `/api/app/account/password`
+}
+
+export const changePassword = async (changePasswordBody: ChangePasswordBody, options?: Parameters<typeof customFetch>[1]): Promise<changePasswordResponse> => {
+
+  return customFetch<changePasswordResponse>(getChangePasswordUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(changePasswordBody)
+  }
+);}
+
+
+export type changeUsernameResponse200 = {
+  data: ChangeUsername200
+  status: 200
+}
+
+export type changeUsernameResponse409 = {
+  data: ChangeUsername409
+  status: 409
+}
+
+export type changeUsernameResponseSuccess = (changeUsernameResponse200) & {
+  headers: Headers;
+};
+export type changeUsernameResponseError = (changeUsernameResponse409) & {
+  headers: Headers;
+};
+
+export type changeUsernameResponse = (changeUsernameResponseSuccess | changeUsernameResponseError)
+
+export const getChangeUsernameUrl = () => {
+
+
+
+
+  return `/api/app/account/username`
+}
+
+export const changeUsername = async (changeUsernameBody: ChangeUsernameBody, options?: Parameters<typeof customFetch>[1]): Promise<changeUsernameResponse> => {
+
+  return customFetch<changeUsernameResponse>(getChangeUsernameUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(changeUsernameBody)
+  }
+);}
+
+
+export type deleteAccountResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteAccountResponse409 = {
+  data: DeleteAccount409
+  status: 409
+}
+
+export type deleteAccountResponseSuccess = (deleteAccountResponse204) & {
+  headers: Headers;
+};
+export type deleteAccountResponseError = (deleteAccountResponse409) & {
+  headers: Headers;
+};
+
+export type deleteAccountResponse = (deleteAccountResponseSuccess | deleteAccountResponseError)
+
+export const getDeleteAccountUrl = () => {
+
+
+
+
+  return `/api/app/account`
+}
+
+export const deleteAccount = async (deleteAccountBody: DeleteAccountBody, options?: Parameters<typeof customFetch>[1]): Promise<deleteAccountResponse> => {
+
+  return customFetch<deleteAccountResponse>(getDeleteAccountUrl(),
+  {
+    ...options,
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(deleteAccountBody)
   }
 );}
 
