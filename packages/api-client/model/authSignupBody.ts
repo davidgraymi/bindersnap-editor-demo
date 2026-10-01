@@ -7,6 +7,10 @@
 
 export type AuthSignupBody = {
   /** @minLength 1 */
+  firstName: string;
+  /** @minLength 1 */
+  lastName: string;
+  /** @minLength 1 */
   username: string;
   email: string;
   /** @minLength 1 */

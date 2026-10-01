@@ -461,7 +461,11 @@ async function signUpUser(credentials: {
       // Origin is required — signup goes through CORS origin enforcement.
       Origin: APP_ORIGIN,
     },
-    body: JSON.stringify(credentials),
+    body: JSON.stringify({
+      firstName: "Test",
+      lastName: "User",
+      ...credentials,
+    }),
   });
 
   if (!response.ok) {

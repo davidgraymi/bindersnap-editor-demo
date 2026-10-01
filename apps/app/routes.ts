@@ -1,3 +1,4 @@
+import { RESERVED_ORGANIZATION_NAMES } from "../../packages/utils/organizationName";
 import { buildDocumentUrl } from "./binderDocument";
 import {
   buildBinderUrl,
@@ -16,6 +17,8 @@ export type AppRoute =
   | { kind: "documents" }
   | { kind: "changes" }
   | { kind: "adminSubscriptions" }
+  /** The signed-in person's own account: `/settings`. */
+  | { kind: "accountSettings" }
   /**
    * One organization's billing: `/{org}/-/billing`.
    *
@@ -142,20 +145,7 @@ export function isLegacyInboxPath(pathname: string): boolean {
  * `login` and the rest. Anything added here must also be refused as an
  * organization name, or somebody's binder becomes unreachable.
  */
-export const RESERVED_FIRST_SEGMENTS = new Set([
-  "activity",
-  "admin",
-  "auth",
-  "billing",
-  "changes",
-  "docs",
-  "documents",
-  // Help is ordinary pages beside the app (`apps/help`), never a route in it.
-  "help",
-  "login",
-  "organizations",
-  "signup",
-]);
+export const RESERVED_FIRST_SEGMENTS = RESERVED_ORGANIZATION_NAMES;
 
 export function getRoute(pathname: string): AppRoute {
   const normalizedPath = normalizePathname(pathname);
@@ -180,6 +170,10 @@ export function getRoute(pathname: string): AppRoute {
   // own Change requests tab, which can only answer for one binder.
   if (normalizedPath === "/changes") {
     return { kind: "changes" };
+  }
+
+  if (normalizedPath === "/settings") {
+    return { kind: "accountSettings" };
   }
 
   // The redesign folded the inbox into Home — every change request that was
@@ -288,6 +282,8 @@ export function routeToPath(route: AppRoute): string {
       return "/documents";
     case "changes":
       return "/changes";
+    case "accountSettings":
+      return "/settings";
     case "adminSubscriptions":
       return "/admin/subscriptions";
     case "billing":
@@ -412,6 +408,7 @@ export function isProtectedAppRoute(route: AppRoute): boolean {
     route.kind === "workspace" ||
     route.kind === "documents" ||
     route.kind === "changes" ||
+    route.kind === "accountSettings" ||
     route.kind === "adminSubscriptions" ||
     // An organization's own pages need a session to resolve at all: which
     // binders you can see is a question about you.

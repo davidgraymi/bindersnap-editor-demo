@@ -42,6 +42,8 @@ async function fillSignupForm(
   },
   confirmPassword = credentials.password,
 ): Promise<void> {
+  await page.getByLabel("First name").fill("Test");
+  await page.getByLabel("Last name").fill("User");
   await page.getByLabel("Username").fill(credentials.username);
   await page.getByLabel("Email").fill(credentials.email);
   await page.getByLabel("Password", { exact: true }).fill(credentials.password);

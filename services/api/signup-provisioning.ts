@@ -1,5 +1,6 @@
 import {
   MAX_ORGANIZATION_NAME_LENGTH as MAX_NAME_LENGTH,
+  RESERVED_ORGANIZATION_NAMES,
   slugifyOrganizationName,
 } from "../../packages/utils/organizationName";
 
@@ -55,8 +56,19 @@ export function deriveOrganizationName(
   const fromRequest = requested ? slugifyOrganizationName(requested) : "";
   const fromUsername = slugifyOrganizationName(username);
 
-  if (fromRequest && fromRequest !== fromUsername) {
+  if (
+    fromRequest &&
+    fromRequest !== fromUsername &&
+    !RESERVED_ORGANIZATION_NAMES.has(fromRequest)
+  ) {
     return fromRequest;
+  }
+
+  // A name the app keeps for its own pages would put the organization behind
+  // one of them. "Billing" becomes `billing-org`, the same shape a name taken
+  // from the username gets.
+  if (fromRequest && RESERVED_ORGANIZATION_NAMES.has(fromRequest)) {
+    return `${fromRequest}-org`;
   }
 
   const base = fromUsername || "org";

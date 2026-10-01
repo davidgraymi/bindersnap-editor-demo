@@ -64,6 +64,7 @@ export function buildApprovalsCsv(record: AuditRecord): string {
       "tag",
       "change",
       "actor",
+      "actor_name",
       "action",
       "timestamp",
       "commit",
@@ -72,8 +73,10 @@ export function buildApprovalsCsv(record: AuditRecord): string {
     ],
   ];
   for (const version of record.versions) {
+    // The login ties the row to the account; the name is what a surveyor
+    // reads. Both, because a login alone is a question somebody has to ask.
     const base = (
-      actor: string,
+      actor: { login: string; name: string } | null | undefined,
       action: string,
       at: string,
       commit = version.commit,
@@ -81,7 +84,8 @@ export function buildApprovalsCsv(record: AuditRecord): string {
       version.version,
       version.tag,
       version.change ? version.change.number : "",
-      actor,
+      actor?.login ?? "",
+      actor?.name ?? "",
       action,
       at,
       commit,
@@ -90,12 +94,7 @@ export function buildApprovalsCsv(record: AuditRecord): string {
     ];
     if (version.change) {
       rows.push(
-        base(
-          version.change.author.login,
-          "submitted",
-          version.change.openedAt,
-          "",
-        ),
+        base(version.change.author, "submitted", version.change.openedAt, ""),
       );
     }
     for (const review of version.reviews) {
@@ -106,11 +105,11 @@ export function buildApprovalsCsv(record: AuditRecord): string {
           : review.stale
             ? " (superseded)"
             : "");
-      rows.push(base(review.reviewer.login, action, review.at, review.commit));
+      rows.push(base(review.reviewer, action, review.at, review.commit));
     }
     rows.push(
       base(
-        version.change?.publishedBy?.login ?? "",
+        version.change?.publishedBy,
         "published",
         version.change?.publishedAt ?? version.publishedAt,
       ),

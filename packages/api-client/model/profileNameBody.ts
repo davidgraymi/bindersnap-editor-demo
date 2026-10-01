@@ -5,14 +5,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export interface SignupBody {
+export interface ProfileNameBody {
   /** @minLength 1 */
   firstName: string;
   /** @minLength 1 */
   lastName: string;
-  /** @minLength 1 */
-  username: string;
-  email: string;
-  /** @minLength 1 */
-  password: string;
 }

@@ -150,7 +150,11 @@ async function provision(): Promise<{
   const signup = await fetch(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
-    body: JSON.stringify(credentials),
+    body: JSON.stringify({
+      firstName: "Test",
+      lastName: "User",
+      ...credentials,
+    }),
   });
   expect(signup.status, await signup.clone().text()).toBe(200);
   const session = (signup.headers.get("set-cookie") ?? "").match(

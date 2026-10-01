@@ -5,6 +5,8 @@
  * OpenAPI spec version: 1.0.0
  */
 
+export * from './accountUserPayload.ts';
+export * from './accountUserPayloadUser.ts';
 export * from './addBinderPerson200.ts';
 export * from './addBinderPerson200GroupsItem.ts';
 export * from './addBinderPerson200GroupsItemMembersItem.ts';
@@ -342,6 +344,7 @@ export * from './openBinderDraftBody.ts';
 export * from './organizationListPayload.ts';
 export * from './organizationListPayloadOrganizationsItem.ts';
 export * from './organizationSummary.ts';
+export * from './profileNameBody.ts';
 export * from './proposeBinderDraft201.ts';
 export * from './proposeBinderDraftBody.ts';
 export * from './proposeBinderSignOffRules201.ts';
@@ -478,6 +481,9 @@ export * from './updateBinderChangeAssignments200Assignee.ts';
 export * from './updateBinderChangeAssignments200ReviewersItem.ts';
 export * from './updateBinderChangeAssignments200ReviewersItemStatus.ts';
 export * from './updateBinderChangeAssignmentsBody.ts';
+export * from './updateProfile200.ts';
+export * from './updateProfile200User.ts';
+export * from './updateProfileBody.ts';
 export * from './uploadResult.ts';
 export * from './workspaceDocumentEntry.ts';
 export * from './workspaceDocumentSummary.ts';

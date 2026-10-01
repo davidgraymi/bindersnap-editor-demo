@@ -1,6 +1,9 @@
 import { useMemo, useRef, useState } from "react";
 
-import { slugifyOrganizationName } from "../../../packages/utils/organizationName";
+import {
+  RESERVED_ORGANIZATION_NAMES,
+  slugifyOrganizationName,
+} from "../../../packages/utils/organizationName";
 import { BindersnapLogoMark } from "./BindersnapLogoMark";
 
 /**
@@ -44,7 +47,14 @@ export function OrganizationSetupPage({
   const [error, setError] = useState<string | null>(null);
   const isMounted = useRef(true);
 
-  const slug = useMemo(() => slugifyOrganizationName(name), [name]);
+  // The address the server will give it, reserved names included, so the
+  // preview never promises `/billing` and delivers `/billing-org`.
+  const slug = useMemo(() => {
+    const derived = slugifyOrganizationName(name);
+    return RESERVED_ORGANIZATION_NAMES.has(derived)
+      ? `${derived}-org`
+      : derived;
+  }, [name]);
   const canSubmit = slug !== "" && !isSubmitting;
 
   return (

@@ -33,6 +33,8 @@ async function provision(): Promise<{ session: string; org: string }> {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
     body: JSON.stringify({
+      firstName: "Test",
+      lastName: "User",
       username: `nav-${suffix}`,
       email: `nav-${suffix}@example.com`,
       password: "Sufficiently-Long-Passphrase-1",
