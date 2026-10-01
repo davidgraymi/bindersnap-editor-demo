@@ -110,6 +110,9 @@ async function signUpThroughOrganizationSetup(
   // A fresh display name per run. The API steps a taken name to the next
   // free suffix and gives up at twenty, so a fixed one here quietly caps
   // this suite at twenty runs against any one stack.
+  // Somebody new is asked first whether they are starting or joining.
+  await page.getByLabel("Start a new organization").check();
+  await page.getByRole("button", { name: "Continue" }).click();
   await page
     .getByLabel("Organization name")
     .fill(`Mercy Health ${randomUUID().slice(0, 6)}`);
