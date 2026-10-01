@@ -219,6 +219,23 @@ test("a ready change waits on whoever can publish it", () => {
   ).toBe(false);
 });
 
+test("an unanswered request is waiting on, even on a change ready to publish", () => {
+  // A binder that needs no approvals: Gitea would merge this now, and the
+  // person asked to review it has still not been heard from.
+  const ready = {
+    ...change({
+      approvalCount: 0,
+      requiredApprovals: 0,
+      reviewers: [reviewer("bob", "awaiting")],
+    }),
+    isApproved: true,
+  };
+
+  expect(
+    buildQueueRows([binder("clinical", [ready])], "bob", NOW)[0]?.waitingOnYou,
+  ).toBe(true);
+});
+
 test("a change can be blocked and waiting on you at once", () => {
   // Both facts are true and neither is safe to hide, which is why waitingOnYou
   // cuts across status rather than being one of its values.
