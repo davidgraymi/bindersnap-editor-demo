@@ -55,6 +55,11 @@ export interface ChangeRowInput {
   approvalCount: number;
   requiredApprovals: number | null;
   isRejected?: boolean;
+  /**
+   * The server's answer to "would Gitea merge it now?" — which also knows
+   * about a reviewer asked and not yet heard from. Absent, the count decides.
+   */
+  isApproved?: boolean;
 }
 
 /**
@@ -115,10 +120,18 @@ export function describeChangeStandingWord(change: ChangeRowInput): {
   }
 
   const required = change.requiredApprovals;
-  const enough =
-    required !== null && required > 0 && change.approvalCount >= required;
+  const ready =
+    change.isApproved ??
+    (required !== null && change.approvalCount >= required);
 
-  return enough
+  // A binder that needs no approvals has nothing to call "Approved": its
+  // change is ready, or it is waiting on somebody's review.
+  if (required === 0) {
+    return ready
+      ? { tone: "approved", standing: "Ready to publish" }
+      : { tone: "awaiting", standing: "Awaiting review" };
+  }
+  return ready
     ? { tone: "approved", standing: "Approved" }
     : { tone: "awaiting", standing: "Awaiting approval" };
 }
