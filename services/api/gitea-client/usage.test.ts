@@ -73,3 +73,42 @@ test("a call made outside any request records nothing", () => {
   recordGiteaCall({ gated: true, waitMs: 1, durationMs: 1 });
   expect(currentGiteaUsage()).toBeUndefined();
 });
+
+test("a read memoized for a request is shared within it, and only within it", async () => {
+  const { memoizeForRequest } = await import("./usage");
+  let reads = 0;
+  const read = () =>
+    memoizeForRequest("protection:a/b@main", async () => ++reads);
+
+  await withGiteaUsage(createGiteaUsage(), async () => {
+    expect(await Promise.all([read(), read(), read()])).toEqual([1, 1, 1]);
+  });
+  // Another request asks again: nothing outlives the request it was read in.
+  await withGiteaUsage(createGiteaUsage(), async () => {
+    expect(await read()).toBe(2);
+  });
+  // Outside a request there is nothing to share it with.
+  expect(await read()).toBe(3);
+});
+
+test("a Gitea write within the request clears what it had shared", async () => {
+  const { memoizeForRequest } = await import("./usage");
+  globalThis.fetch = (async () =>
+    new Response("{}", { status: 200 })) as unknown as typeof fetch;
+  let reads = 0;
+  const read = () =>
+    memoizeForRequest("protection:a/b@main", async () => ++reads);
+
+  await withGiteaUsage(createGiteaUsage(), async () => {
+    expect(await read()).toBe(1);
+    await gatedFetch(
+      new Request(
+        "https://gitea.test/api/v1/repos/a/b/branch_protections/main",
+        {
+          method: "PATCH",
+        },
+      ),
+    );
+    expect(await read()).toBe(2);
+  });
+});

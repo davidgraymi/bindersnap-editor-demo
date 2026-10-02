@@ -467,6 +467,7 @@ test("listOrganizationWorkspaces returns the org's binders in the app's shape", 
           description: "Nursing and clinical practice",
           open_pr_counter: 3,
           updated_at: "2026-09-20T10:00:00Z",
+          permissions: { admin: false, push: true, pull: true },
         },
         {
           id: 9,
@@ -493,6 +494,8 @@ test("listOrganizationWorkspaces returns the org's binders in the app's shape", 
       description: "Nursing and clinical practice",
       openChangeCount: 3,
       updatedAt: "2026-09-20T10:00:00Z",
+      // Gitea answers the caller's permissions on the same read.
+      access: { push: true, admin: false },
     },
     // A binder with no description is an ordinary binder, not a broken one.
     {
@@ -503,6 +506,7 @@ test("listOrganizationWorkspaces returns the org's binders in the app's shape", 
       description: "",
       openChangeCount: 0,
       updatedAt: "",
+      access: { push: false, admin: false },
     },
   ]);
 });

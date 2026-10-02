@@ -6,6 +6,8 @@ import {
   createGiteaUsage,
   currentGiteaUsage,
   giteaUsageLogFields,
+  forgetRequestMemo,
+  memoizeForRequest,
   recordGiteaCall,
   withGiteaUsage,
 } from "./gitea-client/usage";
@@ -732,10 +734,14 @@ async function readJson<T>(req: Request): Promise<T | null> {
 }
 
 async function giteaFetch(path: string, init?: RequestInit): Promise<Response> {
+  const method = (init?.method ?? "GET").toUpperCase();
+  const writes = method !== "GET" && method !== "HEAD";
+  if (writes) forgetRequestMemo();
   const startedAt = performance.now();
   try {
     return await fetch(new URL(path, config.giteaUrl), init);
   } finally {
+    if (writes) forgetRequestMemo();
     // Not gated, so no wait to report — but it is still Gitea's time, and a
     // request that makes these should say so on its log line.
     recordGiteaCall({
@@ -829,6 +835,25 @@ function createServiceGiteaClient(): GiteaClient {
  * so "this document needs no approvals" stays distinguishable from "we could
  * not find out how many it needs".
  */
+/**
+ * A binder's branch protection, read with the service account, once per
+ * request.
+ *
+ * Three helpers below each want a different field of the same rule, and a
+ * page that shows a change asks all three. Each used to be its own Gitea call.
+ */
+function readBranchProtectionForRequest(
+  client: GiteaClient,
+  owner: string,
+  repo: string,
+  branch: string,
+): Promise<RepoBranchProtection | null> {
+  return memoizeForRequest(
+    `privileged:protection:${owner}/${repo}@${branch}`,
+    () => getRepoBranchProtection(client, owner, repo, branch),
+  );
+}
+
 async function readRequiredApprovals(
   owner: string,
   repo: string,
@@ -838,7 +863,7 @@ async function readRequiredApprovals(
   if (!client) return null;
 
   try {
-    const protection = await getRepoBranchProtection(
+    const protection = await readBranchProtectionForRequest(
       client,
       owner,
       repo,
@@ -876,7 +901,7 @@ async function readSignOffGate(
   if (!client) return null;
 
   try {
-    const protection = await getRepoBranchProtection(
+    const protection = await readBranchProtectionForRequest(
       client,
       owner,
       repo,
@@ -926,7 +951,7 @@ async function readMergeRules(
   if (!client) return null;
 
   try {
-    const protection = await getRepoBranchProtection(
+    const protection = await readBranchProtectionForRequest(
       client,
       owner,
       repo,
@@ -5376,7 +5401,7 @@ async function readDecisionRights(params: {
   const client = createPrivilegedGiteaClient();
   if (!client) return { canApprove: canWrite, canPublish: canWrite };
 
-  const protection = await getRepoBranchProtection(
+  const protection = await readBranchProtectionForRequest(
     client,
     org,
     binder,
@@ -5502,7 +5527,8 @@ async function handleWorkspaceChangeDetail(
         repo: workspaceName,
         pullNumber,
       }),
-      readWorkspaceAccess({ client, org: orgName, name: workspaceName }),
+      // Already on the binder read above; not a second `/repos` call.
+      workspace.access,
       // The rules as they stand on the base branch, which is where Gitea reads
       // them from when it decides who to ask.
       readSignOffRules({
@@ -5511,11 +5537,11 @@ async function handleWorkspaceChangeDetail(
         workspace: workspaceName,
       }).catch(() => ({ exists: false, rules: [], unreadable: [] })),
       readSignOffGate(orgName, workspaceName),
-      // Every tag, once, so a restore can be told from a revision. A read that
-      // fails costs the label and not the page.
-      listAllTags({ client, owner: orgName, repo: workspaceName }).catch(
-        () => [],
-      ),
+      // Every tag, once: each document's versions and whether it is being
+      // restored are both read off it. Not caught — a page that could not
+      // read the tags would offer "Publish v1" for a document on v4, and a
+      // version number is the one thing this page cannot guess at.
+      listAllTags({ client, owner: orgName, repo: workspaceName }),
     ]);
 
     const pullState = entry.pullRequest as {
@@ -5542,17 +5568,12 @@ async function handleWorkspaceChangeDetail(
       ),
     );
 
-    // The version each document reaches if this is published. One call per
-    // document the change touches — which is a handful, on a page about one
-    // change, and it is the difference between "Publish" and "Publish v4".
+    // The version each document reaches if this is published — the
+    // difference between "Publish" and "Publish v4". Off the tags already in
+    // hand, rather than another tag read per document.
     const withVersions = await Promise.all(
       documents.map(async (document) => {
-        const versions = await listDocumentVersions({
-          client,
-          org: orgName,
-          workspace: workspaceName,
-          uid: document.uid,
-        });
+        const versions = documentVersionsFrom(tags, document.uid);
         const was = document.uid ? baseAddresses.get(document.uid) : undefined;
         return {
           ...document,
@@ -5588,12 +5609,7 @@ async function handleWorkspaceChangeDetail(
           (document) => document.uid !== null && !stillHere.has(document.uid),
         )
         .map(async (document) => {
-          const versions = await listDocumentVersions({
-            client,
-            org: orgName,
-            workspace: workspaceName,
-            uid: document.uid,
-          });
+          const versions = documentVersionsFrom(tags, document.uid);
           return { ...document, lastVersion: versions[0] ?? null };
         }),
     );
@@ -6637,7 +6653,8 @@ async function handleWorkspaceSettings(
       // a repository admin.
       readWorkspaceProtection(orgName, workspaceName),
       readBinderSettings(workspace),
-      readWorkspaceAccess({ client, org: orgName, name: workspaceName }),
+      // Already on the binder read above; not a second `/repos` call.
+      workspace.access,
       readSignOffRules({
         client,
         org: orgName,
@@ -7162,11 +7179,9 @@ async function handleBinderRules(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    const access = await readWorkspaceAccess({
-      client,
-      org: orgName,
-      name: workspaceName,
-    });
+    // On the binder read above: Gitea answers the caller's permissions on
+    // the same repository call, so asking again was a second identical read.
+    const access = workspace.access;
     if (!access.admin) {
       return json(
         403,
@@ -7587,7 +7602,7 @@ async function readWorkspaceProtection(
   if (!client) return null;
 
   try {
-    return await getRepoBranchProtection(client, owner, repo, "main");
+    return await readBranchProtectionForRequest(client, owner, repo, "main");
   } catch (err) {
     logger.error("Failed to read a binder's branch protection", {
       owner,
@@ -11942,11 +11957,9 @@ async function handleRenameBinder(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    const access = await readWorkspaceAccess({
-      client,
-      org: orgName,
-      name: workspaceName,
-    });
+    // On the binder read above: Gitea answers the caller's permissions on
+    // the same repository call, so asking again was a second identical read.
+    const access = workspace.access;
     if (!access.admin) {
       return json(
         403,
@@ -12049,11 +12062,9 @@ async function handleDescribeBinder(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    const access = await readWorkspaceAccess({
-      client,
-      org: orgName,
-      name: workspaceName,
-    });
+    // On the binder read above: Gitea answers the caller's permissions on
+    // the same repository call, so asking again was a second identical read.
+    const access = workspace.access;
     if (!access.admin) {
       return json(
         403,

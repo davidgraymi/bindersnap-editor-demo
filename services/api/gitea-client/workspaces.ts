@@ -57,6 +57,13 @@ export interface WorkspaceSummary {
   openChangeCount: number;
   /** When anything last moved in it, as Gitea records it. */
   updatedAt: string;
+  /**
+   * What the caller whose token read this may do here — Gitea answers it on
+   * the same read. See {@link readWorkspaceAccess} for why this is the honest
+   * source; a handler that has the binder already has this, and need not ask
+   * for the repository a second time.
+   */
+  access: { push: boolean; admin: boolean };
 }
 
 export interface ProvisionedWorkspace {
@@ -78,6 +85,10 @@ function normalizeWorkspace(repo: Repository): WorkspaceSummary {
     description: repo.description ?? "",
     openChangeCount: repo.open_pr_counter ?? 0,
     updatedAt: repo.updated_at ?? "",
+    access: {
+      push: repo.permissions?.push === true,
+      admin: repo.permissions?.admin === true,
+    },
   };
 }
 

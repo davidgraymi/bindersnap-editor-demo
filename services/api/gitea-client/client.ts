@@ -2,7 +2,7 @@ import createClient from "openapi-fetch";
 
 import { giteaRequestGate } from "./request-gate";
 import type { paths } from "./spec/gitea";
-import { recordGiteaCall } from "./usage";
+import { forgetRequestMemo, recordGiteaCall } from "./usage";
 
 /**
  * Every Gitea call queues here. See `request-gate.ts` for why.
@@ -12,11 +12,17 @@ import { recordGiteaCall } from "./usage";
  */
 export const gatedFetch = (input: Request): Promise<Response> => {
   const queuedAt = performance.now();
+  // A write makes any read this request shared stale. Cleared before, so a
+  // read racing the write cannot be served the old answer, and after, so a
+  // read that started meanwhile is not kept either.
+  const writes = input.method !== "GET" && input.method !== "HEAD";
+  if (writes) forgetRequestMemo();
   return giteaRequestGate.run(async () => {
     const startedAt = performance.now();
     try {
       return await globalThis.fetch(input);
     } finally {
+      if (writes) forgetRequestMemo();
       recordGiteaCall({
         gated: true,
         waitMs: startedAt - queuedAt,
