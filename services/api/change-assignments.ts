@@ -85,13 +85,21 @@ export function latestReviewByUser(
 }
 
 /**
- * Approvals that still count.
+ * Whether one review is an approval that counts.
  *
- * A dismissed approval was taken back and a stale one was overtaken by a new
- * upload; neither is a signature on the version being published. This mirrors
- * what Gitea itself will allow at merge time, so the number on the page and
- * the number the server enforces are the same number.
+ * Gitea marks every review left on an older commit `stale`, whatever the
+ * binder says — and counts it anyway unless the binder dismisses stale
+ * approvals (`dismiss_stale_approvals`, which also marks them dismissed) or
+ * ignores them (`ignore_stale_approvals`). `ignoresStale` is that rule, and
+ * defaults to the strict reading for a caller that does not know it.
  */
+function counts(review: PullReview, ignoresStale: boolean): boolean {
+  return (
+    toReviewerStatus(review.state) === "approved" &&
+    !(ignoresStale && review.stale === true)
+  );
+}
+
 /**
  * Everyone whose approval **stood** on this change, by login.
  *
@@ -101,6 +109,22 @@ export function latestReviewByUser(
  * been replaced — it is not a signature on what is being published, and naming
  * somebody who approved a version they never saw is worse than naming nobody.
  */
+export function approverLogins(
+  reviews: PullReview[],
+  ignoresStale = true,
+): string[] {
+  const logins: string[] = [];
+
+  for (const review of latestReviewByUser(reviews).values()) {
+    if (counts(review, ignoresStale)) {
+      const login = review.user?.login ?? "";
+      if (login !== "") logins.push(login);
+    }
+  }
+
+  return logins.sort((left, right) => left.localeCompare(right));
+}
+
 /**
  * Everyone whose approval stands, as the record writes them: "Jordan Kim
  * (jkim)".
@@ -110,14 +134,14 @@ export function latestReviewByUser(
  * when the account is deleted. The tag is immutable, so it names them the way
  * a surveyor reads a name, with the login beside it to tie the two together.
  */
-export function approverSignatures(reviews: PullReview[]): string[] {
+export function approverSignatures(
+  reviews: PullReview[],
+  ignoresStale = true,
+): string[] {
   const signatures: string[] = [];
 
   for (const review of latestReviewByUser(reviews).values()) {
-    if (
-      toReviewerStatus(review.state) === "approved" &&
-      review.stale !== true
-    ) {
+    if (counts(review, ignoresStale)) {
       const login = review.user?.login ?? "";
       if (login !== "") {
         signatures.push(signatureOf(login, review.user?.full_name ?? ""));
@@ -134,30 +158,23 @@ export function signatureOf(login: string, fullName: string): string {
   return name === "" || name === login ? login : `${name} (${login})`;
 }
 
-export function approverLogins(reviews: PullReview[]): string[] {
-  const logins: string[] = [];
-
-  for (const review of latestReviewByUser(reviews).values()) {
-    if (
-      toReviewerStatus(review.state) === "approved" &&
-      review.stale !== true
-    ) {
-      const login = review.user?.login ?? "";
-      if (login !== "") logins.push(login);
-    }
-  }
-
-  return logins.sort((left, right) => left.localeCompare(right));
-}
-
-export function countApprovals(reviews: PullReview[]): number {
+/**
+ * Approvals that still count.
+ *
+ * A dismissed approval was taken back. A stale one was left on an earlier
+ * version, and counts only where the binder lets an approval stand through
+ * later edits. This mirrors what Gitea itself will allow at merge time, so
+ * the number on the page and the number the server enforces are the same
+ * number.
+ */
+export function countApprovals(
+  reviews: PullReview[],
+  ignoresStale = true,
+): number {
   let approvals = 0;
 
   for (const review of latestReviewByUser(reviews).values()) {
-    if (
-      toReviewerStatus(review.state) === "approved" &&
-      review.stale !== true
-    ) {
+    if (counts(review, ignoresStale)) {
       approvals += 1;
     }
   }
@@ -180,8 +197,10 @@ export function buildChangeReviewers(params: {
   requested: (User | null | undefined)[];
   reviews: PullReview[];
   submittedBy: string;
+  /** The binder's stale-approval rule; see `counts`. */
+  ignoresStale?: boolean;
 }): ChangeReviewer[] {
-  const { requested, reviews, submittedBy } = params;
+  const { requested, reviews, submittedBy, ignoresStale = true } = params;
   const latest = latestReviewByUser(reviews);
   const byLogin = new Map<string, ChangeReviewer>();
 
@@ -196,7 +215,9 @@ export function buildChangeReviewers(params: {
       ...user,
       status: status ?? "awaiting",
       reviewedAt: status && review ? reviewTime(review) : "",
-      stale: status ? review?.stale === true : false,
+      // Stale only where it stops counting: a binder that lets approvals
+      // stand through later edits has nobody to ask again.
+      stale: status && ignoresStale ? review?.stale === true : false,
       requested: wasRequested || existing?.requested === true,
     });
   };

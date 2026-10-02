@@ -393,6 +393,7 @@ function normalizeBranchProtection(
     // every caller: sign-off rules are not being enforced.
     blockOnCodeownerReviews: raw.block_on_codeowner_reviews ?? false,
     dismissStaleApprovals: raw.dismiss_stale_approvals ?? false,
+    ignoreStaleApprovals: raw.ignore_stale_approvals ?? false,
     enablePush: raw.enable_push ?? false,
   };
 }
@@ -518,6 +519,8 @@ export interface RepoBranchProtection {
    * that actually gets published.
    */
   dismissStaleApprovals: boolean;
+  /** Stale approvals stop counting without being dismissed. */
+  ignoreStaleApprovals: boolean;
   /**
    * Whether anybody may push straight to the protected branch.
    *

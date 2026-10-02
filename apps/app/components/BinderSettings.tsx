@@ -1673,6 +1673,13 @@ function ApprovalSection({
               <label className="bs-row-name" htmlFor="binder-dismiss-stale">
                 A new version clears the approvals already collected
               </label>
+              {/* The consequence either way, since both are defensible and
+                  the record reads differently under each. */}
+              <span className="bs-row-meta">
+                {rules.dismissStaleApprovals
+                  ? "When a change request is edited after someone approved it, their approval is cleared and they are asked again. Every approval is for exactly what was published."
+                  : "Approvals stand when a change request is edited afterwards. Reviewers are not asked to look again."}
+              </span>
             </span>
             <span className="bs-row-right bs-settings-value">
               {canManage ? (

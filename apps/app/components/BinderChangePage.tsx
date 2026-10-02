@@ -463,14 +463,15 @@ export function BinderChangePage({
               there too.
             </strong>{" "}
             Choose what each clash should say to bring this change up to date.
-            Approvals already given are dismissed, because they were for
-            different content.
+            {detail.clearsApprovalsOnEdit
+              ? " That changes what it proposes, so approvals already given are cleared and asked for again."
+              : " This binder keeps approvals already given through later edits."}
           </p>
         ) : (
           <p>
             <strong>The binder has moved on since this change was made.</strong>{" "}
-            Updating it pulls in everything published since. Approvals already
-            given are dismissed, because they were for different content.
+            Updating it pulls in everything published since. What this change
+            proposes stays the same, so approvals already given stay too.
           </p>
         )}
         {detail.hasConflicts ? (

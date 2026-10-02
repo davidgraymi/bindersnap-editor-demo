@@ -883,6 +883,12 @@ async function readSignOffGate(
 interface MergeRules {
   requiredApprovals: number;
   heldByReviewRequests: boolean;
+  /**
+   * Whether an approval left on an earlier version stops counting — because
+   * the binder dismisses stale approvals, or ignores them. Off, and Gitea
+   * merges on an approval that stood through later edits.
+   */
+  ignoresStale: boolean;
 }
 
 async function readMergeRules(
@@ -903,6 +909,9 @@ async function readMergeRules(
     return {
       requiredApprovals: protection?.requiredApprovals ?? 0,
       heldByReviewRequests: protection?.blockOnOfficialReviewRequests ?? false,
+      ignoresStale:
+        (protection?.dismissStaleApprovals ?? true) ||
+        (protection?.ignoreStaleApprovals ?? false),
     };
   } catch (err) {
     logger.error("Failed to read a binder's merge rules", {
@@ -2960,7 +2969,8 @@ function buildPendingChangeRow(
   rules: MergeRules | null,
 ) {
   const requiredApprovals = rules?.requiredApprovals ?? null;
-  const approvalCount = countApprovals(entry.reviews);
+  const ignoresStale = rules?.ignoresStale ?? true;
+  const approvalCount = countApprovals(entry.reviews, ignoresStale);
 
   // Declared in the response contract from the beginning and never populated,
   // so `isRejected` read `undefined` everywhere — and `undefined` is falsy.
@@ -2974,6 +2984,7 @@ function buildPendingChangeRow(
     requested: readRequestedReviewers(entry.pullRequest),
     reviews: entry.reviews,
     submittedBy: entry.pullRequest.user?.login ?? "",
+    ignoresStale,
   });
 
   return {
@@ -3809,15 +3820,17 @@ async function handleUpdateChangeAssignments(
       });
     }
 
-    const [after, requiredApprovals] = await Promise.all([
+    const [after, mergeRules] = await Promise.all([
       getPullRequestWithReviews({
         client,
         owner,
         repo,
         pullNumber: prNumber,
       }),
-      readRequiredApprovals(owner, repo),
+      readMergeRules(owner, repo),
     ]);
+    const requiredApprovals = mergeRules?.requiredApprovals ?? null;
+    const ignoresStale = mergeRules?.ignoresStale ?? true;
 
     return json(
       200,
@@ -3827,8 +3840,9 @@ async function handleUpdateChangeAssignments(
           requested: readRequestedReviewers(after.pullRequest),
           reviews: after.reviews,
           submittedBy: after.pullRequest.user?.login ?? submittedBy,
+          ignoresStale,
         }),
-        approvalCount: countApprovals(after.reviews),
+        approvalCount: countApprovals(after.reviews, ignoresStale),
         requiredApprovals,
       },
       baseHeaders,
@@ -5079,7 +5093,13 @@ async function handlePublishWorkspaceChange(
     const publisher = await fetchSessionGiteaUser(session).catch(() => null);
     const stampedPolicy = {
       requiredApprovals: await readRequiredApprovals(owner, workspaceName),
-      approvedBy: merged ? approverSignatures(merged.reviews) : [],
+      approvedBy: merged
+        ? approverSignatures(
+            merged.reviews,
+            (protection?.dismissStaleApprovals ?? true) ||
+              (protection?.ignoreStaleApprovals ?? false),
+          )
+        : [],
       blockOnUnresolvedThreads: reviewSettings.blockOnUnresolvedThreads,
       signOffEnforced: protection?.blockOnCodeownerReviews ?? false,
       publishedBy: signatureOf(session.username, publisher?.fullName ?? ""),
@@ -5489,6 +5509,9 @@ async function handleWorkspaceChangeDetail(
           (entry.pullRequest as { mergeable?: boolean }).mergeable === false,
         blockOnUnresolvedThreads: reviewSettings.blockOnUnresolvedThreads,
         unresolvedThreadCount: discussions.unresolvedCount,
+        // Whether an approval stops counting once what the change proposes
+        // moves on — the binder's "A new version clears the approvals" rule.
+        clearsApprovalsOnEdit: mergeRules?.ignoresStale ?? true,
         canManage: access.push,
         viewer: await readDecisionRights({
           org: orgName,
