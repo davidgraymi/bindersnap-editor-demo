@@ -2024,6 +2024,31 @@
           "error"
         ]
       },
+      "AccountBlockers": {
+        "type": "object",
+        "properties": {
+          "serviceAccount": {
+            "type": "boolean"
+          },
+          "renameBlockedBy": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "deleteBlockedBy": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "serviceAccount",
+          "renameBlockedBy",
+          "deleteBlockedBy"
+        ]
+      },
       "OrganizationSummary": {
         "type": "object",
         "properties": {
@@ -3985,6 +4010,48 @@
           },
           "400": {
             "description": "A first or last name is missing or too long"
+          }
+        }
+      }
+    },
+    "/api/app/account/blockers": {
+      "get": {
+        "operationId": "getAccountBlockers",
+        "tags": [
+          "account"
+        ],
+        "responses": {
+          "200": {
+            "description": "What would refuse a rename or a deletion",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "serviceAccount": {
+                      "type": "boolean"
+                    },
+                    "renameBlockedBy": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "deleteBlockedBy": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "serviceAccount",
+                    "renameBlockedBy",
+                    "deleteBlockedBy"
+                  ]
+                }
+              }
+            }
           }
         }
       }

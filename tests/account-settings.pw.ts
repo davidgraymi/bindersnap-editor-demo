@@ -227,6 +227,25 @@ test("the only owner cannot delete their account; a member can", async ({
   expect(refused.status).toBe(409);
   expect((await refused.json()).organizations).toEqual([org]);
 
+  // And the page says so before anybody types a password.
+  const ownerPage = await page.context().browser()!.newPage();
+  await ownerPage
+    .context()
+    .addCookies([
+      { name: "bindersnap_session", value: owner.session, url: APP_BASE_URL },
+    ]);
+  await ownerPage.goto(`${APP_BASE_URL}/-/user_settings/profile`);
+  await expect(
+    ownerPage.getByText("You are the only owner of these organizations."),
+  ).toBeVisible();
+  await expect(ownerPage.getByRole("link", { name: org })).toBeVisible();
+  await ownerPage.getByLabel(/to confirm/).fill(owner.username);
+  await ownerPage.getByLabel("Current password").last().fill(owner.password);
+  await expect(
+    ownerPage.getByRole("button", { name: "Delete my account" }),
+  ).toBeDisabled();
+  await ownerPage.close();
+
   const member = await signUp();
   const added = await call(
     owner.session,

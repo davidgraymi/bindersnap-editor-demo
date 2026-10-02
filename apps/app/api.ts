@@ -46,6 +46,7 @@ import type {
 } from "../../packages/api-schema/schemas/workspaces";
 
 // Import generated types
+import type { AccountBlockers } from "../../packages/api-schema/schemas/account";
 import type {
   SessionAuthState,
   SessionUser as SessionAuthUser,
@@ -296,6 +297,12 @@ function explainAccountRefusal(err: unknown): never {
     throw new AccountChangeRefused(err.message, blockers);
   }
   throw err;
+}
+
+/** What would refuse a rename or a deletion, before either is tried. */
+export async function fetchAccountBlockers(): Promise<AccountBlockers> {
+  const response = await AccountClient.getAccountBlockers();
+  return response.data;
 }
 
 export async function changePassword(

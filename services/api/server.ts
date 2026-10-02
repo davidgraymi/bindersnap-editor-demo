@@ -2462,6 +2462,57 @@ async function endOtherSessions(
 }
 
 /**
+ * What stands in the way of a rename or a deletion, asked before either.
+ *
+ * The same checks the two actions make, run when the page opens, so a button
+ * that can only be refused is drawn dimmed with the reason rather than
+ * offered and then refused after somebody has typed their password.
+ */
+async function handleAccountBlockers(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const username = auth.session.username;
+
+  if (isServiceAccount(username)) {
+    return json(
+      200,
+      { serviceAccount: true, renameBlockedBy: [], deleteBlockedBy: [] },
+      baseHeaders,
+    );
+  }
+
+  const client = createPrivilegedGiteaClient();
+  if (!client) {
+    return json(
+      502,
+      { error: "Your account cannot be read right now." },
+      baseHeaders,
+    );
+  }
+  try {
+    const orgs = await listUserOrganizations(client, username);
+    const [renameBlockedBy, deleteBlockedBy] = await Promise.all([
+      findSignOffMentions({ client, username, orgs }),
+      findSoleOwnerships({ client, username, orgs }),
+    ]);
+    return json(
+      200,
+      { serviceAccount: false, renameBlockedBy, deleteBlockedBy },
+      baseHeaders,
+    );
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Your account cannot be read right now.",
+    );
+  }
+}
+
+/**
  * A new password, and every other device signed out.
  *
  * Gitea has no "change my own password" API, so the service account sets it —
@@ -12367,6 +12418,8 @@ export function createApiServer() {
         method === "POST"
       ) {
         response = await handleChangeUsername(req, baseHeaders);
+      } else if (pathname === "/api/app/account/blockers" && method === "GET") {
+        response = await handleAccountBlockers(req, baseHeaders);
       } else if (pathname === "/api/app/account" && method === "DELETE") {
         response = await handleDeleteAccount(req, baseHeaders);
       } else if (pathname === "/api/app/onboarding" && method === "GET") {

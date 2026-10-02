@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   AccountChangeRefused,
   changePassword,
   changeUsername,
   deleteAccount,
+  fetchAccountBlockers,
   updateProfile,
 } from "../api";
 import type { SessionUser } from "../../../packages/api-schema/schemas/auth";
+import type { AccountBlockers } from "../../../packages/api-schema/schemas/account";
 import {
   joinFullName,
   splitFullName,
@@ -39,6 +41,24 @@ export function AccountSettingsPage({
   /** The account is gone; leave the signed-in app. */
   onDeleted: () => void | Promise<unknown>;
 }) {
+  // **What would refuse a rename or a deletion, read when the page opens.**
+  // A button that can only be refused is drawn dimmed with the reason, the
+  // way Approve and Publish are, rather than offered and then refused after
+  // somebody has typed their password. Null while unknown: the server checks
+  // again on every attempt, so the page never has to guess.
+  const [blockers, setBlockers] = useState<AccountBlockers | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchAccountBlockers()
+      .then((next) => {
+        if (!cancelled) setBlockers(next);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.username]);
+
   return (
     <div className="docw-page account-settings">
       <div className="bs-pagehead">
@@ -65,7 +85,25 @@ export function AccountSettingsPage({
           note="Your password and the username you sign in with."
         >
           <PasswordForm />
-          <UsernameForm user={user} onSaved={onUserChanged} />
+          <UsernameForm
+            user={user}
+            onSaved={onUserChanged}
+            blocked={
+              blockers?.serviceAccount
+                ? {
+                    reason:
+                      "This account runs Bindersnap itself and cannot be renamed.",
+                    list: [],
+                  }
+                : blockers && blockers.renameBlockedBy.length > 0
+                  ? {
+                      reason:
+                        "Your username is in the sign-off rules of these binders. Change those rules to use a group, then rename.",
+                      list: blockers.renameBlockedBy,
+                    }
+                  : null
+            }
+          />
         </SettingsGroup>
 
         <SettingsGroup
@@ -73,7 +111,25 @@ export function AccountSettingsPage({
           title="Delete your account"
           note="Permanent. What you approved and published stays on the record, under your name."
         >
-          <DeleteAccountForm user={user} onDeleted={onDeleted} />
+          <DeleteAccountForm
+            user={user}
+            onDeleted={onDeleted}
+            blocked={
+              blockers?.serviceAccount
+                ? {
+                    reason:
+                      "This account runs Bindersnap itself and cannot be deleted.",
+                    list: [],
+                  }
+                : blockers && blockers.deleteBlockedBy.length > 0
+                  ? {
+                      reason:
+                        "You are the only owner of these organizations. Make someone else an owner, or delete the organization, first.",
+                      list: blockers.deleteBlockedBy,
+                    }
+                  : null
+            }
+          />
         </SettingsGroup>
       </div>
     </div>
@@ -321,12 +377,17 @@ function PasswordForm() {
   );
 }
 
+/** Why an action is unavailable, and the things to go and fix. */
+type Blocked = { reason: string; list: string[] } | null;
+
 function UsernameForm({
   user,
   onSaved,
+  blocked,
 }: {
   user: SessionUser | null;
   onSaved: () => void | Promise<unknown>;
+  blocked: Blocked;
 }) {
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
@@ -401,12 +462,24 @@ function UsernameForm({
             onChange={(event) => setPassword(event.target.value)}
           />
         </div>
-        <NoticeLine notice={notice} />
+        <NoticeLine
+          notice={
+            notice ??
+            (blocked
+              ? { tone: "danger", text: blocked.reason, list: blocked.list }
+              : null)
+          }
+        />
         <div className="bs-field-row">
           <button
             type="submit"
             className="bs-btn bs-btn--sm bs-btn-primary"
-            disabled={saving || name.trim() === "" || password === ""}
+            disabled={
+              blocked !== null ||
+              saving ||
+              name.trim() === "" ||
+              password === ""
+            }
           >
             {saving ? "Changing…" : "Change username"}
           </button>
@@ -419,9 +492,11 @@ function UsernameForm({
 function DeleteAccountForm({
   user,
   onDeleted,
+  blocked,
 }: {
   user: SessionUser | null;
   onDeleted: () => void | Promise<unknown>;
+  blocked: Blocked;
 }) {
   const username = user?.username ?? "";
   const [confirm, setConfirm] = useState("");
@@ -489,12 +564,21 @@ function DeleteAccountForm({
           onChange={(event) => setPassword(event.target.value)}
         />
       </div>
-      <NoticeLine notice={notice} />
+      <NoticeLine
+        notice={
+          notice ??
+          (blocked
+            ? { tone: "danger", text: blocked.reason, list: blocked.list }
+            : null)
+        }
+      />
       <div className="bs-field-row">
         <button
           type="submit"
           className="bs-btn bs-btn--sm bs-btn--danger"
-          disabled={deleting || !confirmed || password === ""}
+          disabled={
+            blocked !== null || deleting || !confirmed || password === ""
+          }
         >
           {deleting ? "Deleting…" : "Delete my account"}
         </button>

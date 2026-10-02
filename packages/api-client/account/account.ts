@@ -13,6 +13,7 @@ import type {
   ChangeUsernameBody,
   DeleteAccount409,
   DeleteAccountBody,
+  GetAccountBlockers200,
   UpdateProfile200,
   UpdateProfileBody
 } from '../model';
@@ -54,6 +55,38 @@ export const updateProfile = async (updateProfileBody: UpdateProfileBody, option
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(updateProfileBody)
+  }
+);}
+
+
+export type getAccountBlockersResponse200 = {
+  data: GetAccountBlockers200
+  status: 200
+}
+
+export type getAccountBlockersResponseSuccess = (getAccountBlockersResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getAccountBlockersResponse = (getAccountBlockersResponseSuccess)
+
+export const getGetAccountBlockersUrl = () => {
+
+
+
+
+  return `/api/app/account/blockers`
+}
+
+export const getAccountBlockers = async ( options?: Parameters<typeof customFetch>[1]): Promise<getAccountBlockersResponse> => {
+
+  return customFetch<getAccountBlockersResponse>(getGetAccountBlockersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 

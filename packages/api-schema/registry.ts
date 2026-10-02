@@ -40,6 +40,7 @@ import {
 } from "./schemas/documents";
 import { SearchUsersPayloadSchema } from "./schemas/users";
 import {
+  AccountBlockersSchema,
   AccountRefusalSchema,
   AccountUserPayloadSchema,
   ChangePasswordBodySchema,
@@ -132,6 +133,7 @@ registry.register("NewPasswordBody", ChangePasswordBodySchema);
 registry.register("NewUsernameBody", ChangeUsernameBodySchema);
 registry.register("AccountDeletionBody", DeleteAccountBodySchema);
 registry.register("AccountRefusal", AccountRefusalSchema);
+registry.register("AccountBlockers", AccountBlockersSchema);
 registry.register("OrganizationSummary", OrganizationSummarySchema);
 registry.register("OrganizationListPayload", OrganizationListPayloadSchema);
 registry.register("NewOrganizationBody", NewOrganizationBodySchema);
@@ -365,6 +367,19 @@ registry.registerPath({
       content: { "application/json": { schema: AccountUserPayloadSchema } },
     },
     400: { description: "A first or last name is missing or too long" },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/account/blockers",
+  operationId: "getAccountBlockers",
+  tags: ["account"],
+  responses: {
+    200: {
+      description: "What would refuse a rename or a deletion",
+      content: { "application/json": { schema: AccountBlockersSchema } },
+    },
   },
 });
 

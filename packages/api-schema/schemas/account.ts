@@ -43,3 +43,14 @@ export const AccountRefusalSchema = z.object({
   organizations: z.array(z.string()).optional(),
 });
 export type AccountRefusal = z.infer<typeof AccountRefusalSchema>;
+
+/** What would refuse a rename or a deletion, read before either is tried. */
+export const AccountBlockersSchema = z.object({
+  /** The account that runs Bindersnap itself, which neither applies to. */
+  serviceAccount: z.boolean(),
+  /** Binders, as `org/binder`, whose sign-off rules name this person. */
+  renameBlockedBy: z.array(z.string()),
+  /** Organizations this person is the only owner of. */
+  deleteBlockedBy: z.array(z.string()),
+});
+export type AccountBlockers = z.infer<typeof AccountBlockersSchema>;
