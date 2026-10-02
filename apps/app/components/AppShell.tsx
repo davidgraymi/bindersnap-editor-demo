@@ -544,6 +544,7 @@ export function AppShell({
                 <AccountSettingsPage
                   user={user}
                   onUserChanged={onAccountChanged}
+                  onDeleted={onSignOut}
                 />
               ) : route.kind === "billing" ? (
                 billing

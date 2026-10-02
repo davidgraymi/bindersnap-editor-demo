@@ -1,4 +1,4 @@
-import { eq, lte } from "drizzle-orm";
+import { and, eq, lte, ne } from "drizzle-orm";
 import { config } from "./config";
 import { openSqliteDb, type SqliteDb } from "./db/client";
 import { sessions } from "./db/schema";
@@ -19,6 +19,16 @@ export interface SessionBackend {
   put(session: SessionRecord): Promise<void>;
   delete(id: string): Promise<void>;
   reap(now: number): Promise<SessionRecord[]>;
+  /**
+   * Remove every session of this person's except one, and answer with them.
+   *
+   * For the moments a person's other devices must stop being them: a new
+   * password, and an account being deleted. The caller revokes each one's
+   * Gitea token — a deleted row alone would leave the token working.
+   */
+  deleteForUser(username: string, except?: string): Promise<SessionRecord[]>;
+  /** A renamed account's sessions follow it, so nobody is signed out. */
+  renameUser(from: string, to: string): Promise<void>;
 }
 
 export class SessionStore implements SessionBackend {
@@ -65,6 +75,29 @@ export class SessionStore implements SessionBackend {
       .returning()
       .all();
   }
+
+  async deleteForUser(
+    username: string,
+    except?: string,
+  ): Promise<SessionRecord[]> {
+    return this.db
+      .delete(sessions)
+      .where(
+        except === undefined
+          ? eq(sessions.username, username)
+          : and(eq(sessions.username, username), ne(sessions.id, except)),
+      )
+      .returning()
+      .all();
+  }
+
+  async renameUser(from: string, to: string): Promise<void> {
+    this.db
+      .update(sessions)
+      .set({ username: to })
+      .where(eq(sessions.username, from))
+      .run();
+  }
 }
 
 // Lazy wrapper so importing this module never opens the SQLite file; the DB
@@ -93,6 +126,14 @@ class LazySessionStore implements SessionBackend {
 
   reap(now: number): Promise<SessionRecord[]> {
     return this.store.reap(now);
+  }
+
+  deleteForUser(username: string, except?: string): Promise<SessionRecord[]> {
+    return this.store.deleteForUser(username, except);
+  }
+
+  renameUser(from: string, to: string): Promise<void> {
+    return this.store.renameUser(from, to);
   }
 }
 

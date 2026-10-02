@@ -77,4 +77,32 @@ describe("SessionStore", () => {
     expect(reaped).toHaveLength(0);
     expect(await store.get(future.id)).not.toBeNull();
   });
+
+  test("deleteForUser ends a person's other sessions and keeps this one", async () => {
+    await store.put(makeSession({ id: "here", username: "jkim" }));
+    await store.put(makeSession({ id: "laptop", username: "jkim" }));
+    await store.put(makeSession({ id: "someone-else", username: "bob" }));
+
+    const ended = await store.deleteForUser("jkim", "here");
+
+    expect(ended.map((session) => session.id)).toEqual(["laptop"]);
+    expect(await store.get("here")).not.toBeNull();
+    expect(await store.get("laptop")).toBeNull();
+    expect(await store.get("someone-else")).not.toBeNull();
+
+    // Without an exception, every one of them goes.
+    expect((await store.deleteForUser("jkim")).map((s) => s.id)).toEqual([
+      "here",
+    ]);
+  });
+
+  test("renameUser moves every session to the new name", async () => {
+    await store.put(makeSession({ id: "a", username: "jkim" }));
+    await store.put(makeSession({ id: "b", username: "jkim" }));
+
+    await store.renameUser("jkim", "jordan");
+
+    expect((await store.get("a"))?.username).toBe("jordan");
+    expect((await store.get("b"))?.username).toBe("jordan");
+  });
 });

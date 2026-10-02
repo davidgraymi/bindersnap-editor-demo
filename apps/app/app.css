@@ -11470,3 +11470,13 @@ html.bs-writing .app-main {
 .account-settings .bs-settings {
   max-width: 44rem;
 }
+
+/* What is in the way of a rename or a deletion, each a link to go fix it. */
+.account-blockers {
+  margin: var(--brand-space-2) 0 0;
+  padding-left: var(--brand-space-5);
+}
+
+.account-blockers a {
+  color: inherit;
+}
