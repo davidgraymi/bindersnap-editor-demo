@@ -16,10 +16,8 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
 export interface GiteaUsage {
-  /** Gitea calls this request made, gated or not. */
+  /** Gitea calls this request made. */
   calls: number;
-  /** Of those, how many bypassed the request gate (raw `giteaFetch`). */
-  ungatedCalls: number;
   /**
    * Time spent waiting for a gate slot, summed over calls. High means other
    * work held the slots, not that Gitea was slow.
@@ -36,17 +34,50 @@ interface RequestScope {
   usage: GiteaUsage;
   /** Reads shared within this request. See {@link memoizeForRequest}. */
   memo: Map<string, Promise<unknown>>;
+  /** This request's lane in the Gitea request gate. See `request-gate.ts`. */
+  lane: string;
+  /** Aborts when the request's work is no longer wanted. */
+  signal?: AbortSignal;
 }
+
+let nextLane = 0;
 
 const storage = new AsyncLocalStorage<RequestScope>();
 
 export function createGiteaUsage(): GiteaUsage {
-  return { calls: 0, ungatedCalls: 0, gateWaitMs: 0, giteaMs: 0 };
+  return { calls: 0, gateWaitMs: 0, giteaMs: 0 };
 }
 
 /** Run `fn` with its own usage record, which every Gitea call inside adds to. */
-export function withGiteaUsage<T>(usage: GiteaUsage, fn: () => T): T {
-  return storage.run({ usage, memo: new Map() }, fn);
+export function withGiteaUsage<T>(
+  usage: GiteaUsage,
+  fn: () => T,
+  options: {
+    /**
+     * Cancels this request's Gitea calls, queued or in flight. The server
+     * passes the incoming request's signal for reads only: a write stopped
+     * halfway — merged but not tagged — is worse than one that finishes for a
+     * browser that has left.
+     */
+    signal?: AbortSignal;
+  } = {},
+): T {
+  nextLane = (nextLane + 1) % Number.MAX_SAFE_INTEGER;
+  return storage.run(
+    {
+      usage,
+      memo: new Map(),
+      lane: `request-${nextLane}`,
+      signal: options.signal,
+    },
+    fn,
+  );
+}
+
+/** The gate lane and cancellation signal of the request this code runs under. */
+export function currentRequestScope(): { lane?: string; signal?: AbortSignal } {
+  const scope = storage.getStore();
+  return { lane: scope?.lane, signal: scope?.signal };
 }
 
 /** The usage of the request this code is running under, if any. */
@@ -94,14 +125,12 @@ export function forgetRequestMemo(): void {
 }
 
 export function recordGiteaCall(call: {
-  gated: boolean;
   waitMs: number;
   durationMs: number;
 }): void {
   const usage = storage.getStore()?.usage;
   if (!usage) return;
   usage.calls += 1;
-  if (!call.gated) usage.ungatedCalls += 1;
   usage.gateWaitMs += call.waitMs;
   usage.giteaMs += call.durationMs;
 }
@@ -110,7 +139,6 @@ export function recordGiteaCall(call: {
 export function giteaUsageLogFields(usage: GiteaUsage): Record<string, number> {
   return {
     giteaCalls: usage.calls,
-    giteaUngatedCalls: usage.ungatedCalls,
     giteaGateWaitMs: Math.round(usage.gateWaitMs),
     giteaMs: Math.round(usage.giteaMs),
   };
