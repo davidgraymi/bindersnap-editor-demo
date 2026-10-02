@@ -6,6 +6,7 @@ import {
   createGiteaUsage,
   currentGiteaUsage,
   giteaUsageLogFields,
+  currentRequestScope,
   forgetRequestMemo,
   memoizeForRequest,
   recordGiteaCall,
@@ -15,6 +16,7 @@ import {
   giteaRequestGate,
   MAX_CONCURRENT_GITEA_REQUESTS,
 } from "./gitea-client/request-gate";
+import { GITEA_CALL_TIMEOUT_MS } from "./gitea-client/client";
 import { runSessionReaper } from "./session-reaper";
 import { sessionStore, type SessionRecord } from "./sessions";
 import {
@@ -733,23 +735,43 @@ async function readJson<T>(req: Request): Promise<T | null> {
   }
 }
 
+/**
+ * A raw Gitea call — login, token minting and revocation, `GET /user`, the
+ * document download — for the few places the typed client does not fit.
+ *
+ * **Through the same gate as everything else.** These used to skip it, and
+ * `/auth/me` runs on every app load: unqueued load on Gitea exactly when a
+ * page's fan-out was already pressing hardest. A raw call never awaits another
+ * Gitea call while holding its slot, so routing it through cannot deadlock.
+ */
 async function giteaFetch(path: string, init?: RequestInit): Promise<Response> {
   const method = (init?.method ?? "GET").toUpperCase();
   const writes = method !== "GET" && method !== "HEAD";
   if (writes) forgetRequestMemo();
-  const startedAt = performance.now();
-  try {
-    return await fetch(new URL(path, config.giteaUrl), init);
-  } finally {
-    if (writes) forgetRequestMemo();
-    // Not gated, so no wait to report — but it is still Gitea's time, and a
-    // request that makes these should say so on its log line.
-    recordGiteaCall({
-      gated: false,
-      waitMs: 0,
-      durationMs: performance.now() - startedAt,
-    });
-  }
+  const queuedAt = performance.now();
+  const { lane, signal } = currentRequestScope();
+  return giteaRequestGate.run(
+    async () => {
+      const startedAt = performance.now();
+      const timeout = AbortSignal.timeout(GITEA_CALL_TIMEOUT_MS);
+      const signals = [timeout, signal, init?.signal ?? undefined].filter(
+        (entry): entry is AbortSignal => entry !== undefined,
+      );
+      try {
+        return await fetch(new URL(path, config.giteaUrl), {
+          ...init,
+          signal: AbortSignal.any(signals),
+        });
+      } finally {
+        if (writes) forgetRequestMemo();
+        recordGiteaCall({
+          waitMs: startedAt - queuedAt,
+          durationMs: performance.now() - startedAt,
+        });
+      }
+    },
+    { lane, signal },
+  );
 }
 
 async function readResponsePayload(response: Response): Promise<unknown> {
@@ -12898,7 +12920,15 @@ export function createApiServer() {
     // Each request gets its own Gitea usage record, which every Gitea call
     // made while serving it adds to. See `gitea-client/usage.ts`.
     fetch: (req) =>
-      withGiteaUsage(createGiteaUsage(), () => handleRequest(req)),
+      withGiteaUsage(createGiteaUsage(), () => handleRequest(req), {
+        // A read the browser has abandoned stops queueing Gitea calls nobody
+        // will see. A write is never cut off by a disconnect: stopping a
+        // publish between its merge and its tags is worse than finishing it.
+        signal:
+          req.method === "GET" || req.method === "HEAD"
+            ? req.signal
+            : undefined,
+      }),
   });
 }
 

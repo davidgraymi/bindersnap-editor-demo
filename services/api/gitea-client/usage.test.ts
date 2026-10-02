@@ -31,7 +31,6 @@ test("every gated call adds itself to the request it ran under", async () => {
   });
 
   expect(usage.calls).toBe(3);
-  expect(usage.ungatedCalls).toBe(0);
   expect(usage.giteaMs).toBeGreaterThanOrEqual(0);
   expect(usage.gateWaitMs).toBeGreaterThanOrEqual(0);
 });
@@ -44,33 +43,23 @@ test("two requests running at once keep separate counts", async () => {
     withGiteaUsage(first, async () => {
       for (let index = 0; index < 3; index += 1) {
         await Bun.sleep(1);
-        recordGiteaCall({ gated: true, waitMs: 1, durationMs: 2 });
+        recordGiteaCall({ waitMs: 1, durationMs: 2 });
       }
     }),
     withGiteaUsage(second, async () => {
       await Bun.sleep(1);
-      recordGiteaCall({ gated: false, waitMs: 0, durationMs: 5 });
+      recordGiteaCall({ waitMs: 0, durationMs: 5 });
     }),
   ]);
 
-  expect(first).toEqual({
-    calls: 3,
-    ungatedCalls: 0,
-    gateWaitMs: 3,
-    giteaMs: 6,
-  });
-  expect(second).toEqual({
-    calls: 1,
-    ungatedCalls: 1,
-    gateWaitMs: 0,
-    giteaMs: 5,
-  });
+  expect(first).toEqual({ calls: 3, gateWaitMs: 3, giteaMs: 6 });
+  expect(second).toEqual({ calls: 1, gateWaitMs: 0, giteaMs: 5 });
 });
 
 test("a call made outside any request records nothing", () => {
   expect(currentGiteaUsage()).toBeUndefined();
   // Must not throw, and must not land on some other request's line.
-  recordGiteaCall({ gated: true, waitMs: 1, durationMs: 1 });
+  recordGiteaCall({ waitMs: 1, durationMs: 1 });
   expect(currentGiteaUsage()).toBeUndefined();
 });
 

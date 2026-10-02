@@ -2,7 +2,22 @@ import createClient from "openapi-fetch";
 
 import { giteaRequestGate } from "./request-gate";
 import type { paths } from "./spec/gitea";
-import { forgetRequestMemo, recordGiteaCall } from "./usage";
+import {
+  currentRequestScope,
+  forgetRequestMemo,
+  recordGiteaCall,
+} from "./usage";
+
+/**
+ * How long one Gitea call may take once it holds a slot.
+ *
+ * There was no deadline at all: a hung socket held one of four slots for as
+ * long as it stayed hung, and every other user's page queued behind it. A
+ * merge is the slowest call made and finishes in seconds; thirty is generous
+ * for it and is also the API server's own idle timeout, past which nobody is
+ * waiting for the answer anyway.
+ */
+export const GITEA_CALL_TIMEOUT_MS = 30_000;
 
 /**
  * Every Gitea call queues here. See `request-gate.ts` for why.
@@ -17,19 +32,28 @@ export const gatedFetch = (input: Request): Promise<Response> => {
   // read that started meanwhile is not kept either.
   const writes = input.method !== "GET" && input.method !== "HEAD";
   if (writes) forgetRequestMemo();
-  return giteaRequestGate.run(async () => {
-    const startedAt = performance.now();
-    try {
-      return await globalThis.fetch(input);
-    } finally {
-      if (writes) forgetRequestMemo();
-      recordGiteaCall({
-        gated: true,
-        waitMs: startedAt - queuedAt,
-        durationMs: performance.now() - startedAt,
-      });
-    }
-  });
+  // Waits in this request's own lane, so a page fanning out over eighty calls
+  // shares the slots with a single read instead of queueing it; and stops
+  // waiting if the request's work is no longer wanted.
+  const { lane, signal } = currentRequestScope();
+  return giteaRequestGate.run(
+    async () => {
+      const startedAt = performance.now();
+      const timeout = AbortSignal.timeout(GITEA_CALL_TIMEOUT_MS);
+      try {
+        return await globalThis.fetch(input, {
+          signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+        });
+      } finally {
+        if (writes) forgetRequestMemo();
+        recordGiteaCall({
+          waitMs: startedAt - queuedAt,
+          durationMs: performance.now() - startedAt,
+        });
+      }
+    },
+    { lane, signal },
+  );
 };
 
 export type GiteaClient = ReturnType<typeof createGiteaClient>;
