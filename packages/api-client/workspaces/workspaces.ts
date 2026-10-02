@@ -17,6 +17,7 @@ import type {
   CreateBinderDocumentBody,
   CreateBinderFolder201,
   CreateBinderFolderBody,
+  DeleteBinderBody,
   DescribeBinder200,
   DescribeBinderBody,
   DiscardBinderDraft200,
@@ -220,6 +221,48 @@ export const getBinder = async (org: string,
     method: 'GET'
 
 
+  }
+);}
+
+
+export type deleteBinderResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteBinderResponse403 = {
+  data: void
+  status: 403
+}
+
+export type deleteBinderResponseSuccess = (deleteBinderResponse204) & {
+  headers: Headers;
+};
+export type deleteBinderResponseError = (deleteBinderResponse403) & {
+  headers: Headers;
+};
+
+export type deleteBinderResponse = (deleteBinderResponseSuccess | deleteBinderResponseError)
+
+export const getDeleteBinderUrl = (org: string,
+    binder: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}`
+}
+
+export const deleteBinder = async (org: string,
+    binder: string,
+    deleteBinderBody: DeleteBinderBody, options?: Parameters<typeof customFetch>[1]): Promise<deleteBinderResponse> => {
+
+  return customFetch<deleteBinderResponse>(getDeleteBinderUrl(org,binder),
+  {
+    ...options,
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(deleteBinderBody)
   }
 );}
 

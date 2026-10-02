@@ -914,6 +914,8 @@ export const WorkspaceSettingsPayloadSchema = z.object({
   signOff: WorkspaceSignOffSchema,
   /** Whether this caller may change any of it. */
   canManage: z.boolean(),
+  /** Whether this caller may delete the binder: an owner of the organization. */
+  canDelete: z.boolean(),
 });
 export type WorkspaceSettingsPayload = z.infer<
   typeof WorkspaceSettingsPayloadSchema
@@ -1389,3 +1391,9 @@ export const ResolveConflictsBodySchema = z.object({
   baseSha: z.string(),
   resolutions: z.array(ConflictResolutionSchema),
 });
+
+/** Deleting a binder, confirmed by its name typed out. */
+export const DeleteBinderBodySchema = z.object({
+  confirm: z.string().min(1),
+});
+export type DeleteBinderBody = z.infer<typeof DeleteBinderBodySchema>;

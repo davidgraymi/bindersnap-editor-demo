@@ -92,6 +92,7 @@ import {
   ResolveConflictsBodySchema,
   WorkspaceListPayloadSchema,
   WorkspaceSummarySchema,
+  DeleteBinderBodySchema,
 } from "./schemas/workspaces";
 import {
   BillingActionBodySchema,
@@ -581,6 +582,24 @@ registry.registerPath({
         "application/json": { schema: WorkspaceOverviewPayloadSchema },
       },
     },
+  },
+});
+
+registry.registerPath({
+  method: "delete",
+  path: "/api/app/binders/{org}/{binder}",
+  operationId: "deleteBinder",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    body: {
+      required: true,
+      content: { "application/json": { schema: DeleteBinderBodySchema } },
+    },
+  },
+  responses: {
+    204: { description: "Deleted, with everything in it" },
+    403: { description: "Only an owner of the organization can delete it" },
   },
 });
 

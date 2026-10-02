@@ -1637,6 +1637,15 @@ export async function restoreBinderDocument(
  * it is on is addressed by the old one. Old links keep working — Gitea
  * redirects — but the address bar should say what the binder is called now.
  */
+/** Delete a binder for good, confirmed by its name typed out. */
+export async function deleteBinder(
+  org: string,
+  binder: string,
+  confirm: string,
+): Promise<void> {
+  await BindersClient.deleteBinder(org, binder, { confirm });
+}
+
 export async function renameBinder(
   org: string,
   binder: string,
