@@ -321,11 +321,13 @@ test("an invisible collision does not swallow a real creation failure", async ()
   ).toHaveLength(1);
 });
 
-test("an organization never takes an address the app keeps for its own pages", () => {
-  // `/billing` is the billing page and `/settings` is the account. An
-  // organization called either would be shadowed by it, binders and all.
-  expect(deriveOrganizationName("maria", "Billing")).toBe("billing-org");
-  expect(deriveOrganizationName("maria", "Settings")).toBe("settings-org");
+test("an organization never takes an address the app cannot move", () => {
+  // `/help` is a separate site. An organization called that would be
+  // shadowed by it, binders and all.
+  expect(deriveOrganizationName("maria", "Help")).toBe("help-org");
+  // The app's own pages are behind `/-/`, so these names are free to take.
+  expect(deriveOrganizationName("maria", "Billing")).toBe("billing");
+  expect(deriveOrganizationName("maria", "Settings")).toBe("settings");
   expect(deriveOrganizationName("maria", "Sunrise Clinic")).toBe(
     "sunrise-clinic",
   );

@@ -48,7 +48,7 @@ export function OrganizationSetupPage({
   const isMounted = useRef(true);
 
   // The address the server will give it, reserved names included, so the
-  // preview never promises `/billing` and delivers `/billing-org`.
+  // preview never promises `/help` and delivers `/help-org`.
   const slug = useMemo(() => {
     const derived = slugifyOrganizationName(name);
     return RESERVED_ORGANIZATION_NAMES.has(derived)

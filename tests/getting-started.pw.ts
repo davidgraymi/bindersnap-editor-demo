@@ -104,7 +104,7 @@ test("the guide picks up where a new customer left off, and stays hidden once hi
 });
 
 test("a finished customer sees no guide", async ({ page }) => {
-  await page.goto(`${APP_BASE_URL}/login`);
+  await page.goto(`${APP_BASE_URL}/-/login`);
   await page.getByLabel("Username or Email").fill("alice");
   await page
     .getByLabel("Password", { exact: true })

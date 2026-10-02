@@ -918,7 +918,7 @@ test.describe("Stripe subscription lifecycle", () => {
     const credentials = uniqueCredentials();
 
     try {
-      await page.goto("/signup");
+      await page.goto("/-/signup");
       await page.getByLabel("First name").fill("Test");
       await page.getByLabel("Last name").fill("User");
       await page.getByLabel("Username").fill(credentials.username);
@@ -960,7 +960,7 @@ test.describe("Stripe subscription lifecycle", () => {
 
       // Subscribing is now a thing the customer chooses to do, so go and do it.
       // A trial: the page says so, and offers the one thing to do about it.
-      await page.goto("/billing", { waitUntil: "domcontentloaded" });
+      await page.goto("/-/billing", { waitUntil: "domcontentloaded" });
       await expect(page.getByRole("region", { name: "Plan" })).toContainText(
         "Trial",
         { timeout: 20_000 },

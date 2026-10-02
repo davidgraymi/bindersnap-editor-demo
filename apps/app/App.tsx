@@ -42,7 +42,6 @@ import {
   asShellRoute,
   canonicalLocation,
   getRoute,
-  isLegacyInboxPath,
   isProtectedAppRoute,
   routeToPath,
   type AppRoute,
@@ -521,15 +520,6 @@ export function App() {
       setIsCheckingSession(false);
     }
   }, [loadBilling]);
-
-  // `/inbox` is gone — Home shows what used to be there. Rewrite the address
-  // bar so an old link lands somewhere that still exists and stays bookmarkable.
-  useEffect(() => {
-    if (isLegacyInboxPath(window.location.pathname)) {
-      navigateTo({ kind: "workspace" }, true);
-      return;
-    }
-  }, [route]);
 
   useEffect(() => {
     const handlePopState = () => {

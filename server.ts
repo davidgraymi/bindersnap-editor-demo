@@ -50,8 +50,6 @@ const server = serve({
     "/": appIndex,
     "/docs/*": appIndex,
     "/auth/callback": appIndex,
-    "/login": appIndex,
-    "/login/*": appIndex,
     "/*": appIndex,
   },
 

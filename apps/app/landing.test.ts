@@ -67,9 +67,9 @@ test("landing visibility helpers toggle the pre-rendered shell", () => {
 
 test("buildSignupUrl opens signup mode and preserves a typed email", () => {
   expect(buildSignupUrl(" team@bindersnap.com ")).toBe(
-    "/signup?email=team%40bindersnap.com",
+    "/-/signup?email=team%40bindersnap.com",
   );
-  expect(buildSignupUrl("")).toBe("/signup");
+  expect(buildSignupUrl("")).toBe("/-/signup");
 });
 
 test("landing signup routes to the signup page with the typed email", () => {
@@ -80,7 +80,7 @@ test("landing signup routes to the signup page with the typed email", () => {
     navigations.push(url);
   });
 
-  expect(targetUrl).toBe("/signup?email=team%40bindersnap.com");
+  expect(targetUrl).toBe("/-/signup?email=team%40bindersnap.com");
   expect(navigations).toEqual([targetUrl]);
 });
 
@@ -103,6 +103,6 @@ test("pressing Enter in a landing email field routes to signup", () => {
 
 test("only the root pathname should show the landing shell", () => {
   expect(shouldShowLanding("/")).toBe(true);
-  expect(shouldShowLanding("/login")).toBe(false);
+  expect(shouldShowLanding("/-/login")).toBe(false);
   expect(shouldShowLanding("/docs/alice/quarterly-report")).toBe(false);
 });

@@ -23,7 +23,7 @@ function buildUniqueSignupCredentials() {
 }
 
 async function openSignupForm(page: Page): Promise<void> {
-  await page.goto("/signup", { waitUntil: "domcontentloaded" });
+  await page.goto("/-/signup", { waitUntil: "domcontentloaded" });
   await expect(page).toHaveURL(/\/signup$/);
   await expect(
     page.getByRole("heading", {
@@ -160,7 +160,7 @@ async function signUpAndReturnToLogin(
   );
 
   await signOutCurrentUser(page);
-  await page.goto("/login", { waitUntil: "domcontentloaded" });
+  await page.goto("/-/login", { waitUntil: "domcontentloaded" });
   await expect(page).toHaveURL(/\/login$/);
   await expect(
     page.getByRole("heading", { name: "Step into the clean version." }),
@@ -315,7 +315,7 @@ test.describe("signup flow", () => {
 
     await signUpThroughOrganizationSetup(page, firstAccount.username);
     await signOutCurrentUser(page);
-    await page.goto("/login");
+    await page.goto("/-/login");
     await expect(page).toHaveURL(/\/login$/);
 
     await openSignupForm(page);

@@ -20,7 +20,7 @@ describe("onboardingState", () => {
       false,
       false,
     ]);
-    expect(state.steps[0]!.href).toBe("/organizations/new");
+    expect(state.steps[0]!.href).toBe("/-/organizations/new");
     expect(state.steps[1]!.href).toBeNull();
   });
 

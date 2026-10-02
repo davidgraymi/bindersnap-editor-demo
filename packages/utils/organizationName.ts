@@ -8,27 +8,28 @@
  */
 
 /**
- * First path segments the app keeps for itself: `/settings`, `/billing`, ….
+ * First path segments an organization cannot have.
  *
- * An organization's address is `/{org}`, so an organization called "Billing"
- * would be shadowed by the billing page and its binders unreachable. The app's
- * router and the server's naming both read this one list — GitHub reserves
- * `settings` and `login` for the same reason.
+ * The app's own pages live behind `/-/` — `/-/documents`, `/-/login`,
+ * `/-/user_settings/profile` — the way GitLab keeps its own, and no
+ * organization can be called `-`. So almost every name is an organization's
+ * to take. What is left is what the app cannot move: the help pages, which
+ * are a separate site at `/help`; `/auth/callback`, where Gitea's sign-in
+ * sends people back; and the files every browser asks for at the root.
  */
 export const RESERVED_ORGANIZATION_NAMES: ReadonlySet<string> = new Set([
-  "activity",
-  "admin",
+  "-",
   "auth",
-  "billing",
-  "changes",
-  "docs",
-  "documents",
-  // Help is ordinary pages beside the app (`apps/help`), never a route in it.
   "help",
-  "login",
-  "organizations",
-  "settings",
-  "signup",
+  "llms.txt",
+  "apple-touch-icon.png",
+  "favicon.ico",
+  "favicon.svg",
+  "icon-192.png",
+  "icon-512.png",
+  "icon-maskable-512.png",
+  "og-image.png",
+  "site.webmanifest",
 ]);
 
 /** Gitea usernames and organization names share one namespace. */

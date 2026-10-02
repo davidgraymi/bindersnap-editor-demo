@@ -1,5 +1,5 @@
 /**
- * The signed-in person's own account, at `/settings`.
+ * The signed-in person's own account, at `/-/user_settings/profile`.
  *
  * A name is what the record writes, so it is asked for at signup and can be
  * changed here — and the account menu says it, with the login beneath.
@@ -65,7 +65,7 @@ test("a name given at signup is the name the app uses, and can be changed", asyn
   await expect(menu.getByText(`@${username}`)).toBeVisible();
 
   await menu.getByRole("menuitem", { name: "Your account" }).click();
-  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page).toHaveURL(/\/-\/user_settings\/profile$/);
   await expect(page.getByLabel("First name")).toHaveValue("Jordan");
   await expect(page.getByLabel("Last name")).toHaveValue("Kim");
 

@@ -16,7 +16,7 @@ function errorMessage(err: unknown, fallback: string): string {
 }
 
 /**
- * The signed-in person's own account: `/settings`.
+ * The signed-in person's own account: `/-/user_settings/profile`.
  *
  * Everything here is about one person rather than an organization, which is
  * why it hangs off the avatar menu and not the sidebar — the sidebar is

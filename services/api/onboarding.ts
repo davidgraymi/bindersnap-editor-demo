@@ -86,7 +86,7 @@ export function onboardingState(
     org && binder ? `/${enc(org.name)}/${enc(binder.name)}` : null;
 
   const steps: OnboardingStep[] = [
-    { id: "organization", done: org !== null, href: "/organizations/new" },
+    { id: "organization", done: org !== null, href: "/-/organizations/new" },
     {
       id: "binder",
       done: hasBinder,

@@ -77,17 +77,24 @@ present. There is no separate `apps/landing/` directory.
 Routes:
 
 - `/` — landing page (unauthenticated) or workspace home (authenticated)
-- `/login`, `/signup` — credential forms
-- `/documents` — document list
-- `/docs/:owner/:repo` — document detail and review
-- `/docs/:owner/:repo/changes` — open and closed change requests
-- `/docs/:owner/:repo/changes/:number` — one change: its discussion and decision
-- `/docs/:owner/:repo/changes/:number/preview` — the file that change proposes
-- `/docs/:owner/:repo/changes/:number/compare` — that file against the version
-  it replaces, rendered with the additions and deletions marked
-- `/docs/:owner/:repo/collaborators` — collaborator management
-- `/activity` — audit log (`/inbox` was folded into `/`, which now lists the
-  change requests the reader is part of)
+- **The app's own pages are behind `/-/`**, the way GitLab keeps
+  `/-/user_settings/profile` apart from `/{group}`. No organization can be
+  called `-`, so none of them can shadow one, and an organization may be named
+  almost anything. Add new app-wide pages here, never as a bare first segment.
+  - `/-/login`, `/-/signup` — credential forms
+  - `/-/documents` — the library; `/-/changes` — every change in flight
+  - `/-/organizations/new` — create (or ask to join) an organization
+  - `/-/user_settings/profile` — the signed-in person's own account
+  - `/-/billing` — the session's organization's billing, rewritten to
+    `/{org}/-/billing`; `/-/admin/subscriptions` — site admins only
+- `/{org}` — an organization; `/{org}/-/people`, `/{org}/-/billing`,
+  `/{org}/-/settings`, `/{org}/-/binders/new`
+- `/{org}/{binder}` — a binder; its screens and documents are behind its own
+  `/-/` (`/-/changes/3`, `/-/blob/main/{path}`, `/-/settings`)
+- Reserved first segments (`RESERVED_ORGANIZATION_NAMES` in
+  `packages/utils/organizationName.ts`) are only what cannot move off the
+  root: `help` (a separate static site), `auth` (`/auth/callback`, where
+  Gitea's sign-in returns), and the files browsers ask for at the root.
 
 ### The document editor
 

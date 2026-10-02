@@ -64,9 +64,10 @@ export function deriveOrganizationName(
     return fromRequest;
   }
 
-  // A name the app keeps for its own pages would put the organization behind
-  // one of them. "Billing" becomes `billing-org`, the same shape a name taken
-  // from the username gets.
+  // A name the app cannot move off the root — the help site, the sign-in
+  // callback, the files browsers ask for — would put the organization behind
+  // it. "Help" becomes `help-org`, the same shape a name taken from the
+  // username gets.
   if (fromRequest && RESERVED_ORGANIZATION_NAMES.has(fromRequest)) {
     return `${fromRequest}-org`;
   }

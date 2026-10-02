@@ -15,7 +15,7 @@ test.describe("GitHub Pages static artifact", () => {
   });
 
   test("boots the SPA from 404.html for deep links", async ({ page }) => {
-    await page.goto("/login");
+    await page.goto("/-/login");
 
     await expect(page).toHaveURL(/\/login$/);
     await expect(
