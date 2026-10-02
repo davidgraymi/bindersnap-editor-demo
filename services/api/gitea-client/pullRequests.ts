@@ -887,6 +887,27 @@ export async function getPullRequestHeadBranch(
   return pullRequest.head?.ref ?? "";
 }
 
+/**
+ * The commit a merged change landed as on its base branch, or null.
+ *
+ * What a version tag has to point at. `main` is not the same thing: a second
+ * change published a moment later moves `main`, and a tag aimed at the branch
+ * name after that lands on the other change's merge — a wrong git coordinate
+ * in the evidence, and one nothing would ever notice.
+ */
+export async function readMergeCommitSha(
+  params: PullRequestRef,
+): Promise<string | null> {
+  const { client, owner, repo, pullNumber } = params;
+  const pullRequest = (await unwrap(
+    client.GET("/repos/{owner}/{repo}/pulls/{index}", {
+      params: { path: { owner, repo, index: pullNumber } },
+    }),
+  )) as { merged?: boolean; merge_commit_sha?: string | null };
+  if (!pullRequest?.merged) return null;
+  return pullRequest.merge_commit_sha || null;
+}
+
 export async function getPullRequestWithReviews(
   params: PullRequestRef,
 ): Promise<PullRequestWithReviews> {
