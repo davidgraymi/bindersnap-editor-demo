@@ -145,7 +145,7 @@ test("a new password needs the current one, and signs out every other device", a
     .addCookies([
       { name: "bindersnap_session", value: session, url: APP_BASE_URL },
     ]);
-  await page.goto(`${APP_BASE_URL}/settings`);
+  await page.goto(`${APP_BASE_URL}/-/user_settings/profile`);
 
   const newPassword = `${password}-new`;
   await page.getByLabel("Current password").first().fill("not-it");
@@ -243,7 +243,7 @@ test("the only owner cannot delete their account; a member can", async ({
     .addCookies([
       { name: "bindersnap_session", value: member.session, url: APP_BASE_URL },
     ]);
-  await page.goto(`${APP_BASE_URL}/settings`);
+  await page.goto(`${APP_BASE_URL}/-/user_settings/profile`);
   const remove = page.getByRole("button", { name: "Delete my account" });
   await expect(remove).toBeDisabled();
   await page.getByLabel(/to confirm/).fill(member.username);
