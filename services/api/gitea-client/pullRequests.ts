@@ -831,26 +831,53 @@ export async function findClosedChanges(params: {
 export async function listPullRequestsWithReviews(
   params: ListPullRequestsParams,
 ): Promise<PullRequestWithReviews[]> {
+  return attachReviews({
+    ...params,
+    pullRequests: await listPullRequestsWithoutReviews(params),
+  });
+}
+
+/**
+ * The changes themselves — number, branch, title, state — and not their
+ * reviews.
+ *
+ * {@link listPullRequestsWithReviews} reads every change's reviews, one call or
+ * more each, and most callers then keep only the number or the branch: a
+ * binder's document counts, the sign-off check, "is this change open". On a
+ * list page that was a third of every Gitea call made. Take this, narrow to
+ * the changes that matter, and {@link attachReviews} to those.
+ */
+export async function listPullRequestsWithoutReviews(
+  params: ListPullRequestsParams,
+): Promise<PullRequest[]> {
   const { client, owner, repo, state, page } = params;
 
   // One page when the caller asked for one; otherwise all of them. Unpaged,
   // Gitea answers with 30, and an open-changes list, a binder's "N in review"
   // and Home all stopped at the thirtieth change.
-  const pullRequests =
-    page === undefined
-      ? await readAllPages((query) =>
-          unwrap(
-            client.GET("/repos/{owner}/{repo}/pulls", {
-              params: { path: { owner, repo }, query: { state, ...query } },
-            }),
-          ),
-        )
-      : await unwrap(
+  return page === undefined
+    ? await readAllPages((query) =>
+        unwrap(
           client.GET("/repos/{owner}/{repo}/pulls", {
-            params: { path: { owner, repo }, query: { state, page } },
+            params: { path: { owner, repo }, query: { state, ...query } },
           }),
-        );
+        ),
+      )
+    : await unwrap(
+        client.GET("/repos/{owner}/{repo}/pulls", {
+          params: { path: { owner, repo }, query: { state, page } },
+        }),
+      );
+}
 
+/** Read the reviews of changes already listed, and derive their approval state. */
+export async function attachReviews(params: {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  pullRequests: readonly PullRequest[];
+}): Promise<PullRequestWithReviews[]> {
+  const { client, owner, repo, pullRequests } = params;
   return Promise.all(
     pullRequests.map(async (pullRequest) => {
       const reviews = pullRequest.number
