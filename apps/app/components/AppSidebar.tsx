@@ -18,6 +18,7 @@ import { followInApp } from "../appLink";
 import { routeToPath, type AppRoute, type OrganizationTab } from "../routes";
 import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
 import { useCollapsedSidebar } from "../useCollapsedSidebar";
+import { AvatarFace } from "./PersonAvatar";
 import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
 
 /**
@@ -408,7 +409,11 @@ export function AppSidebar({
 
       <div className="app-sidebar-user">
         <span className="app-sidebar-user-avatar" aria-hidden="true">
-          {initials}
+          <AvatarFace
+            login={currentUsername}
+            initials={initials}
+            drawnSize={28}
+          />
         </span>
         <span className="app-sidebar-user-label">
           <span className="app-sidebar-user-name">
