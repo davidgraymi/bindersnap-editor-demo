@@ -1,4 +1,5 @@
 import { config } from "./config";
+import { serviceToken } from "./dev-service-token";
 import {
   createGiteaBasicAuthClient,
   createGiteaClient,
@@ -14,8 +15,11 @@ import {
  * kept in one shape so the two cannot drift apart.
  */
 export function createPrivilegedGiteaClient(): GiteaClient | null {
-  if (config.giteaServiceToken) {
-    return createGiteaClient(config.giteaUrl, config.giteaServiceToken);
+  // The configured token, or — outside production — the one this process
+  // minted for itself at startup. See `dev-service-token.ts`.
+  const token = serviceToken();
+  if (token) {
+    return createGiteaClient(config.giteaUrl, token);
   }
 
   if (

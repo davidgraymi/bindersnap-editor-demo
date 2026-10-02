@@ -12,6 +12,7 @@ import {
   type PublishPlan,
   type PublishResult,
 } from "./jobs/publish";
+import { mintDevServiceToken, serviceToken } from "./dev-service-token";
 import {
   createGiteaUsage,
   currentGiteaUsage,
@@ -400,12 +401,14 @@ function buildTokenAuthHeader(token: string): string {
 function buildGiteaServiceHeaders(
   extraHeaders?: HeadersInit,
 ): HeadersInit | null {
-  if (!config.giteaServiceToken) {
+  // The configured token, or the dev one this process minted at startup.
+  const token = serviceToken();
+  if (!token) {
     return null;
   }
 
   return {
-    Authorization: buildTokenAuthHeader(config.giteaServiceToken),
+    Authorization: buildTokenAuthHeader(token),
     ...extraHeaders,
   };
 }
@@ -851,7 +854,7 @@ function createSessionGiteaClient(session: SessionRecord): GiteaClient {
 }
 
 function createServiceGiteaClient(): GiteaClient {
-  return createGiteaClient(config.giteaUrl, config.giteaServiceToken);
+  return createGiteaClient(config.giteaUrl, serviceToken() ?? "");
 }
 
 /**
@@ -1046,7 +1049,7 @@ async function resolveDocumentAccess(
     return {
       client: serviceClient,
       username: null,
-      token: config.giteaServiceToken,
+      token: serviceToken() ?? "",
     };
   } catch (err) {
     if (err instanceof GiteaApiError && err.status === 404) {
@@ -14283,6 +14286,10 @@ async function handleRequest(req: Request): Promise<Response> {
 if (import.meta.main) {
   const server = createApiServer();
   startCleanupTimer();
+  // Outside production with no service token configured, privileged reads
+  // would ride on basic auth. Mint a token in the background; reads switch
+  // to it as soon as it exists. See `dev-service-token.ts`.
+  void mintDevServiceToken();
   // Finish any multi-step write the last process left half-done — a deploy
   // replaces this container on every push to `main`. See `jobs/runner.ts`.
   startJobRunner({
