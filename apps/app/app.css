@@ -11550,3 +11550,22 @@ html.bs-writing .app-main {
 .org-settings {
   max-width: 44rem;
 }
+
+/* A person's picture, laid over their initials in the same circle: the
+   initials show until it arrives, and if it never does. */
+.rev-avatar,
+.app-topnav-avatar,
+.app-profile-menu-avatar,
+.app-sidebar-user-avatar {
+  position: relative;
+  overflow: hidden;
+}
+
+.avatar-face {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
