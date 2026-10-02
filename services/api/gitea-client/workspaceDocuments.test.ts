@@ -299,7 +299,8 @@ test("listDocumentVersions finds a version past Gitea's first page of tags", asy
 
   expect(versions.map((version) => version.version)).toEqual([1]);
   expect(nextVersionFrom(versions)).toBe(2);
-  expect(mockGet).toHaveBeenCalledTimes(2);
+  // Page 1, then one wave of three: two round trips, not a page at a time.
+  expect(mockGet).toHaveBeenCalledTimes(4);
 });
 
 test("a file with no identity has published nothing, and costs no call", async () => {
