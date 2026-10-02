@@ -38,9 +38,11 @@ export function helpHref(slug?: string): string {
 
 const LOGO_MARK = `<svg viewBox="0 0 18 18" fill="none" aria-hidden="true" width="18" height="18"><rect x="2" y="1" width="9" height="13" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="6" y="4" width="9" height="13" rx="1.5" stroke="currentColor" stroke-width="1.5"/></svg>`;
 
-const FAVICON = `data:image/svg+xml,${encodeURIComponent(
-  LOGO_MARK.replace(/currentColor/g, "#e85d26"),
-)}`;
+/**
+ * Link previews need absolute URLs. The icons and the share card are the
+ * site's own, from `apps/app/public`, which the build copies to the root.
+ */
+const SITE = "https://bindersnap.com";
 
 const FONTS =
   "https://fonts.googleapis.com/css2?family=Lora:wght@500;600&family=Geist:wght@400;500;600&display=swap";
@@ -82,7 +84,20 @@ ${
     ? `<link rel="alternate" type="text/markdown" href="${params.markdown}">\n`
     : ""
 }<link rel="alternate" type="text/plain" href="/help/llms.txt" title="Every guide, for AI agents">
-<link rel="icon" href="${FAVICON}">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Bindersnap">
+<meta property="og:url" content="${SITE}${params.path}">
+<meta property="og:title" content="${escape(params.title)}">
+<meta property="og:description" content="${escape(params.description)}">
+<meta property="og:image" content="${SITE}/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Bindersnap: The surveyor asks which version you approved. Show them.">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="${FONTS}">
