@@ -146,7 +146,7 @@ export function ProposeChangePage({
             {distinct.length === 1
               ? "One change, going to the people who sign this binder off."
               : `${distinct.length} changes, going to the people who sign this binder off.`}{" "}
-            Nothing joins the binder until it is approved and published.
+            Nothing joins the binder until it is published.
           </p>
         </div>
       </div>

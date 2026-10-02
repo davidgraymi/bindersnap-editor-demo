@@ -39,8 +39,8 @@ export const HELP_GUIDES: HelpGuide[] = [
           "Name your organization. You did this when you signed up, or you can do it from the + menu.",
           "Make a binder. Call it what your team already calls it — “Policy manual” works.",
           "Bring in your documents. Drop a whole folder on the binder: its subfolders become the binder's folders.",
-          "Decide who approves. Add the colleague who signs things off. Running it alone? Set the approvals a binder needs to none in its settings.",
-          "Publish. Once a change is approved, publish it. That version is now the record.",
+          "Decide who approves. A new binder needs no approvals, so you can publish on your own while you move in. When a colleague should sign things off, add them and set the approvals the binder needs in its settings.",
+          "Publish. Open the change request and publish it. That version is now the record.",
         ],
       },
       {
@@ -78,7 +78,7 @@ export const HELP_GUIDES: HelpGuide[] = [
       {
         heading: "Why it does not appear in the binder straight away",
         paragraphs: [
-          "A binder only ever shows what has been approved and published. Until then, your document is in a change request, waiting on its reviewers. That is the point: nothing reaches the record without a decision.",
+          "A binder only ever shows what has been published. Until then, your document is in a change request, where the people who sign it off can read it first. That is the point: nothing reaches the record without somebody deciding it should.",
         ],
       },
     ],
@@ -101,8 +101,9 @@ export const HELP_GUIDES: HelpGuide[] = [
       {
         heading: "How many approvals",
         paragraphs: [
-          "Each binder says how many approvals a change needs, in Settings → How changes are approved. The binder's admin can change it. Nobody can approve their own change, so a binder needing one approval needs one other person.",
-          "Running a binder on your own? Set the approvals needed to none. You can raise it the day a colleague joins.",
+          "A new binder needs no approvals, so you can publish your own changes straight away while you move in.",
+          "When colleagues should sign off first, set how many approvals a change needs in Settings → How changes are approved. The binder's admin can change it at any time, and the change is recorded. Nobody can approve their own change, so a binder needing one approval needs one other person.",
+          "Whatever the number, a reviewer you ask holds the change until they answer, and one who asks for changes holds it until they are happy.",
         ],
       },
       {

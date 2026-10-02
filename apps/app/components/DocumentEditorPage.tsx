@@ -1087,7 +1087,7 @@ export function DocumentEditorPage({
           {change ? (
             <p
               className="doc-editor-where"
-              title="The version on record does not change until the change is approved and published."
+              title="The version on record does not change until the change is published."
             >
               <GitPullRequest size={14} strokeWidth={1.75} aria-hidden="true" />
               <span className="doc-editor-where-label">Saving to</span>

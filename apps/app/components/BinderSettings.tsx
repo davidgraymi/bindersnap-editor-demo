@@ -1444,7 +1444,7 @@ function SignOffSection({
           <div className="bs-panel-foot">
             <span className="bs-panel-foot-note">
               {opened !== null
-                ? "We opened a change request for these rules. Nothing takes effect until it is approved and published."
+                ? "We opened a change request for these rules. Nothing takes effect until it is published."
                 : "A change to these rules is already waiting for a decision."}
             </span>
             <button
