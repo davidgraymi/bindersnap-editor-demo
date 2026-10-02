@@ -13,6 +13,7 @@ import {
   nextVersionFrom,
   nextVersionTag,
   toDocumentEntry,
+  treeRefCandidates,
   isRestoredFromArchive,
 } from "./workspaceDocuments";
 
@@ -193,6 +194,48 @@ test("listWorkspaceDocuments treats a binder with no commits as empty", async ()
       workspace: "clinical",
     }),
   ).toEqual([]);
+});
+
+test("a branch named as long as a commit hash is read as the branch", async () => {
+  // `draft/` + a 16-character username + `/` + a 17-digit stamp is exactly
+  // 40 characters, which Gitea's tree endpoint takes for a SHA.
+  const draft = "draft/cmp-993dfc34-d91/20260930181634401";
+  expect(draft).toHaveLength(40);
+  expect(treeRefCandidates(draft)).toEqual([
+    `refs/heads/${draft}`,
+    `refs/tags/${draft}`,
+  ]);
+  // A real hash, and every ordinary name, is passed as it is.
+  const hash = "e122f4cb296e6816bc212c7289c5051d8af5c2eb";
+  expect(treeRefCandidates(hash)).toEqual([hash]);
+  expect(treeRefCandidates("main")).toEqual(["main"]);
+
+  const asked: string[] = [];
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/git/trees/{sha}": (init) => {
+        asked.push(init.params.path.sha);
+        return {
+          tree: [
+            {
+              path: `admissions.${ADMISSIONS}.md`,
+              type: "blob",
+              size: 20,
+              sha: "a",
+            },
+          ],
+        };
+      },
+    },
+  });
+  const tree = await readWorkspaceTree({
+    client,
+    org: "mercy-health",
+    workspace: "clinical",
+    ref: draft,
+  });
+  expect(asked).toEqual([`refs/heads/${draft}`]);
+  expect(tree.documents).toHaveLength(1);
 });
 
 test("listDocumentVersions counts only this document's tags", async () => {
