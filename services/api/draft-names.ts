@@ -70,6 +70,8 @@ export interface DraftNameBackend {
   }): Promise<void>;
   /** Forget a draft's name — it has been discarded or proposed. */
   forget(giteaRepoId: number, branch: string): Promise<void>;
+  /** Forget every draft name in a binder that has been deleted. */
+  forgetBinder(giteaRepoId: number): Promise<void>;
 }
 
 export class DraftNameStore implements DraftNameBackend {
@@ -142,6 +144,13 @@ export class DraftNameStore implements DraftNameBackend {
       )
       .run();
   }
+
+  async forgetBinder(giteaRepoId: number): Promise<void> {
+    this.db
+      .delete(binderDrafts)
+      .where(eq(binderDrafts.giteaRepoId, giteaRepoId))
+      .run();
+  }
 }
 
 /**
@@ -171,6 +180,10 @@ class LazyDraftNameStore implements DraftNameBackend {
 
   forget(giteaRepoId: number, branch: string): Promise<void> {
     return this.store.forget(giteaRepoId, branch);
+  }
+
+  forgetBinder(giteaRepoId: number): Promise<void> {
+    return this.store.forgetBinder(giteaRepoId);
   }
 }
 
