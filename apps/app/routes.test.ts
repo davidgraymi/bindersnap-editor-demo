@@ -194,7 +194,7 @@ test("a current address is left as it is", () => {
     ["/riverside-health/clinical", "?edit=1&draft=draft%2Falice%2Fx"],
     ["/riverside-health/clinical/-/changes/4", ""],
     ["/riverside-health", ""],
-    ["/changes", ""],
+    ["/-/changes", ""],
     ["/", ""],
   ] as const) {
     expect(canonicalLocation(path, search)).toBeNull();

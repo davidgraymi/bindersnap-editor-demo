@@ -22,9 +22,9 @@ export type AppRoute =
   /**
    * One organization's billing: `/{org}/-/billing`.
    *
-   * Billing is per organization, so the page names the one it is about. Bare
-   * `/billing` is an address that predates that — the app answers it with the
-   * session's oldest organization and rewrites the address to say so.
+   * Billing is per organization, so the page names the one it is about.
+   * `/-/billing` names none — the app answers it with the session's oldest
+   * organization and rewrites the address to say so.
    */
   | { kind: "billing"; org?: string }
   | { kind: "createOrganization" }
@@ -288,8 +288,8 @@ export function routeToPath(route: AppRoute): string {
  * Where an address written before `/-/` lives now, or null when it is current.
  *
  * `?tab=changes&change=4&view=compare` is `/-/changes/4/diffs`,
- * `/{org}/{binder}/{path}?ref=x` is `/-/blob/x/{path}`, `/billing/{org}` is
- * `/{org}/-/billing` and `?tab=people` on an organization is `/-/people`.
+ * `/{org}/{binder}/{path}?ref=x` is `/-/blob/x/{path}`, and `?tab=people`
+ * on an organization is `/-/people`.
  * Links that were sent, bookmarked or pasted into a ticket keep working; the
  * app replaces them in the address bar before anything reads them, so there
  * is only ever one grammar on screen.

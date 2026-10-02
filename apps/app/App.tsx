@@ -547,8 +547,8 @@ export function App() {
     void loadBilling();
   }, [billingOrganization, isCheckingSession, loadBilling, signedIn]);
 
-  // `/billing` from before billing was per organization: say which one it is
-  // showing, in the address bar, once the server has answered.
+  // `/-/billing`, which names no organization: say which one it is showing,
+  // in the address bar, once the server has answered.
   useEffect(() => {
     if (
       route.kind === "billing" &&
@@ -668,7 +668,7 @@ export function App() {
     // A session with no organization reads "none" here, because it has no
     // access — but it has not failed to pay, and there is nothing for it to
     // buy. Letting this branch answer for it sent it to the card form no
-    // matter where it was going, which is what made `/organizations/new`
+    // matter where it was going, which is what made `/-/organizations/new`
     // render billing and left the setup screen reachable only by people who
     // already had an organization.
     // A delinquent organization no longer replaces the app with the card

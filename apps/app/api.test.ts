@@ -74,7 +74,7 @@ test("fetchLibrary reports the paywall after a typed 402 response", () => {
 
     // The refused write no longer moves anybody. Read-only mode happens where
     // they are standing; navigating away would take the record with it.
-    if (window.location.pathname !== "/documents") {
+    if (window.location.pathname !== "/-/documents") {
       console.error("expected to stay put but got", window.location.pathname);
       process.exit(1);
     }
@@ -127,7 +127,7 @@ test("fetchBillingStatus ignores 402 interception for billing endpoints", () => 
       process.exit(1);
     }
 
-    if (window.location.pathname !== "/documents") {
+    if (window.location.pathname !== "/-/documents") {
       console.error("unexpected redirect to", window.location.pathname);
       process.exit(1);
     }
