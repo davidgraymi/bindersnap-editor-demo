@@ -1036,6 +1036,38 @@ export function latestChangeByDocument(
   );
 }
 
+/**
+ * The version each merge commit published, for a list that shows one number
+ * per change.
+ *
+ * Every version tag a publish writes points at that change's merge commit, so
+ * the tags grouped by commit are the change's versions. A change that took
+ * several documents to different numbers — v3 of one, v7 of another — has no
+ * single "published as", and is left out rather than labelled with whichever
+ * came first.
+ */
+export function publishedVersionByMergeCommit(
+  tags: readonly GitTag[],
+): Map<string, number> {
+  const versionsAt = new Map<string, Set<number>>();
+  for (const tag of tags) {
+    const name = tag.name ?? "";
+    const sha = tag.commit?.sha ?? "";
+    if (sha === "" || documentUidFromVersionTag(name) === null) continue;
+    const version = versionFromTag(name);
+    if (version === null) continue;
+    const seen = versionsAt.get(sha) ?? new Set<number>();
+    seen.add(version);
+    versionsAt.set(sha, seen);
+  }
+
+  const bySha = new Map<string, number>();
+  for (const [sha, versions] of versionsAt) {
+    if (versions.size === 1) bySha.set(sha, [...versions][0]!);
+  }
+  return bySha;
+}
+
 export function groupVersionsByDocument(
   tags: readonly GitTag[],
   documents: readonly WorkspaceDocumentEntry[],

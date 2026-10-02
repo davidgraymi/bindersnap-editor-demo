@@ -207,15 +207,14 @@ export function resolveClosedOutcome(
 
 export function buildClosedChanges(
   entries: PullRequestWithReviews[],
-  tags: DocTag[],
+  /**
+   * The version each merge commit published, from the binder's tags. See
+   * `publishedVersionByMergeCommit`.
+   */
+  versionByMergeSha: ReadonlyMap<string, number>,
   /** null when the approval policy could not be read. See ClosedChange. */
   requiredApprovals: number | null = null,
 ): ClosedChange[] {
-  const versionByMergeSha = new Map<string, number>();
-  for (const tag of tags) {
-    versionByMergeSha.set(tag.sha, tag.version);
-  }
-
   return entries
     .map(({ pullRequest, reviews }) => {
       const mergeSha = (pullRequest as { merge_commit_sha?: string })

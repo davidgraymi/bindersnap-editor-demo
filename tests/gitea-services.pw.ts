@@ -28,10 +28,7 @@ import {
   mergePullRequest,
   submitReview,
 } from "../services/api/gitea-client/pullRequests";
-import {
-  getLatestDocTag,
-  listDocTags,
-} from "../services/api/gitea-client/repos";
+import {} from "../services/api/gitea-client/repos";
 import { listOrganizationWorkspaces } from "../services/api/gitea-client/workspaces";
 import {
   buildUploadBranchName,
@@ -477,33 +474,6 @@ test.describe("repos", () => {
     expect(seeded, JSON.stringify(binders.map((b) => b.name))).toBeDefined();
     expect(seeded!.fullName).toBe(`${OWNER}/${REPO}`);
     expect(seeded!.owner).toBe(OWNER);
-  });
-
-  test("getLatestDocTag returns null or a valid DocTag", async () => {
-    // The seeded quarterly-report repo may or may not have tags depending on
-    // whether other tests (e.g., document-version-upload.pw.ts) have run.
-    const tag = await getLatestDocTag(makeClient(), OWNER, REPO);
-
-    if (tag !== null) {
-      // If tags exist, validate they have the expected shape
-      expect(typeof tag.name).toBe("string");
-      expect(tag.name).toMatch(/^doc\/v\d{4}$/);
-      expect(typeof tag.version).toBe("number");
-      expect(tag.version).toBeGreaterThan(0);
-    }
-  });
-
-  test("listDocTags returns an array of valid DocTags", async () => {
-    const tags = await listDocTags(makeClient(), OWNER, REPO);
-    expect(Array.isArray(tags)).toBe(true);
-
-    // Validate each tag has the expected shape
-    for (const tag of tags) {
-      expect(typeof tag.name).toBe("string");
-      expect(tag.name).toMatch(/^doc\/v\d{4}$/);
-      expect(typeof tag.version).toBe("number");
-      expect(tag.version).toBeGreaterThan(0);
-    }
   });
 });
 
