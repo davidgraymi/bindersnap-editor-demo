@@ -12113,6 +12113,137 @@ async function handleListOrganizationWorkspaces(
   }
 }
 
+/** What creating a binder will do, recorded before it starts. */
+interface ProvisionBinderPlan {
+  org: string;
+  name: string;
+  description?: string;
+  openToOrganization: boolean;
+}
+
+type ProvisionOutcome =
+  | { kind: "done"; jobId: string; workspace: WorkspaceSummary }
+  /** Failed before the repository existed: nothing to finish. */
+  | { kind: "abandoned"; error: unknown }
+  /** The repository exists, its setup is not finished; the runner keeps at it. */
+  | {
+      kind: "unfinished";
+      jobId: string;
+      workspace: WorkspaceSummary;
+      error: string;
+    }
+  | { kind: "busy"; jobId: string };
+
+/**
+ * Create a binder from its plan, once, and record how it went.
+ *
+ * **Every step is already safe to repeat** — the repository is found if it
+ * exists, the README is removed only if it is there, the team grant and the
+ * branch protection are "set to this" calls. What made a half-made binder
+ * permanent was the handler refusing a name that already existed. Now a
+ * binder whose setup stopped — worst of all, before its `main` was protected,
+ * which left anybody with write access free to push to it unreviewed — is
+ * finished by the runner, or by creating it again under the same name.
+ */
+async function executeProvisionJob(
+  job: JobRecord,
+  client: GiteaClient,
+): Promise<ProvisionOutcome> {
+  const store = jobStore();
+  if (!store.claim(job.id)) return { kind: "busy", jobId: job.id };
+  const plan = job.plan as ProvisionBinderPlan;
+
+  try {
+    const provisioned = await provisionWorkspace({
+      client,
+      org: plan.org,
+      name: plan.name,
+      description: plan.description,
+      openToOrganization: plan.openToOrganization,
+    });
+    store.complete(job.id, { workspace: provisioned.workspace.name });
+    logger.info("Workspace created", {
+      username: job.createdBy,
+      organization: plan.org,
+      workspace: provisioned.workspace.name,
+      jobId: job.id,
+      attempts: job.attempts + 1,
+    });
+    return { kind: "done", jobId: job.id, workspace: provisioned.workspace };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: plan.org,
+      name: plan.name,
+    }).catch(() => null);
+
+    if (!workspace) {
+      store.delete(job.id);
+      return { kind: "abandoned", error: err };
+    }
+
+    logger.error("A binder was created but its setup did not finish", {
+      organization: plan.org,
+      workspace: plan.name,
+      jobId: job.id,
+      error: message,
+    });
+    store.fail(job.id, message);
+    return { kind: "unfinished", jobId: job.id, workspace, error: message };
+  }
+}
+
+function provisionJobResponse(
+  outcome: ProvisionOutcome,
+  baseHeaders: Headers,
+): Response {
+  switch (outcome.kind) {
+    case "done":
+      return json(201, { workspace: outcome.workspace }, baseHeaders);
+    case "abandoned":
+      return responseFromError(
+        outcome.error,
+        baseHeaders,
+        "Unable to create the binder.",
+      );
+    case "unfinished":
+      return json(
+        202,
+        {
+          workspace: outcome.workspace,
+          jobId: outcome.jobId,
+          error:
+            "The binder exists and is still being set up. It will be ready shortly.",
+        },
+        baseHeaders,
+      );
+    case "busy":
+      return json(
+        409,
+        {
+          error: "This binder is being created right now.",
+          jobId: outcome.jobId,
+        },
+        baseHeaders,
+      );
+  }
+}
+
+/** The runner's turn at a binder: finish it as the person who created it. */
+async function resumeProvisionJob(job: JobRecord): Promise<void> {
+  const session = job.sessionId ? await sessionStore.get(job.sessionId) : null;
+  if (!session || session.expiresAt <= Date.now()) {
+    jobStore().fail(
+      job.id,
+      "The person who created this binder has signed out. Creating it again under the same name finishes setting it up.",
+      { permanent: true },
+    );
+    return;
+  }
+  await executeProvisionJob(job, createSessionGiteaClient(session));
+}
+
 async function handleCreateWorkspace(
   req: Request,
   baseHeaders: Headers,
@@ -12146,46 +12277,68 @@ async function handleCreateWorkspace(
       ? payload.description.trim()
       : undefined;
 
-  try {
-    const existing = await findWorkspaceRepo({
-      client: auth.client,
-      org: orgName,
-      name,
-    });
-    if (existing) {
-      return json(
-        409,
-        { error: `A binder named "${name}" already exists.` },
+  const groupKey = `${orgName}/${name}`;
+  return withGroupLock(groupKey, async () => {
+    try {
+      // A binder of this name whose setup never finished is finished now,
+      // rather than refused as a name already taken.
+      const unfinished = jobStore().openFor(groupKey, "binder");
+      if (unfinished) {
+        return provisionJobResponse(
+          await executeProvisionJob(unfinished, auth.client),
+          baseHeaders,
+        );
+      }
+
+      const existing = await findWorkspaceRepo({
+        client: auth.client,
+        org: orgName,
+        name,
+      });
+      if (existing) {
+        return json(
+          409,
+          { error: `A binder named "${name}" already exists.` },
+          baseHeaders,
+        );
+      }
+
+      const job = jobStore().create<ProvisionBinderPlan>({
+        kind: "provision-binder",
+        groupKey,
+        subject: "binder",
+        plan: {
+          org: orgName,
+          name,
+          description,
+          // Absent means open, which is the decided default — an older client
+          // that does not ask gets the answer the product would have given
+          // anyway.
+          openToOrganization: payload?.openToOrganization !== false,
+        },
+        createdBy: auth.session.username,
+        sessionId: auth.session.id,
+        idempotencyKey: req.headers.get("Idempotency-Key"),
+      });
+
+      return provisionJobResponse(
+        await executeProvisionJob(job, auth.client),
         baseHeaders,
       );
+    } catch (err) {
+      logger.error("Failed to create a workspace", {
+        username: auth.session.username,
+        organization: orgName,
+        workspace: name,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return responseFromError(
+        err,
+        baseHeaders,
+        "Unable to create the binder.",
+      );
     }
-
-    const provisioned = await provisionWorkspace({
-      client: auth.client,
-      org: orgName,
-      name,
-      description,
-      // Absent means open, which is the decided default — an older client that
-      // does not ask gets the answer the product would have given anyway.
-      openToOrganization: payload?.openToOrganization !== false,
-    });
-
-    logger.info("Workspace created", {
-      username: auth.session.username,
-      organization: orgName,
-      workspace: provisioned.workspace.name,
-    });
-
-    return json(201, { workspace: provisioned.workspace }, baseHeaders);
-  } catch (err) {
-    logger.error("Failed to create a workspace", {
-      username: auth.session.username,
-      organization: orgName,
-      workspace: name,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return responseFromError(err, baseHeaders, "Unable to create the binder.");
-  }
+  });
 }
 
 /**
@@ -14068,7 +14221,12 @@ if (import.meta.main) {
   startCleanupTimer();
   // Finish any multi-step write the last process left half-done — a deploy
   // replaces this container on every push to `main`. See `jobs/runner.ts`.
-  startJobRunner({ run: { publish: resumePublishJob } });
+  startJobRunner({
+    run: {
+      publish: resumePublishJob,
+      "provision-binder": resumeProvisionJob,
+    },
+  });
   logger.info("Bindersnap API listening", {
     url: `http://localhost:${server.port}`,
     port: server.port,
