@@ -1121,13 +1121,16 @@ describe("admin subscription access overrides", () => {
       );
 
       expect(response.status).toBe(200);
-      expect(await response.json()).toEqual({
+      const body = await response.text();
+      // The Gitea token stays server-side: the browser gets the cookie and
+      // the person, never the credential behind them.
+      expect(body).not.toContain("gitea_token_");
+      expect(JSON.parse(body)).toEqual({
         user: {
           username: expect.stringMatching(/^admin-/),
           fullName: "Admin User",
           isAdmin: true,
         },
-        token: expect.stringMatching(/^gitea_token_/),
       });
     } finally {
       server.stop(true);

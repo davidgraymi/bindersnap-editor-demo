@@ -1704,7 +1704,11 @@ function sessionResponse(
       user: {
         username: session.username,
       },
-      token: session.giteaToken,
+      // **No Gitea token, ever.** The browser holds an HttpOnly cookie and
+      // nothing else; the token stays in the session store, where only this
+      // server can use it. Sent here, any script on the page could read it
+      // and act as the person in Gitea directly, past every rule the API
+      // enforces.
       ...(extra.suggestedOrganizationName
         ? { suggestedOrganizationName: extra.suggestedOrganizationName }
         : {}),
@@ -2162,7 +2166,7 @@ async function handleAuthMe(
         fullName: giteaUser?.fullName ?? undefined,
         isAdmin: giteaUser?.isAdmin === true,
       },
-      token: session.giteaToken,
+      // No Gitea token: see `sessionResponse`.
     },
     baseHeaders,
   );

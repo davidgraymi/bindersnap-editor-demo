@@ -10,7 +10,5 @@ export type AuthMe200 = {
   /** @nullable */
   user: AuthMe200User;
   /** @nullable */
-  token: string | null;
-  /** @nullable */
   suggestedOrganizationName?: string | null;
 };
