@@ -24,15 +24,88 @@ test("every gated call adds itself to the request it ran under", async () => {
     })) as unknown as typeof fetch;
 
   const usage = createGiteaUsage();
-  const call = () => gatedFetch(new Request("https://gitea.test/api/v1/user"));
+  const call = (path: string) =>
+    gatedFetch(new Request(`https://gitea.test/api/v1/${path}`));
 
   await withGiteaUsage(usage, async () => {
-    await Promise.all([call(), call(), call()]);
+    await Promise.all([call("user"), call("user/orgs"), call("user/repos")]);
   });
 
   expect(usage.calls).toBe(3);
+  expect(usage.sharedCalls).toBe(0);
   expect(usage.giteaMs).toBeGreaterThanOrEqual(0);
   expect(usage.gateWaitMs).toBeGreaterThanOrEqual(0);
+});
+
+test("the same read asked at the same moment goes to Gitea once", async () => {
+  let fetched = 0;
+  globalThis.fetch = (async () => {
+    fetched += 1;
+    await Bun.sleep(5);
+    return new Response('{"login":"alice"}', { status: 200 });
+  }) as unknown as typeof fetch;
+
+  const usage = createGiteaUsage();
+  const read = (token: string) =>
+    gatedFetch(
+      new Request("https://gitea.test/api/v1/user", {
+        headers: { Authorization: `token ${token}` },
+      }),
+    );
+
+  const bodies = await withGiteaUsage(usage, () =>
+    Promise.all([
+      read("alice").then((r) => r.json()),
+      read("alice").then((r) => r.json()),
+      read("alice").then((r) => r.json()),
+    ]),
+  );
+  // Everybody reads a whole body of their own.
+  expect(bodies).toEqual([
+    { login: "alice" },
+    { login: "alice" },
+    { login: "alice" },
+  ]);
+  expect(fetched).toBe(1);
+  expect(usage).toMatchObject({ calls: 1, sharedCalls: 2 });
+
+  // Whose credentials asked is part of the question.
+  await Promise.all([read("alice"), read("bob")]);
+  expect(fetched).toBe(3);
+
+  // Nothing outlives the read: asked again later, it is asked again.
+  await read("alice");
+  expect(fetched).toBe(4);
+});
+
+test("a read shared from a request that was abandoned is asked for again", async () => {
+  let fetched = 0;
+  globalThis.fetch = (async (_input: Request, init?: RequestInit) => {
+    fetched += 1;
+    await new Promise((resolve, reject) => {
+      // As `fetch` does: an already-aborted signal rejects at once.
+      if (init?.signal?.aborted) return reject(init.signal.reason);
+      const timer = setTimeout(resolve, 20);
+      init?.signal?.addEventListener("abort", () => {
+        clearTimeout(timer);
+        reject(init.signal!.reason);
+      });
+    });
+    return new Response("{}", { status: 200 });
+  }) as unknown as typeof fetch;
+
+  const leaving = new AbortController();
+  const read = () => gatedFetch(new Request("https://gitea.test/api/v1/user"));
+
+  const first = withGiteaUsage(createGiteaUsage(), read, {
+    signal: leaving.signal,
+  });
+  const second = withGiteaUsage(createGiteaUsage(), read);
+  leaving.abort(new Error("the browser left"));
+
+  await expect(first).rejects.toThrow("the browser left");
+  await expect(second).resolves.toBeInstanceOf(Response);
+  expect(fetched).toBe(2);
 });
 
 test("two requests running at once keep separate counts", async () => {
@@ -52,8 +125,18 @@ test("two requests running at once keep separate counts", async () => {
     }),
   ]);
 
-  expect(first).toEqual({ calls: 3, gateWaitMs: 3, giteaMs: 6 });
-  expect(second).toEqual({ calls: 1, gateWaitMs: 0, giteaMs: 5 });
+  expect(first).toEqual({
+    calls: 3,
+    sharedCalls: 0,
+    gateWaitMs: 3,
+    giteaMs: 6,
+  });
+  expect(second).toEqual({
+    calls: 1,
+    sharedCalls: 0,
+    gateWaitMs: 0,
+    giteaMs: 5,
+  });
 });
 
 test("a call made outside any request records nothing", () => {

@@ -6,6 +6,7 @@ import {
   currentRequestScope,
   forgetRequestMemo,
   recordGiteaCall,
+  recordSharedGiteaCall,
 } from "./usage";
 
 /**
@@ -26,6 +27,45 @@ export const GITEA_CALL_TIMEOUT_MS = 30_000;
  * waiting for a slot from time spent waiting for Gitea (`usage.ts`).
  */
 export const gatedFetch = (input: Request): Promise<Response> => {
+  if (input.method !== "GET") return fetchThroughGate(input);
+
+  // **One read, shared by everybody asking for it at that moment.** The
+  // library and Home ask for the same binder's tags and changes at once, and
+  // a page that mounts twice asks twice. The key is the address and whose
+  // credentials asked — Gitea's answer depends on who is asking — and the
+  // entry is gone the moment the read settles, so nothing is kept to go stale
+  // (AGENTS.md: caching Gitea state is banned; this caches nothing).
+  const key = `${input.headers.get("Authorization") ?? ""} ${input.url}`;
+  const shared = inFlightReads.get(key);
+  if (shared) {
+    recordSharedGiteaCall();
+    const { signal } = currentRequestScope();
+    return shared.then(
+      (response) => response.clone(),
+      // The read it joined was cancelled by the request that started it — that
+      // browser left, this one did not. Ask for itself.
+      (err: unknown) => {
+        if (signal?.aborted) throw err;
+        return fetchThroughGate(input);
+      },
+    );
+  }
+
+  const leader = fetchThroughGate(input);
+  inFlightReads.set(key, leader);
+  const forget = () => {
+    if (inFlightReads.get(key) === leader) inFlightReads.delete(key);
+  };
+  leader.then(forget, forget);
+  // A clone for the caller too, so the original's body stays unread for
+  // whoever joins before it is forgotten.
+  return leader.then((response) => response.clone());
+};
+
+/** Reads in flight right now, by credentials and address. */
+const inFlightReads = new Map<string, Promise<Response>>();
+
+function fetchThroughGate(input: Request): Promise<Response> {
   const queuedAt = performance.now();
   // A write makes any read this request shared stale. Cleared before, so a
   // read racing the write cannot be served the old answer, and after, so a
@@ -54,7 +94,7 @@ export const gatedFetch = (input: Request): Promise<Response> => {
     },
     { lane, signal },
   );
-};
+}
 
 export type GiteaClient = ReturnType<typeof createGiteaClient>;
 
