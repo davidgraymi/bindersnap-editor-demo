@@ -58,6 +58,7 @@ import {
   listAllTags,
   listChangedDocuments,
   listDocumentVersions,
+  documentVersionsFrom,
   listRemovedDocuments,
   readArchivedDocument,
   listVersionsByDocument,
@@ -5118,21 +5119,18 @@ async function handlePublishWorkspaceChange(
     }
 
     // Each document's next version is its own: they are versioned separately
-    // and a binder's documents do not advance in lockstep. Read before the
-    // merge so a failure here changes nothing.
-    const nextVersions = await Promise.all(
-      documents.map(async (document) => ({
-        document,
-        version: nextVersionFrom(
-          await listDocumentVersions({
-            client,
-            org: owner,
-            workspace: workspaceName,
-            uid: document.uid,
-          }),
-        ),
-      })),
-    );
+    // and a binder's documents do not advance in lockstep. Every tag, every
+    // page, read once and before the merge, so a failure here changes nothing
+    // — and so the archive stamps below number off the same read.
+    const allTags = await listAllTags({
+      client,
+      owner,
+      repo: workspaceName,
+    });
+    const nextVersions = documents.map((document) => ({
+      document,
+      version: nextVersionFrom(documentVersionsFrom(allTags, document.uid)),
+    }));
 
     await mergeWorkspaceChange({
       client,
@@ -5214,12 +5212,6 @@ async function handlePublishWorkspaceChange(
     // archived it, when, and under which change.
     const archivedTags = [];
     if (archived.length > 0) {
-      const allTags = await listAllTags({
-        client,
-        owner,
-        repo: workspaceName,
-      });
-
       for (const document of archived) {
         const uid = document.uid!;
         const versions = allTags
