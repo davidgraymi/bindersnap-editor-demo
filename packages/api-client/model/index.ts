@@ -198,6 +198,7 @@ export * from './getBinderChange200DocumentsItemVersionsItem.ts';
 export * from './getBinderChange200RemovedDocumentsItem.ts';
 export * from './getBinderChange200RemovedDocumentsItemLastVersion.ts';
 export * from './getBinderChange200RequiredReviewers.ts';
+export * from './getBinderChange200Viewer.ts';
 export * from './getBinderChangeConflicts200.ts';
 export * from './getBinderChangeConflicts200FilesItem.ts';
 export * from './getBinderChangeConflicts200FilesItemAutomatic.ts';
