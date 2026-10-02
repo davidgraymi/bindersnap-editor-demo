@@ -5509,6 +5509,9 @@ async function handleWorkspaceChangeDetail(
           (entry.pullRequest as { mergeable?: boolean }).mergeable === false,
         blockOnUnresolvedThreads: reviewSettings.blockOnUnresolvedThreads,
         unresolvedThreadCount: discussions.unresolvedCount,
+        // Whether an approval stops counting once what the change proposes
+        // moves on — the binder's "A new version clears the approvals" rule.
+        clearsApprovalsOnEdit: mergeRules?.ignoresStale ?? true,
         canManage: access.push,
         viewer: await readDecisionRights({
           org: orgName,

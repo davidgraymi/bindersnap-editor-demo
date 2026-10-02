@@ -133,7 +133,13 @@ async function setUp(): Promise<{
   return { owner: owner.session, reviewer: reviewer.session, org, binder };
 }
 
-/** Approve, and wait until the approval is on the change. */
+/**
+ * Approve, and wait until the approval is on the change.
+ *
+ * Retried, because Gitea processes the change's opening push asynchronously
+ * and, with stale approvals dismissed, drops an approval recorded against the
+ * head it had a moment before — the same race `binder-archive.pw.ts` meets.
+ */
 async function approve(
   reviewer: string,
   owner: string,
@@ -141,15 +147,17 @@ async function approve(
   binder: string,
   change: number,
 ): Promise<void> {
-  await json(
-    reviewer,
-    "POST",
-    `/api/app/binders/${org}/${binder}/changes/${change}/reviews`,
-    { event: "APPROVE" },
-  );
-  await expect
-    .poll(() => approvalCount(owner, org, binder, change), { timeout: 15_000 })
-    .toBe(1);
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    await json(
+      reviewer,
+      "POST",
+      `/api/app/binders/${org}/${binder}/changes/${change}/reviews`,
+      { event: "APPROVE" },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    if ((await approvalCount(owner, org, binder, change)) === 1) return;
+  }
+  expect(await approvalCount(owner, org, binder, change)).toBe(1);
 }
 
 test("with the setting on, adding to an approved change clears the approval", async () => {
