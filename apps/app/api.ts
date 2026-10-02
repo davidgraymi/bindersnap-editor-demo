@@ -12,6 +12,7 @@ import * as OrganizationsClient from "../../packages/api-client/organizations/or
 import * as BindersClient from "../../packages/api-client/workspaces/workspaces";
 import * as NotificationsClient from "../../packages/api-client/notifications/notifications";
 import * as OnboardingClient from "../../packages/api-client/onboarding/onboarding";
+import * as AccountClient from "../../packages/api-client/account/account";
 import type { OnboardingPayload } from "../../packages/api-schema/schemas/onboarding";
 import type {
   AppNotification,
@@ -45,7 +46,10 @@ import type {
 } from "../../packages/api-schema/schemas/workspaces";
 
 // Import generated types
-import type { SessionAuthState } from "../../packages/api-schema/schemas/auth";
+import type {
+  SessionAuthState,
+  SessionUser as SessionAuthUser,
+} from "../../packages/api-schema/schemas/auth";
 import type {
   ChangeAssignments,
   ChangeUpdatesPayload,
@@ -219,11 +223,14 @@ export async function login(
 }
 
 export async function signup(
+  name: { first: string; last: string },
   username: string,
   email: string,
   password: string,
 ): Promise<SessionAuthState> {
   const response = await AuthClient.authSignup({
+    firstName: name.first.trim(),
+    lastName: name.last.trim(),
     username: username.trim(),
     email: email.trim(),
     password,
@@ -244,6 +251,22 @@ export async function fetchSessionUser(): Promise<SessionAuthState | null> {
     }
     throw error;
   }
+}
+
+// Account functions: the signed-in person's own account.
+
+export async function updateProfile(name: {
+  first: string;
+  last: string;
+}): Promise<SessionAuthUser> {
+  const response = await AccountClient.updateProfile({
+    firstName: name.first.trim(),
+    lastName: name.last.trim(),
+  });
+  if (response.status !== 200) {
+    throw new Error("Your name could not be saved.");
+  }
+  return response.data.user;
 }
 
 export async function logoutSession(): Promise<void> {

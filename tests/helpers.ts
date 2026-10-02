@@ -349,7 +349,7 @@ export async function signInAsAlice(page: Page): Promise<void> {
     await clearBrowserAuthState(page);
   }
 
-  await page.goto("/login");
+  await page.goto("/-/login");
   await page.waitForURL(/\/login$/, { timeout: 5_000 });
   await expect(page.getByLabel("Username or Email")).toBeVisible({
     timeout: 10_000,
@@ -391,7 +391,7 @@ export async function signInAsBob(page: Page): Promise<void> {
     await clearBrowserAuthState(page);
   }
 
-  await page.goto("/login");
+  await page.goto("/-/login");
   await page.waitForURL(/\/login$/, { timeout: 5_000 });
   await expect(page.getByLabel("Username or Email")).toBeVisible({
     timeout: 10_000,
@@ -438,7 +438,7 @@ export async function navigateToDocument(
   docName: string,
 ): Promise<void> {
   // Navigate to Documents page with a search query for the specific document
-  await page.goto(`/documents?q=${encodeURIComponent(docName)}`);
+  await page.goto(`/-/documents?q=${encodeURIComponent(docName)}`);
   await page.waitForLoadState("domcontentloaded");
 
   // DocumentsPage uses .docs-list-item

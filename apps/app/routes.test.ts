@@ -4,7 +4,6 @@ import {
   asShellRoute,
   canonicalLocation,
   getRoute,
-  isLegacyInboxPath,
   isProtectedAppRoute,
   routeToPath,
 } from "./routes";
@@ -20,12 +19,9 @@ test("getRoute maps the SPA home route to the landing/app home kind", () => {
     kind: "organization",
     org: "trailing",
   });
-  expect(getRoute("/login")).toEqual({ kind: "login" });
-  expect(getRoute("/signup")).toEqual({ kind: "signup" });
-  expect(getRoute("/admin/subscriptions")).toEqual({
-    kind: "adminSubscriptions",
-  });
-  expect(getRoute("/admin/pro-access")).toEqual({
+  expect(getRoute("/-/login")).toEqual({ kind: "login" });
+  expect(getRoute("/-/signup")).toEqual({ kind: "signup" });
+  expect(getRoute("/-/admin/subscriptions")).toEqual({
     kind: "adminSubscriptions",
   });
 });
@@ -198,7 +194,7 @@ test("a current address is left as it is", () => {
     ["/riverside-health/clinical", "?edit=1&draft=draft%2Falice%2Fx"],
     ["/riverside-health/clinical/-/changes/4", ""],
     ["/riverside-health", ""],
-    ["/changes", ""],
+    ["/-/changes", ""],
     ["/", ""],
   ] as const) {
     expect(canonicalLocation(path, search)).toBeNull();
@@ -208,10 +204,10 @@ test("a current address is left as it is", () => {
 test("routeToPath keeps home and workspace on the root URL", () => {
   expect(routeToPath({ kind: "home" })).toBe("/");
   expect(routeToPath({ kind: "workspace" })).toBe("/");
-  expect(routeToPath({ kind: "login" })).toBe("/login");
-  expect(routeToPath({ kind: "signup" })).toBe("/signup");
+  expect(routeToPath({ kind: "login" })).toBe("/-/login");
+  expect(routeToPath({ kind: "signup" })).toBe("/-/signup");
   expect(routeToPath({ kind: "adminSubscriptions" })).toBe(
-    "/admin/subscriptions",
+    "/-/admin/subscriptions",
   );
 });
 
@@ -226,13 +222,6 @@ test("document routes are not protected — anonymous users can view public docs
   ).toBe(false);
   expect(isProtectedAppRoute({ kind: "documents" })).toBe(true);
   expect(isProtectedAppRoute({ kind: "workspace" })).toBe(true);
-});
-
-test("the retired /inbox path resolves to Home", () => {
-  expect(getRoute("/inbox")).toEqual({ kind: "workspace" });
-  expect(getRoute("/inbox/")).toEqual({ kind: "workspace" });
-  expect(isLegacyInboxPath("/inbox")).toBe(true);
-  expect(isLegacyInboxPath("/")).toBe(false);
 });
 
 test("asShellRoute converts home to workspace for the authenticated shell", () => {
@@ -324,10 +313,21 @@ test("a bare /{org} addresses the organization itself", () => {
   });
 });
 
-test("the app's own single-segment routes are still not organizations", () => {
-  expect(getRoute("/documents").kind).toBe("documents");
-  expect(getRoute("/login").kind).toBe("login");
-  expect(getRoute("/billing").kind).toBe("billing");
+test("the app's own pages are behind /-/, so an organization can have any name", () => {
+  expect(getRoute("/-/documents").kind).toBe("documents");
+  expect(getRoute("/-/changes").kind).toBe("changes");
+  expect(getRoute("/-/login").kind).toBe("login");
+  expect(getRoute("/-/user_settings/profile").kind).toBe("accountSettings");
+  expect(getRoute("/-/organizations/new").kind).toBe("createOrganization");
+  expect(routeToPath({ kind: "accountSettings" })).toBe(
+    "/-/user_settings/profile",
+  );
+
+  // Names the app's pages used to take are an organization's now.
+  for (const name of ["documents", "login", "billing", "settings", "inbox"]) {
+    expect(getRoute(`/${name}`)).toEqual({ kind: "organization", org: name });
+  }
+  expect(getRoute("/billing/clinical").kind).toBe("binder");
 });
 
 test("billing names the organization it is about", () => {
@@ -338,17 +338,9 @@ test("billing names the organization it is about", () => {
   expect(routeToPath({ kind: "billing", org: "riverside-health" })).toBe(
     "/riverside-health/-/billing",
   );
-  // The address billing had before it sat under its organization.
-  expect(canonicalLocation("/billing/riverside-health", "")).toBe(
-    "/riverside-health/-/billing",
-  );
-  // Stripe's return keeps the query that says a payment has just landed.
-  expect(
-    canonicalLocation("/billing/riverside-health", "?checkout=success"),
-  ).toBe("/riverside-health/-/billing?checkout=success");
-  // The address from before billing was per organization still resolves.
-  expect(getRoute("/billing")).toEqual({ kind: "billing" });
-  expect(routeToPath({ kind: "billing" })).toBe("/billing");
+  // Billing for whichever organization is the session's own.
+  expect(getRoute("/-/billing")).toEqual({ kind: "billing" });
+  expect(routeToPath({ kind: "billing" })).toBe("/-/billing");
 });
 
 test("help is not the app's: its addresses are never a route in it", () => {

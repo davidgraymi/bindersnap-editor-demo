@@ -28,6 +28,8 @@ async function signUp(): Promise<string> {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
     body: JSON.stringify({
+      firstName: "Test",
+      lastName: "User",
       username: `export-${suffix}`,
       email: `export-${suffix}@users.bindersnap.local`,
       password: `Bindersnap-${suffix}!`,

@@ -16,7 +16,7 @@ import { signInAsAlice } from "./helpers";
 
 const PAGES = [
   "/",
-  "/changes",
+  "/-/changes",
   "/riverside-health",
   "/riverside-health?tab=people",
   "/riverside-health/corporate",

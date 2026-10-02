@@ -146,7 +146,7 @@ test("the organization's binder list is the organization itself", () => {
 });
 
 test("pages across the organization have no path: their title names them", () => {
-  for (const address of ["/changes", "/documents", "/billing", "/"]) {
+  for (const address of ["/-/changes", "/-/documents", "/-/billing", "/"]) {
     expect(trailFor(address)).toEqual({
       binder: null,
       path: [],

@@ -105,6 +105,13 @@ input {
   gap: var(--brand-space-2);
 }
 
+/* First and last name, side by side where there is room for both. */
+.app-field-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--brand-space-4);
+}
+
 .app-submit {
   width: 100%;
 }
@@ -5106,6 +5113,14 @@ a.bs-knot {
   font-size: 15px;
   font-weight: var(--brand-weight-semibold);
   line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-profile-menu-login {
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-xs);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -11448,4 +11463,10 @@ html.bs-writing .app-main {
 
 .doc-preview-filename-text--words {
   font-family: inherit;
+}
+
+/* An account's settings are a handful of short fields; full width made a
+   first-name box wider than most people's whole name. */
+.account-settings .bs-settings {
+  max-width: 44rem;
 }

@@ -38,6 +38,8 @@ async function signUpWithBinder(prefix: string) {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
     body: JSON.stringify({
+      firstName: "Test",
+      lastName: "User",
       username,
       email: `${username}@users.bindersnap.local`,
       password: `Bindersnap-${randomUUID()}!`,

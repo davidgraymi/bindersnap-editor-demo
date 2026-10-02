@@ -39,7 +39,7 @@ export function buildDocumentsUrl(state: DocumentsViewState): string {
   if (state.binder) params.set("binder", state.binder);
   if (state.freeText) params.set("q", state.freeText);
   const query = params.toString();
-  return query === "" ? "/documents" : `/documents?${query}`;
+  return query === "" ? "/-/documents" : `/-/documents?${query}`;
 }
 
 /** `riverside-health/clinical` — how a binder is named in the URL. */

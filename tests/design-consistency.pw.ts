@@ -150,7 +150,11 @@ async function provision(): Promise<{
   const signup = await fetch(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
-    body: JSON.stringify(credentials),
+    body: JSON.stringify({
+      firstName: "Test",
+      lastName: "User",
+      ...credentials,
+    }),
   });
   expect(signup.status, await signup.clone().text()).toBe(200);
   const session = (signup.headers.get("set-cookie") ?? "").match(
@@ -254,7 +258,7 @@ test("every row of controls in the product is one size", async ({ page }) => {
     ["the binder's settings", `${APP_BASE_URL}/${org}/${binder}?tab=settings`],
     ["the change requests", `${APP_BASE_URL}/${org}/${binder}?tab=changes`],
     ["the organization's people", `${APP_BASE_URL}/${org}?tab=people`],
-    ["the library", `${APP_BASE_URL}/documents`],
+    ["the library", `${APP_BASE_URL}/-/documents`],
     ["home", `${APP_BASE_URL}/home`],
   ];
 
@@ -368,8 +372,8 @@ test("every page begins in the same place, at the same size", async ({
 
   const screens: Array<[string, string]> = [
     ["home", `${APP_BASE_URL}/home`],
-    ["the library", `${APP_BASE_URL}/documents`],
-    ["the review queue", `${APP_BASE_URL}/changes`],
+    ["the library", `${APP_BASE_URL}/-/documents`],
+    ["the review queue", `${APP_BASE_URL}/-/changes`],
     ["the binder", `${APP_BASE_URL}/${org}/${binder}`],
     ["the organization", `${APP_BASE_URL}/${org}`],
   ];
@@ -532,7 +536,7 @@ test("the marketing eyebrow never labels a field in the app", async ({
     ["its settings", `${APP_BASE_URL}/${org}/${binder}?tab=settings`],
     ["the organization", `${APP_BASE_URL}/${org}`],
     ["the organization's people", `${APP_BASE_URL}/${org}?tab=people`],
-    ["the library", `${APP_BASE_URL}/documents`],
+    ["the library", `${APP_BASE_URL}/-/documents`],
   ];
 
   for (const [where, url] of screens) {
@@ -638,8 +642,8 @@ test("no heading on a page outranks the page's own title", async ({ page }) => {
 
   const screens: Array<[string, string]> = [
     ["home", `${APP_BASE_URL}/home`],
-    ["the library", `${APP_BASE_URL}/documents`],
-    ["the review queue", `${APP_BASE_URL}/changes`],
+    ["the library", `${APP_BASE_URL}/-/documents`],
+    ["the review queue", `${APP_BASE_URL}/-/changes`],
     ["the binder", `${APP_BASE_URL}/${org}/${binder}`],
     ["the organization", `${APP_BASE_URL}/${org}`],
   ];

@@ -461,7 +461,11 @@ async function signUpUser(credentials: {
       // Origin is required — signup goes through CORS origin enforcement.
       Origin: APP_ORIGIN,
     },
-    body: JSON.stringify(credentials),
+    body: JSON.stringify({
+      firstName: "Test",
+      lastName: "User",
+      ...credentials,
+    }),
   });
 
   if (!response.ok) {
@@ -914,7 +918,9 @@ test.describe("Stripe subscription lifecycle", () => {
     const credentials = uniqueCredentials();
 
     try {
-      await page.goto("/signup");
+      await page.goto("/-/signup");
+      await page.getByLabel("First name").fill("Test");
+      await page.getByLabel("Last name").fill("User");
       await page.getByLabel("Username").fill(credentials.username);
       await page.getByLabel("Email").fill(credentials.email);
       await page
@@ -954,7 +960,7 @@ test.describe("Stripe subscription lifecycle", () => {
 
       // Subscribing is now a thing the customer chooses to do, so go and do it.
       // A trial: the page says so, and offers the one thing to do about it.
-      await page.goto("/billing", { waitUntil: "domcontentloaded" });
+      await page.goto("/-/billing", { waitUntil: "domcontentloaded" });
       await expect(page.getByRole("region", { name: "Plan" })).toContainText(
         "Trial",
         { timeout: 20_000 },

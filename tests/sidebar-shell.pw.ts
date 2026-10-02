@@ -82,7 +82,7 @@ test("the sidebar navigates, and marks where you are", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Change requests" }),
   ).toBeVisible({ timeout: 30_000 });
-  expect(new URL(page.url()).pathname).toBe("/changes");
+  expect(new URL(page.url()).pathname).toBe("/-/changes");
   await expect(
     sidebar.getByRole("link", { name: "Change requests" }),
   ).toHaveAttribute("aria-current", "page");

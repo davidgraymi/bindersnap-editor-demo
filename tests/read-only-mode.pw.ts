@@ -66,7 +66,11 @@ async function signUp(credentials: Credentials): Promise<string> {
   const response = await fetch(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
-    body: JSON.stringify(credentials),
+    body: JSON.stringify({
+      firstName: "Test",
+      lastName: "User",
+      ...credentials,
+    }),
   });
   expect(
     response.status,
@@ -302,6 +306,6 @@ test("a second organization is gated, offered and billed as itself", async ({
   ).toBeVisible();
 
   // And the first organization's billing still shows its trial.
-  await page.goto(`${APP_BASE_URL}/billing/${first}`);
+  await page.goto(`${APP_BASE_URL}/${first}/-/billing`);
   await expect(plan).toContainText("Trial");
 });

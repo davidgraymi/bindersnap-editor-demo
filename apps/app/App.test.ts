@@ -365,7 +365,7 @@ test("App keeps a signed-in user working when the billing status fetch rejects",
     expect(
       container.querySelector('[data-testid="read-only-banner"]'),
     ).toBeNull();
-    expect(window.location.pathname).not.toBe("/billing");
+    expect(window.location.pathname).not.toBe("/-/billing");
   } finally {
     unmount();
   }
@@ -413,14 +413,14 @@ test("App drops into read-only mode when the payment required handler fires", as
     });
 
     expect(container.querySelector('[data-testid="app-shell"]')).not.toBeNull();
-    expect(window.location.pathname).not.toBe("/billing");
+    expect(window.location.pathname).not.toBe("/-/billing");
   } finally {
     unmount();
   }
 });
 
 test("App keeps Gitea admins on the Pro access route even when billing status is unavailable", async () => {
-  installDom("/admin/subscriptions");
+  installDom("/-/admin/subscriptions");
 
   mockFetchSessionUser.mockImplementation(async () => ({
     user: {
@@ -443,7 +443,7 @@ test("App keeps Gitea admins on the Pro access route even when billing status is
         '[data-testid="app-shell"]',
       );
 
-      expect(window.location.pathname).toBe("/admin/subscriptions");
+      expect(window.location.pathname).toBe("/-/admin/subscriptions");
       expect(appShell?.dataset.routeKind).toBe("adminSubscriptions");
       expect(appShell?.dataset.userIsAdmin).toBe("true");
       expect(
@@ -456,7 +456,7 @@ test("App keeps Gitea admins on the Pro access route even when billing status is
 });
 
 test("App redirects non-admin users away from the Pro access route", async () => {
-  installDom("/admin/subscriptions");
+  installDom("/-/admin/subscriptions");
 
   mockFetchSessionUser.mockImplementation(async () => ({
     user: {
@@ -585,7 +585,7 @@ function signedInWithNoOrganization() {
 }
 
 test("App shows the setup screen at /organizations/new, not the billing page", async () => {
-  installDom("/organizations/new");
+  installDom("/-/organizations/new");
   signedInWithNoOrganization();
 
   const { App } = await import("./App");
@@ -596,7 +596,7 @@ test("App shows the setup screen at /organizations/new, not the billing page", a
       expect(organizationSetupHeading(container)).toBe(
         "Create your organization",
       );
-      expect(window.location.pathname).toBe("/organizations/new");
+      expect(window.location.pathname).toBe("/-/organizations/new");
       expect(
         container.querySelector('[data-testid="billing-page"]'),
       ).toBeNull();
@@ -636,7 +636,7 @@ test("App lets an account with no organization read, instead of gating every rou
 });
 
 test("App lets Skip for now leave the setup screen and stay gone", async () => {
-  installDom("/organizations/new");
+  installDom("/-/organizations/new");
   signedInWithNoOrganization();
 
   const { App } = await import("./App");
@@ -682,7 +682,7 @@ test("App asks a no-organization session to name one when a write is refused", a
     notifyPaymentRequired({ organizationName: null });
 
     await waitFor(() => {
-      expect(window.location.pathname).toBe("/organizations/new");
+      expect(window.location.pathname).toBe("/-/organizations/new");
       // The wording is the whole point: they were stopped mid-write, not sent
       // here by their own navigation.
       expect(organizationSetupHeading(container)).toBe(

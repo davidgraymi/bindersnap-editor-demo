@@ -63,7 +63,7 @@ export function buildSignupUrl(email: string | null | undefined): string {
   }
 
   const query = params.toString();
-  return query ? `/signup?${query}` : "/signup";
+  return query ? `/-/signup?${query}` : "/-/signup";
 }
 
 export function routeLandingSignup(
