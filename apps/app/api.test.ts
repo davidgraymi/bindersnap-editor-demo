@@ -22,7 +22,7 @@ test("fetchLibrary reports the paywall after a typed 402 response", () => {
     import { registerPaymentRequiredHandler } from "./apps/app/paymentRequired.ts";
 
     const dom = new JSDOM("<!doctype html><html><body></body></html>", {
-      url: "https://bindersnap.com/documents",
+      url: "https://bindersnap.com/-/documents",
     });
 
     Object.assign(globalThis, {
@@ -96,7 +96,7 @@ test("fetchBillingStatus ignores 402 interception for billing endpoints", () => 
     import { registerPaymentRequiredHandler } from "./apps/app/paymentRequired.ts";
 
     const dom = new JSDOM("<!doctype html><html><body></body></html>", {
-      url: "https://bindersnap.com/documents",
+      url: "https://bindersnap.com/-/documents",
     });
 
     Object.assign(globalThis, {
