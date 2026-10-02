@@ -5,13 +5,6 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export interface ChangePasswordBody {
-  /** @minLength 1 */
-  currentPassword: string;
-  /** @minLength 1 */
-  newPassword: string;
-}
-
 export type ChangePasswordBody = {
   /** @minLength 1 */
   currentPassword: string;

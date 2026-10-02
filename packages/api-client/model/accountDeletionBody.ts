@@ -5,9 +5,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type DeleteAccountBody = {
+export interface AccountDeletionBody {
   /** @minLength 1 */
   password: string;
   /** @minLength 1 */
   confirm: string;
-};
+}

@@ -1950,7 +1950,7 @@
           "user"
         ]
       },
-      "ChangePasswordBody": {
+      "NewPasswordBody": {
         "type": "object",
         "properties": {
           "currentPassword": {
@@ -1967,7 +1967,7 @@
           "newPassword"
         ]
       },
-      "ChangeUsernameBody": {
+      "NewUsernameBody": {
         "type": "object",
         "properties": {
           "newUsername": {
@@ -1984,7 +1984,7 @@
           "password"
         ]
       },
-      "DeleteAccountBody": {
+      "AccountDeletionBody": {
         "type": "object",
         "properties": {
           "password": {

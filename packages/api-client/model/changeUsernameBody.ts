@@ -5,13 +5,6 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export interface ChangeUsernameBody {
-  /** @minLength 1 */
-  newUsername: string;
-  /** @minLength 1 */
-  password: string;
-}
-
 export type ChangeUsernameBody = {
   /** @minLength 1 */
   newUsername: string;

@@ -5,6 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 
+export * from './accountDeletionBody.ts';
 export * from './accountRefusal.ts';
 export * from './accountUserPayload.ts';
 export * from './accountUserPayloadUser.ts';
@@ -344,6 +345,8 @@ export * from './listOrganizations200.ts';
 export * from './listOrganizations200OrganizationsItem.ts';
 export * from './loginBody.ts';
 export * from './newOrganizationBody.ts';
+export * from './newPasswordBody.ts';
+export * from './newUsernameBody.ts';
 export * from './newWorkspaceBody.ts';
 export * from './openBinderDraft201.ts';
 export * from './openBinderDraft201Draft.ts';
