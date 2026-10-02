@@ -645,6 +645,7 @@ export function DocumentChangeDetail({
                foot stacked under its own. */
             onOpenSignOffRules={onOpenSignOffRules}
             canManage={canManageAssignments && change.open}
+            decided={!change.open}
             onChanged={onChanged}
           />
         </div>

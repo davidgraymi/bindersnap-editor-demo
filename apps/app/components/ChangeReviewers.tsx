@@ -61,6 +61,8 @@ interface ChangeReviewersProps {
   canManage: boolean;
   /** Refetch the change: reviewers are server state, not local state. */
   onChanged: () => void | Promise<void>;
+  /** The change has been published or closed: nobody will be asked now. */
+  decided?: boolean;
 }
 
 interface UserOption {
@@ -107,6 +109,7 @@ export function ChangeReviewers({
   onOpenSignOffRules = null,
   canManage: canManageProp,
   onChanged,
+  decided = false,
 }: ChangeReviewersProps) {
   // Folded here rather than at each call site, so the binder's change page
   // and the per-document workspace cannot disagree about it.
@@ -326,7 +329,11 @@ export function ChangeReviewers({
   return (
     <div className="rev-reviewers" ref={sectionRef}>
       {reviewers.length === 0 ? (
-        <p className="bs-empty">Nobody has been asked to review this yet.</p>
+        <p className="bs-empty">
+          {decided
+            ? "Nobody was asked to review this."
+            : "Nobody has been asked to review this yet."}
+        </p>
       ) : (
         <ul className="bs-row-list rev-reviewer-list">
           {reviewers.map((reviewer) => {
