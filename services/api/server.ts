@@ -2,6 +2,15 @@ import { createHash, randomUUID } from "crypto";
 
 import { config, type SessionCookieSameSite } from "./config";
 import { logger } from "./logger";
+import { jobStore, withGroupLock, type JobRecord } from "./jobs/store";
+import { startJobRunner } from "./jobs/runner";
+import {
+  PublishConflict,
+  runPublish,
+  type PublishDeps,
+  type PublishPlan,
+  type PublishResult,
+} from "./jobs/publish";
 import {
   createGiteaUsage,
   currentGiteaUsage,
@@ -226,6 +235,7 @@ import {
   createPullRequest,
   getPullRequestWithReviews,
   getPullRequestHeadBranch,
+  getPullRequestHead,
   listPullRequestsWithoutReviews,
   attachReviews,
   readMergeCommitSha,
@@ -5038,6 +5048,259 @@ async function handleStripeWebhook(
  * resolution, and the BFF is the only path to a merge, so it cannot be
  * bypassed from the browser. Checked before the merge, never after.
  */
+/** What publishing needs from the rest of the server. See `jobs/publish.ts`. */
+const publishDeps: PublishDeps = {
+  merge: (params) => mergeWorkspaceChange(params),
+  // **The policy in force, stamped onto the event.** ADR 0004: when
+  // configuration shapes what happened, do not version the configuration —
+  // write it into the annotated tag, where it is immutable, attached to the
+  // exact publish, and readable from a bare clone with no application and no
+  // database running.
+  //
+  // Read after the merge, because the approvals that count are the ones that
+  // stood when Gitea accepted it — an approval dismissed on the way in is not
+  // a signature on what was published. A resumed run reads the same: a merged
+  // change's reviews do not move.
+  stampedPolicy: async (client, plan) => {
+    const [protection, merged, requiredApprovals] = await Promise.all([
+      readWorkspaceProtection(plan.org, plan.repo),
+      getPullRequestWithReviews({
+        client,
+        owner: plan.org,
+        repo: plan.repo,
+        pullNumber: plan.pullNumber,
+      }).catch(() => null),
+      readRequiredApprovals(plan.org, plan.repo),
+    ]);
+    return {
+      requiredApprovals,
+      approvedBy: merged
+        ? approverSignatures(
+            merged.reviews,
+            (protection?.dismissStaleApprovals ?? true) ||
+              (protection?.ignoreStaleApprovals ?? false),
+          )
+        : [],
+      signOffEnforced: protection?.blockOnCodeownerReviews ?? false,
+    };
+  },
+  versionStamp: buildVersionStamp,
+  archiveStamp: buildArchiveStamp,
+  readTagCommits: async ({ client, owner, repo }) =>
+    new Map(
+      (await listAllTags({ client, owner, repo })).flatMap((tag) =>
+        tag.name && tag.commit?.sha
+          ? [[tag.name, tag.commit.sha] as const]
+          : [],
+      ),
+    ),
+  // **A published draft is finished**, and its branch goes the way a merged
+  // branch does on a code host. Left behind, it has nothing on it that `main`
+  // lacks, so its owner's picker offered it back as an empty draft: work they
+  // had just published, looking like work they had never started. Its name is
+  // kept, so the change it became still says what it was called.
+  discardDraftIfAny: async (client, plan) => {
+    if (!isDraftBranch(plan.branch)) return;
+    await discardDraft({
+      client,
+      org: plan.org,
+      workspace: plan.repo,
+      branch: plan.branch,
+    });
+  },
+};
+
+type PublishOutcome =
+  | { kind: "done"; jobId: string; result: PublishResult }
+  /** Failed before the merge: nothing happened, and the job is gone. */
+  | { kind: "abandoned"; error: unknown }
+  /** Merged, and stopped on something waiting will not fix. */
+  | { kind: "conflict"; jobId: string; error: string }
+  /** Merged, versions not all written yet; the runner will keep at it. */
+  | { kind: "unfinished"; jobId: string; error: string }
+  /** Another run holds it right now. */
+  | { kind: "busy"; jobId: string };
+
+/**
+ * Run a publish job once, and record how it went.
+ *
+ * **Whether the merge happened is the line.** A run that fails before the
+ * merge changed nothing, so its job is dropped and the person sees the refusal
+ * exactly as before — no approval yet, a conflict, an unresolved thread. A run
+ * that fails after the merge has left something half-done, so its job stays:
+ * the runner retries it, and Publish pressed again resumes it.
+ */
+async function executePublishJob(
+  job: JobRecord,
+  client: GiteaClient,
+): Promise<PublishOutcome> {
+  const store = jobStore();
+  if (!store.claim(job.id)) return { kind: "busy", jobId: job.id };
+  const plan = job.plan as PublishPlan;
+
+  try {
+    const result = await runPublish({ client, plan, deps: publishDeps });
+    store.complete(job.id, result);
+    logger.info("Workspace change published", {
+      username: job.createdBy,
+      organization: plan.org,
+      workspace: plan.repo,
+      pullNumber: plan.pullNumber,
+      jobId: job.id,
+      attempts: job.attempts + 1,
+      tags: result.tags.map((tag) => tag.tag),
+      archived: result.archived.map((tag) => tag.tag),
+    });
+    return { kind: "done", jobId: job.id, result };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const merged = await readMergeCommitSha({
+      client,
+      owner: plan.org,
+      repo: plan.repo,
+      pullNumber: plan.pullNumber,
+    }).catch(() => "unknown");
+
+    if (merged === null) {
+      store.delete(job.id);
+      return { kind: "abandoned", error: err };
+    }
+
+    logger.error("A publish stopped after its merge", {
+      organization: plan.org,
+      workspace: plan.repo,
+      pullNumber: plan.pullNumber,
+      jobId: job.id,
+      error: message,
+    });
+    if (err instanceof PublishConflict) {
+      store.fail(job.id, message, { permanent: true });
+      return { kind: "conflict", jobId: job.id, error: message };
+    }
+    store.fail(job.id, message);
+    return { kind: "unfinished", jobId: job.id, error: message };
+  }
+}
+
+function publishJobResponse(
+  outcome: PublishOutcome,
+  baseHeaders: Headers,
+): Response {
+  switch (outcome.kind) {
+    case "done":
+      return json(
+        200,
+        {
+          ok: true,
+          tags: outcome.result.tags,
+          archived: outcome.result.archived,
+          jobId: outcome.jobId,
+        },
+        baseHeaders,
+      );
+    case "abandoned":
+      if (outcome.error instanceof PublishConflict) {
+        return json(409, { error: outcome.error.message }, baseHeaders);
+      }
+      return responseFromError(
+        outcome.error,
+        baseHeaders,
+        "Unable to publish the change.",
+      );
+    case "conflict":
+      return json(
+        409,
+        { error: outcome.error, jobId: outcome.jobId },
+        baseHeaders,
+      );
+    case "unfinished":
+      // Accepted rather than failed: the change is merged and the rest will
+      // follow. The page can poll the job, or simply read the change again.
+      return json(
+        202,
+        {
+          ok: false,
+          // The documented shape, empty: none are written yet.
+          tags: [],
+          jobId: outcome.jobId,
+          error:
+            "The change is published, and its versions are still being written. They will appear shortly.",
+        },
+        baseHeaders,
+      );
+    case "busy":
+      return json(
+        409,
+        {
+          error: "This change is being published right now.",
+          jobId: outcome.jobId,
+        },
+        baseHeaders,
+      );
+  }
+}
+
+/**
+ * The runner's turn at a publish: resume it as the person who started it.
+ *
+ * Their session's token, because writing tags takes write access to the
+ * binder and the service token — deliberately — has none. A publish whose
+ * person has since signed out waits in `failed` until somebody who can write
+ * to the binder presses Publish again, which resumes it as them.
+ */
+async function resumePublishJob(job: JobRecord): Promise<void> {
+  const session = job.sessionId ? await sessionStore.get(job.sessionId) : null;
+  if (!session || session.expiresAt <= Date.now()) {
+    jobStore().fail(
+      job.id,
+      "The person who published this has signed out. Its versions will be written when somebody with write access presses Publish again.",
+      { permanent: true },
+    );
+    return;
+  }
+  await executePublishJob(job, createSessionGiteaClient(session));
+}
+
+/**
+ * Where a job stands, for a page that was told to wait for one.
+ *
+ * Readable by anybody who can read the binder it acts on — asked of Gitea, as
+ * every read here is.
+ */
+async function handleReadJob(
+  req: Request,
+  baseHeaders: Headers,
+  jobId: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const job = jobStore().get(jobId);
+  const [org, repo] = job?.groupKey.split("/") ?? [];
+  const visible =
+    job && org && repo
+      ? await findWorkspaceRepo({ client: auth.client, org, name: repo }).catch(
+          () => null,
+        )
+      : null;
+  if (!job || !visible) {
+    return json(404, { error: "No such job." }, baseHeaders);
+  }
+
+  return json(
+    200,
+    {
+      id: job.id,
+      kind: job.kind,
+      status: job.status,
+      attempts: job.attempts,
+      error: job.lastError,
+      result: job.result,
+    },
+    baseHeaders,
+  );
+}
+
 async function handlePublishWorkspaceChange(
   req: Request,
   baseHeaders: Headers,
@@ -5065,339 +5328,257 @@ async function handlePublishWorkspaceChange(
   // this session cannot see answers 404 from Gitea, which is the same answer a
   // binder that does not exist gives — and the right one either way.
   const owner = orgName;
+  const groupKey = `${owner}/${workspaceName}`;
+  const subject = `change:${pullNumber}`;
 
-  try {
-    const workspace = await findWorkspaceRepo({
-      client,
-      org: owner,
-      name: workspaceName,
-    });
-    if (!workspace) {
-      return json(404, { error: "No such binder." }, baseHeaders);
-    }
+  // One publish at a time per binder, so two cannot both number v4.
+  return withGroupLock(groupKey, async () => {
+    try {
+      // **A publish that did not finish is finished, not refused.** A change
+      // merged by a run that died before its tags used to be unpublishable for
+      // good: "already merged". Pressing Publish again now resumes that run, with
+      // the plan it recorded, as whoever pressed it.
+      const unfinished = jobStore().openFor(groupKey, subject);
+      if (unfinished) {
+        return publishJobResponse(
+          await executePublishJob(unfinished, client),
+          baseHeaders,
+        );
+      }
 
-    // Which documents this change covers has to be known before the merge:
-    // afterwards the branch is gone, and with it the question's cheapest
-    // answer.
-    const documents = await listChangedDocuments({
-      client,
-      org: owner,
-      workspace: workspaceName,
-      pullNumber,
-    });
+      const workspace = await findWorkspaceRepo({
+        client,
+        org: owner,
+        name: workspaceName,
+      });
+      if (!workspace) {
+        return json(404, { error: "No such binder." }, baseHeaders);
+      }
 
-    // **What this change takes off the record, as against what it moves.**
-    // Gitea reports a rename as `deleted` plus `added`, so the removed half
-    // alone would call every rename an archiving. A UID that is also in the
-    // added half moved; only a UID absent from the merged tree entirely was
-    // archived. Read before the merge, like everything else here, so a failure
-    // changes nothing.
-    const stillHere = new Set(
-      documents.flatMap((document) => (document.uid ? [document.uid] : [])),
-    );
-    const archived = (
-      await listRemovedDocuments({
+      // Which documents this change covers has to be known before the merge:
+      // afterwards the branch is gone, and with it the question's cheapest
+      // answer.
+      const documents = await listChangedDocuments({
         client,
         org: owner,
         workspace: workspaceName,
         pullNumber,
-      })
-    ).filter(
-      (document) => document.uid !== null && !stillHere.has(document.uid),
-    );
+      });
 
-    // **Three kinds of change legitimately version nothing.** A sign-off change
-    // rewrites `.gitea/CODEOWNERS` — who has to approve what — a shape change
-    // can be a folder made and nothing filed in it yet, and a draft holds
-    // whatever its author put in it, which may be neither. All are real acts
-    // with nothing to tag.
-    //
-    // The refusal is still right for everything else: a change that versions
-    // nothing is a mistake, and publishing it silently would leave somebody
-    // waiting for a version that never arrives.
-    //
-    // Told apart by the branch, the same way an upload is
-    // (`upload/<slugPath>/…`). Neither prefix is under that one, deliberately:
-    // the binder reads an upload branch to work out which document a change is
-    // about, and a folder rename is about no single document — one that moved
-    // twelve would have to pick one to be named after.
-    const changeBranch = await getPullRequestHeadBranch({
-      client,
-      owner,
-      repo: workspaceName,
-      pullNumber,
-    });
-    const mayVersionNothing =
-      changeBranch.startsWith("sign-off/") ||
-      changeBranch.startsWith("shape/") ||
-      isDraftBranch(changeBranch) ||
-      // A fourth, and this one is a fact rather than a branch name: a change
-      // that only archives versions nothing by definition — the document is
-      // leaving the record, not arriving on it. Asked of what the change does
-      // rather than of what its branch is called, because that is the more
-      // reliable question and the branch prefixes are already carrying more
-      // meaning than is comfortable.
-      archived.length > 0;
-
-    if (documents.length === 0 && !mayVersionNothing) {
-      return json(
-        409,
-        { error: "This change does not touch any document." },
-        baseHeaders,
+      // **What this change takes off the record, as against what it moves.**
+      // Gitea reports a rename as `deleted` plus `added`, so the removed half
+      // alone would call every rename an archiving. A UID that is also in the
+      // added half moved; only a UID absent from the merged tree entirely was
+      // archived. Read before the merge, like everything else here, so a failure
+      // changes nothing.
+      const stillHere = new Set(
+        documents.flatMap((document) => (document.uid ? [document.uid] : [])),
       );
-    }
-
-    // **A content file with no identity segment is refused, loudly** (ADR
-    // 0005). Every document Bindersnap writes carries a UID in its filename,
-    // and that UID is what its version tags are named after. A file without one
-    // cannot be versioned: publishing it would merge the change and then
-    // silently write no tag, leaving somebody waiting for a version that never
-    // arrives — and the next publish would do the same thing again.
-    //
-    // Refusing before the merge is the point. ADR 0004 names degrading quietly
-    // as the failure to avoid twice over: the old config parser falling back to
-    // the permissive policy, and Gitea's CODEOWNERS parser dropping a line it
-    // cannot compile. This is the same shape and gets the same answer.
-    const unidentified = documents.filter((document) => document.uid === null);
-    if (unidentified.length > 0) {
-      return json(
-        409,
-        {
-          error:
-            unidentified.length === 1
-              ? `"${unidentified[0]!.path}" was not added through Bindersnap, so it has no version history to add to. Remove it from this change, or add it as a document.`
-              : `${unidentified.length} files in this change were not added through Bindersnap, so they have no version history to add to: ${unidentified
-                  .map((document) => `"${document.path}"`)
-                  .join(", ")}.`,
-        },
-        baseHeaders,
+      const archived = (
+        await listRemovedDocuments({
+          client,
+          org: owner,
+          workspace: workspaceName,
+          pullNumber,
+        })
+      ).filter(
+        (document) => document.uid !== null && !stillHere.has(document.uid),
       );
-    }
 
-    const reviewSettings = await readBinderSettings(workspace);
-    // Read here rather than beside the tag write, so a failure to read the
-    // protection cannot happen after the merge has already landed.
-    const protection = await readWorkspaceProtection(owner, workspaceName);
-
-    if (reviewSettings.blockOnUnresolvedThreads) {
-      const discussions = await listDiscussions({
+      // **Three kinds of change legitimately version nothing.** A sign-off change
+      // rewrites `.gitea/CODEOWNERS` — who has to approve what — a shape change
+      // can be a folder made and nothing filed in it yet, and a draft holds
+      // whatever its author put in it, which may be neither. All are real acts
+      // with nothing to tag.
+      //
+      // The refusal is still right for everything else: a change that versions
+      // nothing is a mistake, and publishing it silently would leave somebody
+      // waiting for a version that never arrives.
+      //
+      // Told apart by the branch, the same way an upload is
+      // (`upload/<slugPath>/…`). Neither prefix is under that one, deliberately:
+      // the binder reads an upload branch to work out which document a change is
+      // about, and a folder rename is about no single document — one that moved
+      // twelve would have to pick one to be named after.
+      const head = await getPullRequestHead({
         client,
         owner,
         repo: workspaceName,
         pullNumber,
       });
+      const changeBranch = head.ref;
+      const mayVersionNothing =
+        changeBranch.startsWith("sign-off/") ||
+        changeBranch.startsWith("shape/") ||
+        isDraftBranch(changeBranch) ||
+        // A fourth, and this one is a fact rather than a branch name: a change
+        // that only archives versions nothing by definition — the document is
+        // leaving the record, not arriving on it. Asked of what the change does
+        // rather than of what its branch is called, because that is the more
+        // reliable question and the branch prefixes are already carrying more
+        // meaning than is comfortable.
+        archived.length > 0;
 
-      if (discussions.unresolvedCount > 0) {
+      if (documents.length === 0 && !mayVersionNothing) {
+        return json(
+          409,
+          { error: "This change does not touch any document." },
+          baseHeaders,
+        );
+      }
+
+      // **A content file with no identity segment is refused, loudly** (ADR
+      // 0005). Every document Bindersnap writes carries a UID in its filename,
+      // and that UID is what its version tags are named after. A file without one
+      // cannot be versioned: publishing it would merge the change and then
+      // silently write no tag, leaving somebody waiting for a version that never
+      // arrives — and the next publish would do the same thing again.
+      //
+      // Refusing before the merge is the point. ADR 0004 names degrading quietly
+      // as the failure to avoid twice over: the old config parser falling back to
+      // the permissive policy, and Gitea's CODEOWNERS parser dropping a line it
+      // cannot compile. This is the same shape and gets the same answer.
+      const unidentified = documents.filter(
+        (document) => document.uid === null,
+      );
+      if (unidentified.length > 0) {
         return json(
           409,
           {
             error:
-              discussions.unresolvedCount === 1
-                ? "This change has 1 unresolved discussion thread. Resolve it before publishing."
-                : `This change has ${discussions.unresolvedCount} unresolved discussion threads. Resolve them before publishing.`,
-            unresolvedCount: discussions.unresolvedCount,
+              unidentified.length === 1
+                ? `"${unidentified[0]!.path}" was not added through Bindersnap, so it has no version history to add to. Remove it from this change, or add it as a document.`
+                : `${unidentified.length} files in this change were not added through Bindersnap, so they have no version history to add to: ${unidentified
+                    .map((document) => `"${document.path}"`)
+                    .join(", ")}.`,
           },
           baseHeaders,
         );
       }
-    }
 
-    // Each document's next version is its own: they are versioned separately
-    // and a binder's documents do not advance in lockstep. Every tag, every
-    // page, read once and before the merge, so a failure here changes nothing
-    // — and so the archive stamps below number off the same read.
-    const allTags = await listAllTags({
-      client,
-      owner,
-      repo: workspaceName,
-    });
-    const nextVersions = documents.map((document) => ({
-      document,
-      version: nextVersionFrom(documentVersionsFrom(allTags, document.uid)),
-    }));
+      const reviewSettings = await readBinderSettings(workspace);
 
-    await mergeWorkspaceChange({
-      client,
-      owner,
-      repo: workspaceName,
-      pullNumber,
-      mergeStyle,
-    });
+      if (reviewSettings.blockOnUnresolvedThreads) {
+        const discussions = await listDiscussions({
+          client,
+          owner,
+          repo: workspaceName,
+          pullNumber,
+        });
 
-    // **The policy in force, stamped onto the event.** ADR 0004: when
-    // configuration shapes what happened, do not version the configuration —
-    // write it into the annotated tag, where it is immutable, attached to the
-    // exact publish, and readable from a bare clone with no application and no
-    // database running. That is what makes it evidence rather than a settings
-    // row a surveyor would have to be told to trust.
-    //
-    // Read after the merge, because the approvals that count are the ones that
-    // stood when Gitea accepted it — an approval dismissed on the way in is not
-    // a signature on what was published.
-    const merged = await getPullRequestWithReviews({
-      client,
-      owner,
-      repo: workspaceName,
-      pullNumber,
-    }).catch(() => null);
+        if (discussions.unresolvedCount > 0) {
+          return json(
+            409,
+            {
+              error:
+                discussions.unresolvedCount === 1
+                  ? "This change has 1 unresolved discussion thread. Resolve it before publishing."
+                  : `This change has ${discussions.unresolvedCount} unresolved discussion threads. Resolve them before publishing.`,
+              unresolvedCount: discussions.unresolvedCount,
+            },
+            baseHeaders,
+          );
+        }
+      }
 
-    const publisher = await fetchSessionGiteaUser(session).catch(() => null);
-
-    // **The tags point at this merge, not at `main`.** A second change
-    // published a moment later moves `main`, and a tag aimed at the branch
-    // name after that lands on the other change's merge commit. The re-read
-    // above carries the SHA; if it failed, ask once more for just that.
-    const mergeCommitSha =
-      (merged?.pullRequest as { merge_commit_sha?: string | null } | undefined)
-        ?.merge_commit_sha ||
-      (await readMergeCommitSha({
+      // Each document's next version is its own: they are versioned separately
+      // and a binder's documents do not advance in lockstep. Every tag, every
+      // page, read once and before the merge, so a failure here changes nothing
+      // — and so the archive stamps below number off the same read.
+      const allTags = await listAllTags({
         client,
         owner,
         repo: workspaceName,
+      });
+      const nextVersions = documents.map((document) => ({
+        document,
+        version: nextVersionFrom(documentVersionsFrom(allTags, document.uid)),
+      }));
+
+      const publisher = await fetchSessionGiteaUser(session).catch(() => null);
+
+      // **Everything this publish will write, decided now and written down
+      // before the first Gitea write.** The merge and the tags are separate
+      // calls with no transaction across them; recorded first, a run that dies
+      // between them leaves a plan that says exactly what is left, and the next
+      // run — the job runner, or Publish pressed again — finishes it.
+      const plan: PublishPlan = {
+        org: owner,
+        repo: workspaceName,
         pullNumber,
-      }).catch(() => null));
-
-    if (!mergeCommitSha) {
-      // Tagging `main` instead would be guessing at evidence. Refuse, loudly:
-      // the change is merged and has no version yet, which is a gap somebody
-      // has to close, not one to paper over.
-      throw new Error(
-        `Change #${pullNumber} was merged, but Gitea did not report its merge commit, so no version was tagged.`,
-      );
-    }
-
-    const stampedPolicy = {
-      requiredApprovals: await readRequiredApprovals(owner, workspaceName),
-      approvedBy: merged
-        ? approverSignatures(
-            merged.reviews,
-            (protection?.dismissStaleApprovals ?? true) ||
-              (protection?.ignoreStaleApprovals ?? false),
-          )
-        : [],
-      blockOnUnresolvedThreads: reviewSettings.blockOnUnresolvedThreads,
-      signOffEnforced: protection?.blockOnCodeownerReviews ?? false,
-      publishedBy: signatureOf(session.username, publisher?.fullName ?? ""),
-      changeNumber: pullNumber,
-    };
-
-    // Sequential: Gitea serializes repository writes, and a partial failure
-    // here is easier to read in order than interleaved.
-    const tags = [];
-    for (const { document, version } of nextVersions) {
-      tags.push(
-        await createDocumentVersionTag({
-          client,
-          org: owner,
-          workspace: workspaceName,
-          // Not null: the guard above refused this change if any file lacked
-          // an identity, which is what makes this assertion safe rather than
+        mergeStyle,
+        headSha: head.sha,
+        branch: changeBranch,
+        documents: nextVersions.map(({ document, version }) => ({
+          // Not null: the guard above refused this change if any file lacked an
+          // identity, which is what makes this assertion safe rather than
           // hopeful.
           uid: document.uid!,
           slugPath: document.slugPath,
+          path: document.path,
+          // The title the product shows, by the rule the product shows it with.
+          // A tag reading "hand-hygiene-and-ppe" while every screen says "Hand
+          // Hygiene and PPE" is two names for one policy in the hands of
+          // somebody holding a clone and a screenshot.
+          title: formatDocumentName(document.name),
           version,
-          target: mergeCommitSha,
-          message: buildVersionStamp({
-            ...stampedPolicy,
-            // The title the product shows, by the rule the product shows it
-            // with. A tag reading "hand-hygiene-and-ppe" while every screen
-            // says "Hand Hygiene and PPE" is two names for one policy in the
-            // hands of somebody holding a clone and a screenshot.
-            title: formatDocumentName(document.name),
+        })),
+        // **The audit line for anything taken off the record.** Archived,
+        // restored, archived again: each is its own fact about its own date, so
+        // the tag is numbered rather than overwritten.
+        archived: archived.map((document) => {
+          const uid = document.uid!;
+          const versions = allTags
+            .map((tag) => tag.name ?? "")
+            .filter((name) => documentUidFromVersionTag(name) === uid)
+            .map((name) => versionFromTag(name) ?? 0);
+          return {
+            uid,
             slugPath: document.slugPath,
             path: document.path,
-            version,
-          }),
+            title: formatDocumentName(document.name),
+            sequence:
+              allTags.filter(
+                (tag) => documentUidFromArchivedTag(tag.name ?? "") === uid,
+              ).length + 1,
+            lastVersion: versions.length === 0 ? null : Math.max(...versions),
+          };
         }),
+        publishedBy: signatureOf(session.username, publisher?.fullName ?? ""),
+        publisherLogin: session.username,
+        blockOnUnresolvedThreads: reviewSettings.blockOnUnresolvedThreads,
+      };
+
+      const job = jobStore().create({
+        kind: "publish",
+        groupKey,
+        subject,
+        plan,
+        createdBy: session.username,
+        sessionId: session.id,
+        idempotencyKey: req.headers.get("Idempotency-Key"),
+      });
+
+      return publishJobResponse(
+        await executePublishJob(job, client),
+        baseHeaders,
+      );
+    } catch (err) {
+      logger.error("Failed to publish a workspace change", {
+        username: session.username,
+        organization: owner,
+        workspace: workspaceName,
+        pullNumber,
+        error: err instanceof Error ? err.message : String(err),
+        cause: err instanceof Error ? err.cause : undefined,
+      });
+      return responseFromError(
+        err,
+        baseHeaders,
+        "Unable to publish the change.",
       );
     }
-
-    // **The audit line for anything taken off the record**, written in this
-    // same pass so it is atomic with the merge by construction rather than by
-    // a webhook holding two writes together. The blob is already safe — every
-    // version tag still points at the commit that held it and git never
-    // collects a commit reachable from a ref — so what this adds is who
-    // archived it, when, and under which change.
-    const archivedTags = [];
-    if (archived.length > 0) {
-      for (const document of archived) {
-        const uid = document.uid!;
-        const versions = allTags
-          .map((tag) => tag.name ?? "")
-          .filter((name) => documentUidFromVersionTag(name) === uid)
-          .map((name) => versionFromTag(name) ?? 0);
-        // Archived, restored, archived again: each is its own fact about its
-        // own date, so the tag is numbered rather than overwritten.
-        const sequence =
-          allTags.filter(
-            (tag) => documentUidFromArchivedTag(tag.name ?? "") === uid,
-          ).length + 1;
-
-        archivedTags.push(
-          await createDocumentArchivedTag({
-            client,
-            org: owner,
-            workspace: workspaceName,
-            uid,
-            sequence,
-            target: mergeCommitSha,
-            message: buildArchiveStamp({
-              title: formatDocumentName(document.name),
-              slugPath: document.slugPath,
-              path: document.path,
-              lastVersion: versions.length === 0 ? null : Math.max(...versions),
-              sequence,
-              archivedBy: session.username,
-              changeNumber: pullNumber,
-            }),
-          }),
-        );
-      }
-    }
-
-    // **A published draft is finished**, and its branch goes the way a merged
-    // branch does on a code host. Left behind, it has nothing on it that
-    // `main` lacks, so its owner's picker offered it back as an empty "Draft
-    // of 28 September — Nothing in it yet": work they had just published,
-    // looking like work they had never started. Best effort: the merge and the
-    // tags are the record, and a branch that outlives them costs a picker row.
-    // Its name is kept, so the change it became still says what it was called.
-    const publishedBranch = await getPullRequestHeadBranch({
-      client,
-      owner,
-      repo: workspaceName,
-      pullNumber,
-    }).catch(() => "");
-    if (isDraftBranch(publishedBranch)) {
-      await discardDraft({
-        client,
-        org: owner,
-        workspace: workspaceName,
-        branch: publishedBranch,
-      }).catch(() => {});
-    }
-
-    logger.info("Workspace change published", {
-      username: session.username,
-      organization: owner,
-      workspace: workspaceName,
-      pullNumber,
-      tags: tags.map((tag) => tag.tag),
-      archived: archivedTags.map((tag) => tag.tag),
-    });
-
-    return json(200, { ok: true, tags, archived: archivedTags }, baseHeaders);
-  } catch (err) {
-    logger.error("Failed to publish a workspace change", {
-      username: session.username,
-      organization: owner,
-      workspace: workspaceName,
-      pullNumber,
-      error: err instanceof Error ? err.message : String(err),
-      cause: err instanceof Error ? err.cause : undefined,
-    });
-    return responseFromError(err, baseHeaders, "Unable to publish the change.");
-  }
+  });
 }
 
 /**
@@ -13062,6 +13243,15 @@ async function handleRequest(req: Request): Promise<Response> {
   } else if (pathname === "/api/app/notifications/read" && method === "POST") {
     response = await handleReadNotifications(req, baseHeaders);
   } else if (
+    method === "GET" &&
+    /^\/api\/app\/jobs\/[0-9a-f-]+$/.test(pathname)
+  ) {
+    response = await handleReadJob(
+      req,
+      baseHeaders,
+      pathname.slice("/api/app/jobs/".length),
+    );
+  } else if (
     pathname === "/api/app/admin/diagnostics/gitea" &&
     method === "GET"
   ) {
@@ -13876,6 +14066,9 @@ async function handleRequest(req: Request): Promise<Response> {
 if (import.meta.main) {
   const server = createApiServer();
   startCleanupTimer();
+  // Finish any multi-step write the last process left half-done — a deploy
+  // replaces this container on every push to `main`. See `jobs/runner.ts`.
+  startJobRunner({ run: { publish: resumePublishJob } });
   logger.info("Bindersnap API listening", {
     url: `http://localhost:${server.port}`,
     port: server.port,
