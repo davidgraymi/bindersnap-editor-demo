@@ -351,13 +351,9 @@ test("billing names the organization it is about", () => {
   expect(routeToPath({ kind: "billing" })).toBe("/billing");
 });
 
-test("the help guides have addresses of their own", () => {
-  expect(getRoute("/help")).toEqual({ kind: "help" });
-  expect(getRoute("/help/approvals")).toEqual({
-    kind: "help",
-    topic: "approvals",
-  });
-  expect(routeToPath({ kind: "help", topic: "approvals" })).toBe(
-    "/help/approvals",
-  );
+test("help is not the app's: its addresses are never a route in it", () => {
+  // `/help` is served as plain pages (apps/help), and the name is reserved so
+  // no organization can take it.
+  expect(getRoute("/help").kind).not.toBe("organization");
+  expect(getRoute("/help/approvals").kind).not.toBe("binder");
 });
