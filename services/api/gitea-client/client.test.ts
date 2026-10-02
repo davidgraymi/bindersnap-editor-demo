@@ -68,3 +68,38 @@ test("toGiteaApiError extracts message from various error shapes", async () => {
   const err4 = toGiteaApiError(503, { unexpected: true });
   expect(err4.message).toBe("Gitea request failed.");
 });
+
+test("readAllPages reads 50 at a time until a short page", async () => {
+  const { readAllPages } = await import("./client");
+  const rows = Array.from({ length: 120 }, (_, index) => index);
+  const asked: Array<{ page: number; limit: number }> = [];
+
+  const all = await readAllPages(async (query) => {
+    asked.push(query);
+    return rows.slice((query.page - 1) * query.limit, query.page * query.limit);
+  });
+
+  expect(all).toEqual(rows);
+  expect(asked).toEqual([
+    { page: 1, limit: 50 },
+    { page: 2, limit: 50 },
+    { page: 3, limit: 50 },
+  ]);
+});
+
+test("readAllPages stops at maxPages when Gitea ignores page", async () => {
+  const { readAllPages } = await import("./client");
+  let calls = 0;
+
+  // A full page every time, as a Gitea that ignored `page` would answer.
+  const all = await readAllPages(
+    async () => {
+      calls += 1;
+      return Array.from({ length: 50 }, () => 0);
+    },
+    { maxPages: 3 },
+  );
+
+  expect(calls).toBe(3);
+  expect(all).toHaveLength(150);
+});

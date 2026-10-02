@@ -22,6 +22,7 @@
 import { parseCodeowners } from "../../packages/utils/codeowners";
 
 import {
+  readAllPages,
   toGiteaApiError,
   unwrap,
   type GiteaClient,
@@ -36,12 +37,15 @@ export async function listUserOrganizations(
   client: GiteaClient,
   username: string,
 ): Promise<string[]> {
-  const orgs = await unwrap(
-    client.GET("/users/{username}/orgs", {
-      params: { path: { username }, query: { limit: 100 } },
-    }),
+  // Every page: `limit: 100` answers with 50.
+  const orgs = await readAllPages((query) =>
+    unwrap(
+      client.GET("/users/{username}/orgs", {
+        params: { path: { username }, query },
+      }),
+    ),
   );
-  return (orgs ?? [])
+  return orgs
     .map((org) => org.username ?? org.name ?? "")
     .filter((name) => name !== "");
 }
@@ -141,15 +145,16 @@ export async function listOwnedDrafts(params: {
   for (const org of orgs) {
     const binders = await listOrganizationWorkspaces({ client, org });
     for (const binder of binders) {
-      const branches = await unwrap(
-        client.GET("/repos/{owner}/{repo}/branches", {
-          params: {
-            path: { owner: org, repo: binder.name },
-            query: { limit: 100 },
-          },
-        }),
+      // Every page. A busy binder has more than 50 branches, and a draft past
+      // the first page was one this list never found.
+      const branches = await readAllPages((query) =>
+        unwrap(
+          client.GET("/repos/{owner}/{repo}/branches", {
+            params: { path: { owner: org, repo: binder.name }, query },
+          }),
+        ),
       ).catch(() => []);
-      for (const row of branches ?? []) {
+      for (const row of branches) {
         const branch = row.name ?? "";
         if (draftOwner(branch)?.toLowerCase() === login) {
           drafts.push({

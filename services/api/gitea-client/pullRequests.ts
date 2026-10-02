@@ -1,6 +1,11 @@
 import type { components } from "./spec/gitea";
 
-import { toGiteaApiError, unwrap, type GiteaClient } from "./client";
+import {
+  readAllPages,
+  toGiteaApiError,
+  unwrap,
+  type GiteaClient,
+} from "./client";
 import { latestReviewByUser } from "../change-assignments";
 
 type PullRequest = components["schemas"]["PullRequest"];
@@ -191,25 +196,15 @@ async function listPullReviews(
   repo: string,
   pullNumber: number,
 ): Promise<PullReview[]> {
-  const allReviews: PullReview[] = [];
-  const limit = 100;
-
-  for (let page = 1; page < 100; page += 1) {
-    const reviews = await unwrap(
+  // `limit: 100` used to answer with 50, which read as a short page, so a
+  // change with more than 50 reviews lost the rest — approvals included.
+  const allReviews: PullReview[] = await readAllPages((query) =>
+    unwrap(
       client.GET("/repos/{owner}/{repo}/pulls/{index}/reviews", {
-        params: {
-          path: { owner, repo, index: pullNumber },
-          query: { limit, page },
-        },
+        params: { path: { owner, repo, index: pullNumber }, query },
       }),
-    );
-
-    allReviews.push(...reviews);
-
-    if (reviews.length < limit) {
-      break;
-    }
-  }
+    ),
+  );
 
   return allReviews;
 }
@@ -838,14 +833,23 @@ export async function listPullRequestsWithReviews(
 ): Promise<PullRequestWithReviews[]> {
   const { client, owner, repo, state, page } = params;
 
-  const pullRequests = await unwrap(
-    client.GET("/repos/{owner}/{repo}/pulls", {
-      params: {
-        path: { owner, repo },
-        query: { state, page },
-      },
-    }),
-  );
+  // One page when the caller asked for one; otherwise all of them. Unpaged,
+  // Gitea answers with 30, and an open-changes list, a binder's "N in review"
+  // and Home all stopped at the thirtieth change.
+  const pullRequests =
+    page === undefined
+      ? await readAllPages((query) =>
+          unwrap(
+            client.GET("/repos/{owner}/{repo}/pulls", {
+              params: { path: { owner, repo }, query: { state, ...query } },
+            }),
+          ),
+        )
+      : await unwrap(
+          client.GET("/repos/{owner}/{repo}/pulls", {
+            params: { path: { owner, repo }, query: { state, page } },
+          }),
+        );
 
   return Promise.all(
     pullRequests.map(async (pullRequest) => {
