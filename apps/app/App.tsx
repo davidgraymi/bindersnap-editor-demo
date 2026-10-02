@@ -660,6 +660,13 @@ export function App() {
     navigateTo({ kind: "home" }, true);
   }, []);
 
+  // Stable, because the join step polls with it on an interval it restarts
+  // whenever this changes.
+  const checkForOrganization = useCallback(async () => {
+    const list = await fetchOrganizations();
+    return list.length > 0;
+  }, []);
+
   const view: AuthView = useMemo(() => {
     if (route.kind === "callback") {
       return "callback";
@@ -733,6 +740,15 @@ export function App() {
         onSkip={() => {
           // Skipping has to actually leave. Reading is free, so the workspace
           // is a legitimate place to be without an organization.
+          setOrganizationSetupReason(null);
+          navigateTo({ kind: "home" }, true);
+        }}
+        username={user?.username ?? ""}
+        fullName={user?.fullName ?? null}
+        checkForOrganization={checkForOrganization}
+        onJoined={async () => {
+          resetOrganizationsCache();
+          await refreshSession().catch(() => undefined);
           setOrganizationSetupReason(null);
           navigateTo({ kind: "home" }, true);
         }}

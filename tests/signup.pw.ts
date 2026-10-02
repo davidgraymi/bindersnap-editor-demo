@@ -11,7 +11,14 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
-import { signOutCurrentUser } from "./helpers";
+import {
+  API_BASE_URL,
+  APP_BASE_URL,
+  GITEA_ADMIN_PASS,
+  GITEA_ADMIN_USER,
+  OWNER,
+  signOutCurrentUser,
+} from "./helpers";
 
 function buildUniqueSignupCredentials() {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -103,13 +110,16 @@ async function signUpThroughOrganizationSetup(
   // is where a new account lands: naming the thing that will own its binders.
   await expect(page).toHaveURL(/\/organizations\/new$/, { timeout: 30_000 });
   await expect(
-    page.getByRole("heading", { name: /organization/i }),
+    page.getByRole("heading", { name: "Welcome to Bindersnap" }),
   ).toBeVisible({ timeout: 15_000 });
 
   // Authoring needs an organization, so create one the way a person would.
   // A fresh display name per run. The API steps a taken name to the next
   // free suffix and gives up at twenty, so a fixed one here quietly caps
   // this suite at twenty runs against any one stack.
+  // Somebody new is asked first whether they are starting or joining.
+  await page.getByLabel("Start a new organization").check();
+  await page.getByRole("button", { name: "Continue" }).click();
   await page
     .getByLabel("Organization name")
     .fill(`Mercy Health ${randomUUID().slice(0, 6)}`);
@@ -230,6 +240,55 @@ test.describe("signup flow", () => {
       }),
     ).toBeVisible();
     await expect(page.getByLabel("Email")).toHaveValue(email);
+  });
+
+  test("somebody joining a team is told what to send an owner, and lands inside once added", async ({
+    page,
+  }) => {
+    const credentials = buildUniqueSignupCredentials();
+    await openSignupForm(page);
+    await fillSignupForm(page, credentials);
+    await submitSignupForm(page);
+
+    await page.getByLabel(/Join my team/).check();
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Ask to be added" }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Send them this")).toHaveValue(
+      new RegExp(`My username is ${credentials.username}\\.`),
+    );
+
+    // An owner adds them, the way People & access does.
+    const owner = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
+      body: JSON.stringify({
+        identifier: GITEA_ADMIN_USER,
+        password: GITEA_ADMIN_PASS,
+      }),
+    });
+    const session = (owner.headers.get("set-cookie") ?? "").match(
+      /bindersnap_session=([^;]+)/,
+    )![1]!;
+    const added = await fetch(`${API_BASE_URL}/api/app/orgs/${OWNER}/people`, {
+      method: "POST",
+      headers: {
+        Cookie: `bindersnap_session=${session}`,
+        "Content-Type": "application/json",
+        Origin: APP_BASE_URL,
+      },
+      body: JSON.stringify({ username: credentials.username }),
+    });
+    expect(added.status).toBeLessThan(300);
+
+    // The page moves on by itself, into the organization.
+    await expect(page).toHaveURL(`${APP_BASE_URL}/`, { timeout: 30_000 });
+    await expect(
+      page.locator(
+        `.app-topnav-avatar[aria-label="User: ${credentials.username}"]`,
+      ),
+    ).toBeVisible();
   });
 
   test("creates an account, signs out, and logs back in with a username", async ({

@@ -11480,3 +11480,61 @@ html.bs-writing .app-main {
 .account-blockers a {
   color: inherit;
 }
+
+/* ── Organization setup: choose, create, or ask to join ─────────────────── */
+.org-setup-lede {
+  color: var(--bs-text-muted);
+}
+
+.org-setup-note {
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-sm);
+}
+
+.org-setup-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--bs-text-muted);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.org-setup-link:hover {
+  color: var(--bs-text-primary);
+  text-decoration: underline;
+}
+
+.org-setup-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--brand-space-4);
+}
+
+.org-setup-identity {
+  display: grid;
+  gap: var(--brand-space-1);
+  margin: var(--brand-space-5) 0;
+  padding: var(--brand-space-4);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-page-bg);
+}
+
+.org-setup-username {
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-body-lg);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.org-setup-identity-name {
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-sm);
+}
+
+.org-setup-message {
+  resize: none;
+  margin-bottom: var(--brand-space-3);
+}
