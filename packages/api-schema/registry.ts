@@ -53,6 +53,8 @@ import {
   CreatedOrganizationPayloadSchema,
   OrganizationListPayloadSchema,
   OrganizationSummarySchema,
+  DeleteOrganizationBodySchema,
+  OrganizationDeletionSchema,
 } from "./schemas/organizations";
 import {
   PublishedWorkspaceChangePayloadSchema,
@@ -134,6 +136,7 @@ registry.register("NewPasswordBody", ChangePasswordBodySchema);
 registry.register("NewUsernameBody", ChangeUsernameBodySchema);
 registry.register("AccountDeletionBody", DeleteAccountBodySchema);
 registry.register("AccountRefusal", AccountRefusalSchema);
+registry.register("OrganizationDeletion", OrganizationDeletionSchema);
 registry.register("AccountBlockers", AccountBlockersSchema);
 registry.register("OrganizationSummary", OrganizationSummarySchema);
 registry.register("OrganizationListPayload", OrganizationListPayloadSchema);
@@ -449,6 +452,41 @@ registry.registerPath({
       description: "This person is the only owner of an organization",
       content: { "application/json": { schema: AccountRefusalSchema } },
     },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/orgs/{org}/deletion",
+  operationId: "getOrganizationDeletion",
+  tags: ["organizations"],
+  request: { params: z.object({ org: z.string() }) },
+  responses: {
+    200: {
+      description: "Whether this caller may delete it, and what is in the way",
+      content: { "application/json": { schema: OrganizationDeletionSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "delete",
+  path: "/api/app/orgs/{org}",
+  operationId: "deleteOrganization",
+  tags: ["organizations"],
+  request: {
+    params: z.object({ org: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: DeleteOrganizationBodySchema },
+      },
+    },
+  },
+  responses: {
+    204: { description: "Deleted" },
+    403: { description: "Only an owner can delete it" },
+    409: { description: "Binders are still in it, or billing is active" },
   },
 });
 

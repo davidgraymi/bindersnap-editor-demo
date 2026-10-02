@@ -2024,6 +2024,32 @@
           "error"
         ]
       },
+      "OrganizationDeletion": {
+        "type": "object",
+        "properties": {
+          "canDelete": {
+            "type": "boolean"
+          },
+          "isOwner": {
+            "type": "boolean"
+          },
+          "binders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "billingActive": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "canDelete",
+          "isOwner",
+          "binders",
+          "billingActive"
+        ]
+      },
       "AccountBlockers": {
         "type": "object",
         "properties": {
@@ -4312,6 +4338,107 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/app/orgs/{org}/deletion": {
+      "get": {
+        "operationId": "getOrganizationDeletion",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Whether this caller may delete it, and what is in the way",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "canDelete": {
+                      "type": "boolean"
+                    },
+                    "isOwner": {
+                      "type": "boolean"
+                    },
+                    "binders": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "billingActive": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "canDelete",
+                    "isOwner",
+                    "binders",
+                    "billingActive"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/orgs/{org}": {
+      "delete": {
+        "operationId": "deleteOrganization",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "confirm": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "confirm"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "403": {
+            "description": "Only an owner can delete it"
+          },
+          "409": {
+            "description": "Binders are still in it, or billing is active"
           }
         }
       }

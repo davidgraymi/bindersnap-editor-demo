@@ -261,7 +261,9 @@ function NoticeLine({ notice }: { notice: Notice | null }) {
         <ul className="account-blockers">
           {notice.list.map((item) => (
             <li key={item}>
-              <a href={`/${item}`}>{item}</a>
+              {/* An organization or a binder, and either one's Settings is
+                  where the thing in the way is dealt with. */}
+              <a href={`/${item}/-/settings`}>{item}</a>
             </li>
           ))}
         </ul>

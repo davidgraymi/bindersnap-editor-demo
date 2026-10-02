@@ -37,3 +37,25 @@ export const CreatedOrganizationPayloadSchema = z.object({
 export type CreatedOrganizationPayload = z.infer<
   typeof CreatedOrganizationPayloadSchema
 >;
+
+/**
+ * What stands between an organization and its deletion: Gitea's rules (an
+ * owner, and no binders left in it) and ours (no subscription still charging).
+ */
+export const OrganizationDeletionSchema = z.object({
+  canDelete: z.boolean(),
+  isOwner: z.boolean(),
+  /** Binders still in it, by name. Each has to go first. */
+  binders: z.array(z.string()),
+  /** A Stripe subscription that would keep charging. */
+  billingActive: z.boolean(),
+});
+export type OrganizationDeletion = z.infer<typeof OrganizationDeletionSchema>;
+
+/** Deleting an organization, confirmed by its name typed out. */
+export const DeleteOrganizationBodySchema = z.object({
+  confirm: z.string().min(1),
+});
+export type DeleteOrganizationBody = z.infer<
+  typeof DeleteOrganizationBodySchema
+>;
