@@ -528,6 +528,8 @@ export const WorkspaceChangeDetailPayloadSchema = z.object({
     canApprove: z.boolean(),
     canPublish: z.boolean(),
   }),
+  /** How a decided change ended; null while it is open. */
+  outcome: z.enum(["published", "declined", "withdrawn"]).nullable(),
   /**
    * Whether an approval stops counting once what the change proposes moves
    * on: the binder's "A new version clears the approvals already collected".
