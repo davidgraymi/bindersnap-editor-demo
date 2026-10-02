@@ -32,18 +32,13 @@
               "username"
             ]
           },
-          "token": {
-            "type": "string",
-            "nullable": true
-          },
           "suggestedOrganizationName": {
             "type": "string",
             "nullable": true
           }
         },
         "required": [
-          "user",
-          "token"
+          "user"
         ]
       },
       "LoginBody": {
@@ -2861,18 +2856,13 @@
                         "username"
                       ]
                     },
-                    "token": {
-                      "type": "string",
-                      "nullable": true
-                    },
                     "suggestedOrganizationName": {
                       "type": "string",
                       "nullable": true
                     }
                   },
                   "required": [
-                    "user",
-                    "token"
+                    "user"
                   ]
                 }
               }
@@ -2942,18 +2932,13 @@
                         "username"
                       ]
                     },
-                    "token": {
-                      "type": "string",
-                      "nullable": true
-                    },
                     "suggestedOrganizationName": {
                       "type": "string",
                       "nullable": true
                     }
                   },
                   "required": [
-                    "user",
-                    "token"
+                    "user"
                   ]
                 }
               }
@@ -2994,18 +2979,13 @@
                         "username"
                       ]
                     },
-                    "token": {
-                      "type": "string",
-                      "nullable": true
-                    },
                     "suggestedOrganizationName": {
                       "type": "string",
                       "nullable": true
                     }
                   },
                   "required": [
-                    "user",
-                    "token"
+                    "user"
                   ]
                 }
               }
