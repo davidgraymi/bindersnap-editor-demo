@@ -11546,3 +11546,7 @@ html.bs-writing .app-main {
   font-size: var(--brand-text-ui-md);
   line-height: 1.45;
 }
+
+.org-settings {
+  max-width: 44rem;
+}

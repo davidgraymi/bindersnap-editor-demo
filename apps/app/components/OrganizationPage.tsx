@@ -9,17 +9,20 @@ import { useWriteAction } from "../paywallContext";
 import { followInApp } from "../appLink";
 import { buildBinderUrl } from "../binderShell";
 import { formatAge, formatDocumentName } from "../documentDisplay";
+import { OrganizationSettings } from "./OrganizationSettings";
 import { NewBinderPage } from "./NewBinderPage";
 import { OrganizationPeople } from "./OrganizationPeople";
 import { SkeletonPanel } from "./Skeleton";
 
 /** The organization's tabs. Binders is the one it opens on. */
-const ORG_TABS = ["binders", "people"] as const;
+const ORG_TABS = ["binders", "people", "settings"] as const;
 type OrgTab = (typeof ORG_TABS)[number];
 
 /** `/{org}/-/people` is People; anything else of the organization's is Binders. */
 function orgTabFromPath(pathname: string): OrgTab {
-  return /^\/[^/]+\/-\/people\/?$/.test(pathname) ? "people" : "binders";
+  if (/^\/[^/]+\/-\/people\/?$/.test(pathname)) return "people";
+  if (/^\/[^/]+\/-\/settings\/?$/.test(pathname)) return "settings";
+  return "binders";
 }
 
 /** `/{org}/-/binders/new`: the new-binder form, as an address of its own. */
@@ -151,7 +154,11 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
           >
             {/* The sidebar's word for the same page. Two names for one
                 screen made "People" and "People & access" read as two. */}
-            {entry === "binders" ? "Binders" : "People & access"}
+            {entry === "binders"
+              ? "Binders"
+              : entry === "people"
+                ? "People & access"
+                : "Settings"}
             {entry === "binders" && binders !== null && binders.length > 0 ? (
               <span className="doc-tab-count">{binders.length}</span>
             ) : null}
@@ -182,6 +189,15 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
         onCancel={() => goTo("binders")}
         onCreated={(created) => onOpenBinder(created.name)}
       />
+    );
+  }
+
+  if (tab === "settings") {
+    return (
+      <section className="docw-page">
+        {header}
+        <OrganizationSettings org={org} displayName={displayName} />
+      </section>
     );
   }
 

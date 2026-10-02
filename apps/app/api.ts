@@ -46,6 +46,7 @@ import type {
 } from "../../packages/api-schema/schemas/workspaces";
 
 // Import generated types
+import type { OrganizationDeletion } from "../../packages/api-schema/schemas/organizations";
 import type { AccountBlockers } from "../../packages/api-schema/schemas/account";
 import type {
   SessionAuthState,
@@ -680,6 +681,22 @@ export async function publishDocument(
 export async function fetchOrganizations(): Promise<OrganizationSummary[]> {
   const response = await OrganizationsClient.listOrganizations();
   return response.data.organizations;
+}
+
+/** Whether this person may delete the organization, and what is in the way. */
+export async function fetchOrganizationDeletion(
+  org: string,
+): Promise<OrganizationDeletion> {
+  const response = await OrganizationsClient.getOrganizationDeletion(org);
+  return response.data;
+}
+
+/** Delete an organization, confirmed by its name typed out. */
+export async function deleteOrganization(
+  org: string,
+  confirm: string,
+): Promise<void> {
+  await OrganizationsClient.deleteOrganization(org, { confirm });
 }
 
 export async function createOrganization(
