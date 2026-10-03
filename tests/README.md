@@ -188,8 +188,11 @@ bun test services/api scripts infra/backups
 
 ## Seeded data
 
-After Gitea is healthy, the `seed` container runs `tests/seed.ts`, which applies
-the scenario described in **[`tests/seed-data/dev.yaml`](seed-data/dev.yaml)**.
+Seeding runs in two containers. Once Gitea is healthy, `seed-accounts` runs
+`tests/seed-accounts.ts`, which installs Gitea and makes every account — the API
+signs in as the install's admin, so this has to come first. Once the API is
+healthy, `seed` runs `tests/seed.ts`, which applies the scenario described in
+**[`tests/seed-data/dev.yaml`](seed-data/dev.yaml)**.
 
 **That YAML file is the seed data.** Want another account, another binder, or a
 policy parked in a particular review state? Edit the YAML. `seed.ts` is only the

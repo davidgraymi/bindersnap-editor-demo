@@ -651,7 +651,9 @@ function reportFailure(config: StackConfig): void {
     .split("\n")
     .map((s) => s.trim())
     .filter(Boolean);
-  for (const service of services.length > 0 ? services : ["seed", "api"]) {
+  for (const service of services.length > 0
+    ? services
+    : ["seed-accounts", "seed", "api"]) {
     const logs = compose(
       config,
       ["logs", "--no-color", "--tail", "60", service],
