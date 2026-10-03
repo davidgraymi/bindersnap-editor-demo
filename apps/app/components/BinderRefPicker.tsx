@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { BookCheck, Check, ChevronDown, GitBranch } from "lucide-react";
 
-import { fetchBinderChanges, fetchBinderDraft } from "../api";
+import {
+  fetchBinderChange,
+  fetchBinderChanges,
+  fetchBinderDraft,
+} from "../api";
 import type {
   OwnDraft,
   WorkspaceChangeSummary,
@@ -93,7 +97,37 @@ export function BinderRefPicker({
     };
   }, [open, org, binder]);
 
-  const label = describeRef(current, nameOf);
+  /**
+   * What the author called the branch, when a change sits on it.
+   *
+   * A proposed draft keeps the name it was given, and the change's own page
+   * says "from Hand hygiene audit" rather than "from Carol's draft" — the
+   * branch's shape is not its name. The picker over the same branch has to say
+   * the same thing, or one branch reads as two.
+   */
+  const [currentLabel, setCurrentLabel] = useState<string | null>(null);
+  useEffect(() => {
+    setCurrentLabel(null);
+    if (current === null) return;
+    let cancelled = false;
+    fetchBinderChanges(org, binder, "open")
+      .then((payload) => {
+        const change = payload.changes.find(
+          (entry) => entry.branchName === current,
+        );
+        return change ? fetchBinderChange(org, binder, change.number) : null;
+      })
+      .then((detail) => {
+        if (!cancelled) setCurrentLabel(detail?.branchLabel ?? null);
+      })
+      // The branch's shape is still a fair name for it.
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [org, binder, current]);
+
+  const label = currentLabel ?? describeRef(current, nameOf);
   const branches = (changes ?? []).filter((change) => change.branchName);
 
   return (
