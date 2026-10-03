@@ -1,19 +1,17 @@
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
 import { Columns2, FileText, Pencil } from "lucide-react";
 
 import type { ChangeUpdate, RepoBranchProtection } from "../api";
-import {
-  listChangeUpdates,
-  publishDocument,
-  submitDocumentReview,
-} from "../api";
+import { publishDocument, submitDocumentReview } from "../api";
 import {
   describeChangeBody,
   describeChangeOpening,
   resolveReviewDecision,
 } from "../changeReview";
 import type { ChangeScope } from "../changeScope";
+import { changeUpdatesQuery } from "../data/queries";
 import type { ChangeRecord } from "../documentDisplay";
 import {
   describeChangeOutcome,
@@ -240,6 +238,8 @@ function ApprovalBars({ change }: { change: ChangeRecord }) {
  * the decision floats bottom right so it is reachable without scrolling back
  * to find it.
  */
+const NO_UPDATES: ChangeUpdate[] = [];
+
 export function DocumentChangeDetail({
   scope,
   currentUser,
@@ -280,8 +280,6 @@ export function DocumentChangeDetail({
   const [openThreadAuthors, setOpenThreadAuthors] = useState<
     ReadonlySet<string>
   >(() => new Set<string>());
-  const [updates, setUpdates] = useState<ChangeUpdate[]>([]);
-  const [resetsApprovals, setResetsApprovals] = useState(false);
   /** The title and description being rewritten, or null while they are not. */
   const [editing, setEditing] = useState<{
     title: string;
@@ -295,26 +293,11 @@ export function DocumentChangeDetail({
   // The updates are their own call: the Changes tab lists changes, and a list
   // has no use for the history inside each one. A failure costs the update
   // count and the update events, not the review.
-  useEffect(() => {
-    let cancelled = false;
-
-    void (async () => {
-      try {
-        const payload = await listChangeUpdates(scope, prNum);
-        if (cancelled) return;
-        setUpdates(payload.updates);
-        setResetsApprovals(payload.resetsApprovals);
-      } catch {
-        if (cancelled) return;
-        setUpdates([]);
-        setResetsApprovals(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [scope, prNum]);
+  const updatesRead = useQuery(
+    changeUpdatesQuery(scope.org, scope.binder, prNum),
+  );
+  const updates: ChangeUpdate[] = updatesRead.data?.updates ?? NO_UPDATES;
+  const resetsApprovals = updatesRead.data?.resetsApprovals ?? false;
 
   function updateActionState(update: Partial<PRActionState>) {
     setActionState((prev) => ({ ...prev, ...update }));

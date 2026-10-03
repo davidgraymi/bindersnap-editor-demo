@@ -433,6 +433,7 @@ export async function listDocumentCollaborators(
   scope: ChangeScope,
   page = 1,
   limit = 12,
+  request?: ReadRequest,
 ): Promise<CollaboratorListPayload> {
   const query = { page: String(page), limit: String(limit) };
   try {
@@ -440,6 +441,7 @@ export async function listDocumentCollaborators(
       scope.org,
       scope.binder,
       query,
+      request,
     );
     return response.data;
   } catch (error) {
@@ -455,13 +457,13 @@ export async function searchWorkspaceUsers(
   query: string,
   page = 1,
   limit = 8,
+  request?: ReadRequest,
 ): Promise<SearchUsersPayload> {
   try {
-    const response = await UsersClient.searchUsers({
-      q: query,
-      page: String(page),
-      limit: String(limit),
-    });
+    const response = await UsersClient.searchUsers(
+      { q: query, page: String(page), limit: String(limit) },
+      request,
+    );
     return response.data;
   } catch (error) {
     handlePaymentRequired("/api/app/users/search", error);
@@ -525,12 +527,14 @@ export async function updateChangeAssignments(
 export async function listChangeUpdates(
   scope: ChangeScope,
   pullNumber: number,
+  request?: ReadRequest,
 ): Promise<ChangeUpdatesPayload> {
   try {
     const response = await BindersClient.listBinderChangeUpdates(
       scope.org,
       scope.binder,
       String(pullNumber),
+      request,
     );
     return response.data;
   } catch (error) {
@@ -544,12 +548,14 @@ export async function listChangeUpdates(
 export async function listChangeDiscussions(
   scope: ChangeScope,
   pullNumber: number,
+  request?: ReadRequest,
 ): Promise<DiscussionSummary> {
   try {
     const response = await BindersClient.listBinderChangeDiscussions(
       scope.org,
       scope.binder,
       String(pullNumber),
+      request,
     );
     return response.data;
   } catch (error) {
@@ -1258,11 +1264,13 @@ export async function fetchBinderChangeConflicts(
   org: string,
   binder: string,
   changeNumber: number,
+  request?: ReadRequest,
 ): Promise<ChangeConflictsPayload> {
   const response = await BindersClient.getBinderChangeConflicts(
     org,
     binder,
     String(changeNumber),
+    request,
   );
   return response.data as ChangeConflictsPayload;
 }

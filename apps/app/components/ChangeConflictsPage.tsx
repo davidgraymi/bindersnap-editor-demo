@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Download, FileText, GitMerge } from "lucide-react";
 
@@ -6,11 +7,8 @@ import type {
   ConflictingFilePayload,
 } from "../../../packages/api-schema/schemas/workspaces";
 import { sanitizeHtml } from "../../../packages/utils/sanitizer";
-import {
-  fetchBinderChangeConflicts,
-  resolveBinderChangeConflicts,
-  updateBinderChange,
-} from "../api";
+import { changeConflictsQuery } from "../data/queries";
+import { resolveBinderChangeConflicts, updateBinderChange } from "../api";
 import { followInApp } from "../appLink";
 import {
   describeConflictFile,
@@ -79,32 +77,14 @@ export function ChangeConflictsPage({
   onBack,
   onResolved,
 }: ChangeConflictsPageProps) {
-  const [payload, setPayload] = useState<ChangeConflictsPayload | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const read = useQuery(changeConflictsQuery(org, binder, changeNumber));
+  const payload: ChangeConflictsPayload | null = read.data ?? null;
+  const error = read.error
+    ? read.error.message || "Unable to read what conflicts in this change."
+    : null;
   const [decisions, setDecisions] = useState<Record<string, FileDecision>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setPayload(null);
-    setError(null);
-    fetchBinderChangeConflicts(org, binder, changeNumber)
-      .then((next) => {
-        if (!cancelled) setPayload(next);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(
-          err instanceof Error && err.message.trim() !== ""
-            ? err.message
-            : "Unable to read what conflicts in this change.",
-        );
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [org, binder, changeNumber]);
 
   const files: FileState[] = useMemo(
     () =>

@@ -1,11 +1,12 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { WorkspaceChangeDetailPayload } from "../../../packages/api-schema/schemas/workspaces";
 import { useMarkNotificationsRead } from "../data/notifications";
+import { binderChangeQuery, queryKeys } from "../data/queries";
 import {
   downloadBinderDocument,
   editBinderChange,
-  fetchBinderChange,
   updateBinderChange,
 } from "../api";
 import { followInApp } from "../appLink";
@@ -99,30 +100,28 @@ export function BinderChangePage({
   onEditInEditor,
 }: BinderChangePageProps) {
   const names = usePeopleNames(org);
-  const [detail, setDetail] = useState<WorkspaceChangeDetailPayload | null>(
-    null,
-  );
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const read = useQuery(binderChangeQuery(org, binder, changeNumber));
+  const detail: WorkspaceChangeDetailPayload | null = read.data ?? null;
+  const error = read.error
+    ? read.error.message || "Unable to open this change."
+    : null;
   /** Which of the change's documents the file screens are about. */
   const [viewing, setViewing] = useState<string | null>(null);
   const [catchingUp, setCatchingUp] = useState(false);
   const [catchUpError, setCatchUpError] = useState<string | null>(null);
 
+  /**
+   * Read the change again after acting on it. Approving, publishing or
+   * catching up all move the binder too — its lists and the counts in the tab
+   * bar above — so everything about the binder is read again, not only this.
+   */
   const load = useCallback(async () => {
-    try {
-      setDetail(await fetchBinderChange(org, binder, changeNumber));
-      setError(null);
-      // Approving, publishing or catching up all move the binder's own
-      // counts, and the tab bar above is showing them.
-      onChanged();
-    } catch (err) {
-      setError(
-        err instanceof Error && err.message.trim() !== ""
-          ? err.message
-          : "Unable to open this change.",
-      );
-    }
-  }, [org, binder, changeNumber, onChanged]);
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.binder(org, binder),
+    });
+    onChanged();
+  }, [queryClient, org, binder, onChanged]);
 
   // Having opened the change is having read what the bell said about it.
   const { mutate: markRead } = useMarkNotificationsRead();
@@ -131,11 +130,8 @@ export function BinderChangePage({
   }, [org, binder, changeNumber, markRead]);
 
   useEffect(() => {
-    setDetail(null);
-    setError(null);
     setViewing(null);
-    void load();
-  }, [load]);
+  }, [org, binder, changeNumber]);
 
   const documents = detail?.documents ?? [];
   // Held as a path rather than an index so the choice survives a refetch.
