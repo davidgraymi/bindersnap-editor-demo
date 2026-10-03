@@ -105,6 +105,8 @@ const { act, createElement } = require("react") as typeof import("react");
 const { createRoot } =
   require("react-dom/client") as typeof import("react-dom/client");
 const { NavSearch } = require("./NavSearch") as typeof import("./NavSearch");
+const { withQueryClient } =
+  require("../data/testing") as typeof import("../data/testing");
 
 type ReactElement = ReturnType<typeof createElement>;
 
@@ -148,7 +150,7 @@ async function render(element: ReactElement) {
   document.body.appendChild(container);
   const root = createRoot(container);
   await act(async () => {
-    root.render(element);
+    root.render(withQueryClient(element));
   });
 
   return {
@@ -223,6 +225,13 @@ async function type(container: HTMLElement, value: string) {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 250));
   });
+  // The debounce settles the question in one render; the search it asks is
+  // started by the next, and answered in the one after that.
+  for (let step = 0; step < 2; step += 1) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+  }
 
   return input;
 }

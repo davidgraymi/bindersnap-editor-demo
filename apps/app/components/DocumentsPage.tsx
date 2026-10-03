@@ -1,7 +1,9 @@
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { BookOpen, FileText } from "lucide-react";
 
-import { fetchLibrary, type LibraryPayload } from "../api";
+import { type LibraryPayload } from "../api";
+import { libraryQuery } from "../data/queries";
 import {
   applyBinderFilter,
   describeBinderHeading,
@@ -57,8 +59,11 @@ export function DocumentsPage({
   const [state, setState] = useState<DocumentsViewState>(() =>
     parseDocumentsViewState(window.location.search),
   );
-  const [library, setLibrary] = useState<LibraryPayload | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const query = useQuery(libraryQuery(state.freeText));
+  const library: LibraryPayload | null = query.data ?? null;
+  const error = query.error
+    ? query.error.message || "Unable to load your documents."
+    : null;
 
   // Back and forward are the way out of a filter, so the page follows the
   // address bar rather than its own memory of what was clicked.
@@ -68,29 +73,6 @@ export function DocumentsPage({
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLibrary(null);
-    setError(null);
-
-    fetchLibrary(state.freeText || undefined)
-      .then((payload) => {
-        if (!cancelled) setLibrary(payload);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(
-          err instanceof Error && err.message.trim() !== ""
-            ? err.message
-            : "Unable to load your documents.",
-        );
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [state.freeText]);
 
   const rows = useMemo(
     () =>

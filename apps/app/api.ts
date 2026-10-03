@@ -365,10 +365,14 @@ export async function logoutSession(): Promise<void> {
  * binder, whatever it holds — so there is no cheaper page to fetch: paging it
  * would mean doing the same work again for every page.
  */
-export async function fetchLibrary(query?: string): Promise<LibraryPayload> {
+export async function fetchLibrary(
+  query?: string,
+  request?: ReadRequest,
+): Promise<LibraryPayload> {
   try {
     const response = await DocumentsClient.listDocuments(
       query ? { q: query } : {},
+      request,
     );
     return response.data;
   } catch (error) {
@@ -376,9 +380,11 @@ export async function fetchLibrary(query?: string): Promise<LibraryPayload> {
   }
 }
 
-export async function getHomeChanges(): Promise<HomeChangesPayload> {
+export async function getHomeChanges(
+  request?: ReadRequest,
+): Promise<HomeChangesPayload> {
   try {
-    const response = await DocumentsClient.getHomeChanges();
+    const response = await DocumentsClient.getHomeChanges(request);
     return response.data;
   } catch (error) {
     handlePaymentRequired("/api/app/home/changes", error);
@@ -397,12 +403,13 @@ export async function getHomeChanges(): Promise<HomeChangesPayload> {
 export async function searchDocuments(
   query: string,
   limit = 8,
+  request?: ReadRequest,
 ): Promise<LibrarySearchPayload> {
   try {
-    const response = await DocumentsClient.searchDocuments({
-      q: query,
-      limit: String(limit),
-    });
+    const response = await DocumentsClient.searchDocuments(
+      { q: query, limit: String(limit) },
+      request,
+    );
     return response.data;
   } catch (error) {
     handlePaymentRequired("/api/app/documents/search", error);
@@ -738,8 +745,9 @@ export async function fetchBinders(): Promise<WorkspaceSummary[]> {
  */
 export async function fetchOrganizationBinders(
   org: string,
+  request?: ReadRequest,
 ): Promise<WorkspaceSummary[]> {
-  const response = await BindersClient.listOrganizationBinders(org);
+  const response = await BindersClient.listOrganizationBinders(org, request);
   return response.data.workspaces;
 }
 
@@ -1855,8 +1863,13 @@ export async function exportAuditPacket(
 export type { OnboardingPayload };
 
 /** How far you have got with moving in: five steps, each read from what exists. */
-export async function fetchOnboarding(): Promise<OnboardingPayload> {
-  const response = await OnboardingClient.getOnboarding({ cache: "no-store" });
+export async function fetchOnboarding(
+  request?: ReadRequest,
+): Promise<OnboardingPayload> {
+  const response = await OnboardingClient.getOnboarding({
+    ...request,
+    cache: "no-store",
+  });
   return response.data;
 }
 
@@ -1867,17 +1880,21 @@ export type { AppNotification };
 /** Your newest notifications, unread only unless `all`. */
 export async function fetchNotifications(
   all = false,
+  request?: ReadRequest,
 ): Promise<AppNotification[]> {
   const response = await NotificationsClient.listNotifications(
     all ? { all: "1" } : undefined,
-    { cache: "no-store" },
+    { ...request, cache: "no-store" },
   );
   return response.data.notifications;
 }
 
 /** How many are unread: the number on the bell. */
-export async function fetchNotificationCount(): Promise<number> {
+export async function fetchNotificationCount(
+  request?: ReadRequest,
+): Promise<number> {
   const response = await NotificationsClient.countNotifications({
+    ...request,
     cache: "no-store",
   });
   return response.data.unread;
