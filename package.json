@@ -37,7 +37,7 @@
     "test:app": "bun test apps/app apps/help packages/editor packages/utils packages/ui-tokens",
     "test:ops": "bun test services/api scripts infra/backups",
     "test:integration": "bunx playwright test --config=playwright.config.ts",
-    "test:seed": "bun test tests/seed-scenario.test.ts tests/seed-documents.test.ts",
+    "test:seed": "bun test tests/seed-scenario.test.ts tests/seed-documents.test.ts tests/seed-check.test.ts",
     "test:unit": "bun test",
     "up": "bun scripts/stack.ts up",
     "up:fg": "bun scripts/stack.ts up --fg",
