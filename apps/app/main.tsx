@@ -1,5 +1,8 @@
+import { QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+
+import { queryClient } from "./data/queryClient";
 
 const elem = document.getElementById("root");
 
@@ -22,15 +25,13 @@ const render = async () => {
   const { App } = await import("./App");
   const isProd = appEnv?.NODE_ENV === "production";
 
-  root.render(
-    isProd ? (
+  const app = (
+    <QueryClientProvider client={queryClient}>
       <App />
-    ) : (
-      <StrictMode>
-        <App />
-      </StrictMode>
-    ),
+    </QueryClientProvider>
   );
+
+  root.render(isProd ? app : <StrictMode>{app}</StrictMode>);
 };
 
 if (import.meta.hot) {

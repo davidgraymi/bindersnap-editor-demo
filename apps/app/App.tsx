@@ -1,4 +1,6 @@
-import { resetOrganizationsCache } from "./useOrganizationDisplayName";
+import { useQueryClient } from "@tanstack/react-query";
+
+import { organizationsQuery, queryKeys } from "./data/queries";
 import {
   type FormEvent,
   useCallback,
@@ -328,6 +330,7 @@ function LoginPage({
 }
 
 export function App() {
+  const queryClient = useQueryClient();
   const [route, setRoute] = useState<AppRoute>(() => {
     settleAddress();
     return getRoute(window.location.pathname);
@@ -489,9 +492,18 @@ export function App() {
       if (resolvedUser) {
         setSubscriptionStatus("loading");
         setHasBillingStatusError(false);
-        setOrganizations(await fetchOrganizations().catch(() => null));
+        // Read fresh, and into the shared cache, so the switcher and every
+        // header naming an organization start from the same answer.
+        setOrganizations(
+          await queryClient
+            .fetchQuery({ ...organizationsQuery(), staleTime: 0 })
+            .catch(() => null),
+        );
         await loadBilling();
       } else {
+        // Nobody signed in: nothing the last person was shown may be shown
+        // to the next one.
+        queryClient.clear();
         setOrganizations(null);
         setOrganizationSetupReason(null);
         setSubscriptionStatus(null);
@@ -519,7 +531,7 @@ export function App() {
     } finally {
       setIsCheckingSession(false);
     }
-  }, [loadBilling]);
+  }, [loadBilling, queryClient]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -726,7 +738,9 @@ export function App() {
           await createOrganization(name);
           // Every screen that names organizations reads this list; without a
           // fresh one the sidebar showed the new one by its slug.
-          resetOrganizationsCache();
+          await queryClient.invalidateQueries({
+            queryKey: queryKeys.organizations(),
+          });
           // The organization changes what this session can do, so re-read
           // access rather than guessing at it. If that read fails the
           // organization still exists, and stranding someone on this form —
@@ -747,7 +761,9 @@ export function App() {
         fullName={user?.fullName ?? null}
         checkForOrganization={checkForOrganization}
         onJoined={async () => {
-          resetOrganizationsCache();
+          await queryClient.invalidateQueries({
+            queryKey: queryKeys.organizations(),
+          });
           await refreshSession().catch(() => undefined);
           setOrganizationSetupReason(null);
           navigateTo({ kind: "home" }, true);

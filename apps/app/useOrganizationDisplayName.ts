@@ -15,54 +15,16 @@
  *
  * **One request, however many callers.** The list is small, changes rarely, and
  * is wanted by the sidebar, the organization page and the binder header at the
- * same moment. Without the cache below, opening a binder fired the same request
- * three times. Cached as the promise rather than the result so that concurrent
- * callers during the first flight share it too, and dropped on failure so a
- * transient error is not remembered forever.
+ * same moment — one query, shared through the app's cache.
  */
 
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
-import { fetchOrganizations } from "./api";
+import { organizationsQuery } from "./data/queries";
 import type { OrganizationSummary } from "../../packages/api-schema/schemas/organizations";
 
-let inFlight: Promise<OrganizationSummary[]> | null = null;
-
-function loadOrganizations(): Promise<OrganizationSummary[]> {
-  if (!inFlight) {
-    inFlight = fetchOrganizations().catch((err: unknown) => {
-      // Not remembered: the next caller should get a fresh attempt rather than
-      // this failure replayed for the life of the tab.
-      inFlight = null;
-      throw err;
-    });
-  }
-  return inFlight;
-}
-
-/** Only for tests: forget what was fetched. */
-export function resetOrganizationsCache(): void {
-  inFlight = null;
-}
-
 function useOrganizations(): OrganizationSummary[] | null {
-  const [organizations, setOrganizations] = useState<
-    OrganizationSummary[] | null
-  >(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    loadOrganizations()
-      .then((rows) => {
-        if (!cancelled) setOrganizations(rows);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return organizations;
+  return useQuery(organizationsQuery()).data ?? null;
 }
 
 /** What an organization calls itself, given what the URL calls it. */

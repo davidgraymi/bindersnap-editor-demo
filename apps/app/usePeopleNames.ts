@@ -12,46 +12,22 @@
  * Failure is silent, and every answer falls back to the login: a history that
  * cannot find a name still has to say who it was.
  *
- * Cached as the promise, per organization, so the history, the binder's
- * latest-change card and anything else asking at once share one request.
- * Dropped on failure, so a transient error is not replayed for the tab's life.
+ * One query per organization, shared with every other screen reading its people.
  */
 
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
-import { fetchOrganizationPeople } from "./api";
+import { organizationPeopleQuery } from "./data/queries";
+import type { OrganizationPeoplePayload } from "../../packages/api-schema/schemas/workspaces";
 
 type NameMap = ReadonlyMap<string, string>;
 
-const inFlight = new Map<string, Promise<NameMap>>();
-
-function loadNames(org: string): Promise<NameMap> {
-  let pending = inFlight.get(org);
-  if (!pending) {
-    pending = fetchOrganizationPeople(org)
-      .then(
-        (payload) =>
-          new Map(
-            payload.people
-              .filter((person) => person.fullName.trim() !== "")
-              .map((person) => [
-                person.login.toLowerCase(),
-                person.fullName.trim(),
-              ]),
-          ),
-      )
-      .catch((err: unknown) => {
-        inFlight.delete(org);
-        throw err;
-      });
-    inFlight.set(org, pending);
-  }
-  return pending;
-}
-
-/** Only for tests: forget what was fetched. */
-export function resetPeopleNamesCache(): void {
-  inFlight.clear();
+function namesOf(payload: OrganizationPeoplePayload): NameMap {
+  return new Map(
+    payload.people
+      .filter((person) => person.fullName.trim() !== "")
+      .map((person) => [person.login.toLowerCase(), person.fullName.trim()]),
+  );
 }
 
 /**
@@ -67,19 +43,7 @@ export function nameFor(names: NameMap | null, login: string): string {
 
 /** Everyone in the organization, by login — null until it is known. */
 export function usePeopleNames(org: string): NameMap | null {
-  const [names, setNames] = useState<NameMap | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    loadNames(org)
-      .then((next) => {
-        if (!cancelled) setNames(next);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [org]);
-
-  return names;
+  return (
+    useQuery({ ...organizationPeopleQuery(org), select: namesOf }).data ?? null
+  );
 }

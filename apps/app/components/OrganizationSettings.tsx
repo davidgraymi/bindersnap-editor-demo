@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 
 import { deleteOrganization, fetchOrganizationDeletion } from "../api";
 import type { OrganizationDeletion } from "../../../packages/api-schema/schemas/organizations";
-import { resetOrganizationsCache } from "../useOrganizationDisplayName";
 import { SettingsGroup } from "./SettingsGroup";
 
 function errorMessage(err: unknown, fallback: string): string {
@@ -122,8 +121,8 @@ function DeleteOrganization({
         setNotice(null);
         try {
           await deleteOrganization(org, confirm.trim());
-          resetOrganizationsCache();
-          // Home, which reads the organizations again on arrival.
+          // A full load of home, which starts with an empty cache and reads
+          // the organizations again.
           window.location.assign("/");
         } catch (err) {
           setNotice(errorMessage(err, "Unable to delete the organization."));

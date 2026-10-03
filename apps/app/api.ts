@@ -1,4 +1,5 @@
 // Re-export document search utilities
+
 export type { DocumentSearchParams } from "./documentSearch";
 export { parseDocumentSearchQuery } from "./documentSearch";
 
@@ -184,6 +185,14 @@ import { isPaywallResponse, notifyPaymentRequired } from "./paymentRequired";
 import type { DocumentSearchParams } from "./documentSearch";
 import type { ChangeScope } from "./changeScope";
 import { scopeChangeBase, scopeRepo } from "./changeScope";
+
+/**
+ * What a read can be told by whoever asked for it: to stop. TanStack Query
+ * hands one to every read and aborts it when nobody is waiting any more.
+ */
+export interface ReadRequest {
+  signal?: AbortSignal;
+}
 
 /**
  * Turn a refused write into read-only mode.
@@ -678,8 +687,10 @@ export async function publishDocument(
  * An empty list is an ordinary answer, not an error: an account that predates
  * ADR 0004, or one whose owner has not created an organization yet, has none.
  */
-export async function fetchOrganizations(): Promise<OrganizationSummary[]> {
-  const response = await OrganizationsClient.listOrganizations();
+export async function fetchOrganizations(
+  request?: ReadRequest,
+): Promise<OrganizationSummary[]> {
+  const response = await OrganizationsClient.listOrganizations(request);
   return response.data.organizations;
 }
 
@@ -817,8 +828,12 @@ export async function proposeBinderSignOff(
 /** Who is in this organization, and the groups it has. */
 export async function fetchOrganizationPeople(
   org: string,
+  request?: ReadRequest,
 ): Promise<OrganizationPeoplePayload> {
-  const response = await OrganizationsClient.getOrganizationPeople(org);
+  const response = await OrganizationsClient.getOrganizationPeople(
+    org,
+    request,
+  );
   return response.data;
 }
 
