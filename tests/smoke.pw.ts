@@ -22,9 +22,8 @@ import {
   OWNER,
   pollUntil,
   REPO,
-  SEEDED_DOC_PATH,
   resolveAndStoreToken,
-  SEEDED_BRANCH,
+  SEEDED,
   signInAsAlice,
 } from "./helpers";
 
@@ -61,7 +60,7 @@ test.beforeAll(async () => {
       client: makeClient(),
       owner: OWNER,
       repo: REPO,
-      branch: SEEDED_BRANCH,
+      branch: SEEDED.branch,
     });
     return pr?.approvalState === "changes_requested";
   }, "seeded pull request to reach changes_requested state");
@@ -116,7 +115,7 @@ test.describe("Gitea dev stack health", () => {
     request,
   }) => {
     const res = await request.get(
-      `${GITEA_URL}/api/v1/repos/${OWNER}/${REPO}/contents/${SEEDED_DOC_PATH}`,
+      `${GITEA_URL}/api/v1/repos/${OWNER}/${REPO}/contents/${SEEDED.docPath}`,
       { headers: authHeaders },
     );
     expect(res.status()).toBe(404);
@@ -126,14 +125,14 @@ test.describe("Gitea dev stack health", () => {
     request,
   }) => {
     const res = await request.get(
-      `${GITEA_URL}/api/v1/repos/${OWNER}/${REPO}/contents/${SEEDED_DOC_PATH}?ref=${encodeURIComponent(SEEDED_BRANCH)}`,
+      `${GITEA_URL}/api/v1/repos/${OWNER}/${REPO}/contents/${SEEDED.docPath}?ref=${encodeURIComponent(SEEDED.branch)}`,
       { headers: authHeaders },
     );
     expect(res.status()).toBe(200);
     const file = (await res.json()) as { name?: string; type?: string };
     // The document's name is its own now, not a canonical filename shared by
     // every repository — that was the one-document-per-repo model.
-    expect(file.name).toBe(SEEDED_DOC_PATH);
+    expect(file.name).toBe(SEEDED.docPath);
     expect(file.type).toBe("file");
   });
 
@@ -172,7 +171,7 @@ test.describe("Gitea dev stack health", () => {
       base?: { ref?: string };
     }>;
 
-    const pr = pulls.find((p) => p.head?.ref === SEEDED_BRANCH);
+    const pr = pulls.find((p) => p.head?.ref === SEEDED.branch);
     expect(pr).toBeTruthy();
     expect(pr!.title).toBe("Q2 amendments — GDPR section update");
     expect(pr!.base?.ref).toBe("main");

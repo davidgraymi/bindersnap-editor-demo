@@ -48,8 +48,7 @@ import {
   pollUntil,
   REPO,
   resolveAndStoreToken,
-  SEEDED_BRANCH,
-  SEEDED_DOC_PATH,
+  SEEDED,
 } from "./helpers";
 
 /**
@@ -81,7 +80,7 @@ test.beforeAll(async () => {
       client: makeClient(),
       owner: OWNER,
       repo: REPO,
-      branch: SEEDED_BRANCH,
+      branch: SEEDED.branch,
     });
     return pr?.approvalState === "changes_requested";
   }, "seeded pull request to reach changes_requested state");
@@ -146,8 +145,8 @@ test.describe("documents", () => {
       client: makeClient(),
       owner: OWNER,
       repo: REPO,
-      filePath: SEEDED_DOC_PATH,
-      ref: SEEDED_BRANCH,
+      filePath: SEEDED.docPath,
+      ref: SEEDED.branch,
     });
 
     expect(commits.length).toBeGreaterThan(0);
@@ -165,8 +164,8 @@ test.describe("documents", () => {
       client: makeClient(),
       owner: OWNER,
       repo: REPO,
-      filePath: SEEDED_DOC_PATH,
-      ref: SEEDED_BRANCH,
+      filePath: SEEDED.docPath,
+      ref: SEEDED.branch,
     });
     expect(commits.length).toBeGreaterThan(0);
 
@@ -174,7 +173,7 @@ test.describe("documents", () => {
       client: makeClient(),
       owner: OWNER,
       repo: REPO,
-      filePath: SEEDED_DOC_PATH,
+      filePath: SEEDED.docPath,
       sha: commits[0]!.sha,
     });
 
@@ -231,7 +230,7 @@ test.describe("pull request workflow", () => {
       client: makeClient(),
       owner: OWNER,
       repo: REPO,
-      branch: SEEDED_BRANCH,
+      branch: SEEDED.branch,
     });
 
     const state: ApprovalState = pr!.approvalState;
@@ -264,7 +263,7 @@ test.describe("pull request workflow", () => {
     expect(prs.length).toBeGreaterThan(0);
 
     const seeded = prs.find(
-      (pr) => (pr.head as { ref?: string } | undefined)?.ref === SEEDED_BRANCH,
+      (pr) => (pr.head as { ref?: string } | undefined)?.ref === SEEDED.branch,
     );
     expect(seeded).toBeDefined();
     expect(seeded!.approvalState).toBe("changes_requested");
