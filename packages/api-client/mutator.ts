@@ -1,7 +1,11 @@
-const API_BASE_URL = (process.env.BUN_PUBLIC_API_BASE_URL ?? "").replace(
-  /\/$/,
-  "",
-);
+/**
+ * Read per request rather than once at import, so a script that sets it — the
+ * seed, pointing at whichever stack it was started against — is not racing
+ * the module graph. In the browser bundle the build has already inlined it.
+ */
+function apiBaseUrl(): string {
+  return (process.env.BUN_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
+}
 
 export class ApiRequestError extends Error {
   constructor(
@@ -18,7 +22,7 @@ export const customFetch = async <T>(
   url: string,
   options: RequestInit,
 ): Promise<T> => {
-  const fullUrl = `${API_BASE_URL}${url}`;
+  const fullUrl = `${apiBaseUrl()}${url}`;
 
   const response = await fetch(fullUrl, {
     ...options,
