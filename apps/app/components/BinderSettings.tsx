@@ -142,9 +142,21 @@ export function BinderSettings({
     ? errorMessage(failure, "Unable to read this binder's settings.")
     : null;
 
+  /**
+   * The organization's list of binders shows each one's name, description
+   * and whether it is open — so a rename, a deletion or a change of who can
+   * read it is read again there too.
+   */
+  const refreshOrganization = () =>
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.organizationBinders(org),
+    });
+
   /** A write answers with the new state; it becomes what every reader sees. */
-  const setPeople = (next: BinderPeoplePayload) =>
+  const setPeople = (next: BinderPeoplePayload) => {
     queryClient.setQueryData(queryKeys.binderPeople(org, binder), next);
+    refreshOrganization();
+  };
   const setSettings = (next: WorkspaceSettingsPayload) =>
     queryClient.setQueryData(queryKeys.binderSettings(org, binder), next);
 
@@ -195,7 +207,10 @@ export function BinderSettings({
             org={org}
             binder={binder}
             description={description}
-            onRenamed={onRenamed}
+            onRenamed={(workspace) => {
+              refreshOrganization();
+              onRenamed?.(workspace);
+            }}
             onDescribed={(next) => {
               queryClient.setQueryData(
                 binderQuery(org, binder).queryKey,
@@ -261,7 +276,14 @@ export function BinderSettings({
           title="Delete this binder"
           note="Permanent. Only an owner of the organization can do this."
         >
-          <DeleteBinder org={org} binder={binder} onDeleted={onDeleted} />
+          <DeleteBinder
+            org={org}
+            binder={binder}
+            onDeleted={() => {
+              refreshOrganization();
+              onDeleted?.();
+            }}
+          />
         </SettingsGroup>
       ) : null}
     </div>

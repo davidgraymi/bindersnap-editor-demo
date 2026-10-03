@@ -1,9 +1,10 @@
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
 import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
 import { BookOpen, FilePen } from "lucide-react";
 
-import { fetchOrganizationBinders } from "../api";
+import { organizationBindersQuery } from "../data/queries";
 import type { WorkspaceSummary } from "../../../packages/api-schema/schemas/workspaces";
 import { useWriteAction } from "../paywallContext";
 import { followInApp } from "../appLink";
@@ -55,39 +56,19 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
   const [tab, setTab] = useState<OrgTab>(() =>
     orgTabFromPath(window.location.pathname),
   );
-  const [binders, setBinders] = useState<WorkspaceSummary[] | null>(null);
+  const read = useQuery(organizationBindersQuery(org));
+  const binders: WorkspaceSummary[] | null = read.data ?? null;
   // What the list's own bar narrows it to — the binder's "Filter this
   // binder…", one level up.
   const [filter, setFilter] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const error = read.error
+    ? read.error.message || "Unable to open this organization."
+    : null;
   // Behind the header's "New binder", at an address of its own rather than a
   // drawer over the list: it can be sent, reloaded and left with Back.
   const [creating, setCreating] = useState(() =>
     isCreatingFromPath(window.location.pathname),
   );
-
-  useEffect(() => {
-    let cancelled = false;
-    setBinders(null);
-    setError(null);
-
-    fetchOrganizationBinders(org)
-      .then((rows) => {
-        if (!cancelled) setBinders(rows);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(
-          err instanceof Error && err.message.trim() !== ""
-            ? err.message
-            : "Unable to open this organization.",
-        );
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [org]);
 
   // Back and forward are how somebody leaves a tab, so the page follows the
   // address bar rather than its own memory of what was clicked.
