@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import {
   lazy,
   Suspense,
@@ -29,6 +30,7 @@ import {
   fetchBinderDocument,
   reviseBinderDocument,
 } from "../api";
+import { queryKeys } from "../data/queries";
 import { formatAge, formatDocumentName } from "../documentDisplay";
 import { parseEditorDocument } from "../editorDocumentHtml";
 import {
@@ -250,6 +252,20 @@ export function DocumentEditorPage({
   onCopyFile,
   onNewFolder,
 }: DocumentEditorPageProps) {
+  const queryClient = useQueryClient();
+  /**
+   * Save, then let every read of this binder know: the document page, the
+   * tree and the contents beside the editor were all read before these words.
+   */
+  const saveRevision = async (
+    ...args: Parameters<typeof reviseBinderDocument>
+  ): ReturnType<typeof reviseBinderDocument> => {
+    const saved = await reviseBinderDocument(...args);
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.binder(org, binder),
+    });
+    return saved;
+  };
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
   const [save, setSave] = useState<SaveState>({ kind: "idle" });
   const [dirty, setDirty] = useState(false);
@@ -609,7 +625,7 @@ export function DocumentEditorPage({
       const shown = shownKey.current
         ? opened.current.get(shownKey.current)
         : undefined;
-      await reviseBinderDocument(
+      await saveRevision(
         org,
         binder,
         file,
@@ -670,7 +686,7 @@ export function DocumentEditorPage({
     for (const [, policy] of others) {
       const json = JSON.stringify(policy.doc);
       try {
-        await reviseBinderDocument(
+        await saveRevision(
           org,
           binder,
           new File([JSON.stringify(policy.doc, null, 2)], "document.json", {
@@ -725,7 +741,7 @@ export function DocumentEditorPage({
     );
     if (!policy || !isUnsaved(policy) || !draft) return true;
     try {
-      await reviseBinderDocument(
+      await saveRevision(
         org,
         binder,
         new File([JSON.stringify(policy.doc, null, 2)], "document.json", {

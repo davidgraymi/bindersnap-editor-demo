@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download, FileText } from "lucide-react";
 
 import { sanitizeHtml } from "../../../packages/utils/sanitizer";
@@ -93,16 +93,22 @@ export function DocumentPreview({
   bare = false,
 }: DocumentPreviewProps) {
   const [state, setState] = useState<PreviewState>({ status: "idle" });
-  const proseRef = useRef<HTMLElement>(null);
   const proseHtml = state.status === "richText" ? state.html : null;
 
-  // The contents list, followed: see `contentsLinks.ts`. Again whenever the
-  // document is drawn again, since that is a fresh set of entries.
-  useEffect(() => {
-    const root = proseRef.current;
-    if (!root || proseHtml === null) return;
-    return wireContentsLinks(root);
-  }, [proseHtml]);
+  // The contents list, followed: see `contentsLinks.ts`. Wired to whichever
+  // element the prose is drawn into, every time one is — not on the HTML
+  // changing. The page can draw the same document twice, once from what it
+  // already had and again when a fresh read lands, and the second element
+  // had the same HTML and no links.
+  const unwireContents = useRef<(() => void) | null>(null);
+  const proseRef = useCallback(
+    (root: HTMLElement | null) => {
+      unwireContents.current?.();
+      unwireContents.current =
+        root && proseHtml !== null ? wireContentsLinks(root) : null;
+    },
+    [proseHtml],
+  );
   // Kept so the Download button can save what is already on screen.
   const [loadedBlob, setLoadedBlob] = useState<Blob | null>(null);
   const kind = classifyDocumentFile(fileName);

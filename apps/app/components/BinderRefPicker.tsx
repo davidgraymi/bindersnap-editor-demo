@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { BookCheck, Check, ChevronDown, GitBranch } from "lucide-react";
 
 import {
-  fetchBinderChange,
-  fetchBinderChanges,
-  fetchBinderDraft,
-} from "../api";
+  binderChangeQuery,
+  binderChangesQuery,
+  binderDraftQuery,
+} from "../data/queries";
 import type {
   OwnDraft,
   WorkspaceChangeSummary,
@@ -61,41 +62,27 @@ export function BinderRefPicker({
   const names = usePeopleNames(org);
   const nameOf = (login: string) => nameFor(names, login);
   const [open, setOpen] = useState(false);
-  const [changes, setChanges] = useState<WorkspaceChangeSummary[] | null>(null);
-  const [drafts, setDrafts] = useState<OwnDraft[]>([]);
   const { boxRef, buttonRef, style } = useFloatingMenu(open, () =>
     setOpen(false),
   );
 
-  // Read when opened: most visits never open it, and the tree is what they
-  // came for. **Both lists in one wait**: with the change requests as the
-  // effect's own trigger, their arrival re-ran it and cancelled the drafts'
-  // read still in flight, and the menu said you had none.
-  const loaded = useRef(false);
+  // Read when first opened: most visits never open it, and the tree is what
+  // they came for. Kept once read, so closing and reopening asks nothing.
+  const [asked, setAsked] = useState(false);
   useEffect(() => {
-    if (!open || loaded.current) return;
-    let cancelled = false;
-
-    void Promise.all([
-      fetchBinderChanges(org, binder, "open")
-        .then((payload) => payload.changes)
-        .catch(() => [] as WorkspaceChangeSummary[]),
-      fetchBinderDraft(org, binder)
-        .then((payload) => payload.drafts)
-        // No drafts to offer is an ordinary answer; failing to list them is
-        // not worth a message inside a menu about something else.
-        .catch(() => [] as OwnDraft[]),
-    ]).then(([openChanges, ownDrafts]) => {
-      if (cancelled) return;
-      loaded.current = true;
-      setChanges(openChanges);
-      setDrafts(ownDrafts);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [open, org, binder]);
+    if (open) setAsked(true);
+  }, [open]);
+  const changes: WorkspaceChangeSummary[] =
+    useQuery({
+      ...binderChangesQuery(org, binder, "open"),
+      // Also on a branch, to name it — see `label`.
+      enabled: asked || current !== null,
+    }).data?.changes ?? [];
+  // No drafts to offer is an ordinary answer; failing to list them is not
+  // worth a message inside a menu about something else.
+  const drafts: OwnDraft[] =
+    useQuery({ ...binderDraftQuery(org, binder), enabled: asked }).data
+      ?.drafts ?? [];
 
   /**
    * What the author called the branch, when a change sits on it.
@@ -103,32 +90,21 @@ export function BinderRefPicker({
    * A proposed draft keeps the name it was given, and the change's own page
    * says "from Hand hygiene audit" rather than "from Carol's draft" — the
    * branch's shape is not its name. The picker over the same branch has to say
-   * the same thing, or one branch reads as two.
+   * the same thing, or one branch reads as two. The branch's shape is still a
+   * fair name for it while that is being read, or when it cannot be.
    */
-  const [currentLabel, setCurrentLabel] = useState<string | null>(null);
-  useEffect(() => {
-    setCurrentLabel(null);
-    if (current === null) return;
-    let cancelled = false;
-    fetchBinderChanges(org, binder, "open")
-      .then((payload) => {
-        const change = payload.changes.find(
-          (entry) => entry.branchName === current,
-        );
-        return change ? fetchBinderChange(org, binder, change.number) : null;
-      })
-      .then((detail) => {
-        if (!cancelled) setCurrentLabel(detail?.branchLabel ?? null);
-      })
-      // The branch's shape is still a fair name for it.
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [org, binder, current]);
-
-  const label = currentLabel ?? describeRef(current, nameOf);
-  const branches = (changes ?? []).filter((change) => change.branchName);
+  const onCurrent =
+    current === null
+      ? undefined
+      : changes.find((change) => change.branchName === current);
+  const currentChange = useQuery({
+    ...binderChangeQuery(org, binder, onCurrent?.number ?? 0),
+    enabled: onCurrent !== undefined,
+  });
+  const label =
+    (onCurrent && currentChange.data?.branchLabel) ||
+    describeRef(current, nameOf);
+  const branches = changes.filter((change) => change.branchName);
 
   return (
     <div className="bs-draftpicker" ref={boxRef}>

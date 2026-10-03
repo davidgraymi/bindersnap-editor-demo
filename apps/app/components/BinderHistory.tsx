@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 import { Archive, Download, FileText } from "lucide-react";
 
-import { fetchBinderHistory } from "../api";
+import { binderHistoryQuery } from "../data/queries";
 import { followInApp } from "../appLink";
 import type { WorkspaceHistoryEntry } from "../../../packages/api-schema/schemas/workspaces";
 import { buildAuditRecord } from "../auditRecord";
@@ -71,37 +72,16 @@ export function BinderHistory({
   documentHref,
   changeHref,
 }: BinderHistoryProps) {
-  const [versions, setVersions] = useState<WorkspaceHistoryEntry[] | null>(
-    null,
-  );
-  const [error, setError] = useState<string | null>(null);
+  const history = useQuery(binderHistoryQuery(org, binder));
+  const versions: WorkspaceHistoryEntry[] | null =
+    history.data?.versions ?? null;
+  const error = history.error
+    ? history.error.message || "Unable to read this binder's history."
+    : null;
   const names = usePeopleNames(org);
   const nameOf = (login: string) => nameFor(names, login);
   const [policy, setPolicy] = useState("");
   const [since, setSince] = useState<HistorySince>("all");
-
-  useEffect(() => {
-    let cancelled = false;
-    setVersions(null);
-    setError(null);
-
-    fetchBinderHistory(org, binder)
-      .then((payload) => {
-        if (!cancelled) setVersions(payload.versions);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(
-          err instanceof Error && err.message.trim() !== ""
-            ? err.message
-            : "Unable to read this binder's history.",
-        );
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [org, binder]);
 
   const all = useMemo(() => groupHistoryByChange(versions ?? []), [versions]);
   const shown = useMemo(
