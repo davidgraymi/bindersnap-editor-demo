@@ -1058,7 +1058,149 @@ async function applyBinder(
     );
   }
 
+  await checkBinder(run);
   return pullRequests;
+}
+
+// ---------------------------------------------------------------------------
+// Reading it back
+// ---------------------------------------------------------------------------
+
+/**
+ * The outcome the product should show for a change the scenario describes.
+ *
+ * Declined and withdrawn are not written in the YAML, and are not stored by
+ * the product either: a closed change with a request for work still standing
+ * is declined, one without is withdrawn. Worked out here the same way, so the
+ * check is against the rule rather than against a second declaration of it.
+ */
+export function expectedOutcome(change: AnyChange): Change["outcome"] {
+  if (change.publish) return "published";
+  if (!change.closed) return "open";
+  return standingRequestForWork(change) ? "declined" : "withdrawn";
+}
+
+/** Whether anybody's last word on the change asked for more work. */
+export function standingRequestForWork(change: AnyChange): boolean {
+  const last = new Map<string, SeedReview["state"]>();
+  for (const review of change.reviews) {
+    // A comment is not a verdict, and does not take one back.
+    if (review.state !== "commented") last.set(review.by, review.state);
+  }
+  return [...last.values()].includes("changes_requested");
+}
+
+/**
+ * What a document's address should hold on `main` once every change has run.
+ *
+ * Addresses a binder-level act moves or archives are left out: following a
+ * document through a rename is the product's job, and the comparison is about
+ * whether each change landed, which the change check already says.
+ */
+export function expectedOnMain(binder: SeedBinder): Map<string, boolean> {
+  const moved = new Set<string>();
+  const movedFolders: string[] = [];
+  for (const change of binder.changes) {
+    for (const act of change.acts) {
+      if (act.kind === "move") moved.add(act.from);
+      if (act.kind === "archive") moved.add(act.document);
+      if (act.kind === "renameFolder") movedFolders.push(`${act.from}/`);
+    }
+  }
+
+  const expected = new Map<string, boolean>();
+  for (const document of binder.documents) {
+    const address = binderDocumentSlugPath(document);
+    if (moved.has(address)) continue;
+    if (movedFolders.some((prefix) => address.startsWith(prefix))) continue;
+    expected.set(
+      address,
+      document.changes.some((change) => change.publish),
+    );
+  }
+  return expected;
+}
+
+/**
+ * Read the binder back through the product's own screens' reads, and say
+ * where it disagrees with the scenario.
+ *
+ * **This is what makes the seed trustworthy.** Every state in `dev.yaml` was
+ * reached through the API, and this asks the API whether it is there: each
+ * change ended the way the scenario says, each review stands, and each
+ * document is or is not published. A state the product cannot reach fails the
+ * seed here, by name, instead of quietly looking slightly wrong in a browser.
+ */
+async function checkBinder(run: BinderRun): Promise<void> {
+  const { org, binder } = run;
+  const as = await run.sessions.options(run.owner);
+  const changes = await listChanges(org, binder.name, as);
+  const problems: string[] = [];
+
+  const scenarioChanges: AnyChange[] = [
+    ...binder.documents.flatMap((document) => document.changes),
+    ...binder.changes,
+  ];
+
+  for (const change of scenarioChanges) {
+    const found = changes.get(change.title);
+    if (!found) {
+      problems.push(`"${change.title}" is not there`);
+      continue;
+    }
+
+    const outcome = expectedOutcome(change);
+    if (found.outcome !== outcome) {
+      problems.push(
+        `"${change.title}" reads as ${found.outcome}, not ${outcome}`,
+      );
+    }
+    if (outcome !== "open") continue;
+
+    for (const review of change.reviews) {
+      const stands = found.reviews.some(
+        (existing) =>
+          existing.author.login === review.by &&
+          existing.state === review.state &&
+          !existing.dismissed,
+      );
+      if (!stands) {
+        problems.push(
+          `"${change.title}" is missing ${review.by}'s ${review.state} review`,
+        );
+      }
+    }
+
+    const asksForWork = standingRequestForWork(change);
+    if (found.isRejected !== asksForWork) {
+      problems.push(
+        `"${change.title}" ${found.isRejected ? "reads as" : "does not read as"} sent back for changes`,
+      );
+    }
+  }
+
+  const onMain = new Map(
+    (await documentsIn(run, as)).map((document) => [
+      document.slugPath,
+      document,
+    ]),
+  );
+  for (const [address, published] of expectedOnMain(binder)) {
+    const there = onMain.get(address);
+    if (published && !there) {
+      problems.push(`${address} should be published and is not on main`);
+    }
+    if (!published && there) {
+      problems.push(`${address} has never been published but is on main`);
+    }
+  }
+
+  if (problems.length > 0) {
+    throw new Error(
+      `${binder.name} does not read back as the scenario describes:\n  - ${problems.join("\n  - ")}`,
+    );
+  }
+  run.log(`Read back: ${scenarioChanges.length} changes as described`);
 }
 
 export { isTokenValid } from "./seed-accounts";

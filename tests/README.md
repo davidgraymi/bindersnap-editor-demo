@@ -194,9 +194,17 @@ signs in as the install's admin, so this has to come first. Once the API is
 healthy, `seed` runs `tests/seed.ts`, which applies the scenario described in
 **[`tests/seed-data/dev.yaml`](seed-data/dev.yaml)**.
 
+The seed replays the YAML **through the API**, signed in as the people it
+names, so every seeded state is one the product itself can reach. When it is
+done it reads each binder back through the same API and fails, naming the
+change, if anything does not read as the YAML says — a change that should be
+declined but reads as withdrawn, a review that did not stand, a document that
+should be published and is not. The one thing written to Gitea directly is
+listed in `THE_PRODUCT_CANNOT` in `seed.ts`.
+
 **That YAML file is the seed data.** Want another account, another binder, or a
 policy parked in a particular review state? Edit the YAML. `seed.ts` is only the
-engine that turns the description into Gitea calls — you should not need to read
+engine that turns the description into API calls — you should not need to read
 it.
 
 The premise is that **you should not have to build a state by hand to look at
