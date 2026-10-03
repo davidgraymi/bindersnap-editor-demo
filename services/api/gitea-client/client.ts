@@ -1,10 +1,12 @@
 import createClient from "openapi-fetch";
 
+import { giteaContentCache, isContentAddressed } from "./content-cache";
 import { giteaRequestGate } from "./request-gate";
 import type { paths } from "./spec/gitea";
 import {
   currentRequestScope,
   forgetRequestMemo,
+  recordCachedGiteaCall,
   recordGiteaCall,
   recordSharedGiteaCall,
 } from "./usage";
@@ -36,6 +38,19 @@ export const gatedFetch = (input: Request): Promise<Response> => {
   // entry is gone the moment the read settles, so nothing is kept to go stale
   // (AGENTS.md: caching Gitea state is banned; this caches nothing).
   const key = `${input.headers.get("Authorization") ?? ""} ${input.url}`;
+
+  // **Content addressed by its hash, kept** — see `content-cache.ts`. The
+  // one exception to keeping nothing: a tree or a file at a commit SHA is the
+  // same bytes for ever, so it cannot be stale.
+  const addressed = isContentAddressed(input.url);
+  if (addressed) {
+    const kept = giteaContentCache.get(key);
+    if (kept) {
+      recordCachedGiteaCall();
+      return Promise.resolve(kept);
+    }
+  }
+
   const shared = inFlightReads.get(key);
   if (shared) {
     recordSharedGiteaCall();
@@ -57,6 +72,12 @@ export const gatedFetch = (input: Request): Promise<Response> => {
     if (inFlightReads.get(key) === leader) inFlightReads.delete(key);
   };
   leader.then(forget, forget);
+  if (addressed) {
+    // Kept from a clone; failing to keep it costs speed, never the answer.
+    leader
+      .then((response) => giteaContentCache.put(key, response))
+      .catch(() => undefined);
+  }
   // A clone for the caller too, so the original's body stays unread for
   // whoever joins before it is forgotten.
   return leader.then((response) => response.clone());

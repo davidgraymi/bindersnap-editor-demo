@@ -340,6 +340,13 @@ read the index. The publish gate, the approval check and the audit packet (#368)
 Gitea. Nothing that gates a decision or ends up in front of a surveyor is allowed to
 depend on the index — which is why the index being wrong can never hurt anyone.
 
+The same reasoning admits one in-memory store that is not an index: answers Gitea
+gives for an address that _is_ a full object hash — a tree at a commit, a blob, a file
+at `?ref=<sha>` — are kept per credential in a bounded LRU in the API process. They
+cannot be stale, because the address names the bytes. Nothing addressed by a name
+that moves (a branch, a tag, `main`) is kept, and nothing about review state is: that
+is still read from Gitea every time.
+
 Note that the binder model makes this cheaper in both directions: a full rebuild walks
 one repository per workspace instead of two hundred, and the documents list drops from
 roughly three Gitea calls per document to a handful per workspace.

@@ -541,7 +541,15 @@ nothing but speed when dropped. Every row keys on an immutable git coordinate (a
 tag name, a commit SHA) so it is either correct or detectably stale, never subtly
 wrong. **The index serves browsing; Gitea serves proving** — no publish gate,
 approval check, or audit export may read it. Anything else that duplicates Gitea
-state is a cache, and caches are still banned.
+state is a cache, and caches are still banned — with one exception.
+
+**Content addressed by its own hash may be kept in memory.** A tree at a commit
+SHA, a blob, a file's bytes at `?ref=<full sha>`: the address is the content, so
+it cannot go stale. `services/api/gitea-client/content-cache.ts` keeps such
+answers in a bounded in-process LRU, keyed by the address _and_ the credentials
+that asked, so access is still decided by Gitea on each person's first read. A
+branch, a tag name, `main`, a list or anything else that can move is never kept.
+Like an index, it is empty on start and loses nothing but speed when dropped.
 
 `.gitea/CODEOWNERS` is the one configuration that belongs in git: it is read at
 pull-request time and lives on the same timeline as the content it governs, so
