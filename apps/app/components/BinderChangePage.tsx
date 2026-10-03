@@ -117,6 +117,8 @@ export function BinderChangePage({
    * bar above — so everything about the binder is read again, not only this.
    */
   const load = useCallback(async () => {
+    // Home and the review queue list this change too.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.homeChanges() });
     await queryClient.invalidateQueries({
       queryKey: queryKeys.binder(org, binder),
     });
