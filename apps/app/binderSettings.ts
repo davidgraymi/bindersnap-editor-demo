@@ -98,3 +98,45 @@ export function groupLevelLabel(access: string): string {
       return "No access";
   }
 }
+
+/**
+ * How many different people can approve a change in this binder: everyone in
+ * a group with any access, since reviewers approve too. Someone in two groups
+ * is one person.
+ */
+export function countApprovers(
+  teams: readonly { access: string; members: readonly { login: string }[] }[],
+): number {
+  const people = new Set<string>();
+  for (const team of teams) {
+    if (groupLevelLabel(team.access) === "No access") continue;
+    for (const member of team.members) people.add(member.login);
+  }
+  return people.size;
+}
+
+/**
+ * What to say when a binder asks for more approvals than it can collect.
+ *
+ * Nobody approves their own change, so the author never counts: with four
+ * people who can approve, the most any one change can collect is three.
+ * Allowed anyway — the administrator may be about to invite people — but said
+ * plainly, because otherwise the first sign is a change that never publishes.
+ */
+export function unreachableApprovalsNote(
+  required: number,
+  approvers: number,
+): string | null {
+  const most = Math.max(approvers - 1, 0);
+  if (required <= most) return null;
+  const people = approvers === 1 ? "1 person" : `${approvers} people`;
+  return `Only ${people} can approve in this binder, and nobody approves their own change, so nothing can be published until more people join.`;
+}
+
+/** A typed approval count, or null when it is not a whole number, 0 or more. */
+export function parseApprovalCount(text: string): number | null {
+  const trimmed = text.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const count = Number(trimmed);
+  return Number.isSafeInteger(count) ? count : null;
+}

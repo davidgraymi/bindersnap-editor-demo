@@ -6884,11 +6884,16 @@
                 "properties": {
                   "blockOnUnresolvedThreads": {
                     "type": "boolean"
+                  },
+                  "requiredApprovals": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "dismissStaleApprovals": {
+                    "type": "boolean"
                   }
-                },
-                "required": [
-                  "blockOnUnresolvedThreads"
-                ]
+                }
               }
             }
           }
@@ -6909,12 +6914,22 @@
                     },
                     "blockOnUnresolvedThreads": {
                       "type": "boolean"
+                    },
+                    "requiredApprovals": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "dismissStaleApprovals": {
+                      "type": "boolean",
+                      "nullable": true
                     }
                   },
                   "required": [
                     "organization",
                     "workspace",
-                    "blockOnUnresolvedThreads"
+                    "blockOnUnresolvedThreads",
+                    "requiredApprovals",
+                    "dismissStaleApprovals"
                   ]
                 }
               }

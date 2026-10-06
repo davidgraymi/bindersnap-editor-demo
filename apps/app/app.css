@@ -8488,6 +8488,16 @@ a.bs-row:focus-visible {
   width: 8.5rem;
 }
 
+.bs-input.bs-settings-count {
+  width: 6rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.bs-row-meta--warning {
+  color: var(--bs-status-warn-fg);
+}
+
 /* ── The offer ────────────────────────────────────────────────────────────
    One panel, in the paywall and on Billing: the plan, its price, what it
    gets you, and the button. */
