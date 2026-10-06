@@ -868,6 +868,42 @@ export const downloadBinderDocument = async (org: string,
 );}
 
 
+export type exportBinderDocumentAuditResponse200 = {
+  data: Blob
+  status: 200
+}
+
+export type exportBinderDocumentAuditResponseSuccess = (exportBinderDocumentAuditResponse200) & {
+  headers: Headers;
+};
+;
+
+export type exportBinderDocumentAuditResponse = (exportBinderDocumentAuditResponseSuccess)
+
+export const getExportBinderDocumentAuditUrl = (org: string,
+    binder: string,
+    documentPath: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/audit/${documentPath}`
+}
+
+export const exportBinderDocumentAudit = async (org: string,
+    binder: string,
+    documentPath: string, options?: Parameters<typeof customFetch>[1]): Promise<exportBinderDocumentAuditResponse> => {
+
+  return customFetch<exportBinderDocumentAuditResponse>(getExportBinderDocumentAuditUrl(org,binder,documentPath),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
 export type exportBinderDocumentResponse200 = {
   data: Blob
   status: 200

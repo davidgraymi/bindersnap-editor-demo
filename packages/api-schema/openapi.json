@@ -7899,6 +7899,52 @@
         }
       }
     },
+    "/api/app/binders/{org}/{binder}/audit/{documentPath}": {
+      "get": {
+        "operationId": "exportBinderDocumentAudit",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "documentPath",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A zip: the audit packet PDF, approvals.csv, record.json, and every version's file",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/app/binders/{org}/{binder}/export/{documentPath}": {
       "get": {
         "operationId": "exportBinderDocument",
