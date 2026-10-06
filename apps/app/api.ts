@@ -10,6 +10,11 @@ import * as BillingClient from "../../packages/api-client/billing/billing";
 import * as AdminClient from "../../packages/api-client/admin/admin";
 import * as OrganizationsClient from "../../packages/api-client/organizations/organizations";
 import * as BindersClient from "../../packages/api-client/workspaces/workspaces";
+import * as NotificationsClient from "../../packages/api-client/notifications/notifications";
+import type {
+  AppNotification,
+  NotificationCountPayload,
+} from "../../packages/api-schema/schemas/notifications";
 import type {
   BinderArchivePayload,
   BinderDraftPayload,
@@ -1711,6 +1716,45 @@ export async function exportAuditPacket(
     "";
   const named = disposition.match(/filename="([^"]+)"/)?.[1];
   return { blob: response.data, fileName: named ?? "audit-packet.zip" };
+}
+
+// Notifications
+
+export type { AppNotification };
+
+/** Your newest notifications, unread only unless `all`. */
+export async function fetchNotifications(
+  all = false,
+): Promise<AppNotification[]> {
+  const response = await NotificationsClient.listNotifications(
+    all ? { all: "1" } : undefined,
+    { cache: "no-store" },
+  );
+  return response.data.notifications;
+}
+
+/** How many are unread: the number on the bell. */
+export async function fetchNotificationCount(): Promise<number> {
+  const response = await NotificationsClient.countNotifications({
+    cache: "no-store",
+  });
+  return response.data.unread;
+}
+
+/**
+ * Mark read: one notification, every one about a change, or all of them.
+ * Answers how many are still unread, so the bell does not ask again.
+ */
+export async function markNotificationsRead(
+  which:
+    | { id: number }
+    | { change: { org: string; binder: string; number: number } }
+    | "all",
+): Promise<NotificationCountPayload> {
+  const response = await NotificationsClient.readNotifications(
+    which === "all" ? {} : which,
+  );
+  return response.data;
 }
 
 // Billing functions

@@ -2843,6 +2843,192 @@
         }
       }
     },
+    "/api/app/notifications": {
+      "get": {
+        "operationId": "listNotifications",
+        "tags": [
+          "notifications"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            },
+            "required": false,
+            "name": "all",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Your newest notifications, with the reason each is yours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "notifications": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "unread": {
+                            "type": "boolean"
+                          },
+                          "org": {
+                            "type": "string"
+                          },
+                          "binder": {
+                            "type": "string"
+                          },
+                          "changeNumber": {
+                            "type": "number"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string",
+                            "enum": [
+                              "review_requested",
+                              "your_change",
+                              "published",
+                              "closed",
+                              "activity"
+                            ]
+                          },
+                          "actor": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "actorName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "unread",
+                          "org",
+                          "binder",
+                          "changeNumber",
+                          "title",
+                          "reason",
+                          "actor",
+                          "actorName",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "notifications"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/notifications/count": {
+      "get": {
+        "operationId": "countNotifications",
+        "tags": [
+          "notifications"
+        ],
+        "responses": {
+          "200": {
+            "description": "How many notifications are unread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "unread": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "unread"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/notifications/read": {
+      "post": {
+        "operationId": "readNotifications",
+        "tags": [
+          "notifications"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "number"
+                  },
+                  "change": {
+                    "type": "object",
+                    "properties": {
+                      "org": {
+                        "type": "string"
+                      },
+                      "binder": {
+                        "type": "string"
+                      },
+                      "number": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "org",
+                      "binder",
+                      "number"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Marked read; how many are still unread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "unread": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "unread"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/app/home/changes": {
       "get": {
         "operationId": "getHomeChanges",

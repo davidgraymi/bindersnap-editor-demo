@@ -22,6 +22,7 @@ describe("API config", () => {
       "write:repository",
       "write:issue",
       "write:organization",
+      "write:notification",
     ]);
   });
 
