@@ -41,6 +41,8 @@ test("somebody with a 16-character username can open a document to edit", async 
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
     body: JSON.stringify({
+      firstName: "Test",
+      lastName: "User",
       username,
       email: `${username}@users.bindersnap.local`,
       password: `Bindersnap-${randomUUID()}!`,

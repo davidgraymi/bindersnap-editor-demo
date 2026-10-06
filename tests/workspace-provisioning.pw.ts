@@ -44,7 +44,11 @@ async function signUp(credentials: Credentials): Promise<string> {
   const response = await fetch(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
-    body: JSON.stringify(credentials),
+    body: JSON.stringify({
+      firstName: "Test",
+      lastName: "User",
+      ...credentials,
+    }),
   });
 
   const body = await response.text();
@@ -3664,15 +3668,17 @@ test("publishing stamps the policy in force onto the version's tag", async () =>
 
   expect(tag.message).toContain("The approval policy in force");
   expect(tag.message).toContain("Approvals required: 1");
-  expect(tag.message).toContain(
-    `Approved by: ${approver.credentials.username}`,
+  expect(tag.message).toMatch(
+    new RegExp(`Approved by: .*\\(${approver.credentials.username}\\)`),
   );
   // Both sides of every rule: one that was off is still a rule somebody chose,
   // and a stamp that only listed what was on would be silent about the rest.
   expect(tag.message).toContain(
     "Unresolved discussions blocked publishing: no",
   );
-  expect(tag.message).toContain(`Published by: ${owner.username}`);
+  expect(tag.message).toMatch(
+    new RegExp(`Published by: .*\\(${owner.username}\\)`),
+  );
   expect(tag.message).toContain(`From change: #${change!.number}`);
 });
 

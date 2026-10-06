@@ -121,6 +121,10 @@ export function ReviewerChooser({
                 <span className="bs-row-name">
                   {person.fullName.trim() || person.login}
                 </span>
+                {/* Two people can share a name; nobody shares a login. */}
+                {person.fullName.trim() ? (
+                  <span className="bs-row-meta">@{person.login}</span>
+                ) : null}
               </label>
             </li>
           );

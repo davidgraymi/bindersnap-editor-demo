@@ -24,6 +24,10 @@ import { provisionSignup } from "./signup-provisioning";
 import { slugifyOrganizationName } from "../../packages/utils/organizationName";
 import { slugifyGroupName } from "../../packages/utils/groupName";
 import {
+  joinFullName,
+  validateFullName,
+} from "../../packages/utils/personName";
+import {
   buildDocumentFilePath,
   buildDocumentSlugPath,
   archivedSequenceFromTag,
@@ -233,7 +237,8 @@ import {
 } from "./gitea-client/conflicts";
 import {
   buildChangeReviewers,
-  approverLogins,
+  approverSignatures,
+  signatureOf,
   countApprovals,
   planReviewerChanges,
   readAssignee,
@@ -1971,6 +1976,7 @@ async function createGiteaUser(
   username: string,
   email: string,
   password: string,
+  fullName: string,
 ): Promise<
   { status: 502; error: string } | { status: number; error: string } | "created"
 > {
@@ -1992,6 +1998,7 @@ async function createGiteaUser(
       username,
       password,
       email,
+      full_name: fullName,
       must_change_password: false,
       restricted: false,
       send_notify: false,
@@ -2077,6 +2084,8 @@ async function handleSignup(
     username?: unknown;
     email?: unknown;
     password?: unknown;
+    firstName?: unknown;
+    lastName?: unknown;
     organization?: unknown;
   }>(req);
   const username =
@@ -2084,6 +2093,10 @@ async function handleSignup(
   const email = typeof payload?.email === "string" ? payload.email : "";
   const password =
     typeof payload?.password === "string" ? payload.password : "";
+  const firstName =
+    typeof payload?.firstName === "string" ? payload.firstName : "";
+  const lastName =
+    typeof payload?.lastName === "string" ? payload.lastName : "";
   const organization =
     typeof payload?.organization === "string" ? payload.organization : "";
 
@@ -2095,9 +2108,21 @@ async function handleSignup(
     );
   }
 
+  // **A name, not a login, is what the record writes.** An approval stamped
+  // "jkim" is one a surveyor has to ask about; one stamped "Jordan Kim" is not.
+  const nameError = validateFullName(firstName, lastName);
+  if (nameError) {
+    return json(400, { error: nameError }, baseHeaders);
+  }
+
   logger.debug("Attempting Gitea user creation", { username, clientIp });
 
-  const created = await createGiteaUser(username, email, password);
+  const created = await createGiteaUser(
+    username,
+    email,
+    password,
+    joinFullName(firstName, lastName),
+  );
   if (created !== "created") {
     logger.warn("Gitea user creation failed during signup", {
       username,
@@ -2310,6 +2335,67 @@ async function handleAuthMe(
         isAdmin: giteaUser?.isAdmin === true,
       },
       // No Gitea token: see `sessionResponse`.
+    },
+    baseHeaders,
+  );
+}
+
+/**
+ * Change the name every record of theirs is signed with.
+ *
+ * On the person's own token, because Gitea lets anybody edit their own
+ * `full_name` and nobody needs the service account to do it. Published
+ * versions keep the name they were stamped with — a tag is immutable, which is
+ * the point of it — and everything still open picks up the new one.
+ */
+async function handleUpdateProfile(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const payload = await readJson<{ firstName?: unknown; lastName?: unknown }>(
+    req,
+  );
+  const firstName =
+    typeof payload?.firstName === "string" ? payload.firstName : "";
+  const lastName =
+    typeof payload?.lastName === "string" ? payload.lastName : "";
+  const nameError = validateFullName(firstName, lastName);
+  if (nameError) return json(400, { error: nameError }, baseHeaders);
+
+  const response = await giteaFetch("/api/v1/user/settings", {
+    method: "PATCH",
+    headers: {
+      Authorization: buildTokenAuthHeader(auth.session.giteaToken),
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ full_name: joinFullName(firstName, lastName) }),
+  }).catch(() => null);
+
+  if (!response || !response.ok) {
+    logger.warn("Failed to update a profile name", {
+      username: auth.session.username,
+      status: response?.status ?? null,
+    });
+    return json(
+      502,
+      { error: "Your name could not be saved. Please try again." },
+      baseHeaders,
+    );
+  }
+
+  const user = await fetchSessionGiteaUser(auth.session);
+  return json(
+    200,
+    {
+      user: {
+        username: user?.username ?? auth.session.username,
+        fullName: user?.fullName ?? undefined,
+        isAdmin: user?.isAdmin === true,
+      },
     },
     baseHeaders,
   );
@@ -4495,12 +4581,13 @@ async function handlePublishWorkspaceChange(
       pullNumber,
     }).catch(() => null);
 
+    const publisher = await fetchSessionGiteaUser(session).catch(() => null);
     const stampedPolicy = {
       requiredApprovals: await readRequiredApprovals(owner, workspaceName),
-      approvedBy: merged ? approverLogins(merged.reviews) : [],
+      approvedBy: merged ? approverSignatures(merged.reviews) : [],
       blockOnUnresolvedThreads: reviewSettings.blockOnUnresolvedThreads,
       signOffEnforced: protection?.blockOnCodeownerReviews ?? false,
-      publishedBy: session.username,
+      publishedBy: signatureOf(session.username, publisher?.fullName ?? ""),
       changeNumber: pullNumber,
     };
 
@@ -11821,6 +11908,11 @@ export function createApiServer() {
         response = await handleLogout(req, baseHeaders);
       } else if (pathname === "/auth/me" && method === "GET") {
         response = await handleAuthMe(req, baseHeaders);
+      } else if (
+        pathname === "/api/app/account/profile" &&
+        method === "PATCH"
+      ) {
+        response = await handleUpdateProfile(req, baseHeaders);
       } else if (pathname === "/api/app/onboarding" && method === "GET") {
         response = await handleOnboarding(req, baseHeaders);
       } else if (pathname === "/api/app/notifications" && method === "GET") {

@@ -146,8 +146,10 @@ describe("pathFromStamp", () => {
 describe("buildApprovalsCsv", () => {
   test("has one row per event, reviews marked when they no longer counted", () => {
     const rows = buildApprovalsCsv(record).trim().split("\r\n");
-    expect(rows[0]).toStartWith("version,tag,change,actor,action,timestamp");
-    expect(rows.map((row) => row.split(",")[4])).toEqual([
+    expect(rows[0]).toStartWith(
+      "version,tag,change,actor,actor_name,action,timestamp",
+    );
+    expect(rows.map((row) => row.split(",")[5])).toEqual([
       "action",
       "submitted",
       "approved (superseded)",
@@ -155,6 +157,8 @@ describe("buildApprovalsCsv", () => {
       "approved",
       "published",
     ]);
+    // A surveyor reads the name; the login ties it to the account.
+    expect(rows[1]?.split(",").slice(3, 5)).toEqual(["alice", "Alice"]);
   });
 });
 

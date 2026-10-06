@@ -27,6 +27,9 @@ export const LoginBodySchema = z.object({
 export type LoginBody = z.infer<typeof LoginBodySchema>;
 
 export const SignupBodySchema = z.object({
+  /** Joined into the account's one full name, which the record writes. */
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
   username: z.string().min(1),
   email: z.string().email(),
   password: z.string().min(1),

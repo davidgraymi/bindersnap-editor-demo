@@ -7,6 +7,7 @@ import {
   Map as MapIcon,
   Moon,
   Shield,
+  UserRound,
 } from "lucide-react";
 import type { SessionUser } from "../api";
 import { buildDocumentsUrl, parseDocumentsViewState } from "../documentsView";
@@ -31,12 +32,15 @@ import { useDefaultOrganization } from "../useOrganizationDisplayName";
 import { HomePage } from "./HomePage";
 import { NavSearch } from "./NavSearch";
 import { CreateMenu } from "./CreateMenu";
+import { AccountSettingsPage } from "./AccountSettingsPage";
 
 interface AppShellProps {
   user: SessionUser | null;
   route: AppRoute;
   onNavigate: (route: AppRoute, replace?: boolean) => void;
   onSignOut: () => void | Promise<void>;
+  /** Read the session again after the account itself changed. */
+  onAccountChanged?: () => void | Promise<unknown>;
   /**
    * The billing page, built by the app that holds the billing state. Drawn in
    * the shell like any other settings page, rather than in place of it.
@@ -83,6 +87,8 @@ function getInitials(name: string): string {
 
 function renderProfileMenuIcon(icon: string) {
   switch (icon) {
+    case "account":
+      return <AppIcon icon={UserRound} size="md" />;
     case "billing":
       return <AppIcon icon={CreditCard} size="md" />;
     case "appearance":
@@ -103,6 +109,7 @@ export function AppShell({
   route,
   onNavigate,
   onSignOut,
+  onAccountChanged = () => undefined,
   billing = null,
 }: AppShellProps) {
   const isReadOnly = useIsReadOnly();
@@ -291,7 +298,10 @@ export function AppShell({
                         {initials}
                       </div>
                       <div className="app-profile-menu-copy">
-                        <p className="app-profile-menu-handle">{username}</p>
+                        <p className="app-profile-menu-handle">{displayName}</p>
+                        {displayName !== username ? (
+                          <p className="app-profile-menu-login">@{username}</p>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -306,6 +316,22 @@ export function AppShell({
                         not drawn and the bottom bar carries only the four
                         places people move between, so this menu is the one
                         way to reach Billing there. */}
+                    <button
+                      type="button"
+                      className={`app-profile-menu-item${route.kind === "accountSettings" ? " app-profile-menu-item--active" : ""}`}
+                      role="menuitem"
+                      onClick={() => {
+                        setProfileOpen(false);
+                        onNavigate({ kind: "accountSettings" });
+                      }}
+                    >
+                      <span className="app-profile-menu-icon">
+                        {renderProfileMenuIcon("account")}
+                      </span>
+                      <span className="app-profile-menu-label">
+                        Your account
+                      </span>
+                    </button>
                     <button
                       type="button"
                       className={`app-profile-menu-item${isBilling ? " app-profile-menu-item--active" : ""}`}
@@ -513,6 +539,11 @@ export function AppShell({
                       binder: route.binder,
                     })
                   }
+                />
+              ) : route.kind === "accountSettings" ? (
+                <AccountSettingsPage
+                  user={user}
+                  onUserChanged={onAccountChanged}
                 />
               ) : route.kind === "billing" ? (
                 billing

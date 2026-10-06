@@ -71,7 +71,12 @@ async function signUp(credentials: Credentials): Promise<string> {
   const response = await fetch(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
-    body: JSON.stringify(credentials),
+    body: JSON.stringify({
+      firstName: "Test",
+      // Unique, so a person is told apart by name the way the app shows them.
+      lastName: credentials.username,
+      ...credentials,
+    }),
   });
   expect(
     response.status,
@@ -368,7 +373,7 @@ test("the library lists a policy across every binder it can reach", async ({
     await publishTheOpenChange(sessionCookie, org, binder);
   }
 
-  await page.goto(`${APP_BASE_URL}/documents`);
+  await page.goto(`${APP_BASE_URL}/-/documents`);
 
   // **Exact**, because this is the page's own title. Substring matching also
   // catches the rail heading of every binder whose name ends in "policies",

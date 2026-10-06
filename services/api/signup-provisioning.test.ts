@@ -320,3 +320,15 @@ test("an invisible collision does not swallow a real creation failure", async ()
     gitea.mockPost.mock.calls.filter((call) => call[0] === "/orgs"),
   ).toHaveLength(1);
 });
+
+test("an organization never takes an address the app cannot move", () => {
+  // `/help` is a separate site. An organization called that would be
+  // shadowed by it, binders and all.
+  expect(deriveOrganizationName("maria", "Help")).toBe("help-org");
+  // The app's own pages are behind `/-/`, so these names are free to take.
+  expect(deriveOrganizationName("maria", "Billing")).toBe("billing");
+  expect(deriveOrganizationName("maria", "Settings")).toBe("settings");
+  expect(deriveOrganizationName("maria", "Sunrise Clinic")).toBe(
+    "sunrise-clinic",
+  );
+});

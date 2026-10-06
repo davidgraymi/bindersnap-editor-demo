@@ -13,8 +13,8 @@ workspace shell when a valid session is present.
 ## Entry points
 
 - `index.html`: Pre-rendered landing shell plus the React mount root.
-- `App.tsx`: Route/auth gate for `/`, `/login`, `/docs/*`, and `/activity`.
-  `/inbox` is retired — it redirects to `/`.
+- `App.tsx`: Route/auth gate. The app's own pages are behind `/-/`
+  (`/-/login`, `/-/documents`, …); see `routes.ts`.
 - `components/LandingPage.tsx`: Controls the static landing shell visibility.
 - `components/AppShell.tsx`: Authenticated workspace shell and data fetch.
 

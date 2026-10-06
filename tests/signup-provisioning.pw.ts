@@ -64,7 +64,12 @@ async function signUp(credentials: Credentials): Promise<string> {
   const response = await fetch(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
-    body: JSON.stringify({ ...credentials, organization: buildOrgName() }),
+    body: JSON.stringify({
+      firstName: "Test",
+      lastName: "User",
+      ...credentials,
+      organization: buildOrgName(),
+    }),
   });
 
   // Read the body once. `expect`'s message argument is evaluated eagerly, so

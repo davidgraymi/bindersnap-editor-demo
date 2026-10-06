@@ -101,6 +101,39 @@ export function latestReviewByUser(
  * been replaced — it is not a signature on what is being published, and naming
  * somebody who approved a version they never saw is worse than naming nobody.
  */
+/**
+ * Everyone whose approval stands, as the record writes them: "Jordan Kim
+ * (jkim)".
+ *
+ * The login alone was what the version tag used to carry, and a login is the
+ * one part of a person that can change — renamed, or freed for somebody else
+ * when the account is deleted. The tag is immutable, so it names them the way
+ * a surveyor reads a name, with the login beside it to tie the two together.
+ */
+export function approverSignatures(reviews: PullReview[]): string[] {
+  const signatures: string[] = [];
+
+  for (const review of latestReviewByUser(reviews).values()) {
+    if (
+      toReviewerStatus(review.state) === "approved" &&
+      review.stale !== true
+    ) {
+      const login = review.user?.login ?? "";
+      if (login !== "") {
+        signatures.push(signatureOf(login, review.user?.full_name ?? ""));
+      }
+    }
+  }
+
+  return signatures.sort((left, right) => left.localeCompare(right));
+}
+
+/** "Jordan Kim (jkim)", or the login alone for an account with no name. */
+export function signatureOf(login: string, fullName: string): string {
+  const name = fullName.trim();
+  return name === "" || name === login ? login : `${name} (${login})`;
+}
+
 export function approverLogins(reviews: PullReview[]): string[] {
   const logins: string[] = [];
 

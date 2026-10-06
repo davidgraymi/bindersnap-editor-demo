@@ -65,6 +65,14 @@
       "SignupBody": {
         "type": "object",
         "properties": {
+          "firstName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "lastName": {
+            "type": "string",
+            "minLength": 1
+          },
           "username": {
             "type": "string",
             "minLength": 1
@@ -79,6 +87,8 @@
           }
         },
         "required": [
+          "firstName",
+          "lastName",
           "username",
           "email",
           "password"
@@ -1893,6 +1903,48 @@
           "hasMore"
         ]
       },
+      "ProfileNameBody": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "lastName": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "firstName",
+          "lastName"
+        ]
+      },
+      "AccountUserPayload": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "type": "object",
+            "properties": {
+              "username": {
+                "type": "string"
+              },
+              "fullName": {
+                "type": "string"
+              },
+              "isAdmin": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "username"
+            ]
+          }
+        },
+        "required": [
+          "user"
+        ]
+      },
       "OrganizationSummary": {
         "type": "object",
         "properties": {
@@ -2546,6 +2598,14 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "firstName": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "lastName": {
+                    "type": "string",
+                    "minLength": 1
+                  },
                   "username": {
                     "type": "string",
                     "minLength": 1
@@ -2560,6 +2620,8 @@
                   }
                 },
                 "required": [
+                  "firstName",
+                  "lastName",
                   "username",
                   "email",
                   "password"
@@ -3760,6 +3822,75 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/app/account/profile": {
+      "patch": {
+        "operationId": "updateProfile",
+        "tags": [
+          "account"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "firstName": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "lastName": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "firstName",
+                  "lastName"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The name was saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "type": "object",
+                      "properties": {
+                        "username": {
+                          "type": "string"
+                        },
+                        "fullName": {
+                          "type": "string"
+                        },
+                        "isAdmin": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "username"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "user"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A first or last name is missing or too long"
           }
         }
       }

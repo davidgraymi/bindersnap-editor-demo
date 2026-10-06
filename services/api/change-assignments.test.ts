@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import {
+  approverSignatures,
   buildChangeReviewers,
   countApprovals,
   planReviewerChanges,
@@ -205,4 +206,17 @@ test("planReviewerChanges writes nothing when nothing moved", () => {
       submittedBy: "sam",
     }),
   ).toEqual({ add: [], remove: [] });
+});
+
+test("a version's approvers are signed with a name and the login beside it", () => {
+  const reviews = [
+    { ...review("jkim", "APPROVED"), user: user("jkim", "Jordan Kim") },
+    review("bob", "APPROVED"),
+    { ...review("dan", "APPROVED"), stale: true },
+    review("carol", "REQUEST_CHANGES"),
+  ];
+
+  // A login can be renamed or freed; the tag that carries this cannot be
+  // edited, so it names the person as well. No name falls back to the login.
+  expect(approverSignatures(reviews)).toEqual(["bob", "Jordan Kim (jkim)"]);
 });

@@ -42,12 +42,12 @@ import {
   asShellRoute,
   canonicalLocation,
   getRoute,
-  isLegacyInboxPath,
   isProtectedAppRoute,
   routeToPath,
   type AppRoute,
 } from "./routes";
 import { resolveSignupPrefill } from "./authIntent";
+import { validateFullName } from "../../packages/utils/personName";
 
 type AuthView =
   "loading" | "callback" | "landing" | "login" | "createOrganization" | "app";
@@ -63,6 +63,7 @@ interface LoginPageProps {
     rememberMe: boolean,
   ) => Promise<void>;
   onSignup: (
+    name: { first: string; last: string },
     username: string,
     email: string,
     password: string,
@@ -106,6 +107,8 @@ function LoginPage({
   onLogin,
   onSignup,
 }: LoginPageProps) {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [username, setUsername] = useState("");
   const [identifier, setIdentifier] = useState(
     mode === "signup" ? prefilledEmail : "",
@@ -126,6 +129,11 @@ function LoginPage({
     const normalizedIdentifier = identifier.trim();
 
     if (mode === "signup") {
+      const nameError = validateFullName(firstName, lastName);
+      if (nameError) {
+        setError(nameError);
+        return;
+      }
       if (
         !normalizedUsername ||
         !normalizedIdentifier ||
@@ -154,7 +162,12 @@ function LoginPage({
       if (mode === "signin") {
         await onLogin(normalizedIdentifier, password, true);
       } else {
-        await onSignup(normalizedUsername, normalizedIdentifier, password);
+        await onSignup(
+          { first: firstName, last: lastName },
+          normalizedUsername,
+          normalizedIdentifier,
+          password,
+        );
       }
     } catch (submitError) {
       if (submitError instanceof Error && submitError.message.trim() !== "") {
@@ -186,6 +199,33 @@ function LoginPage({
           </h1>
 
           <form className="app-form" onSubmit={handleSubmit}>
+            {mode === "signup" ? (
+              // What every approval of theirs will be signed with, so it is
+              // asked for first and in full.
+              <div className="app-field-pair">
+                <label className="app-field">
+                  <span className="bs-label">First name</span>
+                  <input
+                    className="bs-input"
+                    type="text"
+                    value={firstName}
+                    onChange={(event) => setFirstName(event.target.value)}
+                    autoComplete="given-name"
+                  />
+                </label>
+                <label className="app-field">
+                  <span className="bs-label">Last name</span>
+                  <input
+                    className="bs-input"
+                    type="text"
+                    value={lastName}
+                    onChange={(event) => setLastName(event.target.value)}
+                    autoComplete="family-name"
+                  />
+                </label>
+              </div>
+            ) : null}
+
             {mode === "signup" ? (
               <label className="app-field">
                 <span className="bs-label">Username</span>
@@ -481,15 +521,6 @@ export function App() {
     }
   }, [loadBilling]);
 
-  // `/inbox` is gone — Home shows what used to be there. Rewrite the address
-  // bar so an old link lands somewhere that still exists and stays bookmarkable.
-  useEffect(() => {
-    if (isLegacyInboxPath(window.location.pathname)) {
-      navigateTo({ kind: "workspace" }, true);
-      return;
-    }
-  }, [route]);
-
   useEffect(() => {
     const handlePopState = () => {
       settleAddress();
@@ -516,8 +547,8 @@ export function App() {
     void loadBilling();
   }, [billingOrganization, isCheckingSession, loadBilling, signedIn]);
 
-  // `/billing` from before billing was per organization: say which one it is
-  // showing, in the address bar, once the server has answered.
+  // `/-/billing`, which names no organization: say which one it is showing,
+  // in the address bar, once the server has answered.
   useEffect(() => {
     if (
       route.kind === "billing" &&
@@ -637,7 +668,7 @@ export function App() {
     // A session with no organization reads "none" here, because it has no
     // access — but it has not failed to pay, and there is nothing for it to
     // buy. Letting this branch answer for it sent it to the card form no
-    // matter where it was going, which is what made `/organizations/new`
+    // matter where it was going, which is what made `/-/organizations/new`
     // render billing and left the setup screen reachable only by people who
     // already had an organization.
     // A delinquent organization no longer replaces the app with the card
@@ -743,8 +774,13 @@ export function App() {
           }
           navigateTo({ kind: "home" }, true);
         }}
-        onSignup={async (username, email, password) => {
-          const authenticatedSession = await signup(username, email, password);
+        onSignup={async (name, username, email, password) => {
+          const authenticatedSession = await signup(
+            name,
+            username,
+            email,
+            password,
+          );
           // Carried from the signup form so the create-organization screen
           // arrives filled in rather than asking again.
           setSuggestedOrganizationName(
@@ -831,6 +867,12 @@ export function App() {
               />
             }
             onNavigate={navigateTo}
+            // Just the person, not the whole session: a full refresh draws the
+            // loading screen, which would take the settings page with it.
+            onAccountChanged={async () => {
+              const next = await fetchSessionUser();
+              if (next?.user) setUser(next.user);
+            }}
             onSignOut={async () => {
               await logoutSession();
               setUser(null);

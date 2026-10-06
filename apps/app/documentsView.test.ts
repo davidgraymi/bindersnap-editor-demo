@@ -66,7 +66,7 @@ describe("the view in the URL", () => {
     // The page's own address should be the plain one, so a link to "the
     // library" is not a link to whatever filter somebody last had open.
     expect(buildDocumentsUrl({ binder: null, freeText: "" })).toBe(
-      "/documents",
+      "/-/documents",
     );
   });
 });

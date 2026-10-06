@@ -40,6 +40,10 @@ import {
 } from "./schemas/documents";
 import { SearchUsersPayloadSchema } from "./schemas/users";
 import {
+  AccountUserPayloadSchema,
+  ProfileNameBodySchema,
+} from "./schemas/account";
+import {
   NewOrganizationBodySchema,
   CreatedOrganizationPayloadSchema,
   OrganizationListPayloadSchema,
@@ -118,6 +122,8 @@ registry.register(
 registry.register("DiscussionSummary", DiscussionSummarySchema);
 registry.register("ChangeUpdatesPayload", ChangeUpdatesPayloadSchema);
 registry.register("SearchUsersPayload", SearchUsersPayloadSchema);
+registry.register("ProfileNameBody", ProfileNameBodySchema);
+registry.register("AccountUserPayload", AccountUserPayloadSchema);
 registry.register("OrganizationSummary", OrganizationSummarySchema);
 registry.register("OrganizationListPayload", OrganizationListPayloadSchema);
 registry.register("NewOrganizationBody", NewOrganizationBodySchema);
@@ -332,6 +338,27 @@ const discussionParams = z.object({
 });
 
 const threadParams = discussionParams.extend({ threadId: z.string() });
+
+// Account routes: the signed-in person's own account.
+registry.registerPath({
+  method: "patch",
+  path: "/api/app/account/profile",
+  operationId: "updateProfile",
+  tags: ["account"],
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: ProfileNameBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "The name was saved",
+      content: { "application/json": { schema: AccountUserPayloadSchema } },
+    },
+    400: { description: "A first or last name is missing or too long" },
+  },
+});
 
 // Users route
 registry.registerPath({
