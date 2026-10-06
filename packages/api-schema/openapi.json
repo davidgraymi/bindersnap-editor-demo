@@ -10900,6 +10900,16 @@
                         "canPublish"
                       ]
                     },
+                    "outcome": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "published",
+                        "declined",
+                        "withdrawn",
+                        null
+                      ]
+                    },
                     "clearsApprovalsOnEdit": {
                       "type": "boolean"
                     }
@@ -10918,6 +10928,7 @@
                     "canManage",
                     "requiredReviewers",
                     "viewer",
+                    "outcome",
                     "clearsApprovalsOnEdit"
                   ]
                 }

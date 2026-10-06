@@ -5500,6 +5500,12 @@ async function handleWorkspaceChangeDetail(
         organization: orgName,
         workspace: workspaceName,
         change: changeRow,
+        // How it ended, for a change that has: the panel that reads "Ready to
+        // publish" or "Awaiting review" on an open change has to read
+        // "Published" on one that was.
+        outcome: changeOpen
+          ? null
+          : resolveClosedOutcome(entry.pullRequest, entry.reviews).outcome,
         branchLabel,
         documents: withVersions,
         removedDocuments,

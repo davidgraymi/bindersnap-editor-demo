@@ -186,8 +186,11 @@ export function BinderChangePage({
         ? {
             ...toChangeRecord(detail.change),
             // `toChangeRecord` serves the open-changes list, so it assumes
-            // open. A decided change is not still awaiting a decision.
+            // open. A decided change is not still awaiting a decision, and
+            // says how it ended — the approvals panel read "Awaiting review"
+            // on a change that had been published.
             open: detail.change.state === "open",
+            outcome: detail.outcome,
           }
         : null,
     [detail],

@@ -129,6 +129,15 @@ test("a change with no reviewers publishes in a binder that needs no approvals",
   await expect(page).toHaveURL(new RegExp(`/${binder}/-/changes(?:[?#]|$)`));
   await page.getByRole("button", { name: "Closed", exact: true }).click();
   await expect(page.getByText("Add Hand Hygiene")).toBeVisible();
+
+  // Its own page says how it ended, not that it is still waiting.
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/-/changes/${change}`);
+  const approvals = page.locator(".rev-approvals");
+  await expect(approvals).toHaveText("Published");
+  await expect(
+    page.getByText("Nobody was asked to review this."),
+  ).toBeVisible();
+  await expect(page.getByText("Awaiting review")).toHaveCount(0);
 });
 
 test("a binder that needs an approval still waits for one", async ({

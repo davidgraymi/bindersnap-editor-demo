@@ -6,6 +6,7 @@
  */
 import type { GetBinderChange200Change } from './getBinderChange200Change.ts';
 import type { GetBinderChange200DocumentsItem } from './getBinderChange200DocumentsItem.ts';
+import type { GetBinderChange200Outcome } from './getBinderChange200Outcome.ts';
 import type { GetBinderChange200RemovedDocumentsItem } from './getBinderChange200RemovedDocumentsItem.ts';
 import type { GetBinderChange200RequiredReviewers } from './getBinderChange200RequiredReviewers.ts';
 import type { GetBinderChange200Viewer } from './getBinderChange200Viewer.ts';
@@ -25,5 +26,7 @@ export type GetBinderChange200 = {
   canManage: boolean;
   requiredReviewers: GetBinderChange200RequiredReviewers;
   viewer: GetBinderChange200Viewer;
+  /** @nullable */
+  outcome: GetBinderChange200Outcome;
   clearsApprovalsOnEdit: boolean;
 };
