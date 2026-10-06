@@ -28,7 +28,6 @@ export interface SessionBackend {
    */
   deleteForUser(username: string, except?: string): Promise<SessionRecord[]>;
   /** A renamed account's sessions follow it, so nobody is signed out. */
-  renameUser(from: string, to: string): Promise<void>;
 }
 
 export class SessionStore implements SessionBackend {
@@ -90,14 +89,6 @@ export class SessionStore implements SessionBackend {
       .returning()
       .all();
   }
-
-  async renameUser(from: string, to: string): Promise<void> {
-    this.db
-      .update(sessions)
-      .set({ username: to })
-      .where(eq(sessions.username, from))
-      .run();
-  }
 }
 
 // Lazy wrapper so importing this module never opens the SQLite file; the DB
@@ -130,10 +121,6 @@ class LazySessionStore implements SessionBackend {
 
   deleteForUser(username: string, except?: string): Promise<SessionRecord[]> {
     return this.store.deleteForUser(username, except);
-  }
-
-  renameUser(from: string, to: string): Promise<void> {
-    return this.store.renameUser(from, to);
   }
 }
 

@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import {
   AccountChangeRefused,
   changePassword,
-  changeUsername,
   deleteAccount,
   fetchAccountBlockers,
   updateProfile,
@@ -41,7 +40,7 @@ export function AccountSettingsPage({
   /** The account is gone; leave the signed-in app. */
   onDeleted: () => void | Promise<unknown>;
 }) {
-  // **What would refuse a rename or a deletion, read when the page opens.**
+  // **What would refuse a deletion, read when the page opens.**
   // A button that can only be refused is drawn dimmed with the reason, the
   // way Approve and Publish are, rather than offered and then refused after
   // somebody has typed their password. Null while unknown: the server checks
@@ -82,28 +81,9 @@ export function AccountSettingsPage({
         <SettingsGroup
           id="account-sign-in"
           title="Signing in"
-          note="Your password and the username you sign in with."
+          note="Your password. Your username stays as it is: approvals, comments and versions name you by it."
         >
           <PasswordForm />
-          <UsernameForm
-            user={user}
-            onSaved={onUserChanged}
-            blocked={
-              blockers?.serviceAccount
-                ? {
-                    reason:
-                      "This account runs Bindersnap itself and cannot be renamed.",
-                    list: [],
-                  }
-                : blockers && blockers.renameBlockedBy.length > 0
-                  ? {
-                      reason:
-                        "Your username is in the sign-off rules of these binders. Change those rules to use a group, then rename.",
-                      list: blockers.renameBlockedBy,
-                    }
-                  : null
-            }
-          />
         </SettingsGroup>
 
         <SettingsGroup
@@ -381,115 +361,6 @@ function PasswordForm() {
 
 /** Why an action is unavailable, and the things to go and fix. */
 type Blocked = { reason: string; list: string[] } | null;
-
-function UsernameForm({
-  user,
-  onSaved,
-  blocked,
-}: {
-  user: SessionUser | null;
-  onSaved: () => void | Promise<unknown>;
-  blocked: Blocked;
-}) {
-  const [name, setName] = useState("");
-  const [password, setPassword] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [notice, setNotice] = useState<Notice | null>(null);
-
-  async function save() {
-    setSaving(true);
-    setNotice(null);
-    try {
-      const renamed = await changeUsername(name, password);
-      await onSaved();
-      setName("");
-      setPassword("");
-      setNotice({
-        tone: "saved",
-        text: `You sign in as ${renamed.username} now. Your drafts moved with you.`,
-      });
-    } catch (err) {
-      setNotice(refusalNotice(err, "Your username could not be changed."));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <section className="bs-section" aria-label="Username">
-      <h3 className="bs-section-title">Username</h3>
-      <form
-        className="bs-fields"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void save();
-        }}
-      >
-        <div className="bs-field">
-          <label className="bs-field-label" htmlFor="account-new-username">
-            New username
-          </label>
-          <input
-            className="bs-input bs-input--sm"
-            id="account-new-username"
-            type="text"
-            autoComplete="username"
-            spellCheck={false}
-            placeholder={user?.username ?? ""}
-            value={name}
-            disabled={saving}
-            aria-describedby="account-new-username-hint"
-            onChange={(event) => {
-              setName(event.target.value);
-              setNotice(null);
-            }}
-          />
-          {/* What a rename touches that somebody would ask about. */}
-          <p className="bs-field-hint" id="account-new-username-hint">
-            Your name on approvals does not change. Versions already published
-            keep the username they were signed with, beside your name.
-          </p>
-        </div>
-        <div className="bs-field">
-          <label className="bs-field-label" htmlFor="account-username-password">
-            Current password
-          </label>
-          <input
-            className="bs-input bs-input--sm"
-            id="account-username-password"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            disabled={saving}
-            onChange={(event) => setPassword(event.target.value)}
-          />
-        </div>
-        <NoticeLine
-          notice={
-            notice ??
-            (blocked
-              ? { tone: "danger", text: blocked.reason, list: blocked.list }
-              : null)
-          }
-        />
-        <div className="bs-field-row">
-          <button
-            type="submit"
-            className="bs-btn bs-btn--sm bs-btn-primary"
-            disabled={
-              blocked !== null ||
-              saving ||
-              name.trim() === "" ||
-              password === ""
-            }
-          >
-            {saving ? "Changing…" : "Change username"}
-          </button>
-        </div>
-      </form>
-    </section>
-  );
-}
 
 function DeleteAccountForm({
   user,

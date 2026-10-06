@@ -281,9 +281,9 @@ export async function updateProfile(name: {
 }
 
 /**
- * A refusal that names what is in the way — the binders whose sign-off rules
- * name this person, or the organizations they are the only owner of — so the
- * page can list them rather than leave the person guessing.
+ * A refusal that names what is in the way — the organizations this person is
+ * the only owner of — so the page can list them rather than leave the person
+ * guessing.
  */
 export class AccountChangeRefused extends Error {
   constructor(
@@ -297,19 +297,16 @@ export class AccountChangeRefused extends Error {
 
 function explainAccountRefusal(err: unknown): never {
   if (err instanceof ApiRequestError && err.status === 409) {
-    const data = (err.data ?? {}) as {
-      binders?: unknown;
-      organizations?: unknown;
-    };
-    const blockers = [data.binders, data.organizations]
-      .flatMap((list) => (Array.isArray(list) ? list : []))
-      .filter((item): item is string => typeof item === "string");
+    const data = (err.data ?? {}) as { organizations?: unknown };
+    const blockers = (
+      Array.isArray(data.organizations) ? data.organizations : []
+    ).filter((item): item is string => typeof item === "string");
     throw new AccountChangeRefused(err.message, blockers);
   }
   throw err;
 }
 
-/** What would refuse a rename or a deletion, before either is tried. */
+/** What would refuse a deletion, before it is tried. */
 export async function fetchAccountBlockers(): Promise<AccountBlockers> {
   const response = await AccountClient.getAccountBlockers();
   return response.data;
@@ -320,20 +317,6 @@ export async function changePassword(
   newPassword: string,
 ): Promise<void> {
   await AccountClient.changePassword({ currentPassword, newPassword });
-}
-
-export async function changeUsername(
-  newUsername: string,
-  password: string,
-): Promise<SessionAuthUser> {
-  const response = await AccountClient.changeUsername({
-    newUsername: newUsername.trim(),
-    password,
-  }).catch(explainAccountRefusal);
-  if (response.status !== 200) {
-    throw new Error("Your username could not be changed.");
-  }
-  return response.data.user;
 }
 
 export async function deleteAccount(

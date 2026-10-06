@@ -95,14 +95,4 @@ describe("SessionStore", () => {
       "here",
     ]);
   });
-
-  test("renameUser moves every session to the new name", async () => {
-    await store.put(makeSession({ id: "a", username: "jkim" }));
-    await store.put(makeSession({ id: "b", username: "jkim" }));
-
-    await store.renameUser("jkim", "jordan");
-
-    expect((await store.get("a"))?.username).toBe("jordan");
-    expect((await store.get("b"))?.username).toBe("jordan");
-  });
 });

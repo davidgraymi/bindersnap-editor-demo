@@ -1,25 +1,16 @@
 /**
- * The questions a person's own account raises before it is renamed or deleted.
+ * The questions a person's own account raises before it is deleted.
  *
- * Gitea renames and deletes accounts itself, and keeps everything that refers
- * to one by id — reviews, comments, team memberships — pointing at the right
- * place. What it cannot see are the places that refer to somebody **by login,
- * as text**, and Bindersnap has three:
+ * Gitea deletes accounts itself, and keeps everything that refers to one by
+ * id — reviews, comments, published versions — on the record. What it cannot
+ * see is a **draft**: the branch `draft/<login>/<stamp>`, whose owner is read
+ * from that name. A deleted account's drafts are retired out of `draft/`, so a
+ * future account that takes the same login cannot pick them up.
  *
- * - **Sign-off rules.** `.gitea/CODEOWNERS` may name `@jkim`. Gitea reads the
- *   file at merge time; rename Jordan and the line names nobody, and the
- *   folder's sign-off quietly stops applying.
- * - **Drafts.** A draft is the branch `draft/<login>/<stamp>`, and whose it is
- *   is read from that name.
- * - **Sessions.** Each holds the login it was made for.
- *
- * Sign-off rules are changed by an approved change request, never written
- * behind the binder's back — so a rename that would break one is refused with
- * the list of binders to fix. Drafts and sessions are this person's own, so
- * they move with them.
+ * Logins never change. A rename was supported once, and it had to chase every
+ * place that names somebody as text — sign-off rules, drafts, sessions — for
+ * a change nobody needed.
  */
-
-import { parseCodeowners } from "../../packages/utils/codeowners";
 
 import {
   readAllPages,
@@ -27,9 +18,8 @@ import {
   unwrap,
   type GiteaClient,
 } from "./gitea-client/client";
-import { DRAFT_BRANCH_PREFIX, draftOwner } from "./gitea-client/drafts";
+import { draftOwner } from "./gitea-client/drafts";
 import { listOrganizationOwners } from "./gitea-client/orgs";
-import { readSignOffFile } from "./gitea-client/signOff";
 import { listOrganizationWorkspaces } from "./gitea-client/workspaces";
 
 /** Every organization this person is in, by name. */
@@ -48,44 +38,6 @@ export async function listUserOrganizations(
   return orgs
     .map((org) => org.username ?? org.name ?? "")
     .filter((name) => name !== "");
-}
-
-/** Whether a CODEOWNERS file names this login as a person who signs off. */
-export function signOffNamesUser(
-  org: string,
-  content: string,
-  username: string,
-): boolean {
-  const login = username.toLowerCase();
-  return parseCodeowners(org, content).rules.some((rule) =>
-    rule.users.some((user) => user.toLowerCase() === login),
-  );
-}
-
-/** The binders whose sign-off rules name this person, as `org/binder`. */
-export async function findSignOffMentions(params: {
-  client: GiteaClient;
-  username: string;
-  orgs: readonly string[];
-}): Promise<string[]> {
-  const { client, username, orgs } = params;
-  const mentions: string[] = [];
-
-  for (const org of orgs) {
-    const binders = await listOrganizationWorkspaces({ client, org });
-    for (const binder of binders) {
-      const file = await readSignOffFile({
-        client,
-        org,
-        workspace: binder.name,
-      }).catch(() => null);
-      if (file && signOffNamesUser(org, file.content, username)) {
-        mentions.push(`${org}/${binder.name}`);
-      }
-    }
-  }
-
-  return mentions;
 }
 
 /**
@@ -111,17 +63,6 @@ export async function findSoleOwnerships(params: {
   }
 
   return sole;
-}
-
-/** `draft/jkim/20260919…` → `draft/jordan/20260919…`, or null if not theirs. */
-export function renamedDraftBranch(
-  branch: string,
-  from: string,
-  to: string,
-): string | null {
-  if (draftOwner(branch)?.toLowerCase() !== from.toLowerCase()) return null;
-  const stamp = branch.slice(DRAFT_BRANCH_PREFIX.length).split("/")[1];
-  return `${DRAFT_BRANCH_PREFIX}${to}/${stamp}`;
 }
 
 /** One of a person's drafts, in one binder. */

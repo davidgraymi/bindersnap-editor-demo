@@ -278,12 +278,10 @@ import {
 import { buildChangeUpdates } from "./change-updates";
 import type { DraftNameRecord } from "./draft-names";
 import {
-  findSignOffMentions,
   findSoleOwnerships,
   listOwnedDrafts,
   listUserOrganizations,
   renameBranch,
-  renamedDraftBranch,
 } from "./account";
 import {
   defaultDraftName,
@@ -2545,7 +2543,7 @@ async function confirmCurrentPassword(
 /** Gitea's own default, which is what the signup form already lives with. */
 const MIN_PASSWORD_LENGTH = 8;
 
-/** The service account's own login, which no person may rename or delete. */
+/** The service account's own login, which no person may delete. */
 function isServiceAccount(username: string): boolean {
   return username.toLowerCase() === config.giteaAdminUsername.toLowerCase();
 }
@@ -2562,9 +2560,9 @@ async function endOtherSessions(
 }
 
 /**
- * What stands in the way of a rename or a deletion, asked before either.
+ * What stands in the way of a deletion, asked before it.
  *
- * The same checks the two actions make, run when the page opens, so a button
+ * The same check the deletion makes, run when the page opens, so a button
  * that can only be refused is drawn dimmed with the reason rather than
  * offered and then refused after somebody has typed their password.
  */
@@ -2579,7 +2577,7 @@ async function handleAccountBlockers(
   if (isServiceAccount(username)) {
     return json(
       200,
-      { serviceAccount: true, renameBlockedBy: [], deleteBlockedBy: [] },
+      { serviceAccount: true, deleteBlockedBy: [] },
       baseHeaders,
     );
   }
@@ -2594,15 +2592,12 @@ async function handleAccountBlockers(
   }
   try {
     const orgs = await listUserOrganizations(client, username);
-    const [renameBlockedBy, deleteBlockedBy] = await Promise.all([
-      findSignOffMentions({ client, username, orgs }),
-      findSoleOwnerships({ client, username, orgs }),
-    ]);
-    return json(
-      200,
-      { serviceAccount: false, renameBlockedBy, deleteBlockedBy },
-      baseHeaders,
-    );
+    const deleteBlockedBy = await findSoleOwnerships({
+      client,
+      username,
+      orgs,
+    });
+    return json(200, { serviceAccount: false, deleteBlockedBy }, baseHeaders);
   } catch (err) {
     return responseFromError(
       err,
@@ -2695,166 +2690,6 @@ async function handleChangePassword(
     username: session.username,
   });
   return new Response(null, { status: 204, headers: baseHeaders });
-}
-
-/**
- * A new login for the same person.
- *
- * Gitea renames the account and everything that refers to it by id follows.
- * What refers to it by name is handled here — see `account.ts`: a sign-off
- * rule naming them refuses the rename until the rule is changed, and their
- * drafts and sessions move with them.
- */
-async function handleChangeUsername(
-  req: Request,
-  baseHeaders: Headers,
-): Promise<Response> {
-  const auth = await requireSession(req, baseHeaders);
-  if (auth instanceof Response) return auth;
-  const { session } = auth;
-  const from = session.username;
-
-  const payload = await readJson<{ newUsername?: unknown; password?: unknown }>(
-    req,
-  );
-  const to =
-    typeof payload?.newUsername === "string" ? payload.newUsername.trim() : "";
-  const password =
-    typeof payload?.password === "string" ? payload.password : "";
-
-  if (to === "" || to === from) {
-    return json(400, { error: "Enter a new username." }, baseHeaders);
-  }
-  if (isServiceAccount(from)) {
-    return json(
-      403,
-      { error: "This account runs Bindersnap itself and cannot be renamed." },
-      baseHeaders,
-    );
-  }
-
-  const refused = await confirmCurrentPassword(
-    req,
-    session,
-    password,
-    baseHeaders,
-  );
-  if (refused) return refused;
-
-  const client = createPrivilegedGiteaClient();
-  const serviceHeaders = buildGiteaPrivilegedHeaders({
-    "Content-Type": "application/json",
-    Accept: "application/json",
-  });
-  if (!client || !serviceHeaders) {
-    return json(
-      502,
-      { error: "Usernames cannot be changed right now." },
-      baseHeaders,
-    );
-  }
-
-  try {
-    const orgs = await listUserOrganizations(client, from);
-    const mentions = await findSignOffMentions({
-      client,
-      username: from,
-      orgs,
-    });
-    if (mentions.length > 0) {
-      return json(
-        409,
-        {
-          error:
-            "Your username is in the sign-off rules of a binder. Change those rules to use a group first, then rename.",
-          binders: mentions,
-        },
-        baseHeaders,
-      );
-    }
-
-    const response = await giteaFetch(
-      `/api/v1/admin/users/${encodeURIComponent(from)}/rename`,
-      {
-        method: "POST",
-        headers: serviceHeaders,
-        body: JSON.stringify({ new_username: to }),
-      },
-    ).catch(() => null);
-    if (!response || !response.ok) {
-      const taken = response?.status === 422 || response?.status === 409;
-      const error = taken
-        ? "That username is taken, or is not one Bindersnap can use."
-        : "Your username could not be changed.";
-      return json(taken ? 409 : 502, { error }, baseHeaders);
-    }
-
-    // Their sessions first, so nobody is signed out by the rest failing.
-    await sessionStore.renameUser(from, to);
-
-    // A draft is `draft/<login>/<stamp>`, and whose it is comes from that
-    // name. Gitea moves an open change request's head with its branch.
-    const drafts = await listOwnedDrafts({ client, username: from, orgs });
-    for (const draft of drafts) {
-      const renamed = renamedDraftBranch(draft.branch, from, to);
-      if (!renamed) continue;
-      try {
-        await renameBranch({
-          client,
-          org: draft.org,
-          binder: draft.binder,
-          from: draft.branch,
-          to: renamed,
-        });
-        const names = await draftNameStore.forBranches(draft.giteaRepoId, [
-          draft.branch,
-        ]);
-        const named = names.get(draft.branch);
-        if (named) {
-          await draftNameStore.set({
-            giteaRepoId: draft.giteaRepoId,
-            branch: renamed,
-            name: named.name,
-            authored: named.authored,
-            owner: to,
-          });
-          await draftNameStore.forget(draft.giteaRepoId, draft.branch);
-        }
-      } catch (err) {
-        logger.error("A draft did not follow a renamed account", {
-          from,
-          to,
-          branch: draft.branch,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
-
-    logger.info("Account renamed", { from, to, drafts: drafts.length });
-    const user = await fetchSessionGiteaUser({ ...session, username: to });
-    return json(
-      200,
-      {
-        user: {
-          username: user?.username ?? to,
-          fullName: user?.fullName ?? undefined,
-          isAdmin: user?.isAdmin === true,
-        },
-      },
-      baseHeaders,
-    );
-  } catch (err) {
-    logger.error("Failed to rename an account", {
-      from,
-      to,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return json(
-      502,
-      { error: "Your username could not be changed." },
-      baseHeaders,
-    );
-  }
 }
 
 /**
@@ -13439,8 +13274,6 @@ async function handleRequest(req: Request): Promise<Response> {
     response = await handleUpdateProfile(req, baseHeaders);
   } else if (pathname === "/api/app/account/password" && method === "POST") {
     response = await handleChangePassword(req, baseHeaders);
-  } else if (pathname === "/api/app/account/username" && method === "POST") {
-    response = await handleChangeUsername(req, baseHeaders);
   } else if (pathname === "/api/app/account/blockers" && method === "GET") {
     response = await handleAccountBlockers(req, baseHeaders);
   } else if (pathname === "/api/app/account" && method === "DELETE") {

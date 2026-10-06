@@ -7,6 +7,5 @@
 
 export type GetAccountBlockers200 = {
   serviceAccount: boolean;
-  renameBlockedBy: string[];
   deleteBlockedBy: string[];
 };

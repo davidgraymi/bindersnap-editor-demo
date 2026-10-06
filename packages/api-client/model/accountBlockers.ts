@@ -7,6 +7,5 @@
 
 export interface AccountBlockers {
   serviceAccount: boolean;
-  renameBlockedBy: string[];
   deleteBlockedBy: string[];
 }
