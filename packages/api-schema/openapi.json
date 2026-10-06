@@ -10717,6 +10717,9 @@
                         "canApprove",
                         "canPublish"
                       ]
+                    },
+                    "clearsApprovalsOnEdit": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -10732,7 +10735,8 @@
                     "unresolvedThreadCount",
                     "canManage",
                     "requiredReviewers",
-                    "viewer"
+                    "viewer",
+                    "clearsApprovalsOnEdit"
                   ]
                 }
               }

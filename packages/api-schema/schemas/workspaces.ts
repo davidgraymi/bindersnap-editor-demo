@@ -528,6 +528,11 @@ export const WorkspaceChangeDetailPayloadSchema = z.object({
     canApprove: z.boolean(),
     canPublish: z.boolean(),
   }),
+  /**
+   * Whether an approval stops counting once what the change proposes moves
+   * on: the binder's "A new version clears the approvals already collected".
+   */
+  clearsApprovalsOnEdit: z.boolean(),
 });
 export type WorkspaceChangeDetailPayload = z.infer<
   typeof WorkspaceChangeDetailPayloadSchema

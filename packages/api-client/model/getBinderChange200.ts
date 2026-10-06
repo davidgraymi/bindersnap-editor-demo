@@ -25,4 +25,5 @@ export type GetBinderChange200 = {
   canManage: boolean;
   requiredReviewers: GetBinderChange200RequiredReviewers;
   viewer: GetBinderChange200Viewer;
+  clearsApprovalsOnEdit: boolean;
 };
