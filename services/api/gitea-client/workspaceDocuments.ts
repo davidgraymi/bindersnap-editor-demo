@@ -700,10 +700,6 @@ export async function createDocumentVersionTag(params: {
   };
 }
 
-interface GitBranch {
-  name?: string;
-}
-
 /**
  * A document proposed at this address but not yet published, if there is one.
  *
@@ -711,6 +707,13 @@ interface GitBranch {
  * uploads race for one address: both are accepted, and they collide later as
  * two files answering to a single URL. The upload branch carries the identity
  * (`upload/<slugPath>/…`), which is what makes pending work visible here.
+ *
+ * **Proposed means a change request is open on it**, not merely that a branch
+ * with the prefix exists. An upload is three writes — branch, commit, change
+ * request — and a run that stopped after the first two left a branch nobody
+ * had proposed. Counting it blocked the address for good: every later upload
+ * was told the document was "already waiting in a change request" that did not
+ * exist. Such a branch is left where it is; it no longer holds the address.
  *
  * Answers with the branch name so the caller can say which change already
  * claims the address, rather than only that something does.
@@ -724,21 +727,25 @@ export async function findPendingDocumentBranch(params: {
   const { client, org, workspace, slugPath } = params;
 
   try {
-    const branches = (await readAllPages((query) =>
+    const open = (await readAllPages((query) =>
       unwrap(
-        client.GET("/repos/{owner}/{repo}/branches", {
-          params: { path: { owner: org, repo: workspace }, query },
+        client.GET("/repos/{owner}/{repo}/pulls", {
+          params: {
+            path: { owner: org, repo: workspace },
+            query: { state: "open", ...query },
+          },
         }),
       ),
-    )) as GitBranch[];
+    )) as Array<{ head?: { ref?: string } }>;
 
     const prefix = `upload/${slugPath}/`;
     return (
-      branches.find((branch) => (branch.name ?? "").startsWith(prefix))?.name ??
-      null
+      open
+        .map((pull) => pull.head?.ref ?? "")
+        .find((ref) => ref.startsWith(prefix)) ?? null
     );
   } catch (err) {
-    // A binder with no branches yet is not a conflict.
+    // A binder with nothing proposed yet is not a conflict.
     if (err instanceof GiteaApiError && err.status === 404) return null;
     throw err;
   }

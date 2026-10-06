@@ -801,3 +801,39 @@ test("publishedVersionByMergeCommit numbers a change by the tags on its merge", 
     ["merge-b", 4],
   ]);
 });
+
+test("an upload branch nobody proposed does not hold its address", async () => {
+  const { findPendingDocumentBranch } = await import("./workspaceDocuments");
+  const { client } = createMockClient({
+    GET: {
+      // Branches are not asked about at all: a branch left by an upload that
+      // stopped before its change request is not a proposal.
+      "/repos/{owner}/{repo}/branches": () => [
+        { name: "upload/nursing/handover/20260901-orphan" },
+      ],
+      "/repos/{owner}/{repo}/pulls": () => [
+        {
+          number: 3,
+          head: { ref: "upload/nursing/admissions/20260902-alice" },
+        },
+      ],
+    },
+  });
+
+  expect(
+    await findPendingDocumentBranch({
+      client,
+      org: "mercy-health",
+      workspace: "clinical",
+      slugPath: "nursing/handover",
+    }),
+  ).toBeNull();
+  expect(
+    await findPendingDocumentBranch({
+      client,
+      org: "mercy-health",
+      workspace: "clinical",
+      slugPath: "nursing/admissions",
+    }),
+  ).toBe("upload/nursing/admissions/20260902-alice");
+});
