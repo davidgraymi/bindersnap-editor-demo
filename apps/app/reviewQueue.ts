@@ -117,16 +117,21 @@ function isWaitingOnReader(
 ): boolean {
   const login = username.toLowerCase();
 
+  // Asked and not yet answered is waiting on them whatever the status says:
+  // a binder that needs no approvals is "ready" with a request still open.
+  const asked = change.reviewers.some(
+    (reviewer) =>
+      reviewer.login.toLowerCase() === login && reviewer.status === "awaiting",
+  );
+  if (asked) return true;
+
   if (status === "ready") {
     const isMine = change.user?.login?.toLowerCase() === login;
     const ownsDocument = document.repo.owner.login.toLowerCase() === login;
     return isMine || ownsDocument;
   }
 
-  return change.reviewers.some(
-    (reviewer) =>
-      reviewer.login.toLowerCase() === login && reviewer.status === "awaiting",
-  );
+  return false;
 }
 
 function statusFromStanding(standing: ChangeStanding | null): QueueStatus {
