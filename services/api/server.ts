@@ -2,6 +2,17 @@ import { createHash, randomUUID } from "crypto";
 
 import { config, type SessionCookieSameSite } from "./config";
 import { logger } from "./logger";
+import {
+  createGiteaUsage,
+  currentGiteaUsage,
+  giteaUsageLogFields,
+  recordGiteaCall,
+  withGiteaUsage,
+} from "./gitea-client/usage";
+import {
+  giteaRequestGate,
+  MAX_CONCURRENT_GITEA_REQUESTS,
+} from "./gitea-client/request-gate";
 import { runSessionReaper } from "./session-reaper";
 import { sessionStore, type SessionRecord } from "./sessions";
 import {
@@ -719,7 +730,18 @@ async function readJson<T>(req: Request): Promise<T | null> {
 }
 
 async function giteaFetch(path: string, init?: RequestInit): Promise<Response> {
-  return fetch(new URL(path, config.giteaUrl), init);
+  const startedAt = performance.now();
+  try {
+    return await fetch(new URL(path, config.giteaUrl), init);
+  } finally {
+    // Not gated, so no wait to report — but it is still Gitea's time, and a
+    // request that makes these should say so on its log line.
+    recordGiteaCall({
+      gated: false,
+      waitMs: 0,
+      durationMs: performance.now() - startedAt,
+    });
+  }
 }
 
 async function readResponsePayload(response: Response): Promise<unknown> {
@@ -12744,966 +12766,984 @@ function startCleanupTimer(): ReturnType<typeof setInterval> {
   }, 60_000);
 }
 
+/**
+ * The request gate, right now: how many Gitea calls hold a slot and how many
+ * wait for one. Admin-only — it describes everyone's load, not the caller's.
+ *
+ * The per-request half is on every response log line (`giteaCalls`,
+ * `giteaGateWaitMs`, `giteaMs`); this is the process-wide half, for telling a
+ * slow page from a full queue while it is happening.
+ */
+async function handleGiteaDiagnostics(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireAdminSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  return json(
+    200,
+    {
+      gate: {
+        limit: MAX_CONCURRENT_GITEA_REQUESTS,
+        inFlight: giteaRequestGate.inFlight,
+        queued: giteaRequestGate.queued,
+      },
+    },
+    baseHeaders,
+  );
+}
+
 export function createApiServer() {
   return Bun.serve({
     port: config.apiPort,
     idleTimeout: 30,
-    async fetch(req) {
-      const startMs = Date.now();
-      const url = new URL(req.url);
-      const { pathname } = url;
-      const method = req.method;
-      const origin = requestOrigin(req);
-      const clientIp = requestClientIp(req);
+    // Each request gets its own Gitea usage record, which every Gitea call
+    // made while serving it adds to. See `gitea-client/usage.ts`.
+    fetch: (req) =>
+      withGiteaUsage(createGiteaUsage(), () => handleRequest(req)),
+  });
+}
 
-      logger.info("Incoming request", {
+async function handleRequest(req: Request): Promise<Response> {
+  const startMs = Date.now();
+  const url = new URL(req.url);
+  const { pathname } = url;
+  const method = req.method;
+  const origin = requestOrigin(req);
+  const clientIp = requestClientIp(req);
+
+  logger.info("Incoming request", {
+    method,
+    path: pathname,
+    origin,
+    clientIp,
+  });
+
+  // Liveness probe: must respond before any auth/origin/HTTPS gate.
+  // Returns 200 once the process accepts connections; deeper readiness
+  // (e.g. Gitea reachability) would live on /readyz if it lands.
+  if (pathname === "/healthz" && (method === "GET" || method === "HEAD")) {
+    const durationMs = Date.now() - startMs;
+    logger.info("Response sent", {
+      method,
+      path: pathname,
+      status: 200,
+      durationMs,
+    });
+    return new Response(method === "HEAD" ? null : "ok\n", {
+      status: 200,
+      headers: { "content-type": "text/plain; charset=utf-8" },
+    });
+  }
+
+  const baseHeaders = corsHeaders(req);
+  const transportError = enforceTransportSecurity(req, baseHeaders);
+  if (transportError) {
+    const durationMs = Date.now() - startMs;
+    logger.info("Response sent", {
+      method,
+      path: pathname,
+      status: transportError.status,
+      durationMs,
+    });
+    return transportError;
+  }
+
+  if (pathname === "/stripe/webhook" && method === "POST") {
+    const response = await handleStripeWebhook(req, baseHeaders);
+    const durationMs = Date.now() - startMs;
+    if (response.status >= 500) {
+      logger.error("Response sent with 5xx status", {
         method,
         path: pathname,
-        origin,
-        clientIp,
+        status: response.status,
+        durationMs,
       });
+    } else {
+      logger.info("Response sent", {
+        method,
+        path: pathname,
+        status: response.status,
+        durationMs,
+      });
+    }
+    return response;
+  }
 
-      // Liveness probe: must respond before any auth/origin/HTTPS gate.
-      // Returns 200 once the process accepts connections; deeper readiness
-      // (e.g. Gitea reachability) would live on /readyz if it lands.
-      if (pathname === "/healthz" && (method === "GET" || method === "HEAD")) {
-        const durationMs = Date.now() - startMs;
-        logger.info("Response sent", {
-          method,
-          path: pathname,
-          status: 200,
-          durationMs,
-        });
-        return new Response(method === "HEAD" ? null : "ok\n", {
-          status: 200,
-          headers: { "content-type": "text/plain; charset=utf-8" },
-        });
-      }
+  const originError = enforceStateChangingOrigin(req, baseHeaders);
+  if (originError) {
+    const durationMs = Date.now() - startMs;
+    logger.info("Response sent", {
+      method,
+      path: pathname,
+      status: originError.status,
+      durationMs,
+    });
+    return originError;
+  }
 
-      const baseHeaders = corsHeaders(req);
-      const transportError = enforceTransportSecurity(req, baseHeaders);
-      if (transportError) {
-        const durationMs = Date.now() - startMs;
-        logger.info("Response sent", {
-          method,
-          path: pathname,
-          status: transportError.status,
-          durationMs,
-        });
-        return transportError;
-      }
+  if (method === "OPTIONS") {
+    const durationMs = Date.now() - startMs;
+    logger.info("Response sent", {
+      method,
+      path: pathname,
+      status: 204,
+      durationMs,
+    });
+    return new Response(null, {
+      status: 204,
+      headers: baseHeaders,
+    });
+  }
 
-      if (pathname === "/stripe/webhook" && method === "POST") {
-        const response = await handleStripeWebhook(req, baseHeaders);
-        const durationMs = Date.now() - startMs;
-        if (response.status >= 500) {
-          logger.error("Response sent with 5xx status", {
-            method,
-            path: pathname,
-            status: response.status,
-            durationMs,
+  let response: Response;
+
+  if (pathname === "/auth/signup" && method === "POST") {
+    response = await handleSignup(req, baseHeaders);
+  } else if (pathname === "/auth/login" && method === "POST") {
+    response = await handleLogin(req, baseHeaders);
+  } else if (pathname === "/auth/logout" && method === "POST") {
+    response = await handleLogout(req, baseHeaders);
+  } else if (pathname === "/auth/me" && method === "GET") {
+    response = await handleAuthMe(req, baseHeaders);
+  } else if (pathname === "/api/app/account/profile" && method === "PATCH") {
+    response = await handleUpdateProfile(req, baseHeaders);
+  } else if (pathname === "/api/app/account/password" && method === "POST") {
+    response = await handleChangePassword(req, baseHeaders);
+  } else if (pathname === "/api/app/account/username" && method === "POST") {
+    response = await handleChangeUsername(req, baseHeaders);
+  } else if (pathname === "/api/app/account/blockers" && method === "GET") {
+    response = await handleAccountBlockers(req, baseHeaders);
+  } else if (pathname === "/api/app/account" && method === "DELETE") {
+    response = await handleDeleteAccount(req, baseHeaders);
+  } else if (
+    method === "GET" &&
+    /^\/api\/app\/avatars\/[^/]+$/.test(pathname)
+  ) {
+    response = await handleAvatar(
+      req,
+      baseHeaders,
+      decodeURIComponent(pathname.slice("/api/app/avatars/".length)),
+    );
+  } else if (pathname === "/api/app/onboarding" && method === "GET") {
+    response = await handleOnboarding(req, baseHeaders);
+  } else if (pathname === "/api/app/notifications" && method === "GET") {
+    response = await handleListNotifications(req, baseHeaders);
+  } else if (pathname === "/api/app/notifications/count" && method === "GET") {
+    response = await handleNotificationCount(req, baseHeaders);
+  } else if (pathname === "/api/app/notifications/read" && method === "POST") {
+    response = await handleReadNotifications(req, baseHeaders);
+  } else if (
+    pathname === "/api/app/admin/diagnostics/gitea" &&
+    method === "GET"
+  ) {
+    response = await handleGiteaDiagnostics(req, baseHeaders);
+  } else if (pathname === "/api/app/home/changes" && method === "GET") {
+    response = await handleHomeChanges(req, baseHeaders);
+  } else if (pathname === "/api/app/documents" && method === "GET") {
+    response = await handleLibraryDocuments(req, baseHeaders);
+  } else if (pathname === "/api/app/documents/search" && method === "GET") {
+    response = await handleDocumentSearch(req, baseHeaders);
+  } else if (pathname === "/api/app/users/search" && method === "GET") {
+    response = await handleSearchUsersRoute(req, baseHeaders);
+  } else if (
+    pathname === "/api/app/admin/subscriptions/access" &&
+    method === "GET"
+  ) {
+    response = await handleAdminSubscriptionAccessList(req, baseHeaders);
+  } else if (pathname === "/api/app/binders" && method === "GET") {
+    response = await handleListWorkspaces(req, baseHeaders);
+  } else if (pathname === "/api/app/organizations" && method === "GET") {
+    response = await handleListOrganizations(req, baseHeaders);
+  } else if (pathname === "/api/app/organizations" && method === "POST") {
+    response = await handleCreateOrganization(req, baseHeaders);
+  } else if (pathname === "/api/app/billing/status" && method === "GET") {
+    response = await handleBillingStatus(req, baseHeaders);
+  } else if (pathname === "/api/app/billing/checkout" && method === "POST") {
+    response = await handleBillingCheckout(req, baseHeaders);
+  } else if (pathname === "/api/app/billing/portal" && method === "POST") {
+    response = await handleBillingPortal(req, baseHeaders);
+  } else if (pathname === "/api/dev/grant-subscription" && method === "POST") {
+    response = await handleDevGrantSubscription(req, baseHeaders);
+  } else if (pathname === "/api/dev/end-trial" && method === "POST") {
+    response = await handleDevEndTrial(req, baseHeaders);
+  } else {
+    const adminSubscriptionAccessActionMatch = pathname.match(
+      /^\/api\/app\/admin\/subscriptions\/access\/([^/]+)$/,
+    );
+    const adminSubscriptionGrantMatch = pathname.match(
+      /^\/api\/app\/admin\/subscriptions\/([^/]+)\/grant$/,
+    );
+    const adminSubscriptionRevokeMatch = pathname.match(
+      /^\/api\/app\/admin\/subscriptions\/([^/]+)\/revoke$/,
+    );
+    const adminSubscriptionStatusMatch = pathname.match(
+      /^\/api\/app\/admin\/subscriptions\/([^/]+)$/,
+    );
+    const workspaceDocumentsMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/documents$/,
+    );
+    // A new version of a document already in the binder. The document is
+    // named in the body rather than in the path, because a path suffix
+    // would collide with a policy filed in a folder of that name —
+    // `…/documents/nursing/revisions` is a real address a person could
+    // have made.
+    const workspaceDocumentRevisionsMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/document-revisions$/,
+    );
+    // The acts that change where things are filed rather than what they
+    // say. Each names its subject in the body for the same reason a
+    // revision does: a folder called `folders` is a folder somebody could
+    // legitimately make.
+    const workspaceFoldersMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/folders$/,
+    );
+    const workspaceFolderRenamesMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/folder-renames$/,
+    );
+    const workspaceDocumentRenamesMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/document-renames$/,
+    );
+    // Taking a document off the record. Named for what it is rather than
+    // for a verb that is not true: the file leaves `main` and its version
+    // tags still point at every commit that held it.
+    const workspaceDocumentArchivesMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/document-archives$/,
+    );
+    // Bringing one back. Its own act rather than an inverse of the one
+    // above: it writes a file, and what it writes comes out of a tag.
+    const workspaceDocumentRestoresMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/document-restores$/,
+    );
+    // A binder's own name. Not under `settings`, because it is not a
+    // setting — it changes the binder's address, and every other write
+    // under that path leaves the address alone.
+    const workspaceNameMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/name$/,
+    );
+    const workspaceDescriptionMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/description$/,
+    );
+    const workspaceArchiveMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/archive$/,
+    );
+    // The document's path carries slashes — it is a path inside the binder,
+    // not one segment — so this captures the rest of the URL.
+    const workspaceDocumentMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/documents\/(.+)$/,
+    );
+    const workspacePublishMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/publish$/,
+    );
+    const workspaceChangeReviewMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/reviews$/,
+    );
+    const workspaceChangeUpdateMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/update$/,
+    );
+    // A binder is a Gitea repository and a change on it is a Gitea pull
+    // request, so everything below is the document model's own handler
+    // reached at the binder's address. Same behaviour, one namespace per
+    // shape of thing — not a second implementation.
+    const workspaceChangeConflictsMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/conflicts$/,
+    );
+    const workspaceChangeDiscussionsMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/discussions$/,
+    );
+    const workspaceChangeReplyMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/discussions\/([^/]+)\/comments$/,
+    );
+    const workspaceChangeResolveMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/discussions\/([^/]+)\/resolve$/,
+    );
+    const workspaceChangeReactionMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/discussions\/([^/]+)\/comments\/(\d+)\/reactions$/,
+    );
+    const workspaceChangeUpdatesMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/updates$/,
+    );
+    const workspaceChangeAssignmentsMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/assignments$/,
+    );
+    const workspaceCollaboratorsMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/collaborators$/,
+    );
+    const workspaceChangeMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)$/,
+    );
+    // Raw content sits under its own segment rather than as a suffix on
+    // the document, because the document's path is the rest of the URL.
+    const workspaceDocumentRawMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/raw\/(.+)$/,
+    );
+    const workspaceDocumentAuditMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/audit\/(.+)$/,
+    );
+    const workspaceDocumentExportMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/export\/(.+)$/,
+    );
+    const createBinderMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/binders$/,
+    );
+    const organizationPeopleMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/people$/,
+    );
+    const organizationPersonRoleMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/people\/([^/]+)\/role$/,
+    );
+    const organizationDeletionMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/deletion$/,
+    );
+    const organizationMatch = pathname.match(/^\/api\/app\/orgs\/([^/]+)$/);
+    const organizationPersonMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/people\/([^/]+)$/,
+    );
+    const organizationGroupsMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/groups$/,
+    );
+    const organizationGroupMembersMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/groups\/([^/]+)\/members$/,
+    );
+    const organizationGroupMemberMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/groups\/([^/]+)\/members\/([^/]+)$/,
+    );
+    const workspacePeopleMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/people$/,
+    );
+    const workspacePersonMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/people\/([^/]+)$/,
+    );
+    const workspaceVisibilityMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/visibility$/,
+    );
+    const workspaceGroupsMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/groups$/,
+    );
+    const workspaceGroupMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/groups\/([^/]+)$/,
+    );
+    const workspaceChangesMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes$/,
+    );
+    // Singular, because a person has one draft in a binder. The branch is
+    // never in the URL: it carries slashes, it is the server's to name, and
+    // the only draft any of these three verbs acts on is the caller's own.
+    const workspaceDraftMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/draft$/,
+    );
+    const workspaceHistoryMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/history$/,
+    );
+    const workspaceSettingsMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/settings$/,
+    );
+    const workspaceSignOffMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/rules\/sign-off$/,
+    );
+    const workspaceRulesMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/rules$/,
+    );
+    // Last of the binder matchers, because every one above it is a longer
+    // path under the same two segments.
+    const workspaceOverviewMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)$/,
+    );
+
+    if (organizationDeletionMatch && method === "GET") {
+      response = await handleOrganizationDeletion(
+        req,
+        baseHeaders,
+        organizationDeletionMatch[1]!,
+      );
+    } else if (organizationMatch && method === "DELETE") {
+      response = await handleDeleteOrganization(
+        req,
+        baseHeaders,
+        organizationMatch[1]!,
+      );
+    } else if (organizationPeopleMatch && method === "GET") {
+      response = await handleOrganizationPeople(
+        req,
+        baseHeaders,
+        organizationPeopleMatch[1]!,
+      );
+    } else if (organizationPeopleMatch && method === "POST") {
+      response = await handleAddOrganizationPerson(
+        req,
+        baseHeaders,
+        organizationPeopleMatch[1]!,
+      );
+    } else if (organizationPersonRoleMatch && method === "POST") {
+      response = await handleOrganizationPersonRole(
+        req,
+        baseHeaders,
+        organizationPersonRoleMatch[1]!,
+        organizationPersonRoleMatch[2]!,
+      );
+    } else if (organizationPersonMatch && method === "DELETE") {
+      response = await handleRemoveOrganizationPerson(
+        req,
+        baseHeaders,
+        organizationPersonMatch[1]!,
+        organizationPersonMatch[2]!,
+      );
+    } else if (organizationGroupsMatch && method === "POST") {
+      response = await handleCreateOrganizationGroup(
+        req,
+        baseHeaders,
+        organizationGroupsMatch[1]!,
+      );
+    } else if (organizationGroupMembersMatch && method === "POST") {
+      response = await handleOrganizationGroupMember(
+        req,
+        baseHeaders,
+        organizationGroupMembersMatch[1]!,
+        organizationGroupMembersMatch[2]!,
+        null,
+      );
+    } else if (organizationGroupMemberMatch && method === "DELETE") {
+      response = await handleOrganizationGroupMember(
+        req,
+        baseHeaders,
+        organizationGroupMemberMatch[1]!,
+        organizationGroupMemberMatch[2]!,
+        organizationGroupMemberMatch[3]!,
+      );
+    } else if (workspaceVisibilityMatch && method === "POST") {
+      response = await handleBinderVisibility(
+        req,
+        baseHeaders,
+        workspaceVisibilityMatch[1]!,
+        workspaceVisibilityMatch[2]!,
+      );
+    } else if (workspacePeopleMatch && method === "GET") {
+      response = await handleBinderPeople(
+        req,
+        baseHeaders,
+        workspacePeopleMatch[1]!,
+        workspacePeopleMatch[2]!,
+      );
+    } else if (workspacePeopleMatch && method === "POST") {
+      response = await handleBinderPerson(
+        req,
+        baseHeaders,
+        workspacePeopleMatch[1]!,
+        workspacePeopleMatch[2]!,
+        null,
+      );
+    } else if (workspacePersonMatch && method === "POST") {
+      response = await handleBinderPerson(
+        req,
+        baseHeaders,
+        workspacePersonMatch[1]!,
+        workspacePersonMatch[2]!,
+        workspacePersonMatch[3]!,
+      );
+    } else if (workspacePersonMatch && method === "DELETE") {
+      response = await handleRemoveBinderPerson(
+        req,
+        baseHeaders,
+        workspacePersonMatch[1]!,
+        workspacePersonMatch[2]!,
+        workspacePersonMatch[3]!,
+      );
+    } else if (workspaceGroupsMatch && method === "POST") {
+      response = await handleBinderGroup(
+        req,
+        baseHeaders,
+        workspaceGroupsMatch[1]!,
+        workspaceGroupsMatch[2]!,
+        null,
+      );
+    } else if (workspaceGroupMatch && method === "DELETE") {
+      response = await handleBinderGroup(
+        req,
+        baseHeaders,
+        workspaceGroupMatch[1]!,
+        workspaceGroupMatch[2]!,
+        workspaceGroupMatch[3]!,
+      );
+    } else if (createBinderMatch && method === "GET") {
+      response = await handleListOrganizationWorkspaces(
+        req,
+        baseHeaders,
+        createBinderMatch[1]!,
+      );
+    } else if (createBinderMatch && method === "POST") {
+      response = await handleCreateWorkspace(
+        req,
+        baseHeaders,
+        createBinderMatch[1]!,
+      );
+    } else if (workspacePublishMatch && method === "POST") {
+      response = await handlePublishWorkspaceChange(
+        req,
+        baseHeaders,
+        workspacePublishMatch[1]!,
+        workspacePublishMatch[2]!,
+        Number.parseInt(workspacePublishMatch[3] ?? "", 10),
+      );
+    } else if (workspaceDocumentsMatch && method === "GET") {
+      response = await handleListWorkspaceDocuments(
+        req,
+        baseHeaders,
+        workspaceDocumentsMatch[1]!,
+        workspaceDocumentsMatch[2]!,
+        url.searchParams.get("draft"),
+        url.searchParams.get("change"),
+        url.searchParams.get("ref"),
+      );
+    } else if (workspaceChangeReviewMatch && method === "POST") {
+      response = await handleWorkspaceChangeReview(
+        req,
+        baseHeaders,
+        workspaceChangeReviewMatch[1]!,
+        workspaceChangeReviewMatch[2]!,
+        Number.parseInt(workspaceChangeReviewMatch[3] ?? "", 10),
+      );
+    } else if (workspaceChangeDiscussionsMatch && method === "GET") {
+      response = await handleListDiscussions(
+        req,
+        baseHeaders,
+        workspaceChangeDiscussionsMatch[1]!,
+        workspaceChangeDiscussionsMatch[2]!,
+        Number.parseInt(workspaceChangeDiscussionsMatch[3] ?? "", 10),
+      );
+    } else if (workspaceChangeDiscussionsMatch && method === "POST") {
+      response = await handleCreateDiscussionThread(
+        req,
+        baseHeaders,
+        workspaceChangeDiscussionsMatch[1]!,
+        workspaceChangeDiscussionsMatch[2]!,
+        Number.parseInt(workspaceChangeDiscussionsMatch[3] ?? "", 10),
+      );
+    } else if (workspaceChangeReactionMatch && method === "PUT") {
+      response = await handleSetCommentReaction(
+        req,
+        baseHeaders,
+        workspaceChangeReactionMatch[1]!,
+        workspaceChangeReactionMatch[2]!,
+        Number.parseInt(workspaceChangeReactionMatch[3] ?? "", 10),
+        decodePathParam(workspaceChangeReactionMatch[4] ?? ""),
+        Number.parseInt(workspaceChangeReactionMatch[5] ?? "", 10),
+      );
+    } else if (workspaceChangeReplyMatch && method === "POST") {
+      response = await handleReplyToDiscussion(
+        req,
+        baseHeaders,
+        workspaceChangeReplyMatch[1]!,
+        workspaceChangeReplyMatch[2]!,
+        Number.parseInt(workspaceChangeReplyMatch[3] ?? "", 10),
+        decodePathParam(workspaceChangeReplyMatch[4] ?? ""),
+      );
+    } else if (workspaceChangeResolveMatch && method === "POST") {
+      response = await handleResolveDiscussion(
+        req,
+        baseHeaders,
+        workspaceChangeResolveMatch[1]!,
+        workspaceChangeResolveMatch[2]!,
+        Number.parseInt(workspaceChangeResolveMatch[3] ?? "", 10),
+        decodePathParam(workspaceChangeResolveMatch[4] ?? ""),
+      );
+    } else if (workspaceChangeUpdatesMatch && method === "GET") {
+      response = await handleChangeUpdates(
+        req,
+        baseHeaders,
+        workspaceChangeUpdatesMatch[1]!,
+        workspaceChangeUpdatesMatch[2]!,
+        Number.parseInt(workspaceChangeUpdatesMatch[3] ?? "", 10),
+      );
+    } else if (workspaceChangeAssignmentsMatch && method === "PUT") {
+      response = await handleUpdateChangeAssignments(
+        req,
+        baseHeaders,
+        workspaceChangeAssignmentsMatch[1]!,
+        workspaceChangeAssignmentsMatch[2]!,
+        Number.parseInt(workspaceChangeAssignmentsMatch[3] ?? "", 10),
+      );
+    } else if (workspaceCollaboratorsMatch && method === "GET") {
+      response = await handleDocumentCollaborators(
+        req,
+        baseHeaders,
+        workspaceCollaboratorsMatch[1]!,
+        workspaceCollaboratorsMatch[2]!,
+      );
+    } else if (workspaceRulesMatch && method === "PATCH") {
+      response = await handleBinderRules(
+        req,
+        baseHeaders,
+        workspaceRulesMatch[1]!,
+        workspaceRulesMatch[2]!,
+      );
+    } else if (workspaceSignOffMatch && method === "POST") {
+      response = await handleBinderSignOffRules(
+        req,
+        baseHeaders,
+        workspaceSignOffMatch[1]!,
+        workspaceSignOffMatch[2]!,
+      );
+    } else if (workspaceSettingsMatch && method === "GET") {
+      response = await handleWorkspaceSettings(
+        req,
+        baseHeaders,
+        workspaceSettingsMatch[1]!,
+        workspaceSettingsMatch[2]!,
+      );
+    } else if (workspaceHistoryMatch && method === "GET") {
+      response = await handleWorkspaceHistory(
+        req,
+        baseHeaders,
+        workspaceHistoryMatch[1]!,
+        workspaceHistoryMatch[2]!,
+      );
+    } else if (workspaceDraftMatch && method === "GET") {
+      response = await handleBinderDraft(
+        req,
+        baseHeaders,
+        workspaceDraftMatch[1]!,
+        workspaceDraftMatch[2]!,
+      );
+    } else if (workspaceDraftMatch && method === "POST") {
+      response = await handleOpenBinderDraft(
+        req,
+        baseHeaders,
+        workspaceDraftMatch[1]!,
+        workspaceDraftMatch[2]!,
+      );
+    } else if (workspaceDraftMatch && method === "PATCH") {
+      response = await handleRenameBinderDraft(
+        req,
+        baseHeaders,
+        workspaceDraftMatch[1]!,
+        workspaceDraftMatch[2]!,
+      );
+    } else if (workspaceDraftMatch && method === "DELETE") {
+      response = await handleDiscardBinderDraft(
+        req,
+        baseHeaders,
+        workspaceDraftMatch[1]!,
+        workspaceDraftMatch[2]!,
+      );
+    } else if (workspaceChangesMatch && method === "POST") {
+      response = await handleProposeBinderDraft(
+        req,
+        baseHeaders,
+        workspaceChangesMatch[1]!,
+        workspaceChangesMatch[2]!,
+      );
+    } else if (workspaceChangesMatch && method === "GET") {
+      response = await handleListWorkspaceChanges(
+        req,
+        baseHeaders,
+        workspaceChangesMatch[1]!,
+        workspaceChangesMatch[2]!,
+      );
+    } else if (workspaceChangeConflictsMatch && method === "GET") {
+      response = await handleWorkspaceChangeConflicts(
+        req,
+        baseHeaders,
+        workspaceChangeConflictsMatch[1]!,
+        workspaceChangeConflictsMatch[2]!,
+        Number.parseInt(workspaceChangeConflictsMatch[3] ?? "", 10),
+      );
+    } else if (workspaceChangeConflictsMatch && method === "POST") {
+      response = await handleResolveWorkspaceChangeConflicts(
+        req,
+        baseHeaders,
+        workspaceChangeConflictsMatch[1]!,
+        workspaceChangeConflictsMatch[2]!,
+        Number.parseInt(workspaceChangeConflictsMatch[3] ?? "", 10),
+      );
+    } else if (workspaceChangeUpdateMatch && method === "POST") {
+      response = await handleWorkspaceChangeUpdate(
+        req,
+        baseHeaders,
+        workspaceChangeUpdateMatch[1]!,
+        workspaceChangeUpdateMatch[2]!,
+        Number.parseInt(workspaceChangeUpdateMatch[3] ?? "", 10),
+      );
+    } else if (workspaceChangeMatch && method === "PATCH") {
+      response = await handleWorkspaceChangeEdit(
+        req,
+        baseHeaders,
+        workspaceChangeMatch[1]!,
+        workspaceChangeMatch[2]!,
+        Number.parseInt(workspaceChangeMatch[3] ?? "", 10),
+      );
+    } else if (workspaceChangeMatch && method === "GET") {
+      response = await handleWorkspaceChangeDetail(
+        req,
+        baseHeaders,
+        workspaceChangeMatch[1]!,
+        workspaceChangeMatch[2]!,
+        Number.parseInt(workspaceChangeMatch[3] ?? "", 10),
+      );
+    } else if (workspaceDocumentAuditMatch && method === "GET") {
+      response = await handleWorkspaceDocumentAudit(
+        req,
+        baseHeaders,
+        workspaceDocumentAuditMatch[1]!,
+        workspaceDocumentAuditMatch[2]!,
+        decodeURIComponent(workspaceDocumentAuditMatch[3]!),
+      );
+    } else if (workspaceDocumentExportMatch && method === "GET") {
+      response = await handleWorkspaceDocumentExport(
+        req,
+        baseHeaders,
+        workspaceDocumentExportMatch[1]!,
+        workspaceDocumentExportMatch[2]!,
+        decodeURIComponent(workspaceDocumentExportMatch[3]!),
+      );
+    } else if (workspaceDocumentRawMatch && method === "GET") {
+      response = await handleWorkspaceDocumentRaw(
+        req,
+        baseHeaders,
+        workspaceDocumentRawMatch[1]!,
+        workspaceDocumentRawMatch[2]!,
+        decodeURIComponent(workspaceDocumentRawMatch[3]!),
+      );
+    } else if (workspaceDocumentMatch && method === "GET") {
+      response = await handleWorkspaceDocumentDetail(
+        req,
+        baseHeaders,
+        workspaceDocumentMatch[1]!,
+        workspaceDocumentMatch[2]!,
+        decodeURIComponent(workspaceDocumentMatch[3]!),
+        url.searchParams.get("draft"),
+        url.searchParams.get("change"),
+        url.searchParams.get("ref"),
+      );
+    } else if (workspaceOverviewMatch && method === "GET") {
+      response = await handleWorkspaceOverview(
+        req,
+        baseHeaders,
+        workspaceOverviewMatch[1]!,
+        workspaceOverviewMatch[2]!,
+      );
+    } else if (workspaceOverviewMatch && method === "DELETE") {
+      response = await handleDeleteBinder(
+        req,
+        baseHeaders,
+        workspaceOverviewMatch[1]!,
+        workspaceOverviewMatch[2]!,
+      );
+    } else if (workspaceFoldersMatch && method === "POST") {
+      return await handleBinderShapeChange(
+        req,
+        baseHeaders,
+        workspaceFoldersMatch[1]!,
+        workspaceFoldersMatch[2]!,
+        ({ body, tree }) =>
+          planNewFolder({
+            folder: typeof body.folder === "string" ? body.folder : "",
+            existingFolders: tree.folders,
+          }),
+      );
+    } else if (workspaceFolderRenamesMatch && method === "POST") {
+      return await handleBinderShapeChange(
+        req,
+        baseHeaders,
+        workspaceFolderRenamesMatch[1]!,
+        workspaceFolderRenamesMatch[2]!,
+        ({ body, tree }) =>
+          planFolderRename({
+            from: typeof body.from === "string" ? body.from : "",
+            to: typeof body.to === "string" ? body.to : "",
+            paths: tree.paths,
+            existingFolders: tree.folders,
+          }),
+      );
+    } else if (workspaceDocumentRenamesMatch && method === "POST") {
+      return await handleBinderShapeChange(
+        req,
+        baseHeaders,
+        workspaceDocumentRenamesMatch[1]!,
+        workspaceDocumentRenamesMatch[2]!,
+        ({ body, tree }) => {
+          const documentPath =
+            typeof body.documentPath === "string" ? body.documentPath : "";
+          const document =
+            tree.documents.find((entry) => entry.path === documentPath) ??
+            tree.documents.find((entry) => entry.slugPath === documentPath);
+
+          if (!document) {
+            return { error: `"${documentPath}" is not in this binder.` };
+          }
+
+          return planDocumentRename({
+            document,
+            ...(typeof body.name === "string" ? { name: body.name } : {}),
+            ...(typeof body.folder === "string" ? { folder: body.folder } : {}),
+            paths: tree.paths,
           });
-        } else {
-          logger.info("Response sent", {
-            method,
-            path: pathname,
-            status: response.status,
-            durationMs,
+        },
+      );
+    } else if (workspaceDocumentArchivesMatch && method === "POST") {
+      return await handleBinderShapeChange(
+        req,
+        baseHeaders,
+        workspaceDocumentArchivesMatch[1]!,
+        workspaceDocumentArchivesMatch[2]!,
+        ({ body, tree }) => {
+          const documentPath =
+            typeof body.documentPath === "string" ? body.documentPath : "";
+          const document =
+            tree.documents.find((entry) => entry.path === documentPath) ??
+            tree.documents.find((entry) => entry.slugPath === documentPath);
+
+          if (!document) {
+            return { error: `"${documentPath}" is not in this binder.` };
+          }
+
+          return planDocumentArchive({ document });
+        },
+      );
+    } else if (workspaceDocumentRestoresMatch && method === "POST") {
+      return await handleBinderShapeChange(
+        req,
+        baseHeaders,
+        workspaceDocumentRestoresMatch[1]!,
+        workspaceDocumentRestoresMatch[2]!,
+        async ({ body, tree, client }) => {
+          const uid = typeof body.uid === "string" ? body.uid : "";
+          if (uid === "") {
+            return { error: "Name the document to restore." };
+          }
+
+          // Straight off the version tag the policy last published at. The
+          // bytes are still there because a tag is a ref and git never
+          // collects a commit reachable from one — which is the whole
+          // reason there is no archive branch to read from.
+          const archived = await readArchivedDocument({
+            client,
+            org: workspaceDocumentRestoresMatch[1]!,
+            workspace: workspaceDocumentRestoresMatch[2]!,
+            uid,
           });
-        }
-        return response;
-      }
+          if (!archived) {
+            return {
+              error: "That document has no published version to restore from.",
+            };
+          }
 
-      const originError = enforceStateChangingOrigin(req, baseHeaders);
-      if (originError) {
-        const durationMs = Date.now() - startMs;
-        logger.info("Response sent", {
-          method,
-          path: pathname,
-          status: originError.status,
-          durationMs,
-        });
-        return originError;
-      }
+          return planDocumentRestore({
+            document: archived.document,
+            base64Content: archived.base64Content,
+            tree,
+          });
+        },
+      );
+    } else if (workspaceNameMatch && method === "POST") {
+      response = await handleRenameBinder(
+        req,
+        baseHeaders,
+        workspaceNameMatch[1]!,
+        workspaceNameMatch[2]!,
+      );
+    } else if (workspaceDescriptionMatch && method === "POST") {
+      response = await handleDescribeBinder(
+        req,
+        baseHeaders,
+        workspaceDescriptionMatch[1]!,
+        workspaceDescriptionMatch[2]!,
+      );
+    } else if (workspaceArchiveMatch && method === "GET") {
+      response = await handleBinderArchive(
+        req,
+        baseHeaders,
+        workspaceArchiveMatch[1]!,
+        workspaceArchiveMatch[2]!,
+        url.searchParams.get("draft"),
+      );
+    } else if (workspaceDocumentRevisionsMatch && method === "POST") {
+      return await handleReviseWorkspaceDocument(
+        req,
+        baseHeaders,
+        workspaceDocumentRevisionsMatch[1]!,
+        workspaceDocumentRevisionsMatch[2]!,
+      );
+    } else if (workspaceDocumentsMatch && method === "POST") {
+      response = await handleCreateWorkspaceDocument(
+        req,
+        baseHeaders,
+        workspaceDocumentsMatch[1]!,
+        workspaceDocumentsMatch[2]!,
+      );
+    } else if (adminSubscriptionGrantMatch && method === "POST") {
+      response = await upsertLegacyAdminSubscriptionOverride(
+        req,
+        baseHeaders,
+        adminSubscriptionGrantMatch[1] ?? "",
+        "grant",
+      );
+    } else if (adminSubscriptionRevokeMatch && method === "POST") {
+      response = await upsertLegacyAdminSubscriptionOverride(
+        req,
+        baseHeaders,
+        adminSubscriptionRevokeMatch[1] ?? "",
+        "revoke",
+      );
+    } else if (adminSubscriptionStatusMatch && method === "GET") {
+      response = await handleAdminSubscriptionStatus(
+        req,
+        baseHeaders,
+        adminSubscriptionStatusMatch[1] ?? "",
+      );
+    } else if (adminSubscriptionStatusMatch && method === "PUT") {
+      response = await handleAdminSubscriptionBooleanUpdate(
+        req,
+        baseHeaders,
+        adminSubscriptionStatusMatch[1] ?? "",
+      );
+    } else if (adminSubscriptionStatusMatch && method === "DELETE") {
+      response = await upsertLegacyAdminSubscriptionOverride(
+        req,
+        baseHeaders,
+        adminSubscriptionStatusMatch[1] ?? "",
+        "revoke",
+      );
+    } else if (adminSubscriptionAccessActionMatch && method === "PUT") {
+      response = await handleAdminSubscriptionAccessUpdate(
+        req,
+        baseHeaders,
+        adminSubscriptionAccessActionMatch[1] ?? "",
+      );
+    } else if (adminSubscriptionAccessActionMatch && method === "DELETE") {
+      response = await handleAdminSubscriptionAccessDelete(
+        req,
+        baseHeaders,
+        adminSubscriptionAccessActionMatch[1] ?? "",
+      );
+    } else {
+      response = json(404, { error: "Not found." }, baseHeaders);
+    }
+  }
 
-      if (method === "OPTIONS") {
-        const durationMs = Date.now() - startMs;
-        logger.info("Response sent", {
-          method,
-          path: pathname,
-          status: 204,
-          durationMs,
-        });
-        return new Response(null, {
-          status: 204,
-          headers: baseHeaders,
-        });
-      }
+  const durationMs = Date.now() - startMs;
+  const status = response.status;
+  const usage = currentGiteaUsage();
+  const giteaFields = usage ? giteaUsageLogFields(usage) : {};
+  if (status >= 500) {
+    logger.error("Response sent with 5xx status", {
+      method,
+      path: pathname,
+      status,
+      durationMs,
+      ...giteaFields,
+    });
+  } else {
+    logger.info("Response sent", {
+      method,
+      path: pathname,
+      status,
+      durationMs,
+      ...giteaFields,
+    });
+  }
 
-      let response: Response;
-
-      if (pathname === "/auth/signup" && method === "POST") {
-        response = await handleSignup(req, baseHeaders);
-      } else if (pathname === "/auth/login" && method === "POST") {
-        response = await handleLogin(req, baseHeaders);
-      } else if (pathname === "/auth/logout" && method === "POST") {
-        response = await handleLogout(req, baseHeaders);
-      } else if (pathname === "/auth/me" && method === "GET") {
-        response = await handleAuthMe(req, baseHeaders);
-      } else if (
-        pathname === "/api/app/account/profile" &&
-        method === "PATCH"
-      ) {
-        response = await handleUpdateProfile(req, baseHeaders);
-      } else if (
-        pathname === "/api/app/account/password" &&
-        method === "POST"
-      ) {
-        response = await handleChangePassword(req, baseHeaders);
-      } else if (
-        pathname === "/api/app/account/username" &&
-        method === "POST"
-      ) {
-        response = await handleChangeUsername(req, baseHeaders);
-      } else if (pathname === "/api/app/account/blockers" && method === "GET") {
-        response = await handleAccountBlockers(req, baseHeaders);
-      } else if (pathname === "/api/app/account" && method === "DELETE") {
-        response = await handleDeleteAccount(req, baseHeaders);
-      } else if (
-        method === "GET" &&
-        /^\/api\/app\/avatars\/[^/]+$/.test(pathname)
-      ) {
-        response = await handleAvatar(
-          req,
-          baseHeaders,
-          decodeURIComponent(pathname.slice("/api/app/avatars/".length)),
-        );
-      } else if (pathname === "/api/app/onboarding" && method === "GET") {
-        response = await handleOnboarding(req, baseHeaders);
-      } else if (pathname === "/api/app/notifications" && method === "GET") {
-        response = await handleListNotifications(req, baseHeaders);
-      } else if (
-        pathname === "/api/app/notifications/count" &&
-        method === "GET"
-      ) {
-        response = await handleNotificationCount(req, baseHeaders);
-      } else if (
-        pathname === "/api/app/notifications/read" &&
-        method === "POST"
-      ) {
-        response = await handleReadNotifications(req, baseHeaders);
-      } else if (pathname === "/api/app/home/changes" && method === "GET") {
-        response = await handleHomeChanges(req, baseHeaders);
-      } else if (pathname === "/api/app/documents" && method === "GET") {
-        response = await handleLibraryDocuments(req, baseHeaders);
-      } else if (pathname === "/api/app/documents/search" && method === "GET") {
-        response = await handleDocumentSearch(req, baseHeaders);
-      } else if (pathname === "/api/app/users/search" && method === "GET") {
-        response = await handleSearchUsersRoute(req, baseHeaders);
-      } else if (
-        pathname === "/api/app/admin/subscriptions/access" &&
-        method === "GET"
-      ) {
-        response = await handleAdminSubscriptionAccessList(req, baseHeaders);
-      } else if (pathname === "/api/app/binders" && method === "GET") {
-        response = await handleListWorkspaces(req, baseHeaders);
-      } else if (pathname === "/api/app/organizations" && method === "GET") {
-        response = await handleListOrganizations(req, baseHeaders);
-      } else if (pathname === "/api/app/organizations" && method === "POST") {
-        response = await handleCreateOrganization(req, baseHeaders);
-      } else if (pathname === "/api/app/billing/status" && method === "GET") {
-        response = await handleBillingStatus(req, baseHeaders);
-      } else if (
-        pathname === "/api/app/billing/checkout" &&
-        method === "POST"
-      ) {
-        response = await handleBillingCheckout(req, baseHeaders);
-      } else if (pathname === "/api/app/billing/portal" && method === "POST") {
-        response = await handleBillingPortal(req, baseHeaders);
-      } else if (
-        pathname === "/api/dev/grant-subscription" &&
-        method === "POST"
-      ) {
-        response = await handleDevGrantSubscription(req, baseHeaders);
-      } else if (pathname === "/api/dev/end-trial" && method === "POST") {
-        response = await handleDevEndTrial(req, baseHeaders);
-      } else {
-        const adminSubscriptionAccessActionMatch = pathname.match(
-          /^\/api\/app\/admin\/subscriptions\/access\/([^/]+)$/,
-        );
-        const adminSubscriptionGrantMatch = pathname.match(
-          /^\/api\/app\/admin\/subscriptions\/([^/]+)\/grant$/,
-        );
-        const adminSubscriptionRevokeMatch = pathname.match(
-          /^\/api\/app\/admin\/subscriptions\/([^/]+)\/revoke$/,
-        );
-        const adminSubscriptionStatusMatch = pathname.match(
-          /^\/api\/app\/admin\/subscriptions\/([^/]+)$/,
-        );
-        const workspaceDocumentsMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/documents$/,
-        );
-        // A new version of a document already in the binder. The document is
-        // named in the body rather than in the path, because a path suffix
-        // would collide with a policy filed in a folder of that name —
-        // `…/documents/nursing/revisions` is a real address a person could
-        // have made.
-        const workspaceDocumentRevisionsMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/document-revisions$/,
-        );
-        // The acts that change where things are filed rather than what they
-        // say. Each names its subject in the body for the same reason a
-        // revision does: a folder called `folders` is a folder somebody could
-        // legitimately make.
-        const workspaceFoldersMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/folders$/,
-        );
-        const workspaceFolderRenamesMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/folder-renames$/,
-        );
-        const workspaceDocumentRenamesMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/document-renames$/,
-        );
-        // Taking a document off the record. Named for what it is rather than
-        // for a verb that is not true: the file leaves `main` and its version
-        // tags still point at every commit that held it.
-        const workspaceDocumentArchivesMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/document-archives$/,
-        );
-        // Bringing one back. Its own act rather than an inverse of the one
-        // above: it writes a file, and what it writes comes out of a tag.
-        const workspaceDocumentRestoresMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/document-restores$/,
-        );
-        // A binder's own name. Not under `settings`, because it is not a
-        // setting — it changes the binder's address, and every other write
-        // under that path leaves the address alone.
-        const workspaceNameMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/name$/,
-        );
-        const workspaceDescriptionMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/description$/,
-        );
-        const workspaceArchiveMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/archive$/,
-        );
-        // The document's path carries slashes — it is a path inside the binder,
-        // not one segment — so this captures the rest of the URL.
-        const workspaceDocumentMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/documents\/(.+)$/,
-        );
-        const workspacePublishMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/publish$/,
-        );
-        const workspaceChangeReviewMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/reviews$/,
-        );
-        const workspaceChangeUpdateMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/update$/,
-        );
-        // A binder is a Gitea repository and a change on it is a Gitea pull
-        // request, so everything below is the document model's own handler
-        // reached at the binder's address. Same behaviour, one namespace per
-        // shape of thing — not a second implementation.
-        const workspaceChangeConflictsMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/conflicts$/,
-        );
-        const workspaceChangeDiscussionsMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/discussions$/,
-        );
-        const workspaceChangeReplyMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/discussions\/([^/]+)\/comments$/,
-        );
-        const workspaceChangeResolveMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/discussions\/([^/]+)\/resolve$/,
-        );
-        const workspaceChangeReactionMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/discussions\/([^/]+)\/comments\/(\d+)\/reactions$/,
-        );
-        const workspaceChangeUpdatesMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/updates$/,
-        );
-        const workspaceChangeAssignmentsMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/assignments$/,
-        );
-        const workspaceCollaboratorsMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/collaborators$/,
-        );
-        const workspaceChangeMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)$/,
-        );
-        // Raw content sits under its own segment rather than as a suffix on
-        // the document, because the document's path is the rest of the URL.
-        const workspaceDocumentRawMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/raw\/(.+)$/,
-        );
-        const workspaceDocumentAuditMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/audit\/(.+)$/,
-        );
-        const workspaceDocumentExportMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/export\/(.+)$/,
-        );
-        const createBinderMatch = pathname.match(
-          /^\/api\/app\/orgs\/([^/]+)\/binders$/,
-        );
-        const organizationPeopleMatch = pathname.match(
-          /^\/api\/app\/orgs\/([^/]+)\/people$/,
-        );
-        const organizationPersonRoleMatch = pathname.match(
-          /^\/api\/app\/orgs\/([^/]+)\/people\/([^/]+)\/role$/,
-        );
-        const organizationDeletionMatch = pathname.match(
-          /^\/api\/app\/orgs\/([^/]+)\/deletion$/,
-        );
-        const organizationMatch = pathname.match(/^\/api\/app\/orgs\/([^/]+)$/);
-        const organizationPersonMatch = pathname.match(
-          /^\/api\/app\/orgs\/([^/]+)\/people\/([^/]+)$/,
-        );
-        const organizationGroupsMatch = pathname.match(
-          /^\/api\/app\/orgs\/([^/]+)\/groups$/,
-        );
-        const organizationGroupMembersMatch = pathname.match(
-          /^\/api\/app\/orgs\/([^/]+)\/groups\/([^/]+)\/members$/,
-        );
-        const organizationGroupMemberMatch = pathname.match(
-          /^\/api\/app\/orgs\/([^/]+)\/groups\/([^/]+)\/members\/([^/]+)$/,
-        );
-        const workspacePeopleMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/people$/,
-        );
-        const workspacePersonMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/people\/([^/]+)$/,
-        );
-        const workspaceVisibilityMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/visibility$/,
-        );
-        const workspaceGroupsMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/groups$/,
-        );
-        const workspaceGroupMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/groups\/([^/]+)$/,
-        );
-        const workspaceChangesMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes$/,
-        );
-        // Singular, because a person has one draft in a binder. The branch is
-        // never in the URL: it carries slashes, it is the server's to name, and
-        // the only draft any of these three verbs acts on is the caller's own.
-        const workspaceDraftMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/draft$/,
-        );
-        const workspaceHistoryMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/history$/,
-        );
-        const workspaceSettingsMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/settings$/,
-        );
-        const workspaceSignOffMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/rules\/sign-off$/,
-        );
-        const workspaceRulesMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/rules$/,
-        );
-        // Last of the binder matchers, because every one above it is a longer
-        // path under the same two segments.
-        const workspaceOverviewMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)$/,
-        );
-
-        if (organizationDeletionMatch && method === "GET") {
-          response = await handleOrganizationDeletion(
-            req,
-            baseHeaders,
-            organizationDeletionMatch[1]!,
-          );
-        } else if (organizationMatch && method === "DELETE") {
-          response = await handleDeleteOrganization(
-            req,
-            baseHeaders,
-            organizationMatch[1]!,
-          );
-        } else if (organizationPeopleMatch && method === "GET") {
-          response = await handleOrganizationPeople(
-            req,
-            baseHeaders,
-            organizationPeopleMatch[1]!,
-          );
-        } else if (organizationPeopleMatch && method === "POST") {
-          response = await handleAddOrganizationPerson(
-            req,
-            baseHeaders,
-            organizationPeopleMatch[1]!,
-          );
-        } else if (organizationPersonRoleMatch && method === "POST") {
-          response = await handleOrganizationPersonRole(
-            req,
-            baseHeaders,
-            organizationPersonRoleMatch[1]!,
-            organizationPersonRoleMatch[2]!,
-          );
-        } else if (organizationPersonMatch && method === "DELETE") {
-          response = await handleRemoveOrganizationPerson(
-            req,
-            baseHeaders,
-            organizationPersonMatch[1]!,
-            organizationPersonMatch[2]!,
-          );
-        } else if (organizationGroupsMatch && method === "POST") {
-          response = await handleCreateOrganizationGroup(
-            req,
-            baseHeaders,
-            organizationGroupsMatch[1]!,
-          );
-        } else if (organizationGroupMembersMatch && method === "POST") {
-          response = await handleOrganizationGroupMember(
-            req,
-            baseHeaders,
-            organizationGroupMembersMatch[1]!,
-            organizationGroupMembersMatch[2]!,
-            null,
-          );
-        } else if (organizationGroupMemberMatch && method === "DELETE") {
-          response = await handleOrganizationGroupMember(
-            req,
-            baseHeaders,
-            organizationGroupMemberMatch[1]!,
-            organizationGroupMemberMatch[2]!,
-            organizationGroupMemberMatch[3]!,
-          );
-        } else if (workspaceVisibilityMatch && method === "POST") {
-          response = await handleBinderVisibility(
-            req,
-            baseHeaders,
-            workspaceVisibilityMatch[1]!,
-            workspaceVisibilityMatch[2]!,
-          );
-        } else if (workspacePeopleMatch && method === "GET") {
-          response = await handleBinderPeople(
-            req,
-            baseHeaders,
-            workspacePeopleMatch[1]!,
-            workspacePeopleMatch[2]!,
-          );
-        } else if (workspacePeopleMatch && method === "POST") {
-          response = await handleBinderPerson(
-            req,
-            baseHeaders,
-            workspacePeopleMatch[1]!,
-            workspacePeopleMatch[2]!,
-            null,
-          );
-        } else if (workspacePersonMatch && method === "POST") {
-          response = await handleBinderPerson(
-            req,
-            baseHeaders,
-            workspacePersonMatch[1]!,
-            workspacePersonMatch[2]!,
-            workspacePersonMatch[3]!,
-          );
-        } else if (workspacePersonMatch && method === "DELETE") {
-          response = await handleRemoveBinderPerson(
-            req,
-            baseHeaders,
-            workspacePersonMatch[1]!,
-            workspacePersonMatch[2]!,
-            workspacePersonMatch[3]!,
-          );
-        } else if (workspaceGroupsMatch && method === "POST") {
-          response = await handleBinderGroup(
-            req,
-            baseHeaders,
-            workspaceGroupsMatch[1]!,
-            workspaceGroupsMatch[2]!,
-            null,
-          );
-        } else if (workspaceGroupMatch && method === "DELETE") {
-          response = await handleBinderGroup(
-            req,
-            baseHeaders,
-            workspaceGroupMatch[1]!,
-            workspaceGroupMatch[2]!,
-            workspaceGroupMatch[3]!,
-          );
-        } else if (createBinderMatch && method === "GET") {
-          response = await handleListOrganizationWorkspaces(
-            req,
-            baseHeaders,
-            createBinderMatch[1]!,
-          );
-        } else if (createBinderMatch && method === "POST") {
-          response = await handleCreateWorkspace(
-            req,
-            baseHeaders,
-            createBinderMatch[1]!,
-          );
-        } else if (workspacePublishMatch && method === "POST") {
-          response = await handlePublishWorkspaceChange(
-            req,
-            baseHeaders,
-            workspacePublishMatch[1]!,
-            workspacePublishMatch[2]!,
-            Number.parseInt(workspacePublishMatch[3] ?? "", 10),
-          );
-        } else if (workspaceDocumentsMatch && method === "GET") {
-          response = await handleListWorkspaceDocuments(
-            req,
-            baseHeaders,
-            workspaceDocumentsMatch[1]!,
-            workspaceDocumentsMatch[2]!,
-            url.searchParams.get("draft"),
-            url.searchParams.get("change"),
-            url.searchParams.get("ref"),
-          );
-        } else if (workspaceChangeReviewMatch && method === "POST") {
-          response = await handleWorkspaceChangeReview(
-            req,
-            baseHeaders,
-            workspaceChangeReviewMatch[1]!,
-            workspaceChangeReviewMatch[2]!,
-            Number.parseInt(workspaceChangeReviewMatch[3] ?? "", 10),
-          );
-        } else if (workspaceChangeDiscussionsMatch && method === "GET") {
-          response = await handleListDiscussions(
-            req,
-            baseHeaders,
-            workspaceChangeDiscussionsMatch[1]!,
-            workspaceChangeDiscussionsMatch[2]!,
-            Number.parseInt(workspaceChangeDiscussionsMatch[3] ?? "", 10),
-          );
-        } else if (workspaceChangeDiscussionsMatch && method === "POST") {
-          response = await handleCreateDiscussionThread(
-            req,
-            baseHeaders,
-            workspaceChangeDiscussionsMatch[1]!,
-            workspaceChangeDiscussionsMatch[2]!,
-            Number.parseInt(workspaceChangeDiscussionsMatch[3] ?? "", 10),
-          );
-        } else if (workspaceChangeReactionMatch && method === "PUT") {
-          response = await handleSetCommentReaction(
-            req,
-            baseHeaders,
-            workspaceChangeReactionMatch[1]!,
-            workspaceChangeReactionMatch[2]!,
-            Number.parseInt(workspaceChangeReactionMatch[3] ?? "", 10),
-            decodePathParam(workspaceChangeReactionMatch[4] ?? ""),
-            Number.parseInt(workspaceChangeReactionMatch[5] ?? "", 10),
-          );
-        } else if (workspaceChangeReplyMatch && method === "POST") {
-          response = await handleReplyToDiscussion(
-            req,
-            baseHeaders,
-            workspaceChangeReplyMatch[1]!,
-            workspaceChangeReplyMatch[2]!,
-            Number.parseInt(workspaceChangeReplyMatch[3] ?? "", 10),
-            decodePathParam(workspaceChangeReplyMatch[4] ?? ""),
-          );
-        } else if (workspaceChangeResolveMatch && method === "POST") {
-          response = await handleResolveDiscussion(
-            req,
-            baseHeaders,
-            workspaceChangeResolveMatch[1]!,
-            workspaceChangeResolveMatch[2]!,
-            Number.parseInt(workspaceChangeResolveMatch[3] ?? "", 10),
-            decodePathParam(workspaceChangeResolveMatch[4] ?? ""),
-          );
-        } else if (workspaceChangeUpdatesMatch && method === "GET") {
-          response = await handleChangeUpdates(
-            req,
-            baseHeaders,
-            workspaceChangeUpdatesMatch[1]!,
-            workspaceChangeUpdatesMatch[2]!,
-            Number.parseInt(workspaceChangeUpdatesMatch[3] ?? "", 10),
-          );
-        } else if (workspaceChangeAssignmentsMatch && method === "PUT") {
-          response = await handleUpdateChangeAssignments(
-            req,
-            baseHeaders,
-            workspaceChangeAssignmentsMatch[1]!,
-            workspaceChangeAssignmentsMatch[2]!,
-            Number.parseInt(workspaceChangeAssignmentsMatch[3] ?? "", 10),
-          );
-        } else if (workspaceCollaboratorsMatch && method === "GET") {
-          response = await handleDocumentCollaborators(
-            req,
-            baseHeaders,
-            workspaceCollaboratorsMatch[1]!,
-            workspaceCollaboratorsMatch[2]!,
-          );
-        } else if (workspaceRulesMatch && method === "PATCH") {
-          response = await handleBinderRules(
-            req,
-            baseHeaders,
-            workspaceRulesMatch[1]!,
-            workspaceRulesMatch[2]!,
-          );
-        } else if (workspaceSignOffMatch && method === "POST") {
-          response = await handleBinderSignOffRules(
-            req,
-            baseHeaders,
-            workspaceSignOffMatch[1]!,
-            workspaceSignOffMatch[2]!,
-          );
-        } else if (workspaceSettingsMatch && method === "GET") {
-          response = await handleWorkspaceSettings(
-            req,
-            baseHeaders,
-            workspaceSettingsMatch[1]!,
-            workspaceSettingsMatch[2]!,
-          );
-        } else if (workspaceHistoryMatch && method === "GET") {
-          response = await handleWorkspaceHistory(
-            req,
-            baseHeaders,
-            workspaceHistoryMatch[1]!,
-            workspaceHistoryMatch[2]!,
-          );
-        } else if (workspaceDraftMatch && method === "GET") {
-          response = await handleBinderDraft(
-            req,
-            baseHeaders,
-            workspaceDraftMatch[1]!,
-            workspaceDraftMatch[2]!,
-          );
-        } else if (workspaceDraftMatch && method === "POST") {
-          response = await handleOpenBinderDraft(
-            req,
-            baseHeaders,
-            workspaceDraftMatch[1]!,
-            workspaceDraftMatch[2]!,
-          );
-        } else if (workspaceDraftMatch && method === "PATCH") {
-          response = await handleRenameBinderDraft(
-            req,
-            baseHeaders,
-            workspaceDraftMatch[1]!,
-            workspaceDraftMatch[2]!,
-          );
-        } else if (workspaceDraftMatch && method === "DELETE") {
-          response = await handleDiscardBinderDraft(
-            req,
-            baseHeaders,
-            workspaceDraftMatch[1]!,
-            workspaceDraftMatch[2]!,
-          );
-        } else if (workspaceChangesMatch && method === "POST") {
-          response = await handleProposeBinderDraft(
-            req,
-            baseHeaders,
-            workspaceChangesMatch[1]!,
-            workspaceChangesMatch[2]!,
-          );
-        } else if (workspaceChangesMatch && method === "GET") {
-          response = await handleListWorkspaceChanges(
-            req,
-            baseHeaders,
-            workspaceChangesMatch[1]!,
-            workspaceChangesMatch[2]!,
-          );
-        } else if (workspaceChangeConflictsMatch && method === "GET") {
-          response = await handleWorkspaceChangeConflicts(
-            req,
-            baseHeaders,
-            workspaceChangeConflictsMatch[1]!,
-            workspaceChangeConflictsMatch[2]!,
-            Number.parseInt(workspaceChangeConflictsMatch[3] ?? "", 10),
-          );
-        } else if (workspaceChangeConflictsMatch && method === "POST") {
-          response = await handleResolveWorkspaceChangeConflicts(
-            req,
-            baseHeaders,
-            workspaceChangeConflictsMatch[1]!,
-            workspaceChangeConflictsMatch[2]!,
-            Number.parseInt(workspaceChangeConflictsMatch[3] ?? "", 10),
-          );
-        } else if (workspaceChangeUpdateMatch && method === "POST") {
-          response = await handleWorkspaceChangeUpdate(
-            req,
-            baseHeaders,
-            workspaceChangeUpdateMatch[1]!,
-            workspaceChangeUpdateMatch[2]!,
-            Number.parseInt(workspaceChangeUpdateMatch[3] ?? "", 10),
-          );
-        } else if (workspaceChangeMatch && method === "PATCH") {
-          response = await handleWorkspaceChangeEdit(
-            req,
-            baseHeaders,
-            workspaceChangeMatch[1]!,
-            workspaceChangeMatch[2]!,
-            Number.parseInt(workspaceChangeMatch[3] ?? "", 10),
-          );
-        } else if (workspaceChangeMatch && method === "GET") {
-          response = await handleWorkspaceChangeDetail(
-            req,
-            baseHeaders,
-            workspaceChangeMatch[1]!,
-            workspaceChangeMatch[2]!,
-            Number.parseInt(workspaceChangeMatch[3] ?? "", 10),
-          );
-        } else if (workspaceDocumentAuditMatch && method === "GET") {
-          response = await handleWorkspaceDocumentAudit(
-            req,
-            baseHeaders,
-            workspaceDocumentAuditMatch[1]!,
-            workspaceDocumentAuditMatch[2]!,
-            decodeURIComponent(workspaceDocumentAuditMatch[3]!),
-          );
-        } else if (workspaceDocumentExportMatch && method === "GET") {
-          response = await handleWorkspaceDocumentExport(
-            req,
-            baseHeaders,
-            workspaceDocumentExportMatch[1]!,
-            workspaceDocumentExportMatch[2]!,
-            decodeURIComponent(workspaceDocumentExportMatch[3]!),
-          );
-        } else if (workspaceDocumentRawMatch && method === "GET") {
-          response = await handleWorkspaceDocumentRaw(
-            req,
-            baseHeaders,
-            workspaceDocumentRawMatch[1]!,
-            workspaceDocumentRawMatch[2]!,
-            decodeURIComponent(workspaceDocumentRawMatch[3]!),
-          );
-        } else if (workspaceDocumentMatch && method === "GET") {
-          response = await handleWorkspaceDocumentDetail(
-            req,
-            baseHeaders,
-            workspaceDocumentMatch[1]!,
-            workspaceDocumentMatch[2]!,
-            decodeURIComponent(workspaceDocumentMatch[3]!),
-            url.searchParams.get("draft"),
-            url.searchParams.get("change"),
-            url.searchParams.get("ref"),
-          );
-        } else if (workspaceOverviewMatch && method === "GET") {
-          response = await handleWorkspaceOverview(
-            req,
-            baseHeaders,
-            workspaceOverviewMatch[1]!,
-            workspaceOverviewMatch[2]!,
-          );
-        } else if (workspaceOverviewMatch && method === "DELETE") {
-          response = await handleDeleteBinder(
-            req,
-            baseHeaders,
-            workspaceOverviewMatch[1]!,
-            workspaceOverviewMatch[2]!,
-          );
-        } else if (workspaceFoldersMatch && method === "POST") {
-          return await handleBinderShapeChange(
-            req,
-            baseHeaders,
-            workspaceFoldersMatch[1]!,
-            workspaceFoldersMatch[2]!,
-            ({ body, tree }) =>
-              planNewFolder({
-                folder: typeof body.folder === "string" ? body.folder : "",
-                existingFolders: tree.folders,
-              }),
-          );
-        } else if (workspaceFolderRenamesMatch && method === "POST") {
-          return await handleBinderShapeChange(
-            req,
-            baseHeaders,
-            workspaceFolderRenamesMatch[1]!,
-            workspaceFolderRenamesMatch[2]!,
-            ({ body, tree }) =>
-              planFolderRename({
-                from: typeof body.from === "string" ? body.from : "",
-                to: typeof body.to === "string" ? body.to : "",
-                paths: tree.paths,
-                existingFolders: tree.folders,
-              }),
-          );
-        } else if (workspaceDocumentRenamesMatch && method === "POST") {
-          return await handleBinderShapeChange(
-            req,
-            baseHeaders,
-            workspaceDocumentRenamesMatch[1]!,
-            workspaceDocumentRenamesMatch[2]!,
-            ({ body, tree }) => {
-              const documentPath =
-                typeof body.documentPath === "string" ? body.documentPath : "";
-              const document =
-                tree.documents.find((entry) => entry.path === documentPath) ??
-                tree.documents.find((entry) => entry.slugPath === documentPath);
-
-              if (!document) {
-                return { error: `"${documentPath}" is not in this binder.` };
-              }
-
-              return planDocumentRename({
-                document,
-                ...(typeof body.name === "string" ? { name: body.name } : {}),
-                ...(typeof body.folder === "string"
-                  ? { folder: body.folder }
-                  : {}),
-                paths: tree.paths,
-              });
-            },
-          );
-        } else if (workspaceDocumentArchivesMatch && method === "POST") {
-          return await handleBinderShapeChange(
-            req,
-            baseHeaders,
-            workspaceDocumentArchivesMatch[1]!,
-            workspaceDocumentArchivesMatch[2]!,
-            ({ body, tree }) => {
-              const documentPath =
-                typeof body.documentPath === "string" ? body.documentPath : "";
-              const document =
-                tree.documents.find((entry) => entry.path === documentPath) ??
-                tree.documents.find((entry) => entry.slugPath === documentPath);
-
-              if (!document) {
-                return { error: `"${documentPath}" is not in this binder.` };
-              }
-
-              return planDocumentArchive({ document });
-            },
-          );
-        } else if (workspaceDocumentRestoresMatch && method === "POST") {
-          return await handleBinderShapeChange(
-            req,
-            baseHeaders,
-            workspaceDocumentRestoresMatch[1]!,
-            workspaceDocumentRestoresMatch[2]!,
-            async ({ body, tree, client }) => {
-              const uid = typeof body.uid === "string" ? body.uid : "";
-              if (uid === "") {
-                return { error: "Name the document to restore." };
-              }
-
-              // Straight off the version tag the policy last published at. The
-              // bytes are still there because a tag is a ref and git never
-              // collects a commit reachable from one — which is the whole
-              // reason there is no archive branch to read from.
-              const archived = await readArchivedDocument({
-                client,
-                org: workspaceDocumentRestoresMatch[1]!,
-                workspace: workspaceDocumentRestoresMatch[2]!,
-                uid,
-              });
-              if (!archived) {
-                return {
-                  error:
-                    "That document has no published version to restore from.",
-                };
-              }
-
-              return planDocumentRestore({
-                document: archived.document,
-                base64Content: archived.base64Content,
-                tree,
-              });
-            },
-          );
-        } else if (workspaceNameMatch && method === "POST") {
-          response = await handleRenameBinder(
-            req,
-            baseHeaders,
-            workspaceNameMatch[1]!,
-            workspaceNameMatch[2]!,
-          );
-        } else if (workspaceDescriptionMatch && method === "POST") {
-          response = await handleDescribeBinder(
-            req,
-            baseHeaders,
-            workspaceDescriptionMatch[1]!,
-            workspaceDescriptionMatch[2]!,
-          );
-        } else if (workspaceArchiveMatch && method === "GET") {
-          response = await handleBinderArchive(
-            req,
-            baseHeaders,
-            workspaceArchiveMatch[1]!,
-            workspaceArchiveMatch[2]!,
-            url.searchParams.get("draft"),
-          );
-        } else if (workspaceDocumentRevisionsMatch && method === "POST") {
-          return await handleReviseWorkspaceDocument(
-            req,
-            baseHeaders,
-            workspaceDocumentRevisionsMatch[1]!,
-            workspaceDocumentRevisionsMatch[2]!,
-          );
-        } else if (workspaceDocumentsMatch && method === "POST") {
-          response = await handleCreateWorkspaceDocument(
-            req,
-            baseHeaders,
-            workspaceDocumentsMatch[1]!,
-            workspaceDocumentsMatch[2]!,
-          );
-        } else if (adminSubscriptionGrantMatch && method === "POST") {
-          response = await upsertLegacyAdminSubscriptionOverride(
-            req,
-            baseHeaders,
-            adminSubscriptionGrantMatch[1] ?? "",
-            "grant",
-          );
-        } else if (adminSubscriptionRevokeMatch && method === "POST") {
-          response = await upsertLegacyAdminSubscriptionOverride(
-            req,
-            baseHeaders,
-            adminSubscriptionRevokeMatch[1] ?? "",
-            "revoke",
-          );
-        } else if (adminSubscriptionStatusMatch && method === "GET") {
-          response = await handleAdminSubscriptionStatus(
-            req,
-            baseHeaders,
-            adminSubscriptionStatusMatch[1] ?? "",
-          );
-        } else if (adminSubscriptionStatusMatch && method === "PUT") {
-          response = await handleAdminSubscriptionBooleanUpdate(
-            req,
-            baseHeaders,
-            adminSubscriptionStatusMatch[1] ?? "",
-          );
-        } else if (adminSubscriptionStatusMatch && method === "DELETE") {
-          response = await upsertLegacyAdminSubscriptionOverride(
-            req,
-            baseHeaders,
-            adminSubscriptionStatusMatch[1] ?? "",
-            "revoke",
-          );
-        } else if (adminSubscriptionAccessActionMatch && method === "PUT") {
-          response = await handleAdminSubscriptionAccessUpdate(
-            req,
-            baseHeaders,
-            adminSubscriptionAccessActionMatch[1] ?? "",
-          );
-        } else if (adminSubscriptionAccessActionMatch && method === "DELETE") {
-          response = await handleAdminSubscriptionAccessDelete(
-            req,
-            baseHeaders,
-            adminSubscriptionAccessActionMatch[1] ?? "",
-          );
-        } else {
-          response = json(404, { error: "Not found." }, baseHeaders);
-        }
-      }
-
-      const durationMs = Date.now() - startMs;
-      const status = response.status;
-      if (status >= 500) {
-        logger.error("Response sent with 5xx status", {
-          method,
-          path: pathname,
-          status,
-          durationMs,
-        });
-      } else {
-        logger.info("Response sent", {
-          method,
-          path: pathname,
-          status,
-          durationMs,
-        });
-      }
-
-      return response;
-    },
-  });
+  return response;
 }
 
 if (import.meta.main) {

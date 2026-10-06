@@ -2,10 +2,29 @@ import createClient from "openapi-fetch";
 
 import { giteaRequestGate } from "./request-gate";
 import type { paths } from "./spec/gitea";
+import { recordGiteaCall } from "./usage";
 
-/** Every Gitea call queues here. See `request-gate.ts` for why. */
-const gatedFetch = (input: Request): Promise<Response> =>
-  giteaRequestGate.run(() => globalThis.fetch(input));
+/**
+ * Every Gitea call queues here. See `request-gate.ts` for why.
+ *
+ * Timed on both sides of the gate, so a request's log line can tell time spent
+ * waiting for a slot from time spent waiting for Gitea (`usage.ts`).
+ */
+export const gatedFetch = (input: Request): Promise<Response> => {
+  const queuedAt = performance.now();
+  return giteaRequestGate.run(async () => {
+    const startedAt = performance.now();
+    try {
+      return await globalThis.fetch(input);
+    } finally {
+      recordGiteaCall({
+        gated: true,
+        waitMs: startedAt - queuedAt,
+        durationMs: performance.now() - startedAt,
+      });
+    }
+  });
+};
 
 export type GiteaClient = ReturnType<typeof createGiteaClient>;
 

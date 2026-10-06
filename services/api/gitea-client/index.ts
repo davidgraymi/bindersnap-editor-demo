@@ -9,6 +9,7 @@ export * from "./reactions";
 export * from "./repos";
 export * from "./signOff";
 export * from "./uploads";
+export * from "./usage";
 export * from "./workspaces";
 
 // Re-export generated types for consumers that need raw Gitea API types

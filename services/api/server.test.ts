@@ -1329,6 +1329,33 @@ describe("admin subscription access overrides", () => {
     }
   });
 
+  test("the Gitea gate's diagnostics are for admins only", async () => {
+    const server = createApiServer();
+    const admin = await seedSession(`admin-${randomUUID()}`, { isAdmin: true });
+    const member = await seedSession(`member-${randomUUID()}`);
+
+    try {
+      const allowed = await server.fetch(
+        makeSessionRequest("/api/app/admin/diagnostics/gitea", admin),
+      );
+      expect(allowed.status).toBe(200);
+      expect(await allowed.json()).toEqual({
+        gate: {
+          limit: expect.any(Number),
+          inFlight: expect.any(Number),
+          queued: expect.any(Number),
+        },
+      });
+
+      const refused = await server.fetch(
+        makeSessionRequest("/api/app/admin/diagnostics/gitea", member),
+      );
+      expect(refused.status).toBe(403);
+    } finally {
+      server.stop(true);
+    }
+  });
+
   test("billing status reflects an admin revoke override over an active Stripe subscription", async () => {
     const server = createApiServer();
     const username = `revoked-${randomUUID()}`;
