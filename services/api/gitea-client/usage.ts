@@ -19,6 +19,11 @@ export interface GiteaUsage {
   /** Gitea calls this request made. */
   calls: number;
   /**
+   * Reads this request did not make because the same read was already in
+   * flight for somebody else, and it shared that one's answer.
+   */
+  sharedCalls: number;
+  /**
    * Time spent waiting for a gate slot, summed over calls. High means other
    * work held the slots, not that Gitea was slow.
    */
@@ -45,7 +50,7 @@ let nextLane = 0;
 const storage = new AsyncLocalStorage<RequestScope>();
 
 export function createGiteaUsage(): GiteaUsage {
-  return { calls: 0, gateWaitMs: 0, giteaMs: 0 };
+  return { calls: 0, sharedCalls: 0, gateWaitMs: 0, giteaMs: 0 };
 }
 
 /** Run `fn` with its own usage record, which every Gitea call inside adds to. */
@@ -135,10 +140,17 @@ export function recordGiteaCall(call: {
   usage.giteaMs += call.durationMs;
 }
 
+/** A read answered by one already in flight. See `gatedFetch`. */
+export function recordSharedGiteaCall(): void {
+  const usage = storage.getStore()?.usage;
+  if (usage) usage.sharedCalls += 1;
+}
+
 /** Rounded for a log line: fractions of a millisecond are noise there. */
 export function giteaUsageLogFields(usage: GiteaUsage): Record<string, number> {
   return {
     giteaCalls: usage.calls,
+    giteaSharedCalls: usage.sharedCalls,
     giteaGateWaitMs: Math.round(usage.gateWaitMs),
     giteaMs: Math.round(usage.giteaMs),
   };
