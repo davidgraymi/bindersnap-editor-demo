@@ -73,7 +73,9 @@ test("the guide picks up where a new customer left off, and stays hidden once hi
       timeout: 30_000,
     },
   );
-  await expect(page.locator(".guide-step--done")).toHaveCount(2);
+  // Organization and binder, and "Decide who approves": a new binder needs
+  // no approvals, so nobody is stuck waiting for a colleague to sign off.
+  await expect(page.locator(".guide-step--done")).toHaveCount(3);
 
   // "Add documents" lands in the binder with the dialog already open.
   await page.getByRole("link", { name: /Add documents/ }).click();

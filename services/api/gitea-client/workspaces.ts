@@ -31,8 +31,16 @@ type CreateBranchProtectionOption =
  * hand-cleaning the org.
  */
 
-/** How many approvals a change needs before it can publish, by default. */
-export const DEFAULT_REQUIRED_APPROVALS = 1;
+/**
+ * How many approvals a change needs before it can publish, by default: none.
+ *
+ * A new customer is usually one person moving their documents in, and nobody
+ * can approve their own change — so a binder that started at one could not
+ * publish anything until a second person joined, and the first thing the
+ * product did was stop them. The binder's admin raises it in Settings the day
+ * somebody else is there to sign off.
+ */
+export const DEFAULT_REQUIRED_APPROVALS = 0;
 
 export interface WorkspaceSummary {
   id: number;

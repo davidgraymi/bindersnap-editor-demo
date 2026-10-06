@@ -224,9 +224,11 @@ test("a member creates the binder, and it belongs to the organization", async ()
     block_on_codeowner_reviews?: boolean;
   }>(token, `/repos/${org.name}/clinical-policies/branch_protections/main`);
 
-  // Nothing reaches main except a merged, approved change.
+  // Nothing reaches main except a merged change. A new binder needs no
+  // approvals, so a customer moving in alone can publish; its admin raises the
+  // count in Settings.
   expect(protection.enable_push).toBe(false);
-  expect(protection.required_approvals).toBeGreaterThan(0);
+  expect(protection.required_approvals).toBe(0);
 
   // And the field the free-reviewer tier lives or dies on: without it Gitea
   // resolves "official reviewer" as "has write access", which would make every
@@ -1137,8 +1139,10 @@ test("a change says what it proposes, and what publishing it would write", async
     true,
   );
   expect(payload.change.approvalCount).toBe(0);
-  expect(payload.change.requiredApprovals).toBe(1);
-  expect(payload.change.isApproved).toBe(false);
+  // A new binder needs no approvals, and nobody was asked to review: Gitea
+  // would merge it now, so it is ready.
+  expect(payload.change.requiredApprovals).toBe(0);
+  expect(payload.change.isApproved).toBe(true);
 
   // What publishing would write, per document — a document being added says
   // v1 rather than showing no version at all.
@@ -1789,7 +1793,7 @@ test("the binder says who can act in it, and the rules it is under", async () =>
   // than only by a repository admin — the count is policy everyone reviewing
   // is entitled to, so it is read with the service account.
   expect(payload.rules.pushBlocked).toBe(true);
-  expect(payload.rules.requiredApprovals).toBe(1);
+  expect(payload.rules.requiredApprovals).toBe(0);
   expect(payload.rules.dismissStaleApprovals).toBe(true);
 
   // The teams granted onto the repository, asked of the repository — a binder's
@@ -3427,10 +3431,11 @@ test("a binder's thread rule is changed immediately, and read back", async () =>
   ).toBe(false);
 });
 
-test("an owner working alone sets approvals to none and publishes their own policy", async () => {
+test("an owner working alone needs no approvals and publishes their own policy", async () => {
   // A clinic trying Bindersnap on its own has nobody else to approve its first
-  // policy. The approval count is Gitea branch protection, and the binder's
-  // administrator changes it — as themselves, so Gitea is what allows it.
+  // policy, so a new binder starts needing none. The approval count is Gitea
+  // branch protection, and the binder's administrator sets it — as
+  // themselves, so Gitea is what allows it.
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
   const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
@@ -3439,7 +3444,7 @@ test("an owner working alone sets approvals to none and publishes their own poli
   ).toBe(201);
 
   const before = await readSettings(sessionCookie, org.name, "clinical");
-  expect(before.rules.requiredApprovals).toBe(1);
+  expect(before.rules.requiredApprovals).toBe(0);
 
   const response = await fetch(
     `${API_BASE_URL}/api/app/binders/${org.name}/clinical/rules`,
@@ -3512,9 +3517,9 @@ test("the settings page takes a typed approval count, and says when nobody could
     ]);
   await page.goto(`${APP_BASE_URL}/${org.name}/clinical/-/settings`);
   const count = page.getByLabel("Approvals needed before publishing");
-  await expect(count).toHaveValue("1");
-  // Alone in the binder, one approval is already more than anyone can give.
-  await expect(page.getByText(/Only 1 person can approve/)).toBeVisible();
+  // A new binder needs none, and none is something anybody can meet.
+  await expect(count).toHaveValue("0");
+  await expect(page.getByText(/Only 1 person can approve/)).toHaveCount(0);
 
   await count.fill("12");
   await count.press("Enter");
@@ -3525,6 +3530,8 @@ test("the settings page takes a typed approval count, and says when nobody could
           .requiredApprovals,
     )
     .toBe(12);
+  // Alone in the binder, twelve is more than anyone can give.
+  await expect(page.getByText(/Only 1 person can approve/)).toBeVisible();
 
   await count.fill("0");
   await count.blur();
@@ -3603,6 +3610,16 @@ test("publishing stamps the policy in force onto the version's tag", async () =>
 
   const ownerToken = await createUserToken(owner.username, owner.password);
   const approver = await addApprover(ownerToken, org.name, "clinical");
+  // A new binder needs none; one makes the stamp carry an approver.
+  const rules = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org.name}/clinical/rules`,
+    {
+      method: "PATCH",
+      headers: authHeaders(ownerCookie),
+      body: JSON.stringify({ requiredApprovals: 1 }),
+    },
+  );
+  expect(rules.status, await rules.text()).toBe(200);
 
   const added = await addDocument(ownerCookie, org.name, "clinical", {
     name: "Infection Control Policy",

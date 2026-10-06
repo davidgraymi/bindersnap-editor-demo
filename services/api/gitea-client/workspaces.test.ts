@@ -94,7 +94,8 @@ test("protectWorkspaceMain whitelists the role teams so a free reviewer's approv
   // The product's core claim: nothing reaches main except a merged, approved
   // change.
   expect(body.enable_push).toBe(false);
-  expect(body.required_approvals).toBe(1);
+  // None by default: a customer moving in alone must be able to publish.
+  expect(body.required_approvals).toBe(0);
   // CODEOWNERS is enforcement only when a merge is blocked on the outstanding
   // request it creates.
   expect(body.block_on_official_review_requests).toBe(true);

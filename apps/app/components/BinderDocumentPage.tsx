@@ -530,7 +530,7 @@ export function BinderDocumentPage({
               </h2>
               <p className="doc-nothing-published-note">
                 {openChanges.length > 0
-                  ? "A version is waiting on a decision. Once it is approved and published it appears here as the official record."
+                  ? "A version is waiting to be published. Once it is, it appears here as the official record."
                   : "This document is filed here but nothing has been approved yet."}
               </p>
             </div>
