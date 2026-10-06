@@ -10702,6 +10702,21 @@
                         "users",
                         "teams"
                       ]
+                    },
+                    "viewer": {
+                      "type": "object",
+                      "properties": {
+                        "canApprove": {
+                          "type": "boolean"
+                        },
+                        "canPublish": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "canApprove",
+                        "canPublish"
+                      ]
                     }
                   },
                   "required": [
@@ -10716,7 +10731,8 @@
                     "blockOnUnresolvedThreads",
                     "unresolvedThreadCount",
                     "canManage",
-                    "requiredReviewers"
+                    "requiredReviewers",
+                    "viewer"
                   ]
                 }
               }

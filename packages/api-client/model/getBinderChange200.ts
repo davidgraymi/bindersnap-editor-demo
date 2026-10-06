@@ -8,6 +8,7 @@ import type { GetBinderChange200Change } from './getBinderChange200Change.ts';
 import type { GetBinderChange200DocumentsItem } from './getBinderChange200DocumentsItem.ts';
 import type { GetBinderChange200RemovedDocumentsItem } from './getBinderChange200RemovedDocumentsItem.ts';
 import type { GetBinderChange200RequiredReviewers } from './getBinderChange200RequiredReviewers.ts';
+import type { GetBinderChange200Viewer } from './getBinderChange200Viewer.ts';
 
 export type GetBinderChange200 = {
   organization: string;
@@ -23,4 +24,5 @@ export type GetBinderChange200 = {
   unresolvedThreadCount: number;
   canManage: boolean;
   requiredReviewers: GetBinderChange200RequiredReviewers;
+  viewer: GetBinderChange200Viewer;
 };

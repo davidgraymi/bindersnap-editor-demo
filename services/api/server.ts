@@ -5216,6 +5216,63 @@ async function handlePublishWorkspaceChange(
 }
 
 /**
+ * What the person reading a change may do with it: approve, and publish.
+ *
+ * Asked of Gitea's own rules rather than worked out in the browser, which
+ * could only see the branch protection's username whitelists — empty on every
+ * binder, because officialness is team membership — and so offered Approve
+ * and Publish to people Gitea would refuse or not count:
+ *
+ * - **Publish** is a merge, which takes write access to the binder.
+ * - **Approve** counts only from somebody in one of the protection's approval
+ *   teams (`protectWorkspaceMain`). Anybody who can read the change can leave
+ *   an approval, but one that satisfies nothing is a button that lies.
+ */
+async function readDecisionRights(params: {
+  org: string;
+  binder: string;
+  username: string;
+  canWrite: boolean;
+}): Promise<{ canApprove: boolean; canPublish: boolean }> {
+  const { org, binder, username, canWrite } = params;
+  const client = createPrivilegedGiteaClient();
+  if (!client) return { canApprove: canWrite, canPublish: canWrite };
+
+  const protection = await getRepoBranchProtection(
+    client,
+    org,
+    binder,
+    "main",
+  ).catch(() => null);
+
+  // No whitelist: Gitea treats write access as official.
+  if (!protection?.enableApprovalsWhitelist) {
+    return { canApprove: canWrite, canPublish: canWrite };
+  }
+
+  const login = username.toLowerCase();
+  if (
+    protection.approvalsWhitelistUsernames.some(
+      (name) => name.toLowerCase() === login,
+    )
+  ) {
+    return { canApprove: true, canPublish: canWrite };
+  }
+
+  const whitelisted = new Set(protection.approvalsWhitelistTeams);
+  const teams = await listOrganizationTeams({ client, org }).catch(() => []);
+  for (const team of teams) {
+    if (!whitelisted.has(team.name)) continue;
+    const { response } = await client.GET("/teams/{id}/members/{username}", {
+      params: { path: { id: team.id, username } },
+    });
+    if (response.ok) return { canApprove: true, canPublish: canWrite };
+  }
+
+  return { canApprove: false, canPublish: canWrite };
+}
+
+/**
  * Whether `main` has moved on since this change branched off it.
  *
  * A binder protects `main` with `block_on_outdated_branch`, so a change that
@@ -5437,6 +5494,12 @@ async function handleWorkspaceChangeDetail(
         blockOnUnresolvedThreads: reviewSettings.blockOnUnresolvedThreads,
         unresolvedThreadCount: discussions.unresolvedCount,
         canManage: access.push,
+        viewer: await readDecisionRights({
+          org: orgName,
+          binder: workspaceName,
+          username: auth.session.username,
+          canWrite: access.push,
+        }),
         // Who this change is actually held for, out of the people its rules
         // named. Read rather than guessed: see `requiredReviewers.ts`.
         requiredReviewers: requiredReviewersFor({

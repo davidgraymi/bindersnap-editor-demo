@@ -47,6 +47,13 @@ interface DocumentChangeDetailProps {
   blockOnUnresolvedThreads: boolean;
   /** Whether this reader may set the reviewer list. */
   canManageAssignments: boolean;
+  /**
+   * What this reader may do with the change, by Gitea's own rules — from the
+   * server, which can see the binder's approval teams and this reader's write
+   * access. Null where the page has no such answer, and the protection
+   * whitelists decide as they always did.
+   */
+  decisionRights?: { canApprove: boolean; canPublish: boolean } | null;
   nextVersion: number;
   /**
    * How many documents this change touches, for the approve prompt — the
@@ -242,6 +249,7 @@ export function DocumentChangeDetail({
   branchProtection,
   blockOnUnresolvedThreads,
   canManageAssignments,
+  decisionRights = null,
   nextVersion,
   documentCount = 1,
   byline,
@@ -371,12 +379,22 @@ export function DocumentChangeDetail({
     }
   }
 
-  const reviewPerms = canUserReview(
-    currentUser,
-    change.submittedBy,
-    branchProtection,
-  );
-  const mergePerms = canUserMerge(currentUser, branchProtection);
+  const reviewPerms =
+    decisionRights && !decisionRights.canApprove
+      ? {
+          allowed: false,
+          reason:
+            "Your approval would not count in this binder. A binder admin can add you to a group that reviews it.",
+        }
+      : canUserReview(currentUser, change.submittedBy, branchProtection);
+  const mergePerms =
+    decisionRights && !decisionRights.canPublish
+      ? {
+          allowed: false,
+          reason:
+            "Only an editor or admin of this binder can publish. Ask one of them to publish it.",
+        }
+      : canUserMerge(currentUser, branchProtection);
   // The server's answer, which knows this binder's protection; the rule
   // itself only for a change that arrived without one.
   const mergeReady =
@@ -403,6 +421,12 @@ export function DocumentChangeDetail({
     mergeReady,
     canReview: reviewPerms.allowed,
     canMerge: mergePerms.allowed,
+    hasApproved: change.reviewers.some(
+      (reviewer) =>
+        reviewer.login === currentUser &&
+        reviewer.status === "approved" &&
+        !reviewer.stale,
+    ),
   });
   // A delinquent organization records no decisions. Folded into `decision`
   // rather than checked at each button because "none" is already the shape
@@ -453,11 +477,10 @@ export function DocumentChangeDetail({
         ? "One discussion is still open, and this binder holds the publish until every one is resolved."
         : `${unresolvedCount} discussions are still open, and this binder holds the publish until every one is resolved.`
       : null,
-    change.open && ownSubmission && reviewDecision !== "publish"
+    change.open && ownSubmission && !mergeReady
       ? "You submitted this change — it is waiting on its reviewers."
       : null,
-    change.open && !isAnonymous && !ownSubmission ? reviewPerms.reason : null,
-    mergeReady && !mergePerms.allowed ? mergePerms.reason : null,
+    // The reasons a dimmed button gives are said under the button itself.
   ].filter((line): line is string => Boolean(line));
 
   return (
@@ -719,6 +742,42 @@ export function DocumentChangeDetail({
                   </button>
                 </div>
               </div>
+            ) : reviewDecision === "publish-locked" ? (
+              <>
+                <button
+                  className="bs-btn bs-btn--approve bs-btn--block"
+                  type="button"
+                  disabled
+                  aria-describedby="rev-decision-locked"
+                >
+                  Publish
+                </button>
+                <p className="rev-decision-locked" id="rev-decision-locked">
+                  {mergePerms.reason}
+                </p>
+              </>
+            ) : reviewDecision === "review-locked" ? (
+              <>
+                <button
+                  className="bs-btn bs-btn--approve bs-btn--block"
+                  type="button"
+                  disabled
+                  aria-describedby="rev-decision-locked"
+                >
+                  Approve
+                </button>
+                <button
+                  className="bs-btn bs-btn-secondary bs-btn--block"
+                  type="button"
+                  disabled
+                  aria-describedby="rev-decision-locked"
+                >
+                  Ask for changes
+                </button>
+                <p className="rev-decision-locked" id="rev-decision-locked">
+                  {reviewPerms.reason ?? "You cannot approve this change."}
+                </p>
+              </>
             ) : reviewDecision === "publish" ? (
               <button
                 className="bs-btn bs-btn--approve bs-btn--block"
