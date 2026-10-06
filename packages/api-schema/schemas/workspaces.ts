@@ -813,9 +813,11 @@ export type SignOffDocumentView = z.infer<typeof SignOffDocumentSchema>;
  *
  * `enforced` is the field to read first. The rules are a file in the binder;
  * whether Gitea will actually hold a merge for them depends on
- * `block_on_codeowner_reviews`, which exists from 28.0.0 and does not exist on
- * the 1.27.3 production runs. Rules that are listed but not enforced are worse
- * than no rules at all, so the page has to be able to say which it is.
+ * `block_on_codeowner_reviews` being on for the binder's `main`. Provisioning
+ * turns it on, so this reads false only for a binder whose protection is
+ * missing or was changed outside Bindersnap. Rules that are listed but not
+ * enforced are worse than no rules at all, so the page has to be able to say
+ * which it is.
  */
 export const WorkspaceSignOffSchema = z.object({
   enforced: z.boolean(),
