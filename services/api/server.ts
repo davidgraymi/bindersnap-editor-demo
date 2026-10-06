@@ -211,6 +211,7 @@ import {
 import {
   createPullRequest,
   getPullRequestWithReviews,
+  readMergeCommitSha,
   listBranchUpdates,
   listPullRequests,
   findClosedChanges,
@@ -5162,6 +5163,30 @@ async function handlePublishWorkspaceChange(
     }).catch(() => null);
 
     const publisher = await fetchSessionGiteaUser(session).catch(() => null);
+
+    // **The tags point at this merge, not at `main`.** A second change
+    // published a moment later moves `main`, and a tag aimed at the branch
+    // name after that lands on the other change's merge commit. The re-read
+    // above carries the SHA; if it failed, ask once more for just that.
+    const mergeCommitSha =
+      (merged?.pullRequest as { merge_commit_sha?: string | null } | undefined)
+        ?.merge_commit_sha ||
+      (await readMergeCommitSha({
+        client,
+        owner,
+        repo: workspaceName,
+        pullNumber,
+      }).catch(() => null));
+
+    if (!mergeCommitSha) {
+      // Tagging `main` instead would be guessing at evidence. Refuse, loudly:
+      // the change is merged and has no version yet, which is a gap somebody
+      // has to close, not one to paper over.
+      throw new Error(
+        `Change #${pullNumber} was merged, but Gitea did not report its merge commit, so no version was tagged.`,
+      );
+    }
+
     const stampedPolicy = {
       requiredApprovals: await readRequiredApprovals(owner, workspaceName),
       approvedBy: merged
@@ -5192,7 +5217,7 @@ async function handlePublishWorkspaceChange(
           uid: document.uid!,
           slugPath: document.slugPath,
           version,
-          target: "main",
+          target: mergeCommitSha,
           message: buildVersionStamp({
             ...stampedPolicy,
             // The title the product shows, by the rule the product shows it
@@ -5236,7 +5261,7 @@ async function handlePublishWorkspaceChange(
             workspace: workspaceName,
             uid,
             sequence,
-            target: "main",
+            target: mergeCommitSha,
             message: buildArchiveStamp({
               title: formatDocumentName(document.name),
               slugPath: document.slugPath,

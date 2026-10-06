@@ -44,6 +44,8 @@ let giteaLoginsByToken = new Map<string, string>();
 let commentsByPR = new Map<string, MockedComment[]>();
 let reviewConfigFile: string | null = null;
 let mergeCalls = 0;
+/** What each tag write pointed at. A version tag must name the merge commit. */
+let tagTargets: string[] = [];
 let nextCommentId = 1;
 
 function prKey(owner: string, repo: string, index: number): string {
@@ -87,6 +89,7 @@ beforeEach(() => {
   commentsByPR = new Map();
   reviewConfigFile = null;
   mergeCalls = 0;
+  tagTargets = [];
   nextCommentId = 1;
 
   globalThis.fetch = (async (input, init) => {
@@ -214,9 +217,12 @@ beforeEach(() => {
       /^\/api\/v1\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)$/,
     );
     if (prMatch && method === "GET") {
+      // Merged once the merge has been called, as Gitea would answer.
       return json({
         number: Number(prMatch[3]),
-        state: "open",
+        state: mergeCalls > 0 ? "closed" : "open",
+        merged: mergeCalls > 0,
+        merge_commit_sha: mergeCalls > 0 ? "merge-sha" : null,
         mergeable: true,
         head: { ref: "upload/v2" },
       });
@@ -226,6 +232,7 @@ beforeEach(() => {
     if (tagsMatch) {
       if (method === "GET") return json([]);
       if (method === "POST") {
+        tagTargets.push(parsed?.target ?? "");
         return json({
           name: parsed?.tag_name ?? "doc/v0001",
           commit: { sha: "abc", created: new Date().toISOString() },
@@ -538,6 +545,8 @@ describe("publish gate on unresolved threads", () => {
 
       expect(response.status).toBe(200);
       expect(mergeCalls).toBe(1);
+      // The version tag names the merge, not the branch it merged into.
+      expect(tagTargets).toEqual(["merge-sha"]);
     } finally {
       server.stop(true);
     }
