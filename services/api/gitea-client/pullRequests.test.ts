@@ -993,3 +993,43 @@ test("readMergeCommitSha answers the merge commit, and null for an unmerged chan
     }),
   ).toBeNull();
 });
+
+test("listPullRequestsWithoutReviews reads the changes and none of their reviews", async () => {
+  const { listPullRequestsWithoutReviews, attachReviews } =
+    await import("./pullRequests");
+  const reviewReads: number[] = [];
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/pulls": () => [
+        { number: 1, head: { ref: "upload/a/1" }, state: "open" },
+        { number: 2, head: { ref: "sign-off/rules" }, state: "open" },
+      ],
+      "/repos/{owner}/{repo}/pulls/{index}/reviews": (init: unknown) => {
+        reviewReads.push(
+          (init as { params: { path: { index: number } } }).params.path.index,
+        );
+        return [{ id: 1, state: "APPROVED", user: { login: "bob" } }];
+      },
+    },
+  });
+
+  const open = await listPullRequestsWithoutReviews({
+    client,
+    owner: "mercy-health",
+    repo: "clinical",
+    state: "open",
+  });
+  expect(open.map((pull) => pull.number)).toEqual([1, 2]);
+  expect(reviewReads).toEqual([]);
+
+  // Narrowed first, then reviewed: only the change that survives costs a read.
+  const withReviews = await attachReviews({
+    client,
+    owner: "mercy-health",
+    repo: "clinical",
+    pullRequests: open.filter((pull) => pull.number === 1),
+  });
+  expect(withReviews).toHaveLength(1);
+  expect(withReviews[0]!.reviews).toHaveLength(1);
+  expect(reviewReads).toEqual([1]);
+});
