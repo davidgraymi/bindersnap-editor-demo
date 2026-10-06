@@ -56,6 +56,7 @@ import {
   readBinderTimeline,
   isRestoredFromArchive,
   listAllTags,
+  publishedVersionByMergeCommit,
   listChangedDocuments,
   listDocumentVersions,
   documentVersionsFrom,
@@ -180,12 +181,10 @@ import type {
 } from "../../packages/api-schema/schemas/workspaces";
 import {
   getCurrentUserRepoPermission,
-  getLatestDocTag,
   getRepoBranchProtection,
   updateRepoBranchProtection,
   findUser,
   getRepoInfo,
-  listDocTags,
   listRepoCollaborators,
   searchUsers,
   type RepoCollaboratorPermissionSummary,
@@ -3736,10 +3735,12 @@ function groupRefsByRepo(
 }
 
 /**
- * Named decided changes from one document.
+ * Named decided changes from one binder.
  *
  * The tags are what turn a merged change into "published as v3", so they are
- * read per document rather than per change.
+ * read once per binder rather than per change. They are the binder's own
+ * `<uid>/vN` tags: this used to read the pre-ADR-0004 `doc/vNNNN` shape, which
+ * nothing writes any more, so every decided change came back unnumbered.
  */
 async function loadDecidedChanges(
   client: GiteaClient,
@@ -3749,7 +3750,7 @@ async function loadDecidedChanges(
 ) {
   try {
     const [tags, requiredApprovals, entries] = await Promise.all([
-      listDocTags(client, owner, repo),
+      listAllTags({ client, owner, repo }),
       readRequiredApprovals(owner, repo),
       Promise.all(
         numbers.map((pullNumber) =>
@@ -3761,7 +3762,11 @@ async function loadDecidedChanges(
     return {
       owner,
       repo,
-      changes: buildClosedChanges(entries, tags, requiredApprovals),
+      changes: buildClosedChanges(
+        entries,
+        publishedVersionByMergeCommit(tags),
+        requiredApprovals,
+      ),
     };
   } catch (err) {
     // A document that will not answer contributes nothing to the section

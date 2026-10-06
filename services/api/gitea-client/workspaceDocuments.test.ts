@@ -776,3 +776,27 @@ test("a restore is told from a revision by what the tags last recorded", () => {
     }),
   ).toBe(false);
 });
+
+test("publishedVersionByMergeCommit numbers a change by the tags on its merge", async () => {
+  const { publishedVersionByMergeCommit } =
+    await import("./workspaceDocuments");
+
+  const bySha = publishedVersionByMergeCommit([
+    // One document, one merge: that change published v3.
+    { name: `${HANDOVER}/v3`, commit: { sha: "merge-a" } },
+    // Two documents to the same number on one merge: still one answer.
+    { name: `${HANDOVER}/v4`, commit: { sha: "merge-b" } },
+    { name: `${ADMISSIONS}/v4`, commit: { sha: "merge-b" } },
+    // Two documents to different numbers: no single "published as".
+    { name: `${HANDOVER}/v5`, commit: { sha: "merge-c" } },
+    { name: `${ADMISSIONS}/v9`, commit: { sha: "merge-c" } },
+    // The retired shape, and a tag this app did not write.
+    { name: "doc/v0007", commit: { sha: "merge-d" } },
+    { name: "release-2026", commit: { sha: "merge-e" } },
+  ]);
+
+  expect([...bySha]).toEqual([
+    ["merge-a", 3],
+    ["merge-b", 4],
+  ]);
+});
