@@ -873,6 +873,7 @@ async function publish(
   run: BinderRun,
   number: number,
   author: string,
+  reviews: readonly SeedReview[],
 ): Promise<void> {
   const as = await run.sessions.options(publisherFor(run, author));
   for (let attempt = 0; attempt < 10; attempt += 1) {
@@ -887,6 +888,9 @@ async function publish(
       if (isStatus(error, 405, 409, 422) && attempt < 9) return null;
       throw error;
     });
+    // Gitea can dismiss an approval after it was read back as holding, when
+    // it catches up with the push late. Give the reviews again and retry.
+    if (!response) await ensureReviews(run, number, reviews);
     if (response && response.status === 200) {
       run.log(`Published #${number}`);
       return;
@@ -914,7 +918,7 @@ async function settleChange(
     await ensureThread(run, number, thread);
   }
   if (change.closed) await closeInGitea(run, number, author);
-  if (change.publish) await publish(run, number, author);
+  if (change.publish) await publish(run, number, author, change.reviews);
 }
 
 /** A change that has already ended is left exactly as it is. */
