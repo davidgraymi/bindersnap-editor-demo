@@ -25,8 +25,6 @@ export type AppRoute =
    */
   | { kind: "billing"; org?: string }
   | { kind: "createOrganization" }
-  /** The help guides: `/help`, and one guide at `/help/{topic}`. */
-  | { kind: "help"; topic?: string }
   /**
    * An organization: what it owns, and who is in it. `/{org}`, and
    * `/{org}/-/people` for who.
@@ -152,6 +150,7 @@ export const RESERVED_FIRST_SEGMENTS = new Set([
   "changes",
   "docs",
   "documents",
+  // Help is ordinary pages beside the app (`apps/help`), never a route in it.
   "help",
   "login",
   "organizations",
@@ -206,13 +205,6 @@ export function getRoute(pathname: string): AppRoute {
 
   if (normalizedPath === "/organizations/new") {
     return { kind: "createOrganization" };
-  }
-  if (normalizedPath === "/help") {
-    return { kind: "help" };
-  }
-  const helpMatch = normalizedPath.match(/^\/help\/([^/]+)$/);
-  if (helpMatch) {
-    return { kind: "help", topic: decodeSegment(helpMatch[1]!) };
   }
   if (normalizedPath === "/billing") {
     return { kind: "billing" };
@@ -302,8 +294,6 @@ export function routeToPath(route: AppRoute): string {
       return route.org ? `/${route.org}/-/billing` : "/billing";
     case "createOrganization":
       return "/organizations/new";
-    case "help":
-      return route.topic ? `/help/${encodeURIComponent(route.topic)}` : "/help";
     case "organization":
       return route.tab && route.tab !== "binders"
         ? `/${route.org}/-/${route.tab}`
@@ -423,7 +413,6 @@ export function isProtectedAppRoute(route: AppRoute): boolean {
     route.kind === "documents" ||
     route.kind === "changes" ||
     route.kind === "adminSubscriptions" ||
-    route.kind === "help" ||
     // An organization's own pages need a session to resolve at all: which
     // binders you can see is a question about you.
     route.kind === "organization" ||

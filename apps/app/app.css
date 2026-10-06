@@ -11439,56 +11439,6 @@ html.bs-writing .app-main {
   min-width: 12rem;
 }
 
-/* ── Help ───────────────────────────────────────────────────────────────── */
-.help-page > * {
-  max-width: 44rem;
-}
-
-.help-steps + p {
-  margin-top: var(--brand-space-2);
-}
-
-.help-back {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--brand-space-1);
-  margin-bottom: var(--brand-space-2);
-  color: var(--bs-text-muted);
-  font-size: var(--brand-text-ui-md);
-  text-decoration: none;
-}
-
-.help-section {
-  margin-top: var(--brand-space-4);
-}
-
-.help-heading {
-  font-size: 1.1rem;
-  margin: 0 0 var(--brand-space-1-5);
-}
-
-.help-section p,
-.help-steps li {
-  color: var(--bs-text-secondary);
-  line-height: 1.6;
-}
-
-.help-steps {
-  padding-left: var(--brand-space-4);
-  display: grid;
-  gap: var(--brand-space-1);
-}
-
-.help-list {
-  margin-top: var(--brand-space-3);
-  padding: 0;
-  list-style: none;
-}
-
-.help-guide-back {
-  margin: var(--brand-space-2) 0 0;
-}
-
 /* Where a policy written here came from, in the place an upload shows its
    file name: in words, not in a monospace name nobody chose. */
 .doc-header-source {

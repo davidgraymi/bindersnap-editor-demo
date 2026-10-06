@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
-import { CircleHelp, CreditCard, LogOut, Moon, Shield } from "lucide-react";
+import {
+  CircleHelp,
+  CreditCard,
+  LogOut,
+  Map as MapIcon,
+  Moon,
+  Shield,
+} from "lucide-react";
 import type { SessionUser } from "../api";
 import { buildDocumentsUrl, parseDocumentsViewState } from "../documentsView";
 import { followInApp, navigateToHref } from "../appLink";
 import { NotificationBell } from "./NotificationBell";
 import { GettingStarted, GuideBar } from "./GettingStarted";
-import { HelpPage } from "./HelpPage";
 import { useOnboarding } from "../useOnboarding";
 import { routeToPath, type AppRoute } from "../routes";
 import { BinderShell } from "./BinderShell";
@@ -83,6 +89,8 @@ function renderProfileMenuIcon(icon: string) {
       return <AppIcon icon={Moon} size="md" />;
     case "admin":
       return <AppIcon icon={Shield} size="md" />;
+    case "guide":
+      return <AppIcon icon={MapIcon} size="md" />;
     case "signout":
       return <AppIcon icon={LogOut} size="md" />;
     default:
@@ -221,14 +229,17 @@ export function AppShell({
             onSearchLibrary={navigateToSearch}
           />
 
+          {/* **Help opens beside the app, not inside it.** It is ordinary
+              pages anybody can read, signed in or not (apps/help), and
+              reading about a step in a new tab keeps the place where you
+              were doing it. */}
           <a
             className="app-topnav-icon-btn"
             href="/help"
-            title="Help and guides"
-            aria-label="Help and guides"
-            onClick={(event) =>
-              followInApp(event, () => onNavigate({ kind: "help" }))
-            }
+            target="_blank"
+            rel="noopener"
+            title="Help and guides (opens in a new tab)"
+            aria-label="Help and guides (opens in a new tab)"
           >
             <CircleHelp size={16} strokeWidth={1.5} aria-hidden="true" />
           </a>
@@ -327,6 +338,29 @@ export function AppShell({
                       </span>
                       <span className="app-profile-menu-label">Appearance</span>
                     </button>
+                    {/* The way back to a guide somebody hid, for as long as
+                        there is something left to be guided through. */}
+                    {onboarding.hidden &&
+                    onboarding.state &&
+                    !onboarding.state.complete ? (
+                      <button
+                        type="button"
+                        className="app-profile-menu-item"
+                        role="menuitem"
+                        onClick={() => {
+                          setProfileOpen(false);
+                          onboarding.setHidden(false);
+                          onNavigate({ kind: "workspace" });
+                        }}
+                      >
+                        <span className="app-profile-menu-icon">
+                          {renderProfileMenuIcon("guide")}
+                        </span>
+                        <span className="app-profile-menu-label">
+                          Getting-started guide
+                        </span>
+                      </button>
+                    ) : null}
                     {user?.isAdmin ? (
                       <button
                         type="button"
@@ -408,27 +442,14 @@ export function AppShell({
             <main
               className={`app-main${isWorkspace ? " app-main--workspace" : " app-main--page"}`}
             >
-              {showGuide &&
-              onboarding.state &&
-              route.kind !== "workspace" &&
-              route.kind !== "help" ? (
+              {showGuide && onboarding.state && route.kind !== "workspace" ? (
                 <GuideBar
                   state={onboarding.state}
                   onGo={navigateToHref}
                   onHide={() => onboarding.setHidden(true)}
                 />
               ) : null}
-              {route.kind === "help" ? (
-                <HelpPage
-                  topic={route.topic}
-                  onOpen={navigateToHref}
-                  guideHidden={onboarding.hidden}
-                  onShowGuide={() => {
-                    onboarding.setHidden(false);
-                    onNavigate({ kind: "workspace" });
-                  }}
-                />
-              ) : route.kind === "changes" ? (
+              {route.kind === "changes" ? (
                 <ReviewQueuePage
                   currentUsername={currentUsername}
                   onOpenChange={(org, binder, change) =>
