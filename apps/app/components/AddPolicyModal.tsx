@@ -14,6 +14,8 @@ import { formatFileSize } from "../documentFile";
 import { formatDocumentName } from "../documentDisplay";
 import { AppIcon } from "./AppIcon";
 import { ChangeTargetField } from "./ChangeTargetField";
+import { askReviewers } from "./ProposeChangePage";
+import { ReviewerChooser } from "./ReviewerChooser";
 
 /**
  * Adding a policy to a binder.
@@ -28,6 +30,8 @@ import { ChangeTargetField } from "./ChangeTargetField";
 interface AddPolicyModalProps {
   org: string;
   binder: string;
+  /** Who is adding it, so they are not offered as its reviewer. */
+  currentUser: string;
   /**
    * The draft this goes into, when the binder is being edited.
    *
@@ -123,6 +127,7 @@ function extensionOf(fileName: string): string {
 export function AddPolicyModal({
   org,
   binder,
+  currentUser,
   draft,
   onClose,
   onAdded,
@@ -143,6 +148,8 @@ export function AddPolicyModal({
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState("");
   const [folder, setFolder] = useState(initialFolder);
+  /** Who the change this opens is sent to. */
+  const [reviewers, setReviewers] = useState<string[]>([]);
   /** What to call the folder, when the picker's answer is "a new one". */
   const [newFolder, setNewFolder] = useState("");
   /** The folders this binder has, so "where it goes" is a pick, not a path. */
@@ -250,6 +257,11 @@ export function AddPolicyModal({
         filedIn || undefined,
         draft ? { draft } : changeNumber ? { changeNumber } : undefined,
       );
+      // Only a change this opened: one added to an existing change already
+      // has its reviewers, and a draft is asked nobody until it is proposed.
+      if (changeNumber === null && created.pullRequestNumber) {
+        await askReviewers(org, binder, created.pullRequestNumber, reviewers);
+      }
       onAdded(created.pullRequestNumber);
     } catch (err) {
       setError(
@@ -504,6 +516,17 @@ export function AddPolicyModal({
               binder={binder}
               value={changeNumber}
               onChange={setChangeNumber}
+              disabled={submitting}
+            />
+          )}
+
+          {draft || writing || changeNumber !== null ? null : (
+            <ReviewerChooser
+              org={org}
+              binder={binder}
+              currentUser={currentUser}
+              selected={reviewers}
+              onChange={setReviewers}
               disabled={submitting}
             />
           )}
