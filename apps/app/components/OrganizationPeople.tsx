@@ -1,3 +1,4 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
 
@@ -13,6 +14,7 @@ import {
   searchWorkspaceUsers,
   setOrganizationPersonRole,
 } from "../api";
+import { organizationPeopleQuery } from "../data/queries";
 import type { OrganizationPeoplePayload } from "../../../packages/api-schema/schemas/workspaces";
 import {
   GROUP_LEVELS,
@@ -56,35 +58,23 @@ export function OrganizationPeople({ org }: OrganizationPeopleProps) {
   // Same fold as the binder's People tab: a delinquent organization draws no
   // controls, by the flag that already decides whether controls exist.
   const isReadOnly = useIsReadOnly();
-  const [payload, setPayload] = useState<OrganizationPeoplePayload | null>(
-    null,
-  );
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const read = useQuery(organizationPeopleQuery(org));
+  const payload: OrganizationPeoplePayload | null = read.data ?? null;
+  const [actionError, setError] = useState<string | null>(null);
+  const error =
+    actionError ??
+    (read.error
+      ? read.error.message || "Unable to read this organization's people."
+      : null);
+  /**
+   * A write answers with everybody; that answer is what every screen naming
+   * these people now shows — the sidebar's names and quick find included.
+   */
+  const setPayload = (next: OrganizationPeoplePayload) =>
+    queryClient.setQueryData(organizationPeopleQuery(org).queryKey, next);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    setPayload(null);
-    setError(null);
-
-    fetchOrganizationPeople(org)
-      .then((next) => {
-        if (!cancelled) setPayload(next);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(
-          err instanceof Error && err.message.trim() !== ""
-            ? err.message
-            : "Unable to read this organization's people.",
-        );
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [org]);
 
   if (error) {
     return <p className="app-inline-error">{error}</p>;

@@ -1,7 +1,9 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Building2, Lock } from "lucide-react";
 
 import { createBinder } from "../api";
+import { queryKeys } from "../data/queries";
 import { followInApp } from "../appLink";
 import type { WorkspaceSummary } from "../../../packages/api-schema/schemas/workspaces";
 import { slugifyOrganizationName } from "../../../packages/utils/organizationName";
@@ -66,6 +68,7 @@ export function NewBinderPage({
   onCancel,
   onCreated,
 }: NewBinderPageProps) {
+  const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   // Open, because the common case is a policy manual everybody must be able
@@ -110,6 +113,9 @@ export function NewBinderPage({
               description.trim() === "" ? undefined : description.trim(),
               openToOrganization,
             );
+            await queryClient.invalidateQueries({
+              queryKey: queryKeys.organizationBinders(org),
+            });
             onCreated(created);
           } catch (err) {
             setError(
