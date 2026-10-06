@@ -859,6 +859,49 @@ async function readSignOffGate(
   }
 }
 
+/**
+ * What Gitea checks before it merges into a binder's `main`, as far as a
+ * change's own reviews decide it: how many approvals, and whether a review
+ * asked for and not yet given holds the merge. That second one differs by
+ * Gitea — see `settleCodeownerGate` — so it is read, never assumed.
+ *
+ * Null when it cannot be read; nothing is then called ready.
+ */
+interface MergeRules {
+  requiredApprovals: number;
+  heldByReviewRequests: boolean;
+}
+
+async function readMergeRules(
+  owner: string,
+  repo: string,
+  branch = "main",
+): Promise<MergeRules | null> {
+  const client = createPrivilegedGiteaClient();
+  if (!client) return null;
+
+  try {
+    const protection = await getRepoBranchProtection(
+      client,
+      owner,
+      repo,
+      branch,
+    );
+    return {
+      requiredApprovals: protection?.requiredApprovals ?? 0,
+      heldByReviewRequests: protection?.blockOnOfficialReviewRequests ?? false,
+    };
+  } catch (err) {
+    logger.error("Failed to read a binder's merge rules", {
+      owner,
+      repo,
+      branch,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
 interface DocumentAccessContext {
   client: GiteaClient;
   username: string | null;
@@ -2333,8 +2376,9 @@ type HomePendingChangeRow = PendingChangeRow & {
 
 function buildPendingChangeRow(
   entry: PullRequestWithReviews,
-  requiredApprovals: number | null,
+  rules: MergeRules | null,
 ) {
+  const requiredApprovals = rules?.requiredApprovals ?? null;
   const approvalCount = countApprovals(entry.reviews);
 
   // Declared in the response contract from the beginning and never populated,
@@ -2345,23 +2389,32 @@ function buildPendingChangeRow(
   // already folds each reviewer's latest answer, which is the same rule Gitea
   // merges on, so both answers are here for free.
   const isRejected = entry.pullRequest.approvalState === "changes_requested";
+  const reviewers = buildChangeReviewers({
+    requested: readRequestedReviewers(entry.pullRequest),
+    reviews: entry.reviews,
+    submittedBy: entry.pullRequest.user?.login ?? "",
+  });
 
   return {
     ...entry.pullRequest,
-    reviewers: buildChangeReviewers({
-      requested: readRequestedReviewers(entry.pullRequest),
-      reviews: entry.reviews,
-      submittedBy: entry.pullRequest.user?.login ?? "",
-    }),
+    reviewers,
     assignee: readAssignee(entry.pullRequest),
     approvalCount,
     requiredApprovals,
     isRejected,
+    // **Whether Gitea would merge it now**, by the binder's own protection:
+    // nobody's latest answer is "changes requested", the approvals reach the
+    // binder's number — which may be none — and, where the binder holds the
+    // merge for them, nobody asked to review is still silent.
+    // `isReadyToPublish` in the app asks the same things of the same fields.
     isApproved:
       !isRejected &&
-      requiredApprovals !== null &&
-      requiredApprovals > 0 &&
-      approvalCount >= requiredApprovals,
+      rules !== null &&
+      approvalCount >= rules.requiredApprovals &&
+      !(
+        rules.heldByReviewRequests &&
+        reviewers.some((reviewer) => reviewer.status === "awaiting")
+      ),
   };
 }
 
@@ -2401,8 +2454,8 @@ async function loadOpenChangeSummary(
     //
     // A row is worth showing without its approval policy; it is not worth
     // failing the whole list for.
-    const requiredApprovals =
-      pending.length > 0 ? await readRequiredApprovals(owner, repo) : null;
+    const mergeRules =
+      pending.length > 0 ? await readMergeRules(owner, repo) : null;
 
     return {
       pendingPRs: pending
@@ -2420,7 +2473,7 @@ async function loadOpenChangeSummary(
             : [];
 
           return {
-            ...buildPendingChangeRow(entry, requiredApprovals),
+            ...buildPendingChangeRow(entry, mergeRules),
             documentSlugPath: slugPath,
             nextVersion: slugPath === null ? null : nextVersionFrom(versions),
           };
@@ -4634,7 +4687,7 @@ async function handleWorkspaceChangeDetail(
       entry,
       documents,
       absent,
-      requiredApprovals,
+      mergeRules,
       reviewSettings,
       discussions,
       access,
@@ -4660,7 +4713,7 @@ async function handleWorkspaceChangeDetail(
         workspace: workspaceName,
         pullNumber,
       }),
-      readRequiredApprovals(orgName, workspaceName),
+      readMergeRules(orgName, workspaceName),
       readBinderSettings(workspace),
       listDiscussions({
         client,
@@ -4768,7 +4821,7 @@ async function handleWorkspaceChangeDetail(
     // "Bob's draft", worked out from the branch's shape, when Bob had called
     // it "Retire the 2019 supplier terms" — the one sentence about the work
     // that was his, in the one place it was not shown.
-    const changeRow = buildPendingChangeRow(entry, requiredApprovals);
+    const changeRow = buildPendingChangeRow(entry, mergeRules);
     const branchLabel = isDraftBranch(changeRow.branchName)
       ? ((
           await draftNameStore
@@ -5531,14 +5584,14 @@ async function handleListWorkspaceChanges(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    const [entries, requiredApprovals, versionsByDocument] = await Promise.all([
+    const [entries, mergeRules, versionsByDocument] = await Promise.all([
       listPullRequestsWithReviews({
         client,
         owner: orgName,
         repo: workspaceName,
         state,
       }),
-      readRequiredApprovals(orgName, workspaceName),
+      readMergeRules(orgName, workspaceName),
       listVersionsByDocument({
         client,
         org: orgName,
@@ -5566,10 +5619,7 @@ async function handleListWorkspaceChanges(
 
     const changes = entries
       .map(({ pullRequest, reviews }) => {
-        const row = buildPendingChangeRow(
-          { pullRequest, reviews },
-          requiredApprovals,
-        );
+        const row = buildPendingChangeRow({ pullRequest, reviews }, mergeRules);
         const isOpen = pullRequest.state === "open";
         const decided = isOpen
           ? null

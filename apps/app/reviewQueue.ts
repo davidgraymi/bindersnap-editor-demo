@@ -153,6 +153,7 @@ export function buildQueueRows(
         approvalCount: change.approvalCount,
         requiredApprovals: change.requiredApprovals,
         reviewers: change.reviewers,
+        isApproved: change.isApproved,
       });
       const status = statusFromStanding(standing);
       const movedAt = toTime(
@@ -189,6 +190,7 @@ export function buildQueueRows(
           approvalCount: change.approvalCount,
           requiredApprovals: change.requiredApprovals,
           isRejected: standing?.tone === "blocked",
+          isApproved: change.isApproved,
         }),
         waitingOnYou: isWaitingOnReader(document, change, username, status),
         // Gitea's own count on the pull request, passed through as Home reads it.

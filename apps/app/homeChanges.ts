@@ -8,7 +8,6 @@ import {
   describeApprovalProgress,
   formatDocumentName,
   getReviewerDisplayName,
-  hasEnoughApprovals,
   parseChangeTitle,
 } from "./documentDisplay";
 import type { ChangeStandingTone } from "./changeRow";
@@ -185,9 +184,10 @@ function classify(
   const isMine = change.user?.login === username;
   const ownsDocument = document.repo.owner.login === username;
 
-  // Every approval is in. Whoever can publish it is the one being waited on —
-  // the person who submitted it, or the person who owns the document.
-  if (hasEnoughApprovals(change) && !change.isRejected) {
+  // Gitea would merge it now. Whoever can publish it is the one being waited
+  // on — the person who submitted it, or the person who owns the document.
+  // The server decides this, by the same rule the change page does.
+  if (change.isApproved) {
     if (isMine || ownsDocument) return "ready_to_publish";
     return null;
   }
@@ -280,6 +280,7 @@ export function buildOpenChangeRows(
           approvalCount: change.approvalCount ?? 0,
           requiredApprovals: change.requiredApprovals ?? null,
           isRejected: change.isRejected ?? false,
+          isApproved: change.isApproved,
         }),
         commentCount: (change as { comments?: number }).comments ?? 0,
         movedAt: toTime(
