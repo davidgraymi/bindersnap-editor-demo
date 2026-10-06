@@ -1,12 +1,10 @@
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
 import { Check, Clock, MessageSquare, Plus, X } from "lucide-react";
 
-import {
-  listDocumentCollaborators,
-  searchWorkspaceUsers,
-  updateChangeAssignments,
-} from "../api";
+import { updateChangeAssignments } from "../api";
+import { binderCollaboratorsQuery, searchUsersQuery } from "../data/queries";
 import type { ChangeReviewer } from "../api";
 import type { ReviewerDisplayStatus } from "../documentDisplay";
 import {
@@ -118,13 +116,9 @@ export function ChangeReviewers({
   const [picking, setPicking] = useState(false);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [results, setResults] = useState<UserOption[]>([]);
-  const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** The people already on this document, offered before anyone types. */
-  const [collaborators, setCollaborators] = useState<UserOption[]>([]);
-  const searchRequestId = useRef(0);
   const sectionRef = useRef<HTMLDivElement | null>(null);
   const addRef = useRef<HTMLButtonElement | null>(null);
   /**
@@ -151,38 +145,23 @@ export function ChangeReviewers({
 
   // The people who can review this are overwhelmingly the people already on
   // the document, so the popover opens with them listed. Making someone type
-  // two letters to reach a colleague they picked yesterday is the clunk.
-  useEffect(() => {
-    let cancelled = false;
-    if (!canManage) return;
-
-    void (async () => {
-      try {
-        const payload = await listDocumentCollaborators(
-          scope,
-          1,
-          SUGGESTION_LIMIT,
-        );
-        if (cancelled) return;
-        setCollaborators(
-          payload.collaborators
-            .map((entry) => ({
-              login: entry.user.login ?? "",
-              fullName: entry.user.full_name ?? "",
-            }))
-            .filter((user) => user.login),
-        );
-      } catch {
-        // A missing suggestion list is not worth an error banner: the search
-        // box below it still reaches everyone in the workspace.
-        if (!cancelled) setCollaborators([]);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [scope, canManage]);
+  // two letters to reach a colleague they picked yesterday is the clunk. A
+  // missing suggestion list is not worth an error banner: the search box
+  // below it still reaches everyone in the workspace.
+  const suggested = useQuery({
+    ...binderCollaboratorsQuery(scope.org, scope.binder, 1, SUGGESTION_LIMIT),
+    enabled: canManage,
+  });
+  const collaborators: UserOption[] = useMemo(
+    () =>
+      (suggested.data?.collaborators ?? [])
+        .map((entry) => ({
+          login: entry.user.login ?? "",
+          fullName: entry.user.full_name ?? "",
+        }))
+        .filter((user) => user.login),
+    [suggested.data],
+  );
 
   useEffect(() => {
     const handle = window.setTimeout(() => {
@@ -191,41 +170,31 @@ export function ChangeReviewers({
     return () => window.clearTimeout(handle);
   }, [query]);
 
-  useEffect(() => {
-    const requestId = ++searchRequestId.current;
-
-    if (!picking || debouncedQuery.length < 2) {
-      setResults([]);
-      setSearching(false);
-      return;
-    }
-
-    setSearching(true);
-    void (async () => {
-      try {
-        const payload = await searchWorkspaceUsers(
-          debouncedQuery,
-          1,
-          SEARCH_PAGE_SIZE,
-        );
-        if (requestId !== searchRequestId.current) return;
-        setResults(
-          payload.users
+  const asking = picking && debouncedQuery.length >= 2;
+  const found = useQuery({
+    ...searchUsersQuery(debouncedQuery, SEARCH_PAGE_SIZE),
+    enabled: asking,
+  });
+  const searching = asking && found.isFetching;
+  const results: UserOption[] = useMemo(
+    () =>
+      asking
+        ? (found.data?.users ?? [])
             .map((user) => ({
               login: user.login ?? "",
               fullName: user.full_name ?? "",
             }))
-            .filter((user) => user.login),
-        );
-      } catch (err) {
-        if (requestId !== searchRequestId.current) return;
-        setResults([]);
-        setError(readError(err, "Unable to search for people right now."));
-      } finally {
-        if (requestId === searchRequestId.current) setSearching(false);
-      }
-    })();
-  }, [debouncedQuery, picking]);
+            .filter((user) => user.login)
+        : [],
+    [asking, found.data],
+  );
+  useEffect(() => {
+    if (asking && found.error) {
+      setError(
+        readError(found.error, "Unable to search for people right now."),
+      );
+    }
+  }, [asking, found.error]);
 
   // A popover that only closes via the button that opened it is a trap; every
   // other menu on the page closes on Escape and on a click elsewhere.
@@ -295,7 +264,6 @@ export function ChangeReviewers({
     setPicking(false);
     setQuery("");
     setDebouncedQuery("");
-    setResults([]);
   }
 
   async function save(next: string[]) {

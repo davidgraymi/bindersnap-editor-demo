@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef } from "react";
 
-import { fetchBinderPeople } from "../api";
+import { binderPeopleQuery } from "../data/queries";
 import type { BinderPerson } from "../../../packages/api-schema/schemas/workspaces";
 
 /**
@@ -49,29 +50,30 @@ export function ReviewerChooser({
   onChange,
   disabled = false,
 }: ReviewerChooserProps) {
-  const [people, setPeople] = useState<BinderPerson[] | null>(null);
+  // Not being able to list them costs the author a shortcut, not the change:
+  // reviewers can still be asked from the change's own page.
+  const read = useQuery(binderPeopleQuery(org, binder));
+  const people: BinderPerson[] | null = useMemo(
+    () =>
+      read.data
+        ? read.data.people.filter((person) => person.login !== currentUser)
+        : read.isError
+          ? []
+          : null,
+    [read.data, read.isError, currentUser],
+  );
 
+  // The suggestion is made once per binder, when its people first arrive.
+  const suggestedFor = useRef<string | null>(null);
   useEffect(() => {
-    let cancelled = false;
-    fetchBinderPeople(org, binder)
-      .then((payload) => {
-        if (cancelled) return;
-        const others = payload.people.filter(
-          (person) => person.login !== currentUser,
-        );
-        setPeople(others);
-        onChange(suggestReviewers(others, currentUser));
-      })
-      // Not being able to list them costs the author a shortcut, not the
-      // change: reviewers can still be asked from the change's own page.
-      .catch(() => {
-        if (!cancelled) setPeople([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-    // `onChange` is the caller's setter; the suggestion is made once per binder.
-  }, [org, binder, currentUser]);
+    if (!read.data || people === null) return;
+    const key = `${org}/${binder}/${currentUser}`;
+    if (suggestedFor.current === key) return;
+    suggestedFor.current = key;
+    onChange(suggestReviewers(people, currentUser));
+    // `onChange` is the caller's setter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [read.data, people, org, binder, currentUser]);
 
   if (people === null) {
     return (

@@ -12,6 +12,7 @@ import {
   fetchBinder,
   fetchBinderArchive,
   fetchBinderChange,
+  fetchBinderChangeConflicts,
   fetchBinderChanges,
   fetchBinderDocument,
   fetchBinderDocuments,
@@ -27,6 +28,10 @@ import {
   fetchOrganizationPeople,
   fetchOrganizations,
   getHomeChanges,
+  listChangeDiscussions,
+  listChangeUpdates,
+  listDocumentCollaborators,
+  searchWorkspaceUsers,
   searchDocuments,
 } from "../api";
 
@@ -73,6 +78,18 @@ export const queryKeys = {
     documentPath: string,
     at: BinderRef = {},
   ) => ["binders", org, binder, "document", documentPath, refKey(at)] as const,
+  changeDiscussions: (org: string, binder: string, number: number) =>
+    ["binders", org, binder, "change", number, "discussions"] as const,
+  changeUpdates: (org: string, binder: string, number: number) =>
+    ["binders", org, binder, "change", number, "updates"] as const,
+  changeConflicts: (org: string, binder: string, number: number) =>
+    ["binders", org, binder, "change", number, "conflicts"] as const,
+  binderCollaborators: (
+    org: string,
+    binder: string,
+    page: number,
+    limit: number,
+  ) => ["binders", org, binder, "collaborators", page, limit] as const,
   binderArchive: (org: string, binder: string, draft?: string) =>
     ["binders", org, binder, "archive", draft ?? null] as const,
   binderHistory: (org: string, binder: string) =>
@@ -89,6 +106,9 @@ export const queryKeys = {
   library: (query: string) => ["library", query] as const,
   search: (query: string, limit: number) =>
     ["library", "search", query, limit] as const,
+
+  users: (query: string, limit: number) =>
+    ["users", "search", query, limit] as const,
 
   onboarding: () => ["onboarding"] as const,
 
@@ -280,5 +300,75 @@ export function binderPeopleQuery(org: string, binder: string) {
   return queryOptions({
     queryKey: queryKeys.binderPeople(org, binder),
     queryFn: ({ signal }) => fetchBinderPeople(org, binder, { signal }),
+  });
+}
+
+/** A change's discussion threads. */
+export function changeDiscussionsQuery(
+  org: string,
+  binder: string,
+  number: number,
+) {
+  return queryOptions({
+    queryKey: queryKeys.changeDiscussions(org, binder, number),
+    queryFn: ({ signal }) =>
+      listChangeDiscussions({ org, binder, documentPath: "" }, number, {
+        signal,
+      }),
+  });
+}
+
+/** What has happened on a change since it was opened. */
+export function changeUpdatesQuery(
+  org: string,
+  binder: string,
+  number: number,
+) {
+  return queryOptions({
+    queryKey: queryKeys.changeUpdates(org, binder, number),
+    queryFn: ({ signal }) =>
+      listChangeUpdates({ org, binder, documentPath: "" }, number, { signal }),
+  });
+}
+
+/** Where a change and the record disagree. */
+export function changeConflictsQuery(
+  org: string,
+  binder: string,
+  number: number,
+) {
+  return queryOptions({
+    queryKey: queryKeys.changeConflicts(org, binder, number),
+    queryFn: ({ signal }) =>
+      fetchBinderChangeConflicts(org, binder, number, { signal }),
+  });
+}
+
+/** Who can be asked to review in a binder, a page at a time. */
+export function binderCollaboratorsQuery(
+  org: string,
+  binder: string,
+  page = 1,
+  limit = 12,
+) {
+  return queryOptions({
+    queryKey: queryKeys.binderCollaborators(org, binder, page, limit),
+    queryFn: ({ signal }) =>
+      listDocumentCollaborators(
+        { org, binder, documentPath: "" },
+        page,
+        limit,
+        {
+          signal,
+        },
+      ),
+  });
+}
+
+/** People anywhere in the workspace, matching what was typed. */
+export function searchUsersQuery(query: string, limit = 8) {
+  return queryOptions({
+    queryKey: queryKeys.users(query, limit),
+    queryFn: ({ signal }) => searchWorkspaceUsers(query, 1, limit, { signal }),
   });
 }

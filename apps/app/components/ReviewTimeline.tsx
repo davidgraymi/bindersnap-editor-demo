@@ -1,3 +1,4 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
 import {
@@ -12,9 +13,9 @@ import {
 
 import type { ChangeUpdate, DiscussionSummary, ReactionKind } from "../api";
 import type { ChangeScope } from "../changeScope";
+import { changeDiscussionsQuery } from "../data/queries";
 import {
   createChangeDiscussion,
-  listChangeDiscussions,
   replyToChangeDiscussion,
   resolveChangeDiscussion,
   setDiscussionCommentReaction,
@@ -132,57 +133,48 @@ export function ReviewTimeline({
   const isReadOnly = useIsReadOnly();
   const canParticipate = canParticipateProp && !isReadOnly;
   const names = usePeopleNames(scope.org);
-  const [summary, setSummary] = useState<DiscussionSummary | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const [newThreadBody, setNewThreadBody] = useState("");
   const [composing, setComposing] = useState(false);
 
   const pullNumber = change.number;
 
-  // Held in a ref so `apply` stays referentially stable. Callers pass an
-  // inline arrow, and letting that identity reach the load effect's
-  // dependencies would refetch the discussion on every parent render.
+  const discussion = changeDiscussionsQuery(
+    scope.org,
+    scope.binder,
+    pullNumber,
+  );
+  const read = useQuery(discussion);
+  const summary: DiscussionSummary | null = read.data ?? null;
+  const loading = read.isPending;
+  const error =
+    actionError ??
+    (read.error
+      ? read.error.message || "Unable to load the discussion."
+      : null);
+
+  // Held in a ref so a caller passing an inline arrow does not re-run this
+  // on every parent render.
   const onSummaryChangeRef = useRef(onSummaryChange);
   useEffect(() => {
     onSummaryChangeRef.current = onSummaryChange;
   }, [onSummaryChange]);
-
-  const apply = useCallback((next: DiscussionSummary) => {
-    setSummary(next);
-    onSummaryChangeRef.current?.(next);
-  }, []);
-
   useEffect(() => {
-    let cancelled = false;
+    if (read.data) onSummaryChangeRef.current?.(read.data);
+  }, [read.data]);
 
-    async function load() {
-      setLoading(true);
-      try {
-        const next = await listChangeDiscussions(scope, pullNumber);
-        if (!cancelled) {
-          apply(next);
-          setError(null);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Unable to load the discussion.",
-          );
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [scope, pullNumber, apply]);
+  /** Every answer to a write is the whole discussion; it replaces the cache. */
+  const discussionKey = discussion.queryKey;
+  const apply = useCallback(
+    (next: DiscussionSummary) => {
+      queryClient.setQueryData(discussionKey, next);
+    },
+    // The key is rebuilt each render with the same contents.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [queryClient, scope.org, scope.binder, pullNumber],
+  );
 
   async function run(
     action: () => Promise<DiscussionSummary>,

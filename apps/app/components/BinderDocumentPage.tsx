@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FileArchive } from "lucide-react";
 
@@ -6,8 +7,8 @@ import {
   downloadBinderDocument,
   exportAuditPacket,
   exportBinderDocument,
-  fetchBinderDocument,
 } from "../api";
+import { binderDocumentQuery } from "../data/queries";
 import { followInApp } from "../appLink";
 import { AppIcon } from "./AppIcon";
 import {
@@ -136,10 +137,17 @@ export function BinderDocumentPage({
   onOpenBinder,
   onOpenChange,
 }: BinderDocumentPageProps) {
-  const [detail, setDetail] = useState<WorkspaceDocumentDetailPayload | null>(
-    null,
+  const read = useQuery(
+    binderDocumentQuery(org, binder, documentPath, {
+      draft,
+      change,
+      ref: documentRef,
+    }),
   );
-  const [error, setError] = useState<string | null>(null);
+  const detail: WorkspaceDocumentDetailPayload | null = read.data ?? null;
+  const error = read.error
+    ? read.error.message || "Unable to open this document."
+    : null;
   const [downloading, setDownloading] = useState(false);
   const [exportingAudit, setExportingAudit] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -159,36 +167,6 @@ export function BinderDocumentPage({
     window.addEventListener("popstate", handler);
     return () => window.removeEventListener("popstate", handler);
   }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    setDetail(null);
-    setError(null);
-
-    fetchBinderDocument(
-      org,
-      binder,
-      documentPath,
-      draft ?? undefined,
-      change ?? undefined,
-      documentRef ?? undefined,
-    )
-      .then((payload) => {
-        if (!cancelled) setDetail(payload);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(
-          err instanceof Error && err.message.trim() !== ""
-            ? err.message
-            : "Unable to open this document.",
-        );
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [org, binder, documentPath, draft, change, documentRef]);
 
   const viewing = useMemo(
     () =>

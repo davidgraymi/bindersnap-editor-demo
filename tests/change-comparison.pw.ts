@@ -279,8 +279,12 @@ test("every binder says which version its tree is, and switches to another", asy
   await expect(menu).toContainText("Change requests");
 
   // A change request's branch is one pick away, and the page stays the
-  // binder's own.
-  await menu.getByRole("menuitemradio").nth(1).click();
+  // binder's own. Picked by what it says, not where it sits: until the
+  // change requests load, the second row can be one of alice's drafts.
+  await menu
+    .getByRole("menuitemradio", { name: /Change \d+ ·/ })
+    .first()
+    .click();
   await expect(page).toHaveURL(/\/clinical\/-\/tree\/[^/?]+$/);
   await expect(page.locator("h1.bs-title")).toHaveText("Clinical");
   await expect(page.locator(".bs-refpick--branch")).toBeVisible();
