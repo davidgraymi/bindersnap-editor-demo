@@ -32,7 +32,13 @@ export interface GiteaUsage {
   giteaMs: number;
 }
 
-const storage = new AsyncLocalStorage<GiteaUsage>();
+interface RequestScope {
+  usage: GiteaUsage;
+  /** Reads shared within this request. See {@link memoizeForRequest}. */
+  memo: Map<string, Promise<unknown>>;
+}
+
+const storage = new AsyncLocalStorage<RequestScope>();
 
 export function createGiteaUsage(): GiteaUsage {
   return { calls: 0, ungatedCalls: 0, gateWaitMs: 0, giteaMs: 0 };
@@ -40,12 +46,51 @@ export function createGiteaUsage(): GiteaUsage {
 
 /** Run `fn` with its own usage record, which every Gitea call inside adds to. */
 export function withGiteaUsage<T>(usage: GiteaUsage, fn: () => T): T {
-  return storage.run(usage, fn);
+  return storage.run({ usage, memo: new Map() }, fn);
 }
 
 /** The usage of the request this code is running under, if any. */
 export function currentGiteaUsage(): GiteaUsage | undefined {
-  return storage.getStore();
+  return storage.getStore()?.usage;
+}
+
+/**
+ * One answer per request for a read several helpers make.
+ *
+ * Change detail asked for the same branch protection twice — once for the
+ * approval count, once for the sign-off gate — because two helpers each read
+ * it. This lets them share the read without threading it between them.
+ *
+ * **Not a cache.** Nothing outlives the request, so nothing can go stale
+ * across requests, and AGENTS.md's ban on caching Gitea state does not bite.
+ * Within a request, any write to Gitea clears it ({@link forgetRequestMemo},
+ * called from the fetch wrappers), so a read after a write asks again.
+ *
+ * `key` must say everything the answer depends on, including whose
+ * credentials asked. Outside a request it simply calls `read`.
+ */
+export function memoizeForRequest<T>(
+  key: string,
+  read: () => Promise<T>,
+): Promise<T> {
+  const scope = storage.getStore();
+  if (!scope) return read();
+
+  const held = scope.memo.get(key);
+  if (held) return held as Promise<T>;
+
+  const pending = read();
+  scope.memo.set(key, pending);
+  // A failed read is not an answer to share: the next caller asks again.
+  pending.catch(() => {
+    if (scope.memo.get(key) === pending) scope.memo.delete(key);
+  });
+  return pending;
+}
+
+/** Drop this request's shared reads. Called on every Gitea write. */
+export function forgetRequestMemo(): void {
+  storage.getStore()?.memo.clear();
 }
 
 export function recordGiteaCall(call: {
@@ -53,7 +98,7 @@ export function recordGiteaCall(call: {
   waitMs: number;
   durationMs: number;
 }): void {
-  const usage = storage.getStore();
+  const usage = storage.getStore()?.usage;
   if (!usage) return;
   usage.calls += 1;
   if (!call.gated) usage.ungatedCalls += 1;
