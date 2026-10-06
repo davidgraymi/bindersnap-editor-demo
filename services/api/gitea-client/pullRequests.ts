@@ -790,8 +790,12 @@ export async function findClosedChanges(params: {
   const PAGE_SIZE = 50;
   const MAX_PAGES = 40;
 
-  for (let page = 1; page <= MAX_PAGES && !done(); page += 1) {
-    const batch = await unwrap(
+  // Page 1 alone — the change asked about is usually recent — then three at a
+  // time. This runs on every binder page, and a document last changed long
+  // ago used to cost up to forty round trips one after another.
+  const WAVE = 3;
+  const readPage = (page: number) =>
+    unwrap(
       client.GET("/repos/{owner}/{repo}/pulls", {
         params: {
           path: { owner, repo },
@@ -804,7 +808,7 @@ export async function findClosedChanges(params: {
         },
       }),
     );
-
+  const take = (batch: Awaited<ReturnType<typeof readPage>> | undefined) => {
     for (const pullRequest of batch ?? []) {
       const number = pullRequest.number;
       if (number === undefined) continue;
@@ -813,8 +817,25 @@ export async function findClosedChanges(params: {
       const sha = pullRequest.merge_commit_sha ?? "";
       if (commits.has(sha)) byMergeCommit.set(sha, { number, title });
     }
+    return (batch ?? []).length === PAGE_SIZE;
+  };
 
-    if (!batch || batch.length < PAGE_SIZE) break;
+  if (!take(await readPage(1))) return { byNumber, byMergeCommit };
+
+  for (let page = 2; page <= MAX_PAGES && !done(); page += WAVE) {
+    const wave = Array.from(
+      { length: Math.min(WAVE, MAX_PAGES - page + 1) },
+      (_, offset) => page + offset,
+    );
+    const batches = await Promise.all(wave.map(readPage));
+    let more = true;
+    for (const batch of batches) {
+      if (!take(batch)) {
+        more = false;
+        break;
+      }
+    }
+    if (!more) break;
   }
 
   return { byNumber, byMergeCommit };

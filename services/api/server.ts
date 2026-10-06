@@ -5504,6 +5504,7 @@ async function handleWorkspaceChangeDetail(
       signOff,
       gate,
       tags,
+      mainTree,
     ] = await Promise.all([
       getPullRequestWithReviews({
         client,
@@ -5546,6 +5547,14 @@ async function handleWorkspaceChangeDetail(
       // read the tags would offer "Publish v1" for a document on v4, and a
       // version number is the one thing this page cannot guess at.
       listAllTags({ client, owner: orgName, repo: workspaceName }),
+      // The tree on `main`, which is every binder's base: read now rather than
+      // after the change says so, so it costs no round trip of its own. A
+      // change based elsewhere reads its own base below.
+      readWorkspaceTree({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+      }).catch(() => null),
     ]);
 
     const pullState = entry.pullRequest as {
@@ -5560,12 +5569,16 @@ async function handleWorkspaceChangeDetail(
     // does not (ADR 0005), so this is the address the same identity has on the
     // branch this change would land on. A read that fails costs the sentence
     // and not the page: nothing below it is a gate.
-    const onBase = await readWorkspaceTree({
-      client,
-      org: orgName,
-      workspace: workspaceName,
-      ref: entry.pullRequest.base?.ref || "main",
-    }).catch(() => null);
+    const baseRef = entry.pullRequest.base?.ref || "main";
+    const onBase =
+      baseRef === "main"
+        ? mainTree
+        : await readWorkspaceTree({
+            client,
+            org: orgName,
+            workspace: workspaceName,
+            ref: baseRef,
+          }).catch(() => null);
     const baseAddresses = new Map<string, string>(
       (onBase?.documents ?? []).flatMap((document) =>
         document.uid ? [[document.uid, document.slugPath] as const] : [],
@@ -9595,6 +9608,26 @@ async function resolveReadableRef(params: {
   return { ref: asked };
 }
 
+/**
+ * Start a read now and collect it later.
+ *
+ * For a handler that starts independent reads together and awaits each where
+ * it is used: the failure is held rather than raised as an unhandled
+ * rejection when the handler returns early (a 404, a refused draft) before
+ * asking for it, and it is thrown to whoever does ask.
+ */
+function settle<T>(pending: Promise<T>): () => Promise<T> {
+  const outcome = pending.then(
+    (value) => ({ ok: true as const, value }),
+    (error: unknown) => ({ ok: false as const, error }),
+  );
+  return async () => {
+    const result = await outcome;
+    if (!result.ok) throw result.error;
+    return result.value;
+  };
+}
+
 async function handleWorkspaceDocumentDetail(
   req: Request,
   baseHeaders: Headers,
@@ -9609,11 +9642,80 @@ async function handleWorkspaceDocumentDetail(
   if (auth instanceof Response) return auth;
 
   try {
-    const workspace = await findWorkspaceRepo({
-      client: auth.client,
-      org: orgName,
-      name: workspaceName,
-    });
+    const changeNumber = Number.parseInt(changeRaw ?? "", 10);
+    const asksForChange = Number.isFinite(changeNumber) && changeNumber > 0;
+    const namesRef = (refRaw ?? "").trim() !== "";
+    const namesDraft = typeof draftRaw === "string" && draftRaw.trim() !== "";
+
+    // **Everything that does not depend on something else, asked at once.**
+    // The binder, the ref check, the change's branch and your own draft used
+    // to be read one after another before the tree read even started — four
+    // round trips, each waiting on a gate slot, on the page people open most.
+    // The tags and the open changes need only the binder's name, so they start
+    // here too and are awaited where they are used. `settle` holds a failure
+    // until then, so a binder that 404s does not leave a rejection unhandled.
+    const binder = settle(
+      findWorkspaceRepo({
+        client: auth.client,
+        org: orgName,
+        name: workspaceName,
+      }),
+    );
+    const readableRef = settle(
+      resolveReadableRef({
+        client: auth.client,
+        org: orgName,
+        workspace: workspaceName,
+        username: auth.session.username,
+        refRaw,
+      }),
+    );
+    const changeBranch = settle(
+      asksForChange
+        ? getPullRequestHeadBranch({
+            client: auth.client,
+            owner: orgName,
+            repo: workspaceName,
+            pullNumber: changeNumber,
+          })
+            .then((branch) => branch || null)
+            .catch(() => null)
+        : Promise.resolve(null),
+    );
+    const ownDraft = settle(
+      resolveOwnDraftBranch({
+        client: auth.client,
+        org: orgName,
+        workspace: workspaceName,
+        username: auth.session.username,
+        draftRaw,
+      }),
+    );
+    // When nothing names another ref the tree is `main`'s, and it can be read
+    // alongside everything else rather than after it.
+    const mainTree =
+      !namesRef && !asksForChange && !namesDraft
+        ? settle(
+            readWorkspaceTree({
+              client: auth.client,
+              org: orgName,
+              workspace: workspaceName,
+            }),
+          )
+        : null;
+    const tags = settle(
+      listAllTags({ client: auth.client, owner: orgName, repo: workspaceName }),
+    );
+    const openChanges = settle(
+      listPullRequestsWithoutReviews({
+        client: auth.client,
+        owner: orgName,
+        repo: workspaceName,
+        state: "open",
+      }),
+    );
+
+    const workspace = await binder();
     if (!workspace) {
       return json(404, { error: "No such binder." }, baseHeaders);
     }
@@ -9627,13 +9729,7 @@ async function handleWorkspaceDocumentDetail(
      * view instead of the change view."* A change request is one thing that
      * happens to a branch; the branch is the thing the file is on.
      */
-    const readable = await resolveReadableRef({
-      client: auth.client,
-      org: orgName,
-      workspace: workspaceName,
-      username: auth.session.username,
-      refRaw,
-    });
+    const readable = await readableRef();
     if (readable && "error" in readable) {
       return json(409, { error: readable.error }, baseHeaders);
     }
@@ -9653,31 +9749,14 @@ async function handleWorkspaceDocumentDetail(
      * A closed change keeps working: the branch may be gone, in which case the
      * read below falls back and the page says what it can.
      */
-    const changeNumber = Number.parseInt(changeRaw ?? "", 10);
-    const onChange =
-      Number.isFinite(changeNumber) && changeNumber > 0
-        ? await getPullRequestHeadBranch({
-            client: auth.client,
-            owner: orgName,
-            repo: workspaceName,
-            pullNumber: changeNumber,
-          })
-            .then((branch) => branch || null)
-            .catch(() => null)
-        : null;
+    const onChange = await changeBranch();
 
     // **A policy renamed a moment ago is only at that name in the draft.**
     // Clicking a row in the tree while editing opened this on `main`, where
     // the new address has never existed, and the answer was that the document
     // does not exist — of a document sitting on screen. Your own draft only,
     // which is the rule every draft-aware read here follows.
-    const draft = await resolveOwnDraftBranch({
-      client: auth.client,
-      org: orgName,
-      workspace: workspaceName,
-      username: auth.session.username,
-      draftRaw,
-    });
+    const draft = await ownDraft();
     if (draft && "error" in draft) {
       return json(409, { error: draft.error }, baseHeaders);
     }
@@ -9709,11 +9788,13 @@ async function handleWorkspaceDocumentDetail(
           workspace: workspaceName,
           ref: readAt,
         }).catch(() => null)
-      : await readWorkspaceTree({
-          client: auth.client,
-          org: orgName,
-          workspace: workspaceName,
-        });
+      : mainTree
+        ? await mainTree()
+        : await readWorkspaceTree({
+            client: auth.client,
+            org: orgName,
+            workspace: workspaceName,
+          });
 
     if (!tree) {
       return json(
@@ -9767,20 +9848,7 @@ async function handleWorkspaceDocumentDetail(
     }
 
     const resolved = document;
-    const [versions, openChanges] = await Promise.all([
-      listDocumentVersions({
-        client: auth.client,
-        org: orgName,
-        workspace: workspaceName,
-        uid: resolved.uid,
-      }),
-      listPullRequestsWithoutReviews({
-        client: auth.client,
-        owner: orgName,
-        repo: workspaceName,
-        state: "open",
-      }),
-    ]);
+    const versions = documentVersionsFrom(await tags(), resolved.uid);
 
     // Reviews for the changes that touch this document, and no others: the
     // rest of the binder's changes are narrowed away below, and reading their
@@ -9793,7 +9861,7 @@ async function handleWorkspaceDocumentDetail(
         client: auth.client,
         org: orgName,
         workspace: workspaceName,
-        openChanges,
+        openChanges: await openChanges(),
         slugPath: resolved.slugPath,
       }),
     });

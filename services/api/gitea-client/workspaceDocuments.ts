@@ -793,7 +793,9 @@ export async function listAllTags(params: {
           params: { path: { owner, repo }, query },
         }),
       ),
-    { maxPages: 500 },
+    // A mature binder's tags are the one list here that runs to many pages,
+    // and every binder page reads them: three at a time after the first.
+    { maxPages: 500, parallel: 3 },
   )) as GitTag[];
 }
 

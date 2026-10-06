@@ -149,15 +149,39 @@ export async function readAllPages<T>(
     page: number;
     limit: number;
   }) => Promise<T[] | null | undefined>,
-  options: { maxPages?: number } = {},
+  options: {
+    maxPages?: number;
+    /**
+     * Pages to ask for at once after the first. The first page is always read
+     * alone, so a list that fits on one — most of them — costs one call; a
+     * long one then costs `pages / parallel` round trips instead of `pages`.
+     * A wave may read up to `parallel - 1` empty pages past the end.
+     */
+    parallel?: number;
+  } = {},
 ): Promise<T[]> {
   const maxPages = options.maxPages ?? 200;
-  const all: T[] = [];
+  const parallel = Math.max(1, options.parallel ?? 1);
 
-  for (let page = 1; page <= maxPages; page += 1) {
-    const batch = (await readPage({ page, limit: GITEA_PAGE_SIZE })) ?? [];
-    all.push(...batch);
-    if (batch.length < GITEA_PAGE_SIZE) break;
+  const first = (await readPage({ page: 1, limit: GITEA_PAGE_SIZE })) ?? [];
+  const all: T[] = [...first];
+  if (first.length < GITEA_PAGE_SIZE) return all;
+
+  for (let page = 2; page <= maxPages; page += parallel) {
+    const wave = Array.from(
+      { length: Math.min(parallel, maxPages - page + 1) },
+      (_, offset) => page + offset,
+    );
+    const batches = await Promise.all(
+      wave.map(
+        async (number) =>
+          (await readPage({ page: number, limit: GITEA_PAGE_SIZE })) ?? [],
+      ),
+    );
+    for (const batch of batches) {
+      all.push(...batch);
+      if (batch.length < GITEA_PAGE_SIZE) return all;
+    }
   }
 
   return all;
