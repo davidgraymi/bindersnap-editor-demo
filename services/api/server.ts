@@ -3192,15 +3192,16 @@ async function loadOpenChangeSummary(
       ),
       listPullRequestsWithoutReviews({ client, owner, repo, state: "open" }),
     ]);
-    // Reviews only for the changes that make a row. The rest were read and
-    // then dropped, a call or more each, on every library and Home load.
+    // **Every open change, whatever its branch is called.** This used to keep
+    // only `upload/…` branches, which is how a change was made before drafts —
+    // so a change proposed from a draft, the way the app now makes nearly all
+    // of them, never reached Home or the review queue. The seed made only
+    // upload branches, which is why nobody saw it.
     const pending = await attachReviews({
       client,
       owner,
       repo,
-      pullRequests: open.filter((pullRequest) =>
-        (pullRequest.head?.ref ?? "").startsWith("upload/"),
-      ),
+      pullRequests: open,
     });
     // The approval policy only ever answers "how many approvals does this
     // change still need", so a document with nothing in flight has no question
