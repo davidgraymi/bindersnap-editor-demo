@@ -34,15 +34,9 @@ async function main() {
   const GITEA_URL = process.env.GITEA_URL || "http://localhost:3000";
   /**
    * Re-run the conversion, the extension merge and the typegen against the
-   * `swagger2.json` already committed here, fetching nothing.
-   *
-   * This exists because dev and production run different Gitea versions on
-   * purpose: dev is on a 28.0.0 nightly for `block_on_codeowner_reviews`,
-   * production is on 1.27.3, and the committed spec describes **production's**
-   * API — the one the code can rely on everywhere. Without this flag the only
-   * way to pick up a change to `extensions.json` is to fetch from whatever
-   * Gitea happens to be running, which would quietly replace the 1.27.3 spec
-   * with a nightly's and put 402 endpoints nobody has tested into the types.
+   * `swagger2.json` already committed here, fetching nothing — the way to pick
+   * up a change to `extensions.json` without moving the spec to whatever Gitea
+   * happens to be running.
    */
   const offline = process.argv.includes("--offline");
   const SPEC_DIR = "services/api/gitea-client/spec";
