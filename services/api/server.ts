@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 
 import { config, type SessionCookieSameSite } from "./config";
 import { logger } from "./logger";
@@ -2908,6 +2908,74 @@ async function handleDeleteAccount(
       baseHeaders,
     );
   }
+}
+
+/** How long a login's avatar hash is reused before Gitea is asked again. */
+const AVATAR_HASH_TTL_MS = 60 * 60 * 1000;
+const avatarHashes = new Map<string, { hash: string; expiresAt: number }>();
+
+/**
+ * The Gravatar hash for a login: SHA-256 of the account's email, as Gravatar
+ * asks for it.
+ *
+ * Read with the service account, because a person's own token sees other
+ * people's addresses as Gitea's no-reply ones — which would give everybody a
+ * face that is nobody's. An account that cannot be read hashes its login
+ * instead, so it still has a face of its own rather than a broken image.
+ */
+async function avatarHashFor(login: string): Promise<string> {
+  const key = login.toLowerCase();
+  const cached = avatarHashes.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.hash;
+
+  let email: string | null = null;
+  const client = createPrivilegedGiteaClient();
+  if (client) {
+    const { data } = await client
+      .GET("/users/{username}", { params: { path: { username: login } } })
+      .catch(() => ({ data: undefined }));
+    const raw = typeof data?.email === "string" ? data.email.trim() : "";
+    email = looksLikeEmailAddress(raw) ? raw.toLowerCase() : null;
+  }
+
+  const hash = createHash("sha256")
+    .update(email ?? `bindersnap:${key}`)
+    .digest("hex");
+  avatarHashes.set(key, { hash, expiresAt: Date.now() + AVATAR_HASH_TTL_MS });
+  return hash;
+}
+
+/**
+ * Somebody's face: their Gravatar, or Gravatar's pattern for them.
+ *
+ * A redirect rather than a URL in every payload, so the address it is made
+ * from never reaches the browser — only its hash reaches Gravatar. Somebody
+ * with a Gravatar photo shows it; everybody else gets the pattern Gravatar
+ * draws from the same hash, so no two people look alike and one person looks
+ * the same on every page. Signed-in only: the faces of an organization's
+ * people are not for anybody who guesses a login.
+ */
+async function handleAvatar(
+  req: Request,
+  baseHeaders: Headers,
+  login: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const url = new URL(req.url);
+  const requested = Number.parseInt(url.searchParams.get("s") ?? "", 10);
+  const size =
+    Number.isFinite(requested) && requested > 0 ? Math.min(requested, 512) : 80;
+  const hash = await avatarHashFor(login);
+
+  return new Response(null, {
+    status: 302,
+    headers: mergeHeaders(baseHeaders, {
+      Location: `https://www.gravatar.com/avatar/${hash}?s=${size}&d=identicon&r=g`,
+      "Cache-Control": "private, max-age=3600",
+    }),
+  });
 }
 
 /**
@@ -12779,6 +12847,15 @@ export function createApiServer() {
         response = await handleAccountBlockers(req, baseHeaders);
       } else if (pathname === "/api/app/account" && method === "DELETE") {
         response = await handleDeleteAccount(req, baseHeaders);
+      } else if (
+        method === "GET" &&
+        /^\/api\/app\/avatars\/[^/]+$/.test(pathname)
+      ) {
+        response = await handleAvatar(
+          req,
+          baseHeaders,
+          decodeURIComponent(pathname.slice("/api/app/avatars/".length)),
+        );
       } else if (pathname === "/api/app/onboarding" && method === "GET") {
         response = await handleOnboarding(req, baseHeaders);
       } else if (pathname === "/api/app/notifications" && method === "GET") {

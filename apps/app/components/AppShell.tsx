@@ -33,6 +33,7 @@ import { HomePage } from "./HomePage";
 import { NavSearch } from "./NavSearch";
 import { CreateMenu } from "./CreateMenu";
 import { AccountSettingsPage } from "./AccountSettingsPage";
+import { AvatarFace } from "./PersonAvatar";
 
 interface AppShellProps {
   user: SessionUser | null;
@@ -274,7 +275,11 @@ export function AppShell({
               aria-haspopup="menu"
               onClick={() => setProfileOpen((o) => !o)}
             >
-              {initials}
+              <AvatarFace
+                login={currentUsername}
+                initials={initials}
+                drawnSize={32}
+              />
             </button>
 
             {profileOpen && (
@@ -295,7 +300,11 @@ export function AppShell({
                         className="app-profile-menu-avatar"
                         aria-hidden="true"
                       >
-                        {initials}
+                        <AvatarFace
+                          login={currentUsername}
+                          initials={initials}
+                          drawnSize={42}
+                        />
                       </div>
                       <div className="app-profile-menu-copy">
                         <p className="app-profile-menu-handle">{displayName}</p>
