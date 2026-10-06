@@ -1,4 +1,4 @@
-// Generated from Gitea 1.27.3 at 2026-09-08T14:01:58Z
+// Generated from Gitea 28.0.0 at 2026-10-06T20:39:56Z
 // Source: services/api/gitea-client/spec/swagger2.json
 // Note: Types have been extended via extensions.json
 // Do not edit manually — re-run: bun run generate:api
@@ -210,6 +210,23 @@ export interface paths {
         };
         /** List all organizations */
         get: operations["adminGetAllOrgs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/packages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all packages */
+        get: operations["adminListPackages"];
         put?: never;
         post?: never;
         delete?: never;
@@ -995,6 +1012,178 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List an organization's projects */
+        get: operations["orgListProjects"];
+        put?: never;
+        /** Create a project owned by an organization */
+        post: operations["orgCreateProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/projects/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a project */
+        get: operations["orgGetProject"];
+        put?: never;
+        post?: never;
+        /** Delete a project */
+        delete: operations["orgDeleteProject"];
+        options?: never;
+        head?: never;
+        /** Edit a project */
+        patch: operations["orgEditProject"];
+        trace?: never;
+    };
+    "/orgs/{org}/projects/{id}/columns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a project's columns */
+        get: operations["orgListProjectColumns"];
+        put?: never;
+        /** Create a column in a project */
+        post: operations["orgCreateProjectColumn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/projects/{id}/columns/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reorder a project's columns
+         * @description Reorders every column of the project at once. The body lists all column IDs in their new order.
+         */
+        post: operations["orgMoveProjectColumns"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/projects/{id}/columns/{column_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a project column */
+        get: operations["orgGetProjectColumn"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a project column
+         * @description The default column cannot be deleted while it is still the column new issues land in.
+         */
+        delete: operations["orgDeleteProjectColumn"];
+        options?: never;
+        head?: never;
+        /** Edit a project column */
+        patch: operations["orgEditProjectColumn"];
+        trace?: never;
+    };
+    "/orgs/{org}/projects/{id}/columns/{column_id}/default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a project's default column
+         * @description The default column is where newly assigned issues land.
+         */
+        post: operations["orgSetDefaultProjectColumn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/projects/{id}/columns/{column_id}/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the issues in a project column */
+        get: operations["orgListProjectColumnIssues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/projects/{id}/columns/{column_id}/issues/{issue_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add an issue to a project column
+         * @description Assigns the issue to the project if it is not a member yet, then places it in the column.
+         */
+        post: operations["orgAddIssueToProjectColumn"];
+        /** Remove an issue from a project column */
+        delete: operations["orgRemoveIssueFromProjectColumn"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/projects/{id}/issues/{issue_id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move an issue between a project's columns */
+        post: operations["orgMoveProjectIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/public_members": {
         parameters: {
             query?: never;
@@ -1484,6 +1673,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/repos/{owner}/{repo}/actions/runs/{run}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve a workflow run that requires approval */
+        post: operations["approveWorkflowRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/repos/{owner}/{repo}/actions/runs/{run}/artifacts": {
         parameters: {
             query?: never;
@@ -1535,6 +1741,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/repos/{owner}/{repo}/actions/runs/{run}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel a workflow run and its jobs */
+        post: operations["cancelWorkflowRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{owner}/{repo}/actions/runs/{run}/force-cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Force-cancel a workflow run
+         * @description Cancels a workflow run without waiting for its runners to acknowledge the cancellation.
+         *     The jobs are marked cancelled at once and anything a runner reports for them afterwards is discarded.
+         *     Only use this endpoint when the workflow run does not respond to `POST /repos/{owner}/{repo}/actions/runs/{run}/cancel`.
+         */
+        post: operations["forceCancelWorkflowRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/repos/{owner}/{repo}/actions/runs/{run}/jobs": {
         parameters: {
             query?: never;
@@ -1563,6 +1808,23 @@ export interface paths {
         put?: never;
         /** Reruns a specific workflow job in a run */
         post: operations["rerunWorkflowJob"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{owner}/{repo}/actions/runs/{run}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download workflow run logs as archive */
+        get: operations["getWorkflowRunLogs"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1610,7 +1872,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List an repo's actions secrets */
+        /** List a repo's actions secrets */
         get: operations["repoListActionsSecrets"];
         put?: never;
         post?: never;
@@ -2278,7 +2540,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get a single commit from a repository */
+        /** Get a single commit from a repository, it has a GitHub-compatible alias "/repos/{owner}/{repo}/commits/{ref}" */
         get: operations["repoGetSingleCommit"];
         put?: never;
         post?: never;
@@ -3133,6 +3395,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/repos/{owner}/{repo}/keys/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add a deploy token to a repository, it authenticates git over HTTPS */
+        post: operations["repoCreateDeployToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/repos/{owner}/{repo}/keys/{id}": {
         parameters: {
             query?: never;
@@ -3339,6 +3618,178 @@ export interface paths {
         /** Mark notification threads as read, pinned or unread on a specific repo */
         put: operations["notifyReadRepoList"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{owner}/{repo}/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a repository's projects */
+        get: operations["repoListProjects"];
+        put?: never;
+        /** Create a project owned by a repository */
+        post: operations["repoCreateProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{owner}/{repo}/projects/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a project */
+        get: operations["repoGetProject"];
+        put?: never;
+        post?: never;
+        /** Delete a project */
+        delete: operations["repoDeleteProject"];
+        options?: never;
+        head?: never;
+        /** Edit a project */
+        patch: operations["repoEditProject"];
+        trace?: never;
+    };
+    "/repos/{owner}/{repo}/projects/{id}/columns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a project's columns */
+        get: operations["repoListProjectColumns"];
+        put?: never;
+        /** Create a column in a project */
+        post: operations["repoCreateProjectColumn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{owner}/{repo}/projects/{id}/columns/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reorder a project's columns
+         * @description Reorders every column of the project at once. The body lists all column IDs in their new order.
+         */
+        post: operations["repoMoveProjectColumns"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{owner}/{repo}/projects/{id}/columns/{column_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a project column */
+        get: operations["repoGetProjectColumn"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a project column
+         * @description The default column cannot be deleted while it is still the column new issues land in.
+         */
+        delete: operations["repoDeleteProjectColumn"];
+        options?: never;
+        head?: never;
+        /** Edit a project column */
+        patch: operations["repoEditProjectColumn"];
+        trace?: never;
+    };
+    "/repos/{owner}/{repo}/projects/{id}/columns/{column_id}/default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a project's default column
+         * @description The default column is where newly assigned issues land.
+         */
+        post: operations["repoSetDefaultProjectColumn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{owner}/{repo}/projects/{id}/columns/{column_id}/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the issues in a project column */
+        get: operations["repoListProjectColumnIssues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{owner}/{repo}/projects/{id}/columns/{column_id}/issues/{issue_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add an issue to a project column
+         * @description Assigns the issue to the project if it is not a member yet, then places it in the column.
+         */
+        post: operations["repoAddIssueToProjectColumn"];
+        /** Remove an issue from a project column */
+        delete: operations["repoRemoveIssueFromProjectColumn"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{owner}/{repo}/projects/{id}/issues/{issue_id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move an issue between a project's columns */
+        post: operations["repoMoveProjectIssue"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5027,6 +5478,178 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/user/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List your projects */
+        get: operations["userCurrentListProjects"];
+        put?: never;
+        /** Create a project owned by the authenticated user */
+        post: operations["userCurrentCreateProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/user/projects/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a project */
+        get: operations["userCurrentGetProject"];
+        put?: never;
+        post?: never;
+        /** Delete a project */
+        delete: operations["userCurrentDeleteProject"];
+        options?: never;
+        head?: never;
+        /** Edit a project */
+        patch: operations["userCurrentEditProject"];
+        trace?: never;
+    };
+    "/user/projects/{id}/columns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a project's columns */
+        get: operations["userCurrentListProjectColumns"];
+        put?: never;
+        /** Create a column in a project */
+        post: operations["userCurrentCreateProjectColumn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/user/projects/{id}/columns/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reorder a project's columns
+         * @description Reorders every column of the project at once. The body lists all column IDs in their new order.
+         */
+        post: operations["userCurrentMoveProjectColumns"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/user/projects/{id}/columns/{column_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a project column */
+        get: operations["userCurrentGetProjectColumn"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a project column
+         * @description The default column cannot be deleted while it is still the column new issues land in.
+         */
+        delete: operations["userCurrentDeleteProjectColumn"];
+        options?: never;
+        head?: never;
+        /** Edit a project column */
+        patch: operations["userCurrentEditProjectColumn"];
+        trace?: never;
+    };
+    "/user/projects/{id}/columns/{column_id}/default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a project's default column
+         * @description The default column is where newly assigned issues land.
+         */
+        post: operations["userCurrentSetDefaultProjectColumn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/user/projects/{id}/columns/{column_id}/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the issues in a project column */
+        get: operations["userCurrentListProjectColumnIssues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/user/projects/{id}/columns/{column_id}/issues/{issue_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add an issue to a project column
+         * @description Assigns the issue to the project if it is not a member yet, then places it in the column.
+         */
+        post: operations["userCurrentAddIssueToProjectColumn"];
+        /** Remove an issue from a project column */
+        delete: operations["userCurrentRemoveIssueFromProjectColumn"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/user/projects/{id}/issues/{issue_id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move an issue between a project's columns */
+        post: operations["userCurrentMoveProjectIssue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/user/repos": {
         parameters: {
             query?: never;
@@ -5354,6 +5977,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/users/{username}/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a user's projects */
+        get: operations["userListProjects"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/users/{username}/repos": {
         parameters: {
             query?: never;
@@ -5672,9 +6312,13 @@ export interface components {
         /** @description ActionWorkflowRun represents a WorkflowRun */
         ActionWorkflowRun: {
             actor?: components["schemas"]["User"];
+            artifacts_url?: string;
+            cancel_url?: string;
             /** Format: date-time */
             completed_at?: string;
             conclusion?: string;
+            /** Format: date-time */
+            created_at?: string;
             display_title?: string;
             event?: string;
             head_branch?: string;
@@ -5683,6 +6327,8 @@ export interface components {
             html_url?: string;
             /** Format: int64 */
             id?: number;
+            jobs_url?: string;
+            logs_url?: string;
             path?: string;
             /**
              * @description PreviousAttemptURL is the API URL of the previous attempt of this run, e.g. ".../actions/runs/{run_id}/attempts/{attempt-1}".
@@ -5693,6 +6339,7 @@ export interface components {
             repository?: components["schemas"]["Repository"];
             /** Format: int64 */
             repository_id?: number;
+            rerun_url?: string;
             /**
              * Format: int64
              * @description RunAttempt is 1-based for runs created after ActionRunAttempt was introduced.
@@ -5706,6 +6353,8 @@ export interface components {
             started_at?: string;
             status?: string;
             trigger_actor?: components["schemas"]["User"];
+            /** Format: date-time */
+            updated_at?: string;
             url?: string;
         };
         /** @description ActionWorkflowRunsResponse returns ActionWorkflowRuns */
@@ -5776,9 +6425,6 @@ export interface components {
         AddCollaboratorOption: {
             /**
              * @description Permission level to grant the collaborator
-             *     read RepoWritePermissionRead
-             *     write RepoWritePermissionWrite
-             *     admin RepoWritePermissionAdmin
              * @enum {string}
              */
             permission?: "read" | "write" | "admin";
@@ -5842,7 +6488,10 @@ export interface components {
         Attachment: {
             /** @description DownloadURL is the URL to download the attachment */
             browser_download_url?: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Created is the time when the attachment was uploaded
+             */
             created_at?: string;
             /**
              * Format: int64
@@ -5900,10 +6549,10 @@ export interface components {
             approvals_whitelist_teams?: string[];
             approvals_whitelist_username?: string[];
             block_admin_merge_override?: boolean;
+            block_on_codeowner_reviews?: boolean;
             block_on_official_review_requests?: boolean;
             block_on_outdated_branch?: boolean;
             block_on_rejected_reviews?: boolean;
-            /** @description Deprecated: true */
             branch_name?: string;
             bypass_allowlist_teams?: string[];
             bypass_allowlist_usernames?: string[];
@@ -5942,8 +6591,6 @@ export interface components {
             unprotected_file_patterns?: string;
             /** Format: date-time */
             updated_at?: string;
-            /** @description Gitea 28.0.0 (go-gitea PR #34995). Declared here rather than generated, because the committed spec is 1.27.3 — the version production runs — and this field does not exist there. See spec/README.md. */
-            block_on_codeowner_reviews?: boolean;
         };
         /** @description ChangeFileOperation for creating, updating or deleting a file */
         ChangeFileOperation: {
@@ -6022,12 +6669,6 @@ export interface components {
             sha?: string;
             /**
              * @description State is the overall combined status state
-             *     pending CommitStatusPending is for when the CommitStatus is Pending
-             *     success CommitStatusSuccess is for when the CommitStatus is Success
-             *     error CommitStatusError is for when the CommitStatus is Error
-             *     failure CommitStatusFailure is for when the CommitStatus is Failure
-             *     warning CommitStatusWarning is for when the CommitStatus is Warning
-             *     skipped CommitStatusSkipped is for when CommitStatus is Skipped
              * @enum {string}
              */
             state?: "pending" | "success" | "error" | "failure" | "warning" | "skipped";
@@ -6076,7 +6717,10 @@ export interface components {
             author?: components["schemas"]["User"];
             commit?: components["schemas"]["RepoCommit"];
             committer?: components["schemas"]["User"];
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Created is the time when the commit was created
+             */
             created?: string;
             /** @description Files contains information about files affected by the commit */
             files?: components["schemas"]["CommitAffectedFiles"][];
@@ -6099,14 +6743,23 @@ export interface components {
         };
         /** @description CommitDateOptions store dates for GIT_AUTHOR_DATE and GIT_COMMITTER_DATE */
         CommitDateOptions: {
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Author is the author date for the commit
+             */
             author?: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Committer is the committer date for the commit
+             */
             committer?: string;
         };
         /** CommitMeta contains meta information of a commit in terms of API. */
         CommitMeta: {
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Created is the time when the commit was created
+             */
             created?: string;
             /** @description SHA is the commit SHA hash */
             sha?: string;
@@ -6147,12 +6800,6 @@ export interface components {
             id?: number;
             /**
              * @description State represents the status state (pending, success, error, failure)
-             *     pending CommitStatusPending is for when the CommitStatus is Pending
-             *     success CommitStatusSuccess is for when the CommitStatus is Success
-             *     error CommitStatusError is for when the CommitStatus is Error
-             *     failure CommitStatusFailure is for when the CommitStatus is Failure
-             *     warning CommitStatusWarning is for when the CommitStatus is Warning
-             *     skipped CommitStatusSkipped is for when CommitStatus is Skipped
              * @enum {string}
              */
             status?: "pending" | "success" | "error" | "failure" | "warning" | "skipped";
@@ -6167,7 +6814,10 @@ export interface components {
         CommitUser: {
             /** @description Date is the commit date in string format */
             date?: string;
-            /** Format: email */
+            /**
+             * Format: email
+             * @description Email is the person's email address
+             */
             email?: string;
             /** @description Name is the person's name */
             name?: string;
@@ -6211,6 +6861,8 @@ export interface components {
              * @description LfsSize is the file size if this file is stored in LFS
              */
             lfs_size?: number;
+            /** @description `mode` is the Git file mode as an octal string, e.g. `100644` (regular), `100755` (executable), `120000` (symlink), `160000` (submodule) */
+            mode?: string;
             /** @description Name is the file or directory name */
             name?: string;
             /** @description Path is the full path to the file or directory */
@@ -6262,10 +6914,10 @@ export interface components {
             approvals_whitelist_teams?: string[];
             approvals_whitelist_username?: string[];
             block_admin_merge_override?: boolean;
+            block_on_codeowner_reviews?: boolean;
             block_on_official_review_requests?: boolean;
             block_on_outdated_branch?: boolean;
             block_on_rejected_reviews?: boolean;
-            /** @description Deprecated: true */
             branch_name?: string;
             bypass_allowlist_teams?: string[];
             bypass_allowlist_usernames?: string[];
@@ -6296,20 +6948,21 @@ export interface components {
             rule_name?: string;
             status_check_contexts?: string[];
             unprotected_file_patterns?: string;
-            /** @description Gitea 28.0.0 (go-gitea PR #34995). Declared here rather than generated, because the committed spec is 1.27.3 — the version production runs — and this field does not exist there. See spec/README.md. */
-            block_on_codeowner_reviews?: boolean;
         };
         /** @description CreateBranchRepoOption options when creating a branch in a repository */
         CreateBranchRepoOption: {
             /** @description Name of the branch to create */
             new_branch_name: string;
-            /**
-             * @description Deprecated: true
-             *     Name of the old branch to create from
-             */
+            /** @description Name of the old branch to create from */
             old_branch_name?: string;
             /** @description Name of the old branch/tag/commit to create from */
             old_ref_name?: string;
+        };
+        CreateDeployKeyTokenOption: {
+            /** @description Describe if the token has only read access or read/write */
+            read_only?: boolean;
+            /** @description Title of the token to add */
+            title: string;
         };
         /** @description CreateEmailOption options when creating email addresses */
         CreateEmailOption: {
@@ -6353,7 +7006,10 @@ export interface components {
         };
         /** @description CreateHookOption options when create a hook */
         CreateHookOption: {
-            /** @default false */
+            /**
+             * @description Whether the webhook should be active upon creation
+             * @default false
+             */
             active: boolean;
             /** @description Authorization header to include in webhook requests */
             authorization_header?: string;
@@ -6364,7 +7020,10 @@ export interface components {
             events?: string[];
             /** @description Optional human-readable name for the webhook */
             name?: string;
-            /** @enum {string} */
+            /**
+             * @description The type of the webhook to create
+             * @enum {string}
+             */
             type: "dingtalk" | "discord" | "gitea" | "gogs" | "msteams" | "slack" | "telegram" | "feishu" | "wechatwork" | "packagist";
         };
         /**
@@ -6376,6 +7035,7 @@ export interface components {
         };
         /** @description CreateIssueCommentOption options for creating a comment on an issue */
         CreateIssueCommentOption: {
+            /** @description Body is the comment text content */
             body: string;
         };
         /** @description CreateIssueOption options to create one issue */
@@ -6399,7 +7059,6 @@ export interface components {
             ref?: string;
             title: string;
         };
-        /** @description CreateKeyOption options when creating a key */
         CreateKeyOption: {
             /** @description An armored SSH key to add */
             key: string;
@@ -6418,15 +7077,22 @@ export interface components {
             exclusive?: boolean;
             /** @example false */
             is_archived?: boolean;
+            /** @description Name is the display name for the new label */
             name: string;
         };
         /** @description CreateMilestoneOption options for creating a milestone */
         CreateMilestoneOption: {
             /** @description Description provides details about the milestone */
             description?: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Deadline is the due date for the milestone
+             */
             due_on?: string;
-            /** @enum {string} */
+            /**
+             * @description State indicates the initial state of the milestone
+             * @enum {string}
+             */
             state?: "open" | "closed";
             /** @description Title is the title of the new milestone */
             title?: string;
@@ -6465,14 +7131,26 @@ export interface components {
             username: string;
             /**
              * @description possible values are `public` (default), `limited` or `private`
-             *     public UserVisibilityPublic
-             *     limited UserVisibilityLimited
-             *     private UserVisibilityPrivate
              * @enum {string}
              */
             visibility?: "public" | "limited" | "private";
             /** @description The website URL of the organization */
             website?: string;
+        };
+        /** @description CreateProjectColumnOption represents options for creating a project column */
+        CreateProjectColumnOption: {
+            /** @description Column color in 6-digit hex format, e.g. #FF0000 */
+            color?: string;
+            title: string;
+        };
+        /** @description CreateProjectOption represents options for creating a project */
+        CreateProjectOption: {
+            /** @description Card type: "text_only" or "images_and_text" */
+            card_type?: string;
+            description?: string;
+            /** @description Template type: "none", "basic_kanban" or "bug_triage" */
+            template_type?: string;
+            title: string;
         };
         /** @description CreatePullRequestOption options when creating a pull request */
         CreatePullRequestOption: {
@@ -6582,8 +7260,6 @@ export interface components {
             name: string;
             /**
              * @description ObjectFormatName of the underlying git repository, empty string for default (sha1)
-             *     sha1 ObjectFormatSHA1
-             *     sha256 ObjectFormatSHA256
              * @enum {string}
              */
             object_format_name?: "sha1" | "sha256";
@@ -6607,12 +7283,6 @@ export interface components {
             description?: string;
             /**
              * @description State represents the status state to set (pending, success, error, failure)
-             *     pending CommitStatusPending is for when the CommitStatus is Pending
-             *     success CommitStatusSuccess is for when the CommitStatus is Success
-             *     error CommitStatusError is for when the CommitStatus is Error
-             *     failure CommitStatusFailure is for when the CommitStatus is Failure
-             *     warning CommitStatusWarning is for when the CommitStatus is Warning
-             *     skipped CommitStatusSkipped is for when CommitStatus is Skipped
              * @enum {string}
              */
             state?: "pending" | "success" | "error" | "failure" | "warning" | "skipped";
@@ -6623,6 +7293,7 @@ export interface components {
         CreateTagOption: {
             /** @description The message to associate with the tag */
             message?: string;
+            /** @description The name of the tag to create */
             tag_name: string;
             /** @description The target commit SHA or branch name for the tag */
             target?: string;
@@ -6645,16 +7316,20 @@ export interface components {
             /** @description Whether the team has access to all repositories in the organization */
             includes_all_repositories?: boolean;
             name: string;
-            /** @enum {string} */
+            /**
+             * @description All units have this permission (read/write/admin)
+             * @enum {string}
+             */
             permission?: "read" | "write" | "admin";
             /**
+             * @description Deprecated: This variable should be replaced by UnitsMap and will be dropped in later versions.
              * @example [
              *       "repo.actions",
+             *       "repo.packages",
              *       "repo.code",
              *       "repo.issues",
              *       "repo.ext_issues",
              *       "repo.wiki",
-             *       "repo.ext_wiki",
              *       "repo.pulls",
              *       "repo.releases",
              *       "repo.projects",
@@ -6662,15 +7337,25 @@ export interface components {
              *     ]
              */
             units?: string[];
-            /** @example {"repo.actions","repo.packages","repo.code":"read","repo.issues":"write","repo.ext_issues":"none","repo.wiki":"admin","repo.pulls":"owner","repo.releases":"none","repo.projects":"none","repo.ext_wiki":"none"} */
+            /**
+             * @example {
+             *       "repo.actions": "read",
+             *       "repo.code": "read",
+             *       "repo.ext_issues": "none",
+             *       "repo.ext_wiki": "none",
+             *       "repo.issues": "write",
+             *       "repo.packages": "read",
+             *       "repo.projects": "none",
+             *       "repo.pulls": "owner",
+             *       "repo.releases": "none",
+             *       "repo.wiki": "admin"
+             *     }
+             */
             units_map?: {
                 [key: string]: string;
             };
             /**
              * @description Team visibility within the organization. Defaults to "private".
-             *     public TeamVisibilityPublic
-             *     limited TeamVisibilityLimited
-             *     private TeamVisibilityPrivate
              * @enum {string}
              */
             visibility?: "public" | "limited" | "private";
@@ -6684,7 +7369,6 @@ export interface components {
              *     will be set to "now".
              */
             created_at?: string;
-            /** Format: email */
             email: string;
             /** @description The full display name of the user */
             full_name?: string;
@@ -6707,9 +7391,6 @@ export interface components {
             username: string;
             /**
              * @description User visibility level: public, limited, or private
-             *     public UserVisibilityPublic
-             *     limited UserVisibilityLimited
-             *     private UserVisibilityPrivate
              * @enum {string}
              */
             visibility?: "public" | "limited" | "private";
@@ -6801,15 +7482,17 @@ export interface components {
             /** @description Add a Signed-off-by trailer by the committer at the end of the commit log message. */
             signoff?: boolean;
         };
-        /** @description DeployKey a deploy key */
         DeployKey: {
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Created is the time when the deploy-key was added
+             */
             created_at?: string;
             /** @description Fingerprint is the key's fingerprint */
             fingerprint?: string;
             /**
              * Format: int64
-             * @description ID is the unique identifier for the deploy key
+             * @description ID is the unique identifier for the deploy-key
              */
             id?: number;
             /** @description Key contains the actual SSH key content */
@@ -6819,12 +7502,19 @@ export interface components {
              * @description KeyID is the associated public key ID
              */
             key_id?: number;
+            /**
+             * @description Type tells whether the key authenticates over SSH or with a token over HTTPS
+             * @enum {string}
+             */
+            key_type?: "ssh" | "token";
             /** @description ReadOnly indicates if the key has read-only access */
             read_only?: boolean;
             repository?: components["schemas"]["Repository"];
             /** @description Title is the human-readable name for the key */
             title?: string;
-            /** @description URL is the API URL for this deploy key */
+            /** @description Token is the plaintext token of an HTTPS key, only returned when it is created */
+            token?: string;
+            /** @description URL is the API URL for this deploy-key */
             url?: string;
         };
         /** @description DismissPullReviewOptions are options to dismiss a pull request review */
@@ -6846,6 +7536,7 @@ export interface components {
             approvals_whitelist_teams?: string[];
             approvals_whitelist_username?: string[];
             block_admin_merge_override?: boolean;
+            block_on_codeowner_reviews?: boolean;
             block_on_official_review_requests?: boolean;
             block_on_outdated_branch?: boolean;
             block_on_rejected_reviews?: boolean;
@@ -6877,8 +7568,6 @@ export interface components {
             required_approvals?: number;
             status_check_contexts?: string[];
             unprotected_file_patterns?: string;
-            /** @description Gitea 28.0.0 (go-gitea PR #34995). Declared here rather than generated, because the committed spec is 1.27.3 — the version production runs — and this field does not exist there. See spec/README.md. */
-            block_on_codeowner_reviews?: boolean;
         };
         /** @description EditDeadlineOption options for creating a deadline */
         EditDeadlineOption: {
@@ -6909,6 +7598,7 @@ export interface components {
         };
         /** @description EditIssueCommentOption options for editing a comment */
         EditIssueCommentOption: {
+            /** @description Body is the updated comment text content */
             body: string;
         };
         /** @description EditIssueOption options for editing an issue */
@@ -6977,14 +7667,31 @@ export interface components {
             repo_admin_change_team_access?: boolean;
             /**
              * @description possible values are `public`, `limited` or `private`
-             *     public UserVisibilityPublic
-             *     limited UserVisibilityLimited
-             *     private UserVisibilityPrivate
              * @enum {string}
              */
             visibility?: "public" | "limited" | "private";
             /** @description The website URL of the organization */
             website?: string;
+        };
+        /** @description EditProjectColumnOption represents options for editing a project column */
+        EditProjectColumnOption: {
+            /** @description Column color in 6-digit hex format, e.g. #FF0000 */
+            color?: string;
+            /**
+             * Format: int64
+             * @description Position of the column within the project, between -128 and 127
+             */
+            sorting?: number;
+            title?: string;
+        };
+        /** @description EditProjectOption represents options for editing a project */
+        EditProjectOption: {
+            /** @description Card type: "text_only" or "images_and_text" */
+            card_type?: string;
+            description?: string;
+            /** @enum {string} */
+            state?: "open" | "closed";
+            title?: string;
         };
         /** @description EditPullRequestOption options when modify pull request */
         EditPullRequestOption: {
@@ -7137,9 +7844,13 @@ export interface components {
             /** @description Whether the team has access to all repositories in the organization */
             includes_all_repositories?: boolean;
             name: string;
-            /** @enum {string} */
+            /**
+             * @description All units have this permission (read/write/admin)
+             * @enum {string}
+             */
             permission?: "read" | "write" | "admin";
             /**
+             * @description Deprecated: This variable should be replaced by UnitsMap and will be dropped in later versions.
              * @example [
              *       "repo.code",
              *       "repo.issues",
@@ -7170,9 +7881,6 @@ export interface components {
             /**
              * @description Team visibility within the organization. When omitted, visibility is
              *     left unchanged.
-             *     public TeamVisibilityPublic
-             *     limited TeamVisibilityLimited
-             *     private TeamVisibilityPrivate
              * @enum {string}
              */
             visibility?: "public" | "limited" | "private";
@@ -7191,7 +7899,10 @@ export interface components {
             allow_import_local?: boolean;
             /** @description The user's personal description or bio */
             description?: string;
-            /** Format: email */
+            /**
+             * Format: email
+             * @description The email address of the user
+             */
             email?: string;
             /** @description The full display name of the user */
             full_name?: string;
@@ -7212,13 +7923,18 @@ export interface components {
             prohibit_login?: boolean;
             /** @description Whether the user has restricted access privileges */
             restricted?: boolean;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description The authentication source ID to associate with the user
+             */
             source_id: number;
             /**
+             * @description The user type
+             * @enum {string}
+             */
+            type?: "User" | "Organization" | "Bot";
+            /**
              * @description User visibility level: public, limited, or private
-             *     public UserVisibilityPublic
-             *     limited UserVisibilityLimited
-             *     private UserVisibilityPrivate
              * @enum {string}
              */
             visibility?: "public" | "limited" | "private";
@@ -7227,7 +7943,10 @@ export interface components {
         };
         /** @description Email an email address belonging to a user */
         Email: {
-            /** Format: email */
+            /**
+             * Format: email
+             * @description The email address
+             */
             email?: string;
             /** @description Whether this is the primary email address */
             primary?: boolean;
@@ -7261,7 +7980,10 @@ export interface components {
         FileCommitResponse: {
             author?: components["schemas"]["CommitUser"];
             committer?: components["schemas"]["CommitUser"];
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Created is the time when the commit was created
+             */
             created?: string;
             /** @description HTMLURL is the web URL for viewing this commit */
             html_url?: string;
@@ -7314,11 +8036,17 @@ export interface components {
             can_encrypt_storage?: boolean;
             /** @description Whether the key can be used for signing */
             can_sign?: boolean;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description The date and time when the GPG key was created
+             */
             created_at?: string;
             /** @description List of email addresses associated with this GPG key */
             emails?: components["schemas"]["GPGKeyEmail"][];
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description The date and time when the GPG key expires
+             */
             expires_at?: string;
             /**
              * Format: int64
@@ -7542,7 +8270,10 @@ export interface components {
             config?: {
                 [key: string]: string;
             };
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description The date and time when the webhook was created
+             */
             created_at?: string;
             /** @description List of events that trigger this webhook */
             events?: string[];
@@ -7555,12 +8286,18 @@ export interface components {
             name?: string;
             /** @description The type of the webhook (e.g., gitea, slack, discord) */
             type?: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description The date and time when the webhook was last updated
+             */
             updated_at?: string;
         };
         /** @description Identity for a person's identity like an author or committer */
         Identity: {
-            /** Format: email */
+            /**
+             * Format: email
+             * @description Email is the person's email address
+             */
             email?: string;
             /** @description Name is the person's name */
             name?: string;
@@ -7752,11 +8489,7 @@ export interface components {
             Mode?: string;
             /** @description Text markdown to render */
             Text?: string;
-            /**
-             * @description Is it a wiki page? (use mode=wiki instead)
-             *
-             *     Deprecated: true
-             */
+            /** @description Is it a wiki page? (use mode=wiki instead) */
             Wiki?: boolean;
         };
         /** @description MarkupOption markup options */
@@ -7772,11 +8505,7 @@ export interface components {
             Mode?: string;
             /** @description Text markup to render */
             Text?: string;
-            /**
-             * @description Is it a wiki page? (use mode=wiki instead)
-             *
-             *     Deprecated: true
-             */
+            /** @description Is it a wiki page? (use mode=wiki instead) */
             Wiki?: boolean;
         };
         /** @description MergePullRequestForm form for merging Pull Request */
@@ -7859,8 +8588,6 @@ export interface components {
             open_issues?: number;
             /**
              * @description State indicates if the milestone is open or closed
-             *     open StateOpen pr is opened
-             *     closed StateClosed pr is closed
              * @enum {string}
              */
             state?: "open" | "closed";
@@ -7869,74 +8596,29 @@ export interface components {
             /** Format: date-time */
             updated_at?: string;
         };
+        /** @description MoveProjectColumnsOption represents options for reordering a project's columns */
+        MoveProjectColumnsOption: {
+            /** @description Every column ID of the project, in the desired left-to-right order */
+            column_ids: number[];
+        };
+        /** @description MoveProjectIssueOption represents options for moving an issue between columns */
+        MoveProjectIssueOption: {
+            /**
+             * Format: int64
+             * @description Target column to move the issue into
+             */
+            column_id: number;
+            /**
+             * Format: int64
+             * @description Position within the column, ascending. Omit to append. Negative values sort above
+             *     the rest, equal values are ordered newest first.
+             */
+            sorting?: number;
+        };
         /** @description NewIssuePinsAllowed represents an API response that says if new Issue Pins are allowed */
         NewIssuePinsAllowed: {
             issues?: boolean;
             pull_requests?: boolean;
-        };
-        /** @description NodeInfo contains standardized way of exposing metadata about a server running one of the distributed social networks */
-        NodeInfo: {
-            /** @description Metadata contains free form key value pairs for software specific values */
-            metadata?: Record<string, never>;
-            /** @description OpenRegistrations indicates if new user registrations are accepted */
-            openRegistrations?: boolean;
-            /** @description Protocols lists the protocols supported by this server */
-            protocols?: string[];
-            services?: components["schemas"]["NodeInfoServices"];
-            software?: components["schemas"]["NodeInfoSoftware"];
-            usage?: components["schemas"]["NodeInfoUsage"];
-            /** @description Version specifies the schema version */
-            version?: string;
-        };
-        /** @description NodeInfoServices contains the third party sites this server can connect to via their application API */
-        NodeInfoServices: {
-            /** @description Inbound lists services that can deliver content to this server */
-            inbound?: string[];
-            /** @description Outbound lists services this server can deliver content to */
-            outbound?: string[];
-        };
-        /** @description NodeInfoSoftware contains Metadata about server software in use */
-        NodeInfoSoftware: {
-            /** @description Homepage is the URL to the homepage of this server software */
-            homepage?: string;
-            /** @description Name is the canonical name of this server software */
-            name?: string;
-            /** @description Repository is the URL to the source code repository */
-            repository?: string;
-            /** @description Version is the version of this server software */
-            version?: string;
-        };
-        /** @description NodeInfoUsage contains usage statistics for this server */
-        NodeInfoUsage: {
-            /**
-             * Format: int64
-             * @description LocalComments is the total amount of comments made by users local to this server
-             */
-            localComments?: number;
-            /**
-             * Format: int64
-             * @description LocalPosts is the total amount of posts made by users local to this server
-             */
-            localPosts?: number;
-            users?: components["schemas"]["NodeInfoUsageUsers"];
-        };
-        /** @description NodeInfoUsageUsers contains statistics about the users of this server */
-        NodeInfoUsageUsers: {
-            /**
-             * Format: int64
-             * @description ActiveHalfyear is the amount of users that signed in at least once in the last 180 days
-             */
-            activeHalfyear?: number;
-            /**
-             * Format: int64
-             * @description ActiveMonth is the amount of users that signed in at least once in the last 30 days
-             */
-            activeMonth?: number;
-            /**
-             * Format: int64
-             * @description Total is the total amount of users on this server
-             */
-            total?: number;
         };
         /** @description Note contains information related to a git note */
         Note: {
@@ -7962,9 +8644,6 @@ export interface components {
             latest_comment_url?: string;
             /**
              * @description State indicates the current state of the notification subject
-             *     open NotifySubjectStateOpen is an open subject
-             *     closed NotifySubjectStateClosed is a closed subject
-             *     merged NotifySubjectStateMerged is a merged pull request
              * @enum {string}
              */
             state?: "open" | "closed" | "merged";
@@ -7972,10 +8651,6 @@ export interface components {
             title?: string;
             /**
              * @description Type indicates the type of the notification subject
-             *     Issue NotifySubjectIssue a issue is subject of an notification
-             *     Pull NotifySubjectPull a pull is subject of an notification
-             *     Commit NotifySubjectCommit a commit is subject of an notification
-             *     Repository NotifySubjectRepository a repository is subject of an notification
              * @enum {string}
              */
             type?: "Issue" | "Pull" | "Commit" | "Repository";
@@ -8056,9 +8731,6 @@ export interface components {
             username?: string;
             /**
              * @description The visibility level of the organization (public, limited, private)
-             *     public UserVisibilityPublic
-             *     limited UserVisibilityLimited
-             *     private UserVisibilityPrivate
              * @enum {string}
              */
             visibility?: "public" | "limited" | "private";
@@ -8095,7 +8767,10 @@ export interface components {
         };
         /** @description Package represents a package */
         Package: {
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description The date and time when the package was created
+             */
             created_at?: string;
             creator?: components["schemas"]["User"];
             /** @description The HTML URL to view the package */
@@ -8151,7 +8826,10 @@ export interface components {
             modified?: string[];
             /** @description List of files removed in this commit */
             removed?: string[];
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description The timestamp when the commit was made
+             */
             timestamp?: string;
             /** @description The URL to view this commit */
             url?: string;
@@ -8184,44 +8862,78 @@ export interface components {
             pull?: boolean;
             push?: boolean;
         };
-        /** @description Project represents a project */
+        /**
+         * Project represents a project.
+         * @description Projects track issues and pull requests, standalone note cards are not supported.
+         */
         Project: {
+            /** @description Card type: "text_only" or "images_and_text" */
+            card_type?: string;
             /** Format: date-time */
             closed_at?: string;
             /** Format: date-time */
             created_at?: string;
+            creator?: components["schemas"]["User"];
             /**
              * Format: int64
-             * @description CreatorID is the user who created the project
+             * @description Deprecated: use Creator instead
              */
             creator_id?: number;
-            /** @description Description provides details about the project */
             description?: string;
-            /**
-             * Format: int64
-             * @description ID is the unique identifier for the project
-             */
+            html_url?: string;
+            /** Format: int64 */
             id?: number;
-            /** @description IsClosed indicates if the project is closed */
+            /** @description Deprecated: use State instead */
             is_closed?: boolean;
-            /**
-             * Format: int64
-             * @description OwnerID is the owner of the project (for org-level projects)
-             */
+            /** Format: int64 */
+            num_closed_issues?: number;
+            /** Format: int64 */
+            num_issues?: number;
+            /** Format: int64 */
+            num_open_issues?: number;
+            /** Format: int64 */
             owner_id?: number;
-            /**
-             * Format: int64
-             * @description RepoID is the repository this project belongs to (for repo-level projects)
-             */
+            /** Format: int64 */
             repo_id?: number;
-            /** @description Title is the title of the project */
+            /** @enum {string} */
+            state?: "open" | "closed";
+            /** @description Template type: "none", "basic_kanban" or "bug_triage" */
+            template_type?: string;
             title?: string;
+            /** @description Project type: "individual", "repository" or "organization" */
+            type?: string;
+            /**
+             * Format: date-time
+             * @description null only for legacy rows that carry no update timestamp
+             */
+            updated_at?: string;
+        };
+        /** @description ProjectColumn represents a project column (board) */
+        ProjectColumn: {
+            color?: string;
             /** Format: date-time */
+            created_at?: string;
+            creator?: components["schemas"]["User"];
+            default?: boolean;
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            project_id?: number;
+            /** Format: int64 */
+            sorting?: number;
+            title?: string;
+            /**
+             * Format: date-time
+             * @description null only for legacy rows that carry no update timestamp
+             */
             updated_at?: string;
         };
         /** @description PublicKey publickey is a user key to push code to repository */
         PublicKey: {
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Created is the time when the key was added
+             */
             created_at?: string;
             /** @description Fingerprint is the key's fingerprint */
             fingerprint?: string;
@@ -8339,8 +9051,6 @@ export interface components {
             review_comments?: number;
             /**
              * @description The current state of the pull request
-             *     open StateOpen pr is opened
-             *     closed StateClosed pr is closed
              * @enum {string}
              */
             state?: "open" | "closed";
@@ -8462,7 +9172,10 @@ export interface components {
         Reaction: {
             /** @description The reaction content (e.g., emoji or reaction type) */
             content?: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description The date and time when the reaction was created
+             */
             created_at?: string;
             user?: components["schemas"]["User"];
         };
@@ -8530,11 +9243,6 @@ export interface components {
         RepoCollaboratorPermission: {
             /**
              * @description Permission level of the collaborator
-             *     none AccessLevelNameNone
-             *     read AccessLevelNameRead
-             *     write AccessLevelNameWrite
-             *     admin AccessLevelNameAdmin
-             *     owner AccessLevelNameOwner
              * @enum {string}
              */
             permission?: "none" | "read" | "write" | "admin" | "owner";
@@ -8625,8 +9333,6 @@ export interface components {
             name?: string;
             /**
              * @description ObjectFormatName of the underlying git repository
-             *     sha1 ObjectFormatSHA1
-             *     sha256 ObjectFormatSHA256
              * @enum {string}
              */
             object_format_name?: "sha1" | "sha256";
@@ -8695,7 +9401,10 @@ export interface components {
         };
         /** @description StopWatch represent a running stopwatch */
         StopWatch: {
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Created is the time when the stopwatch was started
+             */
             created?: string;
             /** @description Duration is a human-readable duration string */
             duration?: string;
@@ -8738,7 +9447,10 @@ export interface components {
         };
         /** @description TagProtection represents a tag protection */
         TagProtection: {
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description The date and time when the tag protection was created
+             */
             created_at?: string;
             /**
              * Format: int64
@@ -8747,7 +9459,10 @@ export interface components {
             id?: number;
             /** @description The pattern to match tag names for protection */
             name_pattern?: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description The date and time when the tag protection was last updated
+             */
             updated_at?: string;
             /** @description List of team names allowed to create/delete protected tags */
             whitelist_teams?: string[];
@@ -8773,6 +9488,7 @@ export interface components {
             /** @enum {string} */
             permission?: "none" | "read" | "write" | "admin" | "owner";
             /**
+             * @description Deprecated: This variable should be replaced by UnitsMap and will be dropped in later versions.
              * @example [
              *       "repo.code",
              *       "repo.issues",
@@ -8805,9 +9521,6 @@ export interface components {
              *     listable by members and org owners; "limited" teams are listable by
              *     any organization member; "public" teams are listable by any signed-in
              *     user.
-             *     public TeamVisibilityPublic
-             *     limited TeamVisibilityLimited
-             *     private TeamVisibilityPrivate
              * @enum {string}
              */
             visibility?: "public" | "limited" | "private";
@@ -9042,10 +9755,12 @@ export interface components {
             /** Format: int64 */
             starred_repos_count?: number;
             /**
+             * @description the user type
+             * @enum {string}
+             */
+            type?: "User" | "Organization" | "Bot";
+            /**
              * @description User visibility level option: public, limited, private
-             *     public UserVisibilityPublic
-             *     limited UserVisibilityLimited
-             *     private UserVisibilityPrivate
              * @enum {string}
              */
             visibility?: "public" | "limited" | "private";
@@ -9329,10 +10044,10 @@ export interface components {
                 "X-Page"?: number;
                 /** @description Total number of pages */
                 "X-PageCount"?: number;
-                /** @description Commits per page */
+                /** @description Files per page */
                 "X-PerPage"?: number;
-                /** @description Total commit count */
-                "X-Total"?: number;
+                /** @description Total file count */
+                "X-Total-Count"?: number;
                 [name: string]: unknown;
             };
             content: {
@@ -9387,7 +10102,7 @@ export interface components {
                 /** @description Commits per page */
                 "X-PerPage"?: number;
                 /** @description Total commit count */
-                "X-Total"?: number;
+                "X-Total-Count"?: number;
                 [name: string]: unknown;
             };
             content: {
@@ -9781,14 +10496,6 @@ export interface components {
                 "application/json": string;
             };
         };
-        MergeUpstreamRequest: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["MergeUpstreamRequest"];
-            };
-        };
         MergeUpstreamResponse: {
             headers: {
                 [name: string]: unknown;
@@ -9813,15 +10520,6 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["Milestone"][];
-            };
-        };
-        /** @description NodeInfo */
-        NodeInfo: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["NodeInfo"];
             };
         };
         /** @description Note */
@@ -9932,6 +10630,42 @@ export interface components {
                 "application/json": components["schemas"]["Package"][];
             };
         };
+        /** @description Project */
+        Project: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Project"];
+            };
+        };
+        /** @description ProjectColumn */
+        ProjectColumn: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ProjectColumn"];
+            };
+        };
+        /** @description ProjectColumnList */
+        ProjectColumnList: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ProjectColumn"][];
+            };
+        };
+        /** @description ProjectList */
+        ProjectList: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Project"][];
+            };
+        };
         /** @description PublicKey */
         PublicKey: {
             headers: {
@@ -10038,15 +10772,6 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["Reaction"][];
-            };
-        };
-        /** @description Reference */
-        Reference: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["Reference"];
             };
         };
         /** @description ReferenceList */
@@ -10174,15 +10899,6 @@ export interface components {
                 "application/json": components["schemas"]["SearchResults"];
             };
         };
-        /** @description Secret */
-        Secret: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["Secret"];
-            };
-        };
         /** @description SecretList */
         SecretList: {
             headers: {
@@ -10199,15 +10915,6 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["ServerVersion"];
-            };
-        };
-        /** @description StopWatch */
-        StopWatch: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["StopWatch"];
             };
         };
         /** @description StopWatchList */
@@ -10501,22 +11208,6 @@ export interface components {
             };
             content?: never;
         };
-        /** @description parameterBodies */
-        parameterBodies: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["LockIssueOption"];
-            };
-        };
-        /** @description APIRedirect is a redirect response */
-        redirect: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content?: never;
-        };
         /** @description APIRepoArchivedError is an error that is raised when an archived repo should be modified */
         repoArchivedError: {
             headers: {
@@ -10534,6 +11225,15 @@ export interface components {
             content: {
                 "application/json": string;
             };
+        };
+        /** @description APIUnauthorizedError is an unauthorized error response */
+        unauthorized: {
+            headers: {
+                message?: string;
+                url?: string;
+                [name: string]: unknown;
+            };
+            content?: never;
         };
         /** @description APIValidationError is error format response related to input validation */
         validationError: {
@@ -10572,6 +11272,11 @@ export interface components {
                 "application/json": components["schemas"]["UpdateUserAvatarOption"];
             };
         };
+        EditProjectOption: {
+            content: {
+                "application/json": components["schemas"]["EditProjectOption"];
+            };
+        };
         PullReviewRequestOptions: {
             content: {
                 "application/json": components["schemas"]["PullReviewRequestOptions"];
@@ -10600,6 +11305,11 @@ export interface components {
         EditReactionOption: {
             content: {
                 "application/json": components["schemas"]["EditReactionOption"];
+            };
+        };
+        CreateProjectOption: {
+            content: {
+                "application/json": components["schemas"]["CreateProjectOption"];
             };
         };
         UserBadgeOption: {
@@ -10642,6 +11352,26 @@ export interface components {
                 "application/json": components["schemas"]["CreateLabelOption"];
             };
         };
+        CreateProjectColumnOption: {
+            content: {
+                "application/json": components["schemas"]["CreateProjectColumnOption"];
+            };
+        };
+        MoveProjectColumnsOption: {
+            content: {
+                "application/json": components["schemas"]["MoveProjectColumnsOption"];
+            };
+        };
+        EditProjectColumnOption: {
+            content: {
+                "application/json": components["schemas"]["EditProjectColumnOption"];
+            };
+        };
+        MoveProjectIssueOption: {
+            content: {
+                "application/json": components["schemas"]["MoveProjectIssueOption"];
+            };
+        };
         EditIssueCommentOption: {
             content: {
                 "application/json": components["schemas"]["EditIssueCommentOption"];
@@ -10677,7 +11407,7 @@ export interface operations {
     listAdminWorkflowJobs: {
         parameters: {
             query?: {
-                /** @description workflow status (pending, queued, in_progress, failure, success, skipped) */
+                /** @description workflow status (requested, pending, queued, in_progress, failure, success, skipped) */
                 status?: string;
                 /** @description page number of results to return (1-based) */
                 page?: number;
@@ -10794,7 +11524,7 @@ export interface operations {
                 event?: string;
                 /** @description workflow branch */
                 branch?: string;
-                /** @description workflow status (pending, queued, in_progress, failure, success, skipped) */
+                /** @description workflow status (requested, pending, queued, in_progress, failure, success, skipped) */
                 status?: string;
                 /** @description triggered by user */
                 actor?: string;
@@ -10982,6 +11712,28 @@ export interface operations {
             403: components["responses"]["forbidden"];
         };
     };
+    adminListPackages: {
+        parameters: {
+            query?: {
+                /** @description page number of results to return (1-based) */
+                page?: number;
+                /** @description page size of results */
+                limit?: number;
+                /** @description package type filter */
+                type?: "alpine" | "cargo" | "chef" | "composer" | "conan" | "conda" | "container" | "cran" | "debian" | "generic" | "go" | "helm" | "maven" | "npm" | "nuget" | "pub" | "pypi" | "rpm" | "rubygems" | "swift" | "terraform" | "vagrant";
+                /** @description name filter */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["PackageList"];
+            403: components["responses"]["forbidden"];
+        };
+    };
     adminUnadoptedList: {
         parameters: {
             query?: {
@@ -10989,8 +11741,8 @@ export interface operations {
                 page?: number;
                 /** @description page size of results */
                 limit?: number;
-                /** @description pattern of repositories to search for */
-                pattern?: string;
+                /** @description glob pattern of repositories to search for, in the form owner or owner/repo */
+                query?: string;
             };
             header?: never;
             path?: never;
@@ -11096,6 +11848,7 @@ export interface operations {
             201: components["responses"]["User"];
             400: components["responses"]["error"];
             403: components["responses"]["forbidden"];
+            409: components["responses"]["error"];
             422: components["responses"]["validationError"];
         };
     };
@@ -11139,6 +11892,7 @@ export interface operations {
             200: components["responses"]["User"];
             400: components["responses"]["error"];
             403: components["responses"]["forbidden"];
+            409: components["responses"]["error"];
             422: components["responses"]["validationError"];
         };
     };
@@ -11626,7 +12380,7 @@ export interface operations {
     getOrgWorkflowJobs: {
         parameters: {
             query?: {
-                /** @description workflow status (pending, queued, in_progress, failure, success, skipped) */
+                /** @description workflow status (requested, pending, queued, in_progress, failure, success, skipped) */
                 status?: string;
                 /** @description page number of results to return (1-based) */
                 page?: number;
@@ -11753,7 +12507,7 @@ export interface operations {
                 event?: string;
                 /** @description workflow branch */
                 branch?: string;
-                /** @description workflow status (pending, queued, in_progress, failure, success, skipped) */
+                /** @description workflow status (requested, pending, queued, in_progress, failure, success, skipped) */
                 status?: string;
                 /** @description triggered by user */
                 actor?: string;
@@ -12392,6 +13146,346 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["notFound"];
+        };
+    };
+    orgListProjects: {
+        parameters: {
+            query?: {
+                /** @description State of the project (open, closed, all) */
+                state?: "open" | "closed" | "all";
+                /** @description page number of results to return (1-based) */
+                page?: number;
+                /** @description page size of results */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description name of the organization */
+                org: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ProjectList"];
+            404: components["responses"]["notFound"];
+        };
+    };
+    orgCreateProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description name of the organization */
+                org: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: components["requestBodies"]["CreateProjectOption"];
+        responses: {
+            201: components["responses"]["Project"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+        };
+    };
+    orgGetProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description name of the organization */
+                org: string;
+                /** @description id of the project */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Project"];
+            404: components["responses"]["notFound"];
+        };
+    };
+    orgDeleteProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description name of the organization */
+                org: string;
+                /** @description id of the project */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["empty"];
+            404: components["responses"]["notFound"];
+        };
+    };
+    orgEditProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description name of the organization */
+                org: string;
+                /** @description id of the project */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: components["requestBodies"]["EditProjectOption"];
+        responses: {
+            200: components["responses"]["Project"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+        };
+    };
+    orgListProjectColumns: {
+        parameters: {
+            query?: {
+                /** @description page number of results to return (1-based) */
+                page?: number;
+                /** @description page size of results */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description name of the organization */
+                org: string;
+                /** @description id of the project */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ProjectColumnList"];
+            404: components["responses"]["notFound"];
+        };
+    };
+    orgCreateProjectColumn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description name of the organization */
+                org: string;
+                /** @description id of the project */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: components["requestBodies"]["CreateProjectColumnOption"];
+        responses: {
+            201: components["responses"]["ProjectColumn"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+        };
+    };
+    orgMoveProjectColumns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description name of the organization */
+                org: string;
+                /** @description id of the project */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: components["requestBodies"]["MoveProjectColumnsOption"];
+        responses: {
+            204: components["responses"]["empty"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+        };
+    };
+    orgGetProjectColumn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description name of the organization */
+                org: string;
+                /** @description id of the project */
+                id: number;
+                /** @description id of the column */
+                column_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ProjectColumn"];
+            404: components["responses"]["notFound"];
+        };
+    };
+    orgDeleteProjectColumn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description name of the organization */
+                org: string;
+                /** @description id of the project */
+                id: number;
+                /** @description id of the column */
+                column_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["empty"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+        };
+    };
+    orgEditProjectColumn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description name of the organization */
+                org: string;
+                /** @description id of the project */
+                id: number;
+                /** @description id of the column */
+                column_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: components["requestBodies"]["EditProjectColumnOption"];
+        responses: {
+            200: components["responses"]["ProjectColumn"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+        };
+    };
+    orgSetDefaultProjectColumn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description name of the organization */
+                org: string;
+                /** @description id of the project */
+                id: number;
+                /** @description id of the column */
+                column_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["empty"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+        };
+    };
+    orgListProjectColumnIssues: {
+        parameters: {
+            query?: {
+                /** @description page number of results to return (1-based) */
+                page?: number;
+                /** @description page size of results */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description name of the organization */
+                org: string;
+                /** @description id of the project */
+                id: number;
+                /** @description id of the column */
+                column_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["IssueList"];
+            404: components["responses"]["notFound"];
+        };
+    };
+    orgAddIssueToProjectColumn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description name of the organization */
+                org: string;
+                /** @description id of the project */
+                id: number;
+                /** @description id of the column */
+                column_id: number;
+                /** @description global id of the issue, not the repository-local index */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: components["responses"]["empty"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+            423: components["responses"]["repoArchivedError"];
+        };
+    };
+    orgRemoveIssueFromProjectColumn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description name of the organization */
+                org: string;
+                /** @description id of the project */
+                id: number;
+                /** @description id of the column */
+                column_id: number;
+                /** @description global id of the issue, not the repository-local index */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["empty"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            423: components["responses"]["repoArchivedError"];
+        };
+    };
+    orgMoveProjectIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description name of the organization */
+                org: string;
+                /** @description id of the project */
+                id: number;
+                /** @description global id of the issue, not the repository-local index */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: components["requestBodies"]["MoveProjectIssueOption"];
+        responses: {
+            204: components["responses"]["empty"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+            423: components["responses"]["repoArchivedError"];
         };
     };
     orgListPublicMembers: {
@@ -13127,7 +14221,7 @@ export interface operations {
     listWorkflowJobs: {
         parameters: {
             query?: {
-                /** @description workflow status (pending, queued, in_progress, failure, success, skipped) */
+                /** @description workflow status (requested, pending, queued, in_progress, failure, success, skipped) */
                 status?: string;
                 /** @description page number of results to return (1-based) */
                 page?: number;
@@ -13319,7 +14413,7 @@ export interface operations {
                 event?: string;
                 /** @description workflow branch */
                 branch?: string;
-                /** @description workflow status (pending, queued, in_progress, failure, success, skipped) */
+                /** @description workflow status (requested, pending, queued, in_progress, failure, success, skipped) */
                 status?: string;
                 /** @description triggered by user */
                 actor?: string;
@@ -13396,6 +14490,29 @@ export interface operations {
             404: components["responses"]["notFound"];
         };
     };
+    approveWorkflowRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repository */
+                repo: string;
+                /** @description run ID */
+                run: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["WorkflowRun"];
+            400: components["responses"]["error"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            409: components["responses"]["conflict"];
+        };
+    };
     getArtifactsOfRun: {
         parameters: {
             query?: {
@@ -13446,7 +14563,7 @@ export interface operations {
     listWorkflowRunAttemptJobs: {
         parameters: {
             query?: {
-                /** @description workflow status (pending, queued, in_progress, failure, success, skipped) */
+                /** @description workflow status (requested, pending, queued, in_progress, failure, success, skipped) */
                 status?: string;
                 /** @description page number of results to return (1-based) */
                 page?: number;
@@ -13473,10 +14590,56 @@ export interface operations {
             404: components["responses"]["notFound"];
         };
     };
+    cancelWorkflowRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repository */
+                repo: string;
+                /** @description run ID */
+                run: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["WorkflowRun"];
+            400: components["responses"]["error"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            409: components["responses"]["conflict"];
+        };
+    };
+    forceCancelWorkflowRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repository */
+                repo: string;
+                /** @description run ID */
+                run: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["WorkflowRun"];
+            400: components["responses"]["error"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            409: components["responses"]["conflict"];
+        };
+    };
     listWorkflowRunJobs: {
         parameters: {
             query?: {
-                /** @description workflow status (pending, queued, in_progress, failure, success, skipped) */
+                /** @description workflow status (requested, pending, queued, in_progress, failure, success, skipped) */
                 status?: string;
                 /** @description page number of results to return (1-based) */
                 page?: number;
@@ -13530,6 +14693,32 @@ export interface operations {
             404: components["responses"]["notFound"];
             409: components["responses"]["error"];
             422: components["responses"]["validationError"];
+        };
+    };
+    getWorkflowRunLogs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repository */
+                repo: string;
+                /** @description run ID */
+                run: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Logs archive */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["notFound"];
         };
     };
     rerunWorkflowRun: {
@@ -13990,7 +15179,7 @@ export interface operations {
                 event?: string;
                 /** @description workflow branch */
                 branch?: string;
-                /** @description workflow status (pending, queued, in_progress, failure, success, skipped) */
+                /** @description workflow status (requested, pending, queued, in_progress, failure, success, skipped) */
                 status?: string;
                 /** @description triggered by user */
                 actor?: string;
@@ -14684,6 +15873,10 @@ export interface operations {
             query?: {
                 /** @description return the raw comparison as `diff` or `patch` instead of JSON */
                 output?: "diff" | "patch";
+                /** @description include verification for every commit (disable for speedup, default 'true') */
+                verification?: boolean;
+                /** @description include a list of affected files for every commit (disable for speedup, default 'true') */
+                files?: boolean;
             };
             header?: never;
             path: {
@@ -17057,6 +18250,29 @@ export interface operations {
             422: components["responses"]["validationError"];
         };
     };
+    repoCreateDeployToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repo */
+                repo: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CreateDeployKeyTokenOption"];
+            };
+        };
+        responses: {
+            201: components["responses"]["DeployKey"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+        };
+    };
     repoGetKey: {
         parameters: {
             query?: never;
@@ -17289,6 +18505,7 @@ export interface operations {
             200: components["responses"]["MergeUpstreamResponse"];
             400: components["responses"]["error"];
             404: components["responses"]["notFound"];
+            409: components["responses"]["error"];
         };
     };
     issueGetMilestonesList: {
@@ -17497,6 +18714,386 @@ export interface operations {
         requestBody?: never;
         responses: {
             205: components["responses"]["NotificationThreadList"];
+        };
+    };
+    repoListProjects: {
+        parameters: {
+            query?: {
+                /** @description State of the project (open, closed, all) */
+                state?: "open" | "closed" | "all";
+                /** @description page number of results to return (1-based) */
+                page?: number;
+                /** @description page size of results */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repo */
+                repo: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ProjectList"];
+            404: components["responses"]["notFound"];
+        };
+    };
+    repoCreateProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repo */
+                repo: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: components["requestBodies"]["CreateProjectOption"];
+        responses: {
+            201: components["responses"]["Project"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+            423: components["responses"]["repoArchivedError"];
+        };
+    };
+    repoGetProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repo */
+                repo: string;
+                /** @description id of the project */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Project"];
+            404: components["responses"]["notFound"];
+        };
+    };
+    repoDeleteProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repo */
+                repo: string;
+                /** @description id of the project */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["empty"];
+            404: components["responses"]["notFound"];
+            423: components["responses"]["repoArchivedError"];
+        };
+    };
+    repoEditProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repo */
+                repo: string;
+                /** @description id of the project */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: components["requestBodies"]["EditProjectOption"];
+        responses: {
+            200: components["responses"]["Project"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+            423: components["responses"]["repoArchivedError"];
+        };
+    };
+    repoListProjectColumns: {
+        parameters: {
+            query?: {
+                /** @description page number of results to return (1-based) */
+                page?: number;
+                /** @description page size of results */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repo */
+                repo: string;
+                /** @description id of the project */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ProjectColumnList"];
+            404: components["responses"]["notFound"];
+        };
+    };
+    repoCreateProjectColumn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repo */
+                repo: string;
+                /** @description id of the project */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: components["requestBodies"]["CreateProjectColumnOption"];
+        responses: {
+            201: components["responses"]["ProjectColumn"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+            423: components["responses"]["repoArchivedError"];
+        };
+    };
+    repoMoveProjectColumns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repo */
+                repo: string;
+                /** @description id of the project */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: components["requestBodies"]["MoveProjectColumnsOption"];
+        responses: {
+            204: components["responses"]["empty"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+            423: components["responses"]["repoArchivedError"];
+        };
+    };
+    repoGetProjectColumn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repo */
+                repo: string;
+                /** @description id of the project */
+                id: number;
+                /** @description id of the column */
+                column_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ProjectColumn"];
+            404: components["responses"]["notFound"];
+        };
+    };
+    repoDeleteProjectColumn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repo */
+                repo: string;
+                /** @description id of the project */
+                id: number;
+                /** @description id of the column */
+                column_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["empty"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+            423: components["responses"]["repoArchivedError"];
+        };
+    };
+    repoEditProjectColumn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repo */
+                repo: string;
+                /** @description id of the project */
+                id: number;
+                /** @description id of the column */
+                column_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: components["requestBodies"]["EditProjectColumnOption"];
+        responses: {
+            200: components["responses"]["ProjectColumn"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+            423: components["responses"]["repoArchivedError"];
+        };
+    };
+    repoSetDefaultProjectColumn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repo */
+                repo: string;
+                /** @description id of the project */
+                id: number;
+                /** @description id of the column */
+                column_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["empty"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            423: components["responses"]["repoArchivedError"];
+        };
+    };
+    repoListProjectColumnIssues: {
+        parameters: {
+            query?: {
+                /** @description page number of results to return (1-based) */
+                page?: number;
+                /** @description page size of results */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repo */
+                repo: string;
+                /** @description id of the project */
+                id: number;
+                /** @description id of the column */
+                column_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["IssueList"];
+            404: components["responses"]["notFound"];
+        };
+    };
+    repoAddIssueToProjectColumn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repo */
+                repo: string;
+                /** @description id of the project */
+                id: number;
+                /** @description id of the column */
+                column_id: number;
+                /** @description global id of the issue, not the repository-local index */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: components["responses"]["empty"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+            423: components["responses"]["repoArchivedError"];
+        };
+    };
+    repoRemoveIssueFromProjectColumn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repo */
+                repo: string;
+                /** @description id of the project */
+                id: number;
+                /** @description id of the column */
+                column_id: number;
+                /** @description global id of the issue, not the repository-local index */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["empty"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            423: components["responses"]["repoArchivedError"];
+        };
+    };
+    repoMoveProjectIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repo */
+                repo: string;
+                /** @description id of the project */
+                id: number;
+                /** @description global id of the issue, not the repository-local index */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: components["requestBodies"]["MoveProjectIssueOption"];
+        responses: {
+            204: components["responses"]["empty"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+            423: components["responses"]["repoArchivedError"];
         };
     };
     repoListPullRequests: {
@@ -18302,6 +19899,8 @@ export interface operations {
                 draft?: boolean;
                 /** @description filter (exclude / include) pre-releases */
                 "pre-release"?: boolean;
+                /** @description filter releases by tag. supports "*" as a wildcard (for example: v1*, *beta, *rc*). */
+                tag_filter?: string;
                 /** @description page number of results to return (1-based) */
                 page?: number;
                 /** @description page size of results */
@@ -19206,6 +20805,7 @@ export interface operations {
             204: components["responses"]["empty"];
             404: components["responses"]["notFound"];
             422: components["responses"]["invalidTopicsError"];
+            423: components["responses"]["repoArchivedError"];
         };
     };
     repoAddTopic: {
@@ -19227,6 +20827,7 @@ export interface operations {
             204: components["responses"]["empty"];
             404: components["responses"]["notFound"];
             422: components["responses"]["invalidTopicsError"];
+            423: components["responses"]["repoArchivedError"];
         };
     };
     repoDeleteTopic: {
@@ -19248,6 +20849,7 @@ export interface operations {
             204: components["responses"]["empty"];
             404: components["responses"]["notFound"];
             422: components["responses"]["invalidTopicsError"];
+            423: components["responses"]["repoArchivedError"];
         };
     };
     repoTransfer: {
@@ -19886,7 +21488,7 @@ export interface operations {
     getUserWorkflowJobs: {
         parameters: {
             query?: {
-                /** @description workflow status (pending, queued, in_progress, failure, success, skipped) */
+                /** @description workflow status (requested, pending, queued, in_progress, failure, success, skipped) */
                 status?: string;
                 /** @description page number of results to return (1-based) */
                 page?: number;
@@ -20003,7 +21605,7 @@ export interface operations {
                 event?: string;
                 /** @description workflow branch */
                 branch?: string;
-                /** @description workflow status (pending, queued, in_progress, failure, success, skipped) */
+                /** @description workflow status (requested, pending, queued, in_progress, failure, success, skipped) */
                 status?: string;
                 /** @description triggered by user */
                 actor?: string;
@@ -20402,6 +22004,8 @@ export interface operations {
         };
         responses: {
             201: components["responses"]["EmailList"];
+            400: components["responses"]["error"];
+            409: components["responses"]["error"];
             422: components["responses"]["validationError"];
         };
     };
@@ -20515,6 +22119,8 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["string"];
+            401: components["responses"]["unauthorized"];
+            403: components["responses"]["forbidden"];
             404: components["responses"]["notFound"];
         };
     };
@@ -20528,6 +22134,8 @@ export interface operations {
         requestBody?: never;
         responses: {
             201: components["responses"]["GPGKey"];
+            401: components["responses"]["unauthorized"];
+            403: components["responses"]["forbidden"];
             404: components["responses"]["notFound"];
             422: components["responses"]["validationError"];
         };
@@ -20547,6 +22155,8 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["GPGKeyList"];
+            401: components["responses"]["unauthorized"];
+            403: components["responses"]["forbidden"];
         };
     };
     userCurrentPostGPGKey: {
@@ -20563,6 +22173,8 @@ export interface operations {
         };
         responses: {
             201: components["responses"]["GPGKey"];
+            401: components["responses"]["unauthorized"];
+            403: components["responses"]["forbidden"];
             404: components["responses"]["notFound"];
             422: components["responses"]["validationError"];
         };
@@ -20580,6 +22192,8 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["GPGKey"];
+            401: components["responses"]["unauthorized"];
+            403: components["responses"]["forbidden"];
             404: components["responses"]["notFound"];
         };
     };
@@ -20596,6 +22210,7 @@ export interface operations {
         requestBody?: never;
         responses: {
             204: components["responses"]["empty"];
+            401: components["responses"]["unauthorized"];
             403: components["responses"]["forbidden"];
             404: components["responses"]["notFound"];
         };
@@ -20691,6 +22306,8 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["PublicKeyList"];
+            401: components["responses"]["unauthorized"];
+            403: components["responses"]["forbidden"];
         };
     };
     userCurrentPostKey: {
@@ -20703,6 +22320,8 @@ export interface operations {
         requestBody?: components["requestBodies"]["CreateKeyOption"];
         responses: {
             201: components["responses"]["PublicKey"];
+            401: components["responses"]["unauthorized"];
+            403: components["responses"]["forbidden"];
             422: components["responses"]["validationError"];
         };
     };
@@ -20719,6 +22338,8 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["PublicKey"];
+            401: components["responses"]["unauthorized"];
+            403: components["responses"]["forbidden"];
             404: components["responses"]["notFound"];
         };
     };
@@ -20735,6 +22356,7 @@ export interface operations {
         requestBody?: never;
         responses: {
             204: components["responses"]["empty"];
+            401: components["responses"]["unauthorized"];
             403: components["responses"]["forbidden"];
             404: components["responses"]["notFound"];
         };
@@ -20755,6 +22377,310 @@ export interface operations {
         responses: {
             200: components["responses"]["OrganizationList"];
             404: components["responses"]["notFound"];
+        };
+    };
+    userCurrentListProjects: {
+        parameters: {
+            query?: {
+                /** @description State of the project (open, closed, all) */
+                state?: "open" | "closed" | "all";
+                /** @description page number of results to return (1-based) */
+                page?: number;
+                /** @description page size of results */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ProjectList"];
+        };
+    };
+    userCurrentCreateProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: components["requestBodies"]["CreateProjectOption"];
+        responses: {
+            201: components["responses"]["Project"];
+            422: components["responses"]["validationError"];
+        };
+    };
+    userCurrentGetProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id of the project */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["Project"];
+            404: components["responses"]["notFound"];
+        };
+    };
+    userCurrentDeleteProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id of the project */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["empty"];
+            404: components["responses"]["notFound"];
+        };
+    };
+    userCurrentEditProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id of the project */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: components["requestBodies"]["EditProjectOption"];
+        responses: {
+            200: components["responses"]["Project"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+        };
+    };
+    userCurrentListProjectColumns: {
+        parameters: {
+            query?: {
+                /** @description page number of results to return (1-based) */
+                page?: number;
+                /** @description page size of results */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description id of the project */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ProjectColumnList"];
+            404: components["responses"]["notFound"];
+        };
+    };
+    userCurrentCreateProjectColumn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id of the project */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: components["requestBodies"]["CreateProjectColumnOption"];
+        responses: {
+            201: components["responses"]["ProjectColumn"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+        };
+    };
+    userCurrentMoveProjectColumns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id of the project */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: components["requestBodies"]["MoveProjectColumnsOption"];
+        responses: {
+            204: components["responses"]["empty"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+        };
+    };
+    userCurrentGetProjectColumn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id of the project */
+                id: number;
+                /** @description id of the column */
+                column_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ProjectColumn"];
+            404: components["responses"]["notFound"];
+        };
+    };
+    userCurrentDeleteProjectColumn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id of the project */
+                id: number;
+                /** @description id of the column */
+                column_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["empty"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+        };
+    };
+    userCurrentEditProjectColumn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id of the project */
+                id: number;
+                /** @description id of the column */
+                column_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: components["requestBodies"]["EditProjectColumnOption"];
+        responses: {
+            200: components["responses"]["ProjectColumn"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+        };
+    };
+    userCurrentSetDefaultProjectColumn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id of the project */
+                id: number;
+                /** @description id of the column */
+                column_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["empty"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+        };
+    };
+    userCurrentListProjectColumnIssues: {
+        parameters: {
+            query?: {
+                /** @description page number of results to return (1-based) */
+                page?: number;
+                /** @description page size of results */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description id of the project */
+                id: number;
+                /** @description id of the column */
+                column_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["IssueList"];
+            404: components["responses"]["notFound"];
+        };
+    };
+    userCurrentAddIssueToProjectColumn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id of the project */
+                id: number;
+                /** @description id of the column */
+                column_id: number;
+                /** @description global id of the issue, not the repository-local index */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: components["responses"]["empty"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+            423: components["responses"]["repoArchivedError"];
+        };
+    };
+    userCurrentRemoveIssueFromProjectColumn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id of the project */
+                id: number;
+                /** @description id of the column */
+                column_id: number;
+                /** @description global id of the issue, not the repository-local index */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["empty"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            423: components["responses"]["repoArchivedError"];
+        };
+    };
+    userCurrentMoveProjectIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description id of the project */
+                id: number;
+                /** @description global id of the issue, not the repository-local index */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: components["requestBodies"]["MoveProjectIssueOption"];
+        responses: {
+            204: components["responses"]["empty"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+            423: components["responses"]["repoArchivedError"];
         };
     };
     userCurrentListRepos: {
@@ -21200,6 +23126,29 @@ export interface operations {
         responses: {
             200: components["responses"]["OrganizationPermissions"];
             403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+        };
+    };
+    userListProjects: {
+        parameters: {
+            query?: {
+                /** @description State of the project (open, closed, all) */
+                state?: "open" | "closed" | "all";
+                /** @description page number of results to return (1-based) */
+                page?: number;
+                /** @description page size of results */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description username of the user */
+                username: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ProjectList"];
             404: components["responses"]["notFound"];
         };
     };
