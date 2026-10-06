@@ -36,6 +36,14 @@ interface DocumentPreviewProps {
   onDownload: (loaded: Blob | null) => void;
   downloading: boolean;
   /**
+   * Save a policy written in Bindersnap as a PDF or a Word document.
+   *
+   * Its stored file is the editor's JSON, which nobody outside the product
+   * can open — so for one of those, these replace Download rather than sit
+   * beside it.
+   */
+  onExport?: (format: "pdf" | "docx") => void;
+  /**
    * Draw the document without its own name-and-download bar, for a screen
    * whose own bar already carries both — the change comparison, where every
    * control on a file sits in the one header above it.
@@ -81,6 +89,7 @@ export function DocumentPreview({
   fileName,
   onDownload,
   downloading,
+  onExport,
   bare = false,
 }: DocumentPreviewProps) {
   const [state, setState] = useState<PreviewState>({ status: "idle" });
@@ -234,18 +243,12 @@ export function DocumentPreview({
               : `${describeFileKind(fileName)} — this file type doesn’t preview in the browser.`}
           </span>
         </span>
-        <button
-          className="bs-btn bs-btn--sm bs-btn-secondary doc-preview-download"
-          title="Download"
-          type="button"
-          disabled={downloading || !fileName}
-          onClick={() => onDownload(loadedBlob)}
-        >
-          <Download size={14} strokeWidth={1.5} aria-hidden="true" />
-          <span className="doc-preview-download-label">
-            {downloading ? "Downloading…" : "Download"}
-          </span>
-        </button>
+        <DownloadButtons
+          fileName={fileName}
+          downloading={downloading}
+          onDownload={() => onDownload(loadedBlob)}
+          onExport={onExport}
+        />
       </div>
     );
   }
@@ -271,18 +274,12 @@ export function DocumentPreview({
               {formatFileSize(state.size)}
             </span>
           ) : null}
-          <button
-            className="bs-btn bs-btn--sm bs-btn-secondary doc-preview-download"
-            title="Download"
-            type="button"
-            disabled={downloading || !fileName}
-            onClick={() => onDownload(loadedBlob)}
-          >
-            <Download size={14} strokeWidth={1.5} aria-hidden="true" />
-            <span className="doc-preview-download-label">
-              {downloading ? "Downloading…" : "Download"}
-            </span>
-          </button>
+          <DownloadButtons
+            fileName={fileName}
+            downloading={downloading}
+            onDownload={() => onDownload(loadedBlob)}
+            onExport={onExport}
+          />
         </header>
       )}
 
@@ -342,5 +339,69 @@ export function DocumentPreview({
         ) : null}
       </div>
     </section>
+  );
+}
+
+/** Whether a file is a document written in Bindersnap, stored as the editor's JSON. */
+export function isWrittenHere(fileName: string | null): boolean {
+  return fileName?.toLowerCase().endsWith(".json") ?? false;
+}
+
+function DownloadButtons({
+  fileName,
+  downloading,
+  onDownload,
+  onExport,
+}: {
+  fileName: string | null;
+  downloading: boolean;
+  onDownload: () => void;
+  onExport?: (format: "pdf" | "docx") => void;
+}) {
+  if (onExport && isWrittenHere(fileName)) {
+    return (
+      <span
+        className="doc-preview-exports"
+        role="group"
+        aria-label="Download as"
+      >
+        <button
+          className="bs-btn bs-btn--sm bs-btn-secondary doc-preview-download"
+          type="button"
+          title="Download as a PDF"
+          disabled={downloading}
+          onClick={() => onExport("pdf")}
+        >
+          <Download size={14} strokeWidth={1.5} aria-hidden="true" />
+          <span className="doc-preview-download-label">
+            {downloading ? "Preparing…" : "PDF"}
+          </span>
+        </button>
+        <button
+          className="bs-btn bs-btn--sm bs-btn-secondary doc-preview-download"
+          type="button"
+          title="Download as a Word document"
+          disabled={downloading}
+          onClick={() => onExport("docx")}
+        >
+          <Download size={14} strokeWidth={1.5} aria-hidden="true" />
+          <span className="doc-preview-download-label">Word</span>
+        </button>
+      </span>
+    );
+  }
+  return (
+    <button
+      className="bs-btn bs-btn--sm bs-btn-secondary doc-preview-download"
+      title="Download"
+      type="button"
+      disabled={downloading || !fileName}
+      onClick={onDownload}
+    >
+      <Download size={14} strokeWidth={1.5} aria-hidden="true" />
+      <span className="doc-preview-download-label">
+        {downloading ? "Downloading…" : "Download"}
+      </span>
+    </button>
   );
 }

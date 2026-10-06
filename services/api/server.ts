@@ -143,6 +143,12 @@ import {
 } from "./gitea-client/discussions";
 import { isSupportedReaction } from "./gitea-client/reactions";
 import {
+  EXPORT_TYPES,
+  exportDocument,
+  exportFilename,
+  parseExportFormat,
+} from "./export/exportDocument";
+import {
   DEFAULT_WORKSPACE_SETTINGS,
   workspaceSettingsStore,
   type ReviewSettings,
@@ -8456,6 +8462,133 @@ async function handleWorkspaceDocumentRaw(
 }
 
 /**
+ * One document as Word or PDF, at whatever ref is asked for.
+ *
+ * A policy written in the editor is laid out afresh; an uploaded file that is
+ * already in the format asked for is handed back as it came, and one that is
+ * not is refused with a sentence rather than approximated. Addressed under
+ * `export/` for the same reason `raw/` is: the document's path is the rest of
+ * the URL.
+ *
+ * Never gated, like `raw/`: reading and exporting stay free forever (ADR 0004).
+ */
+async function handleWorkspaceDocumentExport(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+  documentPath: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const params = new URL(req.url).searchParams;
+  const ref = params.get("ref")?.trim() || "main";
+  const format = parseExportFormat(params.get("format"));
+  if (!format) {
+    return json(400, { error: "Say which format: pdf or docx." }, baseHeaders);
+  }
+
+  try {
+    const document = await findWorkspaceDocument({
+      client: auth.client,
+      org: orgName,
+      workspace: workspaceName,
+      documentPath,
+      ref,
+    });
+    if (!document) {
+      return json(404, { error: "No such document." }, baseHeaders);
+    }
+
+    const [response, versions] = await Promise.all([
+      giteaFetch(
+        `/api/v1/repos/${encodeURIComponent(orgName)}/${encodeURIComponent(workspaceName)}/raw/${document.path
+          .split("/")
+          .map(encodeURIComponent)
+          .join("/")}?ref=${encodeURIComponent(ref)}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: buildTokenAuthHeader(auth.session.giteaToken),
+            Accept: "*/*",
+          },
+        },
+      ),
+      listDocumentVersions({
+        client: auth.client,
+        org: orgName,
+        workspace: workspaceName,
+        uid: document.uid,
+      }),
+    ]);
+
+    if (!response.ok) {
+      const errorMessage = await readGiteaErrorMessage(
+        response,
+        "Unable to export the document.",
+      );
+      return json(response.status, { error: errorMessage }, baseHeaders);
+    }
+
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const proposed =
+      ref !== "main" && !versions.some((version) => version.tag === ref);
+    const version =
+      ref === "main"
+        ? (versions[0]?.version ?? null)
+        : (versions.find((entry) => entry.tag === ref)?.version ?? null);
+    const result = await exportDocument({
+      path: document.path,
+      bytes,
+      format,
+      // The name the product shows, not the slug the file is saved under.
+      title: formatDocumentName(document.name),
+    });
+
+    if (result.kind === "refused") {
+      return json(415, { error: result.reason }, baseHeaders);
+    }
+
+    const headers = mergeHeaders(baseHeaders);
+    headers.set("content-type", EXPORT_TYPES[format]);
+    headers.set(
+      "content-disposition",
+      `attachment; filename="${exportFilename({
+        slugPath: document.slugPath,
+        version,
+        proposed,
+        format,
+      })}"`,
+    );
+    headers.set("cache-control", "no-store");
+    // The app is on another origin, and the file's name — which version it is
+    // — is the one thing it needs from the headers.
+    headers.set("access-control-expose-headers", "content-disposition");
+    const body = result.kind === "converted" ? result.bytes : bytes;
+    return new Response(new Blob([body as Uint8Array<ArrayBuffer>]), {
+      status: 200,
+      headers,
+    });
+  } catch (err) {
+    logger.error("Failed to export a binder document", {
+      username: auth.session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      documentPath,
+      ref,
+      format,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to export the document.",
+    );
+  }
+}
+
+/**
  * The change request an act should join, if the caller named one.
  *
  * **Every act used to open a change request of its own**, so revising three
@@ -11347,6 +11480,9 @@ export function createApiServer() {
         const workspaceDocumentRawMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/raw\/(.+)$/,
         );
+        const workspaceDocumentExportMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/export\/(.+)$/,
+        );
         const createBinderMatch = pathname.match(
           /^\/api\/app\/orgs\/([^/]+)\/binders$/,
         );
@@ -11726,6 +11862,14 @@ export function createApiServer() {
             workspaceChangeMatch[1]!,
             workspaceChangeMatch[2]!,
             Number.parseInt(workspaceChangeMatch[3] ?? "", 10),
+          );
+        } else if (workspaceDocumentExportMatch && method === "GET") {
+          response = await handleWorkspaceDocumentExport(
+            req,
+            baseHeaders,
+            workspaceDocumentExportMatch[1]!,
+            workspaceDocumentExportMatch[2]!,
+            decodeURIComponent(workspaceDocumentExportMatch[3]!),
           );
         } else if (workspaceDocumentRawMatch && method === "GET") {
           response = await handleWorkspaceDocumentRaw(

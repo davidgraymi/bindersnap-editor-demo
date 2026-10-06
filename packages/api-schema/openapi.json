@@ -7899,6 +7899,72 @@
         }
       }
     },
+    "/api/app/binders/{org}/{binder}/export/{documentPath}": {
+      "get": {
+        "operationId": "exportBinderDocument",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "documentPath",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pdf",
+                "docx"
+              ]
+            },
+            "required": true,
+            "name": "format",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "ref",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The document as a PDF or a Word document",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/app/binders/{org}/{binder}/document-revisions": {
       "post": {
         "operationId": "reviseBinderDocument",
