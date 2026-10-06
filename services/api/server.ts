@@ -4,6 +4,7 @@ import { config, type SessionCookieSameSite } from "./config";
 import { logger } from "./logger";
 import { jobStore, withGroupLock, type JobRecord } from "./jobs/store";
 import { startJobRunner } from "./jobs/runner";
+import { reconcileBinders, type ReconcilerReport } from "./reconciler";
 import {
   PublishConflict,
   runPublish,
@@ -13251,6 +13252,64 @@ async function handleGiteaDiagnostics(
   );
 }
 
+/** The reconciler's last pass, for the admin diagnostics endpoint. */
+let lastReconcilerReport: ReconcilerReport | null = null;
+
+/**
+ * One reconciler pass over every organization this API knows about, with the
+ * service account's read access. Findings are logged one per line so the log
+ * alarm can count them. See `reconciler.ts`.
+ */
+async function runReconcilerPass(): Promise<void> {
+  const client = createPrivilegedGiteaClient();
+  if (!client) return;
+  const organizations = (await organizationStore.list()).map(
+    (record) => record.name,
+  );
+
+  const report = await reconcileBinders({
+    client,
+    organizations,
+    touchedDocuments: async ({ org, binder, changeNumber }) => {
+      const [changed, removed] = await Promise.all([
+        listChangedDocuments({
+          client,
+          org,
+          workspace: binder,
+          pullNumber: changeNumber,
+        }),
+        listRemovedDocuments({
+          client,
+          org,
+          workspace: binder,
+          pullNumber: changeNumber,
+        }),
+      ]);
+      return changed.length > 0 || removed.length > 0;
+    },
+  });
+  lastReconcilerReport = report;
+
+  for (const finding of report.findings) {
+    logger.error("Reconciler finding", { ...finding });
+  }
+  logger.info("Reconciler pass finished", {
+    binders: report.binders,
+    findings: report.findings.length,
+    errors: report.errors.length,
+  });
+}
+
+/** Admin only: what the reconciler found last time it looked. */
+async function handleReconcilerReport(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireAdminSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  return json(200, { report: lastReconcilerReport }, baseHeaders);
+}
+
 export function createApiServer() {
   return Bun.serve({
     port: config.apiPort,
@@ -13408,6 +13467,11 @@ async function handleRequest(req: Request): Promise<Response> {
       baseHeaders,
       pathname.slice("/api/app/jobs/".length),
     );
+  } else if (
+    pathname === "/api/app/admin/diagnostics/reconciler" &&
+    method === "GET"
+  ) {
+    response = await handleReconcilerReport(req, baseHeaders);
   } else if (
     pathname === "/api/app/admin/diagnostics/gitea" &&
     method === "GET"
@@ -14231,6 +14295,16 @@ if (import.meta.main) {
       "provision-binder": resumeProvisionJob,
     },
   });
+  // Report what no job can speak for: binders made before jobs existed, or
+  // changed outside the API. A minute after startup, then every six hours.
+  const reconcile = () =>
+    void runReconcilerPass().catch((err) =>
+      logger.error("Reconciler pass failed", {
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+  setTimeout(reconcile, 60_000);
+  setInterval(reconcile, 6 * 60 * 60_000);
   logger.info("Bindersnap API listening", {
     url: `http://localhost:${server.port}`,
     port: server.port,
