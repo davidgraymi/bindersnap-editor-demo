@@ -135,6 +135,7 @@ import {
   createGiteaBasicAuthClient,
   createGiteaClient,
   GiteaApiError,
+  toGiteaApiError,
   unwrap,
   type GiteaClient,
 } from "./gitea-client/client";
@@ -6642,6 +6643,13 @@ async function handleWorkspaceSettings(
             )?.number ?? null,
         },
         canManage: access.admin,
+        // Gitea deletes a repository only for its owners — an organization's
+        // binder, for the organization's owners. Asked, not assumed.
+        canDelete: await isOrganizationOwnerDirect({
+          client,
+          org: orgName,
+          username: auth.session.username,
+        }).catch(() => false),
       },
       baseHeaders,
     );
@@ -6653,6 +6661,94 @@ async function handleWorkspaceSettings(
       error: err instanceof Error ? err.message : String(err),
     });
     return responseFromError(err, baseHeaders, "Unable to read the settings.");
+  }
+}
+
+/**
+ * Delete a binder, and everything in it, for good.
+ *
+ * Asked of Gitea on the person's own token, so Gitea's rule decides who may:
+ * a repository is deleted only by its owners, which for an organization's
+ * binder means the organization's owners. The confirmation is the binder's
+ * name typed out, the way Gitea confirms. What is lost is the whole record —
+ * every version, approval and discussion — so the page says so first and
+ * offers each document's audit packet; the server's job is to refuse anything
+ * short of the name.
+ */
+async function handleDeleteBinder(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { client, session } = auth;
+
+  const payload = await readJson<{ confirm?: unknown }>(req);
+  const confirm =
+    typeof payload?.confirm === "string" ? payload.confirm.trim() : "";
+  if (confirm.toLowerCase() !== workspaceName.toLowerCase()) {
+    return json(
+      400,
+      { error: "Type the binder's name to confirm." },
+      baseHeaders,
+    );
+  }
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const { error, response } = await client.DELETE("/repos/{owner}/{repo}", {
+      params: { path: { owner: orgName, repo: workspaceName } },
+    });
+    if (error !== undefined || !response.ok) {
+      if (response.status === 403) {
+        return json(
+          403,
+          { error: "Only an owner of the organization can delete a binder." },
+          baseHeaders,
+        );
+      }
+      throw toGiteaApiError(response.status, error);
+    }
+
+    // The rows that were about it. Its settings history stays, with this as
+    // its last line, because that trail is append-only.
+    await workspaceSettingsStore.record([
+      {
+        giteaRepoId: workspace.id,
+        setting: "binder",
+        previousValue: `${orgName}/${workspaceName}`,
+        newValue: "deleted",
+        changedBy: session.username,
+        changedAt: Math.floor(Date.now() / 1000),
+      },
+    ]);
+    await workspaceSettingsStore.forget(workspace.id);
+    await draftNameStore.forgetBinder(workspace.id);
+
+    logger.info("Binder deleted", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+    });
+    return new Response(null, { status: 204, headers: baseHeaders });
+  } catch (err) {
+    logger.error("Failed to delete a binder", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to delete the binder.");
   }
 }
 
@@ -13094,6 +13190,13 @@ export function createApiServer() {
           );
         } else if (workspaceOverviewMatch && method === "GET") {
           response = await handleWorkspaceOverview(
+            req,
+            baseHeaders,
+            workspaceOverviewMatch[1]!,
+            workspaceOverviewMatch[2]!,
+          );
+        } else if (workspaceOverviewMatch && method === "DELETE") {
+          response = await handleDeleteBinder(
             req,
             baseHeaders,
             workspaceOverviewMatch[1]!,

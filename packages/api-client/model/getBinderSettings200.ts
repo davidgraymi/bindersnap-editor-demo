@@ -15,4 +15,5 @@ export type GetBinderSettings200 = {
   rules: GetBinderSettings200Rules;
   signOff: GetBinderSettings200SignOff;
   canManage: boolean;
+  canDelete: boolean;
 };

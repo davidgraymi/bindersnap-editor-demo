@@ -111,6 +111,11 @@ export interface WorkspaceSettingsBackend {
   record(events: SettingsEventRecord[]): Promise<void>;
   /** Newest first. For the administrative view, not for any gate. */
   history(giteaRepoId: number, limit?: number): Promise<SettingsEventRecord[]>;
+  /**
+   * The binder is gone: drop its settings row. Its events stay — the trail
+   * is append-only, and "who deleted it" is the last line of it.
+   */
+  forget(giteaRepoId: number): Promise<void>;
 }
 
 export class WorkspaceSettingsStore implements WorkspaceSettingsBackend {
@@ -239,6 +244,13 @@ export class WorkspaceSettingsStore implements WorkspaceSettingsBackend {
       .orderBy(desc(settingsEvents.changedAt), desc(settingsEvents.id))
       .all();
   }
+
+  async forget(giteaRepoId: number): Promise<void> {
+    this.db
+      .delete(workspaceSettings)
+      .where(eq(workspaceSettings.giteaRepoId, giteaRepoId))
+      .run();
+  }
 }
 
 // Lazy so importing this module never opens the SQLite file.
@@ -268,6 +280,10 @@ class LazyWorkspaceSettingsStore implements WorkspaceSettingsBackend {
 
   history(giteaRepoId: number, limit?: number): Promise<SettingsEventRecord[]> {
     return this.store.history(giteaRepoId, limit);
+  }
+
+  forget(giteaRepoId: number): Promise<void> {
+    return this.store.forget(giteaRepoId);
   }
 }
 

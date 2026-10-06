@@ -4815,6 +4815,57 @@
             }
           }
         }
+      },
+      "delete": {
+        "operationId": "deleteBinder",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "confirm": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "confirm"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Deleted, with everything in it"
+          },
+          "403": {
+            "description": "Only an owner of the organization can delete it"
+          }
+        }
       }
     },
     "/api/app/binders/{org}/{binder}/changes": {
@@ -7621,6 +7672,9 @@
                     },
                     "canManage": {
                       "type": "boolean"
+                    },
+                    "canDelete": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -7629,7 +7683,8 @@
                     "teams",
                     "rules",
                     "signOff",
-                    "canManage"
+                    "canManage",
+                    "canDelete"
                   ]
                 }
               }

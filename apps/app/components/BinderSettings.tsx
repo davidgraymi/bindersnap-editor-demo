@@ -29,6 +29,7 @@ import {
   setBinderPersonLevel,
   setBinderRules,
   setBinderVisibility,
+  deleteBinder,
 } from "../api";
 import type {
   BinderPeoplePayload,
@@ -95,6 +96,8 @@ interface BinderSettingsProps {
   /** Its description changed, so the header that shows it has to re-read. */
   onDescribed?: () => void;
   onOpenChange: (changeNumber: number) => void;
+  /** The binder is gone; leave its pages. */
+  onDeleted?: () => void;
 }
 
 function errorMessage(err: unknown, fallback: string): string {
@@ -110,6 +113,7 @@ export function BinderSettings({
   onRenamed,
   onDescribed,
   onOpenChange,
+  onDeleted,
 }: BinderSettingsProps) {
   // The same fold every other editable surface uses: a delinquent organization
   // draws no controls, by the one flag that already decides whether controls
@@ -253,7 +257,94 @@ export function BinderSettings({
           onChanged={setSettings}
         />
       </SettingsGroup>
+
+      {settings.canDelete && !isReadOnly ? (
+        <SettingsGroup
+          id="binder-settings-delete"
+          title="Delete this binder"
+          note="Permanent. Only an owner of the organization can do this."
+        >
+          <DeleteBinder org={org} binder={binder} onDeleted={onDeleted} />
+        </SettingsGroup>
+      ) : null}
     </div>
+  );
+}
+
+/**
+ * Deleting the binder — the one act here that loses the record.
+ *
+ * Everything else on this page is reversible, and everything in the binder is
+ * evidence: every version, who approved it, what was discussed. So the page
+ * says that plainly, points at the audit packets first, and asks for the name
+ * typed out, the way Gitea confirms the same act.
+ */
+function DeleteBinder({
+  org,
+  binder,
+  onDeleted,
+}: {
+  org: string;
+  binder: string;
+  onDeleted?: () => void;
+}) {
+  const [confirm, setConfirm] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const confirmed = confirm.trim().toLowerCase() === binder.toLowerCase();
+
+  return (
+    <form
+      className="bs-fields"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        if (!confirmed) return;
+        setDeleting(true);
+        setNotice(null);
+        try {
+          await deleteBinder(org, binder, confirm.trim());
+          onDeleted?.();
+        } catch (err) {
+          setNotice(errorMessage(err, "Unable to delete this binder."));
+          setDeleting(false);
+        }
+      }}
+    >
+      <p className="bs-section-note">
+        Every document in it goes, with every version, approval and discussion —
+        the whole record, with no way to restore it. If a surveyor may ever ask
+        about these documents, download each one&rsquo;s audit packet first.
+      </p>
+      <div className="bs-field">
+        <label className="bs-field-label" htmlFor="binder-delete-confirm">
+          Type <strong>{binder}</strong> to confirm
+        </label>
+        <input
+          className="bs-input bs-input--sm"
+          id="binder-delete-confirm"
+          type="text"
+          autoComplete="off"
+          spellCheck={false}
+          value={confirm}
+          disabled={deleting}
+          onChange={(event) => setConfirm(event.target.value)}
+        />
+      </div>
+      {notice ? (
+        <p className="bs-note bs-note--danger" role="alert">
+          {notice}
+        </p>
+      ) : null}
+      <div className="bs-field-row">
+        <button
+          type="submit"
+          className="bs-btn bs-btn--sm bs-btn--danger"
+          disabled={deleting || !confirmed}
+        >
+          {deleting ? "Deleting…" : "Delete this binder"}
+        </button>
+      </div>
+    </form>
   );
 }
 

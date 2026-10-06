@@ -1472,6 +1472,11 @@ export function BinderShell({
           focus={tab === "people" || tab === "sign-off" ? tab : undefined}
           onOpenChange={openChangeNumber}
           onDescribed={loadOverview}
+          onDeleted={() => {
+            // Its pages are gone; the organization's list is where it was.
+            window.history.replaceState({}, "", `/${org}`);
+            window.dispatchEvent(new PopStateEvent("popstate"));
+          }}
           onRenamed={(renamed) => {
             // A new address for the same binder. Replace rather than push:
             // going Back to a name the binder no longer has is a redirect at

@@ -103,6 +103,7 @@ export * from './createOrganizationGroup201GroupMembersItem.ts';
 export * from './createOrganizationGroupBody.ts';
 export * from './deleteAccount409.ts';
 export * from './deleteAccountBody.ts';
+export * from './deleteBinderBody.ts';
 export * from './describeBinder200.ts';
 export * from './describeBinderBody.ts';
 export * from './discardBinderDraft200.ts';
