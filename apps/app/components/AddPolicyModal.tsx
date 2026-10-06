@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FilePen, FileText, FolderUp, Upload, X } from "lucide-react";
 
@@ -8,7 +9,6 @@ import {
 import {
   createBinderDocument,
   discardBinderDraft,
-  fetchBinderDocuments,
   openBinderDraft,
   proposeBinderDraft,
   validateUploadFile,
@@ -21,6 +21,7 @@ import {
   planBulkUpload,
   type BulkSource,
 } from "../bulkUpload";
+import { binderDocumentsQuery } from "../data/queries";
 import { formatFileSize } from "../documentFile";
 import { formatDocumentName } from "../documentDisplay";
 import { AppIcon } from "./AppIcon";
@@ -154,7 +155,13 @@ export function AddPolicyModal({
   /** What to call the folder, when the picker's answer is "a new one". */
   const [newFolder, setNewFolder] = useState("");
   /** The folders this binder has, so "where it goes" is a pick, not a path. */
-  const [folders, setFolders] = useState<string[] | null>(null);
+  // A binder whose folders cannot be read still takes a policy, at its top
+  // level — which is what the picker then offers. The same read as the tree
+  // behind the modal, so usually already in hand.
+  const listing = useQuery(binderDocumentsQuery(org, binder, { draft }));
+  const folders: string[] | null = listing.isError
+    ? []
+    : (listing.data?.folders ?? null);
   /** True while a file is over the zone, so it says it will take it. */
   const [over, setOver] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -184,23 +191,6 @@ export function AddPolicyModal({
     setName(nameFromFile(file.name));
     setError(null);
   }, [file]);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchBinderDocuments(org, binder, draft)
-      .then((payload) => {
-        if (!cancelled) setFolders(payload.folders);
-      })
-      // A binder whose folders cannot be read still takes a policy, at its
-      // top level — which is what the picker then offers.
-      .catch(() => {
-        if (!cancelled) setFolders([]);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [org, binder, draft]);
 
   /**
    * Take a file, whichever way it arrived.

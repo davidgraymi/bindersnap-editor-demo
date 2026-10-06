@@ -1,3 +1,4 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
@@ -17,10 +18,7 @@ import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
 import {
   addBinderPerson,
   describeBinder,
-  fetchBinder,
   fetchBinderPeople,
-  fetchBinderSettings,
-  fetchOrganizationPeople,
   grantBinderGroup,
   proposeBinderSignOff,
   removeBinderPerson,
@@ -31,6 +29,13 @@ import {
   setBinderVisibility,
   deleteBinder,
 } from "../api";
+import {
+  binderPeopleQuery,
+  binderQuery,
+  binderSettingsQuery,
+  organizationPeopleQuery,
+  queryKeys,
+} from "../data/queries";
 import type {
   BinderPeoplePayload,
   BinderPerson,
@@ -119,47 +124,32 @@ export function BinderSettings({
   // draws no controls, by the one flag that already decides whether controls
   // exist.
   const isReadOnly = useIsReadOnly();
-  const [settings, setSettings] = useState<WorkspaceSettingsPayload | null>(
-    null,
-  );
-  const [people, setPeople] = useState<BinderPeoplePayload | null>(null);
-  const [description, setDescription] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const settingsRead = useQuery(binderSettingsQuery(org, binder));
+  const peopleRead = useQuery(binderPeopleQuery(org, binder));
+  // The description is a nicety on this page, not its point: a binder whose
+  // overview cannot be read still has settings to change.
+  const overviewRead = useQuery(binderQuery(org, binder));
+  const settings: WorkspaceSettingsPayload | null = settingsRead.data ?? null;
+  const people: BinderPeoplePayload | null = peopleRead.data ?? null;
+  const description: string | null = overviewRead.data
+    ? (overviewRead.data.workspace.description ?? "")
+    : overviewRead.isError
+      ? ""
+      : null;
+  const failure = settingsRead.error ?? peopleRead.error;
+  const error = failure
+    ? errorMessage(failure, "Unable to read this binder's settings.")
+    : null;
+
+  /** A write answers with the new state; it becomes what every reader sees. */
+  const setPeople = (next: BinderPeoplePayload) =>
+    queryClient.setQueryData(queryKeys.binderPeople(org, binder), next);
+  const setSettings = (next: WorkspaceSettingsPayload) =>
+    queryClient.setQueryData(queryKeys.binderSettings(org, binder), next);
 
   const peopleRef = useRef<HTMLElement>(null);
   const signOffRef = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setSettings(null);
-    setPeople(null);
-    setDescription(null);
-    setError(null);
-
-    Promise.all([
-      fetchBinderSettings(org, binder),
-      fetchBinderPeople(org, binder),
-      // The description is a nicety on this page, not its point: a binder
-      // whose overview cannot be read still has settings to change.
-      fetchBinder(org, binder)
-        .then((overview) => overview.workspace.description ?? "")
-        .catch(() => ""),
-    ])
-      .then(([nextSettings, nextPeople, nextDescription]) => {
-        if (cancelled) return;
-        setSettings(nextSettings);
-        setPeople(nextPeople);
-        setDescription(nextDescription);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(errorMessage(err, "Unable to read this binder's settings."));
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [org, binder]);
 
   const loaded = settings !== null && people !== null && description !== null;
 
@@ -207,7 +197,14 @@ export function BinderSettings({
             description={description}
             onRenamed={onRenamed}
             onDescribed={(next) => {
-              setDescription(next);
+              queryClient.setQueryData(
+                binderQuery(org, binder).queryKey,
+                (overview) =>
+                  overview && {
+                    ...overview,
+                    workspace: { ...overview.workspace, description: next },
+                  },
+              );
               onDescribed?.();
             }}
           />
@@ -869,27 +866,16 @@ function GroupsSection({
   busy: boolean;
   onChanged: (act: () => Promise<BinderPeoplePayload>) => void;
 }) {
-  const [available, setAvailable] = useState<OrganizationGroup[] | null>(null);
+  // Only an admin can compose, so only an admin pays for the picker. Losing
+  // the picker costs the footer, not the page.
+  const groupsRead = useQuery({
+    ...organizationPeopleQuery(org),
+    enabled: canManage,
+  });
+  const available: OrganizationGroup[] | null = groupsRead.isError
+    ? []
+    : (groupsRead.data?.groups ?? null);
   const [adding, setAdding] = useState("");
-
-  useEffect(() => {
-    // Only an admin can compose, so only an admin pays for the picker.
-    if (!canManage) return;
-
-    let cancelled = false;
-    fetchOrganizationPeople(org)
-      .then((payload) => {
-        if (!cancelled) setAvailable(payload.groups);
-      })
-      // Losing the picker costs the footer, not the page.
-      .catch(() => {
-        if (!cancelled) setAvailable([]);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [org, canManage]);
 
   const granted = new Set(groups.map((group) => group.name.toLowerCase()));
   const candidates = (available ?? []).filter(

@@ -1,3 +1,4 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { History, Settings, type LucideIcon } from "lucide-react";
 import { useIsReadOnly } from "../readOnlyContext";
@@ -12,9 +13,6 @@ import {
   downloadBinderDocument,
   fetchBinderArchive,
   restoreBinderDocument,
-  fetchBinder,
-  fetchBinderDocuments,
-  fetchBinderChange,
   fetchBinderDraft,
   openBinderDraft,
   renameBinderDocument,
@@ -22,6 +20,13 @@ import {
   renameBinderFolder,
   type ActTarget,
 } from "../api";
+import {
+  binderChangeQuery,
+  binderDocumentsQuery,
+  binderDraftQuery,
+  binderQuery,
+  queryKeys,
+} from "../data/queries";
 import type { DragSubject } from "../binderMove";
 import type { DraftFileTarget } from "./DraftFiles";
 import type {
@@ -150,26 +155,19 @@ export function BinderShell({
 }: BinderShellProps) {
   const isReadOnly = useIsReadOnly();
   const orgDisplayName = useOrganizationDisplayName(org);
-  const [overview, setOverview] = useState<WorkspaceOverviewPayload | null>(
-    null,
-  );
+  const queryClient = useQueryClient();
+  // The header is context, not content: a binder whose counts cannot be read
+  // still opens, and the tab that failed says so itself. The one exception is
+  // a binder that is not there at all.
+  const overviewRead = useQuery(binderQuery(org, binder));
+  const overview: WorkspaceOverviewPayload | null = overviewRead.data ?? null;
   /**
    * The binder is not there — or not there for you, which Gitea answers the
    * same way on purpose, so a private binder's name does not leak.
    */
-  const [missing, setMissing] = useState(false);
-  /**
-   * The binder's contents, for the navigation beside an open policy.
-   *
-   * **Read only while one is open.** Every other binder screen draws the tree
-   * itself, so asking for it there would be a second read of what is already
-   * on the page — and two trees on one page is one too many.
-   */
-  const [contents, setContents] = useState<SidebarBinder["contents"] | null>(
-    null,
-  );
-  /** How many policies the binder has archived, read with the contents. */
-  const [archivedCount, setArchivedCount] = useState(0);
+  const missing =
+    overviewRead.error instanceof ApiRequestError &&
+    overviewRead.error.status === 404;
   /**
    * Which version of this document is on screen, told by the page reading it.
    *
@@ -289,35 +287,12 @@ export function BinderShell({
       ref: documentRefFromSearch,
     });
 
+  /** Read the header again after something on the page changed the binder. */
   const loadOverview = useCallback(() => {
-    let cancelled = false;
-    fetchBinder(org, binder)
-      .then((payload) => {
-        if (!cancelled) setOverview(payload);
-      })
-      // The header is context, not content: a binder whose counts cannot be
-      // read still opens, and the tab that failed says so itself. The one
-      // exception is a binder that is not there at all.
-      .catch((err: unknown) => {
-        if (
-          !cancelled &&
-          err instanceof ApiRequestError &&
-          err.status === 404
-        ) {
-          setMissing(true);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [org, binder]);
-
-  useEffect(() => {
-    setOverview(null);
-    setMissing(false);
-    return loadOverview();
-  }, [loadOverview]);
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.binderOverview(org, binder),
+    });
+  }, [queryClient, org, binder]);
 
   /**
    * Read the draft whenever the address says we are editing.
@@ -337,42 +312,40 @@ export function BinderShell({
     documentPath && editMode === "writing" && openChange !== null
       ? openChange
       : null;
-  const [changeTarget, setChangeTarget] = useState<{
-    number: number;
-    branch: string;
-    title: string;
-  } | null>(null);
-
-  useEffect(() => {
-    if (writingChange === null) {
-      setChangeTarget(null);
-      return;
-    }
-    let cancelled = false;
-    fetchBinderChange(org, binder, writingChange)
-      .then((detail) => {
-        if (cancelled) return;
-        // Decided, or its branch pruned: nothing to save into, so the change
-        // itself, which says what became of it.
-        if (detail.change.state !== "open" || detail.change.branchName === "") {
-          openChangeNumber(writingChange);
-          return;
-        }
-        setChangeTarget({
+  const changeRead = useQuery({
+    ...binderChangeQuery(org, binder, writingChange ?? 0),
+    enabled: writingChange !== null,
+  });
+  const writable =
+    changeRead.data &&
+    changeRead.data.change.state === "open" &&
+    changeRead.data.change.branchName !== "";
+  const changeTarget =
+    writingChange !== null && changeRead.data && writable
+      ? {
           number: writingChange,
-          branch: detail.change.branchName,
-          title: detail.change.title,
-        });
-      })
-      .catch(() => {
-        if (!cancelled) openChangeNumber(writingChange);
-      });
-    return () => {
-      cancelled = true;
-    };
+          branch: changeRead.data.change.branchName,
+          title: changeRead.data.change.title,
+        }
+      : null;
+
+  // Decided, its branch pruned, or unreadable: nothing to save into, so the
+  // change itself, which says what became of it.
+  useEffect(() => {
+    if (writingChange === null) return;
+    if (changeRead.isError || (changeRead.data && !writable)) {
+      openChangeNumber(writingChange);
+    }
     // `openChangeNumber` closes over org and binder, both listed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [org, binder, writingChange]);
+  }, [
+    org,
+    binder,
+    writingChange,
+    changeRead.isError,
+    changeRead.data,
+    writable,
+  ]);
 
   useEffect(() => {
     // Writing on a change request is not being in a draft: asking for one
@@ -406,23 +379,19 @@ export function BinderShell({
    * the way into one. A read, never a start: looking at the record must not
    * make a draft.
    */
-  const [readingDrafts, setReadingDrafts] = useState<BinderDraftPayload | null>(
-    null,
-  );
+  const readingDrafts: BinderDraftPayload | null =
+    useQuery({
+      ...binderDraftQuery(org, binder),
+      enabled: editMode === "off",
+    }).data ?? null;
+  // An act in a modal bumps this; the drafts it may have touched are read
+  // again with everything else about the binder.
   useEffect(() => {
-    if (editMode !== "off") return;
-    let cancelled = false;
-    fetchBinderDraft(org, binder)
-      .then((payload) => {
-        if (!cancelled) setReadingDrafts(payload);
-      })
-      .catch(() => {
-        if (!cancelled) setReadingDrafts(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [org, binder, editMode, reloadKey]);
+    if (reloadKey === 0) return;
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.binder(org, binder),
+    });
+  }, [reloadKey, org, binder, queryClient]);
   /** Your drafts, whichever of the two reads has them. */
   const knownDrafts = draft ?? readingDrafts;
   const draftChoices = useMemo(
@@ -523,7 +492,9 @@ export function BinderShell({
       const branch = payload.draft?.branch ?? null;
       setDraft(payload);
       const listing = branch
-        ? await fetchBinderDocuments(org, binder, branch)
+        ? await queryClient.fetchQuery(
+            binderDocumentsQuery(org, binder, { draft: branch }),
+          )
         : null;
       const target = listing
         ? pickPolicyToWrite(listing.documents, payload.draft?.acts ?? [])
@@ -703,14 +674,13 @@ export function BinderShell({
     );
     await act({ draft: branch });
     refreshDraft();
-    const listing = await fetchBinderDocuments(org, binder, branch);
-    setContents((before) => ({
-      documents: listing.documents,
-      folders: listing.folders,
-      active: null,
-      change: before?.change ?? null,
-    }));
-    setArchivedCount(listing.archivedCount ?? 0);
+    // Read fresh, into the same entry the navigation beside the page reads.
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.binder(org, binder),
+    });
+    const listing = await queryClient.fetchQuery(
+      binderDocumentsQuery(org, binder, { draft: branch }),
+    );
     const now = was?.uid
       ? listing.documents.find((entry) => entry.uid === was.uid)
       : listing.documents.find((entry) => entry.slugPath === documentPath);
@@ -882,8 +852,14 @@ export function BinderShell({
     }
   };
 
-  /** Re-read the draft, so the bar counts the act that just landed. */
+  /**
+   * Re-read the draft, so the bar counts the act that just landed — and
+   * everything read about the binder, since the act changed what is in it.
+   */
   const refreshDraft = () => {
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.binder(org, binder),
+    });
     fetchBinderDraft(org, binder, draft?.draft?.branch ?? undefined)
       .then((payload) => {
         if (payload.draft) setDraft(payload);
@@ -951,40 +927,58 @@ export function BinderShell({
   const draftForContents =
     editMode === "off" ? null : (draft?.draft?.branch ?? null);
 
+  /**
+   * The binder's contents, for the navigation beside an open policy.
+   *
+   * **Read only while one is open.** Every other binder screen draws the tree
+   * itself, so asking for it there would be a second read of what is already
+   * on the page — and two trees on one page is one too many. Navigation beside
+   * the page, not the page: a binder whose contents cannot be read still shows
+   * the policy somebody opened.
+   */
+  const contentsRead = useQuery({
+    ...binderDocumentsQuery(org, binder, {
+      draft: draftForContents,
+      change: openChange,
+    }),
+    enabled: Boolean(documentPath),
+  });
+  // **Memoized, not rebuilt each render.** It is handed up to the sidebar by
+  // an effect, and a new object every render re-ran that effect, re-rendered
+  // the app, and rebuilt it again — a render loop for as long as a policy was
+  // open.
+  const listing = contentsRead.data;
+  const contents: SidebarBinder["contents"] | null = useMemo(
+    () =>
+      documentPath && listing
+        ? {
+            documents: listing.documents,
+            folders: listing.folders,
+            active: null,
+            change: openChange,
+          }
+        : null,
+    [documentPath, listing, openChange],
+  );
+  /** How many policies the binder has archived, read with the contents. */
+  const archivedCount = contentsRead.data?.archivedCount ?? 0;
+
   useEffect(() => {
-    if (!documentPath) {
-      setContents(null);
-      setReading(null);
-      return;
-    }
+    if (!documentPath) setReading(null);
+  }, [documentPath]);
 
-    let cancelled = false;
-    fetchBinderDocuments(
-      org,
-      binder,
-      draftForContents ?? undefined,
-      openChange ?? undefined,
-    )
-      .then((payload) => {
-        if (cancelled) return;
-        setContents({
-          documents: payload.documents,
-          folders: payload.folders,
-          active: null,
-          change: openChange,
-        });
-        setArchivedCount(payload.archivedCount ?? 0);
-      })
-      // Navigation beside the page, not the page: a binder whose contents
-      // cannot be read still shows the policy somebody opened.
-      .catch(() => {
-        if (!cancelled) setContents(null);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [org, binder, documentPath, draftForContents, openChange, reloadKey]);
+  // Opening another policy reads the contents beside it again, as it always
+  // has: the editor's saves change the tree, and a policy made a moment ago —
+  // a copy, an upload — has to be in it when it opens.
+  useEffect(() => {
+    if (!documentPath) return;
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.binderDocuments(org, binder, {
+        draft: draftForContents,
+        change: openChange,
+      }),
+    });
+  }, [queryClient, org, binder, documentPath, draftForContents, openChange]);
 
   // The sidebar's binder section, kept in step with what is on screen.
   useEffect(() => {

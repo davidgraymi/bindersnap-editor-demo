@@ -770,8 +770,9 @@ export async function createBinder(
 export async function fetchBinder(
   org: string,
   binder: string,
+  request?: ReadRequest,
 ): Promise<WorkspaceOverviewPayload> {
-  const response = await BindersClient.getBinder(org, binder);
+  const response = await BindersClient.getBinder(org, binder, request);
   return response.data;
 }
 
@@ -780,10 +781,14 @@ export async function fetchBinderChanges(
   org: string,
   binder: string,
   state: "open" | "closed" = "open",
+  request?: ReadRequest,
 ): Promise<WorkspaceChangeListPayload> {
-  const response = await BindersClient.listBinderChanges(org, binder, {
-    state,
-  });
+  const response = await BindersClient.listBinderChanges(
+    org,
+    binder,
+    { state },
+    request,
+  );
   return response.data;
 }
 
@@ -979,8 +984,9 @@ export async function revokeBinderGroup(
 export async function fetchBinderPeople(
   org: string,
   binder: string,
+  request?: ReadRequest,
 ): Promise<BinderPeoplePayload> {
-  const response = await BindersClient.getBinderPeople(org, binder);
+  const response = await BindersClient.getBinderPeople(org, binder, request);
   return response.data;
 }
 
@@ -1062,8 +1068,9 @@ export async function setBinderVisibility(
 export async function fetchBinderHistory(
   org: string,
   binder: string,
+  request?: ReadRequest,
 ): Promise<WorkspaceHistoryPayload> {
-  const response = await BindersClient.getBinderHistory(org, binder);
+  const response = await BindersClient.getBinderHistory(org, binder, request);
   return response.data;
 }
 
@@ -1071,8 +1078,9 @@ export async function fetchBinderHistory(
 export async function fetchBinderSettings(
   org: string,
   binder: string,
+  request?: ReadRequest,
 ): Promise<WorkspaceSettingsPayload> {
-  const response = await BindersClient.getBinderSettings(org, binder);
+  const response = await BindersClient.getBinderSettings(org, binder, request);
   return response.data;
 }
 
@@ -1100,12 +1108,18 @@ export async function fetchBinderDocuments(
    * unproposed draft is refused by the server.
    */
   ref?: string,
+  request?: ReadRequest,
 ): Promise<WorkspaceDocumentListPayload> {
-  const response = await BindersClient.listBinderDocuments(org, binder, {
-    ...(draft ? { draft } : {}),
-    ...(change ? { change: String(change) } : {}),
-    ...(ref ? { ref } : {}),
-  });
+  const response = await BindersClient.listBinderDocuments(
+    org,
+    binder,
+    {
+      ...(draft ? { draft } : {}),
+      ...(change ? { change: String(change) } : {}),
+      ...(ref ? { ref } : {}),
+    },
+    request,
+  );
   return response.data;
 }
 
@@ -1155,6 +1169,7 @@ export async function fetchBinderDocument(
    * ref. Somebody else's draft is refused by the server.
    */
   ref?: string,
+  request?: ReadRequest,
 ): Promise<WorkspaceDocumentDetailPayload> {
   const response = await BindersClient.getBinderDocument(
     org,
@@ -1165,6 +1180,7 @@ export async function fetchBinderDocument(
       ...(change ? { change: String(change) } : {}),
       ...(ref ? { ref } : {}),
     },
+    request,
   );
   return response.data;
 }
@@ -1180,11 +1196,13 @@ export async function fetchBinderChange(
   org: string,
   binder: string,
   changeNumber: number,
+  request?: ReadRequest,
 ): Promise<WorkspaceChangeDetailPayload> {
   const response = await BindersClient.getBinderChange(
     org,
     binder,
     String(changeNumber),
+    request,
   );
   return response.data;
 }
@@ -1499,11 +1517,13 @@ export async function fetchBinderDraft(
   org: string,
   binder: string,
   branch?: string,
+  request?: ReadRequest,
 ): Promise<BinderDraftPayload> {
   const response = await BindersClient.getBinderDraft(
     org,
     binder,
     branch ? { draft: branch } : undefined,
+    request,
   );
   return response.data;
 }
@@ -1768,11 +1788,13 @@ export async function fetchBinderArchive(
   org: string,
   binder: string,
   draft?: string,
+  request?: ReadRequest,
 ): Promise<BinderArchivePayload> {
   const response = await BindersClient.getBinderArchive(
     org,
     binder,
     draft ? { draft } : undefined,
+    request,
   );
   return response.data;
 }

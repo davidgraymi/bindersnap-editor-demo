@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Columns2, GitBranch } from "lucide-react";
 
-import { fetchBinderChanges } from "../api";
+import { binderChangesQuery } from "../data/queries";
 import type { WorkspaceChangeSummary } from "../../../packages/api-schema/schemas/workspaces";
 import { followInApp } from "../appLink";
 import { describeBranch } from "../branchLabel";
@@ -39,40 +39,29 @@ export function BinderBranchSummary({
 }: BinderBranchSummaryProps) {
   const names = usePeopleNames(org);
   const nameOf = (login: string) => nameFor(names, login);
+  // Open first — it is nearly always one — and then the decided ones, for a
+  // branch reached from a change that has since been published. Both lists
+  // are the ones the Changes tab reads, so either may already be in hand.
+  const open = useQuery(binderChangesQuery(org, binder, "open"));
+  const onOpen = open.data?.changes.find(
+    (entry) => entry.branchName === branch,
+  );
+  const closed = useQuery({
+    ...binderChangesQuery(org, binder, "closed"),
+    enabled: open.isSuccess && !onOpen,
+  });
+  const onClosed = closed.data?.changes.find(
+    (entry) => entry.branchName === branch,
+  );
+
   // Undefined while loading; null once it is known no change sits on it.
-  const [change, setChange] = useState<
-    WorkspaceChangeSummary | null | undefined
-  >(undefined);
-
-  useEffect(() => {
-    let cancelled = false;
-    setChange(undefined);
-
-    // Open first — it is nearly always one — and then the decided ones, for a
-    // branch reached from a change that has since been published.
-    const find = async () => {
-      for (const state of ["open", "closed"] as const) {
-        const payload = await fetchBinderChanges(org, binder, state);
-        const found = payload.changes.find(
-          (entry) => entry.branchName === branch,
-        );
-        if (found) return found;
-      }
-      return null;
-    };
-
-    find()
-      .then((found) => {
-        if (!cancelled) setChange(found);
-      })
-      .catch(() => {
-        if (!cancelled) setChange(null);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [org, binder, branch]);
+  const change: WorkspaceChangeSummary | null | undefined = onOpen
+    ? onOpen
+    : open.isError || closed.isError
+      ? null
+      : closed.isSuccess
+        ? (onClosed ?? null)
+        : undefined;
 
   const name = describeBranch(branch, nameOf);
 
