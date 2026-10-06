@@ -1,6 +1,8 @@
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { type ReactNode, useMemo } from "react";
 
-import { getHomeChanges, type HomeOpenDocument } from "../api";
+import { type HomeOpenDocument } from "../api";
+import { homeChangesQuery } from "../data/queries";
 import {
   buildDecidedChangeRows,
   buildOpenChangeRows,
@@ -37,6 +39,8 @@ interface HomePageProps {
  * path from here into the library is the "Browse documents" link, because a
  * list of documents answers a question nobody arrives with.
  */
+const EMPTY_OPEN: HomeOpenDocument[] = [];
+
 export function HomePage({
   currentUsername,
   currentUserFullName = "",
@@ -45,56 +49,40 @@ export function HomePage({
   onOpenBinders,
   guide = null,
 }: HomePageProps) {
-  const [documents, setDocuments] = useState<HomeOpenDocument[]>([]);
-  const [decided, setDecided] = useState<HomeDecidedRow[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // One request. Home is a query — "the changes I am part of" — and the
+  // server answers it against every document at once, so the page does not
+  // walk the workspace or ask each document for its own history. The review
+  // queue asks the same question and shares the answer.
+  const home = useQuery(homeChangesQuery());
+  const isLoading = home.isPending;
+  const error = home.error
+    ? home.error.message || "Unable to load your change requests."
+    : null;
+  const documents = home.data?.open ?? EMPTY_OPEN;
 
-  const load = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      // One request. Home is a query — "the changes I am part of" — and the
-      // server answers it against every document at once, so the page no
-      // longer walks the workspace or asks each document for its own history.
-      const { open, decided: decidedDocuments } = await getHomeChanges();
-      setDocuments(open);
-
-      const ownedRepos = new Set(
-        [
-          ...open.map((document) => ({
-            owner: document.repo.owner.login,
-            repo: document.repo.name,
-          })),
-          ...decidedDocuments.map((document) => ({
-            owner: document.owner,
-            repo: document.repo,
-          })),
-        ]
-          .filter((ref) => ref.owner === currentUsername)
-          .map((ref) => `${ref.owner}/${ref.repo}`),
-      );
-
-      setDecided(
-        buildDecidedChangeRows(decidedDocuments, currentUsername, ownedRepos),
-      );
-    } catch (loadError) {
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Unable to load your change requests.",
-      );
-      setDocuments([]);
-      setDecided([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentUsername]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const decided = useMemo(() => {
+    if (!home.data) return [];
+    const { open, decided: decidedDocuments } = home.data;
+    const ownedRepos = new Set(
+      [
+        ...open.map((document) => ({
+          owner: document.repo.owner.login,
+          repo: document.repo.name,
+        })),
+        ...decidedDocuments.map((document) => ({
+          owner: document.owner,
+          repo: document.repo,
+        })),
+      ]
+        .filter((ref) => ref.owner === currentUsername)
+        .map((ref) => `${ref.owner}/${ref.repo}`),
+    );
+    return buildDecidedChangeRows(
+      decidedDocuments,
+      currentUsername,
+      ownedRepos,
+    );
+  }, [home.data, currentUsername]);
 
   const openRows = buildOpenChangeRows(documents, currentUsername);
   const waitingOnYou = selectWaitingOnYou(openRows);
@@ -142,7 +130,7 @@ export function HomePage({
             <button
               type="button"
               className="bs-btn bs-btn-secondary bs-btn--sm"
-              onClick={() => void load()}
+              onClick={() => void home.refetch()}
             >
               Try again
             </button>

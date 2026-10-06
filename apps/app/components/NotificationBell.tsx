@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 import {
   Bell,
   CheckCheck,
@@ -8,17 +9,10 @@ import {
   X,
 } from "lucide-react";
 
-import {
-  fetchNotificationCount,
-  fetchNotifications,
-  markNotificationsRead,
-  type AppNotification,
-} from "../api";
+import { type AppNotification } from "../api";
+import { useMarkNotificationsRead } from "../data/notifications";
+import { notificationCountQuery, notificationListQuery } from "../data/queries";
 import { formatAge } from "../documentDisplay";
-import {
-  NOTIFICATIONS_CHANGED,
-  announceNotificationsChanged,
-} from "../notificationEvents";
 import { describeNotification } from "../notificationText";
 
 /**
@@ -52,62 +46,28 @@ interface NotificationBellProps {
 
 export function NotificationBell({ onOpen }: NotificationBellProps) {
   const [open, setOpen] = useState(false);
-  const [unread, setUnread] = useState(0);
   const [showAll, setShowAll] = useState(false);
-  const [notes, setNotes] = useState<AppNotification[] | null>(null);
-  const [failed, setFailed] = useState<string | null>(null);
   const [anchor, setAnchor] = useState<{ top: number; right: number } | null>(
     null,
   );
   const buttonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const count = useCallback(() => {
-    fetchNotificationCount()
-      .then(setUnread)
-      // A bell that cannot count stays quiet rather than showing an error on
-      // every page.
-      .catch(() => undefined);
-  }, []);
+  // A bell that cannot count stays quiet rather than showing an error on
+  // every page. Polled, and read again whenever the window regains focus.
+  const unread =
+    useQuery({ ...notificationCountQuery(), refetchInterval: POLL_MS }).data ??
+    0;
 
-  useEffect(() => {
-    count();
-    const timer = window.setInterval(count, POLL_MS);
-    const onFocus = () => count();
-    const onChanged = (event: Event) => {
-      const next = (event as CustomEvent<{ unread?: number }>).detail?.unread;
-      if (typeof next === "number") setUnread(next);
-      else count();
-    };
-    window.addEventListener("focus", onFocus);
-    window.addEventListener(NOTIFICATIONS_CHANGED, onChanged);
-    return () => {
-      window.clearInterval(timer);
-      window.removeEventListener("focus", onFocus);
-      window.removeEventListener(NOTIFICATIONS_CHANGED, onChanged);
-    };
-  }, [count]);
+  const list = useQuery({ ...notificationListQuery(showAll), enabled: open });
+  const notes: AppNotification[] | null = list.data ?? null;
+  const failed = list.error
+    ? list.error.message.trim() !== ""
+      ? list.error.message
+      : "Your notifications could not be loaded. Try again in a moment."
+    : null;
 
-  useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    setFailed(null);
-    fetchNotifications(showAll)
-      .then((list) => {
-        if (!cancelled) setNotes(list);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setFailed(
-          err instanceof Error && err.message.trim() !== ""
-            ? err.message
-            : "Your notifications could not be loaded. Try again in a moment.",
-        );
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, showAll]);
+  const markRead = useMarkNotificationsRead();
 
   useEffect(() => {
     if (!open) return;
@@ -146,25 +106,11 @@ export function NotificationBell({ onOpen }: NotificationBellProps) {
 
   const openNote = (note: AppNotification) => {
     setOpen(false);
-    if (note.unread) {
-      void markNotificationsRead({ id: note.id })
-        .then((result) => announceNotificationsChanged(result.unread))
-        .catch(() => undefined);
-    }
+    if (note.unread) markRead.mutate({ id: note.id });
     onOpen(`/${note.org}/${note.binder}/-/changes/${note.changeNumber}`);
   };
 
-  const markAll = () => {
-    void markNotificationsRead("all")
-      .then((result) => {
-        announceNotificationsChanged(result.unread);
-        setNotes(
-          (list) => list?.map((note) => ({ ...note, unread: false })) ?? null,
-        );
-        if (!showAll) setNotes([]);
-      })
-      .catch(() => undefined);
-  };
+  const markAll = () => markRead.mutate("all");
 
   const label =
     unread === 0

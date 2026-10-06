@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useState } from "react";
 
-import { fetchOnboarding, type OnboardingPayload } from "./api";
+import { onboardingQuery, queryKeys } from "./data/queries";
 
 /**
  * The getting-started state, kept fresh without asking on every click.
@@ -27,30 +28,31 @@ function readHidden(username: string): boolean {
 }
 
 export function useOnboarding(username: string, routeKey: string) {
-  const [state, setState] = useState<OnboardingPayload | null>(null);
+  const queryClient = useQueryClient();
+  // A guide that cannot be read is a guide that is not shown. Fresh for the
+  // minimum gap, so focus and page changes inside it ask nothing.
+  const state =
+    useQuery({
+      ...onboardingQuery(),
+      enabled: username !== "",
+      staleTime: MIN_GAP_MS,
+    }).data ?? null;
   const [hidden, setHiddenState] = useState(() => readHidden(username));
-  const last = useRef(0);
 
-  const refresh = useCallback((force = false) => {
-    const now = Date.now();
-    if (!force && now - last.current < MIN_GAP_MS) return;
-    last.current = now;
-    fetchOnboarding()
-      .then(setState)
-      // A guide that cannot be read is a guide that is not shown.
-      .catch(() => undefined);
-  }, []);
+  const refresh = useCallback(
+    (force = false) => {
+      void queryClient.refetchQueries({
+        queryKey: queryKeys.onboarding(),
+        ...(force ? {} : { stale: true }),
+      });
+    },
+    [queryClient],
+  );
 
   useEffect(() => {
     if (!username) return;
     refresh();
   }, [username, routeKey, refresh]);
-
-  useEffect(() => {
-    const onFocus = () => refresh();
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, [refresh]);
 
   const setHidden = useCallback(
     (next: boolean) => {

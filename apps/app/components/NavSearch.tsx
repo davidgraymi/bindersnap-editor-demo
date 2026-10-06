@@ -1,12 +1,20 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { CornerDownLeft, Search } from "lucide-react";
 
 import {
-  fetchOrganizationBinders,
-  fetchOrganizationPeople,
-  searchDocuments,
-} from "../api";
+  organizationBindersQuery,
+  organizationPeopleQuery,
+  searchQuery,
+} from "../data/queries";
 import type { QuickFindResult } from "../quickFind";
 import {
   buildBinderResult,
@@ -76,22 +84,14 @@ export function NavSearch({
 }: NavSearchProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState(initialQuery);
-  const [results, setResults] = useState<QuickFindResult[]>([]);
   const [highlight, setHighlight] = useState(-1);
-  const [loading, setLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
-  const [failed, setFailed] = useState(false);
+  /** What was typed, once typing has paused — the question actually asked. */
+  const [settled, setSettled] = useState<string | null>(null);
 
   const triggerRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
-  /**
-   * Which query each response belongs to. Responses can land out of order, and
-   * a slow answer to a query the reader has since edited is not an answer.
-   */
-  const queryRef = useRef(query);
-
   const closeOverlay = useCallback(() => {
     setOpen(false);
     setHighlight(-1);
@@ -139,97 +139,88 @@ export function NavSearch({
   // Every settled keystroke is a new first page. The debounce is what keeps a
   // typed word from being eight separate searches.
   useEffect(() => {
-    queryRef.current = query;
-
     if (!open || !isQuickFindQuery(query)) {
-      setResults([]);
-      setHasMore(false);
-      setLoading(false);
-      setFailed(false);
+      setSettled(null);
       return;
     }
-
-    setLoading(true);
-    setFailed(false);
-
-    const timer = setTimeout(() => {
-      const asked = query;
-
-      // Documents come from the server, which knows how to search them.
-      // Binders and people are two short lists the reader already has access
-      // to, so they are fetched whole and matched here — a search endpoint for
-      // a list of four binders would be a round trip to filter an array.
-      // Neither can fail the panel: a document search that works is still worth
-      // showing when the org lookup does not.
-      void Promise.all([
-        searchDocuments(asked, QUICK_FIND_PAGE_SIZE),
-        org
-          ? fetchOrganizationBinders(org).catch(() => [])
-          : Promise.resolve([]),
-        org
-          ? fetchOrganizationPeople(org).catch(() => null)
-          : Promise.resolve(null),
-      ])
-        .then(([payload, binders, peoplePayload]) => {
-          if (queryRef.current !== asked) return;
-
-          const binderRows = org
-            ? binders
-                .filter((binder) =>
-                  matchesQuickFindQuery(
-                    `${binder.name} ${binder.description ?? ""}`,
-                    asked,
-                  ),
-                )
-                .slice(0, QUICK_FIND_KIND_LIMIT)
-                .map((binder) => buildBinderResult(org, binder))
-            : [];
-
-          const personRows = org
-            ? (peoplePayload?.people ?? [])
-                .filter((person) =>
-                  matchesQuickFindQuery(
-                    `${person.login} ${person.fullName}`,
-                    asked,
-                  ),
-                )
-                .slice(0, QUICK_FIND_KIND_LIMIT)
-                .map((person) =>
-                  buildPersonResult(org, {
-                    username: person.login,
-                    fullName: person.fullName,
-                    // What they are in this organization. An owner is the one
-                    // fact worth saying on a one-line result; everything else
-                    // is a question the People tab answers.
-                    role: person.isOwner ? "Owner" : undefined,
-                  }),
-                )
-            : [];
-
-          setResults(
-            orderQuickFindResults([
-              ...buildQuickFindResults(payload.documents),
-              ...binderRows,
-              ...personRows,
-            ]),
-          );
-          setHasMore(payload.hasMore);
-          setHighlight(-1);
-        })
-        .catch(() => {
-          if (queryRef.current !== asked) return;
-          setResults([]);
-          setHasMore(false);
-          setFailed(true);
-        })
-        .finally(() => {
-          if (queryRef.current !== asked) return;
-          setLoading(false);
-        });
-    }, QUICK_FIND_DEBOUNCE_MS);
-
+    const timer = setTimeout(() => setSettled(query), QUICK_FIND_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [open, query, currentUsername, org]);
+  }, [open, query]);
+
+  // Documents come from the server, which knows how to search them. Binders
+  // and people are two short lists the reader already has access to — and the
+  // sidebar and People page have usually read them already — so they come
+  // from the shared cache and are matched here. Neither can fail the panel: a
+  // document search that works is still worth showing when they do not.
+  const asking = settled !== null;
+  const found = useQuery({
+    ...searchQuery(settled ?? "", QUICK_FIND_PAGE_SIZE),
+    enabled: asking,
+  });
+  const binders = useQuery({
+    ...organizationBindersQuery(org ?? ""),
+    enabled: asking && Boolean(org),
+  });
+  const people = useQuery({
+    ...organizationPeopleQuery(org ?? ""),
+    enabled: asking && Boolean(org),
+  });
+  const ready =
+    found.data !== undefined &&
+    (!org || (!binders.isPending && !people.isPending));
+
+  const results = useMemo<QuickFindResult[]>(() => {
+    if (settled === null || !ready || !found.data) return [];
+    const asked = settled;
+
+    const binderRows = org
+      ? (binders.data ?? [])
+          .filter((binder) =>
+            matchesQuickFindQuery(
+              `${binder.name} ${binder.description ?? ""}`,
+              asked,
+            ),
+          )
+          .slice(0, QUICK_FIND_KIND_LIMIT)
+          .map((binder) => buildBinderResult(org, binder))
+      : [];
+
+    const personRows = org
+      ? (people.data?.people ?? [])
+          .filter((person) =>
+            matchesQuickFindQuery(`${person.login} ${person.fullName}`, asked),
+          )
+          .slice(0, QUICK_FIND_KIND_LIMIT)
+          .map((person) =>
+            buildPersonResult(org, {
+              username: person.login,
+              fullName: person.fullName,
+              // What they are in this organization. An owner is the one fact
+              // worth saying on a one-line result; everything else is a
+              // question the People tab answers.
+              role: person.isOwner ? "Owner" : undefined,
+            }),
+          )
+      : [];
+
+    return orderQuickFindResults([
+      ...buildQuickFindResults(found.data.documents),
+      ...binderRows,
+      ...personRows,
+    ]);
+  }, [settled, ready, found.data, binders.data, people.data, org]);
+
+  const hasMore = asking && (found.data?.hasMore ?? false);
+  const failed = asking && found.isError;
+  const loading =
+    open &&
+    isQuickFindQuery(query) &&
+    (settled !== query || found.isFetching || !ready) &&
+    !failed;
+
+  useEffect(() => {
+    setHighlight(-1);
+  }, [results]);
 
   const openResult = useCallback(
     (result: QuickFindResult) => {
