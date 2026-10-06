@@ -348,11 +348,15 @@ test("a folder opens, and stays open when you come back", async ({ page }) => {
   // says nothing is a folder nobody opens. Counted all the way down.
   await expect(nursing).toHaveAttribute("aria-expanded", "false");
   await expect(nursing).toContainText("2 documents");
-  await expect(page.getByText("Hand Hygiene")).toBeHidden();
+  await expect(
+    page.locator(".binder-tree").getByText("Hand Hygiene", { exact: true }),
+  ).toBeHidden();
 
   await nursing.click();
   await expect(nursing).toHaveAttribute("aria-expanded", "true");
-  await expect(page.getByText("Hand Hygiene")).toBeVisible();
+  await expect(
+    page.locator(".binder-tree").getByText("Hand Hygiene", { exact: true }),
+  ).toBeVisible();
 
   // The preference is the person's, and it survives the page going away.
   await page.reload();

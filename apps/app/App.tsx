@@ -1,3 +1,4 @@
+import { resetOrganizationsCache } from "./useOrganizationDisplayName";
 import {
   type FormEvent,
   useCallback,
@@ -685,6 +686,9 @@ export function App() {
         reason={organizationSetupReason}
         onCreate={async (name) => {
           await createOrganization(name);
+          // Every screen that names organizations reads this list; without a
+          // fresh one the sidebar showed the new one by its slug.
+          resetOrganizationsCache();
           // The organization changes what this session can do, so re-read
           // access rather than guessing at it. If that read fails the
           // organization still exists, and stranding someone on this form —

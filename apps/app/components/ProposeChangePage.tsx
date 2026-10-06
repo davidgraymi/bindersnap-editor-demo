@@ -75,11 +75,24 @@ export async function askReviewers(
 }
 
 /** The acts as a description somebody can edit rather than start from nothing. */
+/** What the draft did, oldest first, each thing once. */
+export function distinctActs(acts: readonly DraftAct[]): DraftAct[] {
+  const seen = new Set<string>();
+  return [...acts].reverse().filter((act) => {
+    if (seen.has(act.summary)) return false;
+    seen.add(act.summary);
+    return true;
+  });
+}
+
 export function describeActs(acts: readonly DraftAct[]): string {
-  return [...acts]
-    .reverse()
-    .map((act) => `- ${act.summary}`)
-    .join("\n");
+  // Each thing once. Saving the same policy three times is one edit to the
+  // people reading this, not three lines saying the same words.
+  const counts = new Map<string, number>();
+  for (const act of [...acts].reverse()) {
+    counts.set(act.summary, (counts.get(act.summary) ?? 0) + 1);
+  }
+  return [...counts.keys()].map((summary) => `- ${summary}`).join("\n");
 }
 
 export function ProposeChangePage({
@@ -95,6 +108,7 @@ export function ProposeChangePage({
   const [reviewers, setReviewers] = useState<string[]>([]);
   const [title, setTitle] = useState(name);
   const [description, setDescription] = useState(() => describeActs(acts));
+  const distinct = distinctActs(acts);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -129,9 +143,9 @@ export function ProposeChangePage({
         <div className="bs-pagehead-body">
           <h1 className="bs-title">Propose your changes</h1>
           <p className="bs-subtitle">
-            {acts.length === 1
+            {distinct.length === 1
               ? "One change, going to the people who sign this binder off."
-              : `${acts.length} changes, going to the people who sign this binder off.`}{" "}
+              : `${distinct.length} changes, going to the people who sign this binder off.`}{" "}
             Nothing joins the binder until it is approved and published.
           </p>
         </div>
@@ -220,11 +234,13 @@ export function ProposeChangePage({
           <div className="bs-panel">
             <div className="bs-panel-bar">
               <h2 className="bs-panel-bar-title">
-                {acts.length === 1 ? "1 change" : `${acts.length} changes`}
+                {distinct.length === 1
+                  ? "1 change"
+                  : `${distinct.length} changes`}
               </h2>
             </div>
             <ol className="bs-row-list">
-              {[...acts].reverse().map((act) => (
+              {distinct.map((act) => (
                 <li className="bs-row" key={act.sha}>
                   <span className="bs-row-body">
                     <span className="bs-row-name bs-row-name--wrap">

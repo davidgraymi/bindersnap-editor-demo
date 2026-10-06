@@ -404,7 +404,14 @@ export function BinderDocumentPage({
                   the real filename is how a rename does not lose the version
                   history (ADR 0005); it is 26 characters of machinery and has
                   no business on a page somebody reads. */}
-            <span className="bs-filename">{downloadFileName(document)}</span>
+            {/* A policy written here has no file anybody chose a name for —
+                its stored JSON is the editor's business — so the header says
+                where it came from instead. */}
+            {isEditorDocumentFile(document.path) ? (
+              <span className="doc-header-source">Written in Bindersnap</span>
+            ) : (
+              <span className="bs-filename">{downloadFileName(document)}</span>
+            )}
           </div>
         </div>
 
@@ -424,15 +431,19 @@ export function BinderDocumentPage({
                 >
                   Rename or move
                 </button>
-                <button
-                  type="button"
-                  className={`bs-btn ${canWrite ? "bs-btn-secondary" : "bs-btn-primary"}`}
-                  onClick={() => setRevising(true)}
-                >
-                  {/* **What it asks of you.** "New version" read as though it
-                      made one; what it does is take a file and propose it. */}
-                  Upload new version
-                </button>
+                {/* Not for a policy written here: its next version is written
+                    in the editor, and there is no file to upload over it. */}
+                {canWrite ? null : (
+                  <button
+                    type="button"
+                    className="bs-btn bs-btn-primary"
+                    onClick={() => setRevising(true)}
+                  >
+                    {/* **What it asks of you.** "New version" read as though
+                        it made one; what it does is take a file and propose it. */}
+                    Upload new version
+                  </button>
+                )}
               </>
             ) : null}
             {/* **A policy written here is edited here.** Uploading a new

@@ -329,7 +329,7 @@ describe("what an act says it did", () => {
     // product actually says rather than what it should eventually say. Noted
     // in the handoff as outstanding — fixing it changes every title stamped
     // from here on, which is a decision about the record, not about wording.
-    expect(plan.message).toBe("Rename Hand Hygiene to Hand Hygiene And PPE");
+    expect(plan.message).toBe("Rename Hand Hygiene to Hand Hygiene and PPE");
     // The title and the subject are one sentence: the act is the same act
     // whether it goes into a draft or opens a change request of its own.
     expect(plan.title).toBe(plan.message);
@@ -368,7 +368,7 @@ describe("what an act says it did", () => {
       }),
     );
     expect(plan.message).toBe(
-      "Rename Hand Hygiene to Hand Hygiene And PPE and move it to Clinical / Infection Control",
+      "Rename Hand Hygiene to Hand Hygiene and PPE and move it to Clinical / Infection Control",
     );
   });
 
@@ -578,6 +578,6 @@ describe("restoring an archived document", () => {
         tree: tree(),
       }),
     );
-    expect(plan.message).toBe("Restore Hand Hygiene And PPE");
+    expect(plan.message).toBe("Restore Hand Hygiene and PPE");
   });
 });

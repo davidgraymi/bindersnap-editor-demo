@@ -310,7 +310,20 @@ export function buildReviewTimeline(params: {
         emphasiseVerb: false,
         tag: `(update ${update.index})`,
         when: formatEventDate(update.at),
-        note: resetsApprovals ? "earlier approvals were reset" : null,
+        // Only when there was something to clear: an approval given before
+        // this update, which the update then made stale. Saying approvals
+        // were reset on a change nobody had approved yet was a false alarm.
+        note:
+          resetsApprovals &&
+          change.reviewers.some(
+            (reviewer) =>
+              reviewer.stale &&
+              reviewer.status === "approved" &&
+              reviewer.reviewedAt !== "" &&
+              timeOf(reviewer.reviewedAt) <= timeOf(update.at),
+          )
+            ? "the approvals given before this were cleared"
+            : null,
         updateSha: update.sha,
       },
     }));

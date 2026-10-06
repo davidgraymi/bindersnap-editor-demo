@@ -63,7 +63,7 @@ test("a policy's name loses its extension and its identity segment", () => {
     path(
       "/riverside-health/clinical/code-of-conduct.01J8XZ4K7MQ9V3B0RN7YHS2E1D.pdf",
     ),
-  ).toEqual(["Code Of Conduct"]);
+  ).toEqual(["Code of Conduct"]);
 });
 
 test("a change request is under its binder's change requests, and links back up", () => {
