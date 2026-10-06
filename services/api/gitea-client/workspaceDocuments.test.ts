@@ -270,6 +270,38 @@ test("listDocumentVersions counts only this document's tags", async () => {
   ]);
 });
 
+test("listDocumentVersions finds a version past Gitea's first page of tags", async () => {
+  // Gitea answers an unpaged tag read with 30, newest first. This document's
+  // v1 is older than 60 other tags, so it is on the second page — which is
+  // exactly where publish used to stop looking, number the next version v1,
+  // merge, and then have its tag refused as a duplicate.
+  const others = Array.from({ length: 60 }, (_, index) => ({
+    name: `${ADMISSIONS}/v${60 - index}`,
+    commit: { sha: `other-${index}` },
+  }));
+  const all = [...others, { name: `${HANDOVER}/v1`, commit: { sha: "aaa" } }];
+
+  const { client, mockGet } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/tags": (init) => {
+        const { page = 1, limit = 30 } = init?.params?.query ?? {};
+        return all.slice((page - 1) * limit, page * limit);
+      },
+    },
+  });
+
+  const versions = await listDocumentVersions({
+    client,
+    org: "mercy-health",
+    workspace: "clinical",
+    uid: HANDOVER,
+  });
+
+  expect(versions.map((version) => version.version)).toEqual([1]);
+  expect(nextVersionFrom(versions)).toBe(2);
+  expect(mockGet).toHaveBeenCalledTimes(2);
+});
+
 test("a file with no identity has published nothing, and costs no call", async () => {
   const { client, mockGet } = createMockClient({ GET: {} });
 

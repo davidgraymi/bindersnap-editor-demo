@@ -332,9 +332,14 @@ export interface GitTag {
  * `01J8XZ4K7M…/v1`, `…/v2`, and nothing else. Tags this app did not write are
  * ignored rather than counted as versions.
  *
- * One call per document, so it is for the pages that are about one document.
- * {@link listVersionsByDocument} answers the same question for a whole binder
- * in a single read, and is what every list uses.
+ * **Every page of tags, not Gitea's first.** Gitea answers an unpaged tag
+ * read with 30, newest first, so a document whose versions had scrolled past
+ * the thirtieth tag in its binder listed none — and publish, numbering off
+ * that, chose `v1` for a document that already had one, merged, and then had
+ * its tag write refused as a duplicate. The merge landed with no version.
+ *
+ * For the pages that are about one document. {@link listVersionsByDocument}
+ * answers the same question for a whole binder, and is what every list uses.
  */
 export async function listDocumentVersions(params: {
   client: GiteaClient;
@@ -352,13 +357,25 @@ export async function listDocumentVersions(params: {
   const { client, org, workspace, uid } = params;
   if (uid === null) return [];
 
-  const tags = (await unwrap(
-    client.GET("/repos/{owner}/{repo}/tags", {
-      params: { path: { owner: org, repo: workspace } },
-    }),
-  )) as GitTag[];
+  const tags = await listAllTags({ client, owner: org, repo: workspace });
+  return documentVersionsFrom(tags, uid);
+}
 
-  return (tags ?? [])
+/**
+ * One document's versions, out of tags the caller already holds.
+ *
+ * The joining rule {@link listDocumentVersions} applies, on its own, so a
+ * handler that has read every tag for another reason — publish reads them for
+ * the archive stamps — can number versions off the same read instead of making
+ * a second one.
+ */
+export function documentVersionsFrom(
+  tags: readonly GitTag[],
+  uid: string | null,
+): DocumentVersion[] {
+  if (uid === null) return [];
+
+  return tags
     .flatMap((tag) => {
       const name = tag.name ?? "";
       if (documentUidFromVersionTag(name) !== uid) return [];
