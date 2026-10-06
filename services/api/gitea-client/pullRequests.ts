@@ -918,6 +918,26 @@ export async function listPullRequests(
 
 /** One change and its reviews, for the pages that show a single change. */
 /**
+ * A change's head: its branch, and the commit it is at now.
+ *
+ * Publish records the commit in its plan, so a change pushed to after it was
+ * checked is not merged on the strength of approvals for something else.
+ */
+export async function getPullRequestHead(
+  params: PullRequestRef,
+): Promise<{ ref: string; sha: string }> {
+  const { client, owner, repo, pullNumber } = params;
+
+  const pullRequest = await unwrap(
+    client.GET("/repos/{owner}/{repo}/pulls/{index}", {
+      params: { path: { owner, repo, index: pullNumber } },
+    }),
+  );
+
+  return { ref: pullRequest.head?.ref ?? "", sha: pullRequest.head?.sha ?? "" };
+}
+
+/**
  * A change's head branch, and nothing else.
  *
  * The branch is what tells the shapes of change apart —

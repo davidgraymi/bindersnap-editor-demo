@@ -4,6 +4,7 @@ import {
   primaryKey,
   sqliteTable,
   text,
+  uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
 // Canonical schema for the API's SQLite database (one file on the EBS data
@@ -260,5 +261,53 @@ export const binderDrafts = sqliteTable(
   (table) => [
     primaryKey({ columns: [table.giteaRepoId, table.branch] }),
     index("idx_binder_drafts_owner").on(table.giteaRepoId, table.owner),
+  ],
+);
+
+/**
+ * Work the API has promised to finish: a multi-step Gitea write recorded
+ * before its first step runs. See `jobs/` and ADR 0004's note on operational
+ * state.
+ *
+ * **Not evidence, and never read as such.** A row says what is left to do —
+ * merge change 12, then tag these documents at these versions — and nothing
+ * here answers "was this approved" or "what version is live"; Gitea answers
+ * those. Once a job is done its row can be deleted without losing anything,
+ * which is the test ADR 0004 sets for state that may live outside Gitea. The
+ * Stripe `webhook_events` table is the precedent.
+ */
+export const jobs = sqliteTable(
+  "jobs",
+  {
+    id: text("id").primaryKey(),
+    /** `publish` — what the plan is for, and which runner reads it. */
+    kind: text("kind").notNull(),
+    /** `org/repo`. Jobs in one group run one at a time, in order. */
+    groupKey: text("group_key").notNull(),
+    /** What it acts on within the group — `change:12` — for finding it again. */
+    subject: text("subject").notNull(),
+    /** From the request's `Idempotency-Key`, so a retried click gets this job. */
+    idempotencyKey: text("idempotency_key"),
+    /** JSON: everything needed to finish without the request that made it. */
+    plan: text("plan").notNull(),
+    /** `pending`, `running`, `done` or `failed`. */
+    status: text("status").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    /** Epoch ms. A running job whose lease has lapsed is picked up again. */
+    leaseUntil: integer("lease_until"),
+    lastError: text("last_error"),
+    /** JSON: what the finished job reports back. */
+    result: text("result"),
+    /** Who asked. The audit fields come from here, not from whoever resumes. */
+    createdBy: text("created_by").notNull(),
+    /** Their session, whose token a resumed run may use while it lasts. */
+    sessionId: text("session_id"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    index("idx_jobs_status").on(table.status, table.leaseUntil),
+    index("idx_jobs_subject").on(table.groupKey, table.subject),
+    uniqueIndex("idx_jobs_idempotency_key").on(table.idempotencyKey),
   ],
 );
