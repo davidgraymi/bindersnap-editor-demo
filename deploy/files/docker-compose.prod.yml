@@ -47,6 +47,12 @@ services:
       # --- Database ---
       - GITEA__database__DB_TYPE=sqlite3
       - GITEA__database__PATH=/data/gitea.db
+      # WAL, stated here rather than inherited. Litestream switches gitea.db to
+      # WAL when it starts (it needs it to replicate), which is the only reason
+      # prod ran in WAL before this line — so removing or delaying the sidecar
+      # silently dropped Gitea back to the rollback journal, where concurrent
+      # API calls convoy on the write lock. Dev sets the same.
+      - GITEA__database__SQLITE_JOURNAL_MODE=WAL
       # --- Service (registration disabled) ---
       - GITEA__service__DISABLE_REGISTRATION=true
       - GITEA__service__REQUIRE_SIGNIN_VIEW=true

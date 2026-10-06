@@ -27,6 +27,13 @@
  * Measured throughput peaks around 2-4 and degrades from there. Four keeps
  * that peak while leaving enough parallelism to cover the round trips that
  * are not contending on the write lock.
+ *
+ * That measurement was taken with Gitea's SQLite in its default rollback
+ * journal. Both compose files now run it in WAL, where the collapse past four
+ * mostly disappears (32 in flight measured 3.3x faster than in rollback
+ * mode). Four is therefore conservative — but production is a two-vCPU host
+ * shared with the API, Caddy and Litestream, so raise it only after measuring
+ * there. The request log's `giteaGateWaitMs` says whether it is worth doing.
  */
 export const MAX_CONCURRENT_GITEA_REQUESTS = 4;
 
