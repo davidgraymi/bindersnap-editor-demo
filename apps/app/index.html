@@ -11,6 +11,48 @@
       name="description"
       content="Every policy with its current approved version and the record of who signed off on it — for clinics, surgery centers, home health agencies, and behavioral health programs."
     />
+    <!--
+      Icons and the link preview, drawn from the logo mark by
+      scripts/brand-images.ts. The <link> hrefs are relative so Bun bundles
+      them; the build also copies apps/app/public to the site root, where
+      crawlers look for /favicon.ico and the og:image lives at a fixed URL.
+      Link previews need absolute URLs, so those name bindersnap.com.
+    -->
+    <link rel="icon" href="./public/favicon.ico" sizes="48x48" />
+    <link rel="icon" href="./public/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./public/apple-touch-icon.png" />
+    <link rel="manifest" href="./public/site.webmanifest" />
+    <meta
+      name="theme-color"
+      content="#fafaf7"
+      media="(prefers-color-scheme: light)"
+    />
+    <meta
+      name="theme-color"
+      content="#1c1917"
+      media="(prefers-color-scheme: dark)"
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Bindersnap" />
+    <meta property="og:url" content="https://bindersnap.com/" />
+    <meta
+      property="og:title"
+      content="Bindersnap — Policy &amp; Procedure Management for Small Healthcare Providers"
+    />
+    <meta
+      property="og:description"
+      content="Every policy with its current approved version and the record of who signed off on it — for clinics, surgery centers, home health agencies, and behavioral health programs."
+    />
+    <meta property="og:image" content="https://bindersnap.com/og-image.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Bindersnap: The surveyor asks which version you approved. Show them."
+    />
+    <meta property="og:locale" content="en_US" />
+    <meta name="twitter:card" content="summary_large_image" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
