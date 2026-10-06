@@ -8,7 +8,13 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test } from "@playwright/test";
 
-import { API_BASE_URL, APP_BASE_URL } from "./helpers";
+import {
+  API_BASE_URL,
+  APP_BASE_URL,
+  GITEA_ADMIN_PASS,
+  GITEA_ADMIN_USER,
+  GITEA_URL,
+} from "./helpers";
 
 test.describe.configure({ mode: "parallel", timeout: 120_000 });
 
@@ -195,11 +201,11 @@ test("a username is permanent: there is nothing to rename it with", async ({
   expect(await signIn(username, password)).toBe(200);
 });
 
-test("the only owner cannot delete their account; a member can", async ({
+test("the only owner cannot delete their account; a member can, and their draft is retired", async ({
   page,
 }) => {
   const owner = await signUp();
-  const { org } = await organizationWithBinder(owner.session);
+  const { org, binder } = await organizationWithBinder(owner.session);
 
   const refused = await call(owner.session, "DELETE", "/api/app/account", {
     password: owner.password,
@@ -238,6 +244,22 @@ test("the only owner cannot delete their account; a member can", async ({
   );
   expect(added.status, await added.clone().text()).toBeLessThan(300);
 
+  // A draft of the member's own, which must not outlive them under their login.
+  const editor = await call(
+    owner.session,
+    "POST",
+    `/api/app/binders/${org}/${binder}/people`,
+    { username: member.username, level: "editor" },
+  );
+  expect(editor.status, await editor.clone().text()).toBeLessThan(300);
+  const opened = await call(
+    member.session,
+    "POST",
+    `/api/app/binders/${org}/${binder}/draft`,
+    { name: "Before I go" },
+  );
+  expect(opened.status, await opened.clone().text()).toBeLessThan(300);
+
   await page
     .context()
     .addCookies([
@@ -257,4 +279,24 @@ test("the only owner cannot delete their account; a member can", async ({
     await call(owner.session, "GET", `/api/app/orgs/${org}/people`)
   ).text();
   expect(people).not.toContain(member.username);
+
+  // Retired by the member's own token before the account went: out of
+  // `draft/`, so a future account taking the login cannot claim it.
+  const branches = (await (
+    await fetch(
+      `${GITEA_URL}/api/v1/repos/${org}/${binder}/branches?limit=50`,
+      {
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${GITEA_ADMIN_USER}:${GITEA_ADMIN_PASS}`).toString("base64")}`,
+        },
+      },
+    )
+  ).json()) as { name: string }[];
+  const names = branches.map((branch) => branch.name);
+  expect(
+    names.filter((name) => name.startsWith(`draft/${member.username}/`)),
+  ).toEqual([]);
+  expect(
+    names.filter((name) => name.startsWith(`retired/${member.username}/`)),
+  ).toHaveLength(1);
 });

@@ -2697,10 +2697,19 @@ async function handleChangePassword(
  *
  * Gitea's own rule decides what blocks it: an organization with no other owner
  * cannot be left without one, so the person is told which to hand over or
- * delete first. Otherwise they leave every organization, their drafts are
- * retired so a future account with the same login cannot pick them up, and
- * Gitea deletes the account. Their approvals, comments and published versions
- * stay; each version's tag names them in full.
+ * delete first. Otherwise their drafts are retired so a future account with
+ * the same login cannot pick them up, and Gitea deletes the account. Their
+ * approvals, comments and published versions stay; each version's tag names
+ * them in full.
+ *
+ * **As the person, wherever Gitea lets a person act.** Retiring a draft is a
+ * branch rename in their own binder, so it is made with their own token —
+ * Gitea records it as theirs, and the service account needs no write access
+ * to anybody's documents. Only the deletion itself is an admin act, and it
+ * purges: Gitea then takes them out of every organization and team on its
+ * own, which nobody but an organization owner could otherwise do. Purging also
+ * deletes repositories the person owns themselves; Bindersnap never creates
+ * one, since every binder belongs to an organization.
  */
 async function handleDeleteAccount(
   req: Request,
@@ -2790,13 +2799,9 @@ async function handleDeleteAccount(
       await draftNameStore.forget(draft.giteaRepoId, draft.branch);
     }
 
-    for (const org of orgs) {
-      await removeOrganizationMember({ client: ownClient, org, username });
-    }
-
     await endOtherSessions(username, session.id);
     const response = await giteaFetch(
-      `/api/v1/admin/users/${encodeURIComponent(username)}`,
+      `/api/v1/admin/users/${encodeURIComponent(username)}?purge=true`,
       { method: "DELETE", headers: serviceHeaders },
     ).catch(() => null);
     if (!response || !response.ok) {
