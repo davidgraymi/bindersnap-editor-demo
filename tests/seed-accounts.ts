@@ -160,17 +160,19 @@ async function maybeBootstrapInstall(
   // The install form has to advertise the port Gitea actually listens on,
   // which is whatever GITEA_URL points at — not a hardcoded 3000.
   const giteaHttpPort = resolveGiteaHttpPort(baseUrl);
+  // Gitea 28 asks for the one data directory, `app_data_path`, and refuses an
+  // install without it — re-rendering the form with a 200 the request below
+  // cannot tell from success. The repository and log roots it used to ask for
+  // come from the image's own app.ini.
   const form = new URLSearchParams({
     db_type: "sqlite3",
     db_path: "/data/gitea.db",
     app_name: "Gitea",
-    repo_root_path: "/data/git/repositories",
+    app_data_path: "/data/gitea",
     run_user: "git",
-    domain: "localhost",
     ssh_port: "22",
     http_port: giteaHttpPort,
     app_url: `http://localhost:${giteaHttpPort}/`,
-    log_root_path: "/data/gitea/log",
     admin_name: adminUser,
     admin_passwd: adminPass,
     admin_confirm_passwd: adminPass,
@@ -222,7 +224,8 @@ async function ensureUser(
       send_notify: false,
       admin: siteAdmin,
     }),
-    expectedStatuses: [201, 422],
+    // Gitea 28 answers a taken name with 409; 1.27 used 422.
+    expectedStatuses: [201, 409],
   });
 
   if (created.status === 201) {
