@@ -6753,6 +6753,171 @@ async function handleDeleteBinder(
 }
 
 /**
+ * What stands between an organization and its deletion, said before anyone
+ * tries.
+ *
+ * Gitea's rules: only an owner may delete it, and not while it still owns any
+ * binder — a binder is the record, so it goes by its own deliberate act first.
+ * Ours: not while a Stripe subscription would keep charging for it.
+ */
+async function readOrganizationDeletion(
+  client: GiteaClient,
+  org: string,
+  username: string,
+): Promise<{
+  canDelete: boolean;
+  isOwner: boolean;
+  binders: string[];
+  billingActive: boolean;
+}> {
+  const organization = await findOrganization({ client, org });
+  if (!organization) {
+    throw new GiteaApiError(404, "No such organization.");
+  }
+  const [isOwner, binders, subscription] = await Promise.all([
+    isOrganizationOwnerDirect({ client, org, username }).catch(() => false),
+    listOrganizationWorkspaces({ client, org }).catch(() => []),
+    subscriptionStore.getByOrganization(organization.id).catch(() => null),
+  ]);
+  // Charging, and not already set to stop. A subscription cancelled at the
+  // period's end charges nothing more, so it is no reason to refuse.
+  const billingActive =
+    subscription !== null &&
+    ["active", "trialing", "past_due", "unpaid"].includes(
+      subscription.status,
+    ) &&
+    !subscription.cancelAtPeriodEnd &&
+    subscription.cancelAt === null;
+  return {
+    canDelete: isOwner && binders.length === 0 && !billingActive,
+    isOwner,
+    binders: binders.map((binder) => binder.name),
+    billingActive,
+  };
+}
+
+async function handleOrganizationDeletion(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  try {
+    const deletion = await readOrganizationDeletion(
+      auth.client,
+      orgName,
+      auth.session.username,
+    );
+    return json(200, deletion, baseHeaders);
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to read the organization.",
+    );
+  }
+}
+
+/**
+ * Delete an organization: its people, groups and name, for good.
+ *
+ * Asked of Gitea on the owner's own token, so Gitea's rule is the one that
+ * holds — and checked here first, so the refusal names what is in the way
+ * rather than repeating Gitea's sentence about repositories.
+ */
+async function handleDeleteOrganization(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { client, session } = auth;
+
+  const payload = await readJson<{ confirm?: unknown }>(req);
+  const confirm =
+    typeof payload?.confirm === "string" ? payload.confirm.trim() : "";
+  if (confirm.toLowerCase() !== orgName.toLowerCase()) {
+    return json(
+      400,
+      { error: "Type the organization's name to confirm." },
+      baseHeaders,
+    );
+  }
+
+  try {
+    const deletion = await readOrganizationDeletion(
+      client,
+      orgName,
+      session.username,
+    );
+    if (!deletion.isOwner) {
+      return json(
+        403,
+        { error: "Only an owner can delete the organization." },
+        baseHeaders,
+      );
+    }
+    if (deletion.binders.length > 0) {
+      return json(
+        409,
+        {
+          error: "Delete or move every binder in it first.",
+          binders: deletion.binders,
+        },
+        baseHeaders,
+      );
+    }
+    if (deletion.billingActive) {
+      return json(
+        409,
+        { error: "Cancel its subscription in Billing first." },
+        baseHeaders,
+      );
+    }
+
+    const organization = await findOrganization({ client, org: orgName });
+    const { error, response } = await client.DELETE("/orgs/{org}", {
+      params: { path: { org: orgName } },
+    });
+    if (error !== undefined || !response.ok) {
+      throw toGiteaApiError(response.status, error);
+    }
+
+    // **The row stays**, renamed: it is what remembers that this person has
+    // had their trial, and deleting it would make deleting an organization a
+    // way to get another.
+    if (organization) {
+      const record = await organizationStore.get(organization.id);
+      if (record) {
+        await organizationStore.upsert({
+          ...record,
+          name: `${record.name} (deleted)`,
+        });
+      }
+    }
+
+    logger.info("Organization deleted", {
+      username: session.username,
+      organization: orgName,
+    });
+    return new Response(null, { status: 204, headers: baseHeaders });
+  } catch (err) {
+    logger.error("Failed to delete an organization", {
+      username: session.username,
+      organization: orgName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to delete the organization.",
+    );
+  }
+}
+
+/**
  * The most approvals a binder can ask for: whatever Gitea stores.
  *
  * Gitea keeps the count as a 64-bit integer and accepts any of it, so the only
@@ -12782,6 +12947,10 @@ export function createApiServer() {
         const organizationPersonRoleMatch = pathname.match(
           /^\/api\/app\/orgs\/([^/]+)\/people\/([^/]+)\/role$/,
         );
+        const organizationDeletionMatch = pathname.match(
+          /^\/api\/app\/orgs\/([^/]+)\/deletion$/,
+        );
+        const organizationMatch = pathname.match(/^\/api\/app\/orgs\/([^/]+)$/);
         const organizationPersonMatch = pathname.match(
           /^\/api\/app\/orgs\/([^/]+)\/people\/([^/]+)$/,
         );
@@ -12836,7 +13005,19 @@ export function createApiServer() {
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)$/,
         );
 
-        if (organizationPeopleMatch && method === "GET") {
+        if (organizationDeletionMatch && method === "GET") {
+          response = await handleOrganizationDeletion(
+            req,
+            baseHeaders,
+            organizationDeletionMatch[1]!,
+          );
+        } else if (organizationMatch && method === "DELETE") {
+          response = await handleDeleteOrganization(
+            req,
+            baseHeaders,
+            organizationMatch[1]!,
+          );
+        } else if (organizationPeopleMatch && method === "GET") {
           response = await handleOrganizationPeople(
             req,
             baseHeaders,

@@ -13,6 +13,8 @@ import type {
   CreateOrganizationBody,
   CreateOrganizationGroup201,
   CreateOrganizationGroupBody,
+  DeleteOrganizationBody,
+  GetOrganizationDeletion200,
   GetOrganizationPeople200,
   ListOrganizations200,
   RemoveOrganizationGroupMember200,
@@ -22,6 +24,83 @@ import type {
 } from '../model';
 
 import { customFetch } from '.././mutator.ts';
+
+export type getOrganizationDeletionResponse200 = {
+  data: GetOrganizationDeletion200
+  status: 200
+}
+
+export type getOrganizationDeletionResponseSuccess = (getOrganizationDeletionResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getOrganizationDeletionResponse = (getOrganizationDeletionResponseSuccess)
+
+export const getGetOrganizationDeletionUrl = (org: string,) => {
+
+
+
+
+  return `/api/app/orgs/${org}/deletion`
+}
+
+export const getOrganizationDeletion = async (org: string, options?: Parameters<typeof customFetch>[1]): Promise<getOrganizationDeletionResponse> => {
+
+  return customFetch<getOrganizationDeletionResponse>(getGetOrganizationDeletionUrl(org),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type deleteOrganizationResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteOrganizationResponse403 = {
+  data: void
+  status: 403
+}
+
+export type deleteOrganizationResponse409 = {
+  data: void
+  status: 409
+}
+
+export type deleteOrganizationResponseSuccess = (deleteOrganizationResponse204) & {
+  headers: Headers;
+};
+export type deleteOrganizationResponseError = (deleteOrganizationResponse403 | deleteOrganizationResponse409) & {
+  headers: Headers;
+};
+
+export type deleteOrganizationResponse = (deleteOrganizationResponseSuccess | deleteOrganizationResponseError)
+
+export const getDeleteOrganizationUrl = (org: string,) => {
+
+
+
+
+  return `/api/app/orgs/${org}`
+}
+
+export const deleteOrganization = async (org: string,
+    deleteOrganizationBody: DeleteOrganizationBody, options?: Parameters<typeof customFetch>[1]): Promise<deleteOrganizationResponse> => {
+
+  return customFetch<deleteOrganizationResponse>(getDeleteOrganizationUrl(org),
+  {
+    ...options,
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(deleteOrganizationBody)
+  }
+);}
+
 
 export type listOrganizationsResponse200 = {
   data: ListOrganizations200

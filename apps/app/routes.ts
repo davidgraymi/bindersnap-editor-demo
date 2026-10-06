@@ -93,7 +93,7 @@ export type DocumentChangeView =
   /** The documents that conflict with the binder, and resolving them. */
   | "conflicts";
 /** The organization's own tabs. Binders is the one it opens on. */
-export type OrganizationTab = "binders" | "people";
+export type OrganizationTab = "binders" | "people" | "settings";
 
 /**
  * The two tabs that became one.
@@ -189,7 +189,11 @@ export function getRoute(pathname: string): AppRoute {
     return {
       kind: "organization",
       org,
-      ...(screen === "people" ? { tab: "people" as const } : {}),
+      ...(screen === "people"
+        ? { tab: "people" as const }
+        : screen === "settings"
+          ? { tab: "settings" as const }
+          : {}),
     };
   }
 
