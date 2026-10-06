@@ -7,6 +7,7 @@ import { JSDOM } from "jsdom";
 
 import { resolveSignupPrefill } from "./authIntent";
 import { resolveGiteaTokenScopes } from "./giteaTokenScopes";
+import { withQueryClient } from "./data/testing";
 
 const mockClearToken = mock(() => {});
 const mockCreateCheckoutSession = mock(async () => ({
@@ -184,7 +185,7 @@ function mountApp(App: () => JSX.Element) {
   const root = createRoot(container);
 
   flushSync(() => {
-    root.render(createElement(App));
+    root.render(withQueryClient(createElement(App)));
   });
 
   const unmount = () => {

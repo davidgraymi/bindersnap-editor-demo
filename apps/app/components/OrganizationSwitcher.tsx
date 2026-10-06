@@ -1,7 +1,8 @@
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Building2, Check, ChevronDown } from "lucide-react";
 
-import { fetchOrganizations } from "../api";
+import { organizationsQuery } from "../data/queries";
 import { followInApp } from "../appLink";
 import { formatDocumentName } from "../documentDisplay";
 import { defaultOrganization } from "../useOrganizationDisplayName";
@@ -38,7 +39,10 @@ export function OrganizationSwitcher({
   isCurrentPage = false,
   onSelect,
 }: OrganizationSwitcherProps) {
-  const [organizations, setOrganizations] = useState<OrganizationSummary[]>([]);
+  // A switcher that cannot load its list is not worth an error on a page
+  // about something else; it simply does not appear.
+  const organizations: OrganizationSummary[] =
+    useQuery(organizationsQuery()).data ?? [];
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
@@ -52,21 +56,6 @@ export function OrganizationSwitcher({
   const placeMenu = useCallback(() => {
     const rect = buttonRef.current?.getBoundingClientRect();
     if (rect) setAnchor({ top: rect.bottom + 6, left: rect.left });
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchOrganizations()
-      .then((rows) => {
-        if (!cancelled) setOrganizations(rows);
-      })
-      // A switcher that cannot load its list is not worth an error on a page
-      // about something else; it simply does not appear.
-      .catch(() => undefined);
-
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   useEffect(() => {
