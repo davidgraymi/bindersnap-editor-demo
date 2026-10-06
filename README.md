@@ -77,7 +77,8 @@ This is the complete environment variable reference used by repo code, scripts, 
 | `BINDERSNAP_APP_ORIGIN`                 | `http://localhost:${APP_PORT}`            | `services/api/server.ts`, compose                                        | Primary allowed browser origin for auth/session API requests. Production should be `https://bindersnap.com`.                                                               |
 | `BINDERSNAP_ALLOWED_ORIGINS`            | none                                      | `services/api/server.ts`                                                 | Comma-separated override for multiple allowed origins.                                                                                                                     |
 | `BINDERSNAP_USER_EMAIL_DOMAIN`          | `users.bindersnap.local`                  | `services/api/server.ts`                                                 | Domain used when creating signup email addresses in Gitea.                                                                                                                 |
-| `BINDERSNAP_GITEA_SERVICE_TOKEN`        | none                                      | `services/api/server.ts`, prod compose                                   | Dedicated Gitea service-account token used by the API for signup, email lookup, and token cleanup.                                                                         |
+| `BINDERSNAP_GITEA_SERVICE_TOKEN`        | none                                      | `services/api/server.ts`, prod compose                                   | The Gitea service account's read-only token, for privileged reads: branch protection, teams, avatars, the email lookup at sign-in.                                          |
+| `BINDERSNAP_GITEA_ADMIN_TOKEN`          | none                                      | `services/api/server.ts`, prod compose                                   | The service account's `write:admin` token, used only for signup, password changes, account deletion and token revocation. Falls back to the service token while unset.     |
 | `BINDERSNAP_SESSION_COOKIE_NAME`        | `bindersnap_session`                      | `services/api/server.ts`                                                 | Session cookie name used by API auth.                                                                                                                                      |
 | `BINDERSNAP_SESSION_TTL_MS`             | `604800000`                               | `services/api/server.ts`                                                 | Server-side expiry for non-remembered sessions in milliseconds.                                                                                                            |
 | `BINDERSNAP_REMEMBER_ME_SESSION_TTL_MS` | `2592000000`                              | `services/api/server.ts`, prod compose                                   | Server-side expiry and persistent cookie lifetime for remembered sessions.                                                                                                 |
@@ -93,6 +94,7 @@ This is the complete environment variable reference used by repo code, scripts, 
 | `STRIPE_WEBHOOK_SECRET`                 | none                                      | `services/api/server.ts`, compose, Stripe checkout tests                 | Webhook signing secret used to verify `stripe/webhook` events in local dev and tests.                                                                                      |
 | `STRIPE_PRICE_ID`                       | none                                      | `services/api/server.ts`, compose, Stripe checkout tests                 | Subscription price ID used when the API creates Stripe Checkout Sessions.                                                                                                  |
 | `GITEA_SERVICE_TOKEN`                   | none                                      | `docker-compose.prod.yml`, `.env.prod.example`, bootstrap script         | SSM-backed source value that prod compose maps into `BINDERSNAP_GITEA_SERVICE_TOKEN` for the API.                                                                          |
+| `GITEA_ADMIN_TOKEN`                     | none                                      | `docker-compose.prod.yml`, bootstrap script                              | SSM-backed source value that prod compose maps into `BINDERSNAP_GITEA_ADMIN_TOKEN` for the API.                                                                            |
 | `API_TAG`                               | `latest`                                  | `docker-compose.prod.yml`, GitHub Actions deploys                        | API image tag to pull from GHCR; pin to a prior commit SHA for rollback.                                                                                                   |
 | `AWS_REGION`                            | `us-east-1`                               | `docker-compose.prod.yml`, `litestream.yml`, Terraform backups module    | AWS region used by the Litestream container and backup infrastructure.                                                                                                     |
 | `LITESTREAM_S3_BUCKET`                  | none                                      | `docker-compose.prod.yml`, `litestream.yml`, `scripts/restore.sh`        | Required S3 bucket for continuous SQLite replication and restores.                                                                                                         |
@@ -202,12 +204,26 @@ as the schema for the generated file only. The committed example keeps
 placeholders for the SSM-backed values and documents the non-secret runtime
 overrides that can still be passed at deploy time.
 
-The production API now expects `GITEA_SERVICE_TOKEN` in that generated env file.
-On the first deploy against a fresh host, the pyinfra run detects the
-placeholder value, starts Gitea with the first-boot admin credentials from SSM,
-runs `scripts/bootstrap-gitea-service-account.ts` in a throwaway Bun container,
-writes the real token back to `/bindersnap/prod/gitea_service_token`, refreshes
-`/opt/bindersnap/.env.prod`, and only then starts the API.
+The production API expects two tokens for the `bindersnap-service` account in
+that generated env file:
+
+- `GITEA_SERVICE_TOKEN` — read scopes only. Every privileged read uses it, on
+  nearly every request.
+- `GITEA_ADMIN_TOKEN` — `write:admin` alone, for signup, password changes,
+  account deletion and token revocation.
+
+The service account is a Gitea site admin, so scopes are what keep the hot
+read paths from holding root-equivalent power. When either SSM value is the
+bootstrap placeholder, the pyinfra run starts Gitea with the first-boot admin
+credentials from SSM, runs `scripts/bootstrap-gitea-service-account.ts` in a
+throwaway Bun container to mint **both**, writes them back to
+`/bindersnap/prod/gitea_service_token` and `/bindersnap/prod/gitea_admin_token`,
+refreshes `/opt/bindersnap/.env.prod`, and only then starts the API.
+
+A host that predates the split has one token with both scope sets. Applying the
+secrets Terraform creates `gitea_admin_token` as a placeholder; the next deploy
+then re-mints the service token read-only and mints the admin token. Until that
+deploy, the API uses the one token for both.
 
 To support that flow, set these secrets in `infra/secrets/terraform.tfvars`
 before `infra/apply-all.sh apply`:
@@ -228,9 +244,10 @@ bun scripts/bootstrap-gitea-service-account.ts
 ```
 
 The bootstrap script uses `GITEA_ADMIN_USER` and `GITEA_ADMIN_PASS` only long
-enough to ensure the `bindersnap-service` account exists, grant admin, mint a
-`write:admin` PAT, and write it to `/bindersnap/prod/gitea_service_token`.
-After the token is real, the env render stops writing those admin
+enough to ensure the `bindersnap-service` account exists, grant admin, mint the
+read-only and `write:admin` PATs, and write them to
+`/bindersnap/prod/gitea_service_token` and `/bindersnap/prod/gitea_admin_token`.
+After both tokens are real, the env render stops writing those admin
 credentials into `/opt/bindersnap/.env.prod`, so the steady-state compose stack
 does not keep them in its runtime env file.
 

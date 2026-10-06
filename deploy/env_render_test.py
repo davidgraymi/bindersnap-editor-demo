@@ -63,6 +63,40 @@ def test_keeps_admin_creds_while_token_is_placeholder():
     assert "GITEA_ADMIN_PASS=s3cret" in lines, content
 
 
+def test_keeps_admin_creds_while_only_the_admin_token_is_placeholder():
+    # A host that predates the split: its service token is real, and the new
+    # admin token is waiting to be minted — which needs the admin creds.
+    content = build_env_content(
+        [
+            _param("gitea_admin_user", "admin"),
+            _param("gitea_admin_pass", "s3cret"),
+            _param("gitea_admin_token", BOOTSTRAP_TOKEN_PLACEHOLDER),
+            _param("gitea_service_token", "real-token-abc"),
+        ],
+        PATH,
+    )
+    lines = content.splitlines()
+    assert "GITEA_ADMIN_USER=admin" in lines, content
+    assert "GITEA_ADMIN_PASS=s3cret" in lines, content
+
+
+def test_drops_admin_creds_once_both_tokens_are_real():
+    content = build_env_content(
+        [
+            _param("gitea_admin_user", "admin"),
+            _param("gitea_admin_pass", "s3cret"),
+            _param("gitea_admin_token", "real-admin-token"),
+            _param("gitea_service_token", "real-token-abc"),
+        ],
+        PATH,
+    )
+    lines = content.splitlines()
+    assert "GITEA_ADMIN_USER=admin" not in lines, content
+    assert "GITEA_ADMIN_PASS=s3cret" not in lines, content
+    assert "GITEA_ADMIN_TOKEN=real-admin-token" in lines, content
+    assert "GITEA_SERVICE_TOKEN=real-token-abc" in lines, content
+
+
 def test_rejects_newline_values():
     try:
         build_env_content([_param("some_key", "line1\nline2")], PATH)

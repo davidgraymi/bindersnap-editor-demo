@@ -11,6 +11,7 @@ export interface ApiConfig {
   giteaAdminUsername: string;
   giteaAdminPassword: string;
   giteaServiceToken: string;
+  giteaAdminToken: string;
   stripeSecretKey: string;
   stripeWebhookSecret: string;
   stripePriceId: string;
@@ -66,6 +67,7 @@ const STRING_ENV: Record<string, StringSpec> = {
   GITEA_ADMIN_PASS: { default: "" },
   GITEA_INTERNAL_URL: { default: "http://localhost:3000" },
   BINDERSNAP_GITEA_SERVICE_TOKEN: { requiredInProduction: true, default: "" },
+  BINDERSNAP_GITEA_ADMIN_TOKEN: { default: "" },
   STRIPE_SECRET_KEY: { requiredInProduction: true, default: "" },
   STRIPE_WEBHOOK_SECRET: { requiredInProduction: true, default: "" },
   STRIPE_PRICE_ID: { requiredInProduction: true, default: "" },
@@ -342,6 +344,11 @@ export function initializeConfig(
     giteaServiceToken: parseString(
       resolvedEnv,
       "BINDERSNAP_GITEA_SERVICE_TOKEN",
+      isProduction,
+    ),
+    giteaAdminToken: parseString(
+      resolvedEnv,
+      "BINDERSNAP_GITEA_ADMIN_TOKEN",
       isProduction,
     ),
     stripeSecretKey: parseString(
