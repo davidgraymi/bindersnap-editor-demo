@@ -271,6 +271,9 @@ export async function resetPassword(
   password: string,
 ): Promise<SessionAuthState> {
   const response = await AuthClient.authResetPassword({ token, password });
+  if (response.status !== 200) {
+    throw new Error("Your password could not be changed.");
+  }
   return response.data;
 }
 
