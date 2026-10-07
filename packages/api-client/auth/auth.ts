@@ -5,9 +5,15 @@
  * OpenAPI spec version: 1.0.0
  */
 import type {
+  AuthCheckResetLink200,
+  AuthCheckResetLinkParams,
+  AuthForgotPassword202,
+  AuthForgotPasswordBody,
   AuthLogin200,
   AuthLoginBody,
   AuthMe200,
+  AuthResetPassword200,
+  AuthResetPasswordBody,
   AuthSignup200,
   AuthSignupBody
 } from '../model';
@@ -145,6 +151,128 @@ export const authLogout = async ( options?: Parameters<typeof customFetch>[1]): 
     method: 'POST'
 
 
+  }
+);}
+
+
+export type authForgotPasswordResponse202 = {
+  data: AuthForgotPassword202
+  status: 202
+}
+
+export type authForgotPasswordResponse429 = {
+  data: void
+  status: 429
+}
+
+export type authForgotPasswordResponseSuccess = (authForgotPasswordResponse202) & {
+  headers: Headers;
+};
+export type authForgotPasswordResponseError = (authForgotPasswordResponse429) & {
+  headers: Headers;
+};
+
+export type authForgotPasswordResponse = (authForgotPasswordResponseSuccess | authForgotPasswordResponseError)
+
+export const getAuthForgotPasswordUrl = () => {
+
+
+
+
+  return `/auth/password/forgot`
+}
+
+export const authForgotPassword = async (authForgotPasswordBody: AuthForgotPasswordBody, options?: Parameters<typeof customFetch>[1]): Promise<authForgotPasswordResponse> => {
+
+  return customFetch<authForgotPasswordResponse>(getAuthForgotPasswordUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(authForgotPasswordBody)
+  }
+);}
+
+
+export type authCheckResetLinkResponse200 = {
+  data: AuthCheckResetLink200
+  status: 200
+}
+
+export type authCheckResetLinkResponseSuccess = (authCheckResetLinkResponse200) & {
+  headers: Headers;
+};
+;
+
+export type authCheckResetLinkResponse = (authCheckResetLinkResponseSuccess)
+
+export const getAuthCheckResetLinkUrl = (params: AuthCheckResetLinkParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/auth/password/reset?${stringifiedParams}` : `/auth/password/reset`
+}
+
+export const authCheckResetLink = async (params: AuthCheckResetLinkParams, options?: Parameters<typeof customFetch>[1]): Promise<authCheckResetLinkResponse> => {
+
+  return customFetch<authCheckResetLinkResponse>(getAuthCheckResetLinkUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type authResetPasswordResponse200 = {
+  data: AuthResetPassword200
+  status: 200
+}
+
+export type authResetPasswordResponse400 = {
+  data: void
+  status: 400
+}
+
+export type authResetPasswordResponse410 = {
+  data: void
+  status: 410
+}
+
+export type authResetPasswordResponseSuccess = (authResetPasswordResponse200) & {
+  headers: Headers;
+};
+export type authResetPasswordResponseError = (authResetPasswordResponse400 | authResetPasswordResponse410) & {
+  headers: Headers;
+};
+
+export type authResetPasswordResponse = (authResetPasswordResponseSuccess | authResetPasswordResponseError)
+
+export const getAuthResetPasswordUrl = () => {
+
+
+
+
+  return `/auth/password/reset`
+}
+
+export const authResetPassword = async (authResetPasswordBody: AuthResetPasswordBody, options?: Parameters<typeof customFetch>[1]): Promise<authResetPasswordResponse> => {
+
+  return customFetch<authResetPasswordResponse>(getAuthResetPasswordUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(authResetPasswordBody)
   }
 );}
 

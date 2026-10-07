@@ -20,6 +20,8 @@ test("getRoute maps the SPA home route to the landing/app home kind", () => {
     org: "trailing",
   });
   expect(getRoute("/-/login")).toEqual({ kind: "login" });
+  expect(getRoute("/-/forgot_password")).toEqual({ kind: "forgotPassword" });
+  expect(getRoute("/-/reset_password")).toEqual({ kind: "resetPassword" });
   expect(getRoute("/-/signup")).toEqual({ kind: "signup" });
   expect(getRoute("/-/admin/subscriptions")).toEqual({
     kind: "adminSubscriptions",
@@ -205,6 +207,8 @@ test("routeToPath keeps home and workspace on the root URL", () => {
   expect(routeToPath({ kind: "home" })).toBe("/");
   expect(routeToPath({ kind: "workspace" })).toBe("/");
   expect(routeToPath({ kind: "login" })).toBe("/-/login");
+  expect(routeToPath({ kind: "forgotPassword" })).toBe("/-/forgot_password");
+  expect(routeToPath({ kind: "resetPassword" })).toBe("/-/reset_password");
   expect(routeToPath({ kind: "signup" })).toBe("/-/signup");
   expect(routeToPath({ kind: "adminSubscriptions" })).toBe(
     "/-/admin/subscriptions",

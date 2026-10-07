@@ -162,6 +162,22 @@ input {
   color: var(--bs-coral-text);
 }
 
+/* "Forgot password?" under the password field. Quiet: the coral on this
+   panel belongs to the submit button. */
+.app-login-forgot {
+  justify-self: end;
+  margin-top: calc(-1 * var(--brand-space-2));
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-sm);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.app-login-forgot:hover,
+.app-login-forgot:focus-visible {
+  color: var(--bs-text-primary);
+}
+
 .app-login-hint {
   margin: 0;
   color: var(--bs-text-muted);

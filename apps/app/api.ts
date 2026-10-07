@@ -249,6 +249,31 @@ export async function signup(
   return response.data;
 }
 
+/**
+ * Ask for a password reset link. Resolves the same way whether or not the
+ * address has an account — the API will not say, and neither should the page.
+ */
+export async function requestPasswordReset(email: string): Promise<void> {
+  await AuthClient.authForgotPassword({ email: email.trim() });
+}
+
+/** Whether a reset link still works, and whose password it would set. */
+export async function checkResetLink(
+  token: string,
+): Promise<{ valid: boolean; username?: string }> {
+  const response = await AuthClient.authCheckResetLink({ token });
+  return response.data;
+}
+
+/** Set a new password from a reset link. Signs the person in. */
+export async function resetPassword(
+  token: string,
+  password: string,
+): Promise<SessionAuthState> {
+  const response = await AuthClient.authResetPassword({ token, password });
+  return response.data;
+}
+
 export async function fetchSessionUser(): Promise<SessionAuthState | null> {
   try {
     const response = await AuthClient.authMe();

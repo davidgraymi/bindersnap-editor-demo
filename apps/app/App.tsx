@@ -21,6 +21,10 @@ import { BindersnapLogoMark } from "./components/BindersnapLogoMark";
 import { LandingPage } from "./components/LandingPage";
 import { WorkspaceSkeleton } from "./components/WorkspaceSkeleton";
 import {
+  ForgotPasswordPage,
+  ResetPasswordPage,
+} from "./components/PasswordResetPages";
+import {
   type SessionUser,
   createCheckoutSession,
   createOrganization,
@@ -52,7 +56,14 @@ import { resolveSignupPrefill } from "./authIntent";
 import { validateFullName } from "../../packages/utils/personName";
 
 type AuthView =
-  "loading" | "callback" | "landing" | "login" | "createOrganization" | "app";
+  | "loading"
+  | "callback"
+  | "landing"
+  | "login"
+  | "forgotPassword"
+  | "resetPassword"
+  | "createOrganization"
+  | "app";
 type AuthMode = "signin" | "signup";
 
 interface LoginPageProps {
@@ -274,6 +285,19 @@ function LoginPage({
                 }
               />
             </label>
+
+            {mode === "signin" ? (
+              <a
+                className="app-login-forgot"
+                href="/-/forgot_password"
+                onClick={(event) => {
+                  event.preventDefault();
+                  navigateTo({ kind: "forgotPassword" });
+                }}
+              >
+                Forgot password?
+              </a>
+            ) : null}
 
             {mode === "signup" ? (
               <label className="app-field">
@@ -590,7 +614,12 @@ export function App() {
     const isAdminSubscriptionRoute =
       route.kind === "adminSubscriptions" && user?.isAdmin;
 
-    if (user && (route.kind === "login" || route.kind === "signup")) {
+    if (
+      user &&
+      (route.kind === "login" ||
+        route.kind === "signup" ||
+        route.kind === "forgotPassword")
+    ) {
       navigateTo({ kind: "home" }, true);
       return;
     }
@@ -703,6 +732,16 @@ export function App() {
       return "loading";
     }
 
+    // A reset link works whoever is signed in on this browser: it sets the
+    // password of the account it was sent for, and signs that account in.
+    if (route.kind === "resetPassword") {
+      return "resetPassword";
+    }
+
+    if (route.kind === "forgotPassword" && !user) {
+      return "forgotPassword";
+    }
+
     if (route.kind === "createOrganization" && user) {
       return "createOrganization";
     }
@@ -766,6 +805,26 @@ export function App() {
           });
           await refreshSession().catch(() => undefined);
           setOrganizationSetupReason(null);
+          navigateTo({ kind: "home" }, true);
+        }}
+      />
+    );
+  }
+
+  if (view === "forgotPassword") {
+    return <ForgotPasswordPage />;
+  }
+
+  if (view === "resetPassword") {
+    return (
+      <ResetPasswordPage
+        onSignedIn={async () => {
+          const nextUser = await refreshSession();
+          if (!nextUser) {
+            throw new Error(
+              "Your password is saved, but signing in failed. Sign in with it.",
+            );
+          }
           navigateTo({ kind: "home" }, true);
         }}
       />

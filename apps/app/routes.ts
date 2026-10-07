@@ -12,6 +12,10 @@ export type AppRoute =
   | { kind: "home" }
   | { kind: "login" }
   | { kind: "signup" }
+  /** "Forgot password?": ask for a reset link. `/-/forgot_password`. */
+  | { kind: "forgotPassword" }
+  /** Where the emailed link lands: `/-/reset_password?token=…`. */
+  | { kind: "resetPassword" }
   | { kind: "callback" }
   | { kind: "workspace" }
   | { kind: "documents" }
@@ -146,6 +150,8 @@ export const RESERVED_FIRST_SEGMENTS = RESERVED_ORGANIZATION_NAMES;
 const APP_PAGES: Readonly<Record<string, AppRoute>> = {
   "/-/login": { kind: "login" },
   "/-/signup": { kind: "signup" },
+  "/-/forgot_password": { kind: "forgotPassword" },
+  "/-/reset_password": { kind: "resetPassword" },
   "/-/documents": { kind: "documents" },
   // Every change in flight, across every binder. The counterpart to a
   // binder's own Change requests tab, which can only answer for one binder.
@@ -244,6 +250,10 @@ export function routeToPath(route: AppRoute): string {
       return "/-/login";
     case "signup":
       return "/-/signup";
+    case "forgotPassword":
+      return "/-/forgot_password";
+    case "resetPassword":
+      return "/-/reset_password";
     case "callback":
       return "/auth/callback";
     case "documents":
