@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
+import { signUpAndConfirm } from "./mailpit";
 
 test.describe.configure({ timeout: 120_000 });
 
@@ -37,7 +38,7 @@ test("somebody with a 16-character username can open a document to edit", async 
 }) => {
   const username = `ed-${randomUUID().replace(/-/g, "").slice(0, 13)}`;
   expect(username).toHaveLength(16);
-  const signup = await fetch(`${API_BASE_URL}/auth/signup`, {
+  const signup = await signUpAndConfirm(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
     body: JSON.stringify({

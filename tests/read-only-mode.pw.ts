@@ -25,6 +25,7 @@ import {
   GITEA_ADMIN_PASS,
   GITEA_ADMIN_USER,
 } from "./helpers";
+import { signUpAndConfirm } from "./mailpit";
 
 // Signup, organization creation, binder creation and two page loads, on a
 // stack that may be cold. The suite default is nowhere near enough.
@@ -63,7 +64,7 @@ function authHeaders(sessionCookie: string): Record<string, string> {
 }
 
 async function signUp(credentials: Credentials): Promise<string> {
-  const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+  const response = await signUpAndConfirm(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
     body: JSON.stringify({

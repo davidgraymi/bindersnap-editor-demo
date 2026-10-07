@@ -10,7 +10,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
-import { countEmails, waitForEmail } from "./mailpit";
+import { signUpAndConfirm, waitForEmail } from "./mailpit";
 
 test.describe.configure({ mode: "parallel", timeout: 180_000 });
 
@@ -26,7 +26,7 @@ async function signUp(prefix: string): Promise<Person> {
   const username = `${prefix}-${suffix}`;
   const email = `${username}@users.bindersnap.local`;
   const password = `Bindersnap-${suffix}!`;
-  const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+  const response = await signUpAndConfirm(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
     body: JSON.stringify({
@@ -166,11 +166,11 @@ test("a change's review, request, readiness and publish each reach the right inb
           `/api/app/binders/${org}/${binder}/changes/${change}/reviews`,
           { event: "APPROVE" },
         );
-        return countEmails(owner.email);
+        return countEmailsMatching(owner.email, /^Ready to publish: /);
       },
       { timeout: 60_000, intervals: [3_000] },
     )
-    .toBeGreaterThanOrEqual(2);
+    .toBeGreaterThanOrEqual(1);
   await waitForEmail(owner.email, /^Ready to publish: /);
 
   // 4. Published: the reviewer was part of it.

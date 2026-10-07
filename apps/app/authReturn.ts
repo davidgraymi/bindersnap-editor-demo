@@ -24,3 +24,18 @@ export function takeReturnTo(): string | null {
     return null;
   }
 }
+
+/**
+ * The invitation a signup is coming from, without forgetting where to return.
+ * Sent with the signup: an invitation to the same address already proves it,
+ * so no confirmation email is needed.
+ */
+export function pendingInvitationToken(): string | null {
+  try {
+    const path = window.sessionStorage.getItem(KEY) ?? "";
+    const match = path.match(/^\/-\/invitations\/([A-Za-z0-9_-]+)(?:[?#]|$)/);
+    return match ? match[1]! : null;
+  } catch {
+    return null;
+  }
+}

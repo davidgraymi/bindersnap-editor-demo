@@ -4,13 +4,15 @@ Lightweight Bun auth/BFF service for the unified GitHub Pages SPA.
 
 ## What it does
 
-- `POST /auth/signup`
+- `POST /auth/signup` signs the new account in and emails a link to confirm its address; until it is opened, every `/api/app/` route answers `403` with `code: "email_unverified"`. Signing up from an invitation sent to the same address (`invitation`) confirms it without the email.
 - `POST /auth/login` accepts `identifier`/`password` plus optional `rememberMe`
 - `POST /auth/logout`
-- `GET /auth/me`
+- `GET /auth/me` — includes `emailVerified`, and `pendingEmail` while it is false
+- `POST /auth/email/verify` confirms an address from the emailed link; no session needed
+- `POST /auth/email/resend` sends the signed-in account a new link, at most once a minute
 - `POST /auth/password/forgot` emails a reset link if the address is an account's; the answer is the same either way
 - `GET /auth/password/reset?token=` says whether a reset link still works
-- `POST /auth/password/reset` sets the new password, ends every session, and signs in
+- `POST /auth/password/reset` sets the new password, ends every session, signs in, and confirms the address the link went to
 - `GET`/`PUT /api/app/account/email-preferences` — which change emails the signed-in person gets
 - `GET`/`POST /api/app/orgs/{org}/invitations`, `DELETE …/invitations/{id}`, `POST …/invitations/{id}/resend` — an owner's invitations by email
 - `GET /api/app/invitations/{token}` says what an invitation is for; `POST …/accept` accepts it as the signed-in account whose address was invited

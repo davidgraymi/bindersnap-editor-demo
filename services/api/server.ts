@@ -26,6 +26,10 @@ import {
   type Invitation,
 } from "./invitations";
 import {
+  emailVerificationStore,
+  verifyEmailContent,
+} from "./email-verification";
+import {
   passwordChangedEmail,
   passwordResetStore,
   resetLinkEmail,
@@ -693,7 +697,7 @@ async function getSessionFromRequest(
   return session;
 }
 
-type AuthRateLimitAction = "login" | "signup" | "forgot" | "reset";
+type AuthRateLimitAction = "login" | "signup" | "forgot" | "reset" | "verify";
 
 function consumeAuthRateLimit(
   req: Request,
@@ -2217,6 +2221,7 @@ async function handleSignup(
     firstName?: unknown;
     lastName?: unknown;
     organization?: unknown;
+    invitation?: unknown;
   }>(req);
   const username =
     typeof payload?.username === "string" ? payload.username : "";
@@ -2229,6 +2234,8 @@ async function handleSignup(
     typeof payload?.lastName === "string" ? payload.lastName : "";
   const organization =
     typeof payload?.organization === "string" ? payload.organization : "";
+  const invitationToken =
+    typeof payload?.invitation === "string" ? payload.invitation : "";
 
   if (!username || !email || !password) {
     return json(
@@ -2266,6 +2273,8 @@ async function handleSignup(
     username,
     clientIp,
   });
+
+  startEmailVerification(username, email, invitationToken);
 
   const loginName = await verifyUserCredentials(username, password).catch(
     () => null,
@@ -2457,6 +2466,9 @@ async function handleAuthMe(
   });
 
   const giteaUser = await fetchSessionGiteaUser(session);
+  const pendingAddress = emailVerificationStore().pendingAddress(
+    session.username,
+  );
 
   return json(
     200,
@@ -2465,6 +2477,8 @@ async function handleAuthMe(
         username: giteaUser?.username ?? session.username,
         fullName: giteaUser?.fullName ?? undefined,
         isAdmin: giteaUser?.isAdmin === true,
+        emailVerified: pendingAddress === null,
+        ...(pendingAddress ? { pendingEmail: pendingAddress } : {}),
       },
       // No Gitea token: see `sessionResponse`.
     },
@@ -2740,6 +2754,141 @@ function rateLimitedResponse(
  * slow happens, so neither the words nor the timing say which addresses have
  * accounts. A link goes out at most once every two minutes per account.
  */
+/**
+ * After signup: the account must show it owns its address before it can use
+ * the app (see `email-verification.ts`). Signing up from an invitation sent to
+ * the same address already shows it, so that skips the email.
+ */
+function startEmailVerification(
+  username: string,
+  email: string,
+  invitationToken: string,
+): void {
+  const invitation = invitationToken
+    ? invitationStore().byToken(invitationToken)
+    : null;
+  const invited =
+    invitation !== null &&
+    invitationStatus(invitation) === "pending" &&
+    sameAddress(invitation.email, email);
+  const verifications = emailVerificationStore();
+  const token = verifications.start(username, email, { confirmed: invited });
+  if (invited) {
+    logger.info("Signed up from an invitation; address confirmed by it", {
+      username,
+    });
+    return;
+  }
+  queueEmail({
+    kind: "verify-email",
+    to: email,
+    content: verifyEmailContent({
+      link: `${config.appOrigin}/-/verify_email?token=${encodeURIComponent(token)}`,
+      username,
+    }),
+  });
+}
+
+/**
+ * Open an emailed confirmation link. No session needed: it is often opened on
+ * a phone, away from the browser that signed up. The token is the credential.
+ */
+async function handleVerifyEmail(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const rateLimit = consumeAuthRateLimit(req, "verify");
+  if (rateLimit.limited) {
+    return rateLimitedResponse(baseHeaders, rateLimit.retryAfterSeconds);
+  }
+  const payload = await readJson<{ token?: unknown }>(req);
+  const token = typeof payload?.token === "string" ? payload.token : "";
+  const result = token
+    ? emailVerificationStore().verify(token)
+    : ({ ok: false, reason: "unknown" } as const);
+  if (!result.ok) {
+    return json(
+      result.reason === "expired" ? 410 : 404,
+      {
+        error:
+          result.reason === "expired"
+            ? "This link has expired. Sign in, and send yourself a new one."
+            : "This link does not work. Sign in, and send yourself a new one.",
+      },
+      baseHeaders,
+    );
+  }
+  logger.info("Email address confirmed", { username: result.username });
+  return json(200, { verified: true }, baseHeaders);
+}
+
+/** Send the signed-in person a new confirmation link. */
+async function handleResendVerification(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { username } = auth.session;
+  const sent = emailVerificationStore().resend(username);
+  if (sent === "cooldown") {
+    return json(
+      429,
+      { error: "A link went out a moment ago. Give it a minute to arrive." },
+      mergeHeaders(baseHeaders, { "Retry-After": "60" }),
+    );
+  }
+  if (sent === null) {
+    return json(200, { verified: true }, baseHeaders);
+  }
+  queueEmail({
+    kind: "verify-email",
+    to: sent.email,
+    content: verifyEmailContent({
+      link: `${config.appOrigin}/-/verify_email?token=${encodeURIComponent(sent.token)}`,
+      username,
+    }),
+  });
+  logger.info("Email confirmation link resent", { username });
+  return json(202, { verified: false }, baseHeaders);
+}
+
+/**
+ * Routes an account that has not confirmed its address may still use. Its
+ * own invitation's page says what it is for, and deleting the account is
+ * always allowed. Everything else under `/api/app/` waits for the link.
+ */
+function allowedBeforeEmailConfirmed(pathname: string, method: string) {
+  if (method === "GET" && /^\/api\/app\/invitations\/[^/]+$/.test(pathname)) {
+    return true;
+  }
+  if (method === "GET" && pathname.startsWith("/api/app/avatars/")) return true;
+  if (pathname === "/api/app/account" && method === "DELETE") return true;
+  if (pathname === "/api/app/account/blockers" && method === "GET") return true;
+  return false;
+}
+
+async function emailConfirmationGate(
+  req: Request,
+  pathname: string,
+  method: string,
+  baseHeaders: Headers,
+): Promise<Response | null> {
+  if (!pathname.startsWith("/api/app/")) return null;
+  if (allowedBeforeEmailConfirmed(pathname, method)) return null;
+  const session = await getSessionFromRequest(req);
+  if (!session) return null;
+  if (!emailVerificationStore().isUnconfirmed(session.username)) return null;
+  return json(
+    403,
+    {
+      error: "Confirm your email address first. The link is in your inbox.",
+      code: "email_unverified" as const,
+    },
+    baseHeaders,
+  );
+}
+
 async function handleForgotPassword(
   req: Request,
   baseHeaders: Headers,
@@ -2890,6 +3039,8 @@ async function handleResetPassword(
   }
 
   resets.retireAll(record.username);
+  // The link went to this address, so whoever used it owns it.
+  emailVerificationStore().confirm(record.username, record.email);
   await endOtherSessions(record.username);
   resetAuthRateLimit(req, "login");
   queueEmail({
@@ -3036,6 +3187,7 @@ async function handleDeleteAccount(
 
     // The token died with the account; only the row is left.
     await sessionStore.delete(session.id);
+    emailVerificationStore().forget(username);
     logger.info("Account deleted", {
       username,
       organizationsLeft: orgs.length,
@@ -4020,6 +4172,8 @@ async function sendChangeEmails(params: {
   for (const recipient of recipients) {
     if (isServiceAccount(recipient)) continue;
     if (!preferences.wants(recipient, topic)) continue;
+    // Never to an address nobody has shown is theirs.
+    if (emailVerificationStore().isUnconfirmed(recipient)) continue;
     const { email } = await readPerson(client, recipient);
     if (!email) continue;
     const token = preferences.tokenFor(recipient);
@@ -14318,8 +14472,16 @@ async function handleRequest(req: Request): Promise<Response> {
   }
 
   let response: Response;
+  const unconfirmed = await emailConfirmationGate(
+    req,
+    pathname,
+    method,
+    baseHeaders,
+  );
 
-  if (pathname === "/auth/signup" && method === "POST") {
+  if (unconfirmed) {
+    response = unconfirmed;
+  } else if (pathname === "/auth/signup" && method === "POST") {
     response = await handleSignup(req, baseHeaders);
   } else if (pathname === "/auth/login" && method === "POST") {
     response = await handleLogin(req, baseHeaders);
@@ -14327,6 +14489,10 @@ async function handleRequest(req: Request): Promise<Response> {
     response = await handleLogout(req, baseHeaders);
   } else if (pathname === "/auth/me" && method === "GET") {
     response = await handleAuthMe(req, baseHeaders);
+  } else if (pathname === "/auth/email/verify" && method === "POST") {
+    response = await handleVerifyEmail(req, baseHeaders);
+  } else if (pathname === "/auth/email/resend" && method === "POST") {
+    response = await handleResendVerification(req, baseHeaders);
   } else if (pathname === "/auth/password/forgot" && method === "POST") {
     response = await handleForgotPassword(req, baseHeaders);
   } else if (pathname === "/auth/password/reset" && method === "GET") {

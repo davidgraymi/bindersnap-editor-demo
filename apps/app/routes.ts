@@ -16,6 +16,8 @@ export type AppRoute =
   | { kind: "forgotPassword" }
   /** Where the emailed link lands: `/-/reset_password?token=…`. */
   | { kind: "resetPassword" }
+  /** Where the signup confirmation link lands: `/-/verify_email?token=…`. */
+  | { kind: "verifyEmail" }
   /** Where an email's unsubscribe link lands: `/-/unsubscribe?token=…`. */
   | { kind: "unsubscribe" }
   /** Where an invitation email lands: `/-/invitations/{token}`. */
@@ -157,6 +159,7 @@ const APP_PAGES: Readonly<Record<string, AppRoute>> = {
   "/-/forgot_password": { kind: "forgotPassword" },
   "/-/reset_password": { kind: "resetPassword" },
   "/-/unsubscribe": { kind: "unsubscribe" },
+  "/-/verify_email": { kind: "verifyEmail" },
   "/-/documents": { kind: "documents" },
   // Every change in flight, across every binder. The counterpart to a
   // binder's own Change requests tab, which can only answer for one binder.
@@ -266,6 +269,8 @@ export function routeToPath(route: AppRoute): string {
       return "/-/reset_password";
     case "unsubscribe":
       return "/-/unsubscribe";
+    case "verifyEmail":
+      return "/-/verify_email";
     case "invitation":
       return `/-/invitations/${encodeURIComponent(route.token)}`;
     case "callback":

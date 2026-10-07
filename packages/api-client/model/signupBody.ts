@@ -15,4 +15,5 @@ export interface SignupBody {
   email: string;
   /** @minLength 1 */
   password: string;
+  invitation?: string;
 }

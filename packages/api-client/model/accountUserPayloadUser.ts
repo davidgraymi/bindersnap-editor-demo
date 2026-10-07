@@ -9,4 +9,6 @@ export type AccountUserPayloadUser = {
   username: string;
   fullName?: string;
   isAdmin?: boolean;
+  emailVerified?: boolean;
+  pendingEmail?: string;
 };

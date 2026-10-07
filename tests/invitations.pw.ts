@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
-import { waitForEmail } from "./mailpit";
+import { countEmails, signUpAndConfirm, waitForEmail } from "./mailpit";
 
 test.describe.configure({ mode: "parallel", timeout: 180_000 });
 
@@ -25,7 +25,7 @@ async function signUp(prefix: string, email?: string): Promise<Person> {
   const username = `${prefix}-${suffix}`;
   const address = email ?? `${username}@users.bindersnap.local`;
   const password = `Bindersnap-${suffix}!`;
-  const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+  const response = await signUpAndConfirm(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
     body: JSON.stringify({
@@ -146,10 +146,12 @@ test("somebody with no account signs up from the email and lands in the binder",
   await page.getByLabel("Confirm Password").fill("Bindersnap-invitee-1!");
   await page.getByRole("button", { name: "Create account" }).click();
 
-  // Back at the invitation, now signed in.
+  // Back at the invitation, now signed in. The invitation went to this
+  // address, which proves it: no confirmation email, no waiting.
   await expect(page).toHaveURL(/\/-\/invitations\//);
   await page.getByRole("button", { name: /^Join / }).click();
   await expect(page).toHaveURL(new RegExp(`/${org}$`));
+  expect(await countEmails(address)).toBe(1);
 
   expect(await members(owner, org)).toContain(username);
   const binderPeople = await ok(

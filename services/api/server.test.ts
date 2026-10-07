@@ -12,6 +12,7 @@ import {
   WebhookEventStore,
   webhookEventStore,
 } from "./subscriptions";
+import { emailVerificationStore } from "./email-verification";
 
 type MockedFetchCall = {
   path: string;
@@ -1322,9 +1323,40 @@ describe("admin subscription access overrides", () => {
           username: expect.stringMatching(/^admin-/),
           fullName: "Admin User",
           isAdmin: true,
+          emailVerified: true,
         },
       });
     } finally {
+      server.stop(true);
+    }
+  });
+
+  test("an account waiting on its confirmation link is refused the app's routes", async () => {
+    const server = createApiServer();
+    const username = `pending-${randomUUID()}`;
+    const sessionId = await seedSession(username);
+    emailVerificationStore().start(username, `${username}@example.com`);
+
+    try {
+      const me = await server.fetch(makeSessionRequest("/auth/me", sessionId));
+      expect((await me.json()).user).toMatchObject({
+        emailVerified: false,
+        pendingEmail: `${username}@example.com`,
+      });
+
+      const refused = await server.fetch(
+        makeSessionRequest("/api/app/organizations", sessionId),
+      );
+      expect(refused.status).toBe(403);
+      expect(await refused.json()).toMatchObject({ code: "email_unverified" });
+
+      // Deleting the account it never confirmed is still allowed to start.
+      const blockers = await server.fetch(
+        makeSessionRequest("/api/app/account/blockers", sessionId),
+      );
+      expect(blockers.status).not.toBe(403);
+    } finally {
+      emailVerificationStore().forget(username);
       server.stop(true);
     }
   });

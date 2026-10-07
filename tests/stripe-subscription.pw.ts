@@ -32,6 +32,7 @@ import {
   stripeRunTag,
 } from "./stripe-webhook";
 import { STRIPE_API_VERSION } from "../services/api/stripe/api-version";
+import { signUpAndConfirm } from "./mailpit";
 
 // ---------------------------------------------------------------------------
 // Environment
@@ -454,7 +455,7 @@ async function signUpUser(credentials: {
   email: string;
   password: string;
 }): Promise<string> {
-  const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+  const response = await signUpAndConfirm(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

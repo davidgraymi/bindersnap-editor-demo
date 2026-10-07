@@ -243,6 +243,7 @@ export async function signup(
   username: string,
   email: string,
   password: string,
+  invitation?: string | null,
 ): Promise<SessionAuthState> {
   const response = await AuthClient.authSignup({
     firstName: name.first.trim(),
@@ -250,8 +251,23 @@ export async function signup(
     username: username.trim(),
     email: email.trim(),
     password,
+    ...(invitation ? { invitation } : {}),
   });
   return response.data;
+}
+
+/** Open an emailed confirmation link. Throws with the API's reason if not. */
+export async function verifyEmail(token: string): Promise<void> {
+  await AuthClient.authVerifyEmail({ token });
+}
+
+/**
+ * Send the signed-in person a new confirmation link. Resolves `true` when
+ * there was nothing to send because the address is already confirmed.
+ */
+export async function resendVerificationEmail(): Promise<boolean> {
+  const response = await AuthClient.authResendVerification();
+  return response.status === 200;
 }
 
 /**
