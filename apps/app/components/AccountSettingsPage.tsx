@@ -18,6 +18,7 @@ import {
   validateFullName,
 } from "../../../packages/utils/personName";
 import { SettingsGroup } from "./SettingsGroup";
+import { SkeletonPanel } from "./Skeleton";
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error && err.message.trim() !== ""
@@ -313,6 +314,17 @@ function EmailPreferencesForm() {
     }
   }
 
+  // **No boxes until the real answer is here.** Drawn before it, every box
+  // read as off — a person glancing at the page was told they get no email,
+  // and a click on one that "was off" did nothing once the answer landed.
+  if (!preferences) {
+    return notice ? (
+      <NoticeLine notice={notice} />
+    ) : (
+      <SkeletonPanel label="Loading your email settings" rows={4} right />
+    );
+  }
+
   return (
     <div>
       <ul className="bs-row-list">
@@ -329,8 +341,8 @@ function EmailPreferencesForm() {
                 id={`email-${topic.key}`}
                 className="bs-checkbox"
                 type="checkbox"
-                checked={preferences?.[topic.key] ?? false}
-                disabled={!preferences || saving}
+                checked={preferences[topic.key]}
+                disabled={saving}
                 onChange={(event) =>
                   void change(topic.key, event.target.checked)
                 }
