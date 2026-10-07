@@ -10,6 +10,7 @@ import { expect, test } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 test.describe.configure({ timeout: 120_000 });
 
@@ -54,7 +55,10 @@ async function signUpWithBinder(prefix: string) {
     session,
     "POST",
     "/api/app/organizations",
-    { name: `No Approvals ${randomUUID().slice(0, 6)}` },
+    {
+      acceptedTerms: LEGAL_VERSION,
+      name: `No Approvals ${randomUUID().slice(0, 6)}`,
+    },
   );
   const org = organization.name as string;
   const { workspace } = await call(

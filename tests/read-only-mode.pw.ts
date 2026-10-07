@@ -26,6 +26,7 @@ import {
   GITEA_ADMIN_USER,
 } from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 // Signup, organization creation, binder creation and two page loads, on a
 // stack that may be cold. The suite default is nowhere near enough.
@@ -100,12 +101,15 @@ async function createOrganization(
   const response = await fetch(`${API_BASE_URL}/api/app/organizations`, {
     method: "POST",
     headers: authHeaders(sessionCookie),
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, acceptedTerms: LEGAL_VERSION }),
   });
   const body = await response.text();
   expect(response.status, `create organization failed: ${body}`).toBe(201);
-  return (JSON.parse(body) as { organization: { name: string } }).organization
-    .name;
+  return (
+    JSON.parse(body) as {
+      organization: { name: string };
+    }
+  ).organization.name;
 }
 
 async function createBinder(

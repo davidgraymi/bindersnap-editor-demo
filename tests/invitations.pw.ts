@@ -10,6 +10,7 @@ import { expect, test } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL, agreeToTerms } from "./helpers";
 import { countEmails, signUpAndConfirm, waitForEmail } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 test.describe.configure({ mode: "parallel", timeout: 180_000 });
 
@@ -81,6 +82,7 @@ async function ok(
 
 async function orgWithBinder(owner: Person) {
   const created = await ok(owner.session, "POST", "/api/app/organizations", {
+    acceptedTerms: LEGAL_VERSION,
     name: `Invite ${randomUUID().slice(0, 6)}`,
   });
   const org = (created.organization as { name: string }).name;

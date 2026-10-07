@@ -8,6 +8,7 @@ import { expect, test } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 test.describe.configure({ mode: "parallel", timeout: 120_000 });
 
@@ -63,6 +64,7 @@ test("the guide picks up where a new customer left off, and stays hidden once hi
 
   // Done somewhere else — here through the API — and the guide still knows.
   const { organization } = await post(session, "/api/app/organizations", {
+    acceptedTerms: LEGAL_VERSION,
     name: `Guide ${randomUUID().slice(0, 6)}`,
   });
   await post(session, `/api/app/orgs/${organization.name}/binders`, {

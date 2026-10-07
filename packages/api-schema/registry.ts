@@ -53,6 +53,10 @@ import {
 } from "./schemas/documents";
 import { SearchUsersPayloadSchema } from "./schemas/users";
 import {
+  AcceptLegalBodySchema,
+  LegalStatusPayloadSchema,
+} from "./schemas/legal";
+import {
   AccountBlockersSchema,
   AccountRefusalSchema,
   AccountUserPayloadSchema,
@@ -657,6 +661,40 @@ registry.registerPath({
     200: {
       description: "User search results",
       content: { "application/json": { schema: SearchUsersPayloadSchema } },
+    },
+  },
+});
+
+// Agreement to the Terms
+registry.registerPath({
+  method: "get",
+  path: "/api/app/legal",
+  operationId: "getLegalStatus",
+  tags: ["legal"],
+  responses: {
+    200: {
+      description:
+        "What the signed-in person still has to accept, for themselves and for organizations they own",
+      content: { "application/json": { schema: LegalStatusPayloadSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/legal/accept",
+  operationId: "acceptLegal",
+  tags: ["legal"],
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: AcceptLegalBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Recorded; what is still left to accept",
+      content: { "application/json": { schema: LegalStatusPayloadSchema } },
     },
   },
 });

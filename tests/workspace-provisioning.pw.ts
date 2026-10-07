@@ -23,6 +23,7 @@ import {
   GITEA_URL,
 } from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 test.describe.configure({ mode: "parallel", timeout: 120_000 });
 
@@ -78,13 +79,16 @@ async function createOrganization(
   const response = await fetch(`${API_BASE_URL}/api/app/organizations`, {
     method: "POST",
     headers: authHeaders(sessionCookie),
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, acceptedTerms: LEGAL_VERSION }),
   });
 
   const body = await response.text();
   expect(response.status, `create organization failed: ${body}`).toBe(201);
-  return (JSON.parse(body) as { organization: { id: number; name: string } })
-    .organization;
+  return (
+    JSON.parse(body) as {
+      organization: { id: number; name: string };
+    }
+  ).organization;
 }
 
 interface WorkspaceSummary {

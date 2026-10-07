@@ -749,9 +749,17 @@ export async function openNewDocumentModal(page: Page): Promise<void> {
  */
 
 /**
- * Tick the signup form's agreement to the Terms and Privacy Policy, which it
- * will not submit without.
+ * Tick the signup form's agreement to the Terms, which it will not submit
+ * without.
  */
 export async function agreeToTerms(page: Page): Promise<void> {
   await page.getByRole("checkbox", { name: /I agree to the Terms/ }).check();
+}
+
+/**
+ * Tick the create-organization form's acceptance of the Terms for the
+ * organization, which it will not submit without.
+ */
+export async function acceptTermsForOrganization(page: Page): Promise<void> {
+  await page.getByRole("checkbox", { name: /I accept the Terms/ }).check();
 }

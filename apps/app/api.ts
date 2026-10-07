@@ -14,6 +14,7 @@ import * as BindersClient from "../../packages/api-client/workspaces/workspaces"
 import * as NotificationsClient from "../../packages/api-client/notifications/notifications";
 import * as OnboardingClient from "../../packages/api-client/onboarding/onboarding";
 import * as AccountClient from "../../packages/api-client/account/account";
+import * as LegalClient from "../../packages/api-client/legal/legal";
 import type { OnboardingPayload } from "../../packages/api-schema/schemas/onboarding";
 import type {
   AppNotification,
@@ -72,6 +73,10 @@ import type {
   WorkspaceDocumentSummary,
 } from "../../packages/api-schema/schemas/documents";
 import type { SearchUsersPayload } from "../../packages/api-schema/schemas/users";
+import type {
+  AcceptLegalBody,
+  LegalStatusPayload,
+} from "../../packages/api-schema/schemas/legal";
 import type {
   CreatedOrganizationPayload,
   OrganizationSummary,
@@ -786,8 +791,26 @@ export async function deleteOrganization(
 export async function createOrganization(
   name: string,
 ): Promise<CreatedOrganizationPayload["organization"]> {
-  const response = await OrganizationsClient.createOrganization({ name });
+  const response = await OrganizationsClient.createOrganization({
+    name,
+    // The form will not submit until its owner ticks the box for it.
+    acceptedTerms: LEGAL_VERSION,
+  });
   return response.data.organization;
+}
+
+/** What this session still has to accept: for itself, and for its orgs. */
+export async function fetchLegalStatus(): Promise<LegalStatusPayload> {
+  const response = await LegalClient.getLegalStatus();
+  return response.data;
+}
+
+/** Accept the Terms as they stand. Resolves what is left to accept. */
+export async function acceptLegal(
+  body: AcceptLegalBody,
+): Promise<LegalStatusPayload> {
+  const response = await LegalClient.acceptLegal(body);
+  return response.data;
 }
 
 // Binder functions

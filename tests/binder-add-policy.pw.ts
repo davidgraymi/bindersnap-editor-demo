@@ -32,6 +32,7 @@ import {
   openTreeFolder,
 } from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 // Signup, an organization, two binders and several page loads on a stack that
 // may be cold. The suite default is nowhere near enough.
@@ -93,7 +94,7 @@ async function createOrganization(
   const response = await fetch(`${API_BASE_URL}/api/app/organizations`, {
     method: "POST",
     headers: authHeaders(sessionCookie),
-    body: JSON.stringify({ name: displayName }),
+    body: JSON.stringify({ acceptedTerms: LEGAL_VERSION, name: displayName }),
   });
   const body = await response.text();
   expect(response.status, `create organization failed: ${body}`).toBe(201);

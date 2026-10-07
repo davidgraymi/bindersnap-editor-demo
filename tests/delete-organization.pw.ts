@@ -8,6 +8,7 @@ import { expect, test } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 test.describe.configure({ mode: "parallel", timeout: 120_000 });
 
@@ -55,6 +56,7 @@ test("an organization goes only once its binders have, and only by an owner", as
   const owner = await signUp();
   const member = await signUp();
   const created = await call(owner.session, "POST", "/api/app/organizations", {
+    acceptedTerms: LEGAL_VERSION,
     name: `Delete Org ${randomUUID().slice(0, 6)}`,
   });
   const org = (await created.json()).organization.name as string;

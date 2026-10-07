@@ -27,6 +27,7 @@ import {
   GITEA_URL,
 } from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 test.describe.configure({ mode: "serial", timeout: 120_000 });
 
@@ -98,7 +99,7 @@ async function createOrganization(
       // A mutation, so it goes through the state-changing origin check.
       Origin: APP_BASE_URL,
     },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, acceptedTerms: LEGAL_VERSION }),
   });
 
   const body = await response.text();

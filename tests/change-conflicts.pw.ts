@@ -20,6 +20,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 test.describe.configure({ mode: "parallel", timeout: 240_000 });
 
@@ -152,7 +153,10 @@ async function provisionClash(): Promise<{
       await fetch(`${API_BASE_URL}/api/app/organizations`, {
         method: "POST",
         headers: authHeaders(session),
-        body: JSON.stringify({ name: `Clash ${randomUUID().slice(0, 6)}` }),
+        body: JSON.stringify({
+          acceptedTerms: LEGAL_VERSION,
+          name: `Clash ${randomUUID().slice(0, 6)}`,
+        }),
       })
     ).json()) as { organization: { name: string } }
   ).organization.name;

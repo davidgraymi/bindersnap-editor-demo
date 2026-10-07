@@ -10,6 +10,7 @@ import { expect, test } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 test.describe.configure({ timeout: 120_000 });
 
@@ -59,6 +60,7 @@ test("somebody with a 16-character username can open a document to edit", async 
     "POST",
     "/api/app/organizations",
     {
+      acceptedTerms: LEGAL_VERSION,
       name: `Drafts ${randomUUID().slice(0, 6)}`,
     },
   );

@@ -17,6 +17,7 @@ import {
   GITEA_ADMIN_PASS,
   GITEA_ADMIN_USER,
   OWNER,
+  acceptTermsForOrganization,
   agreeToTerms,
   signOutCurrentUser,
 } from "./helpers";
@@ -134,6 +135,15 @@ async function signUpThroughOrganizationSetup(
   await page
     .getByLabel("Organization name")
     .fill(`Mercy Health ${randomUUID().slice(0, 6)}`);
+  // The organization is who the Terms are with, so its owner accepts them for
+  // it here, not only for themselves at signup.
+  await page.getByRole("button", { name: "Create organization" }).click();
+  await expect(
+    page.getByText(
+      "Accept the Terms of Service for the organization to create it.",
+    ),
+  ).toBeVisible();
+  await acceptTermsForOrganization(page);
   await page.getByRole("button", { name: "Create organization" }).click();
 
   // Provisioning creates the organization, its first binder, three role teams
@@ -399,9 +409,7 @@ test.describe("signup flow", () => {
     await submitSignupForm(page);
 
     await expect(
-      page.getByText(
-        "Agree to the Terms of Service and Privacy Policy to create an account.",
-      ),
+      page.getByText("Agree to the Terms of Service to create an account."),
     ).toBeVisible();
     expect(signupRequestCount).toBe(0);
 
