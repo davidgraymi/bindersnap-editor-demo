@@ -10,7 +10,5 @@ export interface SessionAuthState {
   /** @nullable */
   user: SessionAuthStateUser;
   /** @nullable */
-  token: string | null;
-  /** @nullable */
   suggestedOrganizationName?: string | null;
 }
