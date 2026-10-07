@@ -5,6 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type {
+  AcceptInvitation200,
   AddOrganizationGroupMember200,
   AddOrganizationGroupMemberBody,
   AddOrganizationPerson200,
@@ -13,12 +14,18 @@ import type {
   CreateOrganizationBody,
   CreateOrganizationGroup201,
   CreateOrganizationGroupBody,
+  CreateOrganizationInvitation200,
+  CreateOrganizationInvitation201,
+  CreateOrganizationInvitationBody,
   DeleteOrganizationBody,
+  GetInvitation200,
   GetOrganizationDeletion200,
   GetOrganizationPeople200,
+  ListOrganizationInvitations200,
   ListOrganizations200,
   RemoveOrganizationGroupMember200,
   RemoveOrganizationPerson200,
+  ResendOrganizationInvitation200,
   SetOrganizationPersonRole200,
   SetOrganizationPersonRoleBody
 } from '../model';
@@ -227,6 +234,208 @@ export const addOrganizationPerson = async (org: string,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(addOrganizationPersonBody)
+  }
+);}
+
+
+export type listOrganizationInvitationsResponse200 = {
+  data: ListOrganizationInvitations200
+  status: 200
+}
+
+export type listOrganizationInvitationsResponseSuccess = (listOrganizationInvitationsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listOrganizationInvitationsResponse = (listOrganizationInvitationsResponseSuccess)
+
+export const getListOrganizationInvitationsUrl = (org: string,) => {
+
+
+
+
+  return `/api/app/orgs/${org}/invitations`
+}
+
+export const listOrganizationInvitations = async (org: string, options?: Parameters<typeof customFetch>[1]): Promise<listOrganizationInvitationsResponse> => {
+
+  return customFetch<listOrganizationInvitationsResponse>(getListOrganizationInvitationsUrl(org),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type createOrganizationInvitationResponse200 = {
+  data: CreateOrganizationInvitation200
+  status: 200
+}
+
+export type createOrganizationInvitationResponse201 = {
+  data: CreateOrganizationInvitation201
+  status: 201
+}
+
+export type createOrganizationInvitationResponseSuccess = (createOrganizationInvitationResponse200 | createOrganizationInvitationResponse201) & {
+  headers: Headers;
+};
+;
+
+export type createOrganizationInvitationResponse = (createOrganizationInvitationResponseSuccess)
+
+export const getCreateOrganizationInvitationUrl = (org: string,) => {
+
+
+
+
+  return `/api/app/orgs/${org}/invitations`
+}
+
+export const createOrganizationInvitation = async (org: string,
+    createOrganizationInvitationBody: CreateOrganizationInvitationBody, options?: Parameters<typeof customFetch>[1]): Promise<createOrganizationInvitationResponse> => {
+
+  return customFetch<createOrganizationInvitationResponse>(getCreateOrganizationInvitationUrl(org),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createOrganizationInvitationBody)
+  }
+);}
+
+
+export type revokeOrganizationInvitationResponse204 = {
+  data: void
+  status: 204
+}
+
+export type revokeOrganizationInvitationResponseSuccess = (revokeOrganizationInvitationResponse204) & {
+  headers: Headers;
+};
+;
+
+export type revokeOrganizationInvitationResponse = (revokeOrganizationInvitationResponseSuccess)
+
+export const getRevokeOrganizationInvitationUrl = (org: string,
+    id: string,) => {
+
+
+
+
+  return `/api/app/orgs/${org}/invitations/${id}`
+}
+
+export const revokeOrganizationInvitation = async (org: string,
+    id: string, options?: Parameters<typeof customFetch>[1]): Promise<revokeOrganizationInvitationResponse> => {
+
+  return customFetch<revokeOrganizationInvitationResponse>(getRevokeOrganizationInvitationUrl(org,id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+export type resendOrganizationInvitationResponse200 = {
+  data: ResendOrganizationInvitation200
+  status: 200
+}
+
+export type resendOrganizationInvitationResponseSuccess = (resendOrganizationInvitationResponse200) & {
+  headers: Headers;
+};
+;
+
+export type resendOrganizationInvitationResponse = (resendOrganizationInvitationResponseSuccess)
+
+export const getResendOrganizationInvitationUrl = (org: string,
+    id: string,) => {
+
+
+
+
+  return `/api/app/orgs/${org}/invitations/${id}/resend`
+}
+
+export const resendOrganizationInvitation = async (org: string,
+    id: string, options?: Parameters<typeof customFetch>[1]): Promise<resendOrganizationInvitationResponse> => {
+
+  return customFetch<resendOrganizationInvitationResponse>(getResendOrganizationInvitationUrl(org,id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+export type getInvitationResponse200 = {
+  data: GetInvitation200
+  status: 200
+}
+
+export type getInvitationResponseSuccess = (getInvitationResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getInvitationResponse = (getInvitationResponseSuccess)
+
+export const getGetInvitationUrl = (token: string,) => {
+
+
+
+
+  return `/api/app/invitations/${token}`
+}
+
+export const getInvitation = async (token: string, options?: Parameters<typeof customFetch>[1]): Promise<getInvitationResponse> => {
+
+  return customFetch<getInvitationResponse>(getGetInvitationUrl(token),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type acceptInvitationResponse200 = {
+  data: AcceptInvitation200
+  status: 200
+}
+
+export type acceptInvitationResponseSuccess = (acceptInvitationResponse200) & {
+  headers: Headers;
+};
+;
+
+export type acceptInvitationResponse = (acceptInvitationResponseSuccess)
+
+export const getAcceptInvitationUrl = (token: string,) => {
+
+
+
+
+  return `/api/app/invitations/${token}/accept`
+}
+
+export const acceptInvitation = async (token: string, options?: Parameters<typeof customFetch>[1]): Promise<acceptInvitationResponse> => {
+
+  return customFetch<acceptInvitationResponse>(getAcceptInvitationUrl(token),
+  {
+    ...options,
+    method: 'POST'
+
+
   }
 );}
 

@@ -1,4 +1,11 @@
 import "./init-openapi";
+import {
+  AcceptInvitationResultSchema,
+  CreateInvitationBodySchema,
+  InvitationListPayloadSchema,
+  InvitationPayloadSchema,
+  InvitationSummarySchema,
+} from "./schemas/invitations";
 import { OpenAPIRegistry } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
 
@@ -791,6 +798,99 @@ registry.registerPath({
       content: {
         "application/json": { schema: OrganizationPeoplePayloadSchema },
       },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/orgs/{org}/invitations",
+  operationId: "listOrganizationInvitations",
+  tags: ["organizations"],
+  request: { params: z.object({ org: z.string() }) },
+  responses: {
+    200: {
+      description:
+        "Invitations not yet joined, revoked or expired. Owners only.",
+      content: {
+        "application/json": { schema: InvitationListPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/orgs/{org}/invitations",
+  operationId: "createOrganizationInvitation",
+  tags: ["organizations"],
+  request: {
+    params: z.object({ org: z.string() }),
+    body: {
+      required: true,
+      content: { "application/json": { schema: CreateInvitationBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "That address already had an invitation; it was sent again",
+      content: { "application/json": { schema: InvitationPayloadSchema } },
+    },
+    201: {
+      description: "Invited. Grants nothing until accepted.",
+      content: { "application/json": { schema: InvitationPayloadSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "delete",
+  path: "/api/app/orgs/{org}/invitations/{id}",
+  operationId: "revokeOrganizationInvitation",
+  tags: ["organizations"],
+  request: { params: z.object({ org: z.string(), id: z.string() }) },
+  responses: { 204: { description: "Revoked; the link stops working" } },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/orgs/{org}/invitations/{id}/resend",
+  operationId: "resendOrganizationInvitation",
+  tags: ["organizations"],
+  request: { params: z.object({ org: z.string(), id: z.string() }) },
+  responses: {
+    200: {
+      description: "Sent again with a new link and two more weeks",
+      content: { "application/json": { schema: InvitationPayloadSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/invitations/{token}",
+  operationId: "getInvitation",
+  tags: ["organizations"],
+  request: { params: z.object({ token: z.string() }) },
+  responses: {
+    200: {
+      description: "What the invitation is for. No session needed.",
+      content: { "application/json": { schema: InvitationSummarySchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/invitations/{token}/accept",
+  operationId: "acceptInvitation",
+  tags: ["organizations"],
+  request: { params: z.object({ token: z.string() }) },
+  responses: {
+    200: {
+      description:
+        "Accepted by the signed-in account, whose address must be the one invited",
+      content: { "application/json": { schema: AcceptInvitationResultSchema } },
     },
   },
 });

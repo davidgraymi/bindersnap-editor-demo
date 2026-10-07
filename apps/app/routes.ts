@@ -18,6 +18,8 @@ export type AppRoute =
   | { kind: "resetPassword" }
   /** Where an email's unsubscribe link lands: `/-/unsubscribe?token=…`. */
   | { kind: "unsubscribe" }
+  /** Where an invitation email lands: `/-/invitations/{token}`. */
+  | { kind: "invitation"; token: string }
   | { kind: "callback" }
   | { kind: "workspace" }
   | { kind: "documents" }
@@ -181,6 +183,11 @@ export function getRoute(pathname: string): AppRoute {
   const own = APP_PAGES[normalizedPath];
   if (own) return own;
 
+  const invitation = normalizedPath.match(/^\/-\/invitations\/([^/]+)$/);
+  if (invitation) {
+    return { kind: "invitation", token: decodeURIComponent(invitation[1]!) };
+  }
+
   // `/{org}/{binder}` and `/{org}/{binder}/{path}`, the address Gitea and
   // GitHub both use. It is matched last because it would otherwise swallow
   // every route above it — see RESERVED_FIRST_SEGMENTS.
@@ -259,6 +266,8 @@ export function routeToPath(route: AppRoute): string {
       return "/-/reset_password";
     case "unsubscribe":
       return "/-/unsubscribe";
+    case "invitation":
+      return `/-/invitations/${encodeURIComponent(route.token)}`;
     case "callback":
       return "/auth/callback";
     case "documents":
