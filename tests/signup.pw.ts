@@ -17,6 +17,7 @@ import {
   GITEA_ADMIN_PASS,
   GITEA_ADMIN_USER,
   OWNER,
+  agreeToTerms,
   signOutCurrentUser,
 } from "./helpers";
 import { confirmFromEmail } from "./mailpit";
@@ -49,6 +50,7 @@ async function fillSignupForm(
     password: string;
   },
   confirmPassword = credentials.password,
+  { agree = true } = {},
 ): Promise<void> {
   await page.getByLabel("First name").fill("Test");
   await page.getByLabel("Last name").fill("User");
@@ -58,6 +60,7 @@ async function fillSignupForm(
   await page
     .getByLabel("Confirm Password", { exact: true })
     .fill(confirmPassword);
+  if (agree) await agreeToTerms(page);
 }
 
 async function submitSignupForm(page: Page): Promise<void> {
@@ -168,6 +171,7 @@ async function signUpAndReturnToLogin(
     username: credentials.username,
     email: credentials.email,
     password: credentials.password,
+    acceptedTerms: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
   });
 
   await signUpThroughOrganizationSetup(
@@ -372,6 +376,62 @@ test.describe("signup flow", () => {
     await expect(page.getByText("Passwords do not match.")).toBeVisible();
     await expect(page).toHaveURL(/\/signup$/);
     expect(signupRequestCount).toBe(0);
+  });
+
+  test("will not sign up until the Terms are agreed to, and links to them", async ({
+    page,
+  }) => {
+    const credentials = buildUniqueSignupCredentials();
+    let signupRequestCount = 0;
+    page.on("request", (request) => {
+      if (
+        request.url().endsWith("/auth/signup") &&
+        request.method() === "POST"
+      ) {
+        signupRequestCount += 1;
+      }
+    });
+
+    await openSignupForm(page);
+    await fillSignupForm(page, credentials, credentials.password, {
+      agree: false,
+    });
+    await submitSignupForm(page);
+
+    await expect(
+      page.getByText(
+        "Agree to the Terms of Service and Privacy Policy to create an account.",
+      ),
+    ).toBeVisible();
+    expect(signupRequestCount).toBe(0);
+
+    // Each opens beside the form, so reading them loses nothing typed.
+    for (const [name, href] of [
+      ["Terms of Service", "/legal/terms"],
+      ["Privacy Policy", "/legal/privacy"],
+    ] as const) {
+      const link = page.getByRole("link", { name, exact: true });
+      await expect(link).toHaveAttribute("href", href);
+      await expect(link).toHaveAttribute("target", "_blank");
+      const response = await page.request.get(href);
+      expect(response.status()).toBe(200);
+      expect(await response.text()).toContain(`<h1>${name}</h1>`);
+    }
+  });
+
+  test("the API refuses a signup that skipped the box", async () => {
+    const credentials = buildUniqueSignupCredentials();
+    const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
+      body: JSON.stringify({
+        firstName: "Test",
+        lastName: "User",
+        ...credentials,
+      }),
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ code: "terms_not_accepted" });
   });
 
   test("shows the signup API error when Gitea rejects the submitted email", async ({

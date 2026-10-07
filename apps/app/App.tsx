@@ -62,6 +62,7 @@ import {
 } from "./routes";
 import { resolveSignupPrefill } from "./authIntent";
 import { validateFullName } from "../../packages/utils/personName";
+import { PRIVACY_PATH, TERMS_PATH } from "../../packages/utils/legal";
 
 type AuthView =
   | "loading"
@@ -140,6 +141,7 @@ function LoginPage({
   );
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string | null>(callbackError);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -173,6 +175,13 @@ function LoginPage({
 
       if (password !== confirmPassword) {
         setError("Passwords do not match.");
+        return;
+      }
+
+      if (!agreed) {
+        setError(
+          "Agree to the Terms of Service and Privacy Policy to create an account.",
+        );
         return;
       }
     } else if (!normalizedIdentifier || !password) {
@@ -322,6 +331,29 @@ function LoginPage({
                   placeholder="Confirm your password"
                   autoComplete="new-password"
                 />
+              </label>
+            ) : null}
+
+            {mode === "signup" ? (
+              // Unticked to start: agreeing is something a person does.
+              <label className="app-check-row app-terms-row">
+                <input
+                  className="app-check-input"
+                  type="checkbox"
+                  checked={agreed}
+                  onChange={(event) => setAgreed(event.target.checked)}
+                />
+                <span>
+                  I agree to the{" "}
+                  <a href={TERMS_PATH} target="_blank" rel="noopener">
+                    Terms of Service
+                  </a>{" "}
+                  and{" "}
+                  <a href={PRIVACY_PATH} target="_blank" rel="noopener">
+                    Privacy Policy
+                  </a>
+                  , and I won't put patient health information in Bindersnap.
+                </span>
               </label>
             ) : null}
 

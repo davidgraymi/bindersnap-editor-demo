@@ -45,6 +45,11 @@ export const SignupBodySchema = z.object({
    * address already proves it, so no confirmation email follows.
    */
   invitation: z.string().optional(),
+  /**
+   * The version of the Terms of Service and Privacy Policy the person ticked
+   * the box for. Signup refuses anything but the current one.
+   */
+  acceptedTerms: z.string().min(1),
 });
 export type SignupBody = z.infer<typeof SignupBodySchema>;
 

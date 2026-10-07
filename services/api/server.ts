@@ -29,6 +29,8 @@ import {
   emailVerificationStore,
   verifyEmailContent,
 } from "./email-verification";
+import { legalAgreementStore } from "./legal-agreements";
+import { LEGAL_VERSION } from "../../packages/utils/legal";
 import {
   passwordChangedEmail,
   passwordResetStore,
@@ -2223,6 +2225,7 @@ async function handleSignup(
     lastName?: unknown;
     organization?: unknown;
     invitation?: unknown;
+    acceptedTerms?: unknown;
   }>(req);
   const username =
     typeof payload?.username === "string" ? payload.username : "";
@@ -2242,6 +2245,24 @@ async function handleSignup(
     return json(
       400,
       { error: "Username, email and password are required." },
+      baseHeaders,
+    );
+  }
+
+  // The box on the form, and the version of the Terms it pointed at. A page
+  // loaded before the Terms changed agreed to words that are no longer ours,
+  // so it is refused too, with a reason that says to reload.
+  if (payload?.acceptedTerms !== LEGAL_VERSION) {
+    return json(
+      400,
+      {
+        error:
+          typeof payload?.acceptedTerms === "string" &&
+          payload.acceptedTerms !== ""
+            ? "Our Terms of Service changed since this page loaded. Reload it to read them, then sign up."
+            : "Agree to the Terms of Service and Privacy Policy to create an account.",
+        code: "terms_not_accepted",
+      },
       baseHeaders,
     );
   }
@@ -2275,6 +2296,7 @@ async function handleSignup(
     clientIp,
   });
 
+  legalAgreementStore().record(username, LEGAL_VERSION);
   startEmailVerification(username, email, invitationToken);
 
   const loginName = await verifyUserCredentials(username, password).catch(

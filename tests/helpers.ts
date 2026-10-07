@@ -747,3 +747,11 @@ export async function openNewDocumentModal(page: Page): Promise<void> {
  * the question is always shown here — with exactly one binder it is skipped,
  * because choosing from a list of one teaches nothing.
  */
+
+/**
+ * Tick the signup form's agreement to the Terms and Privacy Policy, which it
+ * will not submit without.
+ */
+export async function agreeToTerms(page: Page): Promise<void> {
+  await page.getByRole("checkbox", { name: /I agree to the Terms/ }).check();
+}

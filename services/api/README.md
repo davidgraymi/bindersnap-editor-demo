@@ -4,7 +4,7 @@ Lightweight Bun auth/BFF service for the unified GitHub Pages SPA.
 
 ## What it does
 
-- `POST /auth/signup` signs the new account in and emails a link to confirm its address; until it is opened, every `/api/app/` route answers `403` with `code: "email_unverified"`. Signing up from an invitation sent to the same address (`invitation`) confirms it without the email.
+- `POST /auth/signup` signs the new account in and emails a link to confirm its address; until it is opened, every `/api/app/` route answers `403` with `code: "email_unverified"`. Signing up from an invitation sent to the same address (`invitation`) confirms it without the email. It requires `acceptedTerms` equal to `LEGAL_VERSION` (`packages/utils/legal.ts`), answers `400` with `code: "terms_not_accepted"` otherwise, and records the agreement in `legal_agreements`.
 - `POST /auth/login` accepts `identifier`/`password` plus optional `rememberMe`
 - `POST /auth/logout`
 - `GET /auth/me` — includes `emailVerified`, and `pendingEmail` while it is false

@@ -190,6 +190,7 @@ import { isPaywallResponse, notifyPaymentRequired } from "./paymentRequired";
 import type { DocumentSearchParams } from "./documentSearch";
 import type { ChangeScope } from "./changeScope";
 import { scopeChangeBase, scopeRepo } from "./changeScope";
+import { LEGAL_VERSION } from "../../packages/utils/legal";
 
 /**
  * What a read can be told by whoever asked for it: to stop. TanStack Query
@@ -251,6 +252,8 @@ export async function signup(
     username: username.trim(),
     email: email.trim(),
     password,
+    // The form will not submit until its box is ticked.
+    acceptedTerms: LEGAL_VERSION,
     ...(invitation ? { invitation } : {}),
   });
   return response.data;

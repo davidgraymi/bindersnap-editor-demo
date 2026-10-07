@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test, type BrowserContext } from "@playwright/test";
 
+import { LEGAL_VERSION } from "../packages/utils/legal";
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
 import { waitForEmail } from "./mailpit";
 
@@ -35,6 +36,7 @@ async function signUpUnconfirmed(): Promise<Account> {
       username,
       email,
       password,
+      acceptedTerms: LEGAL_VERSION,
     }),
   });
   expect(response.status).toBe(200);

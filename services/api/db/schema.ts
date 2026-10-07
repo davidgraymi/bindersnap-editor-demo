@@ -475,3 +475,27 @@ export const organizationInvitations = sqliteTable(
     ),
   ],
 );
+
+/**
+ * Who agreed to which Terms of Service and Privacy Policy, and when (#666).
+ *
+ * Signup refuses anyone who has not ticked the box, and writes one row for
+ * the version they ticked (`LEGAL_VERSION` in `packages/utils/legal.ts`). A
+ * row is never changed: agreeing to a later version adds another. Account
+ * state rather than evidence about a document, so SQLite (ADR 0004).
+ *
+ * Rows outlive the account, like the record does: what a person agreed to is
+ * what settles a dispute about it later. A login is never reused while its
+ * account exists, and the timestamp says which account a row was.
+ */
+export const legalAgreements = sqliteTable(
+  "legal_agreements",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    /** Lower-cased: Gitea logins are case-insensitive. */
+    username: text("username").notNull(),
+    version: text("version").notNull(),
+    acceptedAt: integer("accepted_at").notNull(),
+  },
+  (table) => [index("legal_agreements_username_idx").on(table.username)],
+);

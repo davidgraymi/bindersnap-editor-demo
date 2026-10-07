@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test } from "@playwright/test";
 
-import { API_BASE_URL, APP_BASE_URL } from "./helpers";
+import { API_BASE_URL, APP_BASE_URL, agreeToTerms } from "./helpers";
 import { countEmails, signUpAndConfirm, waitForEmail } from "./mailpit";
 
 test.describe.configure({ mode: "parallel", timeout: 180_000 });
@@ -144,6 +144,7 @@ test("somebody with no account signs up from the email and lands in the binder",
     .getByLabel("Password", { exact: true })
     .fill("Bindersnap-invitee-1!");
   await page.getByLabel("Confirm Password").fill("Bindersnap-invitee-1!");
+  await agreeToTerms(page);
   await page.getByRole("button", { name: "Create account" }).click();
 
   // Back at the invitation, now signed in. The invitation went to this

@@ -1361,6 +1361,47 @@ describe("admin subscription access overrides", () => {
     }
   });
 
+  test("signup is refused without agreement to the current Terms", async () => {
+    const server = createApiServer();
+    const signup = (acceptedTerms?: string) =>
+      server.fetch(
+        new Request("http://localhost/auth/signup", {
+          method: "POST",
+          headers: {
+            Origin: config.appOrigin,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            firstName: "Jordan",
+            lastName: "Kim",
+            username: `terms-${randomUUID().slice(0, 8)}`,
+            email: "jordan@example.com",
+            password: "correct horse battery",
+            ...(acceptedTerms === undefined ? {} : { acceptedTerms }),
+          }),
+        }),
+      );
+
+    try {
+      const unticked = await signup();
+      expect(unticked.status).toBe(400);
+      expect(await unticked.json()).toMatchObject({
+        code: "terms_not_accepted",
+        error: expect.stringContaining("Agree to the Terms"),
+      });
+
+      // A page loaded before the Terms changed: told to reload, not to tick.
+      const stale = await signup("2000-01-01");
+      expect(stale.status).toBe(400);
+      expect(await stale.json()).toMatchObject({
+        code: "terms_not_accepted",
+        error: expect.stringContaining("Reload"),
+      });
+    } finally {
+      server.stop(true);
+    }
+  });
+
   test("the Gitea gate's diagnostics are for admins only", async () => {
     const server = createApiServer();
     const admin = await seedSession(`admin-${randomUUID()}`, { isAdmin: true });

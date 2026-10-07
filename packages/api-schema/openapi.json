@@ -93,6 +93,10 @@
           },
           "invitation": {
             "type": "string"
+          },
+          "acceptedTerms": {
+            "type": "string",
+            "minLength": 1
           }
         },
         "required": [
@@ -100,7 +104,8 @@
           "lastName",
           "username",
           "email",
-          "password"
+          "password",
+          "acceptedTerms"
         ]
       },
       "ForgotPasswordBody": {
@@ -2790,6 +2795,10 @@
                   },
                   "invitation": {
                     "type": "string"
+                  },
+                  "acceptedTerms": {
+                    "type": "string",
+                    "minLength": 1
                   }
                 },
                 "required": [
@@ -2797,7 +2806,8 @@
                   "lastName",
                   "username",
                   "email",
-                  "password"
+                  "password",
+                  "acceptedTerms"
                 ]
               }
             }

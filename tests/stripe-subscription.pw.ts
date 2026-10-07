@@ -33,6 +33,7 @@ import {
 } from "./stripe-webhook";
 import { STRIPE_API_VERSION } from "../services/api/stripe/api-version";
 import { confirmFromEmail, signUpAndConfirm } from "./mailpit";
+import { agreeToTerms } from "./helpers";
 
 // ---------------------------------------------------------------------------
 // Environment
@@ -930,6 +931,7 @@ test.describe("Stripe subscription lifecycle", () => {
       await page
         .getByLabel("Confirm Password", { exact: true })
         .fill(credentials.password);
+      await agreeToTerms(page);
       await page.getByRole("button", { name: "Create account" }).click();
       await confirmFromEmail(page, credentials.email);
 

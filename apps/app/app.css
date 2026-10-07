@@ -130,6 +130,22 @@ input {
   accent-color: var(--brand-coral);
 }
 
+.app-terms-row {
+  align-items: flex-start;
+  line-height: var(--brand-leading-relaxed);
+}
+
+.app-terms-row .app-check-input {
+  flex: none;
+  margin-top: 0.2rem;
+}
+
+.app-terms-row a {
+  color: var(--bs-text-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .app-inline-error {
   margin: var(--brand-space-4) 0 0;
   color: var(--bs-coral-text);
