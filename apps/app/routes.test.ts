@@ -22,6 +22,7 @@ test("getRoute maps the SPA home route to the landing/app home kind", () => {
   expect(getRoute("/-/login")).toEqual({ kind: "login" });
   expect(getRoute("/-/forgot_password")).toEqual({ kind: "forgotPassword" });
   expect(getRoute("/-/reset_password")).toEqual({ kind: "resetPassword" });
+  expect(getRoute("/-/unsubscribe")).toEqual({ kind: "unsubscribe" });
   expect(getRoute("/-/signup")).toEqual({ kind: "signup" });
   expect(getRoute("/-/admin/subscriptions")).toEqual({
     kind: "adminSubscriptions",

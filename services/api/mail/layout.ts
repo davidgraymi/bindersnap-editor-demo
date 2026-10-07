@@ -23,6 +23,12 @@ export interface EmailContent {
   action?: { label: string; url: string };
   /** Small print under the action — why they got this, how long a link lasts. */
   footnotes?: string[];
+  /**
+   * For an email a person can choose not to get: why they got it, and links
+   * to their settings and to stop it. A reset link has none — it is not
+   * optional.
+   */
+  optOut?: { reason: string; settingsUrl: string; unsubscribeUrl: string };
 }
 
 export interface RenderedEmail {
@@ -72,6 +78,9 @@ export function renderEmail(
         `<p style="margin: 0 0 8px; font-family: ${SANS}; font-size: 13px; line-height: 1.5; color: ${MUTED};">${escapeHtml(note)}</p>`,
     )
     .join("\n");
+  const optOut = content.optOut
+    ? `${escapeHtml(content.optOut.reason)} <a href="${escapeHtml(content.optOut.settingsUrl)}" style="color: ${MUTED};">Email settings</a> · <a href="${escapeHtml(content.optOut.unsubscribeUrl)}" style="color: ${MUTED};">Unsubscribe</a><br><br>`
+    : "";
   const preview = content.preview
     ? `<div style="display: none; max-height: 0; overflow: hidden;">${escapeHtml(content.preview)}</div>`
     : "";
@@ -96,7 +105,7 @@ ${paragraphs}
 ${action}
 ${footnotes}
 </td></tr>
-<tr><td style="padding: 16px 4px 0; font-family: ${SANS}; font-size: 12px; line-height: 1.5; color: ${MUTED};">Sent by <a href="${escapeHtml(home)}" style="color: ${MUTED};">Bindersnap</a>, where your organization keeps its documents and their approvals.</td></tr>
+<tr><td style="padding: 16px 4px 0; font-family: ${SANS}; font-size: 12px; line-height: 1.5; color: ${MUTED};">${optOut}Sent by <a href="${escapeHtml(home)}" style="color: ${MUTED};">Bindersnap</a>, where your organization keeps its documents and their approvals.</td></tr>
 </table>
 </td></tr>
 </table>
@@ -113,6 +122,14 @@ ${footnotes}
       : []),
     ...(content.footnotes ?? []).flatMap((note) => [note, ""]),
     "—",
+    ...(content.optOut
+      ? [
+          content.optOut.reason,
+          `Email settings: ${content.optOut.settingsUrl}`,
+          `Unsubscribe: ${content.optOut.unsubscribeUrl}`,
+          "",
+        ]
+      : []),
     `Bindersnap · ${home}`,
     "",
   ].join("\n");

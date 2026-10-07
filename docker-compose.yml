@@ -201,6 +201,8 @@ services:
       - BINDERSNAP_MAIL_TRANSPORT=mailpit
       - BINDERSNAP_MAILPIT_URL=http://mailpit:8025
       - BINDERSNAP_MAIL_FROM=Bindersnap <notifications@bindersnap.local>
+      # The API as the browser reaches it, for an email's one-click unsubscribe.
+      - BINDERSNAP_API_ORIGIN=http://localhost:${API_PROXY_PORT:-8788}
     ports:
       - "${API_PORT:-8787}:${API_PORT:-8787}"
     volumes:

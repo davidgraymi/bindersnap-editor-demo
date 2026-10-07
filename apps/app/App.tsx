@@ -20,6 +20,7 @@ import { OrganizationSetupPage } from "./components/OrganizationSetupPage";
 import { BindersnapLogoMark } from "./components/BindersnapLogoMark";
 import { LandingPage } from "./components/LandingPage";
 import { WorkspaceSkeleton } from "./components/WorkspaceSkeleton";
+import { UnsubscribePage } from "./components/UnsubscribePage";
 import {
   ForgotPasswordPage,
   ResetPasswordPage,
@@ -62,6 +63,7 @@ type AuthView =
   | "login"
   | "forgotPassword"
   | "resetPassword"
+  | "unsubscribe"
   | "createOrganization"
   | "app";
 type AuthMode = "signin" | "signup";
@@ -738,6 +740,11 @@ export function App() {
       return "resetPassword";
     }
 
+    // Reached from an email, signed in or not; the token is the credential.
+    if (route.kind === "unsubscribe") {
+      return "unsubscribe";
+    }
+
     if (route.kind === "forgotPassword" && !user) {
       return "forgotPassword";
     }
@@ -809,6 +816,10 @@ export function App() {
         }}
       />
     );
+  }
+
+  if (view === "unsubscribe") {
+    return <UnsubscribePage />;
   }
 
   if (view === "forgotPassword") {

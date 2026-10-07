@@ -4250,6 +4250,162 @@
         }
       }
     },
+    "/api/app/account/email-preferences": {
+      "get": {
+        "operationId": "getEmailPreferences",
+        "tags": [
+          "account"
+        ],
+        "responses": {
+          "200": {
+            "description": "Which change emails this person gets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "preferences": {
+                      "type": "object",
+                      "properties": {
+                        "reviewRequested": {
+                          "type": "boolean"
+                        },
+                        "changesRequested": {
+                          "type": "boolean"
+                        },
+                        "readyToPublish": {
+                          "type": "boolean"
+                        },
+                        "published": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "reviewRequested",
+                        "changesRequested",
+                        "readyToPublish",
+                        "published"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "preferences"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateEmailPreferences",
+        "tags": [
+          "account"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reviewRequested": {
+                    "type": "boolean"
+                  },
+                  "changesRequested": {
+                    "type": "boolean"
+                  },
+                  "readyToPublish": {
+                    "type": "boolean"
+                  },
+                  "published": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved; the full set as it now stands",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "preferences": {
+                      "type": "object",
+                      "properties": {
+                        "reviewRequested": {
+                          "type": "boolean"
+                        },
+                        "changesRequested": {
+                          "type": "boolean"
+                        },
+                        "readyToPublish": {
+                          "type": "boolean"
+                        },
+                        "published": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "reviewRequested",
+                        "changesRequested",
+                        "readyToPublish",
+                        "published"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "preferences"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/unsubscribe": {
+      "post": {
+        "operationId": "unsubscribeFromEmail",
+        "tags": [
+          "account"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "token",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Every change email off for the token's owner. The same answer for a token that matches nobody.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/app/account/password": {
       "post": {
         "operationId": "changePassword",

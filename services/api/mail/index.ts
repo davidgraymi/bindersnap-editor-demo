@@ -53,19 +53,32 @@ export function startMail(): void {
   });
 }
 
+/**
+ * Queue one email. `oneClickUnsubscribeUrl` — an API address that turns the
+ * email off on a bare POST (RFC 8058) — goes into `List-Unsubscribe`, which is
+ * what puts the unsubscribe button in Gmail's and Apple Mail's header.
+ */
 export function queueEmail(params: {
   kind: string;
   to: string;
   content: EmailContent;
   idempotencyKey?: string;
+  oneClickUnsubscribeUrl?: string;
 }): QueuedEmail {
   const rendered = renderEmail(params.content, config.appOrigin);
+  const headers: Record<string, string> = params.oneClickUnsubscribeUrl
+    ? {
+        "List-Unsubscribe": `<${params.oneClickUnsubscribeUrl}>`,
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      }
+    : {};
   const queued = emailOutboxStore().enqueue({
     kind: params.kind,
     recipient: params.to,
     subject: rendered.subject,
     html: rendered.html,
     text: rendered.text,
+    headers,
     idempotencyKey: params.idempotencyKey ?? null,
   });
   wakeSender?.();

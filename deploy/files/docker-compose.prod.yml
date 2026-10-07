@@ -119,6 +119,7 @@ services:
       # Empty until the deploy mints it; the API then uses the service token.
       - BINDERSNAP_GITEA_ADMIN_TOKEN=${GITEA_ADMIN_TOKEN:-}
       - BINDERSNAP_APP_ORIGIN=https://bindersnap.com
+      - BINDERSNAP_API_ORIGIN=https://api.bindersnap.com
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:?set in the generated env file}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:?set in the generated env file}
       - STRIPE_PRICE_ID=${STRIPE_PRICE_ID:?set in the generated env file}

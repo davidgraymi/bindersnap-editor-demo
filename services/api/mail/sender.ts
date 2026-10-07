@@ -66,6 +66,7 @@ export async function sendDue(params: {
         subject: email.subject,
         html: email.html,
         text: email.text,
+        headers: email.headers,
       });
       outbox.markSent(email.id, messageId, now());
       logger.info("Email sent", {

@@ -347,6 +347,31 @@ export async function changePassword(
   await AccountClient.changePassword({ currentPassword, newPassword });
 }
 
+export type EmailPreferences = {
+  reviewRequested: boolean;
+  changesRequested: boolean;
+  readyToPublish: boolean;
+  published: boolean;
+};
+
+/** Which change emails the signed-in person gets. */
+export async function fetchEmailPreferences(): Promise<EmailPreferences> {
+  const response = await AccountClient.getEmailPreferences();
+  return response.data.preferences;
+}
+
+export async function saveEmailPreferences(
+  changes: Partial<EmailPreferences>,
+): Promise<EmailPreferences> {
+  const response = await AccountClient.updateEmailPreferences(changes);
+  return response.data.preferences;
+}
+
+/** Turn every change email off, with the token from an email's link. */
+export async function unsubscribeWithToken(token: string): Promise<void> {
+  await AccountClient.unsubscribeFromEmail({ token });
+}
+
 export async function deleteAccount(
   password: string,
   confirm: string,

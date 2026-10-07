@@ -15,6 +15,7 @@ export interface QueuedEmail {
   subject: string;
   html: string;
   text: string;
+  headers: Record<string, string>;
   idempotencyKey: string | null;
   status: EmailStatus;
   attempts: number;
@@ -36,7 +37,13 @@ export function retryDelayMs(attempts: number): number {
 }
 
 function toRecord(row: typeof emailOutbox.$inferSelect): QueuedEmail {
-  return { ...row, status: row.status as EmailStatus };
+  return {
+    ...row,
+    status: row.status as EmailStatus,
+    headers: row.headers
+      ? (JSON.parse(row.headers) as Record<string, string>)
+      : {},
+  };
 }
 
 export class EmailOutbox {
@@ -56,6 +63,7 @@ export class EmailOutbox {
     subject: string;
     html: string;
     text: string;
+    headers?: Record<string, string>;
     idempotencyKey?: string | null;
     now?: number;
   }): QueuedEmail {
@@ -71,6 +79,10 @@ export class EmailOutbox {
         subject: params.subject,
         html: params.html,
         text: params.text,
+        headers:
+          params.headers && Object.keys(params.headers).length > 0
+            ? JSON.stringify(params.headers)
+            : null,
         idempotencyKey: key,
         status: "pending",
         attempts: 0,

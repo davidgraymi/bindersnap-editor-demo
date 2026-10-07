@@ -6,6 +6,16 @@ import { jobStore, withGroupLock, type JobRecord } from "./jobs/store";
 import { startJobRunner } from "./jobs/runner";
 import { queueEmail, startMail } from "./mail";
 import {
+  changeEmail,
+  changeEmailKey,
+  changeUrl,
+  OPT_OUT_REASON,
+  recipientsFor,
+  TOPIC_OF,
+  type ChangeEmailEvent,
+} from "./change-emails";
+import { emailPreferenceStore, parsePreferences } from "./email-preferences";
+import {
   passwordChangedEmail,
   passwordResetStore,
   resetLinkEmail,
@@ -3914,6 +3924,279 @@ async function loadDecidedChanges(
   }
 }
 
+/**
+ * Email the people a change event concerns (issue #665).
+ *
+ * Fire and forget: the action that caused it has already happened, and an
+ * email that cannot be worked out — Gitea slow, an address missing — must not
+ * turn that action into an error. Everything is read with the service
+ * account, because a person's own token sees other people's addresses as
+ * Gitea's no-reply ones.
+ */
+function notifyChange(params: {
+  owner: string;
+  repo: string;
+  number: number;
+  actor: string;
+  event: ChangeEmailEvent;
+  /** What makes this occurrence distinct — a review id, a head commit. */
+  occurrence: string;
+}): void {
+  void sendChangeEmails(params).catch((err) =>
+    logger.error("Could not queue change emails", {
+      organization: params.owner,
+      workspace: params.repo,
+      pullNumber: params.number,
+      event: params.event.kind,
+      error: err instanceof Error ? err.message : String(err),
+    }),
+  );
+}
+
+async function readPerson(
+  client: GiteaClient,
+  login: string,
+): Promise<{ email: string | null; name: string }> {
+  const { data } = await client
+    .GET("/users/{username}", { params: { path: { username: login } } })
+    .catch(() => ({ data: undefined }));
+  const raw = typeof data?.email === "string" ? data.email.trim() : "";
+  const fullName =
+    typeof data?.full_name === "string" ? data.full_name.trim() : "";
+  return {
+    email: looksLikeEmailAddress(raw) ? raw : null,
+    name: fullName || login,
+  };
+}
+
+async function sendChangeEmails(params: {
+  owner: string;
+  repo: string;
+  number: number;
+  actor: string;
+  event: ChangeEmailEvent;
+  occurrence: string;
+}): Promise<void> {
+  const { owner, repo, number, actor, event, occurrence } = params;
+  const client = createPrivilegedGiteaClient();
+  if (!client) return;
+
+  const { pullRequest } = await getPullRequestWithReviews({
+    client,
+    owner,
+    repo,
+    pullNumber: number,
+  });
+  const author = pullRequest.user?.login ?? "";
+  const recipients = recipientsFor(event, { author, actor });
+  if (recipients.length === 0) return;
+
+  const topic = TOPIC_OF[event.kind];
+  const preferences = emailPreferenceStore();
+  const facts = {
+    owner,
+    repo,
+    number,
+    title: pullRequest.title?.trim() || `Change ${number}`,
+    author,
+    actor,
+    actorName: (await readPerson(client, actor)).name,
+  };
+  const link = changeUrl(config.appOrigin, facts);
+  const content = changeEmail(event, facts, link);
+
+  for (const recipient of recipients) {
+    if (isServiceAccount(recipient)) continue;
+    if (!preferences.wants(recipient, topic)) continue;
+    const { email } = await readPerson(client, recipient);
+    if (!email) continue;
+    const token = preferences.tokenFor(recipient);
+    queueEmail({
+      kind: `change-${event.kind}`,
+      to: email,
+      content: {
+        ...content,
+        optOut: {
+          reason: OPT_OUT_REASON[topic],
+          settingsUrl: `${config.appOrigin}/-/user_settings/profile#email`,
+          unsubscribeUrl: `${config.appOrigin}/-/unsubscribe?token=${encodeURIComponent(token)}`,
+        },
+      },
+      idempotencyKey: changeEmailKey(event, facts, recipient, occurrence),
+      oneClickUnsubscribeUrl: `${config.apiOrigin}/email/unsubscribe?token=${encodeURIComponent(token)}`,
+    });
+  }
+}
+
+/**
+ * After an approval: if that made the change publishable, tell its author.
+ * "Publishable" is the same test Home and the library use (`isApproved`), so
+ * the email never says ready when the page says waiting. Once per version of
+ * the change — a later push that needs approving again can be ready again.
+ */
+function notifyIfReadyToPublish(params: {
+  owner: string;
+  repo: string;
+  number: number;
+  actor: string;
+}): void {
+  void (async () => {
+    const client = createPrivilegedGiteaClient();
+    if (!client) return;
+    const [entry, rules] = await Promise.all([
+      getPullRequestWithReviews({
+        client,
+        owner: params.owner,
+        repo: params.repo,
+        pullNumber: params.number,
+      }),
+      readMergeRules(params.owner, params.repo),
+    ]);
+    if (!buildPendingChangeRow(entry, rules).isApproved) return;
+    notifyChange({
+      ...params,
+      event: { kind: "ready-to-publish" },
+      occurrence: entry.pullRequest.head?.sha ?? "head",
+    });
+  })().catch((err) =>
+    logger.error("Could not check whether a change is ready to publish", {
+      organization: params.owner,
+      workspace: params.repo,
+      pullNumber: params.number,
+      error: err instanceof Error ? err.message : String(err),
+    }),
+  );
+}
+
+/** Everybody a just-opened change asks to review it. */
+function notifyRequestedReviewers(params: {
+  owner: string;
+  repo: string;
+  number: number;
+  actor: string;
+}): void {
+  void (async () => {
+    const client = createPrivilegedGiteaClient();
+    if (!client) return;
+    const { pullRequest } = await getPullRequestWithReviews({
+      client,
+      owner: params.owner,
+      repo: params.repo,
+      pullNumber: params.number,
+    });
+    const reviewers = readRequestedReviewers(pullRequest)
+      .map((user) => user.login?.trim() ?? "")
+      .filter(Boolean);
+    if (reviewers.length === 0) return;
+    notifyChange({
+      ...params,
+      event: { kind: "review-requested", reviewers },
+      occurrence: "opened",
+    });
+  })().catch((err) =>
+    logger.error("Could not read who a new change asks to review it", {
+      organization: params.owner,
+      workspace: params.repo,
+      pullNumber: params.number,
+      error: err instanceof Error ? err.message : String(err),
+    }),
+  );
+}
+
+/** The author and everyone who reviewed or was asked to: it is published. */
+function notifyPublished(params: {
+  owner: string;
+  repo: string;
+  number: number;
+  actor: string;
+}): void {
+  void (async () => {
+    const client = createPrivilegedGiteaClient();
+    if (!client) return;
+    const { pullRequest, reviews } = await getPullRequestWithReviews({
+      client,
+      owner: params.owner,
+      repo: params.repo,
+      pullNumber: params.number,
+    });
+    const participants = [
+      ...reviews.map((review) => review.user?.login ?? ""),
+      ...readRequestedReviewers(pullRequest).map((user) => user.login ?? ""),
+    ].filter(Boolean);
+    notifyChange({
+      ...params,
+      event: { kind: "published", participants },
+      occurrence: "published",
+    });
+  })().catch((err) =>
+    logger.error("Could not read who to tell about a publish", {
+      organization: params.owner,
+      workspace: params.repo,
+      pullNumber: params.number,
+      error: err instanceof Error ? err.message : String(err),
+    }),
+  );
+}
+
+/** The signed-in person's email settings. */
+async function handleReadEmailPreferences(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  return json(
+    200,
+    { preferences: emailPreferenceStore().get(auth.session.username) },
+    baseHeaders,
+  );
+}
+
+async function handleUpdateEmailPreferences(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const changes = parsePreferences(await readJson<unknown>(req));
+  if (!changes) {
+    return json(
+      400,
+      { error: "Each email setting must be true or false." },
+      baseHeaders,
+    );
+  }
+  return json(
+    200,
+    {
+      preferences: emailPreferenceStore().set(auth.session.username, changes),
+    },
+    baseHeaders,
+  );
+}
+
+/**
+ * Turn every change email off, by the token in an email's unsubscribe link.
+ *
+ * No session: whoever holds the link can do this one harmless thing. It is
+ * also the one-click target of `List-Unsubscribe-Post` (RFC 8058), which a
+ * mail client POSTs with no Origin — so it is routed before the origin check.
+ * The same answer for a token that matches nobody, so tokens cannot be probed.
+ */
+async function handleOneClickUnsubscribe(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const token = new URL(req.url).searchParams.get("token") ?? "";
+  const username = token ? emailPreferenceStore().unsubscribe(token) : null;
+  if (username) {
+    logger.info("Change emails turned off from an unsubscribe link", {
+      username,
+    });
+  }
+  return json(200, { ok: true }, baseHeaders);
+}
+
 /** Distinct, trimmed usernames, in the order they were given. */
 function readUsernameList(value: unknown): string[] | null {
   if (!Array.isArray(value)) return null;
@@ -4024,6 +4307,17 @@ async function handleUpdateChangeAssignments(
         pullNumber: prNumber,
         reviewers: add,
       });
+
+      if (add.length > 0) {
+        notifyChange({
+          owner,
+          repo,
+          number: prNumber,
+          actor: auth.session.username,
+          event: { kind: "review-requested", reviewers: add },
+          occurrence: String(Date.now()),
+        });
+      }
 
       await removePullReviewers({
         client,
@@ -5191,6 +5485,12 @@ async function executePublishJob(
   try {
     const result = await runPublish({ client, plan, deps: publishDeps });
     store.complete(job.id, result);
+    notifyPublished({
+      owner: plan.org,
+      repo: plan.repo,
+      number: plan.pullNumber,
+      actor: job.createdBy,
+    });
     logger.info("Workspace change published", {
       username: job.createdBy,
       organization: plan.org,
@@ -6518,6 +6818,24 @@ async function handleWorkspaceChangeReview(
       body: reviewBody,
     });
 
+    if (event === "REQUEST_CHANGES") {
+      notifyChange({
+        owner: orgName,
+        repo: workspaceName,
+        number: pullNumber,
+        actor: auth.session.username,
+        event: { kind: "changes-requested", comment: reviewBody },
+        occurrence: String(review?.id ?? Date.now()),
+      });
+    } else if (event === "APPROVE") {
+      notifyIfReadyToPublish({
+        owner: orgName,
+        repo: workspaceName,
+        number: pullNumber,
+        actor: auth.session.username,
+      });
+    }
+
     return json(200, { review }, baseHeaders);
   } catch (err) {
     logger.error("Failed to review a binder change", {
@@ -7692,6 +8010,13 @@ async function handleBinderSignOffRules(
           .map((entry) => [entry.uid!, formatDocumentName(entry.name)]),
       ),
       author: session.username,
+    });
+
+    notifyRequestedReviewers({
+      owner: orgName,
+      repo: workspaceName,
+      number: proposed.changeNumber,
+      actor: session.username,
     });
 
     logger.info("Sign-off rules proposed", {
@@ -11268,6 +11593,15 @@ ${description}`,
       );
     }
 
+    // Gitea asks the CODEOWNERS of what the change touches to review it as it
+    // opens. Tell them.
+    notifyRequestedReviewers({
+      owner: orgName,
+      repo: workspaceName,
+      number: change.number,
+      actor: session.username,
+    });
+
     // **The name stays.** It used to be forgotten here, on the reasoning that
     // a proposed branch had stopped being a draft — so the change request's
     // branch chip fell back to "Bob's draft" and the owner's picker lost the
@@ -11543,6 +11877,17 @@ async function handleBinderShapeChange(
           ].join("\n"),
         });
 
+    // A new change: Gitea has asked the CODEOWNERS of what it touches to
+    // review it. Tell them. (Into an existing change, nobody new is asked.)
+    if (!target && proposed.changeNumber !== null) {
+      notifyRequestedReviewers({
+        owner: orgName,
+        repo: workspaceName,
+        number: proposed.changeNumber,
+        actor: session.username,
+      });
+    }
+
     logger.info("Binder shape change proposed", {
       username: session.username,
       organization: orgName,
@@ -11788,6 +12133,17 @@ async function handleReviseWorkspaceDocument(
             `File hash (SHA-256): ${fullHash}`,
           ].join("\n"),
         });
+
+    // A new change: Gitea has asked the CODEOWNERS of what it touches to
+    // review it. Tell them. (Into an existing change, nobody new is asked.)
+    if (!target && proposed.changeNumber !== null) {
+      notifyRequestedReviewers({
+        owner: orgName,
+        repo: workspaceName,
+        number: proposed.changeNumber,
+        actor: session.username,
+      });
+    }
 
     logger.info("Workspace document revised", {
       username: session.username,
@@ -12051,6 +12407,17 @@ async function handleCreateWorkspaceDocument(
             `File hash (SHA-256): ${fullHash}`,
           ].join("\n"),
         });
+
+    // A new change: Gitea has asked the CODEOWNERS of what it touches to
+    // review it. Tell them. (Into an existing change, nobody new is asked.)
+    if (!target && proposed.changeNumber !== null) {
+      notifyRequestedReviewers({
+        owner: orgName,
+        repo: workspaceName,
+        number: proposed.changeNumber,
+        actor: session.username,
+      });
+    }
 
     logger.info("Workspace document created", {
       username: session.username,
@@ -13440,6 +13807,19 @@ async function handleRequest(req: Request): Promise<Response> {
     return response;
   }
 
+  // An email's unsubscribe link, POSTed by a mail client with no Origin —
+  // see `handleOneClickUnsubscribe`. The token is the only credential.
+  if (pathname === "/email/unsubscribe" && method === "POST") {
+    const response = await handleOneClickUnsubscribe(req, baseHeaders);
+    logger.info("Response sent", {
+      method,
+      path: pathname,
+      status: response.status,
+      durationMs: Date.now() - startMs,
+    });
+    return response;
+  }
+
   const originError = enforceStateChangingOrigin(req, baseHeaders);
   if (originError) {
     const durationMs = Date.now() - startMs;
@@ -13486,6 +13866,16 @@ async function handleRequest(req: Request): Promise<Response> {
     response = await handleUpdateProfile(req, baseHeaders);
   } else if (pathname === "/api/app/account/password" && method === "POST") {
     response = await handleChangePassword(req, baseHeaders);
+  } else if (
+    pathname === "/api/app/account/email-preferences" &&
+    method === "GET"
+  ) {
+    response = await handleReadEmailPreferences(req, baseHeaders);
+  } else if (
+    pathname === "/api/app/account/email-preferences" &&
+    method === "PUT"
+  ) {
+    response = await handleUpdateEmailPreferences(req, baseHeaders);
   } else if (pathname === "/api/app/account/blockers" && method === "GET") {
     response = await handleAccountBlockers(req, baseHeaders);
   } else if (pathname === "/api/app/account" && method === "DELETE") {

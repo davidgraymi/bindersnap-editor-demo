@@ -11,6 +11,11 @@ import type {
   DeleteAccount409,
   DeleteAccountBody,
   GetAccountBlockers200,
+  GetEmailPreferences200,
+  UnsubscribeFromEmail200,
+  UnsubscribeFromEmailParams,
+  UpdateEmailPreferences200,
+  UpdateEmailPreferencesBody,
   UpdateProfile200,
   UpdateProfileBody
 } from '../model';
@@ -82,6 +87,109 @@ export const getAccountBlockers = async ( options?: Parameters<typeof customFetc
   {
     ...options,
     method: 'GET'
+
+
+  }
+);}
+
+
+export type getEmailPreferencesResponse200 = {
+  data: GetEmailPreferences200
+  status: 200
+}
+
+export type getEmailPreferencesResponseSuccess = (getEmailPreferencesResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getEmailPreferencesResponse = (getEmailPreferencesResponseSuccess)
+
+export const getGetEmailPreferencesUrl = () => {
+
+
+
+
+  return `/api/app/account/email-preferences`
+}
+
+export const getEmailPreferences = async ( options?: Parameters<typeof customFetch>[1]): Promise<getEmailPreferencesResponse> => {
+
+  return customFetch<getEmailPreferencesResponse>(getGetEmailPreferencesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type updateEmailPreferencesResponse200 = {
+  data: UpdateEmailPreferences200
+  status: 200
+}
+
+export type updateEmailPreferencesResponseSuccess = (updateEmailPreferencesResponse200) & {
+  headers: Headers;
+};
+;
+
+export type updateEmailPreferencesResponse = (updateEmailPreferencesResponseSuccess)
+
+export const getUpdateEmailPreferencesUrl = () => {
+
+
+
+
+  return `/api/app/account/email-preferences`
+}
+
+export const updateEmailPreferences = async (updateEmailPreferencesBody: UpdateEmailPreferencesBody, options?: Parameters<typeof customFetch>[1]): Promise<updateEmailPreferencesResponse> => {
+
+  return customFetch<updateEmailPreferencesResponse>(getUpdateEmailPreferencesUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateEmailPreferencesBody)
+  }
+);}
+
+
+export type unsubscribeFromEmailResponse200 = {
+  data: UnsubscribeFromEmail200
+  status: 200
+}
+
+export type unsubscribeFromEmailResponseSuccess = (unsubscribeFromEmailResponse200) & {
+  headers: Headers;
+};
+;
+
+export type unsubscribeFromEmailResponse = (unsubscribeFromEmailResponseSuccess)
+
+export const getUnsubscribeFromEmailUrl = (params: UnsubscribeFromEmailParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/email/unsubscribe?${stringifiedParams}` : `/email/unsubscribe`
+}
+
+export const unsubscribeFromEmail = async (params: UnsubscribeFromEmailParams, options?: Parameters<typeof customFetch>[1]): Promise<unsubscribeFromEmailResponse> => {
+
+  return customFetch<unsubscribeFromEmailResponse>(getUnsubscribeFromEmailUrl(params),
+  {
+    ...options,
+    method: 'POST'
 
 
   }

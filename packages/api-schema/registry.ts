@@ -50,6 +50,8 @@ import {
   ChangePasswordBodySchema,
   DeleteAccountBodySchema,
   ProfileNameBodySchema,
+  EmailPreferencesBodySchema,
+  EmailPreferencesPayloadSchema,
 } from "./schemas/account";
 import {
   NewOrganizationBodySchema,
@@ -447,6 +449,59 @@ registry.registerPath({
     200: {
       description: "What would refuse a rename or a deletion",
       content: { "application/json": { schema: AccountBlockersSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/account/email-preferences",
+  operationId: "getEmailPreferences",
+  tags: ["account"],
+  responses: {
+    200: {
+      description: "Which change emails this person gets",
+      content: {
+        "application/json": { schema: EmailPreferencesPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "put",
+  path: "/api/app/account/email-preferences",
+  operationId: "updateEmailPreferences",
+  tags: ["account"],
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: EmailPreferencesBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Saved; the full set as it now stands",
+      content: {
+        "application/json": { schema: EmailPreferencesPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/email/unsubscribe",
+  operationId: "unsubscribeFromEmail",
+  tags: ["account"],
+  request: { query: z.object({ token: z.string() }) },
+  responses: {
+    200: {
+      description:
+        "Every change email off for the token's owner. The same answer for a token that matches nobody.",
+      content: {
+        "application/json": { schema: z.object({ ok: z.boolean() }) },
+      },
     },
   },
 });

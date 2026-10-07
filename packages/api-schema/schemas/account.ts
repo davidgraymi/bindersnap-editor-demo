@@ -43,3 +43,22 @@ export const AccountBlockersSchema = z.object({
   deleteBlockedBy: z.array(z.string()),
 });
 export type AccountBlockers = z.infer<typeof AccountBlockersSchema>;
+
+/** Which change emails this person gets. Every topic is on until turned off. */
+export const EmailPreferencesSchema = z.object({
+  reviewRequested: z.boolean(),
+  changesRequested: z.boolean(),
+  readyToPublish: z.boolean(),
+  published: z.boolean(),
+});
+export type EmailPreferences = z.infer<typeof EmailPreferencesSchema>;
+
+export const EmailPreferencesPayloadSchema = z.object({
+  preferences: EmailPreferencesSchema,
+});
+export type EmailPreferencesPayload = z.infer<
+  typeof EmailPreferencesPayloadSchema
+>;
+
+export const EmailPreferencesBodySchema = EmailPreferencesSchema.partial();
+export type EmailPreferencesBody = z.infer<typeof EmailPreferencesBodySchema>;
