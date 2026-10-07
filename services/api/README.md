@@ -36,6 +36,10 @@ The browser only receives a Bindersnap session cookie. Gitea access tokens stay 
 - `BINDERSNAP_AUTH_RATE_LIMIT_MAX`: Max auth attempts per IP per action per window. Default `20`.
 - `BINDERSNAP_PAYWALL_BYPASS_USERS`: Optional comma-separated usernames that bypass subscription enforcement. A warning listing every entry is logged at startup when this list is non-empty. `BINDERSNAP_FREE_USERS` is a deprecated alias kept for one release.
 - `BINDERSNAP_SESSIONS_DB_PATH`: SQLite path shared by the session and subscription stores. Default `/var/lib/bindersnap/sessions.db`.
+- `BINDERSNAP_MAIL_TRANSPORT`: How queued email is delivered: `ses` (Amazon SES, with the EC2 instance role), `mailpit` (the local stack), or `off` (queued, never sent). Default `off`. Production sets it from the SSM leaf `mail_transport`.
+- `BINDERSNAP_MAIL_FROM`: The sender. Default `Bindersnap <notifications@bindersnap.com>`; SES only lets the API send as the `from_address` in `infra/email`.
+- `BINDERSNAP_MAILPIT_URL`: Mailpit's HTTP API, for `mailpit`. Default `http://mailpit:8025`.
+- `AWS_REGION`: The SES region. Default `us-east-1`.
 - `LOG_LEVEL`: Logger verbosity. One of `debug`, `info`, `warn`, `error`. Defaults to `info` in production and `debug` otherwise.
 
 ## Local usage
