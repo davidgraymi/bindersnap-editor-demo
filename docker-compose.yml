@@ -88,6 +88,17 @@ services:
       retries: 12
       start_period: 20s
 
+  # Catches every email the API sends (services/api/mail). Nothing leaves the
+  # machine. The Playwright suite reads messages back through its API
+  # (tests/mailpit.ts); people read them at the stack's `mail` URL.
+  mailpit:
+    image: axllent/mailpit:v1.27
+    container_name: ${STACK_NAME:-bindersnap}-mailpit
+    environment:
+      - MP_MAX_MESSAGES=2000
+    ports:
+      - "${MAILPIT_PORT:-8025}:8025"
+
   # The accounts, made straight in Gitea — the one part of the seed that has
   # to come before the API, which signs its own service calls in as the
   # install's admin. Everything else is `seed`, below.
@@ -152,6 +163,8 @@ services:
         condition: service_healthy
       seed-accounts:
         condition: service_completed_successfully
+      mailpit:
+        condition: service_started
     healthcheck:
       test:
         [
@@ -184,6 +197,10 @@ services:
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
       - STRIPE_PRICE_ID=${STRIPE_PRICE_ID:-}
       - STRIPE_RUN_TAG=${STRIPE_RUN_TAG:-}
+      # Email goes to Mailpit, never out — read it at the stack's `mail` URL.
+      - BINDERSNAP_MAIL_TRANSPORT=mailpit
+      - BINDERSNAP_MAILPIT_URL=http://mailpit:8025
+      - BINDERSNAP_MAIL_FROM=Bindersnap <notifications@bindersnap.local>
     ports:
       - "${API_PORT:-8787}:${API_PORT:-8787}"
     volumes:

@@ -1,5 +1,6 @@
 export type LogLevel = "debug" | "info" | "warn" | "error";
 export type SessionCookieSameSite = "Strict" | "Lax" | "None";
+export type MailTransportName = "ses" | "mailpit" | "off";
 
 // The complete configuration of the API server.
 export interface ApiConfig {
@@ -37,6 +38,11 @@ export interface ApiConfig {
   sessionCookieSameSite: SessionCookieSameSite;
   sessionsDbPath: string;
   logLevel: LogLevel;
+  // Email (issue #665): how the outbox delivers, and as whom.
+  mailTransport: MailTransportName;
+  mailFrom: string;
+  mailpitUrl: string;
+  awsRegion: string;
 }
 
 const REQUIRED_GITEA_TOKEN_SCOPES = [
@@ -83,6 +89,15 @@ const STRING_ENV: Record<string, StringSpec> = {
   BINDERSNAP_SESSION_COOKIE_SAME_SITE: { default: "Lax" },
   BINDERSNAP_SESSIONS_DB_PATH: { default: "/var/lib/bindersnap/sessions.db" },
   LOG_LEVEL: { default: "" },
+  // `ses` in production, `mailpit` in the local stack, `off` otherwise —
+  // emails are still queued while off, just never sent.
+  BINDERSNAP_MAIL_TRANSPORT: { default: "" },
+  // The one address infra/email lets the instance role send as.
+  BINDERSNAP_MAIL_FROM: {
+    default: "Bindersnap <notifications@bindersnap.com>",
+  },
+  BINDERSNAP_MAILPIT_URL: { default: "http://mailpit:8025" },
+  AWS_REGION: { default: "us-east-1" },
 };
 
 const INT_ENV: Record<string, IntSpec> = {
@@ -279,6 +294,27 @@ function resolveLogLevel(
   }
 }
 
+function resolveMailTransport(
+  env: NodeJS.ProcessEnv,
+  isProduction: boolean,
+): MailTransportName {
+  const raw = parseString(env, "BINDERSNAP_MAIL_TRANSPORT", isProduction);
+  switch (raw.toLowerCase()) {
+    case "ses":
+      return "ses";
+    case "mailpit":
+      return "mailpit";
+    case "off":
+      return "off";
+    case "":
+      return isProduction ? "ses" : "off";
+    default:
+      throw new Error(
+        "BINDERSNAP_MAIL_TRANSPORT must be one of ses, mailpit, or off.",
+      );
+  }
+}
+
 function validateProductionOrigins(
   isProduction: boolean,
   allowedOriginsRaw: string,
@@ -439,6 +475,14 @@ export function initializeConfig(
       isProduction,
     ),
     logLevel: resolveLogLevel(resolvedEnv, isProduction),
+    mailTransport: resolveMailTransport(resolvedEnv, isProduction),
+    mailFrom: parseString(resolvedEnv, "BINDERSNAP_MAIL_FROM", isProduction),
+    mailpitUrl: parseString(
+      resolvedEnv,
+      "BINDERSNAP_MAILPIT_URL",
+      isProduction,
+    ),
+    awsRegion: parseString(resolvedEnv, "AWS_REGION", isProduction),
   };
 }
 

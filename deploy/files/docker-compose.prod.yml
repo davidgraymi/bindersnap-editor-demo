@@ -130,6 +130,14 @@ services:
       - BINDERSNAP_REQUIRE_HTTPS=true
       - BINDERSNAP_AUTH_RATE_LIMIT_ENABLED=true
       - BINDERSNAP_SESSIONS_DB_PATH=/var/lib/bindersnap/sessions.db
+      # --- Email (issue #665) ---
+      # The API sends through Amazon SES with the instance role (infra/email);
+      # there is no mail secret. Off until the domain verifies: set the SSM
+      # leaf `mail_transport` to `ses` and redeploy. While off, emails queue
+      # in the outbox and wait.
+      - BINDERSNAP_MAIL_TRANSPORT=${MAIL_TRANSPORT:-off}
+      - BINDERSNAP_MAIL_FROM=${MAIL_FROM:-Bindersnap <notifications@bindersnap.com>}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
     volumes:
       - api-data:/var/lib/bindersnap
 

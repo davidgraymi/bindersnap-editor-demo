@@ -4,6 +4,7 @@ import { config, type SessionCookieSameSite } from "./config";
 import { logger } from "./logger";
 import { jobStore, withGroupLock, type JobRecord } from "./jobs/store";
 import { startJobRunner } from "./jobs/runner";
+import { startMail } from "./mail";
 import { reconcileBinders, type ReconcilerReport } from "./reconciler";
 import {
   PublishConflict,
@@ -14150,6 +14151,8 @@ if (import.meta.main) {
       "provision-binder": resumeProvisionJob,
     },
   });
+  // Deliver queued email in the background — see `mail/index.ts`.
+  startMail();
   // Report what no job can speak for: binders made before jobs existed, or
   // changed outside the API. A minute after startup, then every six hours.
   const reconcile = () =>
