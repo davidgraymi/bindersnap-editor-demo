@@ -1999,6 +1999,25 @@ footer {
   font-weight: var(--brand-weight-medium);
 }
 
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--brand-space-2) var(--brand-space-6);
+  font-size: var(--brand-text-sm);
+}
+
+.footer-links a {
+  color: var(--brand-on-dark-secondary);
+  text-decoration: none;
+}
+
+.footer-links a:hover,
+.footer-links a:focus-visible {
+  color: var(--brand-on-dark-primary);
+  text-decoration: underline;
+}
+
 .footer-rule {
   width: 100%;
   height: 1px;

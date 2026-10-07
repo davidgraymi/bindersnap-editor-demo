@@ -93,7 +93,8 @@ Routes:
   `/-/` (`/-/changes/3`, `/-/blob/main/{path}`, `/-/settings`)
 - Reserved first segments (`RESERVED_ORGANIZATION_NAMES` in
   `packages/utils/organizationName.ts`) are only what cannot move off the
-  root: `help` (a separate static site), `auth` (`/auth/callback`, where
+  root: `help` and `legal` (separate static sites, built from
+  `apps/help` and `apps/legal`), `auth` (`/auth/callback`, where
   Gitea's sign-in returns), and the files browsers ask for at the root.
 
 ### The document editor

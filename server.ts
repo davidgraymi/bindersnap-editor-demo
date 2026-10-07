@@ -5,6 +5,8 @@ import { file, serve } from "bun";
 import appIndex from "./apps/app/index.html";
 import { HELP_GUIDES } from "./apps/app/helpGuides";
 import { helpContentType, helpFiles } from "./apps/help/renderHelp";
+import { readLegalDocuments } from "./apps/legal/legalDocuments";
+import { legalFiles } from "./apps/legal/renderLegal";
 
 /**
  * Help is plain pages, not the app: the same files `scripts/build-help.ts`
@@ -16,6 +18,17 @@ function serveHelp(req: Request): Response {
   const body = helpFiles(HELP_GUIDES).get(path);
   return body === undefined
     ? new Response("No such guide.", { status: 404 })
+    : new Response(body, {
+        headers: { "Content-Type": helpContentType(path) },
+      });
+}
+
+/** The legal pages, the same way: read on each request so an edit shows. */
+function serveLegal(req: Request): Response {
+  const path = new URL(req.url).pathname.replace(/\/+$/, "") || "/";
+  const body = legalFiles(readLegalDocuments()).get(path);
+  return body === undefined
+    ? new Response("No such page.", { status: 404 })
     : new Response(body, {
         headers: { "Content-Type": helpContentType(path) },
       });
@@ -47,6 +60,8 @@ const server = serve({
     "/help": serveHelp,
     "/help/*": serveHelp,
     "/llms.txt": serveHelp,
+    "/legal": serveLegal,
+    "/legal/*": serveLegal,
     "/": appIndex,
     "/docs/*": appIndex,
     "/auth/callback": appIndex,
