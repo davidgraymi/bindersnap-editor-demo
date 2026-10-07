@@ -28,4 +28,6 @@ export interface BillingStatusPayload {
   override: BillingStatusPayloadOverride;
   /** @nullable */
   plan: BillingStatusPayloadPlan;
+  canManageBilling?: boolean;
+  hasBillingAccount?: boolean;
 }

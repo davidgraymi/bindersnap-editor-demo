@@ -29,7 +29,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL, openTreeFolder } from "./helpers";
 
-test.describe.configure({ mode: "serial", timeout: 240_000 });
+test.describe.configure({ mode: "parallel", timeout: 240_000 });
 
 interface Credentials {
   username: string;
@@ -526,7 +526,7 @@ test("the archive has a way in, and only once there is something in it", async (
   await page.reload();
   await page.locator(".binder-archive-link").click();
 
-  await expect(page).toHaveURL(/\?archive=1$/);
+  await expect(page).toHaveURL(/\/-\/archive$/);
   await expect(page.getByText("Hand Hygiene")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(/Last published as version 1/)).toBeVisible();
 
@@ -798,7 +798,7 @@ test("Restore opens a change request rather than putting it straight back", asyn
   await restoreButton.click();
 
   // Straight to the change request it opened.
-  await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/-\/changes\/\d+/, { timeout: 30_000 });
 
   // And nothing is back in the binder until that is published.
   const documents = await fetch(

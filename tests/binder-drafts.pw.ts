@@ -27,7 +27,7 @@ import { expect, test } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
 
-test.describe.configure({ mode: "serial", timeout: 180_000 });
+test.describe.configure({ mode: "parallel", timeout: 180_000 });
 
 interface Credentials {
   username: string;

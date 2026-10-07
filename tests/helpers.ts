@@ -527,7 +527,7 @@ export async function expectPublishedVersion(
 /**
  * Assert how many changes are waiting on a decision.
  *
- * The count is on the sidebar's Changes entry: a binder's screens are a
+ * The count is on the binder's Change requests entry: a binder's screens are a
  * section of the map now rather than a tab strip on every page it holds.
  */
 export async function expectOpenChangeCount(
@@ -535,9 +535,12 @@ export async function expectOpenChangeCount(
   count: number,
   timeout = 30_000,
 ): Promise<void> {
+  // `.last()`: Your work has a Change requests entry of its own, above the
+  // binder's.
   const entry = page
     .locator(".app-sidebar")
-    .getByRole("button", { name: /^Changes/ });
+    .getByRole("link", { name: /^Change requests/ })
+    .last();
   if (count === 0) {
     await expect(entry.locator(".app-sidebar-item-count")).toHaveCount(0, {
       timeout,
@@ -553,11 +556,11 @@ export async function expectOpenChangeCount(
 /** Open one of the binder's screens from the sidebar's own section of it. */
 export async function openBinderSection(
   page: Page,
-  section: "Changes" | "History" | "Settings",
+  section: "Change requests" | "History" | "Settings",
 ): Promise<void> {
   const entry = page
     .locator(".app-sidebar")
-    .getByRole("button", { name: new RegExp(`^${section}`) })
+    .getByRole("link", { name: new RegExp(`^${section}`) })
     .last();
   await expect(entry).toBeVisible({ timeout: 15_000 });
   await entry.click();
@@ -725,17 +728,3 @@ export async function openNewDocumentModal(page: Page): Promise<void> {
  * the question is always shown here — with exactly one binder it is skipped,
  * because choosing from a list of one teaches nothing.
  */
-export async function openTopnavNewDocumentModal(page: Page): Promise<void> {
-  const button = page.locator("#topnav-new-doc-btn");
-  await expect(button).toBeVisible();
-  await button.click();
-
-  await expect(
-    page.getByRole("heading", { name: "Which binder?" }),
-  ).toBeVisible();
-  await page.locator(".docs-list-item").first().click();
-
-  await expect(
-    page.getByRole("heading", { name: "Add a policy" }),
-  ).toBeVisible();
-}

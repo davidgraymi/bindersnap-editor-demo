@@ -259,6 +259,13 @@ product's own copy already says policy everywhere it matters — "Add a policy",
 "2 archived policies" — and the ICP says policy manual. Global stays
 "Documents". _Flagged as a wording call in Open questions._
 
+**Decided, Sep 2026: "Documents", everywhere.** The wording call went the
+other way. The people using this work in Word and PDF, and "document" is
+their word for the thing they file; a policy is one kind of document, and
+the product holds more than policies. Every screen now says document —
+"Add a document", "2 archived documents", the bottom bar's "Documents".
+Names of real documents ("Infection Control Policy") are theirs and unchanged.
+
 ### D2 · Three containers. Everything on every binder screen is one of them.
 
 This is the answer to "it looks like a different web page", and it is the whole
@@ -298,6 +305,24 @@ The rules that make it hold:
   `Infection Control Policy` was the title twice with a path in front of it.
   A change request keeps one, because "Change 4" is not a name and the way
   back to the list is worth a row.
+
+  **Amended, Sep 2026: where you are is said in two places, the way GitLab
+  says it.** "The sidebar already says which binder" held only until a policy
+  was opened: the sidebar collapses to icons there and the binder's name goes
+  with it. So a policy named neither its binder nor its folder, and moving
+  between screens felt like moving between different sites.
+
+  - **The scope, in the top bar:** organization / binder — GitHub's
+    `owner / repo` — and never anything deeper (`LocationTrail`).
+  - **The path, in the page:** `Change requests / Change 4 / Compare` or
+    `Nursing / Wards / Handover Standard`, above the page's `h1` (`PagePath`,
+    drawn by `BinderShell`). Only when there is a level above the page to go
+    back to; a path of one step would only repeat the title under it.
+
+  Both are decided in `locationTrail.ts`. The page's own `h1` is still its only
+  title. The content — the page, its path, a binder's file tree — sits on one
+  raised sheet (`.app-canvas`) with rounded top corners; the top bar and the
+  sidebar are the ground around it.
 
 Monospace survives in three places in the binder and nowhere else: a filename,
 a version number (`v2`), and the `⌘K` hint. Those are machine text.

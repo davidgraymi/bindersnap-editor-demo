@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Archive, Download, FileText } from "lucide-react";
 
 import { fetchBinderHistory } from "../api";
+import { followInApp } from "../appLink";
 import type { WorkspaceHistoryEntry } from "../../../packages/api-schema/schemas/workspaces";
 import { buildAuditRecord } from "../auditRecord";
 import {
   countVersions,
-  describeApprovers,
+  describePublication,
   filterHistory,
   groupHistoryByChange,
   historyPolicies,
@@ -14,12 +15,10 @@ import {
   type HistoryChange,
   type HistorySince,
 } from "../binderHistory";
-import {
-  capitalizeFirst,
-  formatDocumentName,
-  formatTimestamp,
-} from "../documentDisplay";
+import { formatDocumentName, formatTimestamp } from "../documentDisplay";
+import { nameFor, usePeopleNames } from "../usePeopleNames";
 import { AppIcon } from "./AppIcon";
+import { PersonAvatar } from "./PersonAvatar";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 /**
@@ -46,6 +45,12 @@ interface BinderHistoryProps {
   binder: string;
   onOpenDocument: (slugPath: string, version: number | null) => void;
   onOpenChange: (changeNumber: number) => void;
+  /**
+   * Where {@link onOpenDocument} and {@link onOpenChange} go, so every change
+   * and every version on the spine is a link — one a surveyor can be sent.
+   */
+  documentHref: (slugPath: string, version: number | null) => string;
+  changeHref: (changeNumber: number) => string;
 }
 
 /** `nursing/hand-hygiene` → `Hand Hygiene`, with the folder ahead of it. */
@@ -63,11 +68,15 @@ export function BinderHistory({
   binder,
   onOpenDocument,
   onOpenChange,
+  documentHref,
+  changeHref,
 }: BinderHistoryProps) {
   const [versions, setVersions] = useState<WorkspaceHistoryEntry[] | null>(
     null,
   );
   const [error, setError] = useState<string | null>(null);
+  const names = usePeopleNames(org);
+  const nameOf = (login: string) => nameFor(names, login);
   const [policy, setPolicy] = useState("");
   const [since, setSince] = useState<HistorySince>("all");
 
@@ -148,7 +157,7 @@ export function BinderHistory({
             className="bs-input bs-input--sm bs-history-pick"
             value={policy}
             disabled={versions === null || policies.length === 0}
-            aria-label="Which policy"
+            aria-label="Which document"
             onChange={(event) => setPolicy(event.target.value)}
           >
             <option value="">The whole binder</option>
@@ -233,8 +242,11 @@ export function BinderHistory({
                   : `change:${change.changeNumber}`
               }
               change={change}
+              nameOf={nameOf}
               onOpenDocument={onOpenDocument}
               onOpenChange={onOpenChange}
+              documentHref={documentHref}
+              changeHref={changeHref}
             />
           ))}
         </ol>
@@ -247,38 +259,62 @@ function ChangeEntry({
   change,
   onOpenDocument,
   onOpenChange,
+  documentHref,
+  changeHref,
+  nameOf,
 }: {
   change: HistoryChange;
+  /** What a login is called, for the line naming who published it. */
+  nameOf: (login: string) => string;
   onOpenDocument: (slugPath: string, version: number | null) => void;
   onOpenChange: (changeNumber: number) => void;
+  documentHref: (slugPath: string, version: number | null) => string;
+  changeHref: (changeNumber: number) => string;
 }) {
+  const number = change.changeNumber;
+  const title =
+    change.title ||
+    (number === null ? "Tagged outside Bindersnap" : `Change ${number}`);
+
   return (
     <li className="bs-spine-item">
-      {change.changeNumber === null ? (
+      {number === null ? (
         // A binder is a git repository and somebody may tag it themselves.
         // The entry says so rather than inventing a change to point at.
         <span className="bs-knot" aria-hidden="true">
           <AppIcon icon={FileText} size="sm" />
         </span>
       ) : (
-        <button
-          type="button"
+        <a
           className="bs-knot bs-knot--change"
-          aria-label={`Change ${change.changeNumber}`}
-          title={`Change ${change.changeNumber}`}
-          onClick={() => onOpenChange(change.changeNumber!)}
+          href={changeHref(number)}
+          aria-label={`Change ${number}`}
+          title={`Change ${number}`}
+          onClick={(event) => followInApp(event, () => onOpenChange(number))}
         >
-          {change.changeNumber}
-        </button>
+          {number}
+        </a>
       )}
 
       <div className="bs-panel">
         <div className="bs-panel-bar">
           <h3 className="bs-panel-bar-title">
-            {change.title ||
-              (change.changeNumber === null
-                ? "Tagged outside Bindersnap"
-                : `Change ${change.changeNumber}`)}
+            {/* The change's name is the way to it, the way a commit's
+                message is on GitLab — the knot is too small to be the only
+                one. */}
+            {number === null ? (
+              title
+            ) : (
+              <a
+                className="bs-spine-title"
+                href={changeHref(number)}
+                onClick={(event) =>
+                  followInApp(event, () => onOpenChange(number))
+                }
+              >
+                {title}
+              </a>
+            )}
           </h3>
           <span className="bs-panel-bar-spacer" />
           {change.publishedAt ? (
@@ -297,16 +333,20 @@ function ChangeEntry({
                   size="sm"
                 />
               </span>
-              <button
-                type="button"
+              <a
                 className="bs-versionrow-name"
+                href={documentHref(row.slugPath, row.version)}
                 /* **At the version this change wrote, not at whatever the
                    document says now.** This row is evidence of a published
                    version; opening the head would answer a different question
                    than the one that was clicked, and on an audit product the
                    difference is the whole point. An archived row has no
                    version to open at, so it opens the record. */
-                onClick={() => onOpenDocument(row.slugPath, row.version)}
+                onClick={(event) =>
+                  followInApp(event, () =>
+                    onOpenDocument(row.slugPath, row.version),
+                  )
+                }
               >
                 {formatDocumentName(row.name)}{" "}
                 {row.folder === "" ? null : (
@@ -314,7 +354,7 @@ function ChangeEntry({
                     {formatDocumentName(row.folder)}
                   </span>
                 )}
-              </button>
+              </a>
               {row.kind === "archived" ? (
                 <span className="bs-status bs-status--working">
                   Taken off the record
@@ -329,10 +369,19 @@ function ChangeEntry({
         </ul>
 
         <div className="bs-panel-foot">
-          {change.submittedBy
-            ? `Published by ${capitalizeFirst(change.submittedBy)} · `
-            : ""}
-          {describeApprovers(change.approvers.map(capitalizeFirst))}
+          {change.submittedBy ? (
+            <PersonAvatar
+              person={{
+                login: change.submittedBy,
+                fullName: nameOf(change.submittedBy),
+              }}
+            />
+          ) : null}
+          {/* Its own box, so a sentence too long for a phone wraps beside the
+              face instead of dropping the whole line below it. */}
+          <span className="history-byline">
+            {describePublication(change, nameOf)}
+          </span>
         </div>
       </div>
     </li>

@@ -352,7 +352,7 @@ export function NavSearch({
         className="quick-find-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label="Search binders, policies, or people"
+        aria-label="Search binders, documents, or people"
         ref={dialogRef}
         onKeyDown={handleDialogKeyDown}
       >
@@ -371,8 +371,8 @@ export function NavSearch({
             ref={inputRef}
             className="quick-find-input"
             type="text"
-            placeholder="Search binders, policies, or people"
-            aria-label="Search binders, policies, or people"
+            placeholder="Search binders, documents, or people"
+            aria-label="Search binders, documents, or people"
             role="combobox"
             aria-expanded={searching}
             aria-controls="quick-find-results"
@@ -506,7 +506,7 @@ export function NavSearch({
         onClick={() => setOpen(true)}
         // Named here rather than by its own text: on a phone the label and the
         // shortcut hint are gone and only the icon is left.
-        aria-label="Search binders, policies, or people"
+        aria-label="Search binders, documents, or people"
         aria-haspopup="dialog"
         aria-expanded={open}
       >
@@ -517,7 +517,7 @@ export function NavSearch({
           strokeWidth={1.5}
         />
         <span className="app-nav-search-trigger-label">
-          {query.trim() || "Search binders, policies, or people"}
+          {query.trim() || "Search binders, documents, or people"}
         </span>
         {/* ⌘K, not "/". Both open it and always have — but the hint is the half
             a reader learns from, and "/" is a reflex from vim and GitHub while

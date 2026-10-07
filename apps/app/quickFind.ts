@@ -193,7 +193,7 @@ export function describeQuickFindEmptyState(query: string): string {
 
 /** The heading above each run of rows. Absent when a kind has none. */
 export const QUICK_FIND_GROUP_LABELS: Record<QuickFindKind, string> = {
-  document: "Policies",
+  document: "Documents",
   binder: "Binders",
   person: "People",
 };

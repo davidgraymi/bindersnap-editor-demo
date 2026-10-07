@@ -40,6 +40,10 @@ export interface WorkspaceSummary {
   fullName: string;
   owner: string;
   description: string;
+  /** Open pull requests, as Gitea counts them — the binder's Changes tab. */
+  openChangeCount: number;
+  /** When anything last moved in it, as Gitea records it. */
+  updatedAt: string;
 }
 
 export interface ProvisionedWorkspace {
@@ -59,6 +63,8 @@ function normalizeWorkspace(repo: Repository): WorkspaceSummary {
     fullName: repo.full_name ?? "",
     owner: repo.owner?.login ?? "",
     description: repo.description ?? "",
+    openChangeCount: repo.open_pr_counter ?? 0,
+    updatedAt: repo.updated_at ?? "",
   };
 }
 

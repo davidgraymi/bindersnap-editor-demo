@@ -13,7 +13,6 @@ import {
   ChevronRight,
   FileText,
   FolderInput,
-  GitBranch,
   Pencil,
 } from "lucide-react";
 import { useIsReadOnly } from "../readOnlyContext";
@@ -59,6 +58,8 @@ interface BinderDocumentsProps {
   org: string;
   binder: string;
   onOpenDocument: (documentPath: string) => void;
+  /** Where {@link onOpenDocument} goes, so each document in the tree is a link. */
+  documentHref: (documentPath: string) => string;
   /** The document open under this binder, so the tree can mark where you are. */
   activeDocument?: string | null;
   /**
@@ -106,15 +107,18 @@ interface BinderDocumentsProps {
   onAddPolicy?: () => void;
   onNewFolder?: () => void;
   /**
-   * Read the binder as this change request would leave it, on its branch.
+   * Read the binder at this branch rather than on the record: `/-/tree/{ref}`.
    *
-   * Where a change's branch link lands: the whole binder at that branch, the
-   * way a code host opens a branch at its root rather than on one file in it.
-   * Read-only — a branch somebody has proposed is theirs, not a draft.
+   * The same page, read somewhere else — the way a code host opens a branch
+   * at its root. Read-only: a branch somebody has proposed is theirs, not a
+   * draft.
    */
-  onChange?: { number: number; branch: string } | null;
-  /** The way back to the change, from its branch. */
-  onBackToChange?: (changeNumber: number) => void;
+  atRef?: string | null;
+  /**
+   * Which version of the binder this is, and the way to the others — first in
+   * the tree's bar whenever the binder is not being edited.
+   */
+  refPicker?: ReactNode;
 }
 
 /**
@@ -176,6 +180,7 @@ export function BinderDocuments({
   org,
   binder,
   onOpenDocument,
+  documentHref,
   activeDocument = null,
   draft = null,
   draftPicker = null,
@@ -187,8 +192,8 @@ export function BinderDocuments({
   draftActs = [],
   onAddPolicy,
   onNewFolder,
-  onChange = null,
-  onBackToChange,
+  atRef = null,
+  refPicker = null,
 }: BinderDocumentsProps) {
   const isReadOnly = useIsReadOnly();
   const [documents, setDocuments] = useState<
@@ -226,7 +231,8 @@ export function BinderDocuments({
       org,
       binder,
       draft ?? undefined,
-      onChange?.number ?? undefined,
+      undefined,
+      atRef ?? undefined,
     )
       .then((payload) => {
         if (cancelled) return;
@@ -257,7 +263,7 @@ export function BinderDocuments({
     return () => {
       cancelled = true;
     };
-  }, [org, binder, draft, onChange?.number, reloadKey, onDraftLost]);
+  }, [org, binder, draft, atRef, reloadKey, onDraftLost]);
 
   useEffect(() => {
     setDocuments(null);
@@ -467,7 +473,7 @@ export function BinderDocuments({
       // move it, not only this one.
       await runAct(
         () => restoreBinderDocument(org, binder, uid, { draft }),
-        "Unable to restore that policy.",
+        "Unable to restore that document.",
       );
     } finally {
       setRestoring(null);
@@ -551,13 +557,6 @@ export function BinderDocuments({
     };
   };
 
-  if (error) {
-    return <p className="app-inline-error">{error}</p>;
-  }
-
-  const policyCount = documents?.length ?? 0;
-  const folderCount = everyFolder.length;
-
   /**
    * The rows this draft has touched.
    *
@@ -574,6 +573,15 @@ export function BinderDocuments({
     }
     return paths;
   }, [draftActs]);
+
+  // Every hook above this line, and no hook below it: an early return that
+  // skips one is what crashed the page for a binder that does not exist.
+  if (error) {
+    return <p className="app-inline-error">{error}</p>;
+  }
+
+  const policyCount = documents?.length ?? 0;
+  const folderCount = everyFolder.length;
 
   const isTouched = (node: BinderTreeNode): boolean => {
     if (!draft) return false;
@@ -627,20 +635,6 @@ export function BinderDocuments({
 
   return (
     <div className="binder-pane">
-      {/* The same way back a document read on a change's branch offers: the
-          reader came here from the change, and came to decide on it. */}
-      {onChange && onBackToChange ? (
-        <div className="doc-on-change" role="status">
-          <button
-            type="button"
-            className="bs-btn bs-btn--sm bs-btn-secondary"
-            onClick={() => onBackToChange(onChange.number)}
-          >
-            Back to change {onChange.number}
-          </button>
-        </div>
-      ) : null}
-
       {actError ? (
         <p className="bs-note bs-note--danger" role="alert">
           {actError}
@@ -672,7 +666,7 @@ export function BinderDocuments({
                 onClick={onAddPolicy}
                 disabled={committing || !onAddPolicy}
               >
-                Add a policy
+                Add a document
               </button>
               <span className="bs-panel-bar-spacer" />
               {/* Continuous save, said where the eye already is. */}
@@ -683,14 +677,11 @@ export function BinderDocuments({
             </>
           ) : (
             <>
-              {/* Which branch this is, in the tree's own bar — the list reads
-                  like the record otherwise, and is not it. */}
-              {onChange ? (
-                <span className="cmp-branch" title="The branch being read">
-                  <GitBranch size={12} strokeWidth={1.75} aria-hidden="true" />
-                  {onChange.branch}
-                </span>
-              ) : null}
+              {/* Which version of the binder this is — the record or a
+                  branch — in the tree's own bar, where GitLab puts its
+                  branch selector. Always there, so the record reads as one
+                  choice among several rather than as the only thing. */}
+              {refPicker}
               <input
                 className="bs-input bs-input--sm binder-filter"
                 type="search"
@@ -703,7 +694,9 @@ export function BinderDocuments({
               <span className="bs-panel-bar-spacer" />
               {documents === null ? null : (
                 <span className="binder-count">
-                  {policyCount === 1 ? "1 policy" : `${policyCount} policies`}
+                  {policyCount === 1
+                    ? "1 document"
+                    : `${policyCount} documents`}
                   {folderCount === 0
                     ? ""
                     : folderCount === 1
@@ -737,8 +730,8 @@ export function BinderDocuments({
             {isReadOnly ? null : (
               <p>
                 {draft
-                  ? "Make a folder or add a policy — it goes into your draft."
-                  : "A policy joins this binder once its change request is published."}
+                  ? "Make a folder or add a document — it goes into your draft."
+                  : "A document joins this binder once its change request is published."}
               </p>
             )}
           </div>
@@ -752,6 +745,7 @@ export function BinderDocuments({
             isFolderOpen={needle === "" ? isOpen : EVERYTHING_OPEN}
             onToggleFolder={toggle}
             onOpenDocument={onOpenDocument}
+            documentHref={documentHref}
             activeDocument={activeDocument}
             renderDocumentAside={renderAside}
             {...(draft
@@ -904,8 +898,8 @@ export function BinderDocuments({
               )}
               <Archive size={14} strokeWidth={1.5} aria-hidden="true" />
               {archivedCount === 1
-                ? "Archived · 1 policy"
-                : `Archived · ${archivedCount} policies`}
+                ? "Archived · 1 document"
+                : `Archived · ${archivedCount} documents`}
             </button>
 
             {archiveOpen && archived === null ? (
@@ -953,7 +947,7 @@ export function BinderDocuments({
             an empty page. The panel's own foot rather than the header, because
             it is about what this binder *held* — a question somebody asks
             after failing to find something, not before. */}
-        {archivedCount > 0 && onOpenArchive && !draft && !onChange ? (
+        {archivedCount > 0 && onOpenArchive && !draft && !atRef ? (
           <div className="bs-panel-foot">
             <button
               type="button"
@@ -962,8 +956,8 @@ export function BinderDocuments({
             >
               <Archive size={14} strokeWidth={1.5} aria-hidden="true" />
               {archivedCount === 1
-                ? "1 archived policy"
-                : `${archivedCount} archived policies`}
+                ? "1 archived document"
+                : `${archivedCount} archived documents`}
             </button>
           </div>
         ) : null}

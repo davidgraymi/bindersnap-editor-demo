@@ -23,7 +23,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL, openTreeFolder } from "./helpers";
 
-test.describe.configure({ mode: "serial", timeout: 240_000 });
+test.describe.configure({ mode: "parallel", timeout: 240_000 });
 
 interface Credentials {
   username: string;
@@ -331,7 +331,7 @@ test("renaming from the settings tab moves the address bar with it", async ({
   await page.getByRole("button", { name: "Save", exact: true }).click();
 
   await expect(page).toHaveURL(
-    new RegExp(`/${org}/clinical-governance\\?tab=settings$`),
+    new RegExp(`/${org}/clinical-governance/-/settings$`),
     { timeout: 30_000 },
   );
   await expect(page.locator(".app-sidebar-binder-name")).toHaveText(

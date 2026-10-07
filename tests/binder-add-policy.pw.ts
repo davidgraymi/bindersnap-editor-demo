@@ -31,7 +31,7 @@ import {
 
 // Signup, an organization, two binders and several page loads on a stack that
 // may be cold. The suite default is nowhere near enough.
-test.describe.configure({ mode: "serial", timeout: 180_000 });
+test.describe.configure({ mode: "parallel", timeout: 180_000 });
 
 interface Credentials {
   username: string;
@@ -136,7 +136,7 @@ async function fileAPolicy(page: Page, name: string, folder: string) {
     await page.locator("#add-policy-new-folder").fill(folder);
   }
 
-  await page.getByRole("button", { name: "Add policy", exact: true }).click();
+  await page.getByRole("button", { name: "Add document", exact: true }).click();
 }
 
 test("a member files a policy from the binder's own page", async ({ page }) => {
@@ -154,9 +154,9 @@ test("a member files a policy from the binder's own page", async ({ page }) => {
   // An empty binder says so rather than showing a blank list.
   await expect(page.getByText("Nothing filed here yet.")).toBeVisible();
 
-  await page.getByRole("button", { name: "Add a policy" }).click();
+  await page.getByRole("button", { name: "Add a document" }).click();
   await expect(
-    page.getByRole("heading", { name: "Add a policy" }),
+    page.getByRole("heading", { name: "Add a document" }),
   ).toBeVisible();
 
   await fileAPolicy(page, "Infection Control Policy", "nursing");
@@ -165,93 +165,22 @@ test("a member files a policy from the binder's own page", async ({ page }) => {
   // binder — it opens a change request, and that is where this lands. Landing
   // on the document's page made the act look finished; a change request is
   // what actually happened and what has to be decided next.
-  await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
-  // The change's own screen: the file it proposes, and the way back to the
-  // list. Not "Publish", which a change with no approvals yet does not offer.
-  await expect(page.getByText("Proposed version")).toBeVisible({
-    timeout: 30_000,
-  });
-  await expect(page.getByRole("button", { name: "All changes" })).toBeVisible();
+  await expect(page).toHaveURL(/\/-\/changes\/\d+/, { timeout: 30_000 });
+  // The change's own screen: the document it proposes, and the way back to
+  // the list. Not "Publish", which a change with no approvals yet does not
+  // offer.
+  await expect(
+    page.locator(".change-does").getByText("Infection Control Policy"),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(
+    page.locator(".page-path").getByRole("link", { name: "Change requests" }),
+  ).toBeVisible();
 
   // And the binder still holds nothing, because nothing has been published.
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
   await expect(page.getByText("Nothing filed here yet.")).toBeVisible({
     timeout: 30_000,
   });
-});
-
-test("the nav's New policy asks which binder, then files into it", async ({
-  page,
-}) => {
-  // The nav is the one surface with no binder in scope. Asking first is not a
-  // nicety: the binder decides who can see the policy, who approves it and
-  // what the rules are, and it is the one answer that cannot be changed
-  // afterwards without re-filing.
-  const credentials = buildCredentials();
-  const sessionCookie = await signUp(credentials);
-  const org = await createOrganization(
-    sessionCookie,
-    `Riverbend ${randomUUID().slice(0, 6)}`,
-  );
-  const first = await createBinder(sessionCookie, org, "Clinical Policies");
-  const second = await createBinder(sessionCookie, org, "Corporate Policies");
-
-  await signInBrowser(page, sessionCookie);
-  await page.goto(`${APP_BASE_URL}/${org}`);
-
-  await page.locator("#topnav-new-doc-btn").click();
-
-  await expect(
-    page.getByRole("heading", { name: "Which binder?" }),
-  ).toBeVisible();
-
-  // Scoped to the dialog: the organization page behind it lists the same
-  // binders, so an unscoped match finds two.
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: second, exact: false })
-    .click();
-  await expect(
-    page.getByRole("heading", { name: "Add a policy" }),
-  ).toBeVisible();
-
-  await fileAPolicy(page, "Expenses Policy", "");
-
-  // Wait for the app to land on the change request before asking the API about
-  // it — otherwise the fetch races the upload and reads an empty binder.
-  await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
-
-  // It landed in the binder that was chosen, not the first one in the list.
-  //
-  // Asked of that binder's change requests rather than its documents: a binder
-  // lists what is on `main`, and a policy filed a moment ago is not there yet.
-  // The change request is where it is, and naming the right binder is the whole
-  // point of this test.
-  const changes = await fetch(
-    `${API_BASE_URL}/api/app/binders/${org}/${second}/changes?state=open`,
-    { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
-  );
-  expect(changes.status).toBe(200);
-  const listed = (await changes.json()) as {
-    changes: Array<{ branchName?: string; title?: string }>;
-  };
-  expect(
-    listed.changes.some(
-      (change) =>
-        (change.branchName ?? "").startsWith("upload/expenses-policy/") ||
-        (change.title ?? "").includes("expenses-policy"),
-    ),
-    JSON.stringify(listed.changes),
-  ).toBe(true);
-
-  // And the binder it was *not* filed into has nothing in flight.
-  const otherChanges = await fetch(
-    `${API_BASE_URL}/api/app/binders/${org}/${first}/changes?state=open`,
-    { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
-  );
-  expect(
-    ((await otherChanges.json()) as { changes: unknown[] }).changes,
-  ).toHaveLength(0);
 });
 
 /**
@@ -337,10 +266,10 @@ test("the library lists a policy across every binder it can reach", async ({
     [corporate, "Expenses Policy"],
   ] as const) {
     await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-    await page.getByRole("button", { name: "Add a policy" }).click();
+    await page.getByRole("button", { name: "Add a document" }).click();
     await fileAPolicy(page, name, "");
     // Filing opens a change request, which is where it lands.
-    await expect(page).toHaveURL(/tab=changes&change=\d+/, {
+    await expect(page).toHaveURL(/\/-\/changes\/\d+/, {
       timeout: 30_000,
     });
     // Onto `main`, because the library lists the record and nothing else.
@@ -359,22 +288,28 @@ test("the library lists a policy across every binder it can reach", async ({
   await expect(
     page.getByRole("heading", { name: "Documents", exact: true }),
   ).toBeVisible();
+  // Each binder heads its own panel, titled the way the binder is everywhere
+  // else, and the heading is the way into it. One organization, so the name
+  // alone: the organization only appears when it tells two binders apart.
   await expect(
-    page.getByRole("heading", { name: clinical, exact: false }),
+    page.getByRole("heading", { name: "Clinical Policies", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: corporate, exact: false }),
+    page.getByRole("heading", { name: "Corporate Policies", exact: true }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Clinical Policies", exact: true }),
+  ).toHaveAttribute("href", `/${org}/${clinical}`);
 
   // Searching narrows it to one, which is the question the page exists for.
   await page
-    .getByRole("searchbox", { name: "Search policies" })
+    .getByRole("searchbox", { name: "Search documents" })
     .fill("expenses");
   await expect(
-    page.getByRole("heading", { name: clinical, exact: false }),
+    page.getByRole("heading", { name: "Clinical Policies", exact: true }),
   ).toHaveCount(0, { timeout: 30_000 });
   await expect(
-    page.getByRole("heading", { name: corporate, exact: false }),
+    page.getByRole("heading", { name: "Corporate Policies", exact: true }),
   ).toBeVisible();
 });
 
@@ -397,9 +332,9 @@ test("the binder's tabs still work once a document is open", async ({
 
   await signInBrowser(page, sessionCookie);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-  await page.getByRole("button", { name: "Add a policy" }).click();
+  await page.getByRole("button", { name: "Add a document" }).click();
   await fileAPolicy(page, "Hand Hygiene Policy", "nursing");
-  await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/-\/changes\/\d+/, { timeout: 30_000 });
 
   // Published, because a binder lists the record — and a document is opened by
   // clicking it in that list, which is the journey this test is about.
@@ -408,8 +343,9 @@ test("the binder's tabs still work once a document is open", async ({
   // It was filed in Nursing, and folders start shut — so the drawer is opened
   // first, the same way a person reaches it.
   await openTreeFolder(page, "Nursing");
+  // A link, the way a file in a code host's tree is: it opens in a tab.
   await page
-    .getByRole("button", { name: "Hand Hygiene Policy" })
+    .getByRole("link", { name: "Hand Hygiene Policy" })
     .click({ timeout: 30_000 });
 
   await expect(page.locator("h1.bs-title").last()).toHaveText(
@@ -431,7 +367,7 @@ test("the binder's tabs still work once a document is open", async ({
   await expect(page.locator(".app-sidebar-binder-name")).toHaveText(
     binderTitle,
   );
-  expect(new URL(page.url()).pathname).toBe(`/${org}/${binder}`);
+  expect(new URL(page.url()).pathname).toBe(`/${org}/${binder}/-/settings`);
 
   // Who can act here is a question about people, not about billing. The seat
   // chip on every row and the "N people · N seats · N free" line above them
@@ -472,10 +408,10 @@ test("the header's one filled button belongs to the tab it sits above", async ({
   await signInBrowser(page, sessionCookie);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
-  const addAPolicy = page.getByRole("button", { name: "Add a policy" });
+  const addAPolicy = page.getByRole("button", { name: "Add a document" });
   await expect(addAPolicy).toBeVisible();
 
-  for (const section of ["Changes", "History", "Settings"] as const) {
+  for (const section of ["Change requests", "History", "Settings"] as const) {
     await openBinderSection(page, section);
     await expect(addAPolicy).toHaveCount(0, { timeout: 30_000 });
   }
@@ -483,8 +419,59 @@ test("the header's one filled button belongs to the tab it sits above", async ({
   // Back to the binder's contents and it returns: scoped, not deleted.
   await page.locator(".app-sidebar-binder").click();
   await expect(addAPolicy).toBeVisible({ timeout: 30_000 });
+});
 
-  // Filing a policy is never more than one click away regardless — the top
-  // nav carries it on every page in the app.
-  await expect(page.getByRole("button", { name: "New policy" })).toBeVisible();
+test("a new binder has a page of its own, and lands you in it", async ({
+  page,
+}) => {
+  // GitLab's "Create blank project": an address, a form that says what the
+  // binder's address will be, and the new binder as where you end up.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const displayName = `Riverbend ${randomUUID().slice(0, 6)}`;
+  const org = await createOrganization(sessionCookie, displayName);
+  await createBinder(sessionCookie, org, "Corporate Policies");
+
+  await signInBrowser(page, sessionCookie);
+  await page.goto(`${APP_BASE_URL}/${org}`);
+  await page.getByRole("link", { name: "New binder" }).click();
+
+  await expect(page).toHaveURL(new RegExp(`/${org}/-/binders/new$`));
+  await expect(page.locator("h1.bs-title")).toHaveText("New binder");
+  // Named the way people read it, not by its slug.
+  await expect(page.getByText(`Everyone at ${displayName}`)).toBeVisible();
+
+  const name = page.getByLabel("Binder name");
+  const create = page.getByRole("button", { name: "Create binder" });
+
+  // A name another binder already has is refused before anything is sent.
+  await name.fill("corporate policies");
+  await expect(page.locator("#new-binder-address")).toContainText(
+    `already has a binder at /${org}/corporate-policies`,
+  );
+  await expect(create).toBeDisabled();
+
+  await name.fill("Clinical Policies");
+  await expect(page.locator("#new-binder-address")).toContainText(
+    `/${org}/clinical-policies`,
+  );
+  await page.getByLabel("Description").fill("Nursing and infection control.");
+  await page.getByText("Only people you add").click();
+  await create.click();
+
+  await expect(page).toHaveURL(new RegExp(`/${org}/clinical-policies$`), {
+    timeout: 30_000,
+  });
+  await expect(page.locator("h1.bs-title")).toHaveText("Clinical Policies");
+  await expect(page.locator(".bs-subtitle").first()).toHaveText(
+    "Nursing and infection control.",
+  );
+
+  // Cancel is a way back to the list, not a toggle in the header.
+  await page.goto(`${APP_BASE_URL}/${org}?new=binder`);
+  await page.getByRole("link", { name: "Cancel" }).click();
+  await expect(page).toHaveURL(new RegExp(`/${org}$`));
+  await expect(
+    page.getByRole("link", { name: "Clinical Policies" }),
+  ).toBeVisible();
 });

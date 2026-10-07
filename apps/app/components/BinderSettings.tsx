@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
+  Building2,
   FileText,
   Folder,
   Library,
+  Lock,
   Pencil,
   ShieldCheck,
   Users,
@@ -41,6 +43,7 @@ import { formatDocumentName } from "../documentDisplay";
 import { describeGroupName } from "../../../packages/utils/groupName";
 import { AppIcon } from "./AppIcon";
 import { PersonAvatar } from "./PersonAvatar";
+import { SettingsGroup } from "./SettingsGroup";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 /**
@@ -73,7 +76,7 @@ interface BinderSettingsProps {
   binder: string;
   /**
    * A block to scroll to once the page has read, for the addresses that were
-   * tabs of their own — `?tab=people` and `?tab=sign-off` still resolve.
+   * tabs of their own — `/-/settings/people` and `/-/settings/sign-off` open on them.
    */
   focus?: BinderSettingsSection;
   /**
@@ -182,50 +185,68 @@ export function BinderSettings({
 
   return (
     <div className="binder-pane bs-settings">
-      {canManage ? (
-        <NameAndDescription
+      <SettingsGroup
+        id="binder-settings-general"
+        title="General"
+        note="What this binder is called, and what it is for."
+      >
+        {canManage ? (
+          <NameAndDescription
+            org={org}
+            binder={binder}
+            description={description}
+            onRenamed={onRenamed}
+            onDescribed={(next) => {
+              setDescription(next);
+              onDescribed?.();
+            }}
+          />
+        ) : (
+          // Said once, at the top, rather than as a missing control in every
+          // block below.
+          <p className="bs-section-note">
+            Only a binder administrator can change these settings.
+          </p>
+        )}
+      </SettingsGroup>
+
+      <SettingsGroup
+        id="binder-settings-access"
+        title="Access"
+        note="Who can read this binder, and what each person can do in it."
+      >
+        <PeopleSections
+          ref={peopleRef}
           org={org}
           binder={binder}
-          description={description}
-          onRenamed={onRenamed}
-          onDescribed={(next) => {
-            setDescription(next);
-            onDescribed?.();
-          }}
+          payload={people}
+          canManage={canManagePeople}
+          onChanged={setPeople}
         />
-      ) : (
-        // Said once, at the top, rather than as a missing control in every
-        // block below.
-        <p className="bs-section-note">
-          Only a binder administrator can change these settings.
-        </p>
-      )}
+      </SettingsGroup>
 
-      <PeopleSections
-        ref={peopleRef}
-        org={org}
-        binder={binder}
-        payload={people}
-        canManage={canManagePeople}
-        onChanged={setPeople}
-      />
+      <SettingsGroup
+        id="binder-settings-review"
+        title="Review and publishing"
+        note="What has to be true before a change becomes the published version."
+      >
+        <SignOffSection
+          ref={signOffRef}
+          org={org}
+          binder={binder}
+          settings={settings}
+          canManage={canManage}
+          onOpenChange={onOpenChange}
+        />
 
-      <SignOffSection
-        ref={signOffRef}
-        org={org}
-        binder={binder}
-        settings={settings}
-        canManage={canManage}
-        onOpenChange={onOpenChange}
-      />
-
-      <ApprovalSection
-        org={org}
-        binder={binder}
-        settings={settings}
-        canManage={canManage}
-        onChanged={setSettings}
-      />
+        <ApprovalSection
+          org={org}
+          binder={binder}
+          settings={settings}
+          canManage={canManage}
+          onChanged={setSettings}
+        />
+      </SettingsGroup>
     </div>
   );
 }
@@ -297,16 +318,23 @@ function NameAndDescription({
             Name
           </label>
           <input
-            className="bs-input"
+            className="bs-input bs-input--sm"
             id="binder-settings-name"
             type="text"
             value={name}
             disabled={saving}
+            aria-describedby="binder-settings-name-hint"
             onChange={(event) => {
               setName(event.target.value);
               setNotice(null);
             }}
           />
+          {/* The one consequence of a rename somebody would want to know
+              before pressing Save: the address moves, and links survive. */}
+          <p className="bs-field-hint" id="binder-settings-name-hint">
+            Renaming it changes its address. Links to the old address keep
+            working.
+          </p>
         </div>
         <div className="bs-field">
           <label
@@ -317,7 +345,7 @@ function NameAndDescription({
             <span className="bs-field-optional">optional</span>
           </label>
           <textarea
-            className="bs-input bs-settings-description"
+            className="bs-input bs-input--sm bs-settings-description"
             id="binder-settings-description"
             value={about}
             disabled={saving}
@@ -414,9 +442,9 @@ function PeopleSections({
     <>
       <section className="bs-section" aria-labelledby="binder-settings-seen">
         <div className="bs-section-head">
-          <h2 className="bs-section-title" id="binder-settings-seen">
+          <h3 className="bs-section-title" id="binder-settings-seen">
             Who can see this binder
-          </h2>
+          </h3>
         </div>
         {canManage ? (
           /* A radio pair rather than a toggle: the two states are a choice
@@ -438,6 +466,12 @@ function PeopleSections({
                   void run(() => setBinderVisibility(org, binder, true))
                 }
               />
+              <Building2
+                className="bs-choice-icon"
+                size={16}
+                strokeWidth={1.75}
+                aria-hidden="true"
+              />
               <span>
                 <span className="bs-choice-name">
                   Everyone at {orgDisplayName}
@@ -457,6 +491,12 @@ function PeopleSections({
                 onChange={() =>
                   void run(() => setBinderVisibility(org, binder, false))
                 }
+              />
+              <Lock
+                className="bs-choice-icon"
+                size={16}
+                strokeWidth={1.75}
+                aria-hidden="true"
               />
               <span>
                 <span className="bs-choice-name">Only the people below</span>
@@ -488,9 +528,9 @@ function PeopleSections({
         aria-labelledby="binder-settings-people"
       >
         <div className="bs-section-head">
-          <h2 className="bs-section-title" id="binder-settings-people">
+          <h3 className="bs-section-title" id="binder-settings-people">
             People
-          </h2>
+          </h3>
           <span className="bs-section-count">{payload.people.length}</span>
         </div>
         <div className="bs-panel">
@@ -762,9 +802,9 @@ function GroupsSection({
   return (
     <section className="bs-section" aria-labelledby="binder-settings-groups">
       <div className="bs-section-head">
-        <h2 className="bs-section-title" id="binder-settings-groups">
+        <h3 className="bs-section-title" id="binder-settings-groups">
           Groups
-        </h2>
+        </h3>
         <span className="bs-section-count">{groups.length}</span>
       </div>
       <div className="bs-panel">
@@ -1065,7 +1105,7 @@ function RulePickers({
           </optgroup>
         ) : null}
         {documents.length > 0 ? (
-          <optgroup label="One policy">
+          <optgroup label="One document">
             {documents.map((entry) => (
               <option key={entry.uid} value={`document:${entry.uid}`}>
                 {formatDocumentName(entry.name)}
@@ -1183,9 +1223,9 @@ function SignOffSection({
       aria-labelledby="binder-settings-sign-off"
     >
       <div className="bs-section-head">
-        <h2 className="bs-section-title" id="binder-settings-sign-off">
+        <h3 className="bs-section-title" id="binder-settings-sign-off">
           Sign-off rules
-        </h2>
+        </h3>
         {signOff.rules.length > 0 ? (
           <span className="bs-section-count">{signOff.rules.length}</span>
         ) : null}
@@ -1225,8 +1265,8 @@ function SignOffSection({
                 the infection control group signs off on anything filed in
                 nursing
               </em>{" "}
-              — so a policy cannot be published without the people who own that
-              subject.
+              — so a document cannot be published without the people who own
+              that subject.
             </p>
             <p>
               A rule can cover this whole binder, one folder, a single document,
@@ -1361,15 +1401,15 @@ function SignOffSection({
             signOff.unnameableDocuments > 0 ? (
               <div className="bs-panel-foot">
                 {signOff.unnameableDocuments === 1
-                  ? "The policy in this binder was filed before Bindersnap tracked policies individually, so a rule can only cover its folder."
-                  : `The ${signOff.unnameableDocuments} policies in this binder were filed before Bindersnap tracked policies individually, so a rule can only cover their folders.`}
+                  ? "The document in this binder was filed before Bindersnap tracked documents individually, so a rule can only cover its folder."
+                  : `The ${signOff.unnameableDocuments} documents in this binder were filed before Bindersnap tracked documents individually, so a rule can only cover their folders.`}
               </div>
             ) : null}
 
             <div className="bs-panel-foot">
               <span className="bs-panel-foot-note">
                 Changing these rules is itself a change to the binder, so it
-                goes through the same approval your policies do.
+                goes through the same approval your documents do.
               </span>
               {changed ? (
                 <button
@@ -1495,17 +1535,17 @@ function ApprovalSection({
   return (
     <section className="bs-section" aria-labelledby="binder-settings-approval">
       <div className="bs-section-head">
-        <h2 className="bs-section-title" id="binder-settings-approval">
+        <h3 className="bs-section-title" id="binder-settings-approval">
           How changes are approved
-        </h2>
+        </h3>
       </div>
 
       {/* Worth saying loudly: a binder without this is not making the
           product's one promise. */}
       {rules.pushBlocked ? null : (
         <p className="bs-note bs-note--danger" role="alert">
-          This binder&rsquo;s main branch is not protected, so a policy could be
-          changed without a review.
+          This binder&rsquo;s main branch is not protected, so a document could
+          be changed without a review.
         </p>
       )}
 

@@ -1,21 +1,30 @@
 import { useEffect, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
 import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
-import { BookOpen, Plus } from "lucide-react";
+import { BookOpen, FilePen } from "lucide-react";
 
-import { createBinder, fetchOrganizationBinders } from "../api";
+import { fetchOrganizationBinders } from "../api";
 import type { WorkspaceSummary } from "../../../packages/api-schema/schemas/workspaces";
-import { formatDocumentName } from "../documentDisplay";
+import { useWriteAction } from "../paywallContext";
+import { followInApp } from "../appLink";
+import { buildBinderUrl } from "../binderShell";
+import { formatAge, formatDocumentName } from "../documentDisplay";
+import { NewBinderPage } from "./NewBinderPage";
 import { OrganizationPeople } from "./OrganizationPeople";
-import { SkeletonGroup, SkeletonLine } from "./Skeleton";
+import { SkeletonPanel } from "./Skeleton";
 
 /** The organization's tabs. Binders is the one it opens on. */
 const ORG_TABS = ["binders", "people"] as const;
 type OrgTab = (typeof ORG_TABS)[number];
 
-function orgTabFromSearch(search: string): OrgTab {
-  const raw = new URLSearchParams(search).get("tab");
-  return ORG_TABS.find((tab) => tab === raw) ?? "binders";
+/** `/{org}/-/people` is People; anything else of the organization's is Binders. */
+function orgTabFromPath(pathname: string): OrgTab {
+  return /^\/[^/]+\/-\/people\/?$/.test(pathname) ? "people" : "binders";
+}
+
+/** `/{org}/-/binders/new`: the new-binder form, as an address of its own. */
+function isCreatingFromPath(pathname: string): boolean {
+  return /^\/[^/]+\/-\/binders\/new\/?$/.test(pathname);
 }
 
 /**
@@ -41,22 +50,18 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
   const isReadOnly = useIsReadOnly();
   const displayName = useOrganizationDisplayName(org);
   const [tab, setTab] = useState<OrgTab>(() =>
-    orgTabFromSearch(window.location.search),
+    orgTabFromPath(window.location.pathname),
   );
   const [binders, setBinders] = useState<WorkspaceSummary[] | null>(null);
+  // What the list's own bar narrows it to — the binder's "Filter this
+  // binder…", one level up.
+  const [filter, setFilter] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
-  // The form is behind the header's "New binder" rather than always open. It
-  // opens on its own for an organization with no binders, because there the
-  // form *is* the page.
-  const [creating, setCreating] = useState(false);
-  const [newName, setNewName] = useState("");
-  // Open, because the common case is a policy manual everybody must be able to
-  // read in order to attest to it — and a product that makes the common case a
-  // configuration step teaches customers that access is fiddly. A default, not
-  // an assumption: the question is on the form.
-  const [openToOrganization, setOpenToOrganization] = useState(true);
-  const [createError, setCreateError] = useState<string | null>(null);
+  // Behind the header's "New binder", at an address of its own rather than a
+  // drawer over the list: it can be sent, reloaded and left with Back.
+  const [creating, setCreating] = useState(() =>
+    isCreatingFromPath(window.location.pathname),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -84,7 +89,10 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
   // Back and forward are how somebody leaves a tab, so the page follows the
   // address bar rather than its own memory of what was clicked.
   useEffect(() => {
-    const handler = () => setTab(orgTabFromSearch(window.location.search));
+    const handler = () => {
+      setTab(orgTabFromPath(window.location.pathname));
+      setCreating(isCreatingFromPath(window.location.pathname));
+    };
     window.addEventListener("popstate", handler);
     return () => window.removeEventListener("popstate", handler);
   }, []);
@@ -93,10 +101,20 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
     window.history.pushState(
       {},
       "",
-      next === "binders" ? `/${org}` : `/${org}?tab=${next}`,
+      next === "binders" ? `/${org}` : `/${org}/-/${next}`,
     );
     setTab(next);
+    setCreating(false);
   };
+
+  const newBinderHref = `/${org}/-/binders/new`;
+  const openNewBinder = () => {
+    window.history.pushState({}, "", newBinderHref);
+    setTab("binders");
+    setCreating(true);
+  };
+  // Drawn while the organization cannot write, and answered with the paywall.
+  const newBinder = useWriteAction(openNewBinder);
 
   const header = (
     <header className="doc-header">
@@ -110,14 +128,14 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
             permanently, which made the page read as a settings screen for
             something that has not started yet — the list is the answer to
             "is my organization in good shape", so the list comes first. */}
-        {tab === "binders" && !isReadOnly ? (
-          <button
-            className={`bs-btn ${creating ? "bs-btn-secondary" : "bs-btn-primary"}`}
-            type="button"
-            onClick={() => setCreating((open) => !open)}
+        {tab === "binders" ? (
+          <a
+            className="bs-btn bs-btn-primary"
+            href={newBinderHref}
+            onClick={(event) => followInApp(event, newBinder)}
           >
-            {creating ? "Cancel" : "New binder"}
-          </button>
+            New binder
+          </a>
         ) : null}
       </div>
 
@@ -131,7 +149,9 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
             aria-selected={tab === entry}
             onClick={() => goTo(entry)}
           >
-            {entry === "binders" ? "Binders" : "People"}
+            {/* The sidebar's word for the same page. Two names for one
+                screen made "People" and "People & access" read as two. */}
+            {entry === "binders" ? "Binders" : "People & access"}
             {entry === "binders" && binders !== null && binders.length > 0 ? (
               <span className="doc-tab-count">{binders.length}</span>
             ) : null}
@@ -141,12 +161,27 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
     </header>
   );
 
+  const shown = binders === null ? [] : filterBinders(binders, filter);
+
   if (error) {
     return (
       <section className="docw-page">
         {header}
         <p className="app-inline-error">{error}</p>
       </section>
+    );
+  }
+
+  if (creating && !isReadOnly) {
+    return (
+      <NewBinderPage
+        org={org}
+        orgDisplayName={displayName}
+        existing={binders}
+        cancelHref={`/${org}`}
+        onCancel={() => goTo("binders")}
+        onCreated={(created) => onOpenBinder(created.name)}
+      />
     );
   }
 
@@ -163,150 +198,140 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
     <section className="docw-page">
       {header}
 
-      {creating ? (
-        <form
-          className="app-form org-new-binder"
-          onSubmit={async (event) => {
-            event.preventDefault();
-            const name = newName.trim();
-            if (name === "" || isCreating) return;
-
-            setIsCreating(true);
-            setCreateError(null);
-            try {
-              const created = await createBinder(
-                org,
-                name,
-                undefined,
-                openToOrganization,
-              );
-              setBinders((rows) => [...(rows ?? []), created]);
-              setNewName("");
-              setOpenToOrganization(true);
-              setCreating(false);
-            } catch (err) {
-              setCreateError(
-                err instanceof Error && err.message.trim() !== ""
-                  ? err.message
-                  : "Unable to create the binder.",
-              );
-            } finally {
-              setIsCreating(false);
-            }
-          }}
-        >
-          <label className="app-field">
-            <span className="bs-field-label">New binder</span>
-            <input
-              className="bs-input"
-              name="binder-name"
-              type="text"
-              placeholder="Clinical policies"
-              value={newName}
-              maxLength={100}
-              onChange={(event) => setNewName(event.target.value)}
-            />
-          </label>
-          {/* Two questions, not one — and the second is the one a customer only
-            knows the answer to right now. The moment somebody is naming a
-            binder is the moment they know whether it is the staff handbook or
-            HR investigations, and it is far cheaper to ask then than to
-            discover the wrong answer a week later. One radio pair, and it
-            never needs to be touched again. */}
-          <fieldset className="org-visibility-choice">
-            <legend className="bs-field-label">Who can see it?</legend>
-            <label className="org-choice">
-              <input
-                type="radio"
-                name="binder-visibility"
-                checked={openToOrganization}
-                onChange={() => setOpenToOrganization(true)}
-              />
-              <span>
-                <span className="docs-list-item-name">Everyone at {org}</span>
-                <span className="docs-list-item-meta">
-                  They can read it and comment on changes. Reading is free.
-                </span>
-              </span>
-            </label>
-            <label className="org-choice">
-              <input
-                type="radio"
-                name="binder-visibility"
-                checked={!openToOrganization}
-                onChange={() => setOpenToOrganization(false)}
-              />
-              <span>
-                <span className="docs-list-item-name">Only people I add</span>
-                <span className="docs-list-item-meta">
-                  For a binder not everybody should see — an investigation, or
-                  board papers.
-                </span>
-              </span>
-            </label>
-          </fieldset>
-
-          {/* Not full width. It is one action on a page whose subject is the
-            list below it, and a coral slab across the page said otherwise. */}
-          <div className="upload-modal-actions">
-            <button
-              className="bs-btn bs-btn-primary"
-              type="submit"
-              disabled={newName.trim() === "" || isCreating}
-            >
-              <Plus size={14} strokeWidth={1.6} aria-hidden="true" />
-              {isCreating ? "Creating…" : "Create binder"}
-            </button>
-          </div>
-        </form>
-      ) : null}
-
-      {createError ? <p className="app-inline-error">{createError}</p> : null}
-
       {binders === null ? (
-        <SkeletonGroup label={`Opening ${org}`}>
-          {Array.from({ length: 3 }).map((_, index) => (
-            <div
-              className="docs-list-item docs-list-item--skeleton"
-              key={index}
-            >
-              <span className="docs-list-item-icon" />
-              <span className="bs-skeleton-lines">
-                <SkeletonLine width="medium" />
-                <SkeletonLine width="short" />
-              </span>
-            </div>
-          ))}
-        </SkeletonGroup>
+        <SkeletonPanel label={`Opening ${org}`} rows={3} />
       ) : binders.length === 0 ? (
-        <p style={{ color: "var(--bs-text-muted)" }}>
-          No binders yet. A binder is a set of policies governed together — by
-          the same people, under the same rules.
-        </p>
-      ) : (
-        <div className="docs-list">
-          {binders.map((binder) => (
-            <button
-              type="button"
-              className="docs-list-item"
-              key={binder.id}
-              onClick={() => onOpenBinder(binder.name)}
+        <div className="bs-panel">
+          <div className="bs-empty">
+            <p className="bs-empty-lead">No binders yet.</p>
+            <p>
+              A binder is a set of documents governed together — by the same
+              people, under the same rules.
+            </p>
+            <a
+              className="bs-btn bs-btn-primary"
+              href={newBinderHref}
+              onClick={(event) => followInApp(event, newBinder)}
             >
-              <span className="docs-list-item-icon" aria-hidden="true">
-                <BookOpen size={16} strokeWidth={1.4} />
-              </span>
-              <span className="docs-list-item-body">
-                <span className="docs-list-item-name">
-                  {formatDocumentName(binder.name)}
-                </span>
-                <span className="docs-list-item-meta">
-                  {binder.description || "No description"}
-                </span>
-              </span>
-            </button>
-          ))}
+              New binder
+            </a>
+          </div>
         </div>
+      ) : (
+        /* The panel and row every other list uses — Home, the change
+           requests, a binder's own documents — so an organization's binders
+           read as a list of the same kind as everything inside them. */
+        <section className="bs-panel" aria-label="Binders">
+          <div className="bs-panel-bar">
+            <input
+              className="bs-input bs-input--sm binder-filter"
+              type="search"
+              value={filter}
+              placeholder="Filter binders…"
+              aria-label="Filter binders"
+              onChange={(event) => setFilter(event.target.value)}
+            />
+            <span className="bs-panel-bar-spacer" />
+            <span className="binder-count">
+              {binders.length === 1 ? "1 binder" : `${binders.length} binders`}
+            </span>
+          </div>
+          {shown.length === 0 ? (
+            <div className="bs-empty">
+              <p>No binder here is called that.</p>
+            </div>
+          ) : (
+            <ul className="bs-row-list">
+              {shown.map((binder) => (
+                <li key={binder.id}>
+                  <a
+                    className="bs-row bs-row--tall"
+                    href={buildBinderUrl({ org, binder: binder.name })}
+                    onClick={(event) =>
+                      followInApp(event, () => onOpenBinder(binder.name))
+                    }
+                  >
+                    <span className="bs-row-icon">
+                      <BookOpen
+                        size={16}
+                        strokeWidth={1.5}
+                        aria-hidden="true"
+                      />
+                    </span>
+                    <span className="bs-row-body">
+                      <span className="bs-row-name">
+                        {formatDocumentName(binder.name)}
+                      </span>
+                      <span className="bs-row-meta">
+                        {binder.description || "No description"}
+                      </span>
+                    </span>
+                    <BinderFacts binder={binder} />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       )}
     </section>
+  );
+}
+
+/**
+ * The binders whose name or description holds what was typed, in the order
+ * the list already had. Case and surrounding space do not count.
+ */
+export function filterBinders(
+  binders: WorkspaceSummary[],
+  query: string,
+): WorkspaceSummary[] {
+  const needle = query.trim().toLowerCase();
+  if (needle === "") return binders;
+  return binders.filter((binder) =>
+    [formatDocumentName(binder.name), binder.name, binder.description ?? ""]
+      .join(" ")
+      .toLowerCase()
+      .includes(needle),
+  );
+}
+
+/**
+ * What a binder is doing, on the right of its row: how many changes are open
+ * in it and when anything last moved.
+ *
+ * **GitLab's project list, for a binder.** The list said what each binder was
+ * *for* and nothing about what was happening in it, so finding the one with
+ * work waiting meant opening them in turn. Both facts come on the repository
+ * Gitea already returns — no request per row.
+ *
+ * The count's slot is always there, empty when nothing is open, so "Updated"
+ * lines up down the list rather than stepping sideways on the rows that have
+ * work in them — the same rule the change rows' comment count follows.
+ */
+function BinderFacts({ binder }: { binder: WorkspaceSummary }) {
+  const open = binder.openChangeCount;
+  const updated = formatAge(binder.updatedAt);
+  const openLabel =
+    open === 1 ? "1 open change request" : `${open} open change requests`;
+
+  return (
+    <span className="bs-row-right org-binder-facts">
+      <span
+        className="org-binder-changes"
+        {...(open > 0 ? { title: openLabel } : { "aria-hidden": true })}
+      >
+        {open > 0 ? (
+          <>
+            <FilePen size={13} strokeWidth={1.75} aria-hidden="true" />
+            <span aria-hidden="true">{open}</span>
+            <span className="sr-only">{openLabel}</span>
+          </>
+        ) : null}
+      </span>
+      {updated ? (
+        <span className="org-binder-updated">Updated {updated}</span>
+      ) : null}
+    </span>
   );
 }

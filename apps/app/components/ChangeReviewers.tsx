@@ -66,7 +66,6 @@ interface ChangeReviewersProps {
 interface UserOption {
   login: string;
   fullName: string;
-  avatarUrl: string;
 }
 
 /**
@@ -167,7 +166,6 @@ export function ChangeReviewers({
             .map((entry) => ({
               login: entry.user.login ?? "",
               fullName: entry.user.full_name ?? "",
-              avatarUrl: entry.user.avatar_url ?? "",
             }))
             .filter((user) => user.login),
         );
@@ -213,7 +211,6 @@ export function ChangeReviewers({
             .map((user) => ({
               login: user.login ?? "",
               fullName: user.full_name ?? "",
-              avatarUrl: user.avatar_url ?? "",
             }))
             .filter((user) => user.login),
         );

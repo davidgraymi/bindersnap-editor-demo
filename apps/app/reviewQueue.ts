@@ -68,6 +68,12 @@ export interface QueueRow {
    * you, and hiding either fact would be the wrong one to hide.
    */
   waitingOnYou: boolean;
+  /**
+   * How many comments are on it — the count Home and a binder's own list put
+   * beside the same change. A row that showed it in two lists and not the
+   * third read as a change nobody had discussed.
+   */
+  commentCount: number;
   /** Sort key. Not rendered. */
   movedAt: number;
 }
@@ -164,6 +170,10 @@ export function buildQueueRows(
           {
             number: change.number,
             submittedBy: change.user?.login ?? "",
+            // Your own change says "You", as "you approved" does: your name
+            // on every row of your own work is noise.
+            submittedByName:
+              change.user?.login === username ? "You" : change.user?.full_name,
             submittedAt: change.created_at ?? change.created ?? "",
             updatedAt: change.updated_at ?? undefined,
             approvalCount: change.approvalCount,
@@ -181,6 +191,8 @@ export function buildQueueRows(
           isRejected: standing?.tone === "blocked",
         }),
         waitingOnYou: isWaitingOnReader(document, change, username, status),
+        // Gitea's own count on the pull request, passed through as Home reads it.
+        commentCount: (change as { comments?: number }).comments ?? 0,
         movedAt,
       });
     }

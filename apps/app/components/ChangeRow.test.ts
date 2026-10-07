@@ -104,9 +104,25 @@ function row(commentCount?: number) {
       requiredApprovals: 1,
       ...(commentCount === undefined ? {} : { commentCount }),
     },
+    href: "/riverside-health/clinical?tab=changes&change=4",
     onOpen: () => {},
   });
 }
+
+test("a row is a link to the change, so it opens in a tab", () => {
+  const { container, unmount } = render(row());
+
+  // An anchor with an address, not a button that moves the address bar in
+  // script: middle-click, "Open in new tab" and copying the link all work.
+  const link = container.querySelector("a.change-row-open");
+  expect(link).not.toBeNull();
+  expect(link?.getAttribute("href")).toBe(
+    "/riverside-health/clinical?tab=changes&change=4",
+  );
+  expect(container.querySelector("button")).toBeNull();
+
+  unmount();
+});
 
 test("a row nobody has commented on still keeps the column", () => {
   const { container, unmount } = render(row(0));

@@ -81,3 +81,54 @@ export function SkeletonGroup({
     </div>
   );
 }
+
+/**
+ * A list that has not arrived yet, drawn as the panel it will arrive in.
+ *
+ * **Every list in the app is a panel of rows**, so every list waits as one:
+ * the same border, the same bar, rows the height of the real ones with an
+ * icon where the icon will be. Loose grey bars on the bare page made a list
+ * look, for a second, like a paragraph — and then the page jumped as the
+ * panel's border and bar appeared around them.
+ */
+export function SkeletonPanel({
+  label,
+  rows = 3,
+  bar = false,
+  right = false,
+  className,
+}: {
+  label: string;
+  rows?: number;
+  /** A bar across the top, for a list whose real panel has one. */
+  bar?: boolean;
+  /** A badge on the right of each row, where a state or a count will be. */
+  right?: boolean;
+  className?: string;
+}) {
+  return (
+    <section
+      className={`bs-panel bs-skeleton-panel${className ? ` ${className}` : ""}`}
+    >
+      {bar ? (
+        <div className="bs-panel-bar">
+          <SkeletonLine width="short" />
+        </div>
+      ) : null}
+      <SkeletonGroup label={label}>
+        {Array.from({ length: rows }, (_, index) => (
+          <div className="bs-row bs-row--tall" key={index}>
+            <span className="bs-row-icon">
+              <span className="bs-skeleton-shape bs-skeleton-shape--glyph" />
+            </span>
+            <span className="bs-row-body bs-skeleton-lines">
+              <SkeletonLine width={index % 2 === 0 ? "medium" : "wide"} />
+              <SkeletonLine width="short" />
+            </span>
+            {right ? <SkeletonShape variant="badge" /> : null}
+          </div>
+        ))}
+      </SkeletonGroup>
+    </section>
+  );
+}

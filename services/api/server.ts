@@ -15,6 +15,7 @@ import { organizationStore } from "./organizations";
 import {
   listSessionOrganizations,
   resolveOrganizationForUser,
+  findSessionOrganization,
   resolveSessionOrganization,
   type SessionOrganization,
 } from "./session-organization";
@@ -122,6 +123,10 @@ import {
   buildStripeSubscriptionRecord,
   reconcileStripeCustomerByCustomerId,
 } from "./stripe/reconcile";
+import {
+  isStripeEventForThisRun,
+  stripeRunTagMetadata,
+} from "./stripe/run-tag";
 import {
   createGiteaBasicAuthClient,
   createGiteaClient,
@@ -435,8 +440,15 @@ function isAllowedOrigin(origin: string | null): boolean {
   return false;
 }
 
-function corsHeaders(req: Request): Headers {
-  const headers = new Headers();
+export function corsHeaders(req: Request): Headers {
+  // **On every response, not only the ones that carry CORS headers.** Whether
+  // a response carries them depends on the request's Origin, so a cache has to
+  // be told that — including about the response that got none. A file is
+  // cached for hours; one fetched without an Origin was stored with no
+  // Allow-Origin and no Vary, and the next cross-origin read of it took that
+  // copy and was blocked. Opening a change's comparison a second time showed
+  // "Failed to fetch" for every file on it.
+  const headers = new Headers({ Vary: "Origin" });
   const origin = requestOrigin(req);
 
   if (origin && isAllowedOrigin(origin)) {
@@ -451,7 +463,6 @@ function corsHeaders(req: Request): Headers {
       "Access-Control-Allow-Methods",
       "GET,POST,PUT,PATCH,DELETE,OPTIONS",
     );
-    headers.set("Vary", "Origin");
   }
 
   return headers;
@@ -935,6 +946,27 @@ function paymentRequired(
   );
 }
 
+/**
+ * The organization a request writes into, read from its address.
+ *
+ * Every authoring route is `/api/app/binders/{org}/…` or
+ * `/api/app/orgs/{org}/…`, so the path already says whose binder it is. That
+ * is the organization whose subscription decides the write — gating on the
+ * writer's oldest organization instead let a lapsed one block work in a paid
+ * one, and a paid one unlock work in a lapsed one.
+ */
+function requestOrganization(req: Request): string | null {
+  const match = new URL(req.url).pathname.match(
+    /^\/api\/app\/(?:binders|orgs)\/([^/]+)\//,
+  );
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]!);
+  } catch {
+    return null;
+  }
+}
+
 async function requireSubscription(
   req: Request,
   baseHeaders: Headers,
@@ -955,6 +987,7 @@ async function requireSubscription(
   const organization = await resolveSessionOrganization(
     auth.client,
     auth.session,
+    requestOrganization(req),
   );
   if (!organization || !(await organizationHasAccess(organization.id))) {
     return paymentRequired(baseHeaders, organization?.name ?? null);
@@ -1014,6 +1047,7 @@ async function requireSubscriptionOrAdmin(
   const organization = await resolveSessionOrganization(
     auth.client,
     auth.session,
+    requestOrganization(req),
   );
   if (organization && (await organizationHasAccess(organization.id))) {
     return auth;
@@ -3549,6 +3583,17 @@ async function handleStripeWebhook(
 
   logger.info("Stripe webhook received", { type, eventId });
 
+  // Another stack sharing this Stripe account caused this event (CI runs
+  // several at once). Acknowledge it so Stripe stops retrying, and touch
+  // nothing: its organization ids are that stack's, not ours.
+  if (!isStripeEventForThisRun(data, config.stripeRunTag)) {
+    logger.info("Stripe webhook belongs to another run — ignoring", {
+      eventId,
+      type,
+    });
+    return json(200, { received: true }, baseHeaders);
+  }
+
   if (eventId && (await webhookEventStore.isProcessed(eventId))) {
     logger.info("Duplicate webhook event — skipping", { eventId, type });
     return json(200, { received: true }, baseHeaders);
@@ -3621,6 +3666,7 @@ async function handleStripeWebhook(
             metadata: {
               bindersnap_gitea_org_id: String(giteaOrgId),
               ...(username ? { bindersnap_username: username } : {}),
+              ...stripeRunTagMetadata(config.stripeRunTag),
             },
           });
           logger.info("Backfilled customer metadata", {
@@ -7169,6 +7215,7 @@ async function handleListWorkspaceDocuments(
   workspaceName: string,
   draftRaw: string | null,
   changeRaw: string | null,
+  refRaw: string | null,
 ): Promise<Response> {
   const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
@@ -7181,6 +7228,21 @@ async function handleListWorkspaceDocuments(
     });
     if (!workspace) {
       return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    // **The binder at a branch, named.** A branch is the primitive — the tree
+    // at `/-/tree/{ref}` is the same page as the binder's own, read somewhere
+    // else — so it is asked for by ref, under the same rule a document read
+    // at a ref follows: somebody else's unproposed draft is refused.
+    const readable = await resolveReadableRef({
+      client: auth.client,
+      org: orgName,
+      workspace: workspaceName,
+      username: auth.session.username,
+      refRaw,
+    });
+    if (readable && "error" in readable) {
+      return json(409, { error: readable.error }, baseHeaders);
     }
 
     const draft = await resolveOwnDraftBranch({
@@ -7205,7 +7267,7 @@ async function handleListWorkspaceDocuments(
     // on the branch you are reading.
     const changeNumber = Number.parseInt(changeRaw ?? "", 10);
     const onChange =
-      !draft && Number.isFinite(changeNumber) && changeNumber > 0
+      !draft && !readable && Number.isFinite(changeNumber) && changeNumber > 0
         ? await getPullRequestWithReviews({
             client: auth.client,
             owner: orgName,
@@ -7216,7 +7278,9 @@ async function handleListWorkspaceDocuments(
             .catch(() => null)
         : null;
 
-    const ref = draft ? draft.branch : onChange;
+    // A draft is yours, a ref is explicit, and a change is a lookup: the most
+    // specific claim the caller made wins, the order a document read uses.
+    const ref = draft ? draft.branch : (readable?.ref ?? onChange);
 
     return json(
       200,
@@ -7470,6 +7534,52 @@ async function countOpenChangesByDocument(params: {
  * `clinical/infection-control` or `clinical/infection-control.pdf`, and the
  * extension is how we render a document rather than how a person refers to it.
  */
+/**
+ * A branch named by the address, if the reader may read it.
+ *
+ * **Somebody else's draft is refused here**, which is the one rule a raw ref
+ * would otherwise walk straight through. Gitea lets every collaborator read
+ * every branch in the repository, and the product's rule is narrower: other
+ * people's drafts are visible as existing and never as contents. So a `draft/`
+ * branch goes through the same ownership check every other draft read uses,
+ * and anything else is an ordinary branch anybody who can read the binder may
+ * read.
+ *
+ * **Only an unproposed draft is private.** The moment a change request sits on
+ * a branch it stops being a draft and becomes the thing every reviewer is being
+ * asked to read — `listBinderDrafts` already subtracts those, so a branch still
+ * in that list is somebody's work in progress and a branch that has left it is
+ * a change request.
+ *
+ * Null when the address names no branch.
+ */
+async function resolveReadableRef(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  username: string;
+  refRaw: string | null;
+}): Promise<{ ref: string } | { error: string } | null> {
+  const asked = (params.refRaw ?? "").trim();
+  if (asked === "") return null;
+
+  const unproposed = isDraftBranch(asked)
+    ? await listBinderDrafts({
+        client: params.client,
+        org: params.org,
+        workspace: params.workspace,
+      })
+    : [];
+  const stillADraft = unproposed.find((entry) => entry.branch === asked);
+  if (stillADraft && stillADraft.owner !== params.username) {
+    return {
+      error:
+        "That draft is not yours. Other people's drafts are visible as existing and never as contents.",
+    };
+  }
+  return { ref: asked };
+}
+
 async function handleWorkspaceDocumentDetail(
   req: Request,
   baseHeaders: Headers,
@@ -7501,45 +7611,18 @@ async function handleWorkspaceDocumentDetail(
      * commit that it was made on. Similarly we should navigate to the branch
      * view instead of the change view."* A change request is one thing that
      * happens to a branch; the branch is the thing the file is on.
-     *
-     * **Somebody else's draft is refused here**, which is the one rule a raw
-     * ref would otherwise walk straight through. Gitea lets every
-     * collaborator read every branch in the repository, and the product's rule
-     * is narrower: other people's drafts are visible as existing and never as
-     * contents. So a `draft/` branch goes through the same ownership check
-     * every other draft read uses, and anything else is an ordinary branch
-     * anybody who can read the binder may read.
      */
-    const askedRef = (refRaw ?? "").trim();
-    let onRef: string | null = null;
-    if (askedRef !== "") {
-      // **Only an unproposed draft is private.** The moment a change request
-      // sits on a branch it stops being a draft and becomes the thing every
-      // reviewer is being asked to read — `listBinderDrafts` already subtracts
-      // those, so a branch still in that list is somebody's work in progress
-      // and a branch that has left it is a change request.
-      const unproposed = isDraftBranch(askedRef)
-        ? await listBinderDrafts({
-            client: auth.client,
-            org: orgName,
-            workspace: workspaceName,
-          })
-        : [];
-      const stillADraft = unproposed.find((entry) => entry.branch === askedRef);
-
-      if (stillADraft && stillADraft.owner !== auth.session.username) {
-        return json(
-          409,
-          {
-            error:
-              "That draft is not yours. Other people's drafts are visible as existing and never as contents.",
-          },
-          baseHeaders,
-        );
-      }
-
-      onRef = askedRef;
+    const readable = await resolveReadableRef({
+      client: auth.client,
+      org: orgName,
+      workspace: workspaceName,
+      username: auth.session.username,
+      refRaw,
+    });
+    if (readable && "error" in readable) {
+      return json(409, { error: readable.error }, baseHeaders);
     }
+    const onRef = readable ? readable.ref : null;
 
     /**
      * The branch a change request proposes, when the address names one.
@@ -7859,7 +7942,7 @@ async function resolveChangeToJoin(params: {
   // binder reads that branch prefix to mean "this change is about no document".
   if ((match.head?.ref ?? "").startsWith("sign-off/")) {
     return {
-      error: `Change ${changeNumber} changes who signs off on this binder. A policy cannot go in it.`,
+      error: `Change ${changeNumber} changes who signs off on this binder. A document cannot go in it.`,
     };
   }
 
@@ -8833,7 +8916,7 @@ async function handleBinderShapeChange(
             "",
             `${session.username} proposed this from Bindersnap.`,
             "",
-            "Nothing in this change alters what any policy says. It changes",
+            "Nothing in this change alters what any document says. It changes",
             "where things are filed, which the binder records like anything",
             "else.",
           ].join("\n"),
@@ -8974,7 +9057,7 @@ async function handleReviseWorkspaceDocument(
       return json(
         404,
         {
-          error: `"${documentPath}" is not in this binder. A new policy is added rather than revised.`,
+          error: `"${documentPath}" is not in this binder. A new document is added rather than revised.`,
         },
         baseHeaders,
       );
@@ -9165,7 +9248,11 @@ async function handleCreateWorkspaceDocument(
   const extension = getFileExtension(file.name);
   const filePath = buildDocumentFilePath(name, extension, uid, folder);
 
-  const organization = await resolveSessionOrganization(client, session);
+  const organization = await resolveSessionOrganization(
+    client,
+    session,
+    orgName,
+  );
   if (!organization) {
     return json(
       409,
@@ -9827,6 +9914,66 @@ async function handleCreateOrganization(
   }
 }
 
+/**
+ * Whether this session may change what its organization pays for.
+ *
+ * ADR 0004: billing belongs to the organization's Owners, read from Gitea. A
+ * member could start a checkout and open the Stripe portal — where the
+ * subscription can be cancelled — which is the one act in billing that must
+ * not be anybody's. A site admin may too, because support is how a stuck
+ * customer gets unstuck.
+ */
+async function canManageOrganizationBilling(
+  auth: { client: GiteaClient; session: SessionRecord },
+  organization: { name: string } | null,
+): Promise<boolean> {
+  if (!organization) return false;
+  if (
+    await isOrganizationOwnerDirect({
+      client: auth.client,
+      org: organization.name,
+      username: auth.session.username,
+    })
+  ) {
+    return true;
+  }
+  const currentUser = await fetchSessionGiteaUser(auth.session).catch(
+    () => null,
+  );
+  return currentUser?.isAdmin === true;
+}
+
+/**
+ * Which organization a billing request is about.
+ *
+ * Billing is per organization (ADR 0004), and a person may be in several, so
+ * every billing request can name one. Naming one they are not in is a 404,
+ * never a quiet fallback: a checkout that fell back would bill an
+ * organization nobody chose. Naming none keeps the old answer, the oldest.
+ */
+async function resolveBillingOrganization(
+  auth: { client: GiteaClient; session: SessionRecord },
+  requested: unknown,
+  baseHeaders: Headers,
+): Promise<SessionOrganization | null | Response> {
+  if (typeof requested === "string" && requested.trim() !== "") {
+    const organization = await findSessionOrganization(
+      auth.client,
+      requested.trim(),
+    );
+    return (
+      organization ??
+      json(404, { error: "You are not in that organization." }, baseHeaders)
+    );
+  }
+  return resolveSessionOrganization(auth.client, auth.session);
+}
+
+/** Where Stripe sends someone back to: that organization's billing page. */
+function billingPageUrl(organization: { name: string }): string {
+  return `${config.appOrigin}/${encodeURIComponent(organization.name)}/-/billing`;
+}
+
 async function handleBillingStatus(
   req: Request,
   baseHeaders: Headers,
@@ -9835,16 +9982,22 @@ async function handleBillingStatus(
   if (auth instanceof Response) return auth;
 
   const { username } = auth.session;
-  const organization = await resolveSessionOrganization(
-    auth.client,
-    auth.session,
+  const organization = await resolveBillingOrganization(
+    auth,
+    new URL(req.url).searchParams.get("organization"),
+    baseHeaders,
   );
+  if (organization instanceof Response) return organization;
 
-  const priceInfo = await fetchStripePriceInfo();
-  const accessState = await resolveSubscriptionAccessState(
-    username,
-    organization,
-  );
+  const [priceInfo, accessState, canManageBilling, subscription] =
+    await Promise.all([
+      fetchStripePriceInfo(),
+      resolveSubscriptionAccessState(username, organization),
+      canManageOrganizationBilling(auth, organization),
+      organization
+        ? subscriptionStore.getByOrganization(organization.id)
+        : Promise.resolve(null),
+    ]);
   return json(
     200,
     {
@@ -9859,6 +10012,11 @@ async function handleBillingStatus(
       accessSource: accessState.source,
       override: serializeSubscriptionOverride(accessState.override),
       plan: priceInfo,
+      canManageBilling,
+      // A Stripe customer exists, so the portal has something to open — true
+      // for a lapsed or cancelled subscription too, which is exactly when a
+      // customer most needs to reach it.
+      hasBillingAccount: subscription !== null,
     },
     baseHeaders,
   );
@@ -9886,12 +10044,18 @@ async function handleBillingCheckout(
     return json(503, { error: "Billing not configured." }, baseHeaders);
   }
 
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const clientIdempotencyKey =
+    typeof body.idempotencyKey === "string" ? body.idempotencyKey : null;
+
   // Checkout buys a subscription for the organization, not for the person
   // clicking the button — so there has to be one.
-  const organization = await resolveSessionOrganization(
-    auth.client,
-    auth.session,
+  const organization = await resolveBillingOrganization(
+    auth,
+    body.organization,
+    baseHeaders,
   );
+  if (organization instanceof Response) return organization;
   if (!organization) {
     return json(
       409,
@@ -9900,14 +10064,18 @@ async function handleBillingCheckout(
     );
   }
 
+  if (!(await canManageOrganizationBilling(auth, organization))) {
+    return json(
+      403,
+      { error: "Only an owner of this organization can change its billing." },
+      baseHeaders,
+    );
+  }
+
   const existingSubscription = await subscriptionStore.getByOrganization(
     organization.id,
   );
   const userEmail = await fetchSessionUserEmail(auth.session);
-
-  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-  const clientIdempotencyKey =
-    typeof body.idempotencyKey === "string" ? body.idempotencyKey : null;
 
   const params: Stripe.Checkout.SessionCreateParams = {
     mode: "subscription",
@@ -9919,15 +10087,17 @@ async function handleBillingCheckout(
       bindersnap_gitea_org_id: String(organization.id),
       bindersnap_organization: organization.name,
       bindersnap_username: auth.session.username,
+      ...stripeRunTagMetadata(config.stripeRunTag),
     },
     subscription_data: {
       metadata: {
         bindersnap_gitea_org_id: String(organization.id),
         bindersnap_username: auth.session.username,
+        ...stripeRunTagMetadata(config.stripeRunTag),
       },
     },
-    success_url: `${config.appOrigin}/billing?checkout=success`,
-    cancel_url: `${config.appOrigin}/billing`,
+    success_url: `${billingPageUrl(organization)}?checkout=success`,
+    cancel_url: billingPageUrl(organization),
   };
   if (existingSubscription?.stripeCustomerId) {
     params.customer = existingSubscription.stripeCustomerId;
@@ -9973,10 +10143,14 @@ async function handleDevGrantSubscription(
   if (auth instanceof Response) return auth;
 
   const { username } = auth.session;
-  const organization = await resolveSessionOrganization(
-    auth.client,
-    auth.session,
+  // Which organization, when a test holds more than one.
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const organization = await resolveBillingOrganization(
+    auth,
+    body.organization,
+    baseHeaders,
   );
+  if (organization instanceof Response) return organization;
   if (!organization) {
     return json(
       409,
@@ -10022,10 +10196,14 @@ async function handleDevEndTrial(
   const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
 
-  const organization = await resolveSessionOrganization(
-    auth.client,
-    auth.session,
+  // Which organization, when a test holds more than one.
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const organization = await resolveBillingOrganization(
+    auth,
+    body.organization,
+    baseHeaders,
   );
+  if (organization instanceof Response) return organization;
   if (!organization) {
     return json(
       409,
@@ -10207,31 +10385,60 @@ async function handleBillingPortal(
   const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
 
-  const organization = await resolveSessionOrganization(
-    auth.client,
-    auth.session,
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const clientIdempotencyKey =
+    typeof body.idempotencyKey === "string" ? body.idempotencyKey : null;
+
+  const organization = await resolveBillingOrganization(
+    auth,
+    body.organization,
+    baseHeaders,
   );
+  if (organization instanceof Response) return organization;
   const record = organization
     ? await subscriptionStore.getByOrganization(organization.id)
     : null;
-  if (!record) {
+  if (!organization || !record) {
     return json(404, { error: "No subscription found." }, baseHeaders);
+  }
+
+  if (!(await canManageOrganizationBilling(auth, organization))) {
+    return json(
+      403,
+      { error: "Only an owner of this organization can change its billing." },
+      baseHeaders,
+    );
   }
 
   if (!config.stripeSecretKey) {
     return json(503, { error: "Billing not configured." }, baseHeaders);
   }
 
-  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-  const clientIdempotencyKey =
-    typeof body.idempotencyKey === "string" ? body.idempotencyKey : null;
-
   try {
     const stripe = getStripeClient();
+    // "Cancel subscription" lands on Stripe's own cancel screen rather than
+    // the portal's front page, so the button does what it says. Stripe owns
+    // the confirmation, the proration and the webhook that tells us.
+    const cancelling =
+      body.intent === "cancel" && Boolean(record.stripeSubscriptionId);
     const session = await stripe.billingPortal.sessions.create(
       {
         customer: record.stripeCustomerId,
-        return_url: `${config.appOrigin}/billing`,
+        return_url: billingPageUrl(organization),
+        ...(cancelling
+          ? {
+              flow_data: {
+                type: "subscription_cancel" as const,
+                subscription_cancel: {
+                  subscription: record.stripeSubscriptionId!,
+                },
+                after_completion: {
+                  type: "redirect" as const,
+                  redirect: { return_url: billingPageUrl(organization) },
+                },
+              },
+            }
+          : {}),
       },
       {
         idempotencyKey: createStripeRequestIdempotencyKey(
@@ -10718,6 +10925,7 @@ export function createApiServer() {
             workspaceDocumentsMatch[2]!,
             url.searchParams.get("draft"),
             url.searchParams.get("change"),
+            url.searchParams.get("ref"),
           );
         } else if (workspaceChangeReviewMatch && method === "POST") {
           response = await handleWorkspaceChangeReview(
@@ -10996,7 +11204,7 @@ export function createApiServer() {
             async ({ body, tree, client }) => {
               const uid = typeof body.uid === "string" ? body.uid : "";
               if (uid === "") {
-                return { error: "Name the policy to restore." };
+                return { error: "Name the document to restore." };
               }
 
               // Straight off the version tag the policy last published at. The
@@ -11012,7 +11220,7 @@ export function createApiServer() {
               if (!archived) {
                 return {
                   error:
-                    "That policy has no published version to restore from.",
+                    "That document has no published version to restore from.",
                 };
               }
 

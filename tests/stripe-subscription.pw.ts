@@ -26,7 +26,11 @@ import { randomUUID } from "node:crypto";
 
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import { resolveStripeWebhookSecret } from "./stripe-runtime";
-import { buildTestStripeEvent, signWebhookBody } from "./stripe-webhook";
+import {
+  buildTestStripeEvent,
+  signWebhookBody,
+  stripeRunTag,
+} from "./stripe-webhook";
 import { STRIPE_API_VERSION } from "../services/api/stripe/api-version";
 
 // ---------------------------------------------------------------------------
@@ -54,12 +58,29 @@ const stripeFullyConfigured = stripeKeySet && webhookSecretSet && priceIdSet;
 // Helpers — Stripe API
 // ---------------------------------------------------------------------------
 
+/**
+ * How far ahead of now a synthetic event is stamped.
+ *
+ * The lifecycle tests make a real subscription, and Stripe delivers that
+ * subscription's own events (`customer.subscription.created`, trialing)
+ * through `stripe listen` a few seconds later. The API skips an event only
+ * when it is strictly older than the last one it applied for that customer,
+ * and a synthetic event posted in the same second as the real subscription
+ * was created is not — so the late real event landed after the test's
+ * `past_due` and put the organization back on its trial. Stamped a minute
+ * ahead, every real event the setup caused is older than the test's own and
+ * is dropped as out of order, which is the ordering the test means.
+ */
+const SYNTHETIC_EVENT_LEAD_SECONDS = 60;
+
 /** POST a signed webhook event to the running API. */
 async function postWebhook(
   type: string,
   object: Record<string, unknown>,
 ): Promise<Response> {
-  const { body } = buildTestStripeEvent(type, object);
+  const { body } = buildTestStripeEvent(type, object, {
+    created: Math.floor(Date.now() / 1000) + SYNTHETIC_EVENT_LEAD_SECONDS,
+  });
   const sig = await signWebhookBody(body, STRIPE_WEBHOOK_SECRET);
 
   return fetch(`${API_BASE_URL}/stripe/webhook`, {
@@ -102,6 +123,16 @@ async function stripeFetch(
 }
 
 /**
+ * This run's tag as form fields. Every CI job's `stripe listen` hears the
+ * events these objects cause, and without the tag another job's API would
+ * reconcile them onto its own organization with the same number.
+ */
+function runTagParams(): Record<string, string> {
+  const tag = stripeRunTag();
+  return tag === "" ? {} : { "metadata[bindersnap_run]": tag };
+}
+
+/**
  * Create a Stripe test Customer + Subscription in trial mode.
  *
  * Uses the 4242 test card — no real charge is made. The subscription is
@@ -119,6 +150,7 @@ async function createTestCustomerAndSubscription(giteaOrgId: number): Promise<{
     "/v1/customers",
     new URLSearchParams({
       "metadata[bindersnap_gitea_org_id]": String(giteaOrgId),
+      ...runTagParams(),
     }),
   );
   const customerId = customer.id as string;
@@ -147,6 +179,7 @@ async function createTestCustomerAndSubscription(giteaOrgId: number): Promise<{
       customer: customerId,
       "items[0][price]": STRIPE_PRICE_ID,
       trial_period_days: "1",
+      ...runTagParams(),
     }),
   );
 
@@ -920,21 +953,27 @@ test.describe("Stripe subscription lifecycle", () => {
       ).toBeVisible({ timeout: 30_000 });
 
       // Subscribing is now a thing the customer chooses to do, so go and do it.
+      // A trial: the page says so, and offers the one thing to do about it.
       await page.goto("/billing", { waitUntil: "domcontentloaded" });
+      await expect(page.getByRole("region", { name: "Plan" })).toContainText(
+        "Trial",
+        { timeout: 20_000 },
+      );
       await expect(
-        page.getByRole("button", { name: "Subscribe now" }),
+        page.getByRole("button", { name: "Subscribe", exact: true }),
       ).toBeVisible({ timeout: 20_000 });
 
-      await page.getByRole("button", { name: "Subscribe now" }).click();
+      await page
+        .getByRole("button", { name: "Subscribe", exact: true })
+        .click();
       await completeHostedStripeCheckout(page, credentials.email);
 
-      await expect(page).toHaveURL(/\/billing\?checkout=success/, {
+      // Back on the billing page of the organization that was billed.
+      await expect(page).toHaveURL(/\/[^/?]+\/-\/billing\?checkout=success/, {
         timeout: 60_000,
       });
       await expect(
-        page.getByRole("heading", {
-          name: "Payment received — activating your workspace…",
-        }),
+        page.getByRole("status").filter({ hasText: "Payment received" }),
       ).toBeVisible({ timeout: 20_000 });
 
       await expect(page).toHaveURL(/\/$/, { timeout: 30_000 });

@@ -89,7 +89,7 @@ export function BinderArchive({
       setError(
         err instanceof Error && err.message.trim() !== ""
           ? err.message
-          : "Unable to restore that policy.",
+          : "Unable to restore that document.",
       );
       setRestoring(null);
     }
@@ -129,7 +129,7 @@ export function BinderArchive({
             opening this page has, and answering it per row would be eleven
             copies of one sentence. */}
         <p className="propose-lede">
-          Taken off the record, and still on it. Every version these policies
+          Taken off the record, and still on it. Every version these documents
           published is unchanged and still readable — archiving removes the file
           from the binder and nothing else.
         </p>

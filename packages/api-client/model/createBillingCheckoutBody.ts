@@ -4,7 +4,10 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { CreateBillingCheckoutBodyIntent } from './createBillingCheckoutBodyIntent.ts';
 
 export type CreateBillingCheckoutBody = {
   idempotencyKey: string;
+  organization?: string;
+  intent?: CreateBillingCheckoutBodyIntent;
 };

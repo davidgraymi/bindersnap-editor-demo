@@ -186,8 +186,8 @@ export function buildAuditRecord(input: AuditRecordInput): AuditRecord {
     ["Organization", organization],
     ["Binder", binder],
     [
-      "Policies on record",
-      documents.length === 1 ? "1 policy" : `${documents.length} policies`,
+      "Documents on record",
+      documents.length === 1 ? "1 document" : `${documents.length} documents`,
     ],
     [
       "Published versions",

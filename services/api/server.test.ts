@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 
 import { config } from "./config";
 import { OrganizationStore, organizationStore } from "./organizations";
-import { createApiServer } from "./server";
+import { corsHeaders, createApiServer } from "./server";
 import { SessionStore, sessionStore } from "./sessions";
 import { resetStripeClientForTests } from "./stripe/client";
 import {
@@ -47,6 +47,15 @@ let giteaLoginsByToken = new Map<string, string>();
 let giteaOrgsByUsername = new Map<string, { id: number; username: string }>();
 // org name -> its Owners team members, for the admin browse listing.
 let giteaOrgOwners = new Map<string, MockedGiteaUser[]>();
+// Logins that are members but not owners of their organization. Everyone
+// else owns the one they were seeded with, as a signup does.
+let giteaNonOwners = new Set<string>();
+// Organizations a login joined after its first, newest last — a person may
+// be in several, and billing has to follow the one they are acting in.
+let giteaExtraOrgsByUsername = new Map<
+  string,
+  { id: number; username: string }[]
+>();
 let nextGiteaOrgId = 4000;
 let stripeSubscriptionsById = new Map<string, MockedStripeResource>();
 let stripeCustomersById = new Map<string, MockedStripeResource>();
@@ -74,6 +83,8 @@ beforeEach(() => {
   giteaLoginsByToken = new Map();
   giteaOrgsByUsername = new Map();
   giteaOrgOwners = new Map();
+  giteaNonOwners = new Set();
+  giteaExtraOrgsByUsername = new Map();
   nextGiteaOrgId = 4000;
   stripeSubscriptionsById = new Map();
   stripeCustomersById = new Map();
@@ -147,6 +158,17 @@ beforeEach(() => {
       );
     }
 
+    const permissionsMatch = url.pathname.match(
+      /^\/api\/v1\/users\/([^/]+)\/orgs\/([^/]+)\/permissions$/,
+    );
+    if (permissionsMatch) {
+      const login = decodeURIComponent(permissionsMatch[1] ?? "");
+      return new Response(
+        JSON.stringify({ is_owner: !giteaNonOwners.has(login) }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
     const userOrgsMatch = url.pathname.match(
       /^\/api\/v1\/users\/([^/]+)\/orgs$/,
     );
@@ -167,10 +189,14 @@ beforeEach(() => {
         : "";
       const login = giteaLoginsByToken.get(token);
       const organization = login ? giteaOrgsByUsername.get(login) : null;
-      return new Response(JSON.stringify(organization ? [organization] : []), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+      const extra = login ? (giteaExtraOrgsByUsername.get(login) ?? []) : [];
+      return new Response(
+        JSON.stringify([...(organization ? [organization] : []), ...extra]),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
 
     if (url.pathname === "/api/v1/user") {
@@ -332,8 +358,11 @@ async function seedSession(
     isAdmin?: boolean;
     /** Pass false for an account that predates ADR 0004 and has no org. */
     withOrganization?: boolean;
+    /** Pass false for a member who does not own their organization. */
+    owner?: boolean;
   },
 ): Promise<string> {
+  if (options?.owner === false) giteaNonOwners.add(username);
   const sessionId = `sess_${randomUUID()}`;
   const giteaToken = `gitea_token_${randomUUID()}`;
   const email =
@@ -382,6 +411,20 @@ function seedOrganizationFor(username: string): number {
     username: `${username}-org`,
   });
   return nextGiteaOrgId;
+}
+
+/** Put a user in a second organization, newer than their first. */
+function seedSecondOrganizationFor(username: string): {
+  id: number;
+  username: string;
+} {
+  nextGiteaOrgId += 1;
+  const organization = { id: nextGiteaOrgId, username: `${username}-second` };
+  giteaExtraOrgsByUsername.set(username, [
+    ...(giteaExtraOrgsByUsername.get(username) ?? []),
+    organization,
+  ]);
+  return organization;
 }
 
 /** The Gitea org id seeded for a user. Billing hangs off this, not the name. */
@@ -508,6 +551,155 @@ async function makeStripeWebhookRequest(
     body: rawBody,
   });
 }
+
+describe("billing belongs to the organization's owners", () => {
+  test("a member who is not an owner cannot start a checkout", async () => {
+    const server = createApiServer();
+    const username = `member-${randomUUID()}`;
+    const sessionId = await seedSession(username, { owner: false });
+
+    const response = await server.fetch(
+      makeBillingRequest("/api/app/billing/checkout", sessionId),
+    );
+
+    expect(response.status).toBe(403);
+    expect(getFetchCallsByPath("/v1/checkout/sessions")).toHaveLength(0);
+  });
+
+  test("the status says who may manage billing", async () => {
+    const server = createApiServer();
+    const owner = await seedSession(`owner-${randomUUID()}`);
+    const member = await seedSession(`member-${randomUUID()}`, {
+      owner: false,
+    });
+
+    const read = async (sessionId: string) =>
+      (await (
+        await server.fetch(
+          makeSessionRequest("/api/app/billing/status", sessionId),
+        )
+      ).json()) as { canManageBilling: boolean; hasBillingAccount: boolean };
+
+    expect((await read(owner)).canManageBilling).toBe(true);
+    expect((await read(member)).canManageBilling).toBe(false);
+    expect((await read(owner)).hasBillingAccount).toBe(false);
+  });
+});
+
+describe("billing is per organization", () => {
+  async function activate(giteaOrgId: number) {
+    await subscriptionStore.upsert({
+      giteaOrgId,
+      stripeCustomerId: `cus_${giteaOrgId}`,
+      stripeSubscriptionId: `sub_${giteaOrgId}`,
+      status: "active",
+      currentPeriodEnd: Math.floor(Date.now() / 1000) + 86_400,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
+      updatedAt: Date.now(),
+    });
+  }
+
+  test("the status answers for the organization it names", async () => {
+    const server = createApiServer();
+    const username = `two-orgs-${randomUUID()}`;
+    const sessionId = await seedSession(username);
+    const second = seedSecondOrganizationFor(username);
+    await activate(orgIdFor(username));
+
+    const read = async (query: string) =>
+      (await (
+        await server.fetch(
+          makeSessionRequest(`/api/app/billing/status${query}`, sessionId),
+        )
+      ).json()) as { organization: { id: number }; hasAccess: boolean };
+
+    // Named: the second organization, which nobody has paid for.
+    const named = await read(`?organization=${second.username}`);
+    expect(named.organization.id).toBe(second.id);
+    expect(named.hasAccess).toBe(false);
+    // Unnamed: the oldest, as before.
+    const unnamed = await read("");
+    expect(unnamed.organization.id).toBe(orgIdFor(username));
+    expect(unnamed.hasAccess).toBe(true);
+  });
+
+  test("naming an organization you are not in is refused, not replaced", async () => {
+    const server = createApiServer();
+    const sessionId = await seedSession(`outsider-${randomUUID()}`);
+    const other = `someone-${randomUUID()}`;
+    await seedSession(other);
+
+    const status = await server.fetch(
+      makeSessionRequest(
+        `/api/app/billing/status?organization=${other}-org`,
+        sessionId,
+      ),
+    );
+    expect(status.status).toBe(404);
+
+    const checkout = await server.fetch(
+      makeBillingRequest("/api/app/billing/checkout", sessionId, {
+        organization: `${other}-org`,
+      }),
+    );
+    expect(checkout.status).toBe(404);
+    expect(getFetchCallsByPath("/v1/checkout/sessions")).toHaveLength(0);
+  });
+
+  test("checkout bills the organization it names, and returns to its page", async () => {
+    const server = createApiServer();
+    const username = `two-orgs-${randomUUID()}`;
+    const sessionId = await seedSession(username);
+    const second = seedSecondOrganizationFor(username);
+
+    const response = await server.fetch(
+      makeBillingRequest("/api/app/billing/checkout", sessionId, {
+        organization: second.username,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const form = getPostedFormBody(
+      getFetchCallsByPath("/v1/checkout/sessions")[0]!,
+    );
+    expect(form.get("metadata[bindersnap_gitea_org_id]")).toBe(
+      String(second.id),
+    );
+    expect(form.get("success_url")).toBe(
+      `${config.appOrigin}/${second.username}/-/billing?checkout=success`,
+    );
+  });
+
+  test("a write is gated by the organization it writes into", async () => {
+    const server = createApiServer();
+    const username = `two-orgs-${randomUUID()}`;
+    const sessionId = await seedSession(username);
+    const second = seedSecondOrganizationFor(username);
+    const first = `${username}-org`;
+    // The oldest is paid for; the second is not.
+    await activate(orgIdFor(username));
+
+    const rename = (org: string) =>
+      server.fetch(
+        makeSessionRequest(`/api/app/binders/${org}/handbook/name`, sessionId, {
+          method: "POST",
+          body: { name: "Handbook" },
+        }),
+      );
+
+    const intoSecond = await rename(second.username);
+    expect(intoSecond.status).toBe(402);
+    expect(await intoSecond.json()).toMatchObject({
+      organization: second.username,
+    });
+    expect((await rename(first)).status).not.toBe(402);
+
+    // And the other way round: paying for the second opens it.
+    await activate(second.id);
+    expect((await rename(second.username)).status).not.toBe(402);
+  });
+});
 
 describe("billing Stripe idempotency", () => {
   test("checkout sends a unique Stripe Idempotency-Key per attempt when no client key provided", async () => {
@@ -1587,5 +1779,28 @@ describe("admin subscription access overrides", () => {
     } finally {
       server.stop(true);
     }
+  });
+});
+
+describe("CORS headers and caches", () => {
+  test("a request from an allowed origin is told it may read the response", () => {
+    const headers = corsHeaders(
+      new Request("http://api.test/api/app/x", {
+        headers: { Origin: "http://localhost:5173" },
+      }),
+    );
+    expect(headers.get("Access-Control-Allow-Origin")).toBe(
+      "http://localhost:5173",
+    );
+    expect(headers.get("Vary")).toBe("Origin");
+  });
+
+  // A file response is cacheable for hours. Stored without Vary, the copy made
+  // for a request with no Origin was later reused for one with an Origin, and
+  // the browser blocked it for lacking Allow-Origin.
+  test("a request with no origin still says the answer varies by origin", () => {
+    const headers = corsHeaders(new Request("http://api.test/api/app/x"));
+    expect(headers.get("Access-Control-Allow-Origin")).toBeNull();
+    expect(headers.get("Vary")).toBe("Origin");
   });
 });

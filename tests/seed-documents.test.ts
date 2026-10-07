@@ -124,6 +124,42 @@ test("re-rendering an unchanged policy produces the same bytes", async () => {
   }
 });
 
+test("rendering many documents at once leaves the clock alone", async () => {
+  // The seed applies every binder concurrently, so renders overlap. The Word
+  // render swaps `globalThis.Date` for a pinned one across an await: a PDF
+  // render inside that window failed pdf-lib's `instanceof Date` check, and
+  // two interleaved Word renders put the wrong `Date` back, freezing the
+  // clock for the rest of the process.
+  const RealDate = globalThis.Date;
+  const formats = ["prosemirror", "markdown", "pdf", "docx"] as const;
+
+  const sequential: string[] = [];
+  for (const format of formats) {
+    const file = await renderSeedDocumentFile(
+      policy,
+      format,
+      "nursing/handover",
+      UID,
+    );
+    sequential.push(file.content);
+  }
+
+  const rounds = await Promise.all(
+    Array.from({ length: 6 }, () =>
+      Promise.all(
+        formats.map((format) =>
+          renderSeedDocumentFile(policy, format, "nursing/handover", UID),
+        ),
+      ),
+    ),
+  );
+
+  for (const round of rounds) {
+    expect(round.map((file) => file.content)).toEqual(sequential);
+  }
+  expect(globalThis.Date).toBe(RealDate);
+});
+
 test("editing the prose changes the bytes for every format", async () => {
   const edited: SeedDocument = {
     ...policy,

@@ -7,19 +7,23 @@ import {
   fetchBinderChange,
   updateBinderChange,
 } from "../api";
-import { describeChangedDocument, describeMove } from "../binderChange";
-import { buildDocumentUrl, downloadFileName } from "../binderDocument";
+import { followInApp } from "../appLink";
+import { describeChangedDocument } from "../binderChange";
+import { buildDocumentUrl } from "../binderDocument";
 import { buildBinderUrl } from "../binderShell";
 import { buildChangedDocumentRows } from "../changedDocuments";
 import type { ChangeScope } from "../changeScope";
 import { formatDocumentName, toChangeRecord } from "../documentDisplay";
 import type { DocumentChangeView } from "../routes";
+import { nameFor, usePeopleNames } from "../usePeopleNames";
+import { ChangeByline } from "./ChangeByline";
 import { ChangeComparisonPage } from "./ChangeComparisonPage";
+import { ChangeStateBadge, ChangeTabs } from "./ChangeTabs";
 import { DocumentChangeDetail } from "./DocumentChangeDetail";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 /**
- * One change in a binder, at `/{org}/{binder}?tab=changes&change=3`.
+ * One change in a binder, at `/{org}/{binder}/-/changes/3`.
  *
  * The review itself is `DocumentChangeDetail` — the same discussion, timeline,
  * comparison, reviewer list and publish gate the per-document workspace has.
@@ -39,7 +43,6 @@ interface BinderChangePageProps {
   view: DocumentChangeView;
   onViewChange: (view: DocumentChangeView) => void;
   onBackToChanges: () => void;
-  onOpenDocument: (slugPath: string) => void;
   /**
    * Open a document at its own address, on this change's branch.
    *
@@ -75,12 +78,12 @@ export function BinderChangePage({
   view,
   onViewChange,
   onBackToChanges,
-  onOpenDocument,
   onChanged,
   onOpenSignOffRules,
   onOpenOnBranch,
   onOpenBranch,
 }: BinderChangePageProps) {
+  const names = usePeopleNames(org);
   const [detail, setDetail] = useState<WorkspaceChangeDetailPayload | null>(
     null,
   );
@@ -89,7 +92,6 @@ export function BinderChangePage({
   const [viewing, setViewing] = useState<string | null>(null);
   const [catchingUp, setCatchingUp] = useState(false);
   const [catchUpError, setCatchUpError] = useState<string | null>(null);
-  const [downloadingRef, setDownloadingRef] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -204,51 +206,23 @@ export function BinderChangePage({
     }
   };
 
-  const handleDownload = async (gitRef: string, loaded?: Blob | null) => {
-    if (!shown) return;
-    setDownloadingRef(gitRef);
-    try {
-      const blob =
-        loaded ??
-        // By identity, for the same reason the scope is: a download of the
-        // version this change replaces is a read at a ref that does not know
-        // the new name.
-        (await downloadBinderDocument(
-          org,
-          binder,
-          shown.path || shown.slugPath,
-          gitRef,
-        ));
-      triggerBrowserDownload(blob, downloadFileName(shown));
-    } finally {
-      setDownloadingRef(null);
-    }
-  };
-
   /**
    * Download one document out of the comparison, at whichever ref it asks for.
    *
-   * Separate from {@link handleDownload} because that one is about the
-   * document on screen, and on the comparison screen every document is on
-   * screen. By identity for the same reason: a download of the version being
-   * replaced is a read at a ref that has never heard of a new name.
+   * By identity: a download of the version being replaced is a read at a ref
+   * that has never heard of a new name.
    */
   const handleRowDownload = async (
     row: { path: string; slugPath: string; fileName: string },
     gitRef: string,
   ) => {
-    setDownloadingRef(gitRef);
-    try {
-      const blob = await downloadBinderDocument(
-        org,
-        binder,
-        row.path || row.slugPath,
-        gitRef,
-      );
-      triggerBrowserDownload(blob, row.fileName);
-    } finally {
-      setDownloadingRef(null);
-    }
+    const blob = await downloadBinderDocument(
+      org,
+      binder,
+      row.path || row.slugPath,
+      gitRef,
+    );
+    triggerBrowserDownload(blob, row.fileName);
   };
 
   if (error) {
@@ -282,15 +256,65 @@ export function BinderChangePage({
   }
 
   const isOpen = detail.change.state === "open";
+  const nameOf = (login: string) => nameFor(names, login);
+  const branchName = detail.change.branchName || null;
+  const branchHref = buildBinderUrl({
+    org,
+    binder,
+    ref: branchName,
+    change: changeNumber,
+  });
+  const openBranch = () => {
+    if (branchName) onOpenBranch(branchName);
+  };
+
+  /* **The same header on both screens**: whether the change is open, and the
+     two tabs that are its two screens. A code host draws a merge request this
+     way — Overview, Changes — and the comparison stops being a page you reach
+     by a button in the rail and leave by the trail. */
+  // A merged change reads as published; one closed without merging did not
+  // publish, and the change alone does not say who ended it or why.
+  const status = (
+    <ChangeStateBadge
+      state={
+        isOpen
+          ? "open"
+          : detail.change.approvalState === "published"
+            ? "published"
+            : "closed"
+      }
+    />
+  );
+  const changesHref = buildBinderUrl({
+    org,
+    binder,
+    tab: "changes",
+    change: changeNumber,
+    view: "compare",
+  });
+  const tabs = (
+    <ChangeTabs
+      view={view}
+      overviewHref={buildBinderUrl({
+        org,
+        binder,
+        tab: "changes",
+        change: changeNumber,
+      })}
+      changesHref={changesHref}
+      documentCount={comparisonRows.length}
+      onSelect={onViewChange}
+    />
+  );
 
   /**
    * Everything this change does, on one screen.
    *
    * Its own screen rather than a panel on this one, and a full-width one: a
    * change that touches six documents is six comparisons, and a comparison in
-   * half a column beside a discussion is a diff nobody can read. `?view=compare`
-   * addresses it, so a reviewer can send "the diff" rather than "open the
-   * change and press Compare".
+   * half a column beside a discussion is a diff nobody can read.
+   * `/-/changes/{n}/diffs` addresses it, so a reviewer can send "the diff"
+   * rather than "open the change and press Compare".
    *
    * `key` on the change number, because everything the screen remembers —
    * which documents are folded, which are ticked, where the reader had got to
@@ -306,25 +330,17 @@ export function BinderChangePage({
           changeNumber={changeNumber}
           title={record.summary}
           open={isOpen}
-          author={record.submittedBy}
+          author={nameOf(record.submittedBy)}
+          openedAt={record.submittedAt}
+          nameOf={nameOf}
           rows={comparisonRows}
           headRef={detail.change.branchName || null}
           /* Arriving from a particular document's Compare button opens on that
              document rather than at the top of a page of six. */
           focusDocument={shown?.slugPath ?? null}
-          onBackToChange={() => onViewChange("discussion")}
           /* The branch's root: the binder as this change would leave it. */
-          branchHref={buildBinderUrl({
-            org,
-            binder,
-            ref: detail.change.branchName || null,
-            change: changeNumber,
-          })}
-          onOpenBranch={() => {
-            if (detail.change.branchName) {
-              onOpenBranch(detail.change.branchName);
-            }
-          }}
+          branchHref={branchHref}
+          onOpenBranch={openBranch}
           /* The same address `onOpenOnBranch` goes to, so View is a real link:
              it opens in a new tab and can be sent to somebody. */
           fileHref={(slugPath) =>
@@ -343,6 +359,8 @@ export function BinderChangePage({
             }
           }}
           onDownload={(row, gitRef) => void handleRowDownload(row, gitRef)}
+          status={status}
+          tabs={tabs}
         />
       </div>
     );
@@ -384,9 +402,24 @@ export function BinderChangePage({
       ) : null}
 
       <DocumentChangeDetail
+        status={status}
+        tabs={tabs}
+        byline={
+          <ChangeByline
+            status={status}
+            author={nameOf(record.submittedBy)}
+            open={isOpen}
+            documents={documents.length}
+            branch={branchName}
+            branchHref={branchHref}
+            onOpenBranch={openBranch}
+            openedAt={record.submittedAt}
+            nameOf={nameOf}
+          />
+        }
         banner={behind}
         documentPicker={
-          documents.length > 1 ? (
+          documents.length > 0 ? (
             /* **What this change does, document by document.** A change is the
                unit of approval and routinely touches several, and this panel
                was a picker rather than an answer: it showed the raw filename,
@@ -398,34 +431,35 @@ export function BinderChangePage({
                 <h2 className="bs-panel-bar-title">What this change does</h2>
                 <span className="bs-panel-bar-spacer" />
                 <span className="binder-count">
-                  {documents.length} documents
+                  {documents.length === 1
+                    ? "1 document"
+                    : `${documents.length} documents`}
                 </span>
-                {/* **The list answers "what", this answers "what changed".**
-                    Picking each row in turn and reading its diff was the only
-                    way to see what a change did to all of it — the "which
-                    version did we approve?" problem one level up. In the
-                    list's own bar, because a control that acts on a list does
-                    not float on the paper above it. */}
-                <button
-                  className="bs-linkbtn"
-                  type="button"
-                  onClick={() => onViewChange("compare")}
-                >
-                  See everything that changed →
-                </button>
               </div>
               <ul className="bs-row-list">
                 {documents.map((document) => {
                   const facts = describeChangedDocument(document, !isOpen);
-                  const on = document.slugPath === shown?.slugPath;
+                  const anchor = comparisonRows.find(
+                    (row) => row.slugPath === document.slugPath,
+                  )?.anchor;
 
                   return (
                     <li key={document.slugPath}>
-                      <button
-                        className={`bs-row${on ? " bs-row--on" : ""}`}
-                        type="button"
-                        aria-current={on ? "true" : undefined}
-                        onClick={() => setViewing(document.slugPath)}
+                      {/* **A way into its diff, not a selector.** Picking a
+                          row used to repoint the rail at that document, so
+                          seeing what changed was pick, then Compare — when
+                          what a reviewer does is open Changes and scroll.
+                          Each row now goes straight to its own place on
+                          that screen. */}
+                      <a
+                        className="bs-row"
+                        href={`${changesHref}${anchor ? `#${anchor}` : ""}`}
+                        onClick={(event) =>
+                          followInApp(event, () => {
+                            setViewing(document.slugPath);
+                            onViewChange("compare");
+                          })
+                        }
                       >
                         <span className="bs-row-body">
                           <span className="bs-row-name">{facts.title}</span>
@@ -442,7 +476,7 @@ export function BinderChangePage({
                           ) : null}
                           <span className="bs-ver">{facts.effect}</span>
                         </span>
-                      </button>
+                      </a>
                     </li>
                   );
                 })}
@@ -468,22 +502,7 @@ export function BinderChangePage({
         blockOnUnresolvedThreads={detail.blockOnUnresolvedThreads}
         canManageAssignments={detail.canManage}
         nextVersion={shown?.nextVersion ?? 1}
-        /* **How many documents this change touches**, which decides whether
-           the header may claim a version. "becomes v2 when published" sits
-           under the change's own title, so with several documents it is a
-           sentence about the change carrying a fact about whichever row
-           happened to be selected — and it changed as you clicked between
-           them. With more than one, the versions belong on the rows that own
-           them and the header says nothing about any. */
         documentCount={documents.length}
-        /* A rename is a change even when not a word of the document changed,
-           and the comparison cannot show it. */
-        documentMove={shown ? describeMove(shown) : null}
-        onOpenOnBranch={
-          shown && detail.change.branchName
-            ? () => onOpenOnBranch(shown.slugPath, detail.change.branchName)
-            : null
-        }
         // A change that touches no document is a change to this binder's
         // sign-off rules — the one kind that goes through review and versions
         // nothing. Saying so replaces the version wording and the file panel,
@@ -500,25 +519,10 @@ export function BinderChangePage({
         documentName={
           shown ? formatDocumentName(shown.name) : `this binder's rules`
         }
-        fileName={shown ? downloadFileName(shown) : null}
-        downloading={downloadingRef !== null}
-        onDownload={(gitRef, loaded) => void handleDownload(gitRef, loaded)}
         onChanged={load}
         onViewChange={onViewChange}
         onBackToList={onBackToChanges}
       />
-
-      {shown ? (
-        <p className="change-open-document">
-          <button
-            className="bs-linkbtn"
-            type="button"
-            onClick={() => onOpenDocument(shown.slugPath)}
-          >
-            Open {formatDocumentName(shown.name)} in the binder →
-          </button>
-        </p>
-      ) : null}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { MouseEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import {
   Archive,
   ArchiveRestore,
@@ -11,16 +11,15 @@ import {
   FilePlus2,
   FileText,
   Folder,
-  GitBranch,
   Layers,
 } from "lucide-react";
 
 import { downloadDocument } from "../api";
+import { followInApp } from "../appLink";
 import type { ChangeScope } from "../changeScope";
 import {
   describeChangedBadge,
   describeChangedKind,
-  describePublishIntent,
   describeReadProgress,
   summarizeChangeScale,
   type ChangedDocumentRow,
@@ -29,6 +28,7 @@ import type { ComparisonSummary } from "../documentComparison";
 import { classifyDocumentFile } from "../documentFile";
 import { DocumentComparison, type ImageMode } from "./DocumentComparison";
 import { DocumentPreview } from "./DocumentPreview";
+import { ChangeByline } from "./ChangeByline";
 
 /**
  * Everything one change does to a binder, on one screen.
@@ -64,8 +64,12 @@ interface ChangeComparisonPageProps {
   title: string;
   /** Whether it is still awaiting a decision — the wording differs. */
   open: boolean;
-  /** Who proposed it, for "alice wants to publish 3 documents from …". */
+  /** Who proposed it, as a name, for "Alice Nguyen wants to publish …". */
   author: string;
+  /** When it was opened, for the end of that line. */
+  openedAt?: string;
+  /** Names the login inside a draft's branch. */
+  nameOf?: (login: string) => string;
   rows: readonly ChangedDocumentRow[];
   /**
    * The branch holding the proposed files, or null when the change has none
@@ -78,7 +82,6 @@ interface ChangeComparisonPageProps {
    * reviewer arrived by pressing Compare on a particular document.
    */
   focusDocument?: string | null;
-  onBackToChange: () => void;
   /**
    * The address of the change's branch at its root — the whole binder as the
    * change would leave it. Where the branch under the title links to.
@@ -94,6 +97,13 @@ interface ChangeComparisonPageProps {
   /** Open one document's proposed file on its own screen. */
   onReadFile: (slugPath: string) => void;
   onDownload: (row: ChangedDocumentRow, gitRef: string) => void;
+  /**
+   * Whether it is still open, or how it ended — the badge before the line
+   * under the title.
+   */
+  status?: ReactNode;
+  /** Overview and Changes: the change's two screens, as tabs under its header. */
+  tabs?: ReactNode;
 }
 
 /** How far ahead of the viewport a document's comparison starts loading. */
@@ -177,24 +187,6 @@ function WordCounts({
   );
 }
 
-/**
- * A link that stays inside the app on an ordinary click, and still behaves as
- * a link — new tab, copy address — on every other kind.
- */
-function followInApp(event: MouseEvent<HTMLAnchorElement>, go: () => void) {
-  if (
-    event.button !== 0 ||
-    event.metaKey ||
-    event.ctrlKey ||
-    event.shiftKey ||
-    event.altKey
-  ) {
-    return;
-  }
-  event.preventDefault();
-  go();
-}
-
 /** `clinical/nursing` for `clinical/nursing/hand-hygiene`; "" at the top. */
 function folderOf(slugPath: string): string {
   const at = slugPath.lastIndexOf("/");
@@ -225,15 +217,18 @@ export function ChangeComparisonPage({
   title,
   open,
   author,
+  openedAt = "",
+  nameOf,
   rows: listed,
   headRef,
   focusDocument = null,
-  onBackToChange,
   branchHref,
   onOpenBranch,
   fileHref,
   onReadFile,
   onDownload,
+  status = null,
+  tabs = null,
 }: ChangeComparisonPageProps) {
   const groups = useMemo(() => groupByFolder(listed), [listed]);
   const rows = useMemo(() => groups.flatMap((group) => group.rows), [groups]);
@@ -518,21 +513,11 @@ export function ChangeComparisonPage({
   const allCollapsed =
     rows.length > 0 && rows.every((row) => collapsed.has(row.anchor));
 
-  /* The way back is a crumb, not a button floating above the title — the same
-     row the change request itself uses, so the two screens open the same way.
-     "Change 4" is not a name, which is why a change keeps its crumbs where a
-     policy does not. */
+  /* The way back is the trail in the top bar — `Clinical / Change requests /
+     Change 4 / Compare` — which every screen shares, so this one opens on its
+     title like the rest. */
   const header = (
     <>
-      <nav className="bs-crumbs" aria-label="Where this is">
-        <button type="button" onClick={onBackToChange}>
-          Change {changeNumber}
-        </button>
-        <span className="bs-crumbs-sep" aria-hidden="true">
-          /
-        </span>
-        <span>Everything that changed</span>
-      </nav>
       <div className="bs-pagehead">
         <div className="bs-pagehead-body">
           <h1 className="bs-title">{title}</h1>
@@ -540,30 +525,17 @@ export function ChangeComparisonPage({
               pull request's title. The branch is a link to that branch in
               the binder, because "from where" is a place you can go. */}
           {rows.length > 0 ? (
-            <p className="cmp-byline">
-              {author ? <strong>{author}</strong> : "Somebody"}{" "}
-              {describePublishIntent({ open, documents: rows.length })}
-              {headRef ? (
-                <>
-                  {" from "}
-                  {/* The branch's root, not its first file — the whole
-                      binder as this change would leave it, which a change
-                      that only archives has as much as any other. */}
-                  <a
-                    className="cmp-branch"
-                    href={branchHref}
-                    onClick={(event) => followInApp(event, onOpenBranch)}
-                  >
-                    <GitBranch
-                      size={12}
-                      strokeWidth={1.75}
-                      aria-hidden="true"
-                    />
-                    {headRef}
-                  </a>
-                </>
-              ) : null}
-            </p>
+            <ChangeByline
+              status={status}
+              author={author}
+              open={open}
+              documents={rows.length}
+              branch={headRef}
+              branchHref={branchHref}
+              onOpenBranch={onOpenBranch}
+              openedAt={openedAt}
+              nameOf={nameOf}
+            />
           ) : null}
           {/* Nothing to size is not a size. The states below say what this
               change does instead, at length — the scale line above them would
@@ -575,6 +547,7 @@ export function ChangeComparisonPage({
           ) : null}
         </div>
       </div>
+      {tabs}
     </>
   );
 

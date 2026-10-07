@@ -24,7 +24,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL, openTreeFolder } from "./helpers";
 
-test.describe.configure({ mode: "serial", timeout: 240_000 });
+test.describe.configure({ mode: "parallel", timeout: 240_000 });
 
 interface Credentials {
   username: string;
@@ -460,7 +460,7 @@ test("Propose opens the change request, with the words the author wrote", async 
   await page.getByRole("button", { name: "Open the change request" }).click();
 
   // Straight to the change request it became, under the author's own title.
-  await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/-\/changes\/\d+/, { timeout: 30_000 });
   await expect(
     page.getByText(
       "Bring the hand hygiene policy in line with the PPE guidance",
@@ -1347,19 +1347,24 @@ test("Open on a change lands on the document's own page", async ({ page }) => {
   };
   const number = body.changeNumber ?? body.pullRequestNumber;
 
+  // The file is read from the change's Changes tab, where every document it
+  // touches has its own View.
   await page.goto(
-    `${APP_BASE_URL}/${org}/${binder}?tab=changes&change=${number}`,
+    `${APP_BASE_URL}/${org}/${binder}?tab=changes&change=${number}&view=compare`,
   );
-  await page.getByRole("button", { name: "Open", exact: true }).click();
+  await page
+    .locator(".cmp-file")
+    .first()
+    .getByRole("link", { name: "View", exact: true })
+    .click();
 
   // The document's address, and the document's own name as the page's title.
   // The branch is the address and the change rides along as the way back —
   // a file lives on a branch, which is how every code host addresses one.
   await expect(page).toHaveURL(
-    new RegExp(`/${org}/${binder}/nursing/hand-hygiene\\?ref=`),
+    new RegExp(`/${org}/${binder}/-/blob/[^/?]+/nursing/hand-hygiene`),
     { timeout: 30_000 },
   );
-  await expect(page).toHaveURL(new RegExp(`[?&]change=${number}`));
   // The page's own heading, not the `# Hand Hygiene` inside the policy.
   await expect(
     page.locator(".app-main h1:not(.doc-preview-prose h1)"),
@@ -1382,11 +1387,11 @@ test("Open on a change lands on the document's own page", async ({ page }) => {
   );
   await page.keyboard.press("Escape");
 
-  // The way back to the change stays, because it is where the reader came
-  // from rather than a fact about the version.
-  await expect(page.locator(".doc-on-change")).toContainText(
-    `Back to change ${number}`,
-  );
+  // No button back to the change: the file is on a branch, and the version
+  // control above says which change that is and leads to it.
+  await expect(
+    page.getByRole("button", { name: /Back to change/ }),
+  ).toHaveCount(0);
 
   // A link somebody saved to the old in-page preview lands there too.
   await page.goto(
@@ -1395,10 +1400,9 @@ test("Open on a change lands on the document's own page", async ({ page }) => {
   // The branch is the address and the change rides along as the way back —
   // a file lives on a branch, which is how every code host addresses one.
   await expect(page).toHaveURL(
-    new RegExp(`/${org}/${binder}/nursing/hand-hygiene\\?ref=`),
+    new RegExp(`/${org}/${binder}/-/blob/[^/?]+/nursing/hand-hygiene`),
     { timeout: 30_000 },
   );
-  await expect(page).toHaveURL(new RegExp(`[?&]change=${number}`));
 });
 
 // ── The binder's contents beside the policy you are reading ────────────────
@@ -1443,7 +1447,7 @@ test("the binder's files sit in a panel beside an open policy", async ({
     .locator(".app-explorer-item", { hasText: "Staff Handbook" })
     .click();
   await expect(page).toHaveURL(
-    new RegExp(`/${org}/${binder}/staff-handbook$`),
+    new RegExp(`/${org}/${binder}/-/blob/main/staff-handbook$`),
     {
       timeout: 30_000,
     },
@@ -1500,7 +1504,9 @@ test("the contents beside a change's policy are the change's", async ({
     .locator(".app-explorer-item", { hasText: "Staff Handbook" })
     .click();
   await expect(page).toHaveURL(
-    new RegExp(`/${org}/${binder}/staff-handbook\\?change=${changeNumber}$`),
+    new RegExp(
+      `/${org}/${binder}/-/blob/[^/?]+/staff-handbook\\?change=${changeNumber}$`,
+    ),
     { timeout: 30_000 },
   );
 });
@@ -1538,15 +1544,19 @@ test("a policy is read beside its own file panel, at the page's full width", asy
     };
     return {
       nav: box(".app-sidebar"),
+      canvas: box(".app-canvas"),
       explorer: box(".app-explorer"),
       page: box(".docw-page"),
       window: window.innerWidth,
     };
   });
 
-  // The explorer sits beside the map rather than inside it.
-  expect(measured.explorer!.left).toBe(
-    measured.nav!.left + measured.nav!.width,
+  // The explorer sits beside the map rather than inside it: on the page's
+  // sheet, which starts where the map ends. The sheet's own edge is a hairline
+  // border, so the explorer starts just inside it.
+  expect(measured.canvas!.left).toBe(measured.nav!.left + measured.nav!.width);
+  expect(measured.explorer!.left - measured.canvas!.left).toBeLessThanOrEqual(
+    1,
   );
 
   // And the policy takes what is left, rather than the page measure a list
@@ -1660,6 +1670,57 @@ test("somebody else's draft is refused as a ref", async () => {
 });
 
 /**
+ * **The binder at a branch is the binder's own page, read somewhere else** —
+ * `/-/tree/{ref}` — so its list is asked for by ref, under the rule a document
+ * read at a ref follows.
+ */
+test("a binder's documents list at the branch the address names", async () => {
+  const { session, org, binder } = await provisionBinder();
+  const draft = await openDraft(session, org, binder);
+  await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-renames`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({
+        documentPath: "nursing/hand-hygiene",
+        name: "Hand Hygiene and PPE",
+        draft,
+      }),
+    },
+  );
+
+  const list = (ref: string, who: string) =>
+    fetch(
+      `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents?ref=${encodeURIComponent(ref)}`,
+      { headers: authHeaders(who) },
+    );
+
+  // Your own draft, by ref: the name it has there.
+  const mine = await list(draft, session);
+  expect(mine.status, await mine.clone().text()).toBe(200);
+  const { documents } = (await mine.json()) as {
+    documents: Array<{ slugPath: string }>;
+  };
+  expect(documents.map((entry) => entry.slugPath)).toContain(
+    "nursing/hand-hygiene-and-ppe",
+  );
+
+  // Somebody else's unproposed draft is refused, as it is for one document.
+  const stranger = buildCredentials();
+  const strangerSession = await signUp(stranger);
+  const added = await fetch(`${API_BASE_URL}/api/app/orgs/${org}/people`, {
+    method: "POST",
+    headers: authHeaders(session),
+    body: JSON.stringify({ username: stranger.username, owner: false }),
+  });
+  expect(added.status, await added.text()).toBeLessThan(300);
+  const refused = await list(draft, strangerSession);
+  expect(refused.status).toBe(409);
+  expect(await refused.text()).toMatch(/not yours/i);
+});
+
+/**
  * **A proposed draft is a change request, and its contents are the thing
  * everybody is being asked to read.**
  *
@@ -1752,14 +1813,19 @@ test("Open on a change lands on the branch, and browsing stays there", async ({
   };
   const number = body.changeNumber ?? body.pullRequestNumber;
 
+  // The file is read from the change's Changes tab, where every document it
+  // touches has its own View.
   await page.goto(
-    `${APP_BASE_URL}/${org}/${binder}?tab=changes&change=${number}`,
+    `${APP_BASE_URL}/${org}/${binder}?tab=changes&change=${number}&view=compare`,
   );
-  await page.getByRole("button", { name: "Open", exact: true }).click();
+  await page
+    .locator(".cmp-file")
+    .first()
+    .getByRole("link", { name: "View", exact: true })
+    .click();
 
   // The branch is the address, and the change rides along as the way back.
-  await expect(page).toHaveURL(/[?&]ref=/, { timeout: 30_000 });
-  await expect(page).toHaveURL(new RegExp(`[?&]change=${number}`));
+  await expect(page).toHaveURL(/\/-\/blob\/(?!main\/)/, { timeout: 30_000 });
   // The file panel names the version its rows are addresses on.
   await expect(page.locator(".app-explorer-versionbtn")).toHaveText(
     new RegExp(`Change #${number}`),
@@ -1771,7 +1837,7 @@ test("Open on a change lands on the branch, and browsing stays there", async ({
     .locator(".app-explorer-item", { hasText: "Staff Handbook" })
     .click();
   await expect(page).toHaveURL(
-    new RegExp(`/${org}/${binder}/staff-handbook\\?ref=`),
+    new RegExp(`/${org}/${binder}/-/blob/(?!main/)[^/?]+/staff-handbook`),
     { timeout: 30_000 },
   );
 });

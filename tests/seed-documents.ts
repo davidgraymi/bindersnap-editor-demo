@@ -233,7 +233,34 @@ async function renderSeedPdf(document: SeedDocument): Promise<Uint8Array> {
  * identity are what distinguish them —
  * `nursing/infection-control.01J8XZ4K7M….docx`.
  */
-export async function renderSeedDocumentFile(
+/**
+ * The tail of the render queue. Every render waits for the one before it.
+ *
+ * `withSeedClock` swaps the global `Date` across an await, and the seed
+ * applies its binders concurrently, so without this a PDF render could run
+ * inside a Word render's window (and fail pdf-lib's `instanceof Date` check),
+ * or two Word renders could interleave and put the pinned `Date` back as if
+ * it were the real one — freezing the clock for the rest of the process.
+ * Rendering is CPU-only and takes milliseconds; the Gitea round trips, which
+ * are the seed's real cost, stay concurrent.
+ */
+let renderQueue: Promise<unknown> = Promise.resolve();
+
+export function renderSeedDocumentFile(
+  document: SeedDocument,
+  format: SeedDocumentFormat,
+  slugPath: string,
+  uid: string,
+): Promise<SeedDocumentFile> {
+  const rendered = renderQueue.then(() =>
+    renderSeedDocumentFileNow(document, format, slugPath, uid),
+  );
+  // A failed render rejects its own caller and must not stall the ones after.
+  renderQueue = rendered.catch(() => undefined);
+  return rendered;
+}
+
+async function renderSeedDocumentFileNow(
   document: SeedDocument,
   format: SeedDocumentFormat,
   slugPath: string,

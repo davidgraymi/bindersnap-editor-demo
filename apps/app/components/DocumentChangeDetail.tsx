@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
-import { Columns2, Download, FileText, Pencil } from "lucide-react";
+import { Columns2, FileText, Pencil } from "lucide-react";
 
 import type { ChangeUpdate, RepoBranchProtection } from "../api";
 import {
@@ -9,7 +9,6 @@ import {
   submitDocumentReview,
 } from "../api";
 import {
-  buildProposedVersionFacts,
   describeChangeBody,
   describeChangeOpening,
   resolveReviewDecision,
@@ -23,6 +22,7 @@ import {
 } from "../documentDisplay";
 import type { DocumentChangeView } from "../routes";
 import { ChangeReviewers } from "./ChangeReviewers";
+import { nameFor, usePeopleNames } from "../usePeopleNames";
 import { ReviewTimeline } from "./ReviewTimeline";
 
 interface DocumentChangeDetailProps {
@@ -48,34 +48,10 @@ interface DocumentChangeDetailProps {
   canManageAssignments: boolean;
   nextVersion: number;
   /**
-   * How many documents this change touches.
-   *
-   * Only the header cares: "becomes v2 when published" is printed under the
-   * change's own title, and with several documents that is a sentence about
-   * the change carrying a fact about one row of it. Publishing still uses
-   * {@link nextVersion}, which is about the document being shown.
+   * How many documents this change touches, for the approve prompt — the
+   * versions themselves are on the rows of "What this change does".
    */
   documentCount?: number;
-  /**
-   * "Renamed from Hand Hygiene", when this change renamed or refiled it.
-   *
-   * **A rename is a change even when not a word of the document changed**, and
-   * the comparison cannot show it — the identity survives a rename and the
-   * address does not, so both versions read identically and the screen said
-   * "nothing changed" about a change that plainly did something.
-   */
-  documentMove?: string | null;
-  /**
-   * Open this document at its own address, on this change's branch.
-   *
-   * **A change request is a branch, and a document on it has an address.**
-   * Reading the proposed version used to happen here, in a panel beside the
-   * discussion: half a column wide, under a heading naming the change rather
-   * than the document, at a URL that said nothing about which document it was.
-   * It is the binder at another ref, which is what every other git front end
-   * does and what a reader already knows how to use.
-   */
-  onOpenOnBranch?: (() => void) | null;
   /**
    * What this change is about, when it is **not** a document.
    *
@@ -92,14 +68,11 @@ interface DocumentChangeDetailProps {
    */
   subject?: { title: string; description: string } | null;
   documentName: string;
-  /** Canonical file name, so the proposed version can be previewed and saved. */
-  fileName: string | null;
-  /** Set while this change's file is being fetched for download. */
-  downloading: boolean;
-  onDownload: (gitRef: string, loaded?: Blob | null) => void;
   onChanged: () => void | Promise<void>;
   onViewChange: (view: DocumentChangeView) => void;
   onBackToList: () => void;
+  /** Who, what and from where: the line under the title, shared with Changes. */
+  byline?: React.ReactNode;
   /**
    * The reviewers this change is actually held for.
    *
@@ -127,6 +100,13 @@ interface DocumentChangeDetailProps {
   banner?: React.ReactNode;
   /** Which of several documents the file screens are about. */
   documentPicker?: React.ReactNode;
+  /**
+   * Whether it is still open, or how it ended — the badge before the line
+   * under the title.
+   */
+  status?: React.ReactNode;
+  /** Overview and Changes: the change's two screens, as tabs under its header. */
+  tabs?: React.ReactNode;
 }
 
 interface PRActionState {
@@ -263,13 +243,9 @@ export function DocumentChangeDetail({
   canManageAssignments,
   nextVersion,
   documentCount = 1,
-  documentMove = null,
-  onOpenOnBranch = null,
+  byline,
   subject = null,
   documentName,
-  fileName,
-  downloading,
-  onDownload,
   onChanged,
   onViewChange,
   onBackToList,
@@ -278,6 +254,8 @@ export function DocumentChangeDetail({
   onOpenSignOffRules = null,
   banner = null,
   documentPicker = null,
+  status = null,
+  tabs = null,
 }: DocumentChangeDetailProps) {
   // Above every early return, like the other hooks here — the notes on
   // `DocumentPreview` record what hook order costs when it slips.
@@ -285,6 +263,7 @@ export function DocumentChangeDetail({
   const [actionState, setActionState] = useState<PRActionState>(
     DEFAULT_PR_ACTION_STATE,
   );
+  const names = usePeopleNames(scope.org);
   const [unresolvedCount, setUnresolvedCount] = useState(0);
   // Who is still holding a thread open. The reviewer list needs it to tell a
   // reviewer who is done from one who raised a concern and never closed it,
@@ -402,18 +381,17 @@ export function DocumentChangeDetail({
   // round trip that ends in a 409.
   const threadsBlockPublish = blockOnUnresolvedThreads && unresolvedCount > 0;
   const ownSubmission = currentUser === change.submittedBy;
-  const opening = describeChangeOpening(
-    change,
-    subject || documentCount !== 1 ? null : nextVersion,
+  // **No version under the title**, on any change. It is printed under the
+  // change's own name, so on a change to several documents it was a fact
+  // about one of them; the rows of "What this change does" carry each
+  // document's own, the same way whatever the count.
+  const opening = describeChangeOpening(change, null, (login) =>
+    nameFor(names, login),
   );
   const description = describeChangeBody(change.summary, change.description);
-  const outcome = describeChangeOutcome(change);
-  const proposed = buildProposedVersionFacts({
-    fileName,
-    branchName: change.branchName,
-    submittedAt: change.submittedAt,
-    updates,
-  });
+  const outcome = describeChangeOutcome(change, (login) =>
+    nameFor(names, login),
+  );
   const decision = resolveReviewDecision({
     open: change.open,
     isAnonymous,
@@ -480,19 +458,14 @@ export function DocumentChangeDetail({
 
   return (
     <article className="change-detail bs-with-rail">
-      <div className="change-main">
-        {/* A change request keeps its crumbs, where a policy does not: "Change
-            4" is not a name, and the way back to the list is worth a row. */}
-        <nav className="bs-crumbs" aria-label="Where this change is">
-          <button type="button" onClick={onBackToList}>
-            All changes
-          </button>
-          <span className="bs-crumbs-sep" aria-hidden="true">
-            /
-          </span>
-          <span>Change {prNum}</span>
-        </nav>
-
+      {/* **The head, the decision, then the discussion — in that order in the
+          document**, so a narrow screen that stacks them puts Approve under
+          the title rather than under every comment ever made on the change.
+          A wide one lays the rail beside both; see `.change-detail`. */}
+      <div className="change-head">
+        {/* The way back to the list is the trail in the top bar — `Clinical
+            / Change requests / Change 4` — the same line every page has, so
+            it is not drawn a second time here. */}
         {editing ? (
           /* A change request is open for days, and the first thing a
              reviewer's question produces is a better title. Once it is
@@ -555,15 +528,26 @@ export function DocumentChangeDetail({
           <header className="bs-pagehead">
             <div className="bs-pagehead-body">
               <h1 className="bs-title rev-title">{change.summary}</h1>
-              <p className="bs-facts">
-                {opening.who} opened this on {opening.when}
-                {opening.becomes !== null ? (
-                  <>
-                    {" · becomes "}
-                    <strong>v{opening.becomes}</strong> when published
-                  </>
-                ) : null}
-              </p>
+              {/* The line the Changes tab has too, so moving between the
+                  two does not change the sentence under the title. */}
+              {byline ?? (
+                <p className="bs-facts">
+                  {status}
+                  {/* One flex item, not four: loose text beside the badge
+                      wrapped at every fragment, and put "when published" on a
+                      line of its own. */}
+                  <span>
+                    {opening.who} opened this on{" "}
+                    <span className="bs-nowrap">{opening.when}</span>
+                    {opening.becomes !== null ? (
+                      <span className="bs-nowrap">
+                        {" · becomes "}
+                        <strong>v{opening.becomes}</strong> when published
+                      </span>
+                    ) : null}
+                  </span>
+                </p>
+              )}
               {description ? (
                 <p className="rev-description">{description}</p>
               ) : null}
@@ -589,52 +573,7 @@ export function DocumentChangeDetail({
           </header>
         )}
 
-        {outcome ? (
-          <p className="rev-outcome" role="status">
-            {outcome}
-          </p>
-        ) : null}
-
-        {banner}
-        {documentPicker}
-
-        <ReviewTimeline
-          scope={scope}
-          change={change}
-          updates={updates}
-          resetsApprovals={resetsApprovals}
-          canParticipate={!isAnonymous}
-          currentUsername={currentUser}
-          blockOnUnresolvedThreads={blockOnUnresolvedThreads}
-          onOpenUpdate={
-            proposed.ref === null || !onOpenOnBranch
-              ? null
-              : () => onOpenOnBranch()
-          }
-          onSummaryChange={(next) => {
-            setUnresolvedCount((prev) =>
-              prev === next.unresolvedCount ? prev : next.unresolvedCount,
-            );
-            setOpenThreadAuthors((prev) => {
-              const authors = new Set(
-                next.threads
-                  .filter((thread) => !thread.resolved)
-                  .map((thread) => thread.comments[0]?.author.login ?? "")
-                  .filter(Boolean),
-              );
-              // Identity churn here would re-render the reviewer list on
-              // every poll, so a set that says the same thing stays the same
-              // set.
-              if (
-                authors.size === prev.size &&
-                [...authors].every((login) => prev.has(login))
-              ) {
-                return prev;
-              }
-              return authors;
-            });
-          }}
-        />
+        {tabs}
       </div>
 
       {/* **Everything needed to decide, in one sticky rail, in the same order
@@ -644,75 +583,21 @@ export function DocumentChangeDetail({
           colliding with the title whenever it wrapped — which it does at any
           realistic length. */}
       <aside className="bs-rail" aria-label="The decision">
-        <div className="bs-panel">
-          <div className="bs-panel-bar">
-            <h2 className="bs-panel-bar-title">
-              {subject ? subject.title : "Proposed version"}
-            </h2>
-          </div>
-          {subject ? (
+        {/* **Only when there is no document to list.** A change to the
+            sign-off rules versions nothing, so this says what is being
+            decided instead. A change to documents lists them in the page,
+            one row each, whether it touches one or six — a panel here for
+            one and not the other made two pages out of one. */}
+        {subject ? (
+          <div className="bs-panel">
+            <div className="bs-panel-bar">
+              <h2 className="bs-panel-bar-title">{subject.title}</h2>
+            </div>
             <div className="bs-panel-body bs-rail-note">
               {subject.description}
             </div>
-          ) : (
-            <>
-              <div className="bs-panel-body bs-rail-note">
-                {[proposed.fileName, proposed.updateLabel, proposed.date]
-                  .filter(Boolean)
-                  .join(" · ")}
-                {/* **A rename is a change even when not a word of the document
-                    changed**, and no comparison can show it: the identity
-                    survives a rename and the address does not, so both refs
-                    read identically. Said here, beside the version it is true
-                    of, rather than only on the screen that draws the diff. */}
-                {documentMove ? <p>{documentMove}.</p> : null}
-              </div>
-              <div className="bs-panel-foot">
-                <button
-                  className="bs-btn bs-btn--sm bs-btn-secondary"
-                  type="button"
-                  disabled={!proposed.ref || !onOpenOnBranch}
-                  onClick={() => onOpenOnBranch?.()}
-                >
-                  Open
-                </button>
-                {/* The question a reviewer actually opens a change with is
-                    "what is different?", not "what does it say?".
-
-                    **Held open for a document with nothing published yet.** It
-                    used to be disabled, because this screen could only draw a
-                    diff and a first version has no before. What it opens now
-                    is the whole change, where a new document is simply read —
-                    which is what a reviewer wants from a policy nobody has
-                    seen. The only thing that can still make it impossible is
-                    a change with no branch on record. */}
-                <button
-                  className="bs-btn bs-btn--sm bs-btn-secondary"
-                  type="button"
-                  disabled={!proposed.ref}
-                  onClick={() => onViewChange("compare")}
-                >
-                  Compare
-                </button>
-                <span className="bs-panel-bar-spacer" />
-                {/* A download arrow with the word "Download" beside it is the
-                    word twice. */}
-                {proposed.ref ? (
-                  <button
-                    className="bs-actionbtn"
-                    type="button"
-                    aria-label={`Download ${fileName ?? "this version"}`}
-                    title="Download"
-                    disabled={downloading || !fileName}
-                    onClick={() => onDownload(proposed.ref!, null)}
-                  >
-                    <Download size={15} strokeWidth={1.6} aria-hidden="true" />
-                  </button>
-                ) : null}
-              </div>
-            </>
-          )}
-        </div>
+          </div>
+        ) : null}
 
         <div className="bs-panel">
           <div className="bs-panel-bar">
@@ -759,9 +644,11 @@ export function DocumentChangeDetail({
             {actionState.showApproveConfirm ? (
               <div className="rev-decision-confirm">
                 <p className="rev-decision-confirm-line">
-                  {subject
-                    ? `Approve this change to ${documentName}? Your name and the time go on the record.`
-                    : `Approve version ${nextVersion} of ${documentName}? Your name and the time go on the record.`}
+                  {`Approve this change to ${
+                    subject || documentCount === 1
+                      ? documentName
+                      : `${documentCount} documents`
+                  }? Your name and the time go on the record.`}
                 </p>
                 <div className="rev-decision-row">
                   <button
@@ -874,6 +761,52 @@ export function DocumentChangeDetail({
           </div>
         )}
       </aside>
+
+      <div className="change-main">
+        {outcome ? (
+          <p className="rev-outcome" role="status">
+            {outcome}
+          </p>
+        ) : null}
+
+        {banner}
+        {documentPicker}
+
+        <ReviewTimeline
+          scope={scope}
+          change={change}
+          updates={updates}
+          resetsApprovals={resetsApprovals}
+          canParticipate={!isAnonymous}
+          currentUsername={currentUser}
+          blockOnUnresolvedThreads={blockOnUnresolvedThreads}
+          /* What an update did is what the Changes tab shows. */
+          onOpenUpdate={subject ? null : () => onViewChange("compare")}
+          onSummaryChange={(next) => {
+            setUnresolvedCount((prev) =>
+              prev === next.unresolvedCount ? prev : next.unresolvedCount,
+            );
+            setOpenThreadAuthors((prev) => {
+              const authors = new Set(
+                next.threads
+                  .filter((thread) => !thread.resolved)
+                  .map((thread) => thread.comments[0]?.author.login ?? "")
+                  .filter(Boolean),
+              );
+              // Identity churn here would re-render the reviewer list on
+              // every poll, so a set that says the same thing stays the same
+              // set.
+              if (
+                authors.size === prev.size &&
+                [...authors].every((login) => prev.has(login))
+              ) {
+                return prev;
+              }
+              return authors;
+            });
+          }}
+        />
+      </div>
     </article>
   );
 }

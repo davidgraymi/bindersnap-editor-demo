@@ -958,10 +958,16 @@ export async function fetchBinderDocuments(
    * policy under the name the change renamed it away from.
    */
   change?: number,
+  /**
+   * Read the binder at a branch, named: `/-/tree/{ref}`. Somebody else's
+   * unproposed draft is refused by the server.
+   */
+  ref?: string,
 ): Promise<WorkspaceDocumentListPayload> {
   const response = await BindersClient.listBinderDocuments(org, binder, {
     ...(draft ? { draft } : {}),
     ...(change ? { change: String(change) } : {}),
+    ...(ref ? { ref } : {}),
   });
   return response.data;
 }
@@ -1591,9 +1597,17 @@ export async function downloadBinderDocument(
 
 // Billing functions
 
-export async function fetchBillingStatus(): Promise<BillingStatusPayload> {
+/**
+ * One organization's billing. Billing is per organization, so every call
+ * names the one it is about; omitting it asks for the session's oldest.
+ */
+export async function fetchBillingStatus(
+  organization?: string | null,
+): Promise<BillingStatusPayload> {
   try {
-    const response = await BillingClient.getBillingStatus();
+    const response = await BillingClient.getBillingStatus(
+      organization ? { organization } : undefined,
+    );
     return response.data;
   } catch (error) {
     // 402 from the billing endpoint contains billing data (e.g. past_due status),
@@ -1609,16 +1623,24 @@ export async function fetchBillingStatus(): Promise<BillingStatusPayload> {
   }
 }
 
-export async function createCheckoutSession(): Promise<{ url: string }> {
+export async function createCheckoutSession(
+  organization?: string | null,
+): Promise<{ url: string }> {
   const response = await BillingClient.createBillingCheckout({
     idempotencyKey: crypto.randomUUID(),
+    ...(organization ? { organization } : {}),
   });
   return response.data;
 }
 
-export async function createPortalSession(): Promise<{ url: string }> {
+export async function createPortalSession(
+  organization?: string | null,
+  intent?: "cancel",
+): Promise<{ url: string }> {
   const response = await BillingClient.createBillingPortal({
     idempotencyKey: crypto.randomUUID(),
+    ...(organization ? { organization } : {}),
+    ...(intent ? { intent } : {}),
   });
   return response.data;
 }

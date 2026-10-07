@@ -86,6 +86,18 @@ test("a row says which binder, who opened it, and when", () => {
   expect(row?.meta).not.toContain("Hand Hygiene");
 });
 
+test("a row carries the comment count Home shows for the same change", () => {
+  const [discussed] = buildQueueRows(
+    [binder("clinical", [change({ comments: 4 } as Partial<PendingPR>)])],
+    "bob",
+    NOW,
+  );
+  const [quiet] = buildQueueRows([binder("clinical", [change()])], "bob", NOW);
+
+  expect(discussed?.commentCount).toBe(4);
+  expect(quiet?.commentCount).toBe(0);
+});
+
 /**
  * Worst news first: a refusal outranks a full count, because a change with
  * every approval and a reviewer asking for changes cannot publish — and
@@ -340,4 +352,15 @@ test("the page opens on the reader's own work, or on everything", () => {
       blocked: 0,
     }),
   ).toBe("all");
+});
+
+/** Your own name on every row of your own work is noise. */
+test("your own change says You, and somebody else's says their name", () => {
+  const [mine] = buildQueueRows([binder("clinical", [change()])], "alice", NOW);
+  expect(mine?.meta).toBe("#1 · You · updated 1 hour ago");
+
+  const named = change();
+  named.user = { login: "alice", full_name: "Alice Nguyen" };
+  const [theirs] = buildQueueRows([binder("clinical", [named])], "bob", NOW);
+  expect(theirs?.meta).toBe("#1 · Alice Nguyen · updated 1 hour ago");
 });

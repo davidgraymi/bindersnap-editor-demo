@@ -48,8 +48,6 @@ export interface HomeChangeRow {
   tone: ChangeStandingTone;
   /** How many comments are on it. */
   commentCount: number;
-  /** The button on the right of a "Waiting on you" row, when there is one. */
-  action: "Review" | "Publish" | null;
 }
 
 export type HomeDecidedOutcome = "published" | "closed";
@@ -170,8 +168,13 @@ function nextVersionOf(change: { nextVersion: number | null }): number | null {
   return change.nextVersion;
 }
 
-function submitterName(change: { user?: { login: string } | null }): string {
-  return capitalizeFirst(change.user?.login ?? "someone");
+function submitterName(change: {
+  user?: { login: string; full_name?: string } | null;
+}): string {
+  return (
+    change.user?.full_name?.trim() ||
+    capitalizeFirst(change.user?.login ?? "someone")
+  );
 }
 
 function classify(
@@ -208,12 +211,11 @@ function classify(
  * rather than a document that does not exist.
  */
 function describeChangeSubject(
-  document: HomeOpenDocument,
-  change: HomeOpenDocument["pendingPRs"][number],
+  binder: string,
+  slugPath: string | null | undefined,
 ): string {
-  const slugPath = change.documentSlugPath;
-  if (slugPath === null || slugPath === "") {
-    return formatDocumentName(document.repo.name);
+  if (slugPath === null || slugPath === undefined || slugPath === "") {
+    return formatDocumentName(binder);
   }
 
   const leaf = slugPath.split("/").pop() ?? slugPath;
@@ -249,7 +251,10 @@ export function buildOpenChangeRows(
         // control policy. The change carries which document it is about; the
         // binder's name is the fallback for a change that is about none —
         // a sign-off rules change, for instance.
-        documentName: describeChangeSubject(document, change),
+        documentName: describeChangeSubject(
+          document.repo.name,
+          change.documentSlugPath,
+        ),
         number: change.number,
         title: parseChangeTitle(change.body, change.user?.login ?? ""),
         kind,
@@ -257,6 +262,10 @@ export function buildOpenChangeRows(
           {
             number: change.number,
             submittedBy: change.user?.login ?? "",
+            // Your own change says "You", as "you approved" does: your name
+            // on every row of your own work is noise.
+            submittedByName:
+              change.user?.login === username ? "You" : change.user?.full_name,
             submittedAt: change.created_at ?? change.created ?? "",
             updatedAt: change.updated_at ?? undefined,
             approvalCount: 0,
@@ -273,12 +282,6 @@ export function buildOpenChangeRows(
           isRejected: change.isRejected ?? false,
         }),
         commentCount: (change as { comments?: number }).comments ?? 0,
-        action:
-          kind === "needs_review"
-            ? "Review"
-            : kind === "ready_to_publish"
-              ? "Publish"
-              : null,
         movedAt: toTime(
           change.updated_at ?? change.created_at ?? change.created,
         ),
@@ -304,10 +307,14 @@ export function selectSubmissions(rows: HomeChangeRow[]): HomeChangeRow[] {
 }
 
 function describeApprovers(change: ClosedChange, username: string): string {
-  const approvers = new Set(
+  // Login to name: a review carries both, and a sentence wants the name.
+  const approvers = new Map(
     change.reviews
       .filter((review) => review.state === "approved" && !review.dismissed)
-      .map((review) => review.author.login),
+      .map((review) => [
+        review.author.login,
+        review.author.fullName.trim() || capitalizeFirst(review.author.login),
+      ]),
   );
 
   if (approvers.size === 0) return "";
@@ -319,7 +326,7 @@ function describeApprovers(change: ClosedChange, username: string): string {
     return `you and ${others} others approved`;
   }
 
-  const names = [...approvers].map(capitalizeFirst);
+  const names = [...approvers.values()];
   return `${formatNameList(names)} approved`;
 }
 
@@ -328,7 +335,15 @@ function describeDecision(change: ClosedChange, username: string): string {
     return describeApprovers(change, username) || "no approvals were recorded";
   }
 
-  const decidedBy = capitalizeFirst(change.decidedBy ?? change.submittedBy);
+  const login = change.decidedBy ?? change.submittedBy;
+  // A review carries the name the login stands for; the reader is "you", as
+  // on the approvals line above.
+  const decidedBy =
+    login === username
+      ? "you"
+      : change.reviews
+          .find((review) => review.author.login === login)
+          ?.author.fullName.trim() || capitalizeFirst(login);
   return change.outcome === "declined"
     ? `declined by ${decidedBy}`
     : `withdrawn by ${decidedBy}`;
@@ -371,7 +386,12 @@ export function buildDecidedChangeRows(
         key: `${document.owner}/${document.repo}#${change.number}`,
         owner: document.owner,
         repo: document.repo,
-        documentName: formatDocumentName(document.repo),
+        // The document, as on an open row — the binder only when the change
+        // was about none of its documents.
+        documentName: describeChangeSubject(
+          document.repo,
+          change.documentSlugPath,
+        ),
         number: change.number,
         title: parseChangeTitle(change.body, change.submittedBy),
         outcome: change.outcome === "published" ? "published" : "closed",

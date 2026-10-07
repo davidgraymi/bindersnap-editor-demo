@@ -694,26 +694,6 @@ input {
   flex-wrap: wrap;
 }
 
-/* A person or a group in the organization's people list. */
-.org-person {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-3);
-  padding: var(--brand-space-3) var(--brand-space-4);
-  border-top: 1px solid var(--bs-rule-warm);
-}
-
-.org-person:first-child {
-  border-top: none;
-}
-
-.org-person-body {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-  flex: 1;
-}
-
 /* The binder's settings: the rules said in sentences, then the people. */
 .binder-settings-section {
   display: grid;
@@ -735,29 +715,18 @@ input {
 }
 
 /* A person's row plus whatever it has to say underneath — a reason a control
-   is disabled, or a confirmation. Grouped so the explanation stays attached to
-   the row that raised it rather than floating above the next person. */
-.org-person-block {
-  border-top: 1px solid var(--bs-rule-warm);
-}
-
-.org-person-block:first-child {
-  border-top: none;
-}
-
-.org-person-block > .org-person {
-  border-top: none;
-}
-
+   is disabled, or a confirmation. Grouped in one list item so the explanation
+   stays attached to the row that raised it rather than floating above the
+   next person; indented to the name, past the avatar. */
 .org-person-reason {
   margin: 0;
-  padding: 0 var(--brand-space-4) var(--brand-space-3) 3.25rem;
+  padding: 0 var(--brand-space-2) var(--brand-space-2) 44px;
 }
 
 .org-person-confirm {
   display: grid;
   gap: var(--brand-space-2);
-  margin: 0 var(--brand-space-4) var(--brand-space-4) 3.25rem;
+  margin: 0 var(--brand-space-2) var(--brand-space-3) 44px;
   padding: var(--brand-space-4);
   background: var(--bs-surface-2);
   border-radius: var(--brand-radius-md);
@@ -767,41 +736,31 @@ input {
 /* A group on the organization's People tab: a row that opens onto who is in
    it. Collapsed by default — the answer to "what groups are there" is the list,
    and the membership is the follow-up question. */
-.org-group {
-  border-top: 1px solid var(--bs-rule-warm);
+.org-group-chevron svg {
+  transition: transform var(--brand-transition-fast);
 }
 
-.org-group:first-child {
-  border-top: none;
+.org-group-head[aria-expanded="true"] .org-group-chevron svg {
+  transform: rotate(90deg);
 }
 
-.org-group-head {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-3);
-  width: 100%;
-  padding: var(--brand-space-3) var(--brand-space-4);
-  background: none;
-  border: none;
-  text-align: left;
-  cursor: pointer;
-  color: inherit;
-  font: inherit;
-}
-
-.org-group-head:hover {
-  background: var(--bs-surface-2);
+@media (prefers-reduced-motion: reduce) {
+  .org-group-chevron svg {
+    transition: none;
+  }
 }
 
 /* The level, beside the name, everywhere the group appears. A Gitea team
    carries one unit map, so this travels with the name and is never a per-binder
    choice. */
 .org-group-level {
-  margin-left: var(--brand-space-2);
-  font-size: var(--brand-text-label);
-  letter-spacing: var(--brand-tracking-wide);
-  text-transform: uppercase;
+  margin-left: var(--brand-space-1-5);
+  padding: 1px 7px;
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-surface-3);
   color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-xs);
+  font-weight: var(--brand-weight-medium);
 }
 
 /* Indented under its own row and tied to it by a rule, so an open group does
@@ -809,7 +768,7 @@ input {
 .org-group-body {
   display: grid;
   gap: var(--brand-space-5);
-  margin: 0 var(--brand-space-4) var(--brand-space-4);
+  margin: 0 var(--brand-space-2) var(--brand-space-4) 17px;
   padding-left: var(--brand-space-4);
   border-left: 2px solid var(--bs-rule-warm);
 }
@@ -848,8 +807,43 @@ input {
   min-width: 12rem;
 }
 
+/* An organization's binders: open changes, then when it last moved. Both
+   columns hold their width so the list reads straight down. */
+.org-binder-facts {
+  align-self: center;
+  gap: var(--brand-space-3);
+  color: var(--bs-text-faint);
+  font-size: var(--brand-text-ui-md);
+  font-variant-numeric: tabular-nums;
+}
+
+.org-binder-changes {
+  display: inline-flex;
+  min-width: 44px;
+  align-items: center;
+  gap: var(--brand-space-1);
+}
+
+.org-binder-updated {
+  min-width: 9.5rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .org-binder-changes:empty {
+    display: none;
+  }
+
+  /* A phone has the width for the name or the date, and the name wins. */
+  .org-binder-updated {
+    display: none;
+  }
+}
+
 .org-group-remove {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   width: 1.25rem;
@@ -868,57 +862,11 @@ input {
   color: var(--bs-status-danger-fg);
 }
 
-.org-group-form {
-  display: grid;
-  gap: var(--brand-space-4);
-  padding: var(--brand-space-4);
-  border: 1px solid var(--bs-rule-warm);
-  border-radius: var(--brand-radius-md);
-  justify-items: start;
-}
-
-/* A radio question — a group's level, a binder's visibility. Used wherever the
-   answer is one of a short list of named choices with a consequence worth
-   spelling out under each. */
-.org-visibility-choice {
-  display: grid;
-  gap: var(--brand-space-3);
-  margin: 0;
-  padding: 0;
-  border: none;
-}
-
-.org-choice {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: start;
-  gap: var(--brand-space-3);
-  cursor: pointer;
-}
-
-/* Aligned to the cap height of the label beside it rather than to the top of
-   the box, which left the control floating above its own text. */
-.org-choice > input[type="radio"] {
-  width: 1rem;
-  height: 1rem;
-  margin: 0.15rem 0 0;
-  accent-color: var(--brand-coral);
-}
-
-.org-choice > span {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-/* The create-binder form, behind the header's "New binder". Boxed, because it
-   is a thing being filled in rather than another section of the page. */
-.org-new-binder {
-  margin-top: 0;
-  padding: var(--brand-space-5);
-  border: 1px solid var(--bs-rule-warm);
-  border-radius: var(--brand-radius-md);
-  background: var(--bs-surface-1);
+/* The act at the foot of an organization form, at its own width rather than
+   stretched across the column of fields above it. */
+.org-people-actions {
+  display: flex;
+  gap: var(--brand-space-2);
 }
 
 /* The visibility question, above the list it changes the meaning of. Boxed,
@@ -935,7 +883,7 @@ input {
 /* The role control on a person's row. Narrower than the people picker beside
    it: it holds one of three words, and a full-width select would read as the
    more important of the two. */
-.org-person > .binder-role-select,
+.bs-row-right > .binder-role-select,
 .org-group-add > .binder-role-select {
   flex: 0 0 auto;
   width: auto;
@@ -946,6 +894,10 @@ input {
    the header, so a pane only has to space its own contents. */
 .binder-pane {
   display: grid;
+  /* One column, as wide as the pane and no wider. The implicit column is
+     `auto`, which grows to its widest child's minimum — on a phone the
+     history's filters and dates pushed it 23px past the screen's edge. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--brand-space-5);
   align-content: start;
   min-width: 0;
@@ -1035,10 +987,7 @@ input {
    under a row of tabs without shouting over them. Margins stay with each page,
    because how far a heading is from what follows it is a property of what
    follows it. */
-.doc-header-title,
-.docs-title,
-.activity-heading,
-.home-greeting {
+.doc-header-title {
   font-family: var(--brand-font-serif);
   font-size: 26px;
   font-weight: var(--brand-weight-semibold);
@@ -1289,7 +1238,15 @@ input {
 .doc-tab:hover,
 .doc-tab:focus-visible {
   color: var(--bs-text-primary);
-  outline: none;
+}
+
+/* A ring, not a colour: the active tab is already the darker colour, so a
+   keyboard landing on it changed nothing you could see. Inset, because on a
+   phone the strip scrolls sideways and clips anything drawn outside it. */
+.doc-tab:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: -2px;
+  border-radius: var(--brand-radius-sm);
 }
 
 .doc-tab--active {
@@ -1333,12 +1290,17 @@ input {
    picture of a document. */
 .doc-preview {
   display: grid;
+  /* minmax(0, …): the file bar's name does not wrap, and an auto column would
+     widen to fit it and push the card off a narrow screen. */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
   background: var(--bs-surface-1);
   border: 1px solid var(--bs-rule);
   border-radius: var(--brand-radius-xl);
   overflow: hidden;
-  min-height: 540px;
+  /* No floor of its own: the card ends where the document does, as a file
+     view on GitLab does. The body keeps a short one so a one-line document
+     still reads as a page, and a PDF's frame sets its own height. */
 }
 
 /* Slim chrome on a white sheet: the file it is, and the way to keep it. */
@@ -1358,7 +1320,22 @@ input {
   font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
   color: var(--bs-text-secondary);
-  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+/* One line at every width. The name is under the title already, so a long
+   one can lose its end here rather than push Download onto a second row. */
+.doc-preview-filename-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-preview-filename svg,
+.doc-preview-size,
+.doc-preview-download {
+  flex-shrink: 0;
 }
 
 .doc-preview-toolbar-spacer {
@@ -1373,9 +1350,29 @@ input {
 .doc-preview-download {
   display: inline-flex;
   align-items: center;
-  gap: var(--brand-space-2);
-  padding: var(--brand-space-2) var(--brand-space-3);
-  font-size: var(--brand-text-sm);
+  gap: var(--brand-space-1-5);
+}
+
+/* **On a phone, the arrow is the button.** A download arrow is read without its
+   word, and the word cost the filename beside it most of its line. The label
+   stays for a screen reader, so the button's name does not change. The button
+   keeps a 36px square so a thumb still finds it. */
+@media (max-width: 768px) {
+  .bs-btn.doc-preview-download {
+    justify-content: center;
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0;
+  }
+
+  .doc-preview-download-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 /* The document reads top to bottom with the page, the way a document should —
@@ -1615,24 +1612,26 @@ input {
   height: auto;
 }
 
-/* Summary rail — three sections, stated in the order they matter: what
-   somebody still has to decide, what is already on the record, and who is
-   here. Section titles are mono labels on the paper; only the cards under
-   them are white. */
+/* Summary rail — what somebody still has to decide, then what is already on
+   the record. Each is a panel of the shared grammar. */
 .doc-rail {
   display: grid;
   align-content: start;
-  gap: var(--brand-space-6);
+  gap: var(--brand-space-4);
   position: sticky;
   top: var(--brand-space-4);
 }
 
-.doc-rail-section {
-  display: grid;
-  gap: var(--brand-space-2-5);
-  align-content: start;
+/* A panel with nothing in it says so in one quiet line, not a whole empty
+   state: the rail is a summary, and "nothing" is a complete answer. */
+.doc-rail-empty {
+  margin: 0;
+  padding: var(--brand-space-2-5) var(--brand-space-2);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
 }
 
+/* Something is waiting on a decision: the rail's one coral element. */
 .doc-rail-title {
   font-size: var(--brand-text-ui-xs);
   font-weight: var(--brand-weight-medium);
@@ -1640,63 +1639,6 @@ input {
   text-transform: uppercase;
   color: var(--bs-text-muted);
   margin: 0;
-}
-
-/* The rail's one coral element, and the page's second: what is unfinished. */
-.doc-rail-title--urgent {
-  color: var(--bs-coral-text);
-}
-
-.doc-rail-card {
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-xl);
-  padding: 14px var(--brand-space-4);
-}
-
-.doc-rail-card--quiet {
-  background: none;
-  border-style: dashed;
-}
-
-.doc-rail-card--rows {
-  padding: var(--brand-space-1-5) var(--brand-space-4);
-}
-
-.doc-rail-card-title {
-  margin: 0;
-  font-size: var(--brand-text-ui-md);
-  font-weight: var(--brand-weight-medium);
-  color: var(--bs-text-primary);
-}
-
-.doc-rail-card-meta {
-  margin: 3px 0 var(--brand-space-2);
-  font-size: var(--brand-text-ui-sm);
-  color: var(--bs-text-muted);
-}
-
-.doc-rail-more,
-.doc-team-manage {
-  appearance: none;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--bs-coral-text);
-  cursor: pointer;
-  font-family: var(--brand-font-sans);
-  text-align: left;
-}
-
-.doc-rail-more,
-.doc-team-manage {
-  font-size: var(--brand-text-ui-sm);
-  font-weight: var(--brand-weight-medium);
-}
-
-.doc-rail-more:hover,
-.doc-team-manage:hover {
-  color: var(--brand-coral);
 }
 
 .doc-rail-note {
@@ -1708,44 +1650,9 @@ input {
   max-width: var(--brand-measure);
 }
 
-/* Versions: hairline-separated rows inside one card, not one card each. */
-.doc-rail-row {
-  appearance: none;
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-2-5);
-  width: 100%;
-  padding: 9px 0;
-  border: none;
-  border-top: 1px solid var(--bs-rule-warm);
-  background: none;
-  color: var(--bs-text-secondary);
-  font-family: var(--brand-font-sans);
-  font-size: var(--brand-text-ui-md);
-  text-align: left;
-  cursor: pointer;
-}
-
-.doc-rail-row:first-child {
-  border-top: none;
-}
-
-/* The earlier version somebody is actually reading. */
-.doc-rail-row--viewing {
-  background: var(--bs-coral-dim);
-}
-
-.doc-rail-row:hover .doc-rail-row-date {
-  color: var(--bs-text-primary);
-}
-
-.doc-rail-row:focus-visible {
-  outline: 2px solid var(--brand-coral);
-  outline-offset: -2px;
-}
-
 .doc-rail-version {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   font-variant-numeric: tabular-nums;
   font-size: var(--brand-text-label);
@@ -1760,52 +1667,6 @@ input {
 .doc-rail-version--current {
   background: var(--bs-green-dim);
   color: var(--brand-green);
-}
-
-.doc-rail-row-date {
-  flex: 1;
-}
-
-.doc-rail-row-note {
-  font-size: var(--brand-text-ui-sm);
-  color: var(--bs-text-muted);
-}
-
-/* A rail row that states a fact rather than going somewhere. */
-.doc-rail-row--static {
-  cursor: default;
-}
-
-/* Team: faces, then the way to the page that lists them properly. */
-.doc-team {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-2);
-  flex-wrap: wrap;
-}
-
-.doc-team-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--brand-radius-full);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  background: var(--bs-surface-2);
-  color: var(--bs-text-secondary);
-  font-size: var(--brand-text-ui-xs);
-  font-weight: var(--brand-weight-semibold);
-}
-
-.doc-team-avatar--more {
-  background: none;
-  border: 1px dashed var(--bs-rule);
-  color: var(--bs-text-muted);
-}
-
-.doc-team-manage {
-  margin-left: var(--brand-space-1);
 }
 
 /* Access & approvals — who is on the document, then what has to happen
@@ -2265,16 +2126,20 @@ input {
   color: var(--brand-green);
 }
 
+/* A sentence, so it wraps like one. As a flex row every fragment was its own
+   box, and on a phone " · Sep 23" dropped to a line of its own, dot first.
+   The padding centres a one-line event on the 28px node beside it. */
 .rev-event {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
   min-height: 28px;
   margin: 0;
-  padding-top: 5px;
+  padding-top: 7px;
   font-size: var(--brand-text-ui-sm);
+  line-height: 1.5;
   color: var(--bs-text-muted);
+}
+
+.rev-event > .rev-event-tag {
+  margin-left: 4px;
 }
 
 .rev-event-actor {
@@ -2298,6 +2163,10 @@ input {
   color: var(--bs-text-muted);
 }
 
+.rev-event-when {
+  white-space: nowrap;
+}
+
 /* ── One comment. A reply is what makes it a thread. ───────────────── */
 
 .rev-thread {
@@ -2311,10 +2180,17 @@ input {
   padding: 13px 18px;
 }
 
+/* Wraps as whole words: on a phone "Resolved" and "Show 1 reply" go to a line
+   of their own, rather than every item breaking in two to share one. */
 .rev-thread-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--brand-space-2);
+  gap: var(--brand-space-1) var(--brand-space-2);
+}
+
+.rev-thread-head > * {
+  white-space: nowrap;
 }
 
 .rev-thread-author {
@@ -2834,8 +2710,8 @@ input {
   font-weight: var(--brand-weight-semibold);
 }
 
-button.bs-knot {
-  cursor: pointer;
+a.bs-knot {
+  text-decoration: none;
 }
 
 .bs-knot--change:hover {
@@ -2876,9 +2752,28 @@ button.bs-knot {
   font: inherit;
   font-weight: var(--brand-weight-medium);
   text-align: left;
+  text-decoration: none;
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
+}
+
+.bs-spine-title {
+  color: inherit;
+  text-decoration: none;
+}
+
+.bs-spine-title:hover {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.bs-spine-title:focus-visible,
+.bs-versionrow-name:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 1px;
+  border-radius: var(--brand-radius-sm);
 }
 
 .bs-versionrow-name:hover {
@@ -3105,14 +3000,6 @@ button.bs-knot {
 
   .doc-spline-head {
     flex-wrap: wrap;
-  }
-
-  .doc-preview-toolbar {
-    flex-wrap: wrap;
-  }
-
-  .doc-preview-filename {
-    flex-basis: 100%;
   }
 
   .doc-preview-body {
@@ -3989,6 +3876,28 @@ button.bs-knot {
   border-radius: var(--brand-radius-full);
 }
 
+.bs-skeleton-shape--glyph {
+  width: 16px;
+  height: 16px;
+  border-radius: var(--brand-radius-xs);
+}
+
+/* A panel's rows, waiting. The shapes pulse; the panel around them does not,
+   because the panel is not what is loading. The label that goes first is for
+   screen readers, so it must not take the first row's place. */
+.bs-skeleton-panel .bs-panel-bar .bs-skeleton-line {
+  flex: 0 0 auto;
+  width: 120px;
+}
+
+.bs-skeleton-panel .bs-skeleton-label + .bs-row {
+  border-top: none;
+}
+
+.bs-skeleton-panel .bs-row--tall {
+  align-items: center;
+}
+
 /* A row of shapes: icon, body lines, and whatever sits on the right. */
 .bs-skeleton-row {
   display: flex;
@@ -4262,8 +4171,9 @@ button.bs-knot {
 
 .app-topnav {
   height: var(--brand-nav-height);
-  background: var(--bs-nav-bg);
-  border-bottom: 1px solid var(--bs-rule);
+  /* The same ground as the sidebar: the bar and the map are the frame, and
+     the sheet under them is the only thing that is raised. */
+  background: var(--bs-surface-2);
   display: flex;
   align-items: center;
   padding: 0 var(--brand-space-8);
@@ -4329,29 +4239,6 @@ button.bs-knot {
   white-space: nowrap;
 }
 
-.app-topnav-nav {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-1);
-  margin-left: var(--brand-space-6);
-  flex-shrink: 0;
-}
-
-/* The sidebar is the map above 768px and carries these same destinations plus
-   the ones the top bar never had, so the links come out rather than being said
-   twice. Below that the sidebar is display:none and these are the only
-   navigation there is — which is why they stay in the markup. The organization
-   switcher beside them is not part of this: it is a control, not a link, and it
-   is wanted at every width. */
-/* Above 768px the sidebar carries these destinations; below it the bottom bar
-   does. The top bar's own links are not the navigation at either width any
-   more — they were only ever there because there was nowhere else to put them,
-   and on a phone they pushed search and the account control off the edge of a
-   bar with overflow:hidden. */
-.app-topnav-nav {
-  display: none;
-}
-
 /* ── BOTTOM NAVIGATION ───────────────────────────────────────
    Phones only. The half of the screen a thumb reaches, and it
    gives the top bar back to search and the account.
@@ -4391,6 +4278,7 @@ button.bs-knot {
     border: none;
     background: transparent;
     color: var(--bs-text-muted);
+    text-decoration: none;
     cursor: pointer;
   }
 
@@ -4428,20 +4316,239 @@ button.bs-knot {
   }
 }
 
-/* The switcher sat inside .app-topnav-nav until the sidebar arrived, so hiding
-   that nav took it with it. It has its own box now: same place on screen, at
-   every width. */
-.app-topnav-org {
+/* ── LOCATION TRAIL ──────────────────────────────────────────
+   Organization / binder, in the top bar — GitHub's owner / repo.
+   The scope and never the page: where inside the binder you are is
+   the page path's job, inside the content (see PAGE PATH).
+──────────────────────────────────────────────────────────────── */
+
+.app-topnav-brand {
+  text-decoration: none;
+}
+
+.app-trail {
   display: flex;
   align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
   margin-left: var(--brand-space-6);
+}
+
+.app-trail-list {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.app-trail-org {
+  display: flex;
+  align-items: center;
   flex-shrink: 0;
 }
 
+/* Nothing to name yet: the separator after it would open the trail with a
+   slash. */
+.app-trail-org:empty + .app-trail-step > .app-trail-sep {
+  display: none;
+}
+
+.app-trail-step {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.app-trail-sep {
+  padding: 0 var(--brand-space-1);
+  color: var(--bs-text-faint);
+  font-size: var(--brand-text-ui-md);
+  user-select: none;
+}
+
+.app-trail-link,
+.app-trail-text {
+  display: block;
+  min-width: 0;
+  padding: var(--brand-space-1) var(--brand-space-1-5);
+  border-radius: var(--brand-radius-md);
+  overflow: hidden;
+  font-size: var(--brand-text-ui-md);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.app-trail-link {
+  color: var(--bs-text-secondary);
+  text-decoration: none;
+}
+
+.app-trail-link:hover {
+  color: var(--bs-text-primary);
+  background: var(--bs-surface-3);
+}
+
+.app-trail-link:focus-visible {
+  outline: 2px solid var(--bs-coral-text);
+  outline-offset: 1px;
+}
+
+.app-trail-text--current {
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-medium);
+}
+
+/* The chevron beside the binder's name: every other binder in the
+   organization. The name stays a link; this is the switcher. */
+.app-trail-switch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  margin-left: -2px;
+  padding: 0;
+  border: none;
+  border-radius: var(--brand-radius-md);
+  background: none;
+  color: var(--bs-text-muted);
+  cursor: pointer;
+}
+
+.app-trail-switch:hover,
+.app-trail-switch[aria-expanded="true"] {
+  background: var(--bs-surface-3);
+  color: var(--bs-text-primary);
+}
+
+.app-trail-switch:focus-visible {
+  outline: 2px solid var(--bs-coral-text);
+  outline-offset: 1px;
+}
+
+.binder-switcher {
+  min-width: 220px;
+}
+
+.binder-switcher-note {
+  margin: 0;
+  padding: var(--brand-space-1-5) var(--brand-space-2);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-sm);
+}
+
+.binder-switcher-foot {
+  margin-top: var(--brand-space-0-5);
+  padding-top: var(--brand-space-1);
+  border-top: 1px solid var(--bs-rule-warm);
+}
+
+.app-trail-org .app-topnav-link[aria-current="page"] {
+  color: var(--bs-text-primary);
+}
+
 @media (max-width: 768px) {
-  .app-topnav-org {
+  .app-trail {
     margin-left: var(--brand-space-3);
   }
+
+  /* The organization gives way before the search button does: a long name
+     ends in "…" rather than running under it. */
+  .app-trail-org,
+  .app-org-switcher,
+  .app-trail-org .app-topnav-link {
+    min-width: 0;
+    flex-shrink: 1;
+  }
+
+  .app-org-switcher {
+    display: flex;
+  }
+
+  /* Qualified to outrank the base rule further down, which lets this group
+     shrink — here that squeezed the search button to half its width. */
+  .app-topnav .app-topnav-right {
+    flex-shrink: 0;
+  }
+
+  /* **A phone keeps the organization and nothing after it.** The binder is
+     the first chip of the strip under the top bar, so naming it here too
+     would cost the search button beside it for a word already on screen. */
+  .app-trail-step {
+    display: none;
+  }
+}
+
+/* ── PAGE PATH ───────────────────────────────────────────────
+   Change requests / Change 4 / Compare, above a binder page's
+   title. Inside the content because it is about the content —
+   GitLab's file path, not its header. Quieter than the title it
+   leads to, and every step above the last is a link back up.
+──────────────────────────────────────────────────────────────── */
+
+.page-path {
+  margin: 0 0 var(--brand-space-3);
+}
+
+.page-path-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: var(--brand-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--brand-text-ui-md);
+}
+
+.page-path-step {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.page-path-sep {
+  padding: 0 var(--brand-space-1-5);
+  color: var(--bs-text-faint);
+  user-select: none;
+}
+
+.page-path-link,
+.page-path-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.page-path-link {
+  color: var(--bs-text-secondary);
+  text-decoration: none;
+  border-radius: var(--brand-radius-sm);
+}
+
+.page-path-link:hover {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.page-path-link:focus-visible {
+  outline: 2px solid var(--bs-coral-text);
+  outline-offset: 2px;
+}
+
+.page-path-text {
+  color: var(--bs-text-muted);
+}
+
+.page-path-text--current {
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-medium);
 }
 
 .app-workspace-pill {
@@ -4751,6 +4858,16 @@ button.bs-knot {
   text-decoration: none;
 }
 
+.app-topnav-link > svg {
+  flex-shrink: 0;
+}
+
+.app-topnav-link-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .app-topnav-link:hover {
   color: var(--bs-text-primary);
   background: var(--bs-surface-2);
@@ -5029,6 +5146,53 @@ button.bs-knot {
   flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
+  background: var(--bs-surface-2);
+}
+
+/* ── CANVAS ──────────────────────────────────────────────────
+   **The content, in a sheet of its own.** Everything about what
+   is on screen — a binder's files, the page, its path — sits on
+   one raised sheet; the things that are not about it (the brand,
+   the organization, search, the account, the map of the product)
+   sit on the warm ground around it. The sheet runs to the bottom
+   of the screen and rounds only its top corners, so it reads as
+   rising out of the frame rather than floating in it.
+──────────────────────────────────────────────────────────────── */
+
+.app-canvas {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0 var(--brand-space-2) 0 0;
+  overflow: hidden;
+  background: var(--bs-page-bg);
+  border: 1px solid var(--bs-rule);
+  border-bottom: none;
+  border-radius: var(--brand-radius-xl) var(--brand-radius-xl) 0 0;
+  box-shadow: var(--bs-shadow-sm);
+}
+
+@media (max-width: 768px) {
+  /* No sidebar beside it, so no ground to rise from on the sides: edge to
+     edge, keeping the rounded top that separates it from the bar. */
+  .app-canvas {
+    margin: 0;
+    border-left: none;
+    border-right: none;
+  }
+}
+
+@media (max-width: 640px) {
+  /* **The sheet still runs to the bottom of the screen.** In block flow it
+     ended where the page's content did, and a short page — a binder of three
+     folders, a one-version policy — stopped mid-screen on a hard edge with the
+     ground's coral wash showing under it. At least the screen below the bar,
+     so a short page is a sheet with room left on it, not a card. */
+  .app-canvas {
+    display: block;
+    overflow: visible;
+    min-height: calc(100dvh - var(--brand-nav-height));
+  }
 }
 
 /* ── SIDEBAR ─────────────────────────────────────────────────── */
@@ -5036,8 +5200,8 @@ button.bs-knot {
 .app-sidebar {
   width: 220px;
   flex-shrink: 0;
-  background: var(--bs-surface-1);
-  border-right: 1px solid var(--bs-rule);
+  /* On the ground, not a panel: the sheet beside it is the panel. */
+  background: transparent;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -5067,6 +5231,30 @@ button.bs-knot {
   margin-bottom: var(--brand-space-1);
 }
 
+/* The organization's heading is its name, so it is set as a name — the case
+   it is written in, and a building beside it — rather than as a shouted
+   category. It is a label, not a link: Binders under it is the way in. */
+.app-sidebar-label--scope {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  min-width: 0;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.app-sidebar-label--scope svg {
+  flex-shrink: 0;
+}
+
+.app-sidebar-label-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .app-sidebar-item {
   display: flex;
   align-items: center;
@@ -5080,7 +5268,9 @@ button.bs-knot {
   border: none;
   background: transparent;
   width: 100%;
+  box-sizing: border-box;
   text-align: left;
+  text-decoration: none;
   transition:
     color var(--brand-transition-base),
     background var(--brand-transition-base);
@@ -5088,12 +5278,12 @@ button.bs-knot {
 
 .app-sidebar-item:hover {
   color: var(--bs-text-primary);
-  background: var(--bs-surface-2);
+  background: var(--bs-surface-3);
 }
 
 .app-sidebar-item--active {
   color: var(--bs-text-primary);
-  background: var(--bs-surface-2);
+  background: var(--bs-surface-3);
   font-weight: var(--brand-weight-medium);
 }
 
@@ -5116,6 +5306,8 @@ button.bs-knot {
 
 .app-sidebar-item--muted {
   color: var(--bs-text-faint);
+  cursor: default;
+  pointer-events: none;
 }
 
 .app-sidebar-spacer {
@@ -5635,10 +5827,6 @@ button.bs-knot {
   .quick-find-all {
     white-space: nowrap;
   }
-
-  .app-topnav-nav {
-    margin-left: var(--brand-space-3);
-  }
 }
 
 /* ── APPROVE CONFIRMATION ────────────────────────────────────── */
@@ -5741,166 +5929,16 @@ button.bs-knot {
    HOME — the reader's queue of change requests
    ═════════════════════════════════════════════════════════════ */
 
-.home-greeting {
-  margin: 0 0 var(--brand-space-1);
-}
-
-.home-subtitle {
-  margin: 0 0 var(--brand-space-8);
-  font-size: var(--brand-text-sm);
-  color: var(--bs-text-muted);
-}
-
-.home-section {
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-xl);
-  overflow: hidden;
-  margin-bottom: var(--brand-space-6);
-}
-
-.home-section:last-child {
-  margin-bottom: 0;
-}
-
-.home-section-head {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-2-5);
-  padding: var(--brand-space-4) var(--brand-space-5);
-}
-
-.home-section-label {
-  font-size: var(--brand-text-label);
-  font-weight: var(--brand-weight-medium);
-  letter-spacing: var(--brand-tracking-wider);
-  text-transform: uppercase;
-  color: var(--bs-text-muted);
-}
-
-/* The one coral element on the page: the work that is actually blocked. */
-.home-section-label--urgent {
-  color: var(--bs-coral-text);
-}
-
-.home-section-count {
-  font-variant-numeric: tabular-nums;
-  font-size: var(--brand-text-label);
-  background: var(--bs-coral-dim);
-  color: var(--bs-coral-text);
-  border-radius: var(--brand-radius-full);
-  padding: 1px var(--brand-space-2);
-}
-
-.home-section-spacer {
-  flex: 1;
-}
-
 .home-section-link {
   font-size: var(--brand-text-ui-md);
   font-weight: var(--brand-weight-medium);
   color: var(--bs-coral-text);
-  background: transparent;
-  border: none;
-  padding: 0;
-  cursor: pointer;
+  text-decoration: none;
 }
 
 .home-section-link:hover {
   color: var(--brand-coral);
-}
-
-.home-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: var(--brand-space-4) var(--brand-space-5);
-  border-top: 1px solid var(--bs-rule-warm);
-  text-align: left;
-  cursor: pointer;
-  background: transparent;
-}
-
-.home-row:hover {
-  background: var(--bs-surface-2);
-}
-
-.home-row:focus-visible {
-  outline: 2px solid var(--brand-coral);
-  outline-offset: -2px;
-}
-
-.home-row--skeleton {
-  cursor: default;
-}
-
-.home-row-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--brand-radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.home-row-icon--urgent {
-  background: var(--bs-coral-dim);
-  color: var(--bs-coral-text);
-}
-
-.home-row-icon--done {
-  background: var(--bs-green-dim);
-  color: var(--brand-green);
-}
-
-.home-row-icon--quiet {
-  background: var(--bs-surface-2);
-  color: var(--bs-text-muted);
-}
-
-.home-row-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--brand-space-0-5);
-  flex: 1;
-  min-width: 0;
-}
-
-.home-row-title {
-  font-size: 14.5px;
-  font-weight: var(--brand-weight-medium);
-  color: var(--bs-text-primary);
-}
-
-.home-row-meta {
-  font-size: var(--brand-text-ui-sm);
-  color: var(--bs-text-muted);
-}
-
-.home-row-docref {
-  font-weight: var(--brand-weight-medium);
-  color: var(--bs-text-secondary);
-}
-
-.home-row-action {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--brand-space-1-5);
-  background: var(--bs-surface-1);
-  color: var(--bs-text-primary);
-  border: 1.5px solid var(--bs-rule);
-  border-radius: var(--brand-radius-md);
-  padding: 8px 14px;
-  font-family: var(--brand-font-sans);
-  font-size: var(--brand-text-ui-md);
-  font-weight: var(--brand-weight-semibold);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.home-row-action:hover {
-  border-color: var(--bs-text-faint);
+  text-decoration: underline;
 }
 
 .home-empty {
@@ -5919,157 +5957,14 @@ button.bs-knot {
   max-width: 52ch;
 }
 
-@media (max-width: 640px) {
-  .home-row {
-    flex-wrap: wrap;
-  }
-
-  .home-row-body {
-    flex-basis: 100%;
-    order: 1;
-  }
-
-  .home-row-icon {
-    order: 0;
-  }
-
-  .home-row-action {
-    order: 2;
-  }
-}
-
-/* ═════════════════════════════════════════════════════════════
-   ACTIVITY LOG
-   ═════════════════════════════════════════════════════════════ */
-
-.activity-page {
-  display: grid;
-  gap: var(--brand-space-6);
-  align-content: start;
-}
-
-.activity-header {
-  display: grid;
-  gap: var(--brand-space-2);
-}
-
-.activity-heading {
-  margin: 0;
-}
-
-.activity-subtitle {
-  margin: 0;
-  max-width: 760px;
-  color: var(--bs-text-faint);
-  font-size: var(--brand-text-ui-md);
-  line-height: var(--brand-leading-relaxed);
-}
-
-.activity-preview-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--brand-space-3);
-}
-
-.activity-preview-card {
-  display: grid;
-  gap: var(--brand-space-2);
-  padding: var(--brand-space-4) 18px;
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-md);
-}
-
-.activity-preview-label {
-  font-size: var(--brand-text-xs);
-  letter-spacing: var(--brand-tracking-wide);
-  text-transform: uppercase;
-  color: var(--bs-text-faint);
-}
-
-.activity-preview-value {
-  font-family: var(--brand-font-serif);
-  font-size: 20px;
-  font-weight: var(--brand-weight-semibold);
-  color: var(--bs-text-primary);
-}
-
-.activity-preview-copy {
-  margin: 0;
-  color: var(--bs-text-faint);
-  font-size: var(--brand-text-ui-md);
-  line-height: var(--brand-leading-relaxed);
-}
-
-.activity-placeholder {
-  padding: var(--brand-space-8);
-  display: grid;
-  gap: var(--brand-space-4);
-}
-
-.activity-placeholder-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--brand-space-3);
-}
-
-/* Below the page's own title, not above it. This was `--brand-text-h2` — a
-   landing-page size, up to 42px — inside a page whose name is 26px, so the
-   heading on a placeholder card outranked the heading on the page. "We need
-   less editorial and more useful tool" is what that looks like in one rule. */
-.activity-placeholder-title {
-  margin: var(--brand-space-2) 0 0;
-  font-family: var(--brand-font-serif);
-  font-size: var(--brand-text-h3);
-  font-weight: var(--brand-weight-semibold);
-  line-height: var(--brand-leading-tight);
-}
-
-.activity-placeholder-body {
-  margin: 0;
-  color: var(--bs-text-muted);
-  line-height: var(--brand-leading-relaxed);
-}
-
-.activity-placeholder-list {
-  display: grid;
-  gap: var(--brand-space-3);
-}
-
-.activity-placeholder-item {
-  display: grid;
-  gap: 4px;
-  padding: var(--brand-space-4);
-  background: var(--bs-surface-2);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-md);
-}
-
-.activity-placeholder-item-title {
-  font-family: var(--brand-font-serif);
-  font-size: var(--brand-text-body);
-  color: var(--bs-text-primary);
-}
-
-.activity-placeholder-item-copy {
-  color: var(--bs-text-faint);
-  font-size: var(--brand-text-ui-md);
-  line-height: var(--brand-leading-relaxed);
-}
-
-.activity-coming-soon {
-  margin-top: var(--brand-space-1);
-}
-
 /* ══════════════════════════════════════════════════════════════
    DOCUMENTS PAGE
    The library. Home is the queue; this is the shelf — one scope at
    a time, narrowed by people, and nothing else to set.
    ══════════════════════════════════════════════════════════════ */
 
-.docs-title {
-  margin: 0 0 var(--brand-space-5);
+.docs-page > .bs-pagehead {
+  margin-bottom: var(--brand-space-5);
 }
 
 /* ── Saved views and person filters ── */
@@ -6189,11 +6084,55 @@ button.bs-knot {
  * them look like duplicates.
  */
 .docs-binder-group {
-  margin-bottom: var(--brand-space-6);
+  margin-bottom: var(--brand-space-5);
 }
 
-.docs-binder-group .doc-rail-title {
-  margin-bottom: var(--brand-space-3);
+/* The binder's name in its panel's bar, and the way into it. Quiet until it
+   is pointed at, the way a group's name is in a code host's breadcrumb: it is
+   a heading first and a link second. */
+.docs-binder-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  padding: 2px var(--brand-space-1);
+  border-radius: var(--brand-radius-sm);
+  color: inherit;
+  text-decoration: none;
+}
+
+.docs-binder-link svg {
+  color: var(--bs-text-faint);
+}
+
+.docs-binder-link:hover {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.docs-binder-link:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 1px;
+}
+
+/* A version column as wide as "v99", so the status dots line up down the
+   list whether or not a row has a version on record. */
+.docs-row-version {
+  min-width: 36px;
+  text-align: right;
+  color: var(--bs-text-secondary);
+}
+
+@media (max-width: 720px) {
+  /* On a phone the name needs the width; the version is on the policy's own
+     page, one tap away. */
+  .docs-row-version {
+    display: none;
+  }
+
+  .docs-row .change-standing {
+    min-width: 0;
+  }
 }
 
 .docs-sorted-by {
@@ -6263,7 +6202,9 @@ button.bs-knot {
   border: none;
   border-top: 1px solid var(--bs-rule-warm);
   background: transparent;
+  color: inherit;
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
   box-sizing: border-box;
 }
@@ -6279,10 +6220,6 @@ button.bs-knot {
 .docs-list-item:focus-visible {
   outline: 2px solid var(--brand-coral);
   outline-offset: -2px;
-}
-
-.docs-list-item--skeleton {
-  cursor: default;
 }
 
 .docs-list-item-icon {
@@ -6365,12 +6302,6 @@ button.bs-knot {
   max-width: 52ch;
 }
 
-.docs-count {
-  margin: 14px 4px 0;
-  font-size: var(--brand-text-ui-sm);
-  color: var(--bs-text-faint);
-}
-
 /*
  * The trigger for the next page. It needs real height: a zero-height box is
  * not something an IntersectionObserver can reliably see, and this one has to
@@ -6403,10 +6334,6 @@ button.bs-knot {
     flex-direction: column;
     align-items: flex-start;
   }
-
-  .activity-preview-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 640px) {
@@ -6426,11 +6353,6 @@ button.bs-knot {
 
   .docs-pill {
     margin-left: 50px;
-  }
-
-  .activity-placeholder-head {
-    flex-direction: column;
-    align-items: flex-start;
   }
 }
 
@@ -6674,8 +6596,16 @@ button.bs-knot {
   font-weight: var(--brand-weight-semibold);
 }
 
-/* A branch name is machine text, so it is set in the monospace and chipped
-   like one — the same shape a code host gives it, so it reads as a place. */
+/* Where a change came from, chipped the way a code host chips a branch so it
+   reads as a place. Its label is a name (`describeBranch`), so it is set like
+   one; the raw branch is the tooltip. */
+.cmp-byline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+}
+
 .cmp-branch {
   display: inline-flex;
   align-items: center;
@@ -6684,8 +6614,9 @@ button.bs-knot {
   border-radius: var(--brand-radius-sm);
   background: var(--bs-status-info-bg);
   color: var(--bs-status-info-fg);
-  font-family: var(--brand-font-mono);
+  font-family: var(--brand-font-sans);
   font-size: var(--brand-text-ui-sm);
+  font-weight: var(--brand-weight-medium);
   text-decoration: none;
   overflow-wrap: anywhere;
 }
@@ -7117,6 +7048,49 @@ a.cmp-file-act {
   outline: none;
 }
 
+/* The top bar's "+": each thing you can make, with a line saying where. */
+.create-menu {
+  min-width: 260px;
+}
+
+.create-menu-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--brand-space-2);
+  padding: var(--brand-space-2);
+}
+
+.create-menu-item > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--bs-text-muted);
+}
+
+.create-menu-name {
+  display: block;
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-medium);
+}
+
+.create-menu-note {
+  display: block;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.app-menu-item--check {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+}
+
+.app-menu-item-check {
+  display: inline-flex;
+  width: var(--brand-icon-sm);
+  flex-shrink: 0;
+  color: var(--bs-coral-text);
+}
+
 /* Read-only mode — a delinquent organization can read everything and write
    nothing. Above the whole app rather than beside any one control, because
    the controls it explains are not drawn at all. */
@@ -7171,133 +7145,55 @@ a.cmp-file-act {
    go somewhere else to act on.
 ──────────────────────────────────────────────────────────────── */
 
-.queue-counters {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: var(--brand-space-3);
-  margin: var(--brand-space-5) 0 var(--brand-space-5);
+/* The list sits a step below the page's heading, as every other list does. */
+.queue-panel {
+  margin-top: var(--brand-space-3);
 }
 
-@media (max-width: 900px) {
-  .queue-counters {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+/* **Tabs with counts, in the list's own bar.** The segmented control a
+   binder's Changes tab already uses, so "which of these am I looking at" is
+   answered the same way on both. Five of them do not fit a phone, so the row
+   scrolls sideways rather than wrapping into a block of buttons. */
+.queue-counters {
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.queue-counters::-webkit-scrollbar {
+  display: none;
 }
 
 .queue-counter {
-  display: grid;
-  gap: var(--brand-space-1);
-  padding: var(--brand-space-4);
-  text-align: left;
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-lg);
-  cursor: pointer;
-  transition:
-    border-color var(--brand-transition-base),
-    background var(--brand-transition-base);
-}
-
-.queue-counter:hover {
-  border-color: var(--bs-coral-border);
-}
-
-.queue-counter:focus-visible {
-  outline: 2px solid var(--brand-coral);
-  outline-offset: 2px;
-}
-
-/* The pressed filter is the one the list below is showing, so it takes the
-   page's one coral edge rather than a fill — a filled tile beside four
-   outlined ones reads as a status, not as a selection. */
-.queue-counter--active {
-  border-color: var(--brand-coral);
-  background: var(--bs-coral-glow);
-}
-
-.queue-counter-value {
-  font-size: var(--brand-text-h3);
-  font-weight: var(--brand-weight-semibold);
-  color: var(--bs-text-primary);
-  font-variant-numeric: tabular-nums;
-}
-
-.queue-counter-label {
-  font-size: var(--brand-text-sm);
-  color: var(--bs-text-muted);
-}
-
-.queue-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-lg);
-  overflow: hidden;
-}
-
-.queue-row + .queue-row {
-  border-top: 1px solid var(--bs-rule-warm);
-}
-
-.queue-row-btn {
-  width: 100%;
-  display: flex;
-  align-items: flex-start;
-  gap: var(--brand-space-4);
-  padding: var(--brand-space-4);
-  border: none;
-  background: none;
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--brand-transition-base);
-}
-
-.queue-row-btn:hover,
-.queue-row-btn:focus-visible {
-  background: var(--bs-surface-2);
-  outline: none;
-}
-
-.queue-row-main {
-  display: grid;
-  gap: var(--brand-space-1);
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.queue-row-title {
-  font-size: var(--brand-text-body);
-  font-weight: var(--brand-weight-medium);
-  color: var(--bs-text-primary);
-  overflow-wrap: anywhere;
-}
-
-/* Binder, document, who sent it, when it last moved. The four facts that tell
-   one change from another when they are stacked fifty deep. */
-.queue-row-meta {
-  font-size: var(--brand-text-sm);
-  color: var(--bs-text-muted);
-  overflow-wrap: anywhere;
-}
-
-.queue-row-standing {
-  display: flex;
+  display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
-  gap: var(--brand-space-3);
-  flex: none;
+  gap: var(--brand-space-1-5);
+  white-space: nowrap;
 }
 
-@media (max-width: 720px) {
-  .queue-row-btn {
-    flex-direction: column;
-    gap: var(--brand-space-2);
-  }
+/* The count, as a code host's tab carries one: a small grey pill after the
+   word, in figures that do not shift as they change. */
+.queue-counter-value {
+  min-width: 18px;
+  padding: 0 var(--brand-space-1-5);
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-surface-3);
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-sm);
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+  text-align: center;
+}
 
-  .queue-row-standing {
-    flex-wrap: wrap;
-  }
+.queue-counter[aria-pressed="true"] .queue-counter-value {
+  background: var(--bs-surface-1);
+}
+
+.queue-counter-value--yours,
+.queue-counter[aria-pressed="true"] .queue-counter-value--yours {
+  background: var(--bs-coral-dim);
+  color: var(--bs-coral-text);
 }
 
 /* Two acts side by side in a page header — "New folder" beside "Add a policy",
@@ -7356,6 +7252,7 @@ a.cmp-file-act {
   cursor: pointer;
   font: inherit;
   color: inherit;
+  text-decoration: none;
 }
 
 .binder-tree-main:focus-visible {
@@ -7816,6 +7713,11 @@ a.cmp-file-act {
 }
 
 /* The facts about the subject, on the line under its name. */
+/* A phrase that reads wrong split, like "becomes v2 when published". */
+.bs-nowrap {
+  white-space: nowrap;
+}
+
 .bs-facts {
   display: flex;
   flex-wrap: wrap;
@@ -7862,6 +7764,14 @@ a.cmp-file-act {
   color: var(--bs-text-muted);
   font-size: var(--brand-text-ui-xs);
   font-weight: var(--brand-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A count that is somebody's to-do — waiting on you, waiting on a decision —
+   in the brand colour, so it is the one the eye goes to. */
+.bs-section-count--attention {
+  background: var(--bs-coral-dim);
+  color: var(--bs-coral-text);
 }
 
 .bs-section-spacer {
@@ -7959,6 +7869,15 @@ a.cmp-file-act {
   border-top: none;
 }
 
+/* **A row wrapped in its own `<li>` is still one row of a list.** A link or a
+   button inside an item is that item's first child, so the rule above took
+   the hairline off every one of them and the list ran together — "What this
+   change does" had been drawn that way since it was written. Drawn between
+   the items instead. */
+.bs-row-list > li + li > .bs-row:first-child {
+  border-top: 1px solid var(--bs-rule-warm);
+}
+
 button.bs-row,
 a.bs-row {
   cursor: pointer;
@@ -8001,6 +7920,13 @@ a.bs-row:focus-visible {
   place-items: center;
   width: 18px;
   color: var(--bs-text-faint);
+}
+
+/* A tall row's icon belongs to its name, not to the row: one line of the
+   name's height, so the two share a centre instead of sharing a top edge. */
+.bs-row--tall > .bs-row-icon {
+  height: 1lh;
+  font-size: var(--brand-text-sm);
 }
 
 .bs-row-body {
@@ -8140,6 +8066,18 @@ a.bs-row:focus-visible {
   font-size: var(--brand-text-ui-md);
 }
 
+/* What each choice means, as a picture beside its name: a building for the
+   whole organization, a lock for a closed list. */
+.bs-choice-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--bs-text-muted);
+}
+
+.bs-choice:has(input:checked) .bs-choice-icon {
+  color: var(--bs-coral-text);
+}
+
 /* ── Container three: the note ────────────────────────────────────────────
    Empty states and consequences, and nothing else. A note that is always
    there is furniture; the sign-off empty state earns its place precisely
@@ -8209,6 +8147,20 @@ a.bs-row:focus-visible {
 .bs-empty p {
   max-width: var(--brand-measure);
   margin: 0;
+}
+
+/* A page for an address with nothing behind it. */
+.not-found {
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-12) 0;
+}
+
+.not-found-code {
+  color: var(--bs-text-faint);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--brand-tracking-wider);
 }
 
 /* ── Buttons that were missing ────────────────────────────────────────── */
@@ -8377,6 +8329,13 @@ a.bs-row:focus-visible {
   cursor: pointer;
 }
 
+/* Where a row's action would be, on the one row that has none — so the
+   controls before it line up with every other row's. */
+.bs-rowact-slot {
+  flex-shrink: 0;
+  width: 28px;
+}
+
 .bs-rowact:hover:not(:disabled) {
   border-color: var(--bs-rule);
   background: var(--bs-surface-1);
@@ -8411,6 +8370,11 @@ a.bs-row:focus-visible {
   min-width: 14rem;
 }
 
+.history-byline {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
 /* ── Settings ─────────────────────────────────────────────────────────────
    A form wants a measure. At the full column a person's row puts their name
    at one edge and their role at the other, with the width of the page
@@ -8422,6 +8386,14 @@ a.bs-row:focus-visible {
 
 .bs-settings .bs-fields {
   max-width: none;
+}
+
+/* **A field is as wide as what goes in it.** A name typed into a box the
+   width of the page read as a paragraph waiting to be written, and a choice
+   of three levels spread its one-line notes across 860px. The list above the
+   form keeps the column; the form keeps a measure. */
+.bs-settings .bs-fields > .bs-field {
+  max-width: 32rem;
 }
 
 /* Compound selectors: the token file is loaded again after this one, so a
@@ -8438,6 +8410,100 @@ a.bs-row:focus-visible {
 
 .bs-input.bs-settings-level {
   width: 8.5rem;
+}
+
+/* ── The offer ────────────────────────────────────────────────────────────
+   One panel, in the paywall and on Billing: the plan, its price, what it
+   gets you, and the button. */
+.plan-offer-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-4) var(--brand-space-4) var(--brand-space-2);
+}
+
+.plan-offer-name {
+  margin: 0;
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-body-lg);
+  color: var(--bs-text-primary);
+}
+
+.plan-offer-for {
+  margin: 2px 0 0;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+.plan-offer-price {
+  margin: 0;
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-body-lg);
+  font-weight: var(--brand-weight-semibold);
+  white-space: nowrap;
+}
+
+.plan-offer-list {
+  display: grid;
+  gap: var(--brand-space-1-5);
+  margin: 0;
+  padding: var(--brand-space-2) var(--brand-space-4) var(--brand-space-4);
+  list-style: none;
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-sm);
+}
+
+.plan-offer-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--brand-space-2);
+}
+
+.plan-offer-list svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: var(--brand-green-dark);
+}
+
+.plan-offer .bs-panel-foot-note {
+  flex: 1 1 14rem;
+}
+
+.paywall {
+  width: min(100%, 560px);
+}
+
+.paywall-lede {
+  margin: var(--brand-space-2) 0 0;
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-sm);
+}
+
+/* Billing: one panel saying where the organization stands, at the measure
+   the other settings pages keep. */
+.billing-page > .bs-panel,
+.billing-page > .bs-note {
+  max-width: 860px;
+}
+
+.billing-page .bs-panel-bar .bs-status {
+  margin-left: auto;
+}
+
+.billing-detail {
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-sm);
+  white-space: normal;
+}
+
+.billing-retry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--brand-space-1-5);
 }
 
 .bs-settings-value {
@@ -8482,6 +8548,8 @@ a.bs-row:focus-visible {
   font-size: var(--brand-text-ui-md);
   font-weight: var(--brand-weight-semibold);
   text-align: left;
+  text-decoration: none;
+  box-sizing: border-box;
   cursor: pointer;
 }
 
@@ -8523,8 +8591,8 @@ a.bs-row:focus-visible {
 
 /* ── The binder's screens on a phone ───────────────────────────────────────
    Below 768px there is no sidebar, so the binder's own screens are a strip
-   under the page title — the shape the tab bar had, which already worked at
-   that width. It scrolls sideways rather than wrapping. */
+   at the top of every binder screen — the shape the tab bar had, which
+   already worked at that width. It scrolls sideways rather than wrapping. */
 
 .binder-strip {
   display: none;
@@ -8559,7 +8627,15 @@ a.bs-row:focus-visible {
     font-size: var(--brand-text-ui-md);
     font-weight: var(--brand-weight-medium);
     white-space: nowrap;
+    text-decoration: none;
     cursor: pointer;
+  }
+
+  /* A round chip the same height as the worded ones. */
+  .binder-strip-item--icon {
+    justify-content: center;
+    min-width: 32px;
+    padding: 0;
   }
 
   .binder-strip-item--active {
@@ -8854,8 +8930,14 @@ a.bs-row:focus-visible {
 
 .change-detail.bs-with-rail {
   display: grid;
+  /* The head and the discussion share the left column; the rail spans both
+     beside them. In the document it sits between the two, which is where a
+     narrow screen stacks it. The last row takes the slack, so a rail taller
+     than a short discussion never opens a gap under the tabs. */
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
+.change-head,
 .change-main {
   display: grid;
   gap: var(--brand-space-4);
@@ -8863,9 +8945,33 @@ a.bs-row:focus-visible {
   min-width: 0;
 }
 
+@media (min-width: 901px) {
+  .change-detail > .change-head {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .change-detail > .bs-rail {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  .change-detail > .change-main {
+    grid-column: 1;
+    grid-row: 2;
+  }
+}
+
 .bs-rail-note {
   color: var(--bs-text-muted);
   font-size: var(--brand-text-ui-md);
+}
+
+.change-proposed-name {
+  margin: 0 0 2px;
+  color: var(--bs-text-primary);
+  font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 /* The mark on a reviewer this change is actually held for. Only "Required" is
@@ -9003,6 +9109,20 @@ a.bs-row:focus-visible {
   cursor: pointer;
 }
 
+/* A change's title is a sentence; in a 340px menu it ends in an ellipsis
+   rather than off the edge. */
+.bs-draftmenu-pick {
+  min-width: 0;
+}
+
+.bs-draftmenu-pick .bs-row-name,
+.bs-draftmenu-pick .bs-row-meta {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .bs-draftmenu-pick:disabled {
   cursor: default;
 }
@@ -9020,6 +9140,56 @@ a.bs-row:focus-visible {
 
 .bs-draftmenu-split {
   border-top: 1px solid var(--bs-rule);
+}
+
+/* A line inside the menu where a list has nothing in it yet. */
+.bs-draftmenu-note {
+  margin: 0;
+  padding: var(--brand-space-1-5) var(--brand-space-2);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+/* ── Which version of the binder the tree is ──────────────────────────────
+   GitLab's branch selector, first in the tree's bar. Quiet on the record,
+   where it is a choice nobody has made yet; tinted the branch chip's blue
+   anywhere else, so the one fact that makes the page not the record is the
+   loudest thing over the tree. */
+.bs-refpick {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  max-width: 280px;
+  min-height: 32px;
+  padding: 0 var(--brand-space-1) 0 var(--brand-space-1-5);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-1);
+  color: var(--bs-text-primary);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-medium);
+  cursor: pointer;
+}
+
+.bs-refpick:hover {
+  border-color: var(--bs-text-muted);
+}
+
+.bs-refpick--branch {
+  border-color: transparent;
+  background: var(--bs-status-info-bg);
+  color: var(--bs-status-info-fg);
+}
+
+.bs-refpick--branch:hover {
+  border-color: var(--bs-status-info-fg);
+}
+
+.bs-refpick-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .bs-draftmenu-new {
@@ -9132,21 +9302,18 @@ a.bs-row:focus-visible {
   gap: var(--brand-space-2);
 }
 
-/* Which branch a document is being read on, said before anything on it. The
-   page is the document's own — its title, its full width — and what makes it a
-   proposal rather than the record is a fact about the ref. */
-.doc-on-change {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--brand-space-3);
-}
-
 /* ── A change request in a list ────────────────────────────────────────────
    Four facts: what it asks for, who asked and when, where it stands, how much
    conversation is on it. Everything else belongs on the change's own page,
    where there is room to say it properly. */
+
+/* Where a change is, on a list that spans more than one place — Home and the
+   review queue. A shade darker than the meta it leads, so the eye can find
+   "which binder" without the row growing a column for it. */
+.change-row-context {
+  color: var(--bs-text-secondary);
+  font-weight: var(--brand-weight-medium);
+}
 
 .change-row-open {
   display: flex;
@@ -9158,6 +9325,8 @@ a.bs-row:focus-visible {
   border: none;
   background: none;
   font: inherit;
+  color: inherit;
+  text-decoration: none;
   text-align: left;
   cursor: pointer;
 }
@@ -9176,6 +9345,29 @@ a.bs-row:focus-visible {
 .change-row-right {
   flex-shrink: 0;
   gap: var(--brand-space-4);
+}
+
+/* **On a phone the title gets the width.** The standing is a 148px column so
+   it lines up down a list on a desk, and at 390px that column left a change's
+   title three words a line. It goes under the title instead, lined up with
+   it, and gives up the column it no longer needs. */
+@media (max-width: 640px) {
+  .change-row {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    padding-top: var(--brand-space-1-5);
+    padding-bottom: var(--brand-space-1-5);
+  }
+
+  .change-row-right {
+    width: 100%;
+    padding-left: calc(18px + var(--brand-space-1-5));
+    gap: var(--brand-space-2);
+  }
+
+  .change-row .change-standing {
+    min-width: 0;
+  }
 }
 
 /* **A word, not a pill.** A pill says "this is unusual"; on every row of
@@ -9506,6 +9698,7 @@ a.bs-row:focus-visible {
   font-family: var(--brand-font-sans);
   font-size: var(--brand-text-ui-sm);
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
   transition:
     color var(--brand-transition-base),
@@ -9564,4 +9757,272 @@ a.bs-row:focus-visible {
    taken their share. */
 .docw-page--document {
   max-width: none;
+}
+
+/* ── A change request's header ─────────────────────────────────────────────
+   The badge that says whether it is still open, and Overview · Changes under
+   the title — the same header on both of the change's screens. */
+
+.change-state {
+  gap: var(--brand-space-1);
+  margin-right: var(--brand-space-2);
+  vertical-align: 1px;
+}
+
+.change-tabs {
+  margin: var(--brand-space-4) 0 var(--brand-space-5);
+  border-bottom: 1px solid var(--bs-rule);
+}
+
+.change-tabs .doc-tab {
+  text-decoration: none;
+}
+
+/* The card and the tree it sits over are one thing, so they sit closer to
+   each other than to the header. */
+.binder-home {
+  display: grid;
+  gap: var(--brand-space-1-5);
+  align-content: start;
+}
+
+/* ── The binder's latest change ───────────────────────────────────────────
+   GitLab's last-commit card, above the files: who, what, when, and the way to
+   the rest of the record. One line on a desktop; the actions drop under the
+   words on a phone rather than squeezing the title. */
+
+.binder-latest {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  padding: var(--brand-space-1-5) var(--brand-space-2);
+}
+
+/* The same card on a branch, saying which branch — in the picker's blue, so
+   the two read as one statement: this is not the published binder. */
+.binder-latest--branch {
+  border-color: var(--bs-status-info-bg);
+  background: color-mix(
+    in srgb,
+    var(--bs-status-info-bg) 45%,
+    var(--bs-surface-1)
+  );
+}
+
+.binder-latest-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bs-status-info-bg);
+  color: var(--bs-status-info-fg);
+}
+
+.binder-latest--loading {
+  min-height: 62px;
+  box-sizing: border-box;
+}
+
+.binder-latest-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.binder-latest-title {
+  display: block;
+  overflow: hidden;
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-semibold);
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+a.binder-latest-title:hover {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+a.binder-latest-title:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 1px;
+  border-radius: var(--brand-radius-sm);
+}
+
+.binder-latest-meta {
+  margin: 2px 0 0;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.binder-latest-right {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+}
+
+.binder-latest-count {
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+  white-space: nowrap;
+}
+
+.binder-latest-history {
+  gap: 6px;
+  text-decoration: none;
+}
+
+@media (max-width: 640px) {
+  .binder-latest {
+    flex-wrap: wrap;
+  }
+
+  .binder-latest-title {
+    white-space: normal;
+  }
+
+  .binder-latest-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+/* ── A new binder ─────────────────────────────────────────────────────────
+   GitLab's create-project form: one column of fields, the choice of who can
+   see it as cards with an icon each, and the act at the foot. */
+
+.new-binder-legend {
+  margin-bottom: var(--brand-space-1);
+}
+
+.new-binder-address code {
+  font-family: var(--brand-font-mono);
+  font-size: 0.95em;
+  color: var(--bs-text-secondary);
+}
+
+.new-binder-address--problem {
+  color: var(--bs-status-danger-fg);
+}
+
+.new-binder-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--brand-space-1);
+  padding-top: var(--brand-space-2);
+  border-top: 1px solid var(--bs-rule-warm);
+}
+
+.new-binder-actions .bs-btn {
+  text-decoration: none;
+}
+
+/* ── Settings groups ──────────────────────────────────────────────────────
+   GitLab's settings hierarchy: a named group with a sentence under it, its
+   settings as subsections, and a rule between groups. The subsections keep
+   their own 15px titles; the group title is the step up. */
+
+.bs-settings {
+  display: flex;
+  flex-direction: column;
+}
+
+.bs-settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-4) 0;
+  border-top: 1px solid var(--bs-rule-warm);
+}
+
+.bs-settings-group:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+.bs-settings-group-head {
+  display: grid;
+  gap: var(--brand-space-0-5);
+}
+
+.bs-settings-group-title {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  margin: 0;
+  color: var(--bs-text-primary);
+  font-family: var(--brand-font-sans);
+  font-size: 1.25rem;
+  font-weight: var(--brand-weight-semibold);
+  letter-spacing: -0.012em;
+  line-height: var(--brand-leading-snug);
+}
+
+.bs-settings-group-note {
+  max-width: var(--brand-measure);
+  margin: 0;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+.bs-settings-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-4);
+}
+
+/* A member's role and remove sit on the middle of the row, not its top line:
+   they are about the person, not about the first line of text. */
+.org-person-block > .bs-row--tall {
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  .org-person-block > .bs-row--tall {
+    flex-wrap: wrap;
+  }
+
+  .org-person-block .bs-row-body {
+    flex-basis: calc(100% - 48px);
+  }
+
+  .org-person-block .bs-row-right {
+    margin-left: 32px;
+  }
+}
+
+/* A version's date is a fact about the row, not its name. */
+.doc-rail .bs-row-body {
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-md);
+}
+
+/* **A page's own actions are the compact size**, as GitLab's are beside a
+   project's name. At 40px, "Add a document" and "Edit" stood taller than the
+   title's second line and were the heaviest things on the page — heavier than
+   the list they act on. The size `.bs-btn--sm` names, so the head's buttons
+   match every other row of controls in the app. */
+.bs-pagehead-actions .bs-btn,
+.doc-header-top > .bs-btn {
+  min-height: 32px;
+  padding: var(--brand-space-1-5) var(--brand-space-4);
+  font-size: var(--brand-text-ui-sm);
+}
+
+/* An icon and its label never touch. Set once, here, rather than remembered
+   per button: the archive link at the foot of a binder forgot, and read
+   "▭1 archived document". */
+.bs-btn {
+  gap: var(--brand-space-1-5);
+}
+
+/* The busy spinner is spaced by that gap too, not by a margin of its own. */
+.bs-btn[aria-busy="true"]::before {
+  margin-right: 0;
 }

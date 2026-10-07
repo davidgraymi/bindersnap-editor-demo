@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -10,6 +11,8 @@ import "./app.css";
 
 import { AppShell } from "./components/AppShell";
 import { BillingPage } from "./components/BillingPage";
+import { PaywallDialog } from "./components/PaywallDialog";
+import { PaywallProvider } from "./paywallContext";
 import { OrganizationSetupPage } from "./components/OrganizationSetupPage";
 import { BindersnapLogoMark } from "./components/BindersnapLogoMark";
 import { LandingPage } from "./components/LandingPage";
@@ -36,6 +39,7 @@ import { ReadOnlyProvider } from "./readOnlyContext";
 import { ReadOnlyBanner } from "./components/ReadOnlyBanner";
 import {
   asShellRoute,
+  canonicalLocation,
   getRoute,
   isLegacyInboxPath,
   isProtectedAppRoute,
@@ -45,13 +49,7 @@ import {
 import { resolveSignupPrefill } from "./authIntent";
 
 type AuthView =
-  | "loading"
-  | "callback"
-  | "landing"
-  | "login"
-  | "billing"
-  | "createOrganization"
-  | "app";
+  "loading" | "callback" | "landing" | "login" | "createOrganization" | "app";
 type AuthMode = "signin" | "signup";
 
 interface LoginPageProps {
@@ -68,6 +66,19 @@ interface LoginPageProps {
     email: string,
     password: string,
   ) => Promise<void>;
+}
+
+/**
+ * Put an address from before `/-/` into its current form, in place.
+ *
+ * Before anything reads it — the screens below read the address bar
+ * themselves — and as a replace, so Back does not return to the old form.
+ */
+function settleAddress(): void {
+  const { pathname, search, hash } = window.location;
+  const next = canonicalLocation(pathname, search, hash);
+  if (next !== null)
+    window.history.replaceState(window.history.state, "", next);
 }
 
 function navigateTo(route: AppRoute, replace = false): void {
@@ -276,9 +287,10 @@ function LoginPage({
 }
 
 export function App() {
-  const [route, setRoute] = useState<AppRoute>(() =>
-    getRoute(window.location.pathname),
-  );
+  const [route, setRoute] = useState<AppRoute>(() => {
+    settleAddress();
+    return getRoute(window.location.pathname);
+  });
   const [user, setUser] = useState<SessionUser | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(
     () => route.kind !== "callback",
@@ -319,12 +331,75 @@ export function App() {
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState<number | null>(null);
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false);
   const [cancelAt, setCancelAt] = useState<number | null>(null);
+  const [trialEndsAt, setTrialEndsAt] = useState<number | null>(null);
+  const [canManageBilling, setCanManageBilling] = useState(false);
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  const paywall = useMemo(() => ({ open: () => setPaywallOpen(true) }), []);
+  const [hasBillingAccount, setHasBillingAccount] = useState(false);
   const [plan, setPlan] = useState<{
     amount: number;
     currency: string;
     interval: string;
     formatted: string;
   } | null>(null);
+  /**
+   * Whose billing the app is showing: the organization on screen.
+   *
+   * Billing is per organization, so a person in two of them has two answers
+   * to "may I write here?" and "what do I pay?". The app used to ask once, and
+   * the server answered for their oldest organization wherever they were —
+   * so a second organization read as paid for by the first, and could not be
+   * subscribed to at all. Pages that belong to no one organization (Home,
+   * Documents, Change requests) leave it null, which asks for the oldest.
+   */
+  const billingOrganization =
+    route.kind === "organization" ||
+    route.kind === "binder" ||
+    route.kind === "binderDocument" ||
+    route.kind === "billing"
+      ? (route.org ?? null)
+      : null;
+  // Read by `loadBilling`, which `refreshSession` calls from a callback that
+  // must not change identity whenever the route does.
+  const billingOrganizationRef = useRef(billingOrganization);
+  billingOrganizationRef.current = billingOrganization;
+  // Which request is the latest. Walking from one organization to another
+  // while a read is in flight must not let the first answer land last.
+  const billingRequest = useRef(0);
+
+  const loadBilling = useCallback(async () => {
+    const request = ++billingRequest.current;
+    setSubscriptionStatus("loading");
+    setHasBillingStatusError(false);
+    try {
+      const billing = await fetchBillingStatus(billingOrganizationRef.current);
+      if (request !== billingRequest.current) return;
+      setSubscriptionStatus(
+        resolveSubscriptionStatus(billing.status, billing.hasAccess),
+      );
+      setAccessSource(billing.accessSource ?? null);
+      setBillingOrganizationName(billing.organization?.name ?? null);
+      setHasBillingStatusError(false);
+      setCurrentPeriodEnd(billing.currentPeriodEnd);
+      setCancelAtPeriodEnd(billing.cancelAtPeriodEnd);
+      setCancelAt(billing.cancelAt);
+      setPlan(billing.plan);
+      setTrialEndsAt(billing.trialEndsAt);
+      setCanManageBilling(billing.canManageBilling === true);
+      setHasBillingAccount(billing.hasBillingAccount === true);
+    } catch {
+      if (request !== billingRequest.current) return;
+      setSubscriptionStatus("none");
+      setAccessSource(null);
+      setHasBillingStatusError(true);
+      setCurrentPeriodEnd(null);
+      setCancelAtPeriodEnd(false);
+      setCancelAt(null);
+      setPlan(null);
+      setTrialEndsAt(null);
+    }
+  }, []);
+
   const handlePaymentRequired = useCallback(
     (event: PaymentRequiredEvent) => {
       if (!user) {
@@ -349,6 +424,9 @@ export function App() {
       setSubscriptionStatus("none");
       setAccessSource(null);
       setHasBillingStatusError(false);
+      // And say what it costs, there and then: the paywall is the answer to
+      // "why did that not save", not a banner discovered later.
+      setPaywallOpen(true);
       setCurrentPeriodEnd(null);
       setCancelAtPeriodEnd(false);
       setCancelAt(null);
@@ -370,28 +448,8 @@ export function App() {
       if (resolvedUser) {
         setSubscriptionStatus("loading");
         setHasBillingStatusError(false);
-        try {
-          setOrganizations(await fetchOrganizations().catch(() => null));
-          const billing = await fetchBillingStatus();
-          setSubscriptionStatus(
-            resolveSubscriptionStatus(billing.status, billing.hasAccess),
-          );
-          setAccessSource(billing.accessSource ?? null);
-          setBillingOrganizationName(billing.organization?.name ?? null);
-          setHasBillingStatusError(false);
-          setCurrentPeriodEnd(billing.currentPeriodEnd);
-          setCancelAtPeriodEnd(billing.cancelAtPeriodEnd);
-          setCancelAt(billing.cancelAt);
-          setPlan(billing.plan);
-        } catch {
-          setSubscriptionStatus("none");
-          setAccessSource(null);
-          setHasBillingStatusError(true);
-          setCurrentPeriodEnd(null);
-          setCancelAtPeriodEnd(false);
-          setCancelAt(null);
-          setPlan(null);
-        }
+        setOrganizations(await fetchOrganizations().catch(() => null));
+        await loadBilling();
       } else {
         setOrganizations(null);
         setOrganizationSetupReason(null);
@@ -420,7 +478,7 @@ export function App() {
     } finally {
       setIsCheckingSession(false);
     }
-  }, []);
+  }, [loadBilling]);
 
   // `/inbox` is gone — Home shows what used to be there. Rewrite the address
   // bar so an old link lands somewhere that still exists and stays bookmarkable.
@@ -433,6 +491,7 @@ export function App() {
 
   useEffect(() => {
     const handlePopState = () => {
+      settleAddress();
       setRoute(getRoute(window.location.pathname));
     };
 
@@ -444,6 +503,30 @@ export function App() {
   }, []);
 
   usePaymentRequiredHandler(handlePaymentRequired);
+
+  // A different organization on screen is a different bill. Only once signed
+  // in and settled — the first read is `refreshSession`'s.
+  const signedIn = Boolean(user);
+  const lastBillingOrganization = useRef(billingOrganization);
+  useEffect(() => {
+    if (lastBillingOrganization.current === billingOrganization) return;
+    lastBillingOrganization.current = billingOrganization;
+    if (!signedIn || isCheckingSession) return;
+    void loadBilling();
+  }, [billingOrganization, isCheckingSession, loadBilling, signedIn]);
+
+  // `/billing` from before billing was per organization: say which one it is
+  // showing, in the address bar, once the server has answered.
+  useEffect(() => {
+    if (
+      route.kind === "billing" &&
+      !route.org &&
+      billingOrganizationName &&
+      subscriptionStatus !== "loading"
+    ) {
+      navigateTo({ kind: "billing", org: billingOrganizationName }, true);
+    }
+  }, [billingOrganizationName, route, subscriptionStatus]);
 
   useEffect(() => {
     if (route.kind === "callback") {
@@ -478,9 +561,6 @@ export function App() {
       return;
     }
 
-    const isCheckoutSuccess =
-      window.location.search.includes("checkout=success");
-
     if (
       user &&
       user.isAdmin &&
@@ -505,19 +585,8 @@ export function App() {
     // the customer's approval history hostage. They land where they were
     // going, read everything, and get the banner and no write controls.
 
-    // Bounce back to the workspace only when there is genuinely nothing to do
-    // on this page. A customer on a trial has access but no subscription, and
-    // sending them home would leave them no way to become a paying one.
-    if (
-      user &&
-      subscriptionStatus === "active" &&
-      accessSource === "stripe" &&
-      route.kind === "billing" &&
-      !isCheckoutSuccess
-    ) {
-      navigateTo({ kind: "home" }, true);
-      return;
-    }
+    // No bounce away from /billing for a paying customer either. It is where
+    // they manage the subscription, and the sidebar links to it.
   }, [accessSource, isCheckingSession, route, subscriptionStatus, user]);
 
   useEffect(() => {
@@ -549,6 +618,16 @@ export function App() {
     ],
   );
 
+  // Stable, because the billing page restarts its checkout polling whenever
+  // this changes. A confirmed checkout goes where it always has: into the
+  // workspace it just unlocked.
+  const handleSubscriptionConfirmed = useCallback(() => {
+    setSubscriptionStatus("active");
+    setAccessSource("stripe");
+    setHasBillingStatusError(false);
+    navigateTo({ kind: "home" }, true);
+  }, []);
+
   const view: AuthView = useMemo(() => {
     if (route.kind === "callback") {
       return "callback";
@@ -575,10 +654,6 @@ export function App() {
 
     if (route.kind === "createOrganization" && user) {
       return "createOrganization";
-    }
-
-    if (route.kind === "billing" && user) {
-      return "billing";
     }
 
     return user ? "app" : "login";
@@ -624,43 +699,6 @@ export function App() {
           // Skipping has to actually leave. Reading is free, so the workspace
           // is a legitimate place to be without an organization.
           setOrganizationSetupReason(null);
-          navigateTo({ kind: "home" }, true);
-        }}
-      />
-    );
-  }
-
-  if (view === "billing") {
-    return (
-      <BillingPage
-        subscriptionStatus={subscriptionStatus ?? "loading"}
-        accessSource={accessSource}
-        hasBillingStatusError={hasBillingStatusError}
-        currentPeriodEnd={currentPeriodEnd}
-        cancelAtPeriodEnd={cancelAtPeriodEnd}
-        cancelAt={cancelAt}
-        plan={plan}
-        onSubscribe={async () => {
-          const { url } = await createCheckoutSession();
-          window.location.href = url;
-        }}
-        onManage={async () => {
-          const { url } = await createPortalSession();
-          window.location.href = url;
-        }}
-        onSubscriptionConfirmed={() => {
-          setSubscriptionStatus("active");
-          setAccessSource("stripe");
-          setHasBillingStatusError(false);
-          navigateTo({ kind: "home" }, true);
-        }}
-        onRetryBillingStatus={async () => {
-          await refreshSession();
-        }}
-        onSignOut={async () => {
-          await logoutSession();
-          setUser(null);
-          setCallbackError(null);
           navigateTo({ kind: "home" }, true);
         }}
       />
@@ -737,22 +775,90 @@ export function App() {
 
   return (
     <ReadOnlyProvider value={readOnly}>
-      <div className="app-root">
-        <ReadOnlyBanner
-          onManageBilling={() => navigateTo({ kind: "billing" })}
-        />
-        <AppShell
-          user={user}
-          route={asShellRoute(route)}
-          onNavigate={navigateTo}
-          onSignOut={async () => {
-            await logoutSession();
-            setUser(null);
-            setCallbackError(null);
-            navigateTo({ kind: "home" }, true);
-          }}
-        />
-      </div>
+      <PaywallProvider value={paywall}>
+        <div className="app-root">
+          <ReadOnlyBanner
+            // The same offer every other way in makes.
+            onManageBilling={() => setPaywallOpen(true)}
+          />
+          <AppShell
+            user={user}
+            route={asShellRoute(route)}
+            billing={
+              <BillingPage
+                subscriptionStatus={subscriptionStatus ?? "loading"}
+                accessSource={accessSource}
+                hasBillingStatusError={hasBillingStatusError}
+                currentPeriodEnd={currentPeriodEnd}
+                cancelAtPeriodEnd={cancelAtPeriodEnd}
+                cancelAt={cancelAt}
+                trialEndsAt={trialEndsAt}
+                organization={
+                  route.kind === "billing" && route.org
+                    ? route.org
+                    : billingOrganizationName
+                }
+                plan={plan}
+                onSubscribe={async () => {
+                  const { url } = await createCheckoutSession(
+                    billingOrganizationName,
+                  );
+                  window.location.href = url;
+                }}
+                onManage={async () => {
+                  const { url } = await createPortalSession(
+                    billingOrganizationName,
+                  );
+                  window.location.href = url;
+                }}
+                onCancel={async () => {
+                  const { url } = await createPortalSession(
+                    billingOrganizationName,
+                    "cancel",
+                  );
+                  window.location.href = url;
+                }}
+                canManageBilling={canManageBilling}
+                hasBillingAccount={hasBillingAccount}
+                onSubscriptionConfirmed={handleSubscriptionConfirmed}
+                onRetryBillingStatus={async () => {
+                  await refreshSession();
+                }}
+              />
+            }
+            onNavigate={navigateTo}
+            onSignOut={async () => {
+              await logoutSession();
+              setUser(null);
+              setCallbackError(null);
+              navigateTo({ kind: "home" }, true);
+            }}
+          />
+          {paywallOpen ? (
+            <PaywallDialog
+              organization={billingOrganizationName}
+              standing={
+                trialEndsAt !== null && trialEndsAt * 1000 < Date.now()
+                  ? "trial-ended"
+                  : hasBillingAccount
+                    ? "lapsed"
+                    : "none"
+              }
+              plan={plan}
+              canManage={canManageBilling}
+              onSubscribe={async () => {
+                // The organization the refusal named, which is the one on
+                // screen — never a different one of this person's.
+                const { url } = await createCheckoutSession(
+                  billingOrganizationName,
+                );
+                window.location.href = url;
+              }}
+              onClose={() => setPaywallOpen(false)}
+            />
+          ) : null}
+        </div>
+      </PaywallProvider>
     </ReadOnlyProvider>
   );
 }

@@ -208,7 +208,7 @@ registry.registerPath({
   },
   responses: {
     200: {
-      description: "Every policy in every binder this person can reach",
+      description: "Every document in every binder this person can reach",
       content: {
         "application/json": { schema: LibraryPayloadSchema },
       },
@@ -832,6 +832,13 @@ registry.registerPath({
        * lead to an address that does not exist on the branch being read.
        */
       change: z.string().optional(),
+      /**
+       * Read the binder at a branch, named — `/-/tree/{ref}` in the app.
+       *
+       * Somebody else's unproposed draft is refused, as it is for a document
+       * read at a ref.
+       */
+      ref: z.string().optional(),
     }),
   },
   responses: {
@@ -1852,6 +1859,12 @@ registry.registerPath({
   path: "/api/app/billing/status",
   operationId: "getBillingStatus",
   tags: ["billing"],
+  request: {
+    query: z.object({
+      /** Which of this person's organizations; their oldest when omitted. */
+      organization: z.string().optional(),
+    }),
+  },
   responses: {
     200: {
       description: "Billing status",

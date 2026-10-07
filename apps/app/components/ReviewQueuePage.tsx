@@ -12,7 +12,9 @@ import {
   type QueueFilter,
   type QueueRow,
 } from "../reviewQueue";
-import { SkeletonGroup, SkeletonLine } from "./Skeleton";
+import { SkeletonPanel } from "./Skeleton";
+import { buildBinderUrl } from "../binderShell";
+import { ChangeRowView } from "./ChangeRow";
 
 /**
  * Every change in flight, across every binder.
@@ -25,6 +27,12 @@ import { SkeletonGroup, SkeletonLine } from "./Skeleton";
  * The counters are the filters. They are not decoration: each one is the
  * number of rows you get by pressing it, which is asserted in
  * reviewQueue.test.ts so the two can never drift.
+ *
+ * **They sit in the list's own bar, as tabs with counts** — GitLab's "Open 65
+ * · Merged · Closed · All", and this binder's own Changes tab's "Open 3 ·
+ * Closed". They were five tiles the size of dashboard metrics above the list,
+ * which made the page read as a report about change requests rather than a
+ * list of them, and pushed the first row halfway down the screen.
  */
 
 interface ReviewQueuePageProps {
@@ -83,121 +91,102 @@ export function ReviewQueuePage({
 
   return (
     <div className="docw-page queue-page">
-      <header className="doc-header">
-        <div className="doc-header-top">
-          <div className="doc-header-identity">
-            <h1 className="doc-header-title">Change requests</h1>
-            <p className="doc-header-fact">
-              {documents === null
-                ? "Gathering what is in flight…"
-                : describeQueue(counts)}
-            </p>
-          </div>
+      <div className="bs-pagehead">
+        <div className="bs-pagehead-body">
+          <h1 className="bs-title">Change requests</h1>
+          <p className="bs-subtitle">
+            {documents === null
+              ? "Gathering what is in flight…"
+              : describeQueue(counts)}
+          </p>
         </div>
-      </header>
+      </div>
 
       {error ? <p className="app-inline-error">{error}</p> : null}
 
       {documents === null ? (
-        <SkeletonGroup label="Loading change requests">
-          <SkeletonLine width="medium" />
-          <SkeletonLine width="wide" />
-          <SkeletonLine width="wide" />
-        </SkeletonGroup>
+        <SkeletonPanel label="Loading change requests" rows={3} bar right />
       ) : rows.length === 0 ? (
         <div className="home-empty">
           <p>Nothing is in flight right now.</p>
           <button
             type="button"
-            className="home-row-action"
+            className="bs-btn bs-btn-secondary bs-btn--sm"
             onClick={onBrowseDocuments}
           >
             Browse documents
           </button>
         </div>
       ) : (
-        <>
+        // The same panel and the same row as a binder's own list: a change
+        // request looks like one wherever it is listed. The binder leads the
+        // line under the title, because this list spans all of them.
+        <section className="bs-panel queue-panel" aria-label="Change requests">
           {/* Counters and filters are the same control. A number you cannot
               press is a number you have to go somewhere else to act on. */}
-          <div
-            className="queue-counters"
-            role="group"
-            aria-label="Filter changes"
-          >
-            {(["all", ...QUEUE_FILTERS] as const).map((entry) => (
-              <button
-                key={entry}
-                type="button"
-                className={`queue-counter queue-counter--${entry}${
-                  activeFilter === entry ? " queue-counter--active" : ""
-                }`}
-                aria-pressed={activeFilter === entry}
-                onClick={() => setFilter(entry)}
-              >
-                <span className="queue-counter-value">{counts[entry]}</span>
-                <span className="queue-counter-label">
-                  {QUEUE_FILTER_LABELS[entry]}
-                </span>
-              </button>
-            ))}
+          <div className="bs-panel-bar">
+            <div
+              className="bs-segmented queue-counters"
+              role="group"
+              aria-label="Filter changes"
+            >
+              {(["all", ...QUEUE_FILTERS] as const).map((entry) => (
+                <button
+                  key={entry}
+                  type="button"
+                  className={`bs-seg queue-counter queue-counter--${entry}`}
+                  aria-pressed={activeFilter === entry}
+                  onClick={() => setFilter(entry)}
+                >
+                  <span className="queue-counter-label">
+                    {QUEUE_FILTER_LABELS[entry]}
+                  </span>
+                  {/* Coral only for the one count that is somebody's turn —
+                      the same coral count Home's "Waiting on you" carries. */}
+                  <span
+                    className={`queue-counter-value${
+                      entry === "waiting" && counts.waiting > 0
+                        ? " queue-counter-value--yours"
+                        : ""
+                    }`}
+                  >
+                    {counts[entry]}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
 
           {visible.length === 0 ? (
-            <div className="home-empty">
+            <div className="bs-empty">
               <p>
                 Nothing here — {QUEUE_FILTER_LABELS[activeFilter]} is empty.
               </p>
             </div>
           ) : (
-            <ul className="queue-list">
+            <ul className="bs-row-list">
               {visible.map((row) => (
-                <QueueRowItem key={row.key} row={row} onOpen={onOpenChange} />
+                <ChangeRowView
+                  key={row.key}
+                  title={row.title}
+                  context={row.binderName}
+                  meta={row.meta}
+                  tone={row.tone}
+                  standing={row.standing}
+                  commentCount={row.commentCount}
+                  href={buildBinderUrl({
+                    org: row.owner,
+                    binder: row.repo,
+                    tab: "changes",
+                    change: row.number,
+                  })}
+                  onOpen={() => onOpenChange(row.owner, row.repo, row.number)}
+                />
               ))}
             </ul>
           )}
-        </>
+        </section>
       )}
     </div>
-  );
-}
-
-function QueueRowItem({
-  row,
-  onOpen,
-}: {
-  row: QueueRow;
-  onOpen: (owner: string, repo: string, changeNumber: number) => void;
-}) {
-  return (
-    <li className="queue-row">
-      <button
-        type="button"
-        className="queue-row-btn"
-        onClick={() => onOpen(row.owner, row.repo, row.number)}
-      >
-        <span className="queue-row-main">
-          <span className="queue-row-title">{row.title}</span>
-          {/* The binder, then who and when — the same line every other list
-              of changes carries. The document it touches is not on it: a
-              change can touch three, and naming one of them is a claim about
-              the other two. */}
-          <span className="queue-row-meta">
-            {row.binderName} · {row.meta}
-          </span>
-        </span>
-
-        <span className="queue-row-standing">
-          {/* One word. It was a flag saying "Waiting on you" beside a status
-              holding an approval count and a sentence — and the flag stayed up
-              on a change that was approved and ready, which is the thing the
-              customer caught. Which filter a change is under says who it
-              waits on; the row says what state it is in. */}
-          <span className={`change-standing change-standing--${row.tone}`}>
-            <span className="change-standing-dot" aria-hidden="true" />
-            {row.standing}
-          </span>
-        </span>
-      </button>
-    </li>
   );
 }

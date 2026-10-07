@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { WorkspaceDocumentDetailPayload } from "../../../packages/api-schema/schemas/workspaces";
 import { downloadBinderDocument, fetchBinderDocument } from "../api";
+import { followInApp } from "../appLink";
 import {
   buildDocumentCrumbs,
   buildDocumentUrl,
@@ -10,6 +11,7 @@ import {
   parseRequestedVersion,
   resolveDocumentRef,
 } from "../binderDocument";
+import { buildBinderUrl } from "../binderShell";
 import { buildReadableRefs, type DocumentRefView } from "../documentRefs";
 import {
   formatDocumentName,
@@ -69,8 +71,6 @@ interface BinderDocumentPageProps {
    * because `ref` is React's own prop and cannot be one of ours.
    */
   documentRef?: string | null;
-  /** Back to the change this is being read on. */
-  onBackToChange?: ((changeNumber: number) => void) | null;
   /**
    * Which versions of this document exist, for the file panel's own control.
    *
@@ -107,7 +107,6 @@ export function BinderDocumentPage({
   draft = null,
   change = null,
   documentRef = null,
-  onBackToChange = null,
   onRefsChange,
   onOpenBinder,
   onOpenChange,
@@ -278,30 +277,6 @@ export function BinderDocumentPage({
 
   return (
     <div className="binder-pane">
-      {/* **Which version you are reading is said by the file panel now.** It
-          was a warning strip here: "You are reading the branch
-          draft/alice/20260922131449975", which named a git object at a reader
-          of a policy manual and offered no way anywhere from it. The panel
-          beside the page is a view of one version of the binder, so the
-          control naming that version sits at the top of it — the customer, of
-          GitHub: *"a branch selector in the file explorer so that it's clear
-          what branch the user is viewing. We should do the same."*
-
-          The way back to the change stays, because it is not a fact about the
-          ref: it is where the reader came from, and somebody who came here to
-          read came here to decide. */}
-      {change !== null && onBackToChange ? (
-        <div className="doc-on-change" role="status">
-          <button
-            type="button"
-            className="bs-btn bs-btn--sm bs-btn-secondary"
-            onClick={() => onBackToChange(change)}
-          >
-            Back to change {change}
-          </button>
-        </div>
-      ) : null}
-
       <header className="bs-pagehead">
         <div className="bs-pagehead-body">
           <h1 className="bs-title">{formatDocumentName(document.name)}</h1>
@@ -357,7 +332,9 @@ export function BinderDocumentPage({
               className="bs-btn bs-btn-primary"
               onClick={() => setRevising(true)}
             >
-              New version
+              {/* **What it asks of you.** "New version" read as though it
+                  made one; what it does is take a file and propose it. */}
+              Upload new version
             </button>
           </div>
         ) : null}
@@ -396,8 +373,8 @@ export function BinderDocumentPage({
 
       {state === "proposed" ? (
         <p className="vault-pr-notice" role="status">
-          This policy is not in the binder yet. What you are reading is the file
-          as submitted, waiting on a decision.
+          This document is not in the binder yet. What you are reading is the
+          file as submitted, waiting on a decision.
         </p>
       ) : null}
 
@@ -442,86 +419,128 @@ export function BinderDocumentPage({
           )}
         </div>
 
+        {/* **Two panels, the way GitLab's merge request sidebar stacks its
+            blocks** — a bar that names the block and counts it, then rows
+            that go somewhere. These were uppercase, letter-spaced labels over
+            cards of their own shape: the only lists in the app drawn that
+            way, and the loudest type on a page whose subject is a policy. */}
         <aside className="doc-rail" aria-label="Document summary">
-          <section className="doc-rail-section">
-            <h2 className="doc-rail-title">Waiting on a decision</h2>
+          <section className="bs-panel" aria-labelledby="doc-rail-open">
+            <div className="bs-panel-bar">
+              <h2 className="bs-panel-bar-title" id="doc-rail-open">
+                Waiting on a decision
+              </h2>
+              {openChanges.length > 0 ? (
+                <span className="bs-section-count bs-section-count--attention">
+                  {openChanges.length}
+                </span>
+              ) : null}
+            </div>
             {openChanges.length === 0 ? (
-              <p className="doc-rail-note">Nothing is in review.</p>
+              <p className="doc-rail-empty">Nothing is in review.</p>
             ) : (
-              <div className="doc-rail-card doc-rail-card--rows">
+              <ul className="bs-row-list">
                 {openChanges.map((change) => (
-                  <button
-                    className="doc-rail-row"
-                    type="button"
-                    key={change.number}
-                    onClick={() => onOpenChange(change.number)}
-                  >
-                    <span className="doc-rail-row-date">
-                      {parseChangeTitle(change.body, change.user?.login ?? "")}
-                    </span>
-                    <span className="doc-rail-row-note">
-                      {getApprovalStateLabel(change.approvalState)}
-                    </span>
-                  </button>
+                  <li key={change.number}>
+                    <a
+                      className="bs-row bs-row--tall"
+                      href={buildBinderUrl({
+                        org,
+                        binder,
+                        tab: "changes",
+                        change: change.number,
+                      })}
+                      onClick={(event) =>
+                        followInApp(event, () => onOpenChange(change.number))
+                      }
+                    >
+                      <span className="bs-row-body">
+                        <span className="bs-row-name bs-row-name--wrap">
+                          {parseChangeTitle(
+                            change.body,
+                            change.user?.login ?? "",
+                          )}
+                        </span>
+                        <span className="bs-row-meta">
+                          #{change.number} ·{" "}
+                          {getApprovalStateLabel(change.approvalState)}
+                        </span>
+                      </span>
+                    </a>
+                  </li>
                 ))}
-              </div>
+              </ul>
             )}
           </section>
 
-          <section className="doc-rail-section">
-            <h2 className="doc-rail-title">Versions</h2>
+          <section className="bs-panel" aria-labelledby="doc-rail-versions">
+            <div className="bs-panel-bar">
+              <h2 className="bs-panel-bar-title" id="doc-rail-versions">
+                Versions
+              </h2>
+              {versions.length > 0 ? (
+                <span className="bs-section-count">{versions.length}</span>
+              ) : null}
+            </div>
             {versions.length === 0 ? (
-              <p className="doc-rail-note">
+              <p className="doc-rail-empty">
                 No version has been published yet.
               </p>
             ) : (
-              <div className="doc-rail-card doc-rail-card--rows">
+              <ul className="bs-row-list">
                 {versions.map((version) => {
                   const isCurrent = version.version === latestVersion?.version;
                   const isViewing =
                     viewing.version?.version === version.version;
+                  const target = isCurrent ? null : version.version;
                   return (
-                    <button
-                      className={`doc-rail-row${isViewing && !isViewingRecord ? " doc-rail-row--viewing" : ""}`}
-                      type="button"
-                      key={version.tag}
-                      // The rail says which version is on screen, not only
-                      // which one is the record — reading v1 beside a row
-                      // marked "Current" is exactly the confusion to avoid.
-                      aria-current={isViewing}
-                      onClick={() =>
-                        selectVersion(isCurrent ? null : version.version)
-                      }
-                    >
-                      <span
-                        className={`doc-rail-version${isCurrent ? " doc-rail-version--current" : ""}`}
+                    <li key={version.tag}>
+                      <a
+                        className={`bs-row${isViewing && !isViewingRecord ? " bs-row--on" : ""}`}
+                        href={buildDocumentUrl({
+                          org,
+                          binder,
+                          documentPath: resolvedPath,
+                          version: target,
+                        })}
+                        // The rail says which version is on screen, not only
+                        // which one is the record — reading v1 beside a row
+                        // marked "Current" is exactly the confusion to avoid.
+                        aria-current={isViewing ? "page" : undefined}
+                        onClick={(event) =>
+                          followInApp(event, () => selectVersion(target))
+                        }
                       >
-                        v{version.version}
-                      </span>
-                      {/* When this version was published. The tag's commit
-                          carries the date in the same call, so nothing extra
-                          is fetched to say it.
+                        <span
+                          className={`doc-rail-version${isCurrent ? " doc-rail-version--current" : ""}`}
+                        >
+                          v{version.version}
+                        </span>
+                        {/* When this version was published. The tag's commit
+                            carries the date in the same call, so nothing
+                            extra is fetched to say it.
 
-                          This used to print the commit SHA. The SHA is the
-                          coordinate the evidence is keyed on, but it is not a
-                          fact about the policy that a compliance manager can
-                          use — on a page whose job is to be trustworthy it
-                          reads as an error code. It stays in the tag, the
-                          audit export and the API, where a surveyor can ask
-                          for it. Empty when Gitea did not give us a date:
-                          "v1 · Current" says more than a date we invented. */}
-                      <span className="doc-rail-row-date">
-                        {formatShortDate(version.publishedAt)}
-                      </span>
-                      {isCurrent ? (
-                        <span className="doc-rail-row-note">Current</span>
-                      ) : isViewing ? (
-                        <span className="doc-rail-row-note">Viewing</span>
-                      ) : null}
-                    </button>
+                            This used to print the commit SHA. The SHA is the
+                            coordinate the evidence is keyed on, but it is not
+                            a fact about the policy that a compliance manager
+                            can use — on a page whose job is to be trustworthy
+                            it reads as an error code. It stays in the tag, the
+                            audit export and the API, where a surveyor can ask
+                            for it. Empty when Gitea did not give us a date:
+                            "v1 · Current" says more than a date we invented. */}
+                        <span className="bs-row-body">
+                          {formatShortDate(version.publishedAt)}
+                        </span>
+                        {isCurrent ? (
+                          <span className="bs-row-right">Current</span>
+                        ) : isViewing ? (
+                          <span className="bs-row-right">Viewing</span>
+                        ) : null}
+                      </a>
+                    </li>
                   );
                 })}
-              </div>
+              </ul>
             )}
           </section>
         </aside>

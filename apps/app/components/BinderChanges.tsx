@@ -8,6 +8,7 @@ import {
 } from "../binderChange";
 import type { ChangeFilter } from "./DocumentChanges";
 import { DocumentChanges } from "./DocumentChanges";
+import { buildBinderUrl } from "../binderShell";
 
 /**
  * The binder's change requests — every revision in flight, and the record of
@@ -112,7 +113,11 @@ export function BinderChanges({
           }
         }}
         onOpenChange={onOpenChange}
+        changeHref={(change) =>
+          buildBinderUrl({ org, binder, tab: "changes", change })
+        }
         onRetryClosed={() => void loadClosed()}
+        org={org}
       />
     </div>
   );

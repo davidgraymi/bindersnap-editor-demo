@@ -42,7 +42,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
 
-test.describe.configure({ mode: "serial", timeout: 240_000 });
+test.describe.configure({ mode: "parallel", timeout: 240_000 });
 
 interface MismatchedRow {
   row: string;
@@ -310,7 +310,7 @@ test("the fields in a form are one size, picker included", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
 
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-  await page.getByRole("button", { name: "Add a policy" }).click();
+  await page.getByRole("button", { name: "Add a document" }).click();
   // **Wait for the picker that loads, not for the first one drawn.** "Put it
   // in" only exists once the binder has an open change and is filled from a
   // read; the folder picker is drawn immediately. Waiting for the wrong one
@@ -369,7 +369,6 @@ test("every page begins in the same place, at the same size", async ({
     ["the review queue", `${APP_BASE_URL}/changes`],
     ["the binder", `${APP_BASE_URL}/${org}/${binder}`],
     ["the organization", `${APP_BASE_URL}/${org}`],
-    ["the activity log", `${APP_BASE_URL}/activity`],
   ];
 
   const shapes: Array<{ where: string; shape: Record<string, unknown> }> = [];
@@ -379,19 +378,14 @@ test("every page begins in the same place, at the same size", async ({
     await settleOnRealShell(page);
     // And the page's own heading, because it is one of the four things
     // measured below and a route can still be a render behind its shell.
-    await page
-      .locator(".bs-title, .doc-header-title, .docs-title, .activity-heading")
-      .first()
-      .waitFor();
+    await page.locator(".bs-title, .doc-header-title").first().waitFor();
 
     const shape = await page.evaluate(() => {
       const main = document.querySelector(".app-main");
       const root = main?.firstElementChild as HTMLElement | undefined;
       if (!root) return null;
       const box = root.getBoundingClientRect();
-      const heading = main!.querySelector(
-        ".bs-title, .doc-header-title, .docs-title, .activity-heading",
-      );
+      const heading = main!.querySelector(".bs-title, .doc-header-title");
       return {
         left: Math.round(box.left),
         width: Math.round(box.width),
@@ -554,7 +548,7 @@ test("the marketing eyebrow never labels a field in the app", async ({
   // And the modal that carries the product's primary act, which is where the
   // loudest of them was.
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-  await page.getByRole("button", { name: "Add a policy" }).click();
+  await page.getByRole("button", { name: "Add a document" }).click();
   await expect(page.locator(".create-document-modal")).toBeVisible({
     timeout: 30_000,
   });
@@ -645,7 +639,6 @@ test("no heading on a page outranks the page's own title", async ({ page }) => {
     ["the review queue", `${APP_BASE_URL}/changes`],
     ["the binder", `${APP_BASE_URL}/${org}/${binder}`],
     ["the organization", `${APP_BASE_URL}/${org}`],
-    ["the activity log", `${APP_BASE_URL}/activity`],
   ];
 
   for (const [where, url] of screens) {
@@ -655,9 +648,7 @@ test("no heading on a page outranks the page's own title", async ({ page }) => {
     const louder = await page.evaluate(() => {
       const main = document.querySelector(".app-main");
       if (!main) return null;
-      const title = main.querySelector(
-        ".bs-title, .doc-header-title, .docs-title, .activity-heading, .home-greeting",
-      );
+      const title = main.querySelector(".bs-title, .doc-header-title");
       if (!title) return [];
       const titleSize = parseFloat(getComputedStyle(title).fontSize);
 

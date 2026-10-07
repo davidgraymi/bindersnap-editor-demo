@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
-import { Bell, FileText, LogOut, Moon, Shield } from "lucide-react";
+import { CreditCard, LogOut, Moon, Shield } from "lucide-react";
 import type { SessionUser } from "../api";
 import { buildDocumentsUrl, parseDocumentsViewState } from "../documentsView";
-import type { AppRoute } from "../routes";
-import { ActivityLogPage } from "./ActivityLogPage";
+import { followInApp, navigateToHref } from "../appLink";
+import { routeToPath, type AppRoute } from "../routes";
 import { BinderShell } from "./BinderShell";
 import { OrganizationPage } from "./OrganizationPage";
-import { OrganizationSwitcher } from "./OrganizationSwitcher";
+import { LocationTrail } from "./LocationTrail";
+import { useWriteAction } from "../paywallContext";
 import { AdminSubscriptionManagementPage } from "./AdminSubscriptionManagementPage";
 import { AppIcon } from "./AppIcon";
 import { BindersnapLogoMark } from "./BindersnapLogoMark";
@@ -17,16 +18,20 @@ import { AppSidebar, type SidebarBinder } from "./AppSidebar";
 import { BinderExplorer } from "./BinderExplorer";
 import { AppBottomNav } from "./AppBottomNav";
 import { useDefaultOrganization } from "../useOrganizationDisplayName";
-import { NewPolicyModal } from "./NewPolicyModal";
 import { HomePage } from "./HomePage";
 import { NavSearch } from "./NavSearch";
-import { NewDocumentButton } from "./NewDocumentButton";
+import { CreateMenu } from "./CreateMenu";
 
 interface AppShellProps {
   user: SessionUser | null;
   route: AppRoute;
   onNavigate: (route: AppRoute, replace?: boolean) => void;
   onSignOut: () => void | Promise<void>;
+  /**
+   * The billing page, built by the app that holds the billing state. Drawn in
+   * the shell like any other settings page, rather than in place of it.
+   */
+  billing?: ReactNode;
 }
 
 function toggleTheme() {
@@ -68,8 +73,8 @@ function getInitials(name: string): string {
 
 function renderProfileMenuIcon(icon: string) {
   switch (icon) {
-    case "documents":
-      return <AppIcon icon={FileText} size="md" />;
+    case "billing":
+      return <AppIcon icon={CreditCard} size="md" />;
     case "appearance":
       return <AppIcon icon={Moon} size="md" />;
     case "admin":
@@ -86,11 +91,11 @@ export function AppShell({
   route,
   onNavigate,
   onSignOut,
+  billing = null,
 }: AppShellProps) {
   const isReadOnly = useIsReadOnly();
   const isWorkspace = route.kind === "workspace";
-  const isDocuments = route.kind === "documents";
-  const isChanges = route.kind === "changes";
+  const isBilling = route.kind === "billing";
 
   // The organization the sidebar's org-scoped entries point at: the one on
   // screen, or the one the switcher settled on. Null on a page that belongs to
@@ -102,7 +107,9 @@ export function AppShell({
     route.kind === "binder" ||
     route.kind === "binderDocument"
       ? route.org
-      : defaultOrg;
+      : route.kind === "billing" && route.org
+        ? route.org
+        : defaultOrg;
   const isAdminSubscriptions = route.kind === "adminSubscriptions";
 
   const displayName = user?.fullName ?? user?.username ?? "";
@@ -121,17 +128,34 @@ export function AppShell({
   const [sidebarBinder, setSidebarBinder] = useState<SidebarBinder | null>(
     null,
   );
+  /**
+   * The `org/binder` of an address that turned out to name no binder, so the
+   * top bar does not go on naming it. Kept by address rather than cleared on
+   * navigation: any other binder simply is not this one.
+   */
+  const [missingBinder, setMissingBinder] = useState<string | null>(null);
+  const onBinderMissing = useCallback(
+    (missing: boolean) => {
+      if (route.kind !== "binder" && route.kind !== "binderDocument") return;
+      const key = `${route.org}/${route.binder}`;
+      setMissingBinder((current) =>
+        missing ? key : current === key ? null : current,
+      );
+    },
+    [route],
+  );
   const [profileOpen, setProfileOpen] = useState(false);
-  const [showCreateDocumentModal, setShowCreateDocumentModal] = useState(false);
   // A search that was linked to or reloaded is still the search that is on
   // screen, so the box says so.
   const [initialSearch] = useState(
     () => parseDocumentsViewState(window.location.search).freeText,
   );
 
-  const openCreateDocumentModal = useCallback(() => {
-    setShowCreateDocumentModal(true);
-  }, []);
+  // A binder is a write, so it meets the paywall while the organization
+  // cannot write. An organization is free to make: the first has a trial.
+  const newBinder = useWriteAction((org: string) =>
+    navigateToHref(`/${org}/-/binders/new`),
+  );
 
   // Leaving a binder takes its section with it, so the map does not keep
   // offering the screens of a binder you are no longer in.
@@ -141,80 +165,38 @@ export function AppShell({
     }
   }, [route]);
 
-  useEffect(() => {
-    document.addEventListener("bs:open-create-modal", openCreateDocumentModal);
-    return () => {
-      document.removeEventListener(
-        "bs:open-create-modal",
-        openCreateDocumentModal,
-      );
-    };
-  }, [openCreateDocumentModal]);
-
   return (
     <div className="app-shell">
       {/* ── TOP NAV ── */}
       <header className="app-topnav">
-        {/* Brand — always the way back to Home */}
-        <button
-          type="button"
+        {/* Brand — always the way back to Home, and a real link to it. */}
+        <a
           className="app-topnav-brand"
-          onClick={() => onNavigate({ kind: "workspace" })}
+          href={routeToPath({ kind: "workspace" })}
+          onClick={(event) =>
+            followInApp(event, () => onNavigate({ kind: "workspace" }))
+          }
           aria-label="Bindersnap home"
         >
           <span className="app-topnav-logo-mark" aria-hidden="true">
             <BindersnapLogoMark width={14} height={14} aria-hidden="true" />
           </span>
           <span className="app-topnav-wordmark">Bindersnap</span>
-        </button>
+        </a>
 
-        {/* Small screens only — the sidebar carries these above 768px. */}
-        <nav className="app-topnav-nav" aria-label="Workspace">
-          <button
-            type="button"
-            className={`app-topnav-link${isWorkspace ? " app-topnav-link--active" : ""}`}
-            onClick={() => onNavigate({ kind: "workspace" })}
-            aria-current={isWorkspace ? "page" : undefined}
-          >
-            Home
-          </button>
-          <button
-            type="button"
-            className={`app-topnav-link${isChanges ? " app-topnav-link--active" : ""}`}
-            onClick={() => onNavigate({ kind: "changes" })}
-            aria-current={isChanges ? "page" : undefined}
-          >
-            Change requests
-          </button>
-          <button
-            type="button"
-            className={`app-topnav-link${isDocuments ? " app-topnav-link--active" : ""}`}
-            onClick={() => onNavigate({ kind: "documents" })}
-            aria-current={isDocuments ? "page" : undefined}
-          >
-            Documents
-          </button>
-        </nav>
-
-        {/* Outside the nav above, and deliberately so: that nav is hidden once
-            the sidebar takes over the same destinations, and this is a control
-            rather than a link — which organization you are looking at is worth
-            answering at every width.
-
-            Absent for somebody in one organization, because a switcher
-            offering a single choice is furniture. */}
-        <div className="app-topnav-org">
-          <OrganizationSwitcher
-            currentOrg={
-              route.kind === "organization" ||
-              route.kind === "binder" ||
-              route.kind === "binderDocument"
-                ? route.org
-                : undefined
-            }
-            onSelect={(org) => onNavigate({ kind: "organization", org })}
-          />
-        </div>
+        {/* **Which organization and binder you are in**, on every page —
+            GitHub's owner / repo. Where inside the binder is drawn above the
+            page's title instead (`PagePath`), inside the content. The
+            organization is the switcher it always was. */}
+        <LocationTrail
+          route={route}
+          org={sidebarOrg}
+          binderMissing={
+            (route.kind === "binder" || route.kind === "binderDocument") &&
+            missingBinder === `${route.org}/${route.binder}`
+          }
+          onNavigate={onNavigate}
+        />
 
         <div className="app-topnav-spacer" />
 
@@ -228,23 +210,13 @@ export function AppShell({
             onSearchLibrary={navigateToSearch}
           />
 
-          {/* Create document — a convenience, not the page's headline action.
-              Gone while the organization is read-only, like every other way
-              in: it sits on every page, so leaving it is offering the one
-              affordance a delinquent customer sees everywhere and cannot
-              use. */}
-          {isReadOnly ? null : (
-            <NewDocumentButton onClick={openCreateDocumentModal} />
-          )}
-
-          {/* Notifications */}
-          <button
-            className="app-topnav-icon-btn"
-            type="button"
-            aria-label="Notifications"
-          >
-            <AppIcon icon={Bell} size="md" />
-          </button>
+          {/* Make something that has no page to be added from: a binder, an
+              organization. A document is added on its binder's page. */}
+          <CreateMenu
+            org={sidebarOrg}
+            onNewBinder={newBinder}
+            onNewOrganization={() => onNavigate({ kind: "createOrganization" })}
+          />
 
           {/* User profile: avatar with dropdown */}
           <div className="app-topnav-profile">
@@ -291,19 +263,28 @@ export function AppShell({
                     role="group"
                     aria-label="Navigation"
                   >
+                    {/* Billing, not a second way to Documents. The sidebar
+                        already goes to Documents; on a phone the sidebar is
+                        not drawn and the bottom bar carries only the four
+                        places people move between, so this menu is the one
+                        way to reach Billing there. */}
                     <button
                       type="button"
-                      className={`app-profile-menu-item${isDocuments ? " app-profile-menu-item--active" : ""}`}
+                      className={`app-profile-menu-item${isBilling ? " app-profile-menu-item--active" : ""}`}
                       role="menuitem"
                       onClick={() => {
                         setProfileOpen(false);
-                        onNavigate({ kind: "documents" });
+                        onNavigate(
+                          sidebarOrg
+                            ? { kind: "billing", org: sidebarOrg }
+                            : { kind: "billing" },
+                        );
                       }}
                     >
                       <span className="app-profile-menu-icon">
-                        {renderProfileMenuIcon("documents")}
+                        {renderProfileMenuIcon("billing")}
                       </span>
-                      <span className="app-profile-menu-label">Documents</span>
+                      <span className="app-profile-menu-label">Billing</span>
                     </button>
                     <button
                       type="button"
@@ -379,135 +360,131 @@ export function AppShell({
           onNavigate={onNavigate}
         />
 
-        {/* **The binder's files, in a panel of their own.** Two different
+        {/* The sheet the content sits on — see `.app-canvas`. The binder's
+            files are content, so they are on it; the sidebar is not. */}
+        <div className="app-canvas">
+          {/* **The binder's files, in a panel of their own.** Two different
             questions deserve two panels: the map of the product barely
             changes, and a binder's contents change every time you open a
             different binder. It also lets the file list be as wide as a
             filename needs while the map stays narrow. Only while a policy is
             open — every other binder screen draws its own tree in the page. */}
-        {sidebarBinder?.contents ? (
-          <BinderExplorer
-            binder={{ ...sidebarBinder, contents: sidebarBinder.contents }}
-            onNavigate={onNavigate}
-          />
-        ) : null}
+          {sidebarBinder?.contents ? (
+            <BinderExplorer
+              binder={{ ...sidebarBinder, contents: sidebarBinder.contents }}
+              onNavigate={onNavigate}
+            />
+          ) : null}
 
-        {/* Main content area */}
-        <div className="app-main-area">
-          <main
-            className={`app-main${isWorkspace ? " app-main--workspace" : " app-main--page"}`}
-          >
-            {route.kind === "changes" ? (
-              <ReviewQueuePage
-                currentUsername={currentUsername}
-                onOpenChange={(org, binder, change) =>
-                  onNavigate({
-                    kind: "binder",
-                    org,
-                    binder,
-                    tab: "changes",
-                    change,
-                  })
-                }
-                onBrowseDocuments={() => onNavigate({ kind: "documents" })}
-              />
-            ) : route.kind === "documents" ? (
-              <DocumentsPage
-                onSelectDocument={(org, binder, documentPath) =>
-                  onNavigate({
-                    kind: "binderDocument",
-                    org,
-                    binder,
-                    documentPath,
-                  })
-                }
-              />
-            ) : route.kind === "organization" ? (
-              <OrganizationPage
-                org={route.org}
-                onOpenBinder={(binder) =>
-                  onNavigate({ kind: "binder", org: route.org, binder })
-                }
-              />
-            ) : route.kind === "binder" || route.kind === "binderDocument" ? (
-              // One shell for both: a document is a file inside the binder,
-              // so it opens under the binder's own header and tabs rather
-              // than on a page of its own.
-              <BinderShell
-                org={route.org}
-                binder={route.binder}
-                {...(route.kind === "binderDocument"
-                  ? { documentPath: route.documentPath }
-                  : {})}
-                currentUser={currentUsername}
-                onBinderChange={setSidebarBinder}
-                onOpenDocument={(documentPath, version) =>
-                  onNavigate({
-                    kind: "binderDocument",
-                    org: route.org,
-                    binder: route.binder,
-                    documentPath,
-                    ...(version == null ? {} : { version }),
-                  })
-                }
-                onOpenBinder={() =>
-                  onNavigate({
-                    kind: "binder",
-                    org: route.org,
-                    binder: route.binder,
-                  })
-                }
-              />
-            ) : route.kind === "activity" ? (
-              <ActivityLogPage />
-            ) : route.kind === "adminSubscriptions" ? (
-              <AdminSubscriptionManagementPage
-                currentUsername={currentUsername}
-              />
-            ) : (
-              <HomePage
-                currentUsername={currentUsername}
-                currentUserFullName={user?.fullName ?? ""}
-                // A change is on a binder now: Home's rows carry the owning
-                // organization and the binder, which is what `owner`/`repo`
-                // always were once a document stopped being a repository.
-                onOpenChange={(org, binder, changeNumber) =>
-                  onNavigate({
-                    kind: "binder",
-                    org,
-                    binder,
-                    tab: "changes",
-                    change: changeNumber,
-                  })
-                }
-                onBrowseDocuments={() => onNavigate({ kind: "documents" })}
-                onNewDocument={openCreateDocumentModal}
-              />
-            )}
-          </main>
+          {/* Main content area */}
+          <div className="app-main-area">
+            <main
+              className={`app-main${isWorkspace ? " app-main--workspace" : " app-main--page"}`}
+            >
+              {route.kind === "changes" ? (
+                <ReviewQueuePage
+                  currentUsername={currentUsername}
+                  onOpenChange={(org, binder, change) =>
+                    onNavigate({
+                      kind: "binder",
+                      org,
+                      binder,
+                      tab: "changes",
+                      change,
+                    })
+                  }
+                  onBrowseDocuments={() => onNavigate({ kind: "documents" })}
+                />
+              ) : route.kind === "documents" ? (
+                <DocumentsPage
+                  onSelectDocument={(org, binder, documentPath) =>
+                    onNavigate({
+                      kind: "binderDocument",
+                      org,
+                      binder,
+                      documentPath,
+                    })
+                  }
+                  onOpenBinder={(org, binder) =>
+                    onNavigate({ kind: "binder", org, binder })
+                  }
+                />
+              ) : route.kind === "organization" ? (
+                <OrganizationPage
+                  org={route.org}
+                  onOpenBinder={(binder) =>
+                    onNavigate({ kind: "binder", org: route.org, binder })
+                  }
+                />
+              ) : route.kind === "binder" || route.kind === "binderDocument" ? (
+                // One shell for both: a document is a file inside the binder,
+                // so it opens under the binder's own header and tabs rather
+                // than on a page of its own.
+                <BinderShell
+                  org={route.org}
+                  binder={route.binder}
+                  {...(route.kind === "binderDocument"
+                    ? { documentPath: route.documentPath }
+                    : {})}
+                  currentUser={currentUsername}
+                  onBinderChange={setSidebarBinder}
+                  onBinderMissing={onBinderMissing}
+                  onOpenDocument={(documentPath, version) =>
+                    onNavigate({
+                      kind: "binderDocument",
+                      org: route.org,
+                      binder: route.binder,
+                      documentPath,
+                      ...(version == null ? {} : { version }),
+                    })
+                  }
+                  onOpenBinder={() =>
+                    onNavigate({
+                      kind: "binder",
+                      org: route.org,
+                      binder: route.binder,
+                    })
+                  }
+                />
+              ) : route.kind === "billing" ? (
+                billing
+              ) : route.kind === "adminSubscriptions" ? (
+                <AdminSubscriptionManagementPage
+                  currentUsername={currentUsername}
+                />
+              ) : (
+                <HomePage
+                  currentUsername={currentUsername}
+                  currentUserFullName={user?.fullName ?? ""}
+                  // A change is on a binder now: Home's rows carry the owning
+                  // organization and the binder, which is what `owner`/`repo`
+                  // always were once a document stopped being a repository.
+                  onOpenChange={(org, binder, changeNumber) =>
+                    onNavigate({
+                      kind: "binder",
+                      org,
+                      binder,
+                      tab: "changes",
+                      change: changeNumber,
+                    })
+                  }
+                  onBrowseDocuments={() => onNavigate({ kind: "documents" })}
+                  onOpenBinders={
+                    sidebarOrg
+                      ? () =>
+                          onNavigate({ kind: "organization", org: sidebarOrg })
+                      : null
+                  }
+                />
+              )}
+            </main>
+          </div>
         </div>
       </div>
 
       {/* Below 768px the sidebar is not rendered and this is the navigation.
           Fixed to the bottom, so it sits outside the scrolling body. */}
       <AppBottomNav route={route} org={sidebarOrg} onNavigate={onNavigate} />
-
-      {showCreateDocumentModal ? (
-        <NewPolicyModal
-          onClose={() => setShowCreateDocumentModal(false)}
-          onAdded={(org, binder, changeNumber) => {
-            setShowCreateDocumentModal(false);
-            // The change request it is in, not the document it will become.
-            onNavigate({
-              kind: "binder",
-              org,
-              binder,
-              tab: "changes",
-              change: changeNumber,
-            });
-          }}
-        />
-      ) : null}
     </div>
   );
 }

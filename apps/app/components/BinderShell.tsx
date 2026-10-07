@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
+import { History, Settings, type LucideIcon } from "lucide-react";
 import { useIsReadOnly } from "../readOnlyContext";
+import { ApiRequestError } from "../../../packages/api-client/mutator";
+import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
+import { routeToPath } from "../routes";
 
 import {
   discardBinderDraft,
@@ -14,18 +18,17 @@ import type {
   WorkspaceOverviewPayload,
 } from "../../../packages/api-schema/schemas/workspaces";
 import {
-  archiveFromSearch,
-  binderTabFromSearch,
   buildBinderUrl,
-  changeViewFromSearch,
+  currentBinderAddress,
+  DEFAULT_REF,
   draftFromSearch,
   editModeFromSearch,
   type BinderEditMode,
   type BinderTab,
 } from "../binderShell";
 import type { DocumentChangeView } from "../routes";
-import { parseRequestedChange } from "../binderChange";
-import { buildDocumentUrl, parseRequestedRef } from "../binderDocument";
+import { followInApp } from "../appLink";
+import { buildDocumentUrl } from "../binderDocument";
 import { formatDocumentName } from "../documentDisplay";
 import { AddPolicyModal } from "./AddPolicyModal";
 import { NewFolderModal } from "./NewFolderModal";
@@ -38,10 +41,15 @@ import { BinderChanges } from "./BinderChanges";
 import { BinderHistory } from "./BinderHistory";
 import { BinderSettings } from "./BinderSettings";
 import { BinderDocumentPage } from "./BinderDocumentPage";
+import { BinderBranchSummary } from "./BinderBranchSummary";
+import { BinderLatestChange } from "./BinderLatestChange";
+import { BinderRefPicker } from "./BinderRefPicker";
 import { BinderDocuments } from "./BinderPage";
 import type { SidebarBinder } from "./AppSidebar";
 import type { DocumentRefView } from "../documentRefs";
 import { SkeletonLine } from "./Skeleton";
+import { PagePath } from "./LocationTrail";
+import { useWriteAction } from "../paywallContext";
 
 /**
  * The binder, laid out the way a repository is.
@@ -62,11 +70,23 @@ import { SkeletonLine } from "./Skeleton";
  * The dispatch is the whole point, and leaving it out is the bug this
  * replaced. A tab click drops the document path off the URL, but the route
  * the app holds is only re-read on `popstate` — so without one, the app kept
- * rendering `/{org}/{binder}/{path}` while the address bar said
- * `/{org}/{binder}?tab=people`, and every tab in the binder stopped working
+ * rendering a document while the address bar said
+ * `/{org}/{binder}/-/settings/people`, and every tab in the binder stopped working
  * the moment somebody opened a document. Same shape as the library's own
  * navigation, for the same reason.
  */
+/**
+ * The branch the address reads at, or null for the record.
+ *
+ * `main` named outright is the record too: a document on the record lives at
+ * `/-/blob/main/…`, and treating that as "a branch" would draw the chrome of
+ * reading somewhere else around the thing everybody reads.
+ */
+function readRef(): string | null {
+  const { ref } = currentBinderAddress();
+  return ref === DEFAULT_REF ? null : ref;
+}
+
 function moveTo(url: string): void {
   window.history.pushState({}, "", url);
   window.dispatchEvent(new PopStateEvent("popstate"));
@@ -88,6 +108,11 @@ interface BinderShellProps {
    */
   onBinderChange?: (binder: SidebarBinder | null) => void;
   /**
+   * Tell the shell above that the address names no binder, so its top bar
+   * stops naming one. Called with false once a binder answers again.
+   */
+  onBinderMissing?: (missing: boolean) => void;
+  /**
    * Open a document. `version` opens it at one published version — the
    * history links that way, because a row there is evidence of a version and
    * not a pointer at whatever the document says now.
@@ -102,13 +127,20 @@ export function BinderShell({
   documentPath,
   currentUser,
   onBinderChange,
+  onBinderMissing,
   onOpenDocument,
   onOpenBinder,
 }: BinderShellProps) {
   const isReadOnly = useIsReadOnly();
+  const orgDisplayName = useOrganizationDisplayName(org);
   const [overview, setOverview] = useState<WorkspaceOverviewPayload | null>(
     null,
   );
+  /**
+   * The binder is not there — or not there for you, which Gitea answers the
+   * same way on purpose, so a private binder's name does not leak.
+   */
+  const [missing, setMissing] = useState(false);
   /**
    * The binder's contents, for the navigation beside an open policy.
    *
@@ -132,21 +164,17 @@ export function BinderShell({
 
   // Back and forward are how somebody leaves a tab or a change, so the shell
   // follows the address bar rather than its own memory of what was clicked.
-  const [tab, setTab] = useState<BinderTab>(() =>
-    binderTabFromSearch(window.location.search),
+  const [tab, setTab] = useState<BinderTab>(() => currentBinderAddress().tab);
+  const [openChange, setOpenChange] = useState<number | null>(
+    () => currentBinderAddress().change,
   );
-  const [openChange, setOpenChange] = useState<number | null>(() =>
-    parseRequestedChange(window.location.search),
-  );
-  const [changeView, setChangeView] = useState<DocumentChangeView>(() =>
-    changeViewFromSearch(window.location.search),
+  const [changeView, setChangeView] = useState<DocumentChangeView>(
+    () => currentBinderAddress().view,
   );
   const [editMode, setEditMode] = useState<BinderEditMode>(() =>
     editModeFromSearch(window.location.search),
   );
-  const [archive, setArchive] = useState(() =>
-    archiveFromSearch(window.location.search),
-  );
+  const [archive, setArchive] = useState(() => currentBinderAddress().archive);
   /**
    * Which of your drafts is being edited, from the address.
    *
@@ -158,9 +186,9 @@ export function BinderShell({
   const [draftBranch, setDraftBranch] = useState<string | null>(() =>
     draftFromSearch(window.location.search),
   );
-  /** The branch a document is being read on, from `?ref=`. */
+  /** The branch the documents are read on: `/-/tree/{ref}`, `/-/blob/{ref}`. */
   const [documentRefFromSearch, setDocumentRef] = useState<string | null>(() =>
-    parseRequestedRef(window.location.search),
+    readRef(),
   );
 
   /**
@@ -179,13 +207,14 @@ export function BinderShell({
 
   useEffect(() => {
     const handler = () => {
-      setTab(binderTabFromSearch(window.location.search));
-      setOpenChange(parseRequestedChange(window.location.search));
-      setChangeView(changeViewFromSearch(window.location.search));
+      const address = currentBinderAddress();
+      setTab(address.tab);
+      setOpenChange(address.change);
+      setChangeView(address.view);
       setEditMode(editModeFromSearch(window.location.search));
       setDraftBranch(draftFromSearch(window.location.search));
-      setDocumentRef(parseRequestedRef(window.location.search));
-      setArchive(archiveFromSearch(window.location.search));
+      setDocumentRef(readRef());
+      setArchive(address.archive);
     };
     window.addEventListener("popstate", handler);
     return () => window.removeEventListener("popstate", handler);
@@ -203,11 +232,39 @@ export function BinderShell({
    */
   const openDocument = (documentPath: string, version?: number | null) => {
     if (editMode === "editing" && draft?.draft) {
-      moveTo(`/${org}/${binder}/${documentPath}?edit=1`);
+      moveTo(
+        buildDocumentUrl({
+          org,
+          binder,
+          documentPath,
+          version: null,
+          edit: true,
+        }),
+      );
       return;
     }
     onOpenDocument(documentPath, version);
   };
+
+  /** Where {@link openDocument} goes, for the rows that are links to it. */
+  const documentHref = (documentPath: string) =>
+    buildDocumentUrl({
+      org,
+      binder,
+      documentPath,
+      version: null,
+      edit: editMode === "editing" && Boolean(draft?.draft),
+    });
+
+  /** A document on the branch the tree is read at. */
+  const branchDocumentHref = (documentPath: string) =>
+    buildDocumentUrl({
+      org,
+      binder,
+      documentPath,
+      version: null,
+      ref: documentRefFromSearch,
+    });
 
   const loadOverview = useCallback(() => {
     let cancelled = false;
@@ -216,8 +273,17 @@ export function BinderShell({
         if (!cancelled) setOverview(payload);
       })
       // The header is context, not content: a binder whose counts cannot be
-      // read still opens, and the tab that failed says so itself.
-      .catch(() => undefined);
+      // read still opens, and the tab that failed says so itself. The one
+      // exception is a binder that is not there at all.
+      .catch((err: unknown) => {
+        if (
+          !cancelled &&
+          err instanceof ApiRequestError &&
+          err.status === 404
+        ) {
+          setMissing(true);
+        }
+      });
 
     return () => {
       cancelled = true;
@@ -226,6 +292,7 @@ export function BinderShell({
 
   useEffect(() => {
     setOverview(null);
+    setMissing(false);
     return loadOverview();
   }, [loadOverview]);
 
@@ -444,6 +511,22 @@ export function BinderShell({
 
   const binderName = formatDocumentName(binder);
 
+  /**
+   * The binder's own page, read at a branch: `/-/tree/{ref}`.
+   *
+   * **The same page as the record's**, title, description and all — a branch
+   * is the binder somewhere else, not a screen of the change that made it.
+   * What differs is said by the picker over the tree and the card above it,
+   * and the acts that write to the record are not offered.
+   */
+  const onBranch =
+    documentRefFromSearch !== null &&
+    !documentPath &&
+    activeTab === "documents" &&
+    openChange === null &&
+    !archive &&
+    editMode === "off";
+
   const draftForContents =
     editMode === "off" ? null : (draft?.draft?.branch ?? null);
 
@@ -483,6 +566,13 @@ export function BinderShell({
 
   // The sidebar's binder section, kept in step with what is on screen.
   useEffect(() => {
+    // No binder, no binder section: its Changes, History and Settings would
+    // each lead to another page about a binder that is not there.
+    onBinderMissing?.(missing);
+    if (missing) {
+      onBinderChange?.(null);
+      return;
+    }
     onBinderChange?.({
       org,
       binder,
@@ -515,6 +605,8 @@ export function BinderShell({
     documentPath,
     documentRefFromSearch,
     onBinderChange,
+    onBinderMissing,
+    missing,
   ]);
 
   /**
@@ -524,11 +616,22 @@ export function BinderShell({
    * whole of D1. Below it the sidebar is `display: none`, so the strip is the
    * same shape the tab bar had — and that shape already worked.
    */
-  const sections: Array<{ id: BinderTab; label: string; count?: number }> = [
+  const sections: Array<{
+    id: BinderTab;
+    label: string;
+    count?: number;
+    /**
+     * Drawn instead of the word. History and Settings are the clock and the
+     * gear the sidebar already uses, and their words pushed Settings off the
+     * end of a 320px strip. The binder and its changes keep their words: they
+     * carry counts, and they are where people are going.
+     */
+    icon?: LucideIcon;
+  }> = [
     { id: "documents", label: binderName, count: overview?.documentCount },
     { id: "changes", label: "Changes", count: overview?.openChangeCount },
-    { id: "history", label: "History" },
-    { id: "settings", label: "Settings" },
+    { id: "history", label: "History", icon: History },
+    { id: "settings", label: "Settings", icon: Settings },
   ];
 
   /**
@@ -573,10 +676,80 @@ export function BinderShell({
                         : {}),
                   };
 
+  // **A page, not a broken binder.** An address with no binder behind it drew
+  // the whole binder — its name made up from the address, Add a document and
+  // Edit buttons, a subtitle that never loaded — around one red line. GitLab
+  // answers a bad address with a page that says so and the way back.
+  // Kept on screen while the organization cannot write, and answered with the
+  // paywall: a missing button explains nothing, an offer does.
+  const addDocument = useWriteAction(() => setAdding(true));
+  const editBinder = useWriteAction(() => void startEditing());
+
+  if (missing) {
+    const orgHref = routeToPath({ kind: "organization", org });
+    return (
+      <section className="docw-page">
+        <div className="bs-empty not-found">
+          <p className="not-found-code">404</p>
+          <h1 className="bs-title">Binder not found</h1>
+          <p>
+            There is no binder at{" "}
+            <code>
+              /{org}/{binder}
+            </code>
+            , or it is one you have not been given access to. Its address may
+            have changed if it was renamed.
+          </p>
+          <a
+            className="bs-btn bs-btn-secondary bs-btn--sm"
+            href={orgHref}
+            onClick={(event) => followInApp(event, () => moveTo(orgHref))}
+          >
+            Back to {orgDisplayName}
+          </a>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section
       className={`docw-page${documentPath ? " docw-page--document" : ""}`}
     >
+      {/* A phone has no sidebar, so the binder's screens are a strip — the
+          shape the tab bar had, which already worked at that width. Above
+          768px it is not drawn at all.
+
+          **First on every screen.** It sat under the title on the screens
+          the shell titles and above it on the ones that title themselves, so
+          tapping History moved the row you had just tapped down the page. */}
+      <nav className="binder-strip" aria-label="This binder">
+        {sections.map((entry) => (
+          <a
+            key={entry.id}
+            href={buildBinderUrl({ org, binder, tab: entry.id })}
+            className={`binder-strip-item${
+              entry.icon ? " binder-strip-item--icon" : ""
+            }${activeTab === entry.id ? " binder-strip-item--active" : ""}`}
+            title={entry.icon ? entry.label : undefined}
+            aria-current={activeTab === entry.id ? "page" : undefined}
+            onClick={(event) => followInApp(event, () => goTo(entry.id))}
+          >
+            {entry.icon ? (
+              <>
+                <entry.icon size={15} strokeWidth={1.75} aria-hidden="true" />
+                <span className="sr-only">{entry.label}</span>
+              </>
+            ) : (
+              entry.label
+            )}
+            {entry.count !== undefined && entry.count > 0 ? (
+              <span className="binder-strip-count">{entry.count}</span>
+            ) : null}
+          </a>
+        ))}
+      </nav>
+
       {head ? (
         <div className="bs-pagehead">
           <div className="bs-pagehead-body">
@@ -596,7 +769,7 @@ export function BinderShell({
               The contents only. This is the page's one filled button, and on
               the other three screens the answer to "what is this page for" is
               not "add a policy". */}
-          {isReadOnly || activeTab !== "documents" ? null : (
+          {activeTab !== "documents" || onBranch ? null : (
             <div className="bs-pagehead-actions">
               {/* **The same buttons in the same slots.** Reading, the header
                   offers Add a policy and Edit; editing, it offers the way
@@ -615,14 +788,14 @@ export function BinderShell({
                   <button
                     className="bs-btn bs-btn-secondary"
                     type="button"
-                    onClick={() => setAdding(true)}
+                    onClick={addDocument}
                   >
-                    Add a policy
+                    Add a document
                   </button>
                   <button
                     className="bs-btn bs-btn-primary"
                     type="button"
-                    onClick={() => void startEditing()}
+                    onClick={editBinder}
                     disabled={startingEdit}
                   >
                     {startingEdit ? "Opening your draft…" : "Edit"}
@@ -642,27 +815,18 @@ export function BinderShell({
         </div>
       ) : null}
 
-      {/* A phone has no sidebar, so the binder's screens are a strip under
-          the page title — the shape the tab bar had, which already worked at
-          that width. Above 768px it is not drawn at all. */}
-      <nav className="binder-strip" aria-label="This binder">
-        {sections.map((entry) => (
-          <button
-            key={entry.id}
-            className={`binder-strip-item${
-              activeTab === entry.id ? " binder-strip-item--active" : ""
-            }`}
-            type="button"
-            aria-current={activeTab === entry.id ? "page" : undefined}
-            onClick={() => goTo(entry.id)}
-          >
-            {entry.label}
-            {entry.count !== undefined && entry.count > 0 ? (
-              <span className="binder-strip-count">{entry.count}</span>
-            ) : null}
-          </button>
-        ))}
-      </nav>
+      {/* Where in the binder this page is. The binder itself is in the top
+          bar; this is the part that changes as you move around inside it.
+          After the strip, so a phone reads binder, then where in it, then the
+          title. Only the screens that title themselves are deep enough to
+          draw one, so on a wide screen it is always straight above a title. */}
+      <PagePath
+        route={
+          documentPath
+            ? { kind: "binderDocument", org, binder, documentPath }
+            : { kind: "binder", org, binder }
+        }
+      />
 
       {/* Between the header and whatever is under it, because it is about the
           binder rather than about the list: the propose screen replaces the
@@ -690,38 +854,12 @@ export function BinderShell({
              The change is where the reader came from. */
           documentRef={documentRefFromSearch}
           change={openChange}
-          onBackToChange={openChangeNumber}
           onRefsChange={setReading}
           /* Opened from the tree while editing, so it is read where the name
              it was clicked under actually exists. */
           draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
           onOpenBinder={onOpenBinder}
           onOpenChange={openChangeNumber}
-        />
-      ) : openChange !== null &&
-        documentRefFromSearch !== null &&
-        activeTab === "documents" ? (
-        /* **The binder at a change's branch**, from the branch link under a
-           comparison's title — the root of the branch, the way a code host
-           opens one, rather than whichever file happened to be first. */
-        <BinderDocuments
-          org={org}
-          binder={binder}
-          onChange={{ number: openChange, branch: documentRefFromSearch }}
-          onBackToChange={openChangeNumber}
-          onOpenChange={openChangeNumber}
-          onOpenDocument={(slugPath) =>
-            moveTo(
-              buildDocumentUrl({
-                org,
-                binder,
-                documentPath: slugPath,
-                version: null,
-                change: openChange,
-                ref: documentRefFromSearch,
-              }),
-            )
-          }
         />
       ) : openChange !== null ? (
         <BinderChangePage
@@ -733,7 +871,6 @@ export function BinderShell({
           onViewChange={(next) => openChangeNumber(openChange, next)}
           onBackToChanges={() => goTo("changes")}
           onOpenSignOffRules={() => goTo("sign-off")}
-          onOpenDocument={openDocument}
           /* The document's own address, on this change's branch — the binder
              at another ref rather than a panel inside the change. */
           /* **The branch, not the change.** A file lives on a branch, which
@@ -746,20 +883,12 @@ export function BinderShell({
                 binder,
                 documentPath: slugPath,
                 version: null,
-                change: openChange,
                 ref: branch,
               }),
             )
           }
           onOpenBranch={(branch) =>
-            moveTo(
-              buildBinderUrl({
-                org,
-                binder,
-                ref: branch,
-                change: openChange,
-              }),
-            )
+            moveTo(buildBinderUrl({ org, binder, ref: branch }))
           }
           onChanged={loadOverview}
         />
@@ -775,6 +904,12 @@ export function BinderShell({
           binder={binder}
           onOpenDocument={openDocument}
           onOpenChange={openChangeNumber}
+          documentHref={(documentPath, version) =>
+            buildDocumentUrl({ org, binder, documentPath, version })
+          }
+          changeHref={(change) =>
+            buildBinderUrl({ org, binder, tab: "changes", change })
+          }
         />
       ) : activeTab === "settings" ? (
         <BinderSettings
@@ -828,34 +963,88 @@ export function BinderShell({
           }}
         />
       ) : (
-        <BinderDocuments
-          org={org}
-          binder={binder}
-          onOpenDocument={openDocument}
-          activeDocument={documentPath ?? null}
-          draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
-          draftPicker={
-            draft?.draft && editMode === "editing" ? (
-              <BinderDraftPicker
-                drafts={draft.drafts}
-                others={draft.others}
-                current={draft.draft.branch}
-                busy={startingEdit}
-                onSwitch={switchDraft}
-                onStart={startAnother}
-                onRename={renameDraft}
-              />
-            ) : null
-          }
-          draftActs={draft?.draft?.acts ?? []}
-          reloadKey={reloadKey}
-          onEdited={refreshDraft}
-          onDraftLost={leaveEditMode}
-          onOpenArchive={() => goToArchive(true)}
-          onOpenChange={openChangeNumber}
-          onAddPolicy={() => setAdding(true)}
-          onNewFolder={() => setAddingFolder(true)}
-        />
+        <div className="binder-home">
+          {/* What happened last, above what is in it — GitLab's newest commit
+              over the files. Not while editing: the draft bar is the news
+              then, and the record has not moved. */}
+          {onBranch ? (
+            <BinderBranchSummary
+              org={org}
+              binder={binder}
+              branch={documentRefFromSearch!}
+              changeHref={(change, compare) =>
+                buildBinderUrl({
+                  org,
+                  binder,
+                  tab: "changes",
+                  change,
+                  view: compare ? "compare" : "discussion",
+                })
+              }
+              onOpenChange={(change, compare) =>
+                openChangeNumber(change, compare ? "compare" : "discussion")
+              }
+            />
+          ) : editMode === "off" ? (
+            <BinderLatestChange
+              key={reloadKey}
+              org={org}
+              binder={binder}
+              changeHref={(change) =>
+                buildBinderUrl({ org, binder, tab: "changes", change })
+              }
+              historyHref={buildBinderUrl({ org, binder, tab: "history" })}
+              onOpenChange={openChangeNumber}
+              onOpenHistory={() => goTo("history")}
+            />
+          ) : null}
+          <BinderDocuments
+            org={org}
+            binder={binder}
+            onOpenDocument={(slugPath) =>
+              onBranch
+                ? moveTo(branchDocumentHref(slugPath))
+                : openDocument(slugPath)
+            }
+            documentHref={onBranch ? branchDocumentHref : documentHref}
+            atRef={onBranch ? documentRefFromSearch : null}
+            refPicker={
+              editMode === "off" ? (
+                <BinderRefPicker
+                  org={org}
+                  binder={binder}
+                  current={onBranch ? documentRefFromSearch : null}
+                  onPick={(ref) => moveTo(buildBinderUrl({ org, binder, ref }))}
+                  onPickDraft={(branch) => goToEdit("editing", branch)}
+                />
+              ) : null
+            }
+            activeDocument={documentPath ?? null}
+            draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
+            draftPicker={
+              draft?.draft && editMode === "editing" ? (
+                <BinderDraftPicker
+                  org={org}
+                  drafts={draft.drafts}
+                  others={draft.others}
+                  current={draft.draft.branch}
+                  busy={startingEdit}
+                  onSwitch={switchDraft}
+                  onStart={startAnother}
+                  onRename={renameDraft}
+                />
+              ) : null
+            }
+            draftActs={draft?.draft?.acts ?? []}
+            reloadKey={reloadKey}
+            onEdited={refreshDraft}
+            onDraftLost={leaveEditMode}
+            onOpenArchive={() => goToArchive(true)}
+            onOpenChange={openChangeNumber}
+            onAddPolicy={() => setAdding(true)}
+            onNewFolder={() => setAddingFolder(true)}
+          />
+        </div>
       )}
 
       {/* Last in the page, and sticky to the bottom of the viewport: it is

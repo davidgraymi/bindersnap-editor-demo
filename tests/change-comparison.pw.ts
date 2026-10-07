@@ -31,35 +31,64 @@
  * Requires the full Docker Compose stack — run via `bun run test:integration`.
  */
 
-import { expect, test } from "@playwright/test";
+import { expect as baseExpect, test } from "@playwright/test";
 
 import { APP_BASE_URL, OWNER, signInAsAlice } from "./helpers";
 
 test.describe.configure({ mode: "serial", timeout: 180_000 });
 
-/** `?view=compare` — its own address, so a reviewer can send the diff. */
+// A comparison reads every changed document at two refs before it draws, and
+// on a loaded runner that outlasts the 5s an assertion waits by default — CI
+// caught the page still empty. The tests have 180s; their assertions get room
+// to use it.
+const expect = baseExpect.configure({ timeout: 20_000 });
+
+/** `/-/changes/{n}/diffs` — its own address, so a reviewer can send the diff. */
 function comparisonUrl(binder: string, change: number): string {
-  return `${APP_BASE_URL}/${OWNER}/${binder}?tab=changes&change=${change}&view=compare`;
+  return `${APP_BASE_URL}/${OWNER}/${binder}/-/changes/${change}/diffs`;
 }
 
-test("the change's own list is the way in, and it names the screen", async ({
-  page,
-}) => {
+test("a document in the change's list opens its own diff", async ({ page }) => {
   await signInAsAlice(page);
   await page.goto(`${APP_BASE_URL}/${OWNER}/facilities?tab=changes&change=4`);
 
-  // In the list's own bar, beside the count — not floating on the paper above
-  // it, which is the rule that makes the binder's screens read as one product.
-  const link = page.getByRole("button", {
-    name: /See everything that changed/,
-  });
-  await expect(link).toBeVisible();
-  await link.click();
+  // A row is a way into the Changes screen, not a selector for the rail —
+  // the rail has no per-file panel, whatever the count.
+  const rows = page.locator(".change-does .bs-row");
+  await expect(rows).toHaveCount(2);
+  await expect(
+    page.locator(".bs-rail").getByRole("heading", { name: "Proposed version" }),
+  ).toHaveCount(0);
 
-  await expect(page).toHaveURL(/view=compare/);
-  // Both documents, on one screen, without picking either.
+  const second = rows.nth(1);
+  const name = await second.locator(".bs-row-name").innerText();
+  await second.click();
+
+  await expect(page).toHaveURL(/\/-\/changes\/\d+\/diffs/);
+  // Both documents, on one screen, and the one clicked is the one marked.
   await expect(page.locator(".cmp-file")).toHaveCount(2);
   await expect(page.locator(".bs-rail .bs-row")).toHaveCount(2);
+  await expect(
+    page.locator('.bs-rail .bs-row[aria-current="true"]'),
+  ).toContainText(name);
+});
+
+test("a change to one document reads the same as a change to several", async ({
+  page,
+}) => {
+  await signInAsAlice(page);
+  await page.goto(`${APP_BASE_URL}/${OWNER}/clinical?tab=changes&change=7`);
+
+  // The same list, with its one row, and the same rail.
+  await expect(page.locator(".change-does .bs-row")).toHaveCount(1);
+  await expect(page.locator(".change-does")).toContainText("1 document");
+  await expect(
+    page.locator(".bs-rail").getByRole("heading", { name: "Proposed version" }),
+  ).toHaveCount(0);
+
+  await page.locator(".change-does .bs-row").click();
+  await expect(page).toHaveURL(/\/-\/changes\/\d+\/diffs/);
+  await expect(page.locator(".cmp-file")).toHaveCount(1);
 });
 
 test("a renamed policy is read by identity, not by address", async ({
@@ -154,10 +183,20 @@ test("folding a document keeps its bar, and every act in it", async ({
   page,
 }) => {
   await signInAsAlice(page);
-  await page.goto(comparisonUrl("facilities", 4));
+  // Not facilities #4: that change only renames a folder, so both of its
+  // documents read the same at both refs, draw no comparison, and leave an
+  // empty body that the stylesheet already hides. "Visible before folding"
+  // held there only while the comparison was still loading — a race, and one
+  // CI lost. Clinical #19 changes the wording, so its body settles to a diff
+  // that stays on screen until it is folded.
+  await page.goto(comparisonUrl("clinical", 19));
 
   const first = page.locator(".cmp-file").first();
-  await expect(first.locator(".cmp-file-body")).toBeVisible();
+  const body = first.locator(".cmp-file-body");
+  // Wait for the settled diff, not the loading skeleton, so folding is the
+  // only thing that can hide it.
+  await expect(body.locator("del").first()).toBeVisible({ timeout: 30_000 });
+  await expect(body).toBeVisible();
 
   await first.locator(".cmp-file-fold").click();
 
@@ -168,7 +207,7 @@ test("folding a document keeps its bar, and every act in it", async ({
   // the document and leaves the way to view or download it.
   await expect(
     first.locator(".cmp-file-head").getByRole("link", { name: "View" }),
-  ).toHaveAttribute("href", /\?ref=.*&change=4/);
+  ).toHaveAttribute("href", /\/-\/blob\/(?!main\/)[^/?]+\/[^?]+$/);
   await expect(
     first.locator(".cmp-file-head").getByRole("button", { name: "Download" }),
   ).toBeVisible();
@@ -187,26 +226,64 @@ test("the branch opens the binder at its root, and View opens the file", async (
   const branchName = (await branch.textContent())!.trim();
   await expect(branch).toHaveAttribute(
     "href",
-    /^\/[^/]+\/clinical\?ref=.+&change=19$/,
+    /^\/[^/]+\/clinical\/-\/tree\/[^/?]+$/,
   );
 
   // View in the file's bar is that one file on the branch — a real link, so
   // it can be opened in a new tab or sent to somebody.
   await expect(
     page.locator(".cmp-file-head").first().getByRole("link", { name: "View" }),
-  ).toHaveAttribute("href", /\/clinical\/.+\?ref=.+&change=19$/);
+  ).toHaveAttribute("href", /\/clinical\/-\/blob\/[^/?]+\/[^?]+$/);
 
   await branch.click();
-  await expect(page).toHaveURL(/\/clinical\?ref=.+&change=19$/);
-  // The tree, named for the branch it is read on, with the way back.
-  await expect(page.locator(".binder-pane .cmp-branch")).toHaveText(branchName);
+  await expect(page).toHaveURL(/\/clinical\/-\/tree\/[^/?]+$/);
+  // The binder's own page, read at the branch: its title, the picker naming
+  // the branch, and the card saying which change sits on it — not a button
+  // back to where the reader clicked from.
+  await expect(page.locator("h1.bs-title")).toHaveText("Clinical");
+  await expect(page.locator(".bs-refpick")).toHaveText(branchName);
+  await expect(page.locator(".binder-latest--branch")).toContainText(
+    "change 19",
+  );
   await expect(page.locator(".binder-tree-row").first()).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Back to change 19" }),
-  ).toBeVisible();
+    page.getByRole("button", { name: /Back to change/ }),
+  ).toHaveCount(0);
+  // Nothing that writes to the record is offered on somebody's branch.
+  await expect(page.getByRole("button", { name: "Edit" })).toHaveCount(0);
 
   // A policy opened from there is still read on the branch.
-  await page.getByRole("button", { name: "Code Of Conduct" }).click();
-  await expect(page).toHaveURL(/\/clinical\/[^?]+\?ref=.+&change=19$/);
+  await page
+    .getByRole("link", { name: "Code Of Conduct", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/clinical\/-\/blob\/(?!main\/)[^/?]+\/[^?]+$/);
   await expect(page.locator("h1.bs-title")).toHaveText(/code of conduct/i);
+});
+
+test("every binder says which version its tree is, and switches to another", async ({
+  page,
+}) => {
+  await signInAsAlice(page);
+  await page.goto(`${APP_BASE_URL}/${OWNER}/clinical`);
+
+  // On the record, the picker says so — GitLab's branch selector over the
+  // tree, there whether or not anybody is editing.
+  const picker = page.locator(".bs-refpick");
+  await expect(picker).toHaveText("Published");
+  await picker.click();
+  const menu = page.getByRole("menu");
+  await expect(menu).toContainText("Change requests");
+
+  // A change request's branch is one pick away, and the page stays the
+  // binder's own.
+  await menu.getByRole("menuitemradio").nth(1).click();
+  await expect(page).toHaveURL(/\/clinical\/-\/tree\/[^/?]+$/);
+  await expect(page.locator("h1.bs-title")).toHaveText("Clinical");
+  await expect(page.locator(".bs-refpick--branch")).toBeVisible();
+
+  // And back.
+  await page.locator(".bs-refpick").click();
+  await page.getByRole("menuitemradio", { name: /Published/ }).click();
+  await expect(page).toHaveURL(/\/clinical$/);
+  await expect(page.locator(".bs-refpick")).toHaveText("Published");
 });

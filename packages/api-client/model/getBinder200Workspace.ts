@@ -11,4 +11,6 @@ export type GetBinder200Workspace = {
   owner: string;
   fullName: string;
   description: string;
+  openChangeCount: number;
+  updatedAt: string;
 };

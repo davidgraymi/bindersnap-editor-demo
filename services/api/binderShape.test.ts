@@ -558,7 +558,9 @@ describe("restoring an archived document", () => {
       base64Content: "SGVsbG8=",
       tree: tree({ documents: [document()] }),
     });
-    expect(result).toEqual({ error: "That policy is already in this binder." });
+    expect(result).toEqual({
+      error: "That document is already in this binder.",
+    });
   });
 
   test("a policy renamed since it left comes back under its last name", () => {

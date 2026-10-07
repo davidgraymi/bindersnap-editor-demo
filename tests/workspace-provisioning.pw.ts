@@ -23,7 +23,7 @@ import {
   GITEA_URL,
 } from "./helpers";
 
-test.describe.configure({ mode: "serial", timeout: 120_000 });
+test.describe.configure({ mode: "parallel", timeout: 120_000 });
 
 interface Credentials {
   username: string;

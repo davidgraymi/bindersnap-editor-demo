@@ -152,7 +152,7 @@ async function signInBrowser(page: Page, sessionCookie: string): Promise<void> {
   ]);
 }
 
-test("a delinquent organization keeps its record and loses its controls", async ({
+test("a delinquent organization keeps its record, and its controls open the paywall", async ({
   page,
 }) => {
   const credentials = buildCredentials();
@@ -169,9 +169,9 @@ test("a delinquent organization keeps its record and loses its controls", async 
   // Before: a member in good standing is offered the way to write.
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
   await expect(
-    page.getByRole("button", { name: "Add a policy" }),
+    page.getByRole("button", { name: "Add a document" }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "New policy" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create new…" })).toBeVisible();
   await expect(page.getByTestId("read-only-banner")).toHaveCount(0);
 
   const adminSession = await signIn(GITEA_ADMIN_USER, GITEA_ADMIN_PASS);
@@ -186,17 +186,35 @@ test("a delinquent organization keeps its record and loses its controls", async 
   // The heading shows the name they typed, not the slug the repository is
   // addressed by — "Clinical Policies", not "clinical-policies".
   await expect(page.getByRole("heading", { name: binderTitle })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Add a policy" })).toHaveCount(
-    0,
-  );
-  // The top nav's create button sits on every page, so leaving it would put
-  // the one unusable affordance in front of them everywhere they went. It was
-  // missed on the first pass and found by looking at a screenshot.
-  await expect(page.getByRole("button", { name: "New policy" })).toHaveCount(0);
+  // The ways to write stay where they were, and each one is answered with
+  // the paywall — what it costs and what it gets you — rather than removed,
+  // because a button that has vanished explains nothing. "Not now" leaves the
+  // reader exactly where they were.
+  const paywall = page.getByRole("dialog");
+  for (const open of [
+    () => page.getByRole("button", { name: "Add a document" }).click(),
+    async () => {
+      await page.getByRole("button", { name: "Create new…" }).click();
+      await page.getByRole("menuitem", { name: /New binder/ }).click();
+    },
+    () => page.getByRole("button", { name: "Restore access" }).click(),
+  ]) {
+    await open();
+    await expect(paywall.getByRole("heading", { level: 2 })).toContainText(
+      /subscription has lapsed|free trial has ended|Subscribe to keep writing/,
+    );
+    await expect(paywall).toContainText("Bindersnap Pro");
+    await paywall.getByRole("button", { name: "Not now" }).click();
+    await expect(paywall).toHaveCount(0);
+  }
   expect(new URL(page.url()).pathname).toBe(`/${org}/${binder}`);
   // The empty state must not instruct an action whose control is gone.
-  await expect(page.getByText("Nothing filed here yet.")).toBeVisible();
-  await expect(page.getByText("Add a policy and it joins")).toHaveCount(0);
+  // A fresh binder's listing is read from Gitea, which can take longer than
+  // the 5s default on a loaded runner — CI caught it still on its skeleton.
+  await expect(page.getByText("Nothing filed here yet.")).toBeVisible({
+    timeout: 20_000,
+  });
+  await expect(page.getByText("Add a document and it joins")).toHaveCount(0);
 
   // The API half of the same promise, asserted directly rather than through
   // the screen: reads are open, writes are refused, and the refusal is typed
@@ -219,4 +237,71 @@ test("a delinquent organization keeps its record and loses its controls", async 
   };
   expect(refusal.code).toBe("subscription_required");
   expect(refusal.organization).toBe(org);
+});
+
+/**
+ * Billing is per organization, for a person in two of them.
+ *
+ * Only a person's first organization gets a trial, so their second starts
+ * unable to write. The server used to answer every billing question for the
+ * oldest: the second read as paid for by the first, the paywall's checkout
+ * billed the first, and the second could never be subscribed to at all.
+ */
+test("a second organization is gated, offered and billed as itself", async ({
+  page,
+}) => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const first = await createOrganization(
+    sessionCookie,
+    `First Health ${randomUUID().slice(0, 6)}`,
+  );
+  const secondName = `Second Health ${randomUUID().slice(0, 6)}`;
+  const second = await createOrganization(sessionCookie, secondName);
+
+  // The API: the first is on its trial, the second has nothing.
+  const intoSecond = await fetch(
+    `${API_BASE_URL}/api/app/orgs/${second}/binders`,
+    {
+      method: "POST",
+      headers: authHeaders(sessionCookie),
+      body: JSON.stringify({ name: "Refused" }),
+    },
+  );
+  expect(intoSecond.status).toBe(402);
+  expect(
+    ((await intoSecond.json()) as { organization?: string }).organization,
+  ).toBe(second);
+  await createBinder(sessionCookie, first, "Allowed");
+
+  await signInBrowser(page, sessionCookie);
+
+  // The first organization writes; the second is read-only, and says whose.
+  await page.goto(`${APP_BASE_URL}/${first}`);
+  await expect(
+    page.getByRole("heading", { name: /First Health/ }),
+  ).toBeVisible();
+  await expect(page.getByTestId("read-only-banner")).toHaveCount(0);
+
+  await page.goto(`${APP_BASE_URL}/${second}`);
+  const banner = page.getByTestId("read-only-banner");
+  await expect(banner).toContainText(secondName);
+  await page.getByRole("button", { name: "Restore access" }).click();
+  const paywall = page.getByRole("dialog");
+  await expect(paywall).toContainText(secondName);
+  await paywall.getByRole("button", { name: "Not now" }).click();
+
+  // Its billing page is its own, reached from the entry under its name.
+  const orgNav = page.getByRole("navigation", { name: secondName });
+  await orgNav.getByRole("link", { name: "Billing" }).click();
+  await expect(page).toHaveURL(new RegExp(`/${second}/-/billing$`));
+  const plan = page.getByRole("region", { name: "Plan" });
+  await expect(plan).toContainText("Inactive");
+  await expect(
+    page.getByRole("button", { name: "Subscribe", exact: true }),
+  ).toBeVisible();
+
+  // And the first organization's billing still shows its trial.
+  await page.goto(`${APP_BASE_URL}/billing/${first}`);
+  await expect(plan).toContainText("Trial");
 });

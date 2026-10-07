@@ -1,5 +1,5 @@
 import {
-  Activity,
+  Building2,
   CreditCard,
   FileText,
   FilePen,
@@ -14,22 +14,24 @@ import {
 
 import type { BinderTab } from "../binderShell";
 import type { DocumentRefView } from "../documentRefs";
-import type { AppRoute, OrganizationTab } from "../routes";
+import { followInApp } from "../appLink";
+import { routeToPath, type AppRoute, type OrganizationTab } from "../routes";
 import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
 import { useCollapsedSidebar } from "../useCollapsedSidebar";
+import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
 
 /**
  * The map of the product, always on screen.
  *
  * Before this, the whole of global navigation was "Home · Documents · [org
- * switcher]". Everything else — people, activity, billing, an organization's
+ * switcher]". Everything else — people, billing, an organization's
  * own page — was reachable only by first entering a binder or by typing a URL,
  * so a new reader had no way to learn what the product contained.
  *
- * The grouping is the teaching, and it is worth more than the links. The work
- * you do, then the things you manage, then the settings you rarely touch. A
- * flat list of eight would answer "where is billing" no better than the top bar
- * did.
+ * The grouping is the teaching, and it is worth more than the links. **Each
+ * group is a scope, named, outermost first**: your work across every
+ * organization, then this organization's binders, people and billing, then
+ * the binder you are in. A reader always knows whose page an entry opens.
  *
  * **The binder you are in is a section of this, and it was a tab bar** (D1,
  * the customer's call). A binder is still a place — one set of rules, one set
@@ -45,11 +47,22 @@ import { useCollapsedSidebar } from "../useCollapsedSidebar";
  * the way pressing a folder opens the folder.
  *
  * **Below 768px this is not rendered at all** (`.app-sidebar` is
- * `display: none`), so the top bar keeps its links for small screens and they
- * are hidden where the sidebar takes over. Neither is duplicated at any width.
- * Mobile navigation is still thin — that is a known gap in the review, not
- * something this fixes.
+ * `display: none`); the bottom bar carries the places people move between
+ * there. Neither is duplicated at any width.
  */
+
+/**
+ * Whether the organization's People tab is the page.
+ *
+ * The route carries the tab only when the app navigated there itself; an
+ * address that was typed, reloaded or opened in a new tab says it in the query.
+ */
+function isOrganizationPeople(route: AppRoute): boolean {
+  if (route.kind !== "organization") return false;
+  const tab =
+    route.tab ?? new URLSearchParams(window.location.search).get("tab");
+  return tab === "people";
+}
 
 /** The binder on screen, as its own section of the map. */
 export interface SidebarBinder {
@@ -160,6 +173,7 @@ export function AppSidebar({
   // The org-scoped entries have nowhere to point until we know which
   // organization is on screen. Rendered muted and inert rather than hidden:
   // a map that changes shape as you walk around it is not a map.
+  const orgName = useOrganizationDisplayName(org ?? "");
   const orgRoute = (tab?: OrganizationTab): AppRoute | null =>
     org === null
       ? null
@@ -188,18 +202,6 @@ export function AppSidebar({
       route: { kind: "documents" },
       isActive: (r) => r.kind === "documents",
     },
-    {
-      key: "binders",
-      label: "Binders",
-      icon: Library,
-      route: orgRoute(),
-      // A binder and a document inside it are both "in" the binders section —
-      // you got there through it, and the sidebar should not lose your place.
-      isActive: (r) =>
-        r.kind === "organization" ||
-        r.kind === "binder" ||
-        r.kind === "binderDocument",
-    },
   ];
 
   /**
@@ -211,7 +213,10 @@ export function AppSidebar({
     ? [
         {
           key: "binder-changes",
-          label: "Changes",
+          // What the page it opens is titled, and what the same list is
+          // called under Your work — GitLab's project sidebar says "Merge
+          // requests" too, not a shorter word for the same thing.
+          label: "Change requests",
           icon: FilePen,
           route: {
             kind: "binder",
@@ -254,42 +259,40 @@ export function AppSidebar({
       ]
     : [];
 
-  const manage: Entry[] = [
+  /**
+   * **The organization's own entries, under its name.** They were split
+   * across "Manage" and "Settings" headings between the binder and the foot,
+   * with nothing saying which organization they belonged to — beside Home and
+   * Change requests, which span every organization you are in. Now each scope
+   * is a labelled group: yours, this organization's, this binder's.
+   */
+  const organization: Entry[] = [
+    {
+      key: "binders",
+      label: "Binders",
+      icon: Library,
+      route: orgRoute(),
+      // A binder and a document inside it are both "in" the binders section —
+      // you got there through it, and the sidebar should not lose your place.
+      isActive: (r) =>
+        (r.kind === "organization" && !isOrganizationPeople(r)) ||
+        r.kind === "binder" ||
+        r.kind === "binderDocument",
+    },
     {
       key: "people",
       label: "People & access",
       icon: Users,
       route: orgRoute("people"),
-      isActive: () => false,
+      isActive: isOrganizationPeople,
     },
-    {
-      key: "activity",
-      label: "Activity",
-      icon: Activity,
-      route: { kind: "activity" },
-      isActive: (r) => r.kind === "activity",
-    },
-  ];
-
-  /**
-   * **One destination per entry.**
-   *
-   * "Organization" pointed at the organization's page — which is the binder
-   * list, which "Binders" above it already opens, which the org button in the
-   * top bar also opens. Three entries, one destination, and a reader learning
-   * the product from the map would conclude two of them were broken.
-   *
-   * It is gone rather than repointed: "Binders" is the organization's home
-   * and "People & access" under Manage is the rest of it, so there was nothing
-   * left for a third entry to mean. Billing is the only thing under Settings
-   * that is genuinely a setting.
-   */
-  const settings: Entry[] = [
     {
       key: "billing",
       label: "Billing",
       icon: CreditCard,
-      route: { kind: "billing" },
+      // This organization's billing, not the reader's oldest: billing is per
+      // organization, and the entry sits under this one's name.
+      route: org === null ? null : { kind: "billing", org },
       isActive: (r) => r.kind === "billing",
     },
   ];
@@ -299,11 +302,15 @@ export function AppSidebar({
     const active = entry.isActive(route);
     const disabled = entry.route === null;
 
+    // **A link, not a button**, so it can be opened in a new tab, middle-
+    // clicked, and shows its address on hover — everything a reader expects
+    // of a place they can go. A plain click still navigates in-app. An entry
+    // with nowhere to go yet has no `href`, which is how a link says so.
     return (
-      <button
+      <a
         key={entry.key}
-        type="button"
-        disabled={disabled}
+        href={entry.route ? routeToPath(entry.route) : undefined}
+        aria-disabled={disabled || undefined}
         className={`app-sidebar-item${active ? " app-sidebar-item--active" : ""}${
           disabled ? " app-sidebar-item--muted" : ""
         }`}
@@ -314,14 +321,17 @@ export function AppSidebar({
         // navigation whichever width it is at — and the title puts it back for
         // a pointer.
         title={collapsed ? entry.label : undefined}
-        onClick={() => entry.route && onNavigate(entry.route)}
+        onClick={(event) => {
+          const to = entry.route;
+          if (to) followInApp(event, () => onNavigate(to));
+        }}
       >
         <Icon size={15} strokeWidth={1.75} aria-hidden="true" />
         <span className="app-sidebar-item-label">{entry.label}</span>
         {typeof entry.count === "number" && entry.count > 0 ? (
           <span className="app-sidebar-item-count">{entry.count}</span>
         ) : null}
-      </button>
+      </a>
     );
   };
 
@@ -338,7 +348,23 @@ export function AppSidebar({
       className={`app-sidebar${collapsed ? " app-sidebar--collapsed" : ""}`}
     >
       <nav className="app-sidebar-section" aria-label="Your work">
+        <div className="app-sidebar-label">Your work</div>
         {work.map(renderEntry)}
+      </nav>
+
+      {/* The organization's, under its own name — outermost to innermost:
+          your work, this organization, the binder you are in. */}
+      <nav
+        className="app-sidebar-section"
+        aria-label={orgName ? orgName : "Organization"}
+      >
+        <div className="app-sidebar-label app-sidebar-label--scope">
+          <Building2 size={12} strokeWidth={2} aria-hidden="true" />
+          <span className="app-sidebar-label-text">
+            {orgName || "Organization"}
+          </span>
+        </div>
+        {organization.map(renderEntry)}
       </nav>
 
       {binder ? (
@@ -346,41 +372,37 @@ export function AppSidebar({
           className="app-sidebar-section app-sidebar-section--binder"
           aria-label={binder.name}
         >
-          <button
-            type="button"
+          <a
+            href={routeToPath({
+              kind: "binder",
+              org: binder.org,
+              binder: binder.binder,
+            })}
             className={`app-sidebar-binder${
               binder.section === "documents"
                 ? " app-sidebar-binder--active"
                 : ""
             }`}
             aria-current={binder.section === "documents" ? "page" : undefined}
-            onClick={() =>
-              onNavigate({
-                kind: "binder",
-                org: binder.org,
-                binder: binder.binder,
-              })
+            onClick={(event) =>
+              followInApp(event, () =>
+                onNavigate({
+                  kind: "binder",
+                  org: binder.org,
+                  binder: binder.binder,
+                }),
+              )
             }
           >
             <span className="app-sidebar-binder-mark" aria-hidden="true">
               <Library size={14} strokeWidth={1.75} />
             </span>
             <span className="app-sidebar-binder-name">{binder.name}</span>
-          </button>
+          </a>
 
           {binderEntries.map(renderEntry)}
         </nav>
       ) : null}
-
-      <nav className="app-sidebar-section" aria-label="Manage">
-        <div className="app-sidebar-label">Manage</div>
-        {manage.map(renderEntry)}
-      </nav>
-
-      <nav className="app-sidebar-section" aria-label="Settings">
-        <div className="app-sidebar-label">Settings</div>
-        {settings.map(renderEntry)}
-      </nav>
 
       <div className="app-sidebar-spacer" />
 

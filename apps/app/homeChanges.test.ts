@@ -104,6 +104,7 @@ function closed(overrides: Partial<ClosedChange> = {}): ClosedChange {
     title: "New onboarding checklist",
     body: "New onboarding checklist",
     branchName: "version/6",
+    documentSlugPath: null,
     submittedBy: "maya",
     submittedAt: "2026-08-18T10:00:00Z",
     closedAt: "2026-08-19T10:00:00Z",
@@ -137,7 +138,6 @@ describe("buildOpenChangeRows", () => {
     // says what state the change is in, which is a different question — and
     // the two were being answered on the same line.
     expect(rows[0]?.standing).toBe("Awaiting approval");
-    expect(rows[0]?.action).toBe("Review");
     expect(rows[0]?.documentName).toBe("Vendor Agreement");
     expect(rows[0]?.meta).toContain("Maya");
     expect(rows[0]?.meta).not.toContain("approvals");
@@ -184,7 +184,6 @@ describe("buildOpenChangeRows", () => {
     // *"why does a CR say 'Waiting on you' when it's approved to be
     // published? It should say 'Approved'."*
     expect(rows[0]?.standing).toBe("Approved");
-    expect(rows[0]?.action).toBe("Publish");
     // Which version it becomes is a fact about a document, and a change can
     // touch three. It belongs on the change's own page.
     expect(rows[0]?.meta).not.toContain("becomes v");
@@ -213,7 +212,6 @@ describe("buildOpenChangeRows", () => {
     expect(rows[0]?.kind).toBe("submission");
     expect(rows[0]?.standing).toBe("Awaiting approval");
     expect(rows[0]?.meta).not.toContain("approvals");
-    expect(rows[0]?.action).toBeNull();
   });
 
   test("a change the reader has nothing to do with is left off", () => {
@@ -309,6 +307,22 @@ describe("buildDecidedChangeRows", () => {
     expect(rows[0]?.tone).toBe("published");
   });
 
+  test("a decided change names its document, not the binder it is in", () => {
+    const rows = buildDecidedChangeRows(
+      [
+        {
+          owner: "david",
+          repo: "clinical",
+          changes: [closed({ documentSlugPath: "nursing/hand-hygiene" })],
+        },
+      ],
+      "david",
+      new Set(["david/clinical"]),
+    );
+
+    expect(rows[0]?.documentName).toBe("Hand Hygiene");
+  });
+
   test("a withdrawn change says who withdrew it", () => {
     const rows = buildDecidedChangeRows(
       [
@@ -332,6 +346,41 @@ describe("buildDecidedChangeRows", () => {
     expect(rows[0]?.outcome).toBe("closed");
     expect(rows[0]?.meta).toBe("withdrawn by Tom");
     expect(rows[0]?.standing).toBe("Closed");
+  });
+
+  test("a decision says who made it by name, and you by 'you'", () => {
+    const declined = (decidedBy: string) =>
+      buildDecidedChangeRows(
+        [
+          {
+            owner: "david",
+            repo: "mutual-nda",
+            changes: [
+              closed({
+                outcome: "declined",
+                publishedVersion: null,
+                decidedBy,
+                closedAt: "2026-08-12T10:00:00Z",
+                reviewers: [reviewer("david")],
+                reviews: [
+                  review("tom", {
+                    author: {
+                      login: "tom",
+                      fullName: "Tom Okafor",
+                      avatarUrl: "",
+                    },
+                    state: "changes_requested",
+                  }),
+                ],
+              }),
+            ],
+          },
+        ],
+        "david",
+      )[0]?.meta;
+
+    expect(declined("tom")).toBe("declined by Tom Okafor");
+    expect(declined("david")).toBe("declined by you");
   });
 
   test("a decision the reader had no part in is left off", () => {

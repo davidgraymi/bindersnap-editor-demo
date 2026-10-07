@@ -280,6 +280,9 @@
                   "properties": {
                     "login": {
                       "type": "string"
+                    },
+                    "full_name": {
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -593,6 +596,9 @@
                   "properties": {
                     "login": {
                       "type": "string"
+                    },
+                    "full_name": {
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -801,6 +807,9 @@
                   "nullable": true,
                   "properties": {
                     "login": {
+                      "type": "string"
+                    },
+                    "full_name": {
                       "type": "string"
                     }
                   },
@@ -1967,6 +1976,12 @@
           },
           "description": {
             "type": "string"
+          },
+          "openChangeCount": {
+            "type": "number"
+          },
+          "updatedAt": {
+            "type": "string"
           }
         },
         "required": [
@@ -1974,7 +1989,9 @@
           "name",
           "owner",
           "fullName",
-          "description"
+          "description",
+          "openChangeCount",
+          "updatedAt"
         ]
       },
       "WorkspaceListPayload": {
@@ -1999,6 +2016,12 @@
                 },
                 "description": {
                   "type": "string"
+                },
+                "openChangeCount": {
+                  "type": "number"
+                },
+                "updatedAt": {
+                  "type": "string"
                 }
               },
               "required": [
@@ -2006,7 +2029,9 @@
                 "name",
                 "owner",
                 "fullName",
-                "description"
+                "description",
+                "openChangeCount",
+                "updatedAt"
               ]
             }
           }
@@ -2276,6 +2301,12 @@
               "interval",
               "formatted"
             ]
+          },
+          "canManageBilling": {
+            "type": "boolean"
+          },
+          "hasBillingAccount": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -2679,7 +2710,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Every policy in every binder this person can reach",
+            "description": "Every document in every binder this person can reach",
             "content": {
               "application/json": {
                 "schema": {
@@ -2999,6 +3030,9 @@
                                   "properties": {
                                     "login": {
                                       "type": "string"
+                                    },
+                                    "full_name": {
+                                      "type": "string"
                                     }
                                   },
                                   "required": [
@@ -3132,6 +3166,10 @@
                                 },
                                 "branchName": {
                                   "type": "string"
+                                },
+                                "documentSlugPath": {
+                                  "type": "string",
+                                  "nullable": true
                                 },
                                 "submittedBy": {
                                   "type": "string"
@@ -3296,6 +3334,7 @@
                                 "title",
                                 "body",
                                 "branchName",
+                                "documentSlugPath",
                                 "submittedBy",
                                 "submittedAt",
                                 "closedAt",
@@ -3729,6 +3768,12 @@
                           },
                           "description": {
                             "type": "string"
+                          },
+                          "openChangeCount": {
+                            "type": "number"
+                          },
+                          "updatedAt": {
+                            "type": "string"
                           }
                         },
                         "required": [
@@ -3736,7 +3781,9 @@
                           "name",
                           "owner",
                           "fullName",
-                          "description"
+                          "description",
+                          "openChangeCount",
+                          "updatedAt"
                         ]
                       }
                     }
@@ -3794,6 +3841,12 @@
                           },
                           "description": {
                             "type": "string"
+                          },
+                          "openChangeCount": {
+                            "type": "number"
+                          },
+                          "updatedAt": {
+                            "type": "string"
                           }
                         },
                         "required": [
@@ -3801,7 +3854,9 @@
                           "name",
                           "owner",
                           "fullName",
-                          "description"
+                          "description",
+                          "openChangeCount",
+                          "updatedAt"
                         ]
                       }
                     }
@@ -3880,6 +3935,12 @@
                         },
                         "description": {
                           "type": "string"
+                        },
+                        "openChangeCount": {
+                          "type": "number"
+                        },
+                        "updatedAt": {
+                          "type": "string"
                         }
                       },
                       "required": [
@@ -3887,7 +3948,9 @@
                         "name",
                         "owner",
                         "fullName",
-                        "description"
+                        "description",
+                        "openChangeCount",
+                        "updatedAt"
                       ]
                     }
                   },
@@ -3950,6 +4013,12 @@
                         },
                         "description": {
                           "type": "string"
+                        },
+                        "openChangeCount": {
+                          "type": "number"
+                        },
+                        "updatedAt": {
+                          "type": "string"
                         }
                       },
                       "required": [
@@ -3957,7 +4026,9 @@
                         "name",
                         "owner",
                         "fullName",
-                        "description"
+                        "description",
+                        "openChangeCount",
+                        "updatedAt"
                       ]
                     },
                     "documentCount": {
@@ -7131,6 +7202,14 @@
             "required": false,
             "name": "change",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "ref",
+            "in": "query"
           }
         ],
         "responses": {
@@ -7664,6 +7743,9 @@
                             "nullable": true,
                             "properties": {
                               "login": {
+                                "type": "string"
+                              },
+                              "full_name": {
                                 "type": "string"
                               }
                             },
@@ -9396,6 +9478,9 @@
                           "nullable": true,
                           "properties": {
                             "login": {
+                              "type": "string"
+                            },
+                            "full_name": {
                               "type": "string"
                             }
                           },
@@ -11860,6 +11945,16 @@
         "tags": [
           "billing"
         ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "organization",
+            "in": "query"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Billing status",
@@ -11978,6 +12073,12 @@
                         "interval",
                         "formatted"
                       ]
+                    },
+                    "canManageBilling": {
+                      "type": "boolean"
+                    },
+                    "hasBillingAccount": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -12014,6 +12115,15 @@
                 "properties": {
                   "idempotencyKey": {
                     "type": "string"
+                  },
+                  "organization": {
+                    "type": "string"
+                  },
+                  "intent": {
+                    "type": "string",
+                    "enum": [
+                      "cancel"
+                    ]
                   }
                 },
                 "required": [
@@ -12060,6 +12170,15 @@
                 "properties": {
                   "idempotencyKey": {
                     "type": "string"
+                  },
+                  "organization": {
+                    "type": "string"
+                  },
+                  "intent": {
+                    "type": "string",
+                    "enum": [
+                      "cancel"
+                    ]
                   }
                 },
                 "required": [
