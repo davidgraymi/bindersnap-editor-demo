@@ -2708,7 +2708,7 @@ async function handleDeleteAccount(
 ): Promise<Response> {
   const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
-  const { session } = auth;
+  const { session, client: ownClient } = auth;
   const username = session.username;
 
   const payload = await readJson<{ password?: unknown; confirm?: unknown }>(
@@ -2750,6 +2750,9 @@ async function handleDeleteAccount(
     );
   }
 
+  // Reads go through the service token; what changes in Gitea before the
+  // account itself goes is done as the person, whose token carries the write
+  // scopes the service token deliberately lacks.
   try {
     const orgs = await listUserOrganizations(client, username);
     const sole = await findSoleOwnerships({ client, username, orgs });
@@ -2772,7 +2775,7 @@ async function handleDeleteAccount(
     for (const draft of drafts) {
       const stamp = draft.branch.split("/")[2] ?? "";
       await renameBranch({
-        client,
+        client: ownClient,
         org: draft.org,
         binder: draft.binder,
         from: draft.branch,
@@ -2788,7 +2791,7 @@ async function handleDeleteAccount(
     }
 
     for (const org of orgs) {
-      await removeOrganizationMember({ client, org, username });
+      await removeOrganizationMember({ client: ownClient, org, username });
     }
 
     await endOtherSessions(username, session.id);
