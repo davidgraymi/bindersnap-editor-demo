@@ -53,17 +53,14 @@
     />
     <meta property="og:locale" content="en_US" />
     <meta name="twitter:card" content="summary_large_image" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="preload"
-      as="style"
-      href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap"
-    />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap"
-    />
+    <!--
+      Our own copy of the fonts, not Google's: see public/fonts/fonts.css. An
+      @import, so the bundler leaves it alone instead of inlining every font
+      file into the app's stylesheet.
+    -->
+    <style>
+      @import url("/fonts/fonts.css");
+    </style>
     <link
       rel="preload"
       as="style"

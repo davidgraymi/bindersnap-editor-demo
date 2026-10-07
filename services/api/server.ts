@@ -34,6 +34,7 @@ import {
   passwordResetStore,
   resetLinkEmail,
 } from "./password-reset";
+import { identiconSvg } from "./identicon";
 import { reconcileBinders, type ReconcilerReport } from "./reconciler";
 import {
   PublishConflict,
@@ -3214,50 +3215,17 @@ async function handleDeleteAccount(
   }
 }
 
-/** How long a login's avatar hash is reused before Gitea is asked again. */
-const AVATAR_HASH_TTL_MS = 60 * 60 * 1000;
-const avatarHashes = new Map<string, { hash: string; expiresAt: number }>();
-
 /**
- * The Gravatar hash for a login: SHA-256 of the account's email, as Gravatar
- * asks for it.
+ * Somebody's face: a pattern drawn from their login, here, by us.
  *
- * Read with the service account, because a person's own token sees other
- * people's addresses as Gitea's no-reply ones — which would give everybody a
- * face that is nobody's. An account that cannot be read hashes its login
- * instead, so it still has a face of its own rather than a broken image.
- */
-async function avatarHashFor(login: string): Promise<string> {
-  const key = login.toLowerCase();
-  const cached = avatarHashes.get(key);
-  if (cached && cached.expiresAt > Date.now()) return cached.hash;
-
-  let email: string | null = null;
-  const client = createPrivilegedGiteaClient();
-  if (client) {
-    const { data } = await client
-      .GET("/users/{username}", { params: { path: { username: login } } })
-      .catch(() => ({ data: undefined }));
-    const raw = typeof data?.email === "string" ? data.email.trim() : "";
-    email = looksLikeEmailAddress(raw) ? raw.toLowerCase() : null;
-  }
-
-  const hash = createHash("sha256")
-    .update(email ?? `bindersnap:${key}`)
-    .digest("hex");
-  avatarHashes.set(key, { hash, expiresAt: Date.now() + AVATAR_HASH_TTL_MS });
-  return hash;
-}
-
-/**
- * Somebody's face: their Gravatar, or Gravatar's pattern for them.
- *
- * A redirect rather than a URL in every payload, so the address it is made
- * from never reaches the browser — only its hash reaches Gravatar. Somebody
- * with a Gravatar photo shows it; everybody else gets the pattern Gravatar
- * draws from the same hash, so no two people look alike and one person looks
- * the same on every page. Signed-in only: the faces of an organization's
- * people are not for anybody who guesses a login.
+ * Not Gravatar. Asking Gravatar for a face hands Automattic a hash of the
+ * person's email and the viewer's IP address, for a picture almost nobody at a
+ * clinic has ever uploaded, so the Privacy Policy promises that nobody else
+ * sees who uses Bindersnap and this keeps the promise. The pattern is the
+ * kind Gravatar drew for everybody without a photo: a mirrored five-by-five
+ * grid in one colour, so no two people look alike and one person looks the
+ * same on every page. Signed-in only: the faces of an organization's people
+ * are not for anybody who guesses a login.
  */
 async function handleAvatar(
   req: Request,
@@ -3271,13 +3239,12 @@ async function handleAvatar(
   const requested = Number.parseInt(url.searchParams.get("s") ?? "", 10);
   const size =
     Number.isFinite(requested) && requested > 0 ? Math.min(requested, 512) : 80;
-  const hash = await avatarHashFor(login);
 
-  return new Response(null, {
-    status: 302,
+  return new Response(identiconSvg(login, size), {
+    status: 200,
     headers: mergeHeaders(baseHeaders, {
-      Location: `https://www.gravatar.com/avatar/${hash}?s=${size}&d=identicon&r=g`,
-      "Cache-Control": "private, max-age=3600",
+      "Content-Type": "image/svg+xml",
+      "Cache-Control": "private, max-age=86400",
     }),
   });
 }

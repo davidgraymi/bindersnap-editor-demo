@@ -15,9 +15,9 @@ Because Bindersnap runs on one server in one region, a serious failure there wou
 
 ## Encryption
 
-- **In transit.** Every connection to Bindersnap uses TLS (HTTPS). Caddy manages the certificates, which come from Let's Encrypt. Our API refuses connections that aren't HTTPS.
+- **In transit.** Every connection to Bindersnap uses TLS (HTTPS). On our server, Caddy manages the certificates, which come from Let's Encrypt. GitHub Pages provides the certificate for our public website. Our API refuses connections that aren't HTTPS.
 - **At rest.** The server's disks are encrypted with AWS-managed keys. Our backup storage (Amazon S3) blocks all public access and uses S3's default server-side encryption.
-- **Browser protections.** We send security headers that stop other sites from framing Bindersnap (`X-Frame-Options: DENY`), stop browsers from guessing file types (`nosniff`), and keep our page addresses from leaking to other sites (same-origin referrer policy).
+- **Browser protections.** Our API and document server send security headers that stop other sites from framing them (`X-Frame-Options: DENY`), stop browsers from guessing file types (`nosniff`), and keep our addresses from leaking to other sites (same-origin referrer policy). Our public website and the app's files are served by GitHub Pages, which doesn't let us set these headers.
 
 ## Backups
 
@@ -48,8 +48,8 @@ Deleted information remains in backups until it ages out, up to 7 days for snaps
 - **Narrow internal access.** Our own service accounts are split by power: read-only accounts for reading, and admin accounts only where admin power is needed.
 - **Passwords and tokens are stored hashed.** The document server hashes passwords. We store password-reset and email-confirmation tokens only as SHA-256 hashes.
 - **Rate limits.** We limit repeated sign-in and account requests to slow down password guessing.
-- **Email confirmation.** An account can't be used until its owner confirms their email address.
-- **No third-party scripts.** The app loads no analytics, advertising or other third-party code.
+- **Email confirmation.** An account can't be used until its owner confirms their email address, either with the link we send or by accepting an invitation sent to that address.
+- **No third-party scripts.** The app loads no analytics, advertising or other third-party code. Its fonts and profile pictures come from Bindersnap itself, not from Google, Gravatar or any other outside service.
 
 ## Monitoring
 

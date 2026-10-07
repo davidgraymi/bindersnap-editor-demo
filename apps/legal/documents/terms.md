@@ -14,13 +14,17 @@ The agreement is between Solid Gray LLC and the organization that creates or use
 - you have authority to bind that organization, and
 - the organization agrees to these Terms.
 
-If you do not have that authority, do not accept the Terms. If you use Bindersnap as an individual member of an organization's account, you must follow these Terms, and your organization is responsible for what you do under its account.
+If you do not have that authority, do not accept the Terms.
+
+**Users.** Everyone who creates a Bindersnap account also agrees, personally, to follow Sections 3, 4 and 5. That includes people invited into an organization that already has an account. Agreeing does not make an invited person a party to their organization's agreement with us. The organization stays responsible for what its users do under its account.
+
+**Where we offer Bindersnap.** Bindersnap is offered to organizations based in the United States. Do not accept these Terms for an organization based anywhere else.
 
 You accept the Terms by checking the acceptance box, creating an account, starting a trial, or using the service, whichever comes first.
 
 ## 2. The service
 
-Bindersnap is a service for writing, reviewing, approving, publishing, and keeping documents such as policies and procedures. Documents live in "binders." Every version, approval, review comment, and published version is kept as a permanent audit record.
+Bindersnap is a service for writing, reviewing, approving, publishing, and keeping documents such as policies and procedures. Documents live in "binders." Every version, approval, review comment, and published version is kept as an audit record for as long as the binder exists, except as Sections 5 and 8 provide.
 
 "Service" means the Bindersnap website, application, and related features. We may improve, change, or retire features. If we make a change that materially reduces core functionality for paying customers, we will give notice under Section 18.
 
@@ -28,7 +32,7 @@ Bindersnap is a service for writing, reviewing, approving, publishing, and keepi
 
 **Organizations.** The paying customer is an organization. A person creates the organization and becomes an owner. Owners can invite other people, manage teams and binders, and manage billing.
 
-**Accounts.** Each person has an individual account with a username, name, email address, and password. A username cannot be changed after it is created. You must give accurate information and confirm your email address before using the account. Do not share your password. Tell us promptly at [security@bindersnap.com](mailto:security@bindersnap.com) if you suspect unauthorized access.
+**Accounts.** Each person has an individual account with a username, name, email address, and password. A username cannot be changed after it is created. You must give accurate information and confirm your email address before using the account. Accepting an invitation sent to that address counts as confirming it. Do not share your password. Tell us promptly at [security@bindersnap.com](mailto:security@bindersnap.com) if you suspect unauthorized access.
 
 **Responsibility.** The Customer is responsible for:
 
@@ -69,7 +73,13 @@ The Customer is responsible for:
 - training its users and checking documents before upload or approval; and
 - any consequences, including regulatory consequences, of PHI being submitted despite this section.
 
-If we learn that PHI has been uploaded, we may ask the Customer to remove it, restrict access to the affected content, or suspend the account. We do not accept responsibility under HIPAA for PHI that a Customer submits, and the Customer must not describe Bindersnap to anyone as HIPAA-compliant.
+**If PHI is submitted.** If we learn that PHI or other data this section prohibits has been submitted, we will tell the organization's owners. The Customer must remove it within 5 business days after our notice. If it does not, or if we reasonably decide that removal cannot wait, we may:
+
+- restrict access to the affected content,
+- suspend the account, or
+- permanently remove the affected content, including from approved and published versions and their history, even though Section 7 says those are otherwise kept.
+
+We will tell the Customer what we removed and when. We do not accept responsibility under HIPAA for PHI that a Customer submits, and the Customer must not describe Bindersnap to anyone as HIPAA-compliant.
 
 The same applies to other data that needs special regulatory protection, such as payment card numbers, government identification numbers, and similar sensitive records. Do not upload them.
 
@@ -93,7 +103,7 @@ We do not sell Customer Content, use it to advertise, or use it to train machine
 
 Bindersnap is built to keep evidence. Please understand how that affects you:
 
-- Approved and published versions are kept. An approved version cannot be edited, only superseded by a newer version.
+- Approved and published versions are kept for as long as the binder exists. An approved version cannot be edited, only superseded by a newer version. The only exceptions are deleting the whole binder (Section 8) and removing prohibited data (Section 5).
 - Reviews, comments, and approvals stay attached to the record. They remain on the record even after the person who made them deletes their account, because they are the organization's evidence.
 - Do not put anything in a binder, including a review comment, that you would not want kept permanently with the binder.
 
@@ -114,7 +124,7 @@ Deletion is real and, in some cases, cannot be undone. Details are in the "Reten
 
 **Stripe.** We use Stripe, Inc. to process payments. You enter payment details on Stripe's pages, and we never see full card numbers. Stripe's terms apply to its services.
 
-**Renewal.** Subscriptions renew automatically for the same period (monthly or annual, as shown at purchase) until canceled. We will charge the payment method on file at each renewal.
+**Renewal.** Subscriptions renew automatically for the same period (monthly or annual, as shown at purchase) until canceled. We will charge the payment method on file at each renewal. For an annual subscription, we will email the organization's owners at least 30 days before it renews.
 
 **Price changes.** We may change prices for future periods. We will give at least 30 days' notice by email to the organization's owners before a change applies to an existing subscription. If you do not accept the change, you can cancel before it takes effect.
 
@@ -187,7 +197,7 @@ These Terms start when you accept them and continue as long as the Customer has 
 
 We will try to give notice before suspending and to limit the suspension to what is needed.
 
-**Effect of termination.** When the agreement ends, the Customer's right to use the Service ends. We will make Customer Content available for export for at least 30 days after termination, unless the termination is for conduct that creates a legal or security risk, or law prevents it. After that, we may delete it. Sections that by their nature should continue (including Sections 6, 7, 11, 15 through 17, and 20) continue after termination.
+**Effect of termination.** When the agreement ends, the Customer's right to use the Service ends. We will make Customer Content available for export for at least 30 days after termination, unless the termination is for conduct that creates a legal or security risk, or law prevents it. After that, we may delete it. Sections that by their nature should continue (including Sections 6, 7, 11, 15 through 17, and 19 through 21, and any fees already owed under Section 9) continue after termination.
 
 ## 15. Warranties and disclaimers
 
@@ -197,6 +207,8 @@ Except as stated in these Terms, the Service is provided "as is" and "as availab
 
 Bindersnap is a document-management tool. It does not provide legal, compliance, medical, or regulatory advice, and using it does not make an organization compliant with any law, standard, or accreditation requirement. The Customer is responsible for the content of its documents and for its own compliance.
 
+Bindersnap is also not a substitute for the Customer's own record-keeping. The Customer is responsible for meeting any record-keeping or retention requirements that apply to it, including by exporting its records.
+
 ## 16. Limitation of liability
 
 To the fullest extent the law allows:
@@ -204,12 +216,18 @@ To the fullest extent the law allows:
 - Neither party is liable for indirect, incidental, special, consequential, or punitive damages, or for lost profits, revenue, or goodwill, however caused, even if told of the possibility.
 - Each party's total liability arising out of or relating to these Terms is limited to the fees the Customer paid to us for the Service in the 12 months before the event that gave rise to the claim. If the Customer has paid nothing, the limit is US $100.
 
-These limits do not apply to:
+**Higher limit.** For the following claims, the total limit is instead two times the fees the Customer paid to us for the Service in the 12 months before the event that gave rise to the claim, or US $200 if the Customer has paid nothing:
 
-- a party's indemnification obligations under Section 17,
-- breach of confidentiality (but not a data breach, which remains subject to the cap),
+- our obligations under Section 17 ("By us"), and
+- either party's breach of Section 11 (Confidentiality), including any claim arising from unauthorized access to Customer Content or another security incident.
+
+Claims under this higher limit count toward it and toward no other limit. The two limits are not added together.
+
+**No limit.** These limits do not apply to:
+
+- the Customer's obligations under Section 17 ("By the Customer"),
 - the Customer's payment obligations,
-- a party's gross negligence, fraud, or willful misconduct, or
+- a party's fraud or willful misconduct, or
 - liability that cannot be limited by law.
 
 The limits apply to all claims in total, not per claim. They reflect the price of the Service and the allocation of risk between us.
@@ -227,13 +245,15 @@ The limits apply to all claims in total, not per claim. They reflect the price o
 
 ## 18. Changes to these Terms
 
-We may update these Terms. For material changes, we will email the organization's owners and post the new version, with its date and version number, at least 30 days before the change takes effect. If a change is required by law or is needed for security reasons, it may take effect sooner.
+We may update these Terms. For material changes, we will email the organization's owners and post the new version, with its date and version number, at least 30 days before the change takes effect. We may also ask owners to accept the new version in the Service, and we keep a record of each acceptance. If a change is required by law or is needed for security reasons, it may take effect sooner.
 
 If you do not agree, you can cancel before the change takes effect. If you continue to use the Service after the effective date, you accept the updated Terms. We keep prior versions available on request.
 
 ## 19. Governing law and disputes
 
 These Terms are governed by the laws of the State of [STATE], without regard to conflict-of-law rules. The parties will first try to resolve a dispute informally: write to us at the address in Section 20, and we will work with you in good faith for 30 days. If that fails, the courts located in [STATE] have exclusive jurisdiction, and each party consents to them. Either party may seek an injunction in any court of competent jurisdiction to protect its intellectual property or Confidential Information.
+
+**Jury waiver.** To the extent the law allows, each party waives any right to a jury trial in any dispute arising out of or relating to these Terms.
 
 ## 20. Notices and contact
 

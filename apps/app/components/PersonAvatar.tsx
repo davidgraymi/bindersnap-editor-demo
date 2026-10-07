@@ -22,7 +22,7 @@ const DRAWN_SIZE = { sm: 24, md: 26 } as const;
  * Same circle in the reviewers row, the comment header, the picker, the top
  * bar and the sidebar, so the name beside it is the only thing that changes.
  *
- * **Their Gravatar, or the pattern Gravatar draws for them.** Initials alone
+ * **The pattern the API draws for them.** Initials alone
  * made a room of people look alike. The image comes from the API, by login,
  * so it is the same image on every page — the reason pull request 533 dropped Gitea's
  * pictures was that one person had two faces, and that cannot happen here.

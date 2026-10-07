@@ -33,8 +33,7 @@ const LOGO_MARK = `<svg viewBox="0 0 18 18" fill="none" aria-hidden="true" width
 
 const SITE = "https://bindersnap.com";
 
-const FONTS =
-  "https://fonts.googleapis.com/css2?family=Lora:wght@500;600&family=Geist:wght@400;500;600&display=swap";
+const FONTS = "/fonts/fonts.css";
 
 const THEME_SCRIPT = `(function(){try{var s=localStorage.getItem("bs-theme");var d=window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.setAttribute("data-theme",s||(d?"dark":"light"));}catch(e){}})();`;
 
@@ -78,8 +77,6 @@ ${
 <meta property="og:title" content="${escape(params.title)}">
 <meta property="og:description" content="${escape(params.description)}">
 <meta property="og:image" content="${SITE}/og-image.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="${FONTS}">
 <link rel="stylesheet" href="/legal/legal.css">
 <script>${THEME_SCRIPT}</script>

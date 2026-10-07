@@ -10,7 +10,7 @@ The Customer accepts this DPA by accepting the Terms. No separate signature is n
 ## 1. Definitions
 
 - **Applicable Data Protection Law** means the laws that apply to our processing of Customer Personal Data, including, as applicable, the EU General Data Protection Regulation (GDPR), the UK GDPR and Data Protection Act 2018, the Swiss FADP, and U.S. state privacy laws such as the California Consumer Privacy Act as amended (CCPA).
-- **Customer Personal Data** means Personal Data contained in Customer Content, and Personal Data about the Customer's users that we process to provide the Service.
+- **Customer Personal Data** means Personal Data contained in Customer Content, including the invitations, team membership and binder roles the Customer manages. It does not include account, billing, security, log, email-sending and agreement records, for which we are an independent controller under our Privacy Policy.
 - **Controller, Processor, Data Subject, Personal Data, Personal Data Breach, Processing,** and **Supervisory Authority** have the meanings in the GDPR. "Business," "Service Provider," "Sell," and "Share" have the meanings in the CCPA.
 - **Subprocessor** means a third party we engage that processes Customer Personal Data.
 - **Terms such as "Customer Content," "Service"** have the meanings in the Terms.
@@ -19,9 +19,9 @@ The Customer accepts this DPA by accepting the Terms. No separate signature is n
 
 The Customer is the Controller (or a Processor acting for its own controller) and we are the Processor (or Subprocessor) of Customer Personal Data. Under the CCPA, the Customer is the Business and we are its Service Provider.
 
-We act as an independent controller for a small amount of data we use for our own purposes, such as billing records, account security, and preventing trial abuse. Our Privacy Policy at [/legal/privacy](/legal/privacy) covers that use.
+We act as an independent controller for the data we use for our own purposes: user accounts, billing records, account security and server logs, records of the emails we send, records of agreement to the Terms, and preventing trial abuse. Our Privacy Policy at [/legal/privacy](/legal/privacy) covers that use, and this DPA does not.
 
-Annex 1 describes the processing. The Customer must not submit protected health information (PHI) or other special-category data to the Service, as stated in Section 5 of the Terms. Annex 1 reflects that restriction.
+Annex 1 describes the processing. The Customer must not submit protected health information (PHI) or other special-category data to the Service, as stated in Section 5 of the Terms. Annex 1 reflects that restriction. If such data is submitted, the Customer instructs us to restrict or permanently remove it as Section 5 of the Terms allows.
 
 ## 3. Processing on instructions
 
@@ -115,7 +115,7 @@ We do not restore deleted data from backups to the live Service for the purpose 
 
 **10.6 End of the agreement.** After the agreement ends and the export period passes, we will delete Customer Personal Data in the live Service, and it will age out of backups as stated in 10.4, unless law requires us to keep it. If law requires retention, we will keep it protected and process it only as the law requires.
 
-**10.7 Our own records.** Billing records, the record of who agreed to which version of the Terms and when, and the minimal record in 10.3, are kept for the purposes in our Privacy Policy, such as tax, accounting, and fraud prevention.
+**10.7 Our own records.** Billing records, the record of who agreed to which version of the Terms and when (kept for six years after the account is deleted), and the minimal record in 10.3, are kept for the purposes in our Privacy Policy, such as tax, accounting, and fraud prevention.
 
 ## 11. Audits and information
 
@@ -132,9 +132,9 @@ We will give the Customer the information reasonably needed to show that we comp
 
 ## 12. International transfers
 
-**Hosting location.** We host Customer Personal Data in the United States, in AWS region us-east-1 (N. Virginia). Our Subprocessors are in the United States.
+**Hosting location.** The Service is offered to organizations based in the United States. We host Customer Personal Data in the United States, in AWS region us-east-1 (N. Virginia). Our Subprocessors are in the United States.
 
-**EU, UK, and Swiss data.** If the Customer sends us Personal Data subject to the GDPR, the UK GDPR, or the Swiss FADP, which we process in the United States, the following apply:
+**EU, UK, and Swiss data.** The Service is not offered to organizations outside the United States. Even so, a Customer may hold Personal Data of people in Europe, such as staff working abroad. If the Customer sends us Personal Data subject to the GDPR, the UK GDPR, or the Swiss FADP, which we process in the United States, the following apply:
 
 - **EU Standard Contractual Clauses.** The parties agree to the EU Standard Contractual Clauses (Commission Implementing Decision (EU) 2021/914), which are incorporated by reference and completed as follows:
 - Module Two (controller to processor) applies where the Customer is a controller. Module Three (processor to processor) applies where the Customer is a processor.
@@ -200,7 +200,7 @@ Privacy questions, countersigned copies, objections, and Data Subject requests: 
 
 **Duration.** For as long as the Customer has an account, plus the export period and the deletion and backup ageing described in Section 10.
 
-**Nature of the processing.** Hosting, storage, retrieval, display, transmission, backup, and deletion of Customer Content and account data; sending transactional emails; supporting and securing the Service.
+**Nature of the processing.** Hosting, storage, retrieval, display, transmission, backup, and deletion of Customer Content; sending the invitation and notification emails that the Customer's use of the Service triggers; supporting and securing the Service.
 
 **Purpose.** To provide the Service to the Customer under the Terms, to secure it, to support the Customer, and to comply with law.
 
@@ -214,11 +214,10 @@ Privacy questions, countersigned copies, objections, and Data Subject requests: 
 
 **Categories of Personal Data.**
 
-- Account data: username, first and last name, email address, password (stored hashed), email-verification status, and role and team membership.
-- Content data: names and other Personal Data that users put in documents, versions, approvals, review comments, reactions, and tags, and the identity of who did what and when.
-- Technical data: session information, client IP addresses (in logs, for security and rate limiting), and notification preferences.
-- Invitation and email data: invited email addresses and records of emails sent.
-- Profile picture: a SHA-256 hash of the email address, used to request a profile picture from Gravatar.
+- Identity in the record: the names and usernames of the Customer's users as they appear on versions, approvals, reviews and comments, and the identity of who did what and when.
+- Membership: the Customer's teams, who is in them, and each person's role in each binder.
+- Content data: names and other Personal Data that users put in documents, versions, approvals, review comments, reactions, and tags.
+- Invitations: the email addresses the Customer invites, and the invitation emails the Service sends to them.
 
 **Special categories of data.** None. The Customer must not submit special-category data (as defined in GDPR Article 9), protected health information (PHI) under HIPAA, or data about criminal convictions, as set out in Section 5 of the Terms. We do not sign business associate agreements.
 
@@ -243,12 +242,9 @@ Our measures are described in full at [/legal/security](/legal/security). In sum
 
 The current list is at [/legal/subprocessors](/legal/subprocessors). As of the date above:
 
-| Subprocessor               | Purpose                                                                                                       | Location        |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------- |
-| Amazon Web Services, Inc.  | Hosting, storage, and backups (EC2, EBS, S3); logs (CloudWatch); email delivery (SES)                         | USA (us-east-1) |
-| Stripe, Inc.               | Subscription billing and payments                                                                             | USA             |
-| Gravatar / Automattic Inc. | Profile pictures (receives a hash of the email address)                                                       | USA             |
-| GitHub, Inc.               | Hosting of the public website and application files (sees visitor IP addresses; receives no Customer Content) | USA             |
-| Google LLC (Google Fonts)  | Web fonts on public pages (sees visitor IP addresses)                                                         | USA             |
+| Subprocessor              | Purpose                                                                               | Location        |
+| ------------------------- | ------------------------------------------------------------------------------------- | --------------- |
+| Amazon Web Services, Inc. | Hosting, storage, and backups (EC2, EBS, S3); logs (CloudWatch); email delivery (SES) | USA (us-east-1) |
+| Stripe, Inc.              | Subscription billing and payments                                                     | USA             |
 
 Changes to this list follow Section 6.

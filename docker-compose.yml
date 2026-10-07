@@ -72,6 +72,10 @@ services:
       - GITEA__cors__ALLOW_DOMAIN=http://localhost:${APP_PORT:-5173}
       - GITEA__cors__METHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
       - GITEA__cors__ALLOW_CREDENTIALS=true
+      # No Gravatar or other outside avatar service: Gitea draws its own, so no
+      # hash of anybody's email leaves the host (the Privacy Policy says so).
+      - GITEA__picture__DISABLE_GRAVATAR=true
+      - GITEA__picture__ENABLE_FEDERATED_AVATAR=false
       - GITEA__log__LEVEL=warn
       # Local-only: the seed accounts share the password `dev`. Gitea's
       # default minimum would reject it.
