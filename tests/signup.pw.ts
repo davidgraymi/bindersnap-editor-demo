@@ -19,7 +19,7 @@ import {
   OWNER,
   signOutCurrentUser,
 } from "./helpers";
-import { waitForEmail } from "./mailpit";
+import { confirmFromEmail } from "./mailpit";
 
 function buildUniqueSignupCredentials() {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -107,21 +107,6 @@ async function attachScreenshot(
  * Nothing works until a new account's address is confirmed, so that is the
  * page signup lands on: it names the address, and the email's link finishes it.
  */
-async function confirmFromEmail(page: Page, email: string): Promise<void> {
-  await expect(
-    page.getByRole("heading", { name: "Confirm your email." }),
-  ).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText(email)).toBeVisible();
-  const confirmation = await waitForEmail(email, /^Confirm your email/);
-  await page.goto(
-    confirmation.links.find((href) => href.includes("/-/verify_email?"))!,
-  );
-  await expect(
-    page.getByRole("heading", { name: "Your email is confirmed." }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Continue" }).click();
-}
-
 async function signUpThroughOrganizationSetup(
   page: Page,
   username: string,

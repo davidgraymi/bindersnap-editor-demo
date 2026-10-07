@@ -7,7 +7,7 @@
  * email, follow the link.
  */
 
-import { expect } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
 
@@ -151,4 +151,26 @@ export async function signUpAndConfirm(
   )?.[1];
   if (session) await confirmEmail(session);
   return response;
+}
+
+/**
+ * Finish a signup made in the browser: the page asks for the email to be
+ * confirmed, so open the link from it, and continue into the app.
+ */
+export async function confirmFromEmail(
+  page: Page,
+  email: string,
+): Promise<void> {
+  await expect(
+    page.getByRole("heading", { name: "Confirm your email." }),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(email)).toBeVisible();
+  const confirmation = await waitForEmail(email, /^Confirm your email/);
+  await page.goto(
+    confirmation.links.find((href) => href.includes("/-/verify_email?"))!,
+  );
+  await expect(
+    page.getByRole("heading", { name: "Your email is confirmed." }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Continue" }).click();
 }

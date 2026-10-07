@@ -2818,6 +2818,9 @@ async function handleVerifyEmail(
       baseHeaders,
     );
   }
+  // Only failures count toward the limit: it is there to slow guessing, and
+  // one office behind one address confirms many accounts in a day.
+  resetAuthRateLimit(req, "verify");
   logger.info("Email address confirmed", { username: result.username });
   return json(200, { verified: true }, baseHeaders);
 }
