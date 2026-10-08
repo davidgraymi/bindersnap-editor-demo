@@ -1,4 +1,4 @@
-import { and, eq, lte, ne } from "drizzle-orm";
+import { and, desc, eq, gt, lte, ne } from "drizzle-orm";
 import { config } from "./config";
 import { openSqliteDb, type SqliteDb } from "./db/client";
 import { sessions } from "./db/schema";
@@ -27,7 +27,12 @@ export interface SessionBackend {
    * Gitea token — a deleted row alone would leave the token working.
    */
   deleteForUser(username: string, except?: string): Promise<SessionRecord[]>;
-  /** A renamed account's sessions follow it, so nobody is signed out. */
+  /**
+   * This person's unexpired sessions, newest first. For the one job that acts
+   * as somebody who is not making the request: finishing an accepted
+   * invitation with an owner's own token.
+   */
+  liveForUser?(username: string, now?: number): Promise<SessionRecord[]>;
 }
 
 export class SessionStore implements SessionBackend {
@@ -89,6 +94,18 @@ export class SessionStore implements SessionBackend {
       .returning()
       .all();
   }
+
+  async liveForUser(
+    username: string,
+    now = Date.now(),
+  ): Promise<SessionRecord[]> {
+    return this.db
+      .select()
+      .from(sessions)
+      .where(and(eq(sessions.username, username), gt(sessions.expiresAt, now)))
+      .orderBy(desc(sessions.createdAt))
+      .all();
+  }
 }
 
 // Lazy wrapper so importing this module never opens the SQLite file; the DB
@@ -121,6 +138,10 @@ class LazySessionStore implements SessionBackend {
 
   deleteForUser(username: string, except?: string): Promise<SessionRecord[]> {
     return this.store.deleteForUser(username, except);
+  }
+
+  liveForUser(username: string, now?: number): Promise<SessionRecord[]> {
+    return this.store.liveForUser?.(username, now) ?? Promise.resolve([]);
   }
 }
 

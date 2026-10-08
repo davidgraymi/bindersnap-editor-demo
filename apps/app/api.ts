@@ -181,6 +181,11 @@ export function validateUploadFile(file: File): UploadValidationResult {
 export { validateUploadFile as validateUploadFileWithClient };
 
 import { ApiRequestError } from "../../packages/api-client/mutator";
+import type {
+  BinderLevel,
+  InvitationRow,
+  InvitationSummary,
+} from "../../packages/api-schema/schemas/invitations";
 import { isPaywallResponse, notifyPaymentRequired } from "./paymentRequired";
 import type { DocumentSearchParams } from "./documentSearch";
 import type { ChangeScope } from "./changeScope";
@@ -930,6 +935,62 @@ export async function addOrganizationPerson(
     owner,
   });
   return response.data;
+}
+
+// Invitations by email (issue 426).
+
+export async function fetchInvitations(org: string): Promise<InvitationRow[]> {
+  const response = await OrganizationsClient.listOrganizationInvitations(org);
+  return response.data.invitations;
+}
+
+/** Invite by email. Grants nothing until accepted. */
+export async function inviteToOrganization(
+  org: string,
+  invite: {
+    email: string;
+    owner: boolean;
+    binder?: string;
+    level?: BinderLevel;
+  },
+): Promise<InvitationRow> {
+  const response = await OrganizationsClient.createOrganizationInvitation(org, {
+    email: invite.email.trim(),
+    owner: invite.owner,
+    ...(invite.binder ? { binder: invite.binder, level: invite.level } : {}),
+  });
+  return response.data.invitation;
+}
+
+export async function revokeInvitation(org: string, id: string): Promise<void> {
+  await OrganizationsClient.revokeOrganizationInvitation(org, id);
+}
+
+export async function resendInvitation(
+  org: string,
+  id: string,
+): Promise<InvitationRow> {
+  const response = await OrganizationsClient.resendOrganizationInvitation(
+    org,
+    id,
+  );
+  return response.data.invitation;
+}
+
+/** What an invitation link is for. No session needed. */
+export async function fetchInvitation(
+  token: string,
+): Promise<InvitationSummary> {
+  const response = await OrganizationsClient.getInvitation(token);
+  return response.data;
+}
+
+/** Accept as the signed-in account. `joined`, or `accepted` while it waits. */
+export async function acceptInvitation(
+  token: string,
+): Promise<InvitationSummary["status"]> {
+  const response = await OrganizationsClient.acceptInvitation(token);
+  return response.data.status;
 }
 
 /**

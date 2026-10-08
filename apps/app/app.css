@@ -11585,3 +11585,15 @@ html.bs-writing .app-main {
   border-radius: inherit;
   object-fit: cover;
 }
+
+/* Invite by email: the binder and the level side by side. */
+.org-invite-binder {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--brand-space-2);
+}
+
+.org-invitation-row .bs-row-right {
+  display: flex;
+  gap: var(--brand-space-1);
+}

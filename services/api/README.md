@@ -12,6 +12,8 @@ Lightweight Bun auth/BFF service for the unified GitHub Pages SPA.
 - `GET /auth/password/reset?token=` says whether a reset link still works
 - `POST /auth/password/reset` sets the new password, ends every session, and signs in
 - `GET`/`PUT /api/app/account/email-preferences` — which change emails the signed-in person gets
+- `GET`/`POST /api/app/orgs/{org}/invitations`, `DELETE …/invitations/{id}`, `POST …/invitations/{id}/resend` — an owner's invitations by email
+- `GET /api/app/invitations/{token}` says what an invitation is for; `POST …/accept` accepts it as the signed-in account whose address was invited
 - `POST /email/unsubscribe?token=` turns every change email off; no session, and the one-click target of `List-Unsubscribe-Post`
 - `GET /api/app/documents`
 - & more

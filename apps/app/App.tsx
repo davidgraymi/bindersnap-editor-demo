@@ -21,6 +21,9 @@ import { BindersnapLogoMark } from "./components/BindersnapLogoMark";
 import { LandingPage } from "./components/LandingPage";
 import { WorkspaceSkeleton } from "./components/WorkspaceSkeleton";
 import { UnsubscribePage } from "./components/UnsubscribePage";
+import { InvitationPage } from "./components/InvitationPage";
+import { takeReturnTo } from "./authReturn";
+import { navigateToHref } from "./appLink";
 import {
   ForgotPasswordPage,
   ResetPasswordPage,
@@ -64,6 +67,7 @@ type AuthView =
   | "forgotPassword"
   | "resetPassword"
   | "unsubscribe"
+  | "invitation"
   | "createOrganization"
   | "app";
 type AuthMode = "signin" | "signup";
@@ -745,6 +749,12 @@ export function App() {
       return "unsubscribe";
     }
 
+    // Signed in or not: it says what it is either way, and asks for an
+    // account only when it is time to accept.
+    if (route.kind === "invitation") {
+      return "invitation";
+    }
+
     if (route.kind === "forgotPassword" && !user) {
       return "forgotPassword";
     }
@@ -822,6 +832,10 @@ export function App() {
     return <UnsubscribePage />;
   }
 
+  if (view === "invitation" && route.kind === "invitation") {
+    return <InvitationPage token={route.token} user={user} />;
+  }
+
   if (view === "forgotPassword") {
     return <ForgotPasswordPage />;
   }
@@ -874,6 +888,13 @@ export function App() {
               "Sign-in completed, but the session could not be verified.",
             );
           }
+          // Back to the invitation they signed in to accept, if that is how
+          // they got here.
+          const returnTo = takeReturnTo();
+          if (returnTo) {
+            navigateToHref(returnTo);
+            return;
+          }
           navigateTo({ kind: "home" }, true);
         }}
         onSignup={async (name, username, email, password) => {
@@ -905,6 +926,13 @@ export function App() {
           // so naming one is the next step — not a wall they hit on the way
           // somewhere else. They arrive un-blocked, and may skip.
           setOrganizationSetupReason(null);
+          // Invited: the invitation is their organization, so it comes before
+          // the offer to make one.
+          const returnTo = takeReturnTo();
+          if (returnTo) {
+            navigateToHref(returnTo);
+            return;
+          }
           navigateTo({ kind: "createOrganization" }, true);
         }}
       />

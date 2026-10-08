@@ -29,6 +29,7 @@ import { PersonAvatar } from "./PersonAvatar";
 import { ChevronRight, X } from "lucide-react";
 
 import { AppIcon } from "./AppIcon";
+import { OrganizationInvitations } from "./OrganizationInvitations";
 import { SettingsGroup } from "./SettingsGroup";
 import { SkeletonPanel } from "./Skeleton";
 import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
@@ -144,6 +145,15 @@ export function OrganizationPeople({ org }: OrganizationPeopleProps) {
             onAdded={setPayload}
             onFailed={setNotice}
             onBusy={setBusy}
+          />
+        ) : null}
+
+        {payload.canManage && !isReadOnly ? (
+          <OrganizationInvitations
+            org={org}
+            orgName={orgName}
+            binders={payload.binders}
+            busy={busy}
           />
         ) : null}
       </SettingsGroup>
@@ -1018,14 +1028,12 @@ function AddOrgPersonForm({
           </button>
         </div>
 
-        {/* The limitation stated on the form rather than met as a refusal. It is
-          the visible edge of having no invitation flow, and somebody reaching
-          for a colleague who has not signed up deserves to know before they
-          type the name. */}
+        {/* What this form is for, stated before somebody types a name that
+          has no account behind it. */}
         <p className="bs-field-hint">
-          They need a Bindersnap account already — we cannot email an invitation
-          yet. Anyone you add joins straight away and can read every binder that
-          is open to the organization.
+          For someone who already has a Bindersnap account. They join straight
+          away and can read every binder that is open to the organization. To
+          bring in someone new, or to ask first, invite them by email below.
         </p>
       </form>
     </section>

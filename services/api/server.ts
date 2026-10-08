@@ -16,6 +16,16 @@ import {
 } from "./change-emails";
 import { emailPreferenceStore, parsePreferences } from "./email-preferences";
 import {
+  describeGrant,
+  invitationEmail,
+  invitationStatus,
+  invitationStore,
+  maskAddress,
+  sameAddress,
+  type BinderLevel,
+  type Invitation,
+} from "./invitations";
+import {
   passwordChangedEmail,
   passwordResetStore,
   resetLinkEmail,
@@ -2394,6 +2404,8 @@ async function handleLogin(
   );
   if (response.ok) {
     resetAuthRateLimit(req, "login");
+    // An owner signing in can finish invitations that were waiting for one.
+    void completeWaitingInvitations().catch(() => undefined);
     logger.debug("Session created after login", {
       username: resolution.username,
       clientIp,
@@ -8381,23 +8393,503 @@ async function refuseLastOwner(params: {
   return `${org} needs at least one owner. Make someone else an owner first.`;
 }
 
+// ---------------------------------------------------------------------------
+// Invitations by email (issue #426; docs/design/org-access-architecture.md §2)
+// ---------------------------------------------------------------------------
+
+/**
+ * The link in the email. It carries the address too, so the page can fill in
+ * the signup form for somebody with no account — it is their own inbox the
+ * link was sent to.
+ */
+function invitationLink(token: string, email: string): string {
+  return `${config.appOrigin}/-/invitations/${encodeURIComponent(token)}?email=${encodeURIComponent(email)}`;
+}
+
+/** An invitation as an owner's pending list shows it. */
+function invitationRow(invitation: Invitation) {
+  return {
+    id: invitation.id,
+    email: invitation.email,
+    orgRole: invitation.orgRole,
+    binder: invitation.binder,
+    binderLevel: invitation.binderLevel,
+    grant: describeGrant(invitation),
+    invitedBy: invitation.invitedBy,
+    createdAt: invitation.createdAt,
+    expiresAt: invitation.expiresAt,
+    status: invitationStatus(invitation),
+  };
+}
+
+/**
+ * The organization, and whether this session owns it — the gate on every
+ * invitation route but the invitee's own. Nothing in Gitea is written until
+ * an invitation is accepted, so Gitea cannot refuse a non-owner here the way
+ * it refuses a team add; this asks it the same question first.
+ */
+async function requireOrganizationOwner(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  /**
+   * Sending an invitation is a write and is paywalled like adding somebody
+   * directly. Reading the list and withdrawing one cost nothing (ADR 0004).
+   */
+  { sends }: { sends: boolean },
+) {
+  const auth = sends
+    ? await requireSubscription(req, baseHeaders)
+    : await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const organization = await findOrganization({
+    client: auth.client,
+    org: orgName,
+  });
+  if (!organization) {
+    return json(404, { error: "No such organization." }, baseHeaders);
+  }
+  const owner = await isOrganizationOwnerDirect({
+    client: auth.client,
+    org: orgName,
+    username: auth.session.username,
+  });
+  if (!owner) {
+    return json(
+      403,
+      { error: "Only an owner of this organization can invite people." },
+      baseHeaders,
+    );
+  }
+  return { ...auth, organization };
+}
+
+async function sendInvitationEmail(
+  invitation: Invitation,
+  token: string,
+  displayName: string,
+): Promise<void> {
+  const client = createPrivilegedGiteaClient();
+  const inviterName = client
+    ? (await readPerson(client, invitation.invitedBy)).name
+    : invitation.invitedBy;
+  queueEmail({
+    kind: "organization-invitation",
+    to: invitation.email,
+    content: invitationEmail({
+      inviterName,
+      orgName: displayName,
+      grant: describeGrant(invitation),
+      email: invitation.email,
+      link: invitationLink(token, invitation.email),
+    }),
+  });
+}
+
+async function handleListInvitations(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+): Promise<Response> {
+  const auth = await requireOrganizationOwner(req, baseHeaders, orgName, {
+    sends: false,
+  });
+  if (auth instanceof Response) return auth;
+  return json(
+    200,
+    {
+      invitations: invitationStore()
+        .open(auth.organization.id)
+        .map(invitationRow),
+    },
+    baseHeaders,
+  );
+}
+
+/**
+ * Invite somebody by email: a row, and an email with a link. Grants nothing
+ * yet — and so it works for somebody with no account, which the direct add
+ * cannot. Inviting an address with an open invitation sends it again rather
+ * than making a second.
+ */
+async function handleCreateInvitation(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+): Promise<Response> {
+  const auth = await requireOrganizationOwner(req, baseHeaders, orgName, {
+    sends: true,
+  });
+  if (auth instanceof Response) return auth;
+  const { client, session, organization } = auth;
+
+  const body =
+    (await readJson<{
+      email?: unknown;
+      owner?: unknown;
+      binder?: unknown;
+      level?: unknown;
+    }>(req)) ?? {};
+  const email = typeof body.email === "string" ? body.email.trim() : "";
+  if (!looksLikeEmailAddress(email)) {
+    return json(400, { error: "Enter the address to invite." }, baseHeaders);
+  }
+  const orgRole = body.owner === true ? "owner" : "member";
+  const binder =
+    typeof body.binder === "string" && body.binder.trim() !== ""
+      ? body.binder.trim()
+      : null;
+  const level =
+    typeof body.level === "string" && body.level in BINDER_LEVEL_ROLES
+      ? (body.level as BinderLevel)
+      : null;
+  if (binder && !level) {
+    return json(
+      400,
+      {
+        error:
+          "Say whether they join the binder as an admin, editor or reviewer.",
+      },
+      baseHeaders,
+    );
+  }
+  if (binder) {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: binder,
+    }).catch(() => null);
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+  }
+
+  const store = invitationStore();
+  const existing = store.openFor(organization.id, email);
+  if (existing && existing.acceptedAt === null) {
+    const token = store.renew(existing.id);
+    await sendInvitationEmail(
+      existing,
+      token,
+      organization.fullName || organization.name,
+    );
+    return json(
+      200,
+      { invitation: invitationRow(store.get(existing.id)!) },
+      baseHeaders,
+    );
+  }
+
+  const { invitation, token } = store.create({
+    giteaOrgId: organization.id,
+    orgName: organization.name,
+    email,
+    orgRole,
+    binder,
+    binderLevel: binder ? level : null,
+    invitedBy: session.username,
+  });
+  await sendInvitationEmail(
+    invitation,
+    token,
+    organization.fullName || organization.name,
+  );
+  logger.info("Organization invitation sent", {
+    username: session.username,
+    organization: orgName,
+    invitationId: invitation.id,
+    orgRole,
+    binder,
+  });
+  return json(201, { invitation: invitationRow(invitation) }, baseHeaders);
+}
+
+async function handleInvitationAction(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  invitationId: string,
+  action: "revoke" | "resend",
+): Promise<Response> {
+  const auth = await requireOrganizationOwner(req, baseHeaders, orgName, {
+    sends: action === "resend",
+  });
+  if (auth instanceof Response) return auth;
+  const store = invitationStore();
+  const invitation = store.get(invitationId);
+  if (!invitation || invitation.giteaOrgId !== auth.organization.id) {
+    return json(404, { error: "No such invitation." }, baseHeaders);
+  }
+  if (action === "revoke") {
+    if (!store.revoke(invitation.id)) {
+      return json(
+        409,
+        { error: "That invitation was already accepted or revoked." },
+        baseHeaders,
+      );
+    }
+    return new Response(null, { status: 204, headers: baseHeaders });
+  }
+  if (invitationStatus(invitation) === "accepted" || invitation.revokedAt) {
+    return json(
+      409,
+      { error: "That invitation was already accepted or revoked." },
+      baseHeaders,
+    );
+  }
+  const token = store.renew(invitation.id);
+  await sendInvitationEmail(
+    invitation,
+    token,
+    auth.organization.fullName || auth.organization.name,
+  );
+  return json(
+    200,
+    { invitation: invitationRow(store.get(invitation.id)!) },
+    baseHeaders,
+  );
+}
+
+/**
+ * What an invitation link is for, so its page can say so before anybody signs
+ * in. Nothing here a link-holder does not already know from the email, and
+ * the address is masked.
+ */
+async function handleReadInvitation(
+  req: Request,
+  baseHeaders: Headers,
+  token: string,
+): Promise<Response> {
+  const invitation = invitationStore().byToken(token);
+  if (!invitation) {
+    return json(
+      404,
+      { error: "This invitation link does not work." },
+      baseHeaders,
+    );
+  }
+  const client = createPrivilegedGiteaClient();
+  const organization = client
+    ? await findOrganization({ client, org: invitation.orgName }).catch(
+        () => null,
+      )
+    : null;
+  const inviterName = client
+    ? (await readPerson(client, invitation.invitedBy)).name
+    : invitation.invitedBy;
+  const session = await getSessionFromRequest(req);
+  return json(
+    200,
+    {
+      organization: invitation.orgName,
+      organizationName: organization?.fullName || invitation.orgName,
+      invitedBy: inviterName,
+      grant: describeGrant(invitation),
+      email: maskAddress(invitation.email),
+      status: invitationStatus(invitation),
+      // Only to the account it was accepted by: whether they are in yet.
+      ...(session && invitation.acceptedBy === session.username
+        ? { acceptedByYou: true }
+        : {}),
+    },
+    baseHeaders,
+  );
+}
+
+/**
+ * Accept, as the signed-in person — whose account's address must be the one
+ * invited, so the link is not a key anybody it is forwarded to can use. The
+ * join itself is `completeInvitation`'s.
+ */
+async function handleAcceptInvitation(
+  req: Request,
+  baseHeaders: Headers,
+  token: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { session } = auth;
+  const store = invitationStore();
+  const invitation = store.byToken(token);
+  if (!invitation) {
+    return json(
+      404,
+      { error: "This invitation link does not work." },
+      baseHeaders,
+    );
+  }
+  const status = invitationStatus(invitation);
+  if (status === "revoked" || status === "expired") {
+    return json(
+      410,
+      {
+        error:
+          status === "revoked"
+            ? "This invitation was withdrawn. Ask whoever sent it for a new one."
+            : "This invitation has expired. Ask whoever sent it for a new one.",
+      },
+      baseHeaders,
+    );
+  }
+  if (status !== "pending") {
+    if (invitation.acceptedBy === session.username) {
+      return json(200, { status }, baseHeaders);
+    }
+    return json(
+      409,
+      { error: "This invitation was already accepted." },
+      baseHeaders,
+    );
+  }
+
+  const client = createPrivilegedGiteaClient();
+  const { email } = client
+    ? await readPerson(client, session.username)
+    : { email: null };
+  if (!email || !sameAddress(email, invitation.email)) {
+    return json(
+      403,
+      {
+        error: `This invitation is for ${maskAddress(invitation.email)}. Sign in with the account that uses that address, or create one with it.`,
+      },
+      baseHeaders,
+    );
+  }
+
+  const accepted = store.accept(invitation.id, session.username);
+  if (!accepted) {
+    return json(
+      409,
+      { error: "This invitation was already accepted." },
+      baseHeaders,
+    );
+  }
+  logger.info("Organization invitation accepted", {
+    username: session.username,
+    organization: accepted.orgName,
+    invitationId: accepted.id,
+  });
+
+  const joined = await completeInvitation(accepted);
+  return json(200, { status: joined ? "joined" : "accepted" }, baseHeaders);
+}
+
+/**
+ * Add an accepted invitee in Gitea, as an owner, with that owner's own token.
+ *
+ * The inviter first, then any other owner — whoever has a live session. The
+ * service account is never used: it has no write access to anybody's
+ * organization, by design. With no owner signed in, the invitation waits
+ * (accepted, not joined) and the sweep finishes it as soon as one is.
+ */
+async function completeInvitation(invitation: Invitation): Promise<boolean> {
+  const username = invitation.acceptedBy;
+  if (!username || invitation.joinedAt !== null) return false;
+
+  const candidates = [invitation.invitedBy];
+  const privileged = createPrivilegedGiteaClient();
+  if (privileged) {
+    const owners = await findOrganizationTeam({
+      client: privileged,
+      org: invitation.orgName,
+      name: OWNERS_TEAM_NAME,
+    }).catch(() => null);
+    if (owners) {
+      const members = await listTeamMembers({
+        client: privileged,
+        teamId: owners.id,
+      }).catch(() => []);
+      for (const member of members) {
+        if (!candidates.some((c) => sameAddress(c, member.login))) {
+          candidates.push(member.login);
+        }
+      }
+    }
+  }
+
+  for (const owner of candidates) {
+    for (const session of await sessionStore.liveForUser(owner)) {
+      const client = createSessionGiteaClient(session);
+      try {
+        const refused = await addToOrganization({
+          client,
+          org: invitation.orgName,
+          username,
+          owner: invitation.orgRole === "owner",
+        });
+        if (refused) throw new Error(refused);
+        if (invitation.binder && invitation.binderLevel) {
+          await addToBinder({
+            client,
+            org: invitation.orgName,
+            workspace: invitation.binder,
+            username,
+            role: BINDER_LEVEL_ROLES[invitation.binderLevel]!,
+          });
+        }
+        invitationStore().markJoined(invitation.id);
+        logger.info("Invited person joined the organization", {
+          organization: invitation.orgName,
+          subject: username,
+          addedWithSessionOf: owner,
+          invitationId: invitation.id,
+        });
+        return true;
+      } catch (err) {
+        logger.warn("Could not finish an invitation with this session", {
+          organization: invitation.orgName,
+          invitationId: invitation.id,
+          owner,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  }
+  return false;
+}
+
+/** Finish every accepted invitation that was waiting for an owner. */
+async function completeWaitingInvitations(): Promise<void> {
+  for (const invitation of invitationStore().waitingToJoin()) {
+    await completeInvitation(invitation).catch(() => false);
+  }
+}
+
+/**
+ * The Gitea half of adding somebody to an organization, shared by an owner's
+ * direct add and an accepted invitation: `staff`, then `Owners` if asked.
+ * Answers a refusal to show, or null. Made with whatever token `client`
+ * carries — always an owner's own.
+ */
+async function addToOrganization(params: {
+  client: GiteaClient;
+  org: string;
+  username: string;
+  owner: boolean;
+}): Promise<string | null> {
+  const { client, org, username, owner } = params;
+  await ensureOrganizationMembership({ client, org, username });
+  if (!owner) return null;
+  const owners = await findOrganizationTeam({
+    client,
+    org,
+    name: OWNERS_TEAM_NAME,
+  });
+  if (!owners) return "This organization has no owners team.";
+  await addTeamMember({ client, teamId: owners.id, username });
+  return null;
+}
+
 /**
  * Put somebody in the organization.
  *
- * **There is no invitation, and that is a decision rather than an omission.**
- * Gitea has no invitation primitive — `/orgs/{org}/members` is `GET` only, and
- * the only way in is `PUT /teams/{id}/members/{username}`, which needs the
- * account to exist. Building the pending-invitation half means a SQLite table,
- * four routes, address-bound acceptance and an email nobody can send yet: this
- * repository has no mail infrastructure at all. So an owner adds a person who
- * has already signed up, and the rest is the invitations issue, 426.
- *
- * Two consequences worth being straight about, because both are visible from
- * the outside. Somebody with no account cannot be added at all — hence the
- * refusal below, which names that cause rather than letting Gitea answer 404
- * and having every layer above read it as "no such organization". And nobody
- * consents to being added. Neither is a bug to be found later; they are the
- * shape of the MVP.
+ * **The direct add, beside the invitation.** Gitea's only way in is
+ * `PUT /teams/{id}/members/{username}`, which needs the account to exist, so
+ * this adds a person who has already signed up, at once and without asking
+ * them. Somebody with no account — or anybody who should agree first — is
+ * invited by email instead (`handleCreateInvitation`); the refusal below
+ * points there rather than letting Gitea answer 404 and having every layer
+ * above read it as "no such organization".
  *
  * `staff` before `Owners`, the same order every other path into the
  * organization uses: a failure part-way leaves them a member who can read the
@@ -8448,37 +8940,19 @@ async function handleAddOrganizationPerson(
         {
           error:
             `${username} does not have a Bindersnap account yet. ` +
-            `They need to sign up first — then you can add them here.`,
+            `Invite them by email instead — they can sign up on the way in.`,
         },
         baseHeaders,
       );
     }
 
-    await ensureOrganizationMembership({
+    const refused = await addToOrganization({
       client,
       org: orgName,
       username: account.login,
+      owner,
     });
-
-    if (owner) {
-      const owners = await findOrganizationTeam({
-        client,
-        org: orgName,
-        name: OWNERS_TEAM_NAME,
-      });
-      if (!owners) {
-        return json(
-          404,
-          { error: "This organization has no owners team." },
-          baseHeaders,
-        );
-      }
-      await addTeamMember({
-        client,
-        teamId: owners.id,
-        username: account.login,
-      });
-    }
+    if (refused) return json(404, { error: refused }, baseHeaders);
 
     logger.info("Organization member added", {
       username: session.username,
@@ -9053,6 +9527,35 @@ async function readBinderPeople(
 }
 
 /**
+ * The Gitea half of putting somebody in a binder at a role, shared by the
+ * binder's People tab and an accepted invitation.
+ */
+async function addToBinder(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  username: string;
+  role: WorkspaceRole;
+}): Promise<void> {
+  const { client, org, workspace, username, role } = params;
+  await ensureOrganizationMembership({ client, org, username });
+
+  // Leave whatever role they held here first, so a move cannot end with them
+  // in two of this binder's teams and their effective access decided by
+  // whichever ranks higher.
+  await removeFromRoleTeams({ client, org, workspace, username, except: role });
+
+  const team = await createWorkspaceRoleTeam({ client, org, workspace, role });
+  // Idempotent, and needed on the first use of a team that already existed
+  // but had been revoked. Before the membership, so a failure leaves the
+  // person out rather than in a team that reaches nothing.
+  await grantTeamOnRepo({ client, teamId: team.id, org, repo: workspace });
+  await addTeamMember({ client, teamId: team.id, username });
+
+  await recomputeApprovalsWhitelist({ client, org, workspace });
+}
+
+/**
  * Add somebody to this binder at a level, or move them between its levels.
  *
  * **The role team is created on first use, not at provisioning.** A binder that
@@ -9130,44 +9633,12 @@ async function handleBinderPerson(
       if (refusal) return json(409, { error: refusal }, baseHeaders);
     }
 
-    await ensureOrganizationMembership({
-      client,
-      org: orgName,
-      username,
-    });
-
-    // Leave whatever role they held here first, so a move cannot end with them
-    // in two of this binder's teams and their effective access decided by
-    // whichever ranks higher.
-    await removeFromRoleTeams({
+    await addToBinder({
       client,
       org: orgName,
       workspace: workspaceName,
       username,
-      except: role,
-    });
-
-    const team = await createWorkspaceRoleTeam({
-      client,
-      org: orgName,
-      workspace: workspaceName,
       role,
-    });
-    // Idempotent, and needed on the first use of a team that already existed
-    // but had been revoked. Before the membership, so a failure leaves the
-    // person out rather than in a team that reaches nothing.
-    await grantTeamOnRepo({
-      client,
-      teamId: team.id,
-      org: orgName,
-      repo: workspaceName,
-    });
-    await addTeamMember({ client, teamId: team.id, username });
-
-    await recomputeApprovalsWhitelist({
-      client,
-      org: orgName,
-      workspace: workspaceName,
     });
 
     return json(
@@ -14064,6 +14535,21 @@ async function handleRequest(req: Request): Promise<Response> {
     const createBinderMatch = pathname.match(
       /^\/api\/app\/orgs\/([^/]+)\/binders$/,
     );
+    const organizationInvitationsMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/invitations$/,
+    );
+    const organizationInvitationMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/invitations\/([0-9a-f-]+)$/,
+    );
+    const organizationInvitationResendMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/invitations\/([0-9a-f-]+)\/resend$/,
+    );
+    const invitationMatch = pathname.match(
+      /^\/api\/app\/invitations\/([A-Za-z0-9_-]+)$/,
+    );
+    const invitationAcceptMatch = pathname.match(
+      /^\/api\/app\/invitations\/([A-Za-z0-9_-]+)\/accept$/,
+    );
     const organizationPeopleMatch = pathname.match(
       /^\/api\/app\/orgs\/([^/]+)\/people$/,
     );
@@ -14139,6 +14625,46 @@ async function handleRequest(req: Request): Promise<Response> {
         req,
         baseHeaders,
         organizationMatch[1]!,
+      );
+    } else if (organizationInvitationsMatch && method === "GET") {
+      response = await handleListInvitations(
+        req,
+        baseHeaders,
+        organizationInvitationsMatch[1]!,
+      );
+    } else if (organizationInvitationsMatch && method === "POST") {
+      response = await handleCreateInvitation(
+        req,
+        baseHeaders,
+        organizationInvitationsMatch[1]!,
+      );
+    } else if (organizationInvitationMatch && method === "DELETE") {
+      response = await handleInvitationAction(
+        req,
+        baseHeaders,
+        organizationInvitationMatch[1]!,
+        organizationInvitationMatch[2]!,
+        "revoke",
+      );
+    } else if (organizationInvitationResendMatch && method === "POST") {
+      response = await handleInvitationAction(
+        req,
+        baseHeaders,
+        organizationInvitationResendMatch[1]!,
+        organizationInvitationResendMatch[2]!,
+        "resend",
+      );
+    } else if (invitationMatch && method === "GET") {
+      response = await handleReadInvitation(
+        req,
+        baseHeaders,
+        decodeURIComponent(invitationMatch[1]!),
+      );
+    } else if (invitationAcceptMatch && method === "POST") {
+      response = await handleAcceptInvitation(
+        req,
+        baseHeaders,
+        decodeURIComponent(invitationAcceptMatch[1]!),
       );
     } else if (organizationPeopleMatch && method === "GET") {
       response = await handleOrganizationPeople(
@@ -14746,6 +15272,16 @@ if (import.meta.main) {
   });
   // Deliver queued email in the background — see `mail/index.ts`.
   startMail();
+  // Accepted invitations that found no owner signed in finish when one is.
+  setInterval(
+    () =>
+      void completeWaitingInvitations().catch((err) =>
+        logger.error("Invitation sweep failed", {
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      ),
+    60_000,
+  );
   // Report what no job can speak for: binders made before jobs existed, or
   // changed outside the API. A minute after startup, then every six hours.
   const reconcile = () =>

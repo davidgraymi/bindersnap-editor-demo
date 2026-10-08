@@ -401,3 +401,55 @@ export const emailPreferences = sqliteTable("email_preferences", {
   unsubscribeToken: text("unsubscribe_token").notNull().unique(),
   updatedAt: integer("updated_at").notNull(),
 });
+
+/**
+ * Invitations into an organization, by email (issue #426, design in
+ * docs/design/org-access-architecture.md §2).
+ *
+ * Gitea cannot hold a pending invitation or invite anyone by email, and an
+ * unaccepted invitation is not evidence about a document — so, by ADR 0004's
+ * own procedure, it is configuration and lives here. Losing the table loses
+ * pending invitations and no access: membership itself is only ever Gitea's
+ * team membership.
+ *
+ * - **Grants nothing until it is accepted.** Acceptance is what adds the
+ *   person to the organization's teams, in Gitea.
+ * - **Bound to the address.** Only an account whose email is the invited one
+ *   can accept, so a forwarded link is not a key.
+ * - **Joined as an owner.** The add is made with an owner's own session token,
+ *   never the service account's. If no owner of the organization is signed in
+ *   when it is accepted, it waits (`accepted_at` set, `joined_at` not) and
+ *   finishes as soon as one is.
+ *
+ * Only a SHA-256 of the link's token is kept, like a password reset's.
+ */
+export const organizationInvitations = sqliteTable(
+  "organization_invitations",
+  {
+    id: text("id").primaryKey(),
+    tokenHash: text("token_hash").notNull().unique(),
+    giteaOrgId: integer("gitea_org_id").notNull(),
+    /** For display and Gitea calls; the id above is the identity. */
+    orgName: text("org_name").notNull(),
+    email: text("email").notNull(),
+    /** `owner` or `member`. */
+    orgRole: text("org_role").notNull(),
+    /** A binder to land them in, and at which level, or null for neither. */
+    binder: text("binder"),
+    binderLevel: text("binder_level"),
+    invitedBy: text("invited_by").notNull(),
+    createdAt: integer("created_at").notNull(),
+    expiresAt: integer("expires_at").notNull(),
+    revokedAt: integer("revoked_at"),
+    acceptedAt: integer("accepted_at"),
+    acceptedBy: text("accepted_by"),
+    joinedAt: integer("joined_at"),
+  },
+  (table) => [
+    index("idx_organization_invitations_org").on(table.giteaOrgId),
+    index("idx_organization_invitations_waiting").on(
+      table.acceptedAt,
+      table.joinedAt,
+    ),
+  ],
+);

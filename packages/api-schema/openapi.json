@@ -5909,6 +5909,576 @@
         }
       }
     },
+    "/api/app/orgs/{org}/invitations": {
+      "get": {
+        "operationId": "listOrganizationInvitations",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invitations not yet joined, revoked or expired. Owners only.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "invitations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "orgRole": {
+                            "type": "string",
+                            "enum": [
+                              "owner",
+                              "member"
+                            ]
+                          },
+                          "binder": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "binderLevel": {
+                            "type": "string",
+                            "nullable": true,
+                            "enum": [
+                              "admin",
+                              "editor",
+                              "reviewer",
+                              null
+                            ]
+                          },
+                          "grant": {
+                            "type": "string"
+                          },
+                          "invitedBy": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "number"
+                          },
+                          "expiresAt": {
+                            "type": "number"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "accepted",
+                              "joined",
+                              "revoked",
+                              "expired"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "email",
+                          "orgRole",
+                          "binder",
+                          "binderLevel",
+                          "grant",
+                          "invitedBy",
+                          "createdAt",
+                          "expiresAt",
+                          "status"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "invitations"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createOrganizationInvitation",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "owner": {
+                    "type": "boolean"
+                  },
+                  "binder": {
+                    "type": "string"
+                  },
+                  "level": {
+                    "type": "string",
+                    "enum": [
+                      "admin",
+                      "editor",
+                      "reviewer"
+                    ]
+                  }
+                },
+                "required": [
+                  "email"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "That address already had an invitation; it was sent again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "invitation": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "orgRole": {
+                          "type": "string",
+                          "enum": [
+                            "owner",
+                            "member"
+                          ]
+                        },
+                        "binder": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "binderLevel": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "admin",
+                            "editor",
+                            "reviewer",
+                            null
+                          ]
+                        },
+                        "grant": {
+                          "type": "string"
+                        },
+                        "invitedBy": {
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "number"
+                        },
+                        "expiresAt": {
+                          "type": "number"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "accepted",
+                            "joined",
+                            "revoked",
+                            "expired"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "email",
+                        "orgRole",
+                        "binder",
+                        "binderLevel",
+                        "grant",
+                        "invitedBy",
+                        "createdAt",
+                        "expiresAt",
+                        "status"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "invitation"
+                  ]
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Invited. Grants nothing until accepted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "invitation": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "orgRole": {
+                          "type": "string",
+                          "enum": [
+                            "owner",
+                            "member"
+                          ]
+                        },
+                        "binder": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "binderLevel": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "admin",
+                            "editor",
+                            "reviewer",
+                            null
+                          ]
+                        },
+                        "grant": {
+                          "type": "string"
+                        },
+                        "invitedBy": {
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "number"
+                        },
+                        "expiresAt": {
+                          "type": "number"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "accepted",
+                            "joined",
+                            "revoked",
+                            "expired"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "email",
+                        "orgRole",
+                        "binder",
+                        "binderLevel",
+                        "grant",
+                        "invitedBy",
+                        "createdAt",
+                        "expiresAt",
+                        "status"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "invitation"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/orgs/{org}/invitations/{id}": {
+      "delete": {
+        "operationId": "revokeOrganizationInvitation",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Revoked; the link stops working"
+          }
+        }
+      }
+    },
+    "/api/app/orgs/{org}/invitations/{id}/resend": {
+      "post": {
+        "operationId": "resendOrganizationInvitation",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sent again with a new link and two more weeks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "invitation": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "orgRole": {
+                          "type": "string",
+                          "enum": [
+                            "owner",
+                            "member"
+                          ]
+                        },
+                        "binder": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "binderLevel": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "admin",
+                            "editor",
+                            "reviewer",
+                            null
+                          ]
+                        },
+                        "grant": {
+                          "type": "string"
+                        },
+                        "invitedBy": {
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "number"
+                        },
+                        "expiresAt": {
+                          "type": "number"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "accepted",
+                            "joined",
+                            "revoked",
+                            "expired"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "email",
+                        "orgRole",
+                        "binder",
+                        "binderLevel",
+                        "grant",
+                        "invitedBy",
+                        "createdAt",
+                        "expiresAt",
+                        "status"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "invitation"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/invitations/{token}": {
+      "get": {
+        "operationId": "getInvitation",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "token",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "What the invitation is for. No session needed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "organizationName": {
+                      "type": "string"
+                    },
+                    "invitedBy": {
+                      "type": "string"
+                    },
+                    "grant": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "accepted",
+                        "joined",
+                        "revoked",
+                        "expired"
+                      ]
+                    },
+                    "acceptedByYou": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "organizationName",
+                    "invitedBy",
+                    "grant",
+                    "email",
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/invitations/{token}/accept": {
+      "post": {
+        "operationId": "acceptInvitation",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "token",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Accepted by the signed-in account, whose address must be the one invited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "accepted",
+                        "joined",
+                        "revoked",
+                        "expired"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/app/orgs/{org}/people/{username}/role": {
       "post": {
         "operationId": "setOrganizationPersonRole",
