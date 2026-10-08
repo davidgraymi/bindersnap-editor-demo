@@ -83,13 +83,17 @@ describe("syncSubscriptionSeats", () => {
     expect(updates).toEqual([]);
   });
 
-  test("corrects the one line of a subscription on an older price", async () => {
+  test("never changes a subscription on an older, flat price", async () => {
+    // Its quantity times the old price would be a price rise without the
+    // 30 days' notice the Terms promise.
     const { stripe, updates } = fakeStripe({
-      status: "past_due",
+      status: "active",
       items: [{ id: "si_old", price: "price_flat", quantity: 1 }],
     });
-    await syncSubscriptionSeats(stripe, { ...params, seats: 2 });
-    expect(updates.map((update) => update.id)).toEqual(["si_old"]);
+    expect(
+      await syncSubscriptionSeats(stripe, { ...params, seats: 2 }),
+    ).toMatchObject({ changed: false, reason: "no_item" });
+    expect(updates).toEqual([]);
   });
 
   test("will not guess between several lines on other prices", async () => {

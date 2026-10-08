@@ -532,6 +532,13 @@ Reviewers and readers are free. The count is `countBillableSeats`
   route saw (an account deleted, a role changed in Gitea directly).
 - **Billing status** returns `seats`, so the Billing page and paywall show
   "N writers today: $X / month" before anyone pays.
+- **Older subscriptions**: the sync changes only a line on the seat price. A
+  subscription still on the old flat price is left alone (the API logs "no
+  seat line"), because its quantity times the old price would be a price rise,
+  and Terms Section 9 promises owners 30 days' email notice first. Move each
+  one to the seat price by hand after that notice.
+- **Terms**: Section 9 says what a seat is, that anyone who can add a writer
+  can raise the bill, and that changes are prorated onto the next invoice.
 - **Customer portal**: turn off quantity changes in the portal configuration.
   The count comes from Gitea, and a quantity edited in the portal is put back
   at the next sync.

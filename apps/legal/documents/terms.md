@@ -122,6 +122,8 @@ Deletion is real and, in some cases, cannot be undone. Details are in the "Reten
 
 **Fees.** After the trial, using the authoring features requires a paid subscription at the price shown on our pricing page, billed per organization. Fees depend on the plan and the number of seats.
 
+**Seats.** A seat is each person who holds the Owner role in the organization, or the Admin or Editor role in any of its binders. A person counts once, however many binders they work in. Reviewers and people who only read are not seats. The number of seats is whatever the organization's roles say at the time, so anyone the Customer allows to give someone one of those roles can add a seat. The Customer is responsible for the fees for every seat its users add. When the number of seats changes during a billing period, we adjust the subscription right away. The next invoice charges the prorated fee for each added seat for the rest of the period, and credits the unused part of each removed seat. The app shows the organization's current number of seats and their cost on the People and Billing pages.
+
 **Stripe.** We use Stripe, Inc. to process payments. You enter payment details on Stripe's pages, and we never see full card numbers. Stripe's terms apply to its services.
 
 **Renewal.** Subscriptions renew automatically for the same period (monthly or annual, as shown at purchase) until canceled. We will charge the payment method on file at each renewal. For an annual subscription, we will email the organization's owners at least 30 days before it renews.

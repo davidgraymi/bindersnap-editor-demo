@@ -14050,6 +14050,8 @@ async function syncOrganizationSeats(orgName: string): Promise<void> {
       to: result.to,
     });
   } else if (result.reason === "no_item") {
+    // Most often a subscription still on the old flat price, which waits to
+    // be moved to the seat price by hand after 30 days' notice.
     logger.warn("Subscription has no seat line to update", {
       organization: orgName,
       subscriptionId: subscription.stripeSubscriptionId,

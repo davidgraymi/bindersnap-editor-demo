@@ -55,12 +55,15 @@ export async function syncSubscriptionSeats(
     return { changed: false, reason: "ended", quantity: null };
   }
 
-  const items = subscription.items?.data ?? [];
-  // The seat price's line. A subscription made before per-seat billing has
-  // one item on an older price, and that is the line to correct too.
-  const item =
-    items.find((candidate) => candidate.price?.id === params.priceId) ??
-    (items.length === 1 ? items[0] : undefined);
+  // Only a line on the seat price is ever changed. A subscription made before
+  // per-seat billing has one line on an older, flat price, and setting its
+  // quantity to the seat count would multiply that price: a price rise the
+  // Terms (Section 9) allow only after 30 days' notice. Such a subscription
+  // is moved to the seat price by hand, after that notice, and until then it
+  // is reported as having no seat line.
+  const item = (subscription.items?.data ?? []).find(
+    (candidate) => candidate.price?.id === params.priceId,
+  );
   if (!item) return { changed: false, reason: "no_item", quantity: null };
 
   const to = seatQuantity(params.seats);
