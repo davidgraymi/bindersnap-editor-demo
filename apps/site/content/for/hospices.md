@@ -57,7 +57,7 @@ At least every 2 years. Under §418.113, the emergency plan and the emergency pr
 
 ### We run home health and hospice. Can we keep both manuals?
 
-Yes. Create a binder for each, with its own approvers. Your organization pays one price for all of its binders. See [pricing](/pricing).
+Yes. Create a binder for each, with its own approvers. Binders are never priced: your organization pays for the people who write policies, once each, however many binders they work in. See [pricing](/pricing).
 
 ## Sources
 
