@@ -69,6 +69,16 @@ function uniqueOrgName(): string {
   return `${ORG_PREFIX}${randomUUID().slice(0, 8)}`;
 }
 
+/**
+ * Who owns the fixture organizations.
+ *
+ * Not the site admin: the app stops anyone at "Accept our updated Terms"
+ * until each organization they own has an agreement on record, and these
+ * organizations are made in Gitea directly, so none ever does. Owned by `alice`
+ * they would lock her out of every spec running beside this one.
+ */
+const FIXTURE_OWNER = "bs-adr4-owner";
+
 /** Every organization provisioned in this run, for `afterAll` to remove. */
 const provisionedOrgs: string[] = [];
 
@@ -253,6 +263,20 @@ async function sweepLeftoverOrgs(admin: GiteaClient): Promise<void> {
   }
 }
 
+async function ensureFixtureOwner(admin: GiteaClient): Promise<void> {
+  try {
+    await post(admin, "/admin/users", {
+      username: FIXTURE_OWNER,
+      email: `${FIXTURE_OWNER}@example.invalid`,
+      password: randomUUID(),
+      must_change_password: false,
+    });
+  } catch (err) {
+    // Already there from an earlier run.
+    if (!(err instanceof GiteaApiError) || err.status !== 422) throw err;
+  }
+}
+
 /**
  * Provision an organization, a workspace repository owned by it, and the three
  * role teams granted onto that repository — the shape ADR 0004 §2 describes.
@@ -288,7 +312,11 @@ async function provisionWorkspace(
   // Recorded before the first call that can fail, so a half-provisioned
   // organization is still cleaned up.
   provisionedOrgs.push(org);
-  await post(admin, "/orgs", { username: org, visibility: "private" });
+  await ensureFixtureOwner(admin);
+  await post(admin, `/admin/users/${FIXTURE_OWNER}/orgs`, {
+    username: org,
+    visibility: "private",
+  });
   await post(admin, `/orgs/${org}/repos`, {
     name: repo,
     private: true,
