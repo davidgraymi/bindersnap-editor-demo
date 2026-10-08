@@ -10,7 +10,7 @@
  *   STRIPE_SECRET_KEY=sk_test_...   Real Stripe test-mode secret key
  *   STRIPE_WEBHOOK_SECRET=whsec_... Webhook signing secret (from the Stripe
  *                                   Dashboard endpoint or `stripe listen --print-secret`)
- *   STRIPE_PRICE_ID=price_...       The $100/mo price ID
+ *   STRIPE_PRICE_ID=price_...       The per-writer seat price ($39/mo per unit)
  *   BUN_PUBLIC_API_BASE_URL         API base URL (default: http://localhost:8788)
  *   BINDERSNAP_APP_ORIGIN           Allowed CORS origin (default: http://localhost:5173)
  *
@@ -199,6 +199,35 @@ async function createTestCustomerAndSubscription(giteaOrgId: number): Promise<{
     subscriptionId: subscription.id as string,
     currentPeriodEnd,
   };
+}
+
+/** The quantity on a subscription's one line: what it bills seats for. */
+async function subscriptionSeatQuantity(
+  subscriptionId: string,
+): Promise<number | null> {
+  const subscription = await stripeFetch(`/v1/subscriptions/${subscriptionId}`);
+  const items = (subscription.items as { data?: { quantity?: number }[] })
+    ?.data;
+  return items?.[0]?.quantity ?? null;
+}
+
+/** POST or DELETE as the signed-in person, answering the status. */
+async function asPerson(
+  sessionCookie: string,
+  method: "POST" | "DELETE",
+  path: string,
+  body?: Record<string, unknown>,
+): Promise<number> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method,
+    headers: {
+      Cookie: `bindersnap_session=${sessionCookie}`,
+      Origin: APP_ORIGIN,
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return response.status;
 }
 
 /** Cancel a Stripe subscription. Best-effort — ignores errors during cleanup. */
@@ -486,6 +515,7 @@ async function signUpUser(credentials: {
 
 interface BillingStatusPayload {
   status: string | null;
+  seats?: number | null;
   currentPeriodEnd: number | null;
   hasAccess?: boolean;
   accessSource?: string | null;
@@ -909,6 +939,80 @@ test.describe("Stripe subscription lifecycle", () => {
     const body = (await response.json()) as { url?: string };
     expect(typeof body.url).toBe("string");
     expect(body.url).toMatch(/^https:\/\/checkout\.stripe\.com\//);
+
+    // One unit of the seat price per writer: a new organization has one, its
+    // owner, and the Billing page is told the same count.
+    const sessionId = body.url!.match(/cs_test_[A-Za-z0-9]+/)?.[0];
+    expect(sessionId).toBeTruthy();
+    const lines = await stripeFetch(
+      `/v1/checkout/sessions/${sessionId}/line_items`,
+    );
+    const line = (
+      lines.data as { quantity: number; price: { id: string } }[]
+    )[0]!;
+    expect(line.price.id).toBe(STRIPE_PRICE_ID);
+    expect(line.quantity).toBe(1);
+    expect((await getBillingStatus(sessionCookie)).seats).toBe(1);
+  });
+
+  test("adding and removing a writer changes the subscription's seat count", async () => {
+    test.skip(!stripeFullyConfigured, "Stripe test credentials not configured");
+    // Seat syncs settle for three seconds before they run, then call Gitea
+    // and Stripe; two of them, with Stripe round trips around each.
+    test.setTimeout(120_000);
+
+    const owner = uniqueCredentials();
+    const { sessionCookie, giteaOrgId, org } = await signUpOrganization(owner);
+    const { customerId, subscriptionId } =
+      await createTestCustomerAndSubscription(giteaOrgId);
+
+    try {
+      const activated = await postWebhook("checkout.session.completed", {
+        id: `cs_test_${Date.now()}`,
+        client_reference_id: String(giteaOrgId),
+        customer: customerId,
+        subscription: subscriptionId,
+        payment_status: "paid",
+      });
+      expect(activated.ok).toBe(true);
+      expect(await subscriptionSeatQuantity(subscriptionId)).toBe(1);
+
+      // A second owner can write everywhere, so is a second seat.
+      const writer = uniqueCredentials();
+      await signUpUser(writer);
+      expect(
+        await asPerson(sessionCookie, "POST", `/api/app/orgs/${org}/people`, {
+          username: writer.username,
+          owner: true,
+        }),
+      ).toBeLessThan(300);
+
+      await expect
+        .poll(() => subscriptionSeatQuantity(subscriptionId), {
+          timeout: 45_000,
+          intervals: [2_000],
+        })
+        .toBe(2);
+      expect((await getBillingStatus(sessionCookie)).seats).toBe(2);
+
+      // And removing them hands the seat back.
+      expect(
+        await asPerson(
+          sessionCookie,
+          "DELETE",
+          `/api/app/orgs/${org}/people/${writer.username}`,
+        ),
+      ).toBeLessThan(300);
+
+      await expect
+        .poll(() => subscriptionSeatQuantity(subscriptionId), {
+          timeout: 45_000,
+          intervals: [2_000],
+        })
+        .toBe(1);
+    } finally {
+      await cancelTestSubscription(subscriptionId);
+    }
   });
 
   test("hosted Stripe Checkout redirects back and unlocks the workspace", async ({
