@@ -26,7 +26,7 @@ Use it to check that nothing federal is missing, then add what your state and ac
 
 ## Keep each one approved and current
 
-A required policy is only as good as its record: the version in force, who approved it, and when it was last reviewed. In Bindersnap, each of these becomes a document in a binder, with named approvers. Changes take effect only when they approve, and every earlier version stays with its approvals. See [pricing](/pricing): one price for your organization, with a 14-day free trial.
+A required policy is only as good as its record: the version in force, who approved it, and when it was last reviewed. In Bindersnap, each of these becomes a document in a binder, with named approvers. Changes take effect only when they approve, and every earlier version stays with its approvals. Only the people who write policies are paid seats; reviewers and staff who only read are free. Every organization starts with a 14-day free trial. See [pricing](/pricing).
 
 ## Frequently asked questions
 
