@@ -185,6 +185,7 @@ body::after {
   letter-spacing: var(--brand-tracking-wide);
   text-decoration: none;
   text-transform: uppercase;
+  white-space: nowrap;
   padding: 9px 14px;
   transition:
     color var(--brand-transition-base),
@@ -2320,6 +2321,14 @@ footer {
   .trust-strip {
     grid-template-columns: 1fr;
     gap: var(--brand-space-5);
+  }
+}
+
+/* Templates, Pricing and Help are in the footer too; on a phone the bar
+   keeps only Sign In and Sign Up. */
+@media (max-width: 600px) {
+  .nav-secondary-link {
+    display: none;
   }
 }
 
