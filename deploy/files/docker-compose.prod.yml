@@ -117,6 +117,8 @@ services:
       - NODE_ENV=production
       - GITEA_INTERNAL_URL=http://gitea:3000
       - BINDERSNAP_GITEA_SERVICE_TOKEN=${GITEA_SERVICE_TOKEN:?set in the generated env file}
+      # Empty until the deploy mints it; the API then uses the service token.
+      - BINDERSNAP_GITEA_ADMIN_TOKEN=${GITEA_ADMIN_TOKEN:-}
       - BINDERSNAP_APP_ORIGIN=https://bindersnap.com
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:?set in the generated env file}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:?set in the generated env file}

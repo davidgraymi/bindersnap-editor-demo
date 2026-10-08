@@ -12,7 +12,12 @@ import {
   type PublishPlan,
   type PublishResult,
 } from "./jobs/publish";
-import { mintDevServiceToken, serviceToken } from "./dev-service-token";
+import {
+  adminToken,
+  mintDevServiceTokens,
+  serviceToken,
+  type ServiceTokenKind,
+} from "./dev-service-token";
 import {
   createGiteaUsage,
   currentGiteaUsage,
@@ -396,27 +401,22 @@ function buildTokenAuthHeader(token: string): string {
   return `token ${token}`;
 }
 
-function buildGiteaServiceHeaders(
+/**
+ * Headers for a call the person themselves could not make, or null.
+ *
+ * `"read"` is the service account's read-only token, for the privileged reads
+ * made on ordinary requests; `"admin"` is its `write:admin` token, for the
+ * few account acts that need it. See `dev-service-token.ts`. Dev and test
+ * stacks without either fall back to the admin's basic auth.
+ */
+function buildGiteaPrivilegedHeaders(
+  kind: ServiceTokenKind,
   extraHeaders?: HeadersInit,
 ): HeadersInit | null {
   // The configured token, or the dev one this process minted at startup.
-  const token = serviceToken();
-  if (!token) {
-    return null;
-  }
-
-  return {
-    Authorization: buildTokenAuthHeader(token),
-    ...extraHeaders,
-  };
-}
-
-function buildGiteaPrivilegedHeaders(
-  extraHeaders?: HeadersInit,
-): HeadersInit | null {
-  const serviceHeaders = buildGiteaServiceHeaders(extraHeaders);
-  if (serviceHeaders) {
-    return serviceHeaders;
+  const token = kind === "admin" ? adminToken() : serviceToken();
+  if (token) {
+    return { Authorization: buildTokenAuthHeader(token), ...extraHeaders };
   }
 
   if (
@@ -1776,7 +1776,7 @@ function looksLikeEmailAddress(value: string): boolean {
 }
 
 async function findUsernameByEmail(email: string): Promise<LoginResolution> {
-  const serviceHeaders = buildGiteaPrivilegedHeaders({
+  const serviceHeaders = buildGiteaPrivilegedHeaders("read", {
     Accept: "application/json",
   });
   if (!serviceHeaders) {
@@ -2061,7 +2061,7 @@ async function revokeUserToken(session: SessionRecord): Promise<void> {
     return;
   }
 
-  const serviceHeaders = buildGiteaPrivilegedHeaders({
+  const serviceHeaders = buildGiteaPrivilegedHeaders("admin", {
     Accept: "application/json",
   });
   if (!serviceHeaders) {
@@ -2082,7 +2082,7 @@ async function createGiteaUser(
 ): Promise<
   { status: 502; error: string } | { status: number; error: string } | "created"
 > {
-  const serviceHeaders = buildGiteaPrivilegedHeaders({
+  const serviceHeaders = buildGiteaPrivilegedHeaders("admin", {
     "Content-Type": "application/json",
     Accept: "application/json",
   });
@@ -2649,7 +2649,7 @@ async function handleChangePassword(
   );
   if (refused) return refused;
 
-  const serviceHeaders = buildGiteaPrivilegedHeaders({
+  const serviceHeaders = buildGiteaPrivilegedHeaders("admin", {
     "Content-Type": "application/json",
     Accept: "application/json",
   });
@@ -2748,7 +2748,7 @@ async function handleDeleteAccount(
   if (refused) return refused;
 
   const client = createPrivilegedGiteaClient();
-  const serviceHeaders = buildGiteaPrivilegedHeaders({
+  const serviceHeaders = buildGiteaPrivilegedHeaders("admin", {
     Accept: "application/json",
   });
   if (!client || !serviceHeaders) {
@@ -14132,10 +14132,16 @@ async function handleRequest(req: Request): Promise<Response> {
 if (import.meta.main) {
   const server = createApiServer();
   startCleanupTimer();
-  // Outside production with no service token configured, privileged reads
-  // would ride on basic auth. Mint a token in the background; reads switch
-  // to it as soon as it exists. See `dev-service-token.ts`.
-  void mintDevServiceToken();
+  // Outside production with no service tokens configured, privileged calls
+  // would ride on basic auth. Mint the read and admin tokens in the
+  // background; calls switch to each as soon as it exists. See
+  // `dev-service-token.ts`.
+  void mintDevServiceTokens();
+  if (config.isProduction && !config.giteaAdminToken) {
+    logger.warn(
+      "No BINDERSNAP_GITEA_ADMIN_TOKEN: signup, password and account deletion use the service token until a deploy mints the admin token",
+    );
+  }
   // Finish any multi-step write the last process left half-done — a deploy
   // replaces this container on every push to `main`. See `jobs/runner.ts`.
   startJobRunner({

@@ -61,7 +61,14 @@ variable "gitea_internal_token" {
 }
 
 variable "gitea_service_token" {
-  description = "Dedicated sysadmin service-account token used by the API for signup and token lifecycle operations"
+  description = "The service account's read-only token, used by the API for privileged reads (branch protection, teams, the email lookup at sign-in). Minted on the host by the deploy bootstrap."
+  type        = string
+  sensitive   = true
+  default     = "BOOTSTRAP_WITH_scripts/bootstrap-gitea-service-account.ts"
+}
+
+variable "gitea_admin_token" {
+  description = "The service account's write:admin token, used by the API only for signup, password changes and account deletion. Minted on the host by the deploy bootstrap."
   type        = string
   sensitive   = true
   default     = "BOOTSTRAP_WITH_scripts/bootstrap-gitea-service-account.ts"
@@ -120,6 +127,7 @@ locals {
     gitea_secret_key             = var.gitea_secret_key
     gitea_internal_token         = var.gitea_internal_token
     gitea_service_token          = var.gitea_service_token
+    gitea_admin_token            = var.gitea_admin_token
     gitea_admin_user             = var.gitea_admin_user
     gitea_admin_pass             = var.gitea_admin_pass
     bindersnap_user_email_domain = var.bindersnap_user_email_domain
@@ -132,6 +140,7 @@ locals {
   parameter_arn_base          = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${local.parameter_path}"
   parameter_arn_prefix        = "${local.parameter_arn_base}/*"
   service_token_parameter_arn = "${local.parameter_arn_base}/gitea_service_token"
+  admin_token_parameter_arn   = "${local.parameter_arn_base}/gitea_admin_token"
 }
 
 resource "aws_kms_key" "ssm" {
@@ -189,6 +198,7 @@ data "aws_iam_policy_document" "instance_ssm_access" {
 
     resources = [
       local.service_token_parameter_arn,
+      local.admin_token_parameter_arn,
     ]
   }
 
@@ -242,7 +252,7 @@ data "aws_iam_policy_document" "instance_ssm_access" {
     condition {
       test     = "StringEquals"
       variable = "kms:EncryptionContext:PARAMETER_ARN"
-      values   = [local.service_token_parameter_arn]
+      values   = [local.service_token_parameter_arn, local.admin_token_parameter_arn]
     }
   }
 }
