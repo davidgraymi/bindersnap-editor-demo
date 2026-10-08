@@ -51,6 +51,14 @@ export const SITE_COLLECTIONS: readonly SiteCollection[] = [
     minWords: 500,
   },
   {
+    key: "requirements",
+    prefix: "requirements",
+    label: "Requirements, answered",
+    intro:
+      "Plain answers, with citations, to the questions people ask about healthcare policy rules: how often to review, who approves, and how long to keep old versions.",
+    minWords: 450,
+  },
+  {
     key: "templates",
     prefix: "templates",
     label: "Policy templates",
