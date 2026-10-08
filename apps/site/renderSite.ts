@@ -67,6 +67,15 @@ const MEASUREMENT_ID = /^G-[A-Z0-9]{4,20}$/;
  * signals and no ad personalization, and not loaded at all when the browser
  * sends Global Privacy Control. `id` comes from `BINDERSNAP_GA_MEASUREMENT_ID`
  * at build time; without one there is no tag.
+ *
+ * Three settings in the Google Analytics admin keep the rest of the policy
+ * true, and nothing here can check them:
+ * - Data retention set to 14 months (the policy says so; GA4's default is 2).
+ * - Every data-sharing setting off ("Google products & services" first), and
+ *   Google's data processing terms accepted, so Google acts as our service
+ *   provider and the policy's "we do not share" holds under California law.
+ * - Google signals and ad personalization off for the property, as the tag
+ *   asks.
  */
 export function analyticsTag(id: string | undefined): string {
   if (!id || !MEASUREMENT_ID.test(id)) return "";
