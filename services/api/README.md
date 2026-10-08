@@ -11,6 +11,8 @@ Lightweight Bun auth/BFF service for the unified GitHub Pages SPA.
 - `POST /auth/password/forgot` emails a reset link if the address is an account's; the answer is the same either way
 - `GET /auth/password/reset?token=` says whether a reset link still works
 - `POST /auth/password/reset` sets the new password, ends every session, and signs in
+- `GET`/`PUT /api/app/account/email-preferences` — which change emails the signed-in person gets
+- `POST /email/unsubscribe?token=` turns every change email off; no session, and the one-click target of `List-Unsubscribe-Post`
 - `GET /api/app/documents`
 - & more
 
@@ -42,6 +44,7 @@ The browser only receives a Bindersnap session cookie. Gitea access tokens stay 
 - `BINDERSNAP_MAIL_TRANSPORT`: How queued email is delivered: `ses` (Amazon SES, with the EC2 instance role), `mailpit` (the local stack), or `off` (queued, never sent). Default `off`. Production sets it from the SSM leaf `mail_transport`.
 - `BINDERSNAP_MAIL_FROM`: The sender. Default `Bindersnap <notifications@bindersnap.com>`; SES only lets the API send as the `from_address` in `infra/email`.
 - `BINDERSNAP_MAILPIT_URL`: Mailpit's HTTP API, for `mailpit`. Default `http://mailpit:8025`.
+- `BINDERSNAP_API_ORIGIN`: The API's public origin, for links that must reach the API rather than the app (an email's one-click unsubscribe). Default `http://localhost:$API_PORT`.
 - `AWS_REGION`: The SES region. Default `us-east-1`.
 - `LOG_LEVEL`: Logger verbosity. One of `debug`, `info`, `warn`, `error`. Defaults to `info` in production and `debug` otherwise.
 

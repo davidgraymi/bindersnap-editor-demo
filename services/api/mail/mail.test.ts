@@ -74,6 +74,7 @@ test("a sent email keeps who and when, and forgets its body", async () => {
       subject: email.subject,
       html: email.html,
       text: email.text,
+      headers: {},
     },
   ]);
   const after = outbox.get(queued.id)!;
@@ -124,6 +125,19 @@ test("an email stops in failed after its last try", () => {
   expect(outbox.markFailed(queued.id, "down", false).status).toBe("failed");
 });
 
+test("headers ride along with the email to the transport", async () => {
+  const outbox = freshOutbox();
+  outbox.enqueue({
+    ...email,
+    headers: { "List-Unsubscribe": "<https://api.example/u?token=t>" },
+  });
+  const transport = recordingTransport();
+  await sendDue({ outbox, transport, from: "x@y.z" });
+  expect(transport.sent[0]!.headers).toEqual({
+    "List-Unsubscribe": "<https://api.example/u?token=t>",
+  });
+});
+
 test("backoff doubles from a minute and caps at four hours", () => {
   expect(retryDelayMs(1)).toBe(60_000);
   expect(retryDelayMs(2)).toBe(120_000);
@@ -162,6 +176,27 @@ test("the layout escapes everything a person could have typed", () => {
   expect(rendered.text).toContain("Open the change: https://b.com/a?x=1&y=2");
   expect(rendered.text).toContain("<script>alert(1)</script> & more");
   expect(rendered.subject).toBe("Review <Hand hygiene>");
+});
+
+test("an optional email says why it came and how to stop it", () => {
+  const rendered = renderEmail(
+    {
+      subject: "s",
+      heading: "h",
+      paragraphs: [],
+      optOut: {
+        reason: "You get this because you were asked to review.",
+        settingsUrl: "https://b.com/-/user_settings/profile#email",
+        unsubscribeUrl: "https://b.com/-/unsubscribe?token=t",
+      },
+    },
+    "https://b.com",
+  );
+  expect(rendered.html).toContain('href="https://b.com/-/unsubscribe?token=t"');
+  expect(rendered.html).toContain("Email settings");
+  expect(rendered.text).toContain(
+    "Unsubscribe: https://b.com/-/unsubscribe?token=t",
+  );
 });
 
 test("escapeHtml covers quotes as well as angle brackets", () => {

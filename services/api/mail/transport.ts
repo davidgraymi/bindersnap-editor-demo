@@ -15,6 +15,7 @@ export interface OutgoingEmail {
   subject: string;
   html: string;
   text: string;
+  headers?: Record<string, string>;
 }
 
 export interface MailTransport {
@@ -61,6 +62,9 @@ export function sesTransport(region: string): MailTransport {
                   Html: { Data: email.html, Charset: "UTF-8" },
                   Text: { Data: email.text, Charset: "UTF-8" },
                 },
+                Headers: Object.entries(email.headers ?? {}).map(
+                  ([Name, Value]) => ({ Name, Value }),
+                ),
               },
             },
           }),
@@ -100,6 +104,7 @@ export function mailpitTransport(baseUrl: string): MailTransport {
           Subject: email.subject,
           HTML: email.html,
           Text: email.text,
+          Headers: email.headers ?? {},
         }),
       }).catch((err: unknown) => {
         throw new MailSendError(

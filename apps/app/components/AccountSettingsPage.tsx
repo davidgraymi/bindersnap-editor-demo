@@ -5,7 +5,10 @@ import {
   changePassword,
   deleteAccount,
   fetchAccountBlockers,
+  fetchEmailPreferences,
+  saveEmailPreferences,
   updateProfile,
+  type EmailPreferences,
 } from "../api";
 import type { SessionUser } from "../../../packages/api-schema/schemas/auth";
 import type { AccountBlockers } from "../../../packages/api-schema/schemas/account";
@@ -84,6 +87,14 @@ export function AccountSettingsPage({
           note="Your password. Your username stays as it is: approvals, comments and versions name you by it."
         >
           <PasswordForm />
+        </SettingsGroup>
+
+        <SettingsGroup
+          id="email"
+          title="Email"
+          note="What Bindersnap emails you about. Password resets always come, whatever you choose here."
+        >
+          <EmailPreferencesForm />
         </SettingsGroup>
 
         <SettingsGroup
@@ -224,6 +235,112 @@ function ProfileName({
         </button>
       </div>
     </form>
+  );
+}
+
+const EMAIL_TOPICS: ReadonlyArray<{
+  key: keyof EmailPreferences;
+  name: string;
+  meta: string;
+}> = [
+  {
+    key: "reviewRequested",
+    name: "Someone asks you to review a change",
+    meta: "Including when a change touches a folder you sign off on.",
+  },
+  {
+    key: "changesRequested",
+    name: "A reviewer asks for changes to yours",
+    meta: "With what they said.",
+  },
+  {
+    key: "readyToPublish",
+    name: "Your change is ready to publish",
+    meta: "When it has every approval it needs.",
+  },
+  {
+    key: "published",
+    name: "A change you were part of is published",
+    meta: "As its author, a reviewer, or someone asked to review.",
+  },
+];
+
+/**
+ * Which change emails to get. Each box saves as it is ticked, the way a
+ * binder's rules do — there is nothing to forget to press.
+ */
+function EmailPreferencesForm() {
+  const [preferences, setPreferences] = useState<EmailPreferences | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<Notice | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchEmailPreferences()
+      .then((next) => {
+        if (!cancelled) setPreferences(next);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setNotice({
+            tone: "danger",
+            text: errorMessage(err, "Your email settings could not be read."),
+          });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function change(key: keyof EmailPreferences, on: boolean) {
+    if (!preferences) return;
+    const before = preferences;
+    setPreferences({ ...preferences, [key]: on });
+    setSaving(true);
+    setNotice(null);
+    try {
+      setPreferences(await saveEmailPreferences({ [key]: on }));
+      setNotice({ tone: "saved", text: "Saved." });
+    } catch (err) {
+      setPreferences(before);
+      setNotice({
+        tone: "danger",
+        text: errorMessage(err, "That could not be saved."),
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div>
+      <ul className="bs-row-list">
+        {EMAIL_TOPICS.map((topic) => (
+          <li className="bs-row" key={topic.key}>
+            <span className="bs-row-body">
+              <label className="bs-row-name" htmlFor={`email-${topic.key}`}>
+                {topic.name}
+              </label>
+              <span className="bs-row-meta">{topic.meta}</span>
+            </span>
+            <span className="bs-row-right bs-settings-value">
+              <input
+                id={`email-${topic.key}`}
+                className="bs-checkbox"
+                type="checkbox"
+                checked={preferences?.[topic.key] ?? false}
+                disabled={!preferences || saving}
+                onChange={(event) =>
+                  void change(topic.key, event.target.checked)
+                }
+              />
+            </span>
+          </li>
+        ))}
+      </ul>
+      <NoticeLine notice={notice} />
+    </div>
   );
 }
 

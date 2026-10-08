@@ -21,6 +21,9 @@ export interface ApiConfig {
   stripeRunTag: string;
   defaultAppOrigin: string;
   appOrigin: string;
+  // Where the API itself is reached from outside — for links that must hit
+  // the API rather than the app, like an email's one-click unsubscribe.
+  apiOrigin: string;
   configuredAllowedOrigins: Set<string>;
   hasExplicitBrowserOrigins: boolean;
   emailDomain: string;
@@ -80,6 +83,7 @@ const STRING_ENV: Record<string, StringSpec> = {
   STRIPE_RUN_TAG: { default: "" },
   BINDERSNAP_ALLOWED_ORIGINS: { default: "" },
   BINDERSNAP_APP_ORIGIN: { default: "" },
+  BINDERSNAP_API_ORIGIN: { default: "" },
   BINDERSNAP_USER_EMAIL_DOMAIN: { default: "users.bindersnap.local" },
   BINDERSNAP_SESSION_COOKIE_NAME: { default: "bindersnap_session" },
   BINDERSNAP_GITEA_TOKEN_SCOPES: { default: "" },
@@ -411,6 +415,10 @@ export function initializeConfig(
       defaultAppOrigin,
     ),
     hasExplicitBrowserOrigins: allowedOriginsRaw !== "" || appOriginRaw !== "",
+    apiOrigin:
+      resolveOrigin(
+        parseString(resolvedEnv, "BINDERSNAP_API_ORIGIN", isProduction),
+      ) ?? `http://localhost:${apiPort}`,
     emailDomain: parseString(
       resolvedEnv,
       "BINDERSNAP_USER_EMAIL_DOMAIN",

@@ -20,6 +20,8 @@ export interface Email {
   text: string;
   /** Every `href` in the HTML body, in order. */
   links: string[];
+  /** The message's headers, first value of each. */
+  headers: Record<string, string>;
 }
 
 interface MailpitSummary {
@@ -56,6 +58,15 @@ async function read(id: string): Promise<Email> {
     throw new Error(`Mailpit read failed: ${response.status}`);
   }
   const message = (await response.json()) as MailpitMessage;
+  const headerResponse = await fetch(
+    `${MAILPIT_URL}/api/v1/message/${id}/headers`,
+  );
+  const rawHeaders = headerResponse.ok
+    ? ((await headerResponse.json()) as Record<string, string[]>)
+    : {};
+  const headers = Object.fromEntries(
+    Object.entries(rawHeaders).map(([name, values]) => [name, values[0] ?? ""]),
+  );
   const links = [...message.HTML.matchAll(/href="([^"]+)"/g)].map((m) =>
     m[1]!.replaceAll("&amp;", "&"),
   );
@@ -69,6 +80,7 @@ async function read(id: string): Promise<Email> {
     html: message.HTML,
     text: message.Text,
     links,
+    headers,
   };
 }
 

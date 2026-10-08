@@ -338,6 +338,8 @@ export const emailOutbox = sqliteTable(
     subject: text("subject").notNull(),
     html: text("html").notNull(),
     text: text("text").notNull(),
+    /** Extra headers, as a JSON object — `List-Unsubscribe` and its kin. */
+    headers: text("headers"),
     idempotencyKey: text("idempotency_key"),
     status: text("status").notNull(),
     attempts: integer("attempts").notNull().default(0),
@@ -374,3 +376,28 @@ export const passwordResets = sqliteTable(
   },
   (table) => [index("idx_password_resets_username").on(table.username)],
 );
+
+/**
+ * Which emails each person wants (issue #665). Settings, so SQLite (ADR 0004).
+ *
+ * No row means every topic on: a person who never opened the settings gets
+ * what everybody gets. `unsubscribe_token` is random, per person, and is what
+ * an email's unsubscribe link carries — so turning email off needs no sign-in,
+ * and the link cannot be guessed for anybody else.
+ */
+export const emailPreferences = sqliteTable("email_preferences", {
+  /** Lower-cased: Gitea logins are case-insensitive. */
+  username: text("username").primaryKey(),
+  reviewRequested: integer("review_requested", { mode: "boolean" })
+    .notNull()
+    .default(true),
+  changesRequested: integer("changes_requested", { mode: "boolean" })
+    .notNull()
+    .default(true),
+  readyToPublish: integer("ready_to_publish", { mode: "boolean" })
+    .notNull()
+    .default(true),
+  published: integer("published", { mode: "boolean" }).notNull().default(true),
+  unsubscribeToken: text("unsubscribe_token").notNull().unique(),
+  updatedAt: integer("updated_at").notNull(),
+});
