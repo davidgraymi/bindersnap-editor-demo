@@ -264,11 +264,12 @@ describe("the files crawlers and agents read", () => {
     )["@graph"] as Record<string, unknown>[];
     expect(graph.some((node) => node["@type"] === "FAQPage")).toBe(true);
     const app = graph.find((node) => node["@type"] === "SoftwareApplication");
-    expect(pricing.meta.price).toBeDefined();
-    expect((app!.offers as { price: string }).price).toBe(pricing.meta.price);
+    const stated = pricing.meta.price!;
+    expect(stated).toMatch(/^\d+$/);
+    expect((app!.offers as { price: string }).price).toBe(stated);
     // Every dollar figure on the site is the one price, or a multiple of it
     // in a worked example. A stale price anywhere fails here.
-    const price = Number(pricing.meta.price);
+    const price = Number(stated);
     for (const page of pages) {
       for (const [, amount] of page.body.matchAll(/\$(\d+)/g)) {
         expect({ page: page.path, multiple: Number(amount) % price }).toEqual({
@@ -278,7 +279,7 @@ describe("the files crawlers and agents read", () => {
       }
     }
     const llms = files.get("/llms.txt")!;
-    expect(llms).toContain(`$${pricing.meta.price} a month per paid seat`);
+    expect(llms).toContain(`$${stated} a month per paid seat`);
     expect(llms).toContain(
       "Reviewers who approve and staff who only read are free",
     );
