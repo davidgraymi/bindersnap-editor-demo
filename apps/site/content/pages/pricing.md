@@ -31,7 +31,7 @@ A person counts once, however many binders they write in. The People page shows 
 
 ## What happens when the trial ends
 
-Subscribe from the Billing page and nothing changes: your binders, versions and approval records stay where they are. You see the price for your paid seats before you pay, and checkout is handled by Stripe. If you don't subscribe, **reading and exporting stay free, always.** Everyone can still open every document and download it with its history. Nobody can propose, approve or publish new changes until someone subscribes. Your record is never held hostage.
+Subscribe from the Billing page and nothing changes: your binders, versions and approval records stay where they are. You see the price for your paid seats before you pay, and checkout is handled by Stripe. If you don't subscribe, **reading and exporting stay free** for as long as your organization keeps its account. Everyone can still open every document and download it with its history. Nobody can propose, approve or publish new changes until someone subscribes. Your record isn't held hostage to a subscription.
 
 ## Who it's for
 
@@ -59,7 +59,7 @@ No. You create an account, move your policies in, and subscribe with a card thro
 
 ### What happens to my policies if we cancel?
 
-They stay. Reading and exporting are free, always, so you can open any document, see who approved each version, and download it to PDF or Word whether or not you're subscribed.
+They stay. Reading and exporting are free whether or not you're subscribed, so you can open any document, see who approved each version, and download it to PDF or Word. If your account ever ends, you have at least 30 days to export everything first, as section 14 of our [Terms of Service](/legal/terms) sets out.
 
 ### Can Bindersnap store patient information?
 
