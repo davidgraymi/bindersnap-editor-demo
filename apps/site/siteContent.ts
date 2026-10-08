@@ -35,6 +35,13 @@ export interface SiteCollection {
   footerOnly?: boolean;
 }
 
+/**
+ * Above every page that explains the rules: what we write is information, and
+ * the reader's own advisers decide what applies to them.
+ */
+export const GUIDANCE_NOTICE =
+  "General information about the federal rules, not legal advice. Your state, your accreditor and your own services may require more, so check the cited rules, and ask your own advisers, before you rely on it.";
+
 /** In the order the navigation and the footer list them. */
 export const SITE_COLLECTIONS: readonly SiteCollection[] = [
   {
@@ -51,6 +58,7 @@ export const SITE_COLLECTIONS: readonly SiteCollection[] = [
     intro:
       "What surveyors and accreditors expect from your policy manual, by kind of provider, and how Bindersnap keeps the approval record for each policy.",
     minWords: 500,
+    notice: GUIDANCE_NOTICE,
   },
   {
     key: "templates",
@@ -69,6 +77,7 @@ export const SITE_COLLECTIONS: readonly SiteCollection[] = [
     intro:
       "Plain answers, with citations, to the questions people ask about healthcare policy rules: how often to review, who approves, and how long to keep old versions.",
     minWords: 450,
+    notice: GUIDANCE_NOTICE,
   },
   {
     key: "tools",
@@ -77,6 +86,7 @@ export const SITE_COLLECTIONS: readonly SiteCollection[] = [
     intro:
       "Free tools for the person who keeps the policy manual, built on the federal rules and the citations behind them.",
     minWords: 250,
+    notice: GUIDANCE_NOTICE,
   },
   {
     key: "compare",
@@ -95,6 +105,7 @@ export const SITE_COLLECTIONS: readonly SiteCollection[] = [
       "Plain definitions of the survey, accreditation and policy management terms small healthcare providers meet, with the rule each comes from.",
     footerOnly: true,
     minWords: 200,
+    notice: GUIDANCE_NOTICE,
   },
 ];
 
