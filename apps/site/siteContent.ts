@@ -29,6 +29,8 @@ export interface SiteCollection {
   intro: string;
   /** Fewest words a page in this collection may have. Thin pages rank for nothing. */
   minWords: number;
+  /** Shown above every page's body: what a reader must know before using it. */
+  notice?: string;
 }
 
 /** In the order the navigation and the footer list them. */
@@ -47,6 +49,16 @@ export const SITE_COLLECTIONS: readonly SiteCollection[] = [
     intro:
       "What surveyors and accreditors expect from your policy manual, by kind of provider, and how Bindersnap keeps the approval record for each policy.",
     minWords: 500,
+  },
+  {
+    key: "templates",
+    prefix: "templates",
+    label: "Policy templates",
+    intro:
+      "Free policy and procedure templates for small healthcare providers, written from the federal rules they answer to, with the citations to check them against.",
+    minWords: 800,
+    notice:
+      "A starting point, not legal or clinical advice. Each template follows the federal rules cited on the page. Your state, your accreditor and your own services may require more, so have the people responsible for this policy review it before you adopt it.",
   },
 ];
 

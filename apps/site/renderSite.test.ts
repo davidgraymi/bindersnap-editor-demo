@@ -272,3 +272,13 @@ describe("the landing page", () => {
     expect((app.offers as { price: string }).price).toBe(pricing.meta.price!);
   });
 });
+
+describe("a template page", () => {
+  test("sets the policy itself apart, up to the next section", () => {
+    const html = files.get("/templates/exposure-control-plan")!;
+    const sheet = html.match(/<div class="site-template">([\s\S]*?)<\/div>/);
+    expect(sheet).not.toBeNull();
+    expect(sheet![1]).toContain("Exposure Control Plan");
+    expect(sheet![1]).not.toContain('id="how-to-adapt-it"');
+  });
+});

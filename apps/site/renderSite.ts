@@ -382,6 +382,17 @@ export function softwareApplicationLd(price: string, currency = "USD") {
   };
 }
 
+/**
+ * The policy itself, on a template page, as a sheet set apart from the advice
+ * around it: everything from the "The template" heading to the next `h2`.
+ */
+export function frameTemplate(html: string): string {
+  return html.replace(
+    /(<h2 id="the-template">[\s\S]*?<\/h2>)([\s\S]*?)(?=<h2 |$)/,
+    '$1<div class="site-template">$2</div>',
+  );
+}
+
 export function renderSitePage(
   page: SitePage,
   pages: readonly SitePage[],
@@ -438,7 +449,11 @@ export function renderSitePage(
 <p class="site-updated">Updated <time datetime="${page.updated}">${escape(
       formatDate(page.updated),
     )}</time></p>
-${renderLegalBody(page.body)}
+${
+  page.collection.notice
+    ? `<p class="site-notice">${escape(page.collection.notice)}</p>\n`
+    : ""
+}${frameTemplate(renderLegalBody(page.body))}
 </article>
 ${facilityHtml(page, pages)}
 ${relatedHtml(page, pages, listed)}
@@ -511,7 +526,10 @@ export function formatDate(iso: string): string {
 }
 
 export function renderPageMarkdown(page: SitePage): string {
-  return `# ${page.title}\n\n${page.description}\n\nUpdated: ${page.updated}\nSource: ${SITE}${page.path}\n\n${page.body}\n`;
+  const notice = page.collection.notice
+    ? `> ${page.collection.notice}\n\n`
+    : "";
+  return `# ${page.title}\n\n${page.description}\n\nUpdated: ${page.updated}\nSource: ${SITE}${page.path}\n\n${notice}${page.body}\n`;
 }
 
 /** Another site's page this one lists: help guides, legal documents, the landing page. */
@@ -768,6 +786,28 @@ const SITE_CSS = `
   padding: 14px 16px;
   font-size: 14px;
 }
+.site-notice {
+  margin: 0 0 24px;
+  padding: 12px 16px;
+  border: 1px solid var(--bs-status-warn-border);
+  border-radius: 10px;
+  background: var(--bs-status-warn-bg);
+  color: var(--bs-status-warn-fg);
+  font-size: 15px;
+}
+.site-template {
+  margin: 12px 0 8px;
+  padding: 28px 32px;
+  border: 1px solid var(--bs-rule);
+  border-radius: 12px;
+  background: var(--bs-surface-1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.site-template h3:first-child {
+  margin-top: 0;
+  font-family: var(--brand-font-serif, "Lora", Georgia, serif);
+  font-size: 20px;
+}
 .site-updated {
   font-family: var(--brand-font-mono, "Geist Mono", monospace);
   font-size: 13px;
@@ -815,5 +855,6 @@ const SITE_CSS = `
   .site-signin { display: none; }
   .site-main { padding: 24px 16px 56px; }
   .site-main h1 { font-size: 28px; }
+  .site-template { padding: 18px 16px; }
 }
 `;
