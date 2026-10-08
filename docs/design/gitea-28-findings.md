@@ -289,6 +289,14 @@ nightly would be on different Gitea builds with different migration state. Pin
 why the two disagree — an unexplained version skew between dev and production is a
 thing somebody eventually "fixes".
 
+**Update 2026-10-06: 28.0.0 was released on 2026-09-29, and both environments
+run it.** Both compose files pin `gitea/gitea:28.0.0@sha256:a9dc2567…`, and the
+binary reports `28.0.0`. Production did not migrate. Its data was erased and it
+started again from an empty database (`docs/ops/deploy.md`, "Starting production
+from nothing"), so 1.27.3 has run its last binder. The breaking change in the
+release notes is the git egress proxy (go-gitea #39426). Neither compose file
+sets a host allow-list or block-list, so it does not affect us.
+
 ## Sources
 
 - go-gitea/gitea PR #34995 (merged 2026-07-31, milestone 28.0.0) and its diff of

@@ -111,7 +111,8 @@ all, and nobody consents to being added. The rest is
 production left on 1.27.3, and its verification turned up one claim the design
 had backwards — a CODEOWNERS pattern that does not compile is dropped silently
 rather than failing closed. That became a requirement on the generator before
-the generator existed.
+the generator existed. On 2026-10-06 both environments moved to the released
+28.0.0. Production started again from an empty database rather than migrating.
 
 **The old model is deleted too** — 20,000 lines out, the library rebuilt on
 binders in the same change because it would otherwise have gone blank, and two
