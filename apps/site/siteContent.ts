@@ -40,6 +40,14 @@ export const SITE_COLLECTIONS: readonly SiteCollection[] = [
     intro: "",
     minWords: 250,
   },
+  {
+    key: "for",
+    prefix: "for",
+    label: "Who it's for",
+    intro:
+      "What surveyors and accreditors expect from your policy manual, by kind of provider, and how Bindersnap keeps the approval record for each policy.",
+    minWords: 500,
+  },
 ];
 
 export interface SitePage {
@@ -55,6 +63,11 @@ export interface SitePage {
   updated: string;
   /** Addresses of other pages to recommend at the foot of this one. */
   related: string[];
+  /**
+   * The kinds of provider this page is for: slugs of pages in `for/`. A
+   * provider's page lists every page that names it.
+   */
+  facilities: string[];
   /**
    * Any other front-matter keys: `crumb` (a short name for the breadcrumb when
    * the title is long), and whatever a collection's own renderer reads.
@@ -93,7 +106,12 @@ export function parseSitePage(
       throw new Error(`${where} needs "${key}:" in its front matter`);
   }
 
-  const { title, description, updated, related, ...rest } = meta;
+  const { title, description, updated, related, facilities, ...rest } = meta;
+  const list = (value: string | undefined) =>
+    (value ?? "")
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
   return {
     collection,
     slug,
@@ -101,10 +119,8 @@ export function parseSitePage(
     title: title!,
     description: description!,
     updated: updated!,
-    related: (related ?? "")
-      .split(",")
-      .map((entry) => entry.trim())
-      .filter(Boolean),
+    related: list(related),
+    facilities: list(facilities),
     meta: rest,
     body: match[2]!.trim(),
   };

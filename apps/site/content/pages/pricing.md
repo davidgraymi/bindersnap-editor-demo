@@ -30,7 +30,7 @@ Subscribe from the Billing page and nothing changes: your binders, versions and 
 
 ## Who it's for
 
-Bindersnap is for small healthcare providers who keep a policy manual and answer to a surveyor or accreditor: ambulatory surgery centers, physician and specialty clinics, home health and hospice agencies, and behavioral health programs. If your policies live in a shared drive and your sign-offs live in someone's inbox, it's for you.
+Bindersnap is for small healthcare providers who keep a policy manual and answer to a surveyor or accreditor: [ambulatory surgery centers](/for/ambulatory-surgery-centers), [physician practices and clinics](/for/medical-practices), [rural health clinics](/for/rural-health-clinics), [home health agencies](/for/home-health-agencies), [hospices](/for/hospices), and [behavioral health programs](/for/behavioral-health). If your policies live in a shared drive and your sign-offs live in someone's inbox, it's for you.
 
 Bindersnap holds your policies and procedures. It is not for patient records or other protected health information.
 

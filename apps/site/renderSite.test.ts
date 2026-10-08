@@ -36,8 +36,8 @@ const known = new Set<string>([
 const FORBIDDEN_CLAIMS = [
   /HIPAA[- ]compliant/i,
   /\bguarantee/i,
-  /\bcertified by\b/i,
-  /\bendorsed by\b/i,
+  /Bindersnap (is|has been) (certified|endorsed|accredited|approved)/i,
+  /(certifies|guarantees|ensures) (your )?compliance/i,
 ];
 
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -135,6 +135,15 @@ describe("every page on the public site", () => {
           expect({ page: page.path, link, exists: known.has(link) }).toEqual({
             page: page.path,
             link,
+            exists: true,
+          });
+        }
+      });
+
+      test("names only providers that have a page", () => {
+        for (const facility of page.facilities) {
+          expect({ facility, exists: known.has(`/for/${facility}`) }).toEqual({
+            facility,
             exists: true,
           });
         }

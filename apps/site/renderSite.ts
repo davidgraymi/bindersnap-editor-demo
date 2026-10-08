@@ -292,10 +292,56 @@ const CTA = `<aside class="site-cta">
 <a class="site-cta-button" href="/-/signup">Start your 14-day free trial</a>
 </aside>`;
 
-function relatedHtml(page: SitePage, pages: readonly SitePage[]): string {
+/**
+ * On a provider's page (`/for/{slug}`), every other page written for that
+ * provider, by section: its templates, its requirements, the terms it meets.
+ * Tagging a new page with `facilities:` is all it takes to be listed here.
+ */
+export function pagesForFacility(
+  facility: string,
+  pages: readonly SitePage[],
+): { collection: SiteCollection; pages: SitePage[] }[] {
+  return SITE_COLLECTIONS.map((collection) => ({
+    collection,
+    pages: pages.filter(
+      (page) =>
+        page.collection.key === collection.key &&
+        page.facilities.includes(facility),
+    ),
+  })).filter((group) => group.pages.length > 0);
+}
+
+function facilityHtml(page: SitePage, pages: readonly SitePage[]): string {
+  if (page.collection.key !== "for") return "";
+  return pagesForFacility(page.slug, pages)
+    .map(
+      (group) =>
+        `<section class="site-facility"><h2>${escape(group.collection.label)} for ${escape(
+          (page.meta.crumb ?? page.title).toLowerCase(),
+        )}</h2><ul class="help-cards">${group.pages
+          .map(
+            (entry) =>
+              `<li><a href="${entry.path}"><span class="help-card-title">${escape(
+                entry.title,
+              )}</span><span class="help-card-summary">${escape(entry.description)}</span></a></li>`,
+          )
+          .join("")}</ul></section>`,
+    )
+    .join("");
+}
+
+function relatedHtml(
+  page: SitePage,
+  pages: readonly SitePage[],
+  listed: readonly ListedPage[],
+): string {
   const items = page.related
-    .map((path) => pages.find((entry) => entry.path === path))
-    .filter((entry): entry is SitePage => entry !== undefined);
+    .map(
+      (path): ListedPage | undefined =>
+        pages.find((entry) => entry.path === path) ??
+        listed.find((entry) => entry.path === path),
+    )
+    .filter((entry): entry is ListedPage => entry !== undefined);
   if (!items.length) return "";
   return `<nav class="site-related" aria-label="Related"><h2>Related</h2><ul class="help-cards">${items
     .map(
@@ -339,6 +385,8 @@ export function softwareApplicationLd(price: string, currency = "USD") {
 export function renderSitePage(
   page: SitePage,
   pages: readonly SitePage[],
+  /** Help guides and legal documents a page may recommend. */
+  listed: readonly ListedPage[] = [],
 ): string {
   const crumbs: Crumb[] = [{ name: "Home", path: "/" }];
   if (page.collection.prefix) {
@@ -392,7 +440,8 @@ export function renderSitePage(
     )}</time></p>
 ${renderLegalBody(page.body)}
 </article>
-${relatedHtml(page, pages)}
+${facilityHtml(page, pages)}
+${relatedHtml(page, pages, listed)}
 ${CTA}`,
   });
 }
@@ -592,7 +641,10 @@ export function siteFiles(
     ["/llms-full.txt", renderLlmsFullTxt(pages, others.helpMarkdown)],
   ]);
   for (const page of pages) {
-    files.set(page.path, renderSitePage(page, pages));
+    files.set(
+      page.path,
+      renderSitePage(page, pages, [...others.help, ...others.legal]),
+    );
     files.set(`${page.path}.md`, renderPageMarkdown(page));
   }
   const indexes = navCollections(pages);
@@ -725,9 +777,8 @@ const SITE_CSS = `
 .site-crumbs ol { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 20px; font-size: 14px; color: var(--bs-text-muted); }
 .site-crumbs li + li::before { content: "/"; margin-right: 6px; }
 .site-crumbs a { color: var(--bs-text-muted); }
-.site-related { margin-top: 48px; }
-.site-related .help-cards { margin-top: 12px; }
-.site-cta {
+.site-related, .site-facility { margin-top: 48px; }
+.site-facility .help-cards, .site-cta {
   margin: 48px 0 0;
   padding: 24px;
   border: 1px solid var(--bs-rule);
