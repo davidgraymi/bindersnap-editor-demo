@@ -65,6 +65,7 @@ export const SITE_COLLECTIONS: readonly SiteCollection[] = [
     intro:
       "Plain answers, with citations, to the questions people ask about healthcare policy rules: how often to review, who approves, and how long to keep old versions.",
     minWords: 450,
+    notice: GUIDANCE_NOTICE,
   },
   {
     key: "templates",
