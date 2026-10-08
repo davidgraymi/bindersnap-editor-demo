@@ -307,7 +307,10 @@ function relatedHtml(page: SitePage, pages: readonly SitePage[]): string {
     .join("")}</ul></nav>`;
 }
 
-/** The product and its one plan, for a page that states the price. */
+/**
+ * The product and its price, for a page whose front matter states one
+ * (`price:`, per paid seat per month). No page does until a price is set.
+ */
 export function softwareApplicationLd(price: string, currency = "USD") {
   return {
     "@type": "SoftwareApplication",
@@ -493,7 +496,7 @@ export function renderLlmsTxt(
     "",
     "> Bindersnap is policy and procedure management software for small healthcare providers — clinics, ambulatory surgery centers, home health agencies and behavioral health programs. Every policy keeps its current approved version, every earlier version, and the record of who approved each one and when, so the organization can answer a surveyor or accreditor in minutes.",
     "",
-    "- Price: one flat monthly subscription per organization, with a 14-day free trial; reviewers and readers cost nothing extra. See the pricing page.",
+    "- Pricing: per paid seat — the owners, admins and editors who write and publish policies. Reviewers who approve and staff who only read are free, in any number. Every organization starts with a 14-day free trial, no card required. See the pricing page.",
     "- Not for patient health information: Bindersnap holds an organization's policies and procedures, never patient records.",
     "- Exports any version, and an audit packet of versions and approvals, to PDF and Word.",
     "",

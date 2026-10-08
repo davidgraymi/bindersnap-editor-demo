@@ -235,21 +235,34 @@ describe("the files crawlers and agents read", () => {
     for (const page of pages) expect(full).toContain(`# ${page.title}`);
   });
 
-  test("the pricing page states the offer in JSON-LD", () => {
+  test("the pricing page says who pays, and claims no price until one is set", () => {
+    const pricing = pages.find((page) => page.path === "/pricing")!;
+    expect(pricing.body).toContain("Paid seat");
+    expect(pricing.body).toMatch(
+      /\|\s*\*\*Reviewer\*\*\s*\|[^\n]*\*\*Free\*\*/,
+    );
     const html = files.get("/pricing")!;
     const graph = JSON.parse(
       html.match(
         /<script type="application\/ld\+json">([\s\S]*?)<\/script>/,
       )![1]!,
     )["@graph"] as Record<string, unknown>[];
-    const app = graph.find((node) => node["@type"] === "SoftwareApplication")!;
-    expect((app.offers as { price: string }).price).toBe("100");
     expect(graph.some((node) => node["@type"] === "FAQPage")).toBe(true);
+    const app = graph.find((node) => node["@type"] === "SoftwareApplication");
+    if (pricing.meta.price) {
+      expect((app!.offers as { price: string }).price).toBe(pricing.meta.price);
+    } else {
+      expect(app).toBeUndefined();
+      expect(pricing.body).not.toMatch(/\$\d/);
+    }
+    expect(files.get("/llms.txt")).toContain(
+      "Reviewers who approve and staff who only read are free",
+    );
   });
 });
 
 describe("the landing page", () => {
-  test("its JSON-LD parses and names the price /pricing states", async () => {
+  test("its JSON-LD parses, and offers only the price /pricing states", async () => {
     const html = await Bun.file(
       new URL("../app/index.html", import.meta.url),
     ).text();
@@ -260,6 +273,8 @@ describe("the landing page", () => {
     const graph = JSON.parse(ld![1]!)["@graph"] as Record<string, unknown>[];
     const app = graph.find((node) => node["@type"] === "SoftwareApplication")!;
     const pricing = pages.find((page) => page.path === "/pricing")!;
-    expect((app.offers as { price: string }).price).toBe(pricing.meta.price!);
+    expect((app.offers as { price?: string } | undefined)?.price).toBe(
+      pricing.meta.price,
+    );
   });
 });
