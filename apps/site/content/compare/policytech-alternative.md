@@ -34,7 +34,7 @@ NAVEX has renamed PolicyTech **NAVEX One Policy & Procedure Management**. Its si
 | Linked training and AI policy assistant | Yes                                                                                                            | No                                                                                                       |
 | Starter policies                        | Six sample policies, such as anti-bribery and workplace harassment                                             | Free [healthcare policy templates](/templates), downloadable as Word files                               |
 | Reviewers and readers                   | Check with vendor                                                                                              | Free, in any number                                                                                      |
-| After you stop paying                   | Check with vendor                                                                                              | Reading and exporting stay free, always                                                                  |
+| After you stop paying                   | Check with vendor                                                                                              | Reading and exporting stay free while the account is open                                                |
 
 ## Where PolicyTech does more
 
@@ -45,7 +45,7 @@ PolicyTech is a broader product, and NAVEX has been building it for a long time.
 - **It's built for healthcare surveys.** Our [requirements guides](/requirements) and [templates](/templates) are written for what CMS surveyors and accreditors ask small providers for, and the [required policies checklist](/tools/required-policies-checklist) shows which policies your facility needs.
 - **You pay for writers, not readers.** $39 a month for each person who writes and publishes policies. Reviewers and staff who only read are free, and there's no long contract.
 - **You can start today.** Create an account, upload the Word and PDF files you already have, and invite your approvers. The [getting started guide](/help/getting-started) shows how.
-- **It does one thing completely.** A change to a policy is proposed, reviewed and approved before it becomes the policy, and every version keeps its approvals forever. See [how a change becomes the record](/help/approvals).
+- **It does one thing completely.** A change to a policy is proposed, reviewed and approved before it becomes the policy, and every version keeps its approvals for as long as the binder exists. See [how a change becomes the record](/help/approvals).
 - **Your record stays yours.** If you stop paying, you can still read and export every version and its approval history.
 
 ## Frequently asked questions
