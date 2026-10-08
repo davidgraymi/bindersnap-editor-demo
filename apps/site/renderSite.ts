@@ -421,10 +421,14 @@ export function softwareApplicationLd(price: string, currency = "USD") {
  * The policy itself, on a template page, as a sheet set apart from the advice
  * around it: everything from the "The template" heading to the next `h2`.
  */
-export function frameTemplate(html: string): string {
+export function frameTemplate(html: string, page?: SitePage): string {
+  const download = page
+    ? `<p class="site-download"><a class="site-download-button" href="${page.path}.docx" download="${page.slug}.docx">Download as Word (.docx)</a><span>Edit it in Word, then upload it to Bindersnap to keep its approvals and every version.</span></p>`
+    : "";
   return html.replace(
     /(<h2 id="the-template">[\s\S]*?<\/h2>)([\s\S]*?)(?=<h2 |$)/,
-    '$1<div class="site-template">$2</div>',
+    (_match, heading: string, sheet: string) =>
+      `${heading}${download}<div class="site-template">${sheet}</div>`,
   );
 }
 
@@ -497,7 +501,10 @@ ${
   page.collection.notice
     ? `<p class="site-notice">${escape(page.collection.notice)}</p>\n`
     : ""
-}${page.tool?.html ?? ""}${frameTemplate(renderLegalBody(page.body))}
+}${page.tool?.html ?? ""}${frameTemplate(
+      renderLegalBody(page.body),
+      page.collection.key === "templates" ? page : undefined,
+    )}
 </article>
 ${facilityHtml(page, pages)}
 ${relatedHtml(page, pages, listed)}
@@ -840,6 +847,26 @@ const SITE_CSS = `
   color: var(--bs-status-warn-fg);
   font-size: 15px;
 }
+.site-download {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin: 8px 0 14px;
+  font-size: 14px;
+  color: var(--bs-text-muted);
+}
+.site-download-button {
+  display: inline-block;
+  padding: 8px 14px;
+  border: 1px solid var(--bs-rule);
+  border-radius: 8px;
+  background: var(--bs-surface-1);
+  color: var(--bs-text-primary) !important;
+  font-weight: 600;
+  text-decoration: none;
+}
+.site-download-button:hover { border-color: var(--brand-coral); }
 .site-template {
   margin: 12px 0 8px;
   padding: 28px 32px;
