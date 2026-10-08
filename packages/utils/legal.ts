@@ -7,7 +7,7 @@
  * test holds them together, so an edit to the Terms or to a checkbox cannot
  * ship while agreements still record the old version.
  */
-export const LEGAL_VERSION = "2026-10-07";
+export const LEGAL_VERSION = "2026-10-08";
 
 /**
  * The last version everybody has to accept again: people for themselves, and

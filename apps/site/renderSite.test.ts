@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { RESERVED_ORGANIZATION_NAMES } from "../../packages/utils/organizationName";
 import { publicSiteFiles } from "./publicSite";
 import {
+  analyticsTag,
   extractFaqs,
   pageTitle,
   renderSitePage,
@@ -280,5 +281,30 @@ describe("a template page", () => {
     expect(sheet).not.toBeNull();
     expect(sheet![1]).toContain("Exposure Control Plan");
     expect(sheet![1]).not.toContain('id="how-to-adapt-it"');
+  });
+});
+
+describe("the Google tag", () => {
+  test("is only written for a real measurement ID", () => {
+    expect(analyticsTag(undefined)).toBe("");
+    expect(analyticsTag("")).toBe("");
+    expect(analyticsTag('G-1"</script>')).toBe("");
+    expect(analyticsTag("G-ABC123XYZ")).toContain(
+      "googletagmanager.com/gtag/js?id=G-ABC123XYZ",
+    );
+  });
+
+  test("stays off when the browser sends Global Privacy Control, and sends no ad signals", () => {
+    const tag = analyticsTag("G-ABC123XYZ");
+    expect(tag).toContain("if (navigator.globalPrivacyControl) return;");
+    expect(tag).toContain("allow_google_signals:false");
+    expect(tag).toContain("allow_ad_personalization_signals:false");
+  });
+
+  test("is never on the landing page, which signed-in customers load", async () => {
+    const landing = await Bun.file(
+      new URL("../app/index.html", import.meta.url),
+    ).text();
+    expect(landing).not.toContain("googletagmanager");
   });
 });
