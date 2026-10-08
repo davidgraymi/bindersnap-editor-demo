@@ -44,8 +44,7 @@ const LOGO_MARK = `<svg viewBox="0 0 18 18" fill="none" aria-hidden="true" width
  */
 const SITE = "https://bindersnap.com";
 
-const FONTS =
-  "https://fonts.googleapis.com/css2?family=Lora:wght@500;600&family=Geist:wght@400;500;600&display=swap";
+const FONTS = "/fonts/fonts.css";
 
 /**
  * The theme the app would show: the choice made in the app on this browser,
@@ -98,8 +97,6 @@ ${
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Bindersnap: The surveyor asks which version you approved. Show them.">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="${FONTS}">
 <link rel="stylesheet" href="/help/help.css">
 <script>${THEME_SCRIPT}</script>

@@ -363,3 +363,9 @@ test("help is not the app's: its addresses are never a route in it", () => {
   expect(getRoute("/help").kind).not.toBe("organization");
   expect(getRoute("/help/approvals").kind).not.toBe("binder");
 });
+
+test("the legal pages are not the app's either", () => {
+  // `/legal` is plain pages too (apps/legal), reserved the same way.
+  expect(getRoute("/legal").kind).not.toBe("organization");
+  expect(getRoute("/legal/terms").kind).not.toBe("binder");
+});

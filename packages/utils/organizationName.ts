@@ -13,14 +13,15 @@
  * The app's own pages live behind `/-/` — `/-/documents`, `/-/login`,
  * `/-/user_settings/profile` — the way GitLab keeps its own, and no
  * organization can be called `-`. So almost every name is an organization's
- * to take. What is left is what the app cannot move: the help pages, which
- * are a separate site at `/help`; `/auth/callback`, where Gitea's sign-in
+ * to take. What is left is what the app cannot move: the help pages and the
+ * legal pages, which are separate sites at `/help` and `/legal`; `/auth/callback`, where Gitea's sign-in
  * sends people back; and the files every browser asks for at the root.
  */
 export const RESERVED_ORGANIZATION_NAMES: ReadonlySet<string> = new Set([
   "-",
   "auth",
   "help",
+  "legal",
   "llms.txt",
   "apple-touch-icon.png",
   "favicon.ico",

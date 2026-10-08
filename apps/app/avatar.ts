@@ -1,9 +1,9 @@
 /**
- * Where a person's face comes from: the API's avatar redirect, by login.
+ * Where a person's face comes from: the pattern the API draws for a login.
  *
- * The API looks the address up and sends the browser on to Gravatar, so the
- * address never reaches the page. Asked at twice the drawn size, for screens
- * that draw two pixels for every one.
+ * Drawn by us, not fetched from Gravatar, so nobody outside Bindersnap learns
+ * who is looking at whom. Asked at twice the drawn size, for screens that draw
+ * two pixels for every one.
  */
 const API_BASE_URL = (process.env.BUN_PUBLIC_API_BASE_URL ?? "").replace(
   /\/+$/,

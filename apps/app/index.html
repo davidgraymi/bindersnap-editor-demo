@@ -3,6 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Never inside another site's frame (clickjacking). The API and Gitea say
+      so with X-Frame-Options, but GitHub Pages serves this page and will not
+      send headers, so the page says it itself: framed, it hides before it
+      draws anything. It also asks to take over the whole tab, which browsers
+      usually refuse a cross-site frame, so hiding is the part that counts.
+      First in <head> so it runs before any paint. A frame sandboxed against scripts stops this,
+      but it stops the app too, so there is nothing in it to click.
+    -->
+    <script>
+      if (window.self !== window.top) {
+        document.documentElement.style.display = "none";
+        try {
+          window.top.location.replace(window.self.location.href);
+        } catch (e) {
+          // A sandboxed frame may not navigate its parent; hidden is enough.
+        }
+      }
+    </script>
     <title>
       Bindersnap — Policy &amp; Procedure Management for Small Healthcare
       Providers
@@ -53,17 +72,14 @@
     />
     <meta property="og:locale" content="en_US" />
     <meta name="twitter:card" content="summary_large_image" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="preload"
-      as="style"
-      href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap"
-    />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap"
-    />
+    <!--
+      Our own copy of the fonts, not Google's: see public/fonts/fonts.css. An
+      @import, so the bundler leaves it alone instead of inlining every font
+      file into the app's stylesheet.
+    -->
+    <style>
+      @import url("/fonts/fonts.css");
+    </style>
     <link
       rel="preload"
       as="style"
@@ -1133,6 +1149,18 @@
             ><br />
             You do not have one. That is exactly who we built this for.
           </p>
+          <div
+            class="footer-links"
+            role="navigation"
+            aria-label="Legal and help"
+          >
+            <a href="/legal/terms">Terms</a>
+            <a href="/legal/privacy">Privacy</a>
+            <a href="/legal/security">Security</a>
+            <a href="/legal/subprocessors">Subprocessors</a>
+            <a href="/legal/dpa">DPA</a>
+            <a href="/help">Help</a>
+          </div>
           <div class="footer-rule"></div>
           <div class="footer-bottom">
             <span class="footer-copy">&copy; 2026 Solid Gray LLC</span>

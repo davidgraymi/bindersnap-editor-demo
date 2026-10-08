@@ -70,6 +70,10 @@ services:
       - GITEA__cors__METHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
       - GITEA__cors__ALLOW_CREDENTIALS=true
       # --- Logging ---
+      # No Gravatar or other outside avatar service: Gitea draws its own, so no
+      # hash of anybody's email leaves the host (the Privacy Policy says so).
+      - GITEA__picture__DISABLE_GRAVATAR=true
+      - GITEA__picture__ENABLE_FEDERATED_AVATAR=false
       - GITEA__log__LEVEL=warn
       - GITEA__log__MODE=console
       # --- Security ---

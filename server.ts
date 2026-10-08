@@ -1,10 +1,12 @@
 import { readdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 
 import { file, serve } from "bun";
 import appIndex from "./apps/app/index.html";
 import { HELP_GUIDES } from "./apps/app/helpGuides";
 import { helpContentType, helpFiles } from "./apps/help/renderHelp";
+import { readLegalDocuments } from "./apps/legal/legalDocuments";
+import { legalFiles } from "./apps/legal/renderLegal";
 
 /**
  * Help is plain pages, not the app: the same files `scripts/build-help.ts`
@@ -21,16 +23,30 @@ function serveHelp(req: Request): Response {
       });
 }
 
+/** The legal pages, the same way: read on each request so an edit shows. */
+function serveLegal(req: Request): Response {
+  const path = new URL(req.url).pathname.replace(/\/+$/, "") || "/";
+  const body = legalFiles(readLegalDocuments()).get(path);
+  return body === undefined
+    ? new Response("No such page.", { status: 404 })
+    : new Response(body, {
+        headers: { "Content-Type": helpContentType(path) },
+      });
+}
+
 /**
- * The icons and the link-preview image, at the site root where the build
- * copies them for GitHub Pages: `/favicon.ico`, `/og-image.png` and the rest.
+ * The icons, the link-preview image and the fonts, at the site root where the
+ * build copies them for GitHub Pages: `/favicon.ico`, `/fonts/fonts.css` and
+ * the rest.
  */
 const PUBLIC_DIR = join(import.meta.dir, "apps/app/public");
 const publicFiles = Object.fromEntries(
-  readdirSync(PUBLIC_DIR).map((name) => [
-    `/${name}`,
-    () => new Response(file(join(PUBLIC_DIR, name))),
-  ]),
+  readdirSync(PUBLIC_DIR, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => {
+      const path = join(entry.parentPath, entry.name);
+      return [`/${relative(PUBLIC_DIR, path)}`, () => new Response(file(path))];
+    }),
 );
 
 const configuredPort = Number.parseInt(
@@ -47,6 +63,8 @@ const server = serve({
     "/help": serveHelp,
     "/help/*": serveHelp,
     "/llms.txt": serveHelp,
+    "/legal": serveLegal,
+    "/legal/*": serveLegal,
     "/": appIndex,
     "/docs/*": appIndex,
     "/auth/callback": appIndex,
