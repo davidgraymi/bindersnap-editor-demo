@@ -27,7 +27,7 @@ _Based on RLDatix's public website as of October 7, 2026. Products change, so ch
 | Connects to incident reporting               | Yes, with RLDatix RL6                                                      | No                                                                                             |
 | Write in the browser, or upload Word and PDF | Check with vendor                                                          | Both                                                                                           |
 | Reviewers and readers                        | Check with vendor                                                          | Free, in any number                                                                            |
-| After you stop paying                        | Check with vendor                                                          | Reading and exporting stay free, always                                                        |
+| After you stop paying                        | Check with vendor                                                          | Reading and exporting stay free while the account is open                                      |
 
 ## Where PolicyStat does more
 
@@ -37,7 +37,7 @@ RLDatix's policy management tracks revisions and runs approval workflows, as Bin
 
 - **You pay for writers, not readers.** Only the people who write and publish policies are paid seats; reviewers and staff who only read are free.
 - **No implementation project.** Upload the Word and PDF files you already have, name your approvers, and you're running. The [getting started guide](/help/getting-started) shows how.
-- **A permanent record.** Every version of every policy keeps the names and dates of its approvals, and your organization can read and export all of it even if it stops paying.
+- **A lasting record.** Every version of every policy keeps the names and dates of its approvals for as long as the binder exists, and your organization can read and export all of it even if it stops paying.
 - **Built for the person who owns the binder**: the administrator, director of nursing or practice manager who keeps the manual alongside everything else.
 
 ## Frequently asked questions
