@@ -35,7 +35,7 @@ Two more sections reach the policy manual. Section 491.11 requires a **biennial 
 
 - **Your professional group, as approvers.** Name the physician, the PA or NP, and the outside member as the binder's approvers. A policy changes only when they approve it.
 - **Biennial reviews you can show.** When the group reviews a policy, they approve it again. Each approval is recorded with names and dates against that exact version. See [how a change becomes the record](/help/approvals).
-- **The outside member doesn't need a paid seat.** Reviewers and readers cost nothing extra. See [pricing](/pricing).
+- **The outside member doesn't need a paid seat.** Reviewers and staff who only read are free. See [pricing](/pricing).
 - **Every version kept.** Show the surveyor the manual as it stood at the last review, and what has changed since.
 
 Bindersnap holds your clinic's policies and procedures, not patient records.

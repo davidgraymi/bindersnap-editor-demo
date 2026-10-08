@@ -1,6 +1,6 @@
 ---
 title: Bindersnap vs. PolicyStat (RLDatix) for small providers
-description: RLDatix PolicyStat is built for hospitals and health systems and sold through a demo. Bindersnap is for small providers, with a published price and free trial.
+description: RLDatix PolicyStat is built for hospitals and health systems and sold through a demo. Bindersnap is for small providers: free reviewers and a self-serve trial.
 updated: 2026-10-07
 crumb: PolicyStat
 related: /pricing, /compare/powerdms-alternative, /compare/shared-drive
@@ -13,21 +13,21 @@ _Based on RLDatix's public website as of October 7, 2026. Products change, so ch
 ## The short version
 
 - **Choose RLDatix PolicyStat** if you are a hospital or health system that wants policy management connected to RLDatix's incident reporting (RL6) and contract management, with standards content available as an add-on, and you are ready for a sales-led purchase.
-- **Choose Bindersnap** if you want every policy's approved version, full history and approvals in one place, set up yourself, for one published monthly price.
+- **Choose Bindersnap** if you want every policy's approved version, full history and approvals in one place, set up yourself, paying only for the people who write policies.
 
 ## Side by side
 
-|                                              | RLDatix PolicyStat                                                         | Bindersnap                                                                               |
-| -------------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Who it's built for                           | Healthcare organizations: hospitals, health systems and smaller facilities | Small healthcare providers: ASCs, clinics, home health, hospice, behavioral health       |
-| Price                                        | Not published; book a demo                                                 | $100 a month per organization, published on [our pricing page](/pricing)                 |
-| How you buy                                  | Book a live demo                                                           | Sign up and start a 14-day free trial, no card                                           |
-| Revision tracking and approval workflows     | Yes                                                                        | Yes: every change approved before it takes effect, every version kept with its approvals |
-| Manufacturer documents and standards         | Available, sold separately                                                 | No                                                                                       |
-| Connects to incident reporting               | Yes, with RLDatix RL6                                                      | No                                                                                       |
-| Write in the browser, or upload Word and PDF | Check with vendor                                                          | Both                                                                                     |
-| Reviewers and readers                        | Check with vendor                                                          | Free; one price for the organization                                                     |
-| After you stop paying                        | Check with vendor                                                          | Reading and exporting stay free, always                                                  |
+|                                              | RLDatix PolicyStat                                                         | Bindersnap                                                                                     |
+| -------------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Who it's built for                           | Healthcare organizations: hospitals, health systems and smaller facilities | Small healthcare providers: ASCs, clinics, home health, hospice, behavioral health             |
+| Price                                        | Not published; book a demo                                                 | Per paid seat (people who write policies); reviewers and readers free. See [pricing](/pricing) |
+| How you buy                                  | Book a live demo                                                           | Sign up and start a 14-day free trial, no card                                                 |
+| Revision tracking and approval workflows     | Yes                                                                        | Yes: every change approved before it takes effect, every version kept with its approvals       |
+| Manufacturer documents and standards         | Available, sold separately                                                 | No                                                                                             |
+| Connects to incident reporting               | Yes, with RLDatix RL6                                                      | No                                                                                             |
+| Write in the browser, or upload Word and PDF | Check with vendor                                                          | Both                                                                                           |
+| Reviewers and readers                        | Check with vendor                                                          | Free, in any number                                                                            |
+| After you stop paying                        | Check with vendor                                                          | Reading and exporting stay free, always                                                        |
 
 ## Where PolicyStat does more
 
@@ -35,7 +35,7 @@ RLDatix's policy management tracks revisions and runs approval workflows, as Bin
 
 ## Where Bindersnap fits better
 
-- **A price you can see.** $100 a month for the whole organization, with reviewers and readers included.
+- **You pay for writers, not readers.** Only the people who write and publish policies are paid seats; reviewers and staff who only read are free.
 - **No implementation project.** Upload the Word and PDF files you already have, name your approvers, and you're running. The [getting started guide](/help/getting-started) shows how.
 - **A permanent record.** Every version of every policy keeps the names and dates of its approvals, and your organization can read and export all of it even if it stops paying.
 - **Built for the person who owns the binder**: the administrator, director of nursing or practice manager who keeps the manual alongside everything else.
