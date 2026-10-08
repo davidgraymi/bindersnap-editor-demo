@@ -6,7 +6,7 @@ import {
   BACKGROUND_POLL_WINDOW_MS,
   runBackgroundPoll,
 } from "./checkoutPolling";
-import { PlanOffer } from "./PlanOffer";
+import { PlanOffer, type OfferedPlan } from "./PlanOffer";
 import { SkeletonPanel } from "./Skeleton";
 import { describeBilling } from "./billingAccess";
 import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
@@ -26,12 +26,7 @@ interface BillingPageProps {
   trialEndsAt: number | null;
   /** Whose bill it is — the organization's slug, or null outside one. */
   organization: string | null;
-  plan: {
-    amount: number;
-    currency: string;
-    interval: string;
-    formatted: string;
-  } | null;
+  plan: OfferedPlan | null;
   onSubscribe: () => Promise<void>;
   onManage: () => Promise<void>;
   /** Open Stripe's portal on its cancel screen. */

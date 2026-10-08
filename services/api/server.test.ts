@@ -130,6 +130,8 @@ beforeEach(() => {
               id: ownersTeamIdFor(orgName),
               name: "Owners",
               permission: "owner",
+              // As Gitea reports it: Owners reach every binder in the org.
+              includes_all_repositories: true,
             },
           ]
         : [];
@@ -672,6 +674,50 @@ describe("billing is per organization", () => {
     expect(form.get("success_url")).toBe(
       `${config.appOrigin}/${second.username}/-/billing?checkout=success`,
     );
+  });
+
+  test("checkout bills one unit for each person who can write", async () => {
+    const server = createApiServer();
+    const username = `seats-${randomUUID()}`;
+    const sessionId = await seedSession(username);
+    giteaOrgOwners.set(`${username}-org`, [
+      { login: username, email: `${username}@${config.emailDomain}` },
+      { login: `${username}-b`, email: `b@${config.emailDomain}` },
+      // One person in the team twice is still one seat.
+      { login: `${username}-B`, email: `b@${config.emailDomain}` },
+      { login: `${username}-c`, email: `c@${config.emailDomain}` },
+    ]);
+
+    const response = await server.fetch(
+      makeBillingRequest("/api/app/billing/checkout", sessionId),
+    );
+
+    expect(response.status).toBe(200);
+    const form = getPostedFormBody(
+      getFetchCallsByPath("/v1/checkout/sessions")[0]!,
+    );
+    expect(form.get("line_items[0][price]")).toBe(config.stripePriceId);
+    expect(form.get("line_items[0][quantity]")).toBe("3");
+
+    // And the Billing page is told the same count before anyone pays.
+    const status = await server.fetch(
+      makeSessionRequest("/api/app/billing/status", sessionId),
+    );
+    expect(((await status.json()) as { seats: number }).seats).toBe(3);
+  });
+
+  test("checkout never bills for fewer than one seat", async () => {
+    const server = createApiServer();
+    const sessionId = await seedSession(`no-seats-${randomUUID()}`);
+
+    await server.fetch(
+      makeBillingRequest("/api/app/billing/checkout", sessionId),
+    );
+
+    const form = getPostedFormBody(
+      getFetchCallsByPath("/v1/checkout/sessions")[0]!,
+    );
+    expect(form.get("line_items[0][quantity]")).toBe("1");
   });
 
   test("a write is gated by the organization it writes into", async () => {

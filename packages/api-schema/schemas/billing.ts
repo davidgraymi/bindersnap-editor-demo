@@ -51,6 +51,12 @@ export const BillingStatusPayloadSchema = z.object({
   accessSource: AdminSubscriptionAccessSourceSchema.nullable(),
   override: AdminSubscriptionAccessOverrideSchema.nullable(),
   plan: BillingPlanSchema.nullable(),
+  /**
+   * Paid seats: the people who can write in the organization (Owners, Admins
+   * and Editors), counted once. Reviewers and readers are free and are not in
+   * it. Null when it could not be counted.
+   */
+  seats: z.number().int().nullable().optional(),
   /** Whether this session may subscribe, cancel or change the card. */
   canManageBilling: z.boolean().optional(),
   /** Whether a Stripe customer exists, so its billing portal has a page. */

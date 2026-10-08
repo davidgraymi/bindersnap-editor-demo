@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
-import { PlanOffer } from "./PlanOffer";
+import { PlanOffer, type OfferedPlan } from "./PlanOffer";
 
 interface PaywallDialogProps {
   /** Whose bill it is: the organization's slug, or null if unknown. */
   organization: string | null;
   /** Why the organization cannot write — decides the heading. */
   standing: "trial-ended" | "lapsed" | "none";
-  plan: { formatted: string } | null;
+  plan: OfferedPlan | null;
   canManage: boolean;
   onSubscribe: () => Promise<void>;
   onClose: () => void;

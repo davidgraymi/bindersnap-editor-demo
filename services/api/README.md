@@ -33,7 +33,7 @@ The browser only receives a Bindersnap session cookie. Gitea access tokens stay 
 - `BINDERSNAP_ALLOWED_ORIGINS`: Optional comma-separated override for multiple allowed origins.
 - `STRIPE_SECRET_KEY`: Stripe secret key used to create Checkout and Customer Portal sessions.
 - `STRIPE_WEBHOOK_SECRET`: Stripe webhook signing secret used to verify `/stripe/webhook`.
-- `STRIPE_PRICE_ID`: Stripe price ID used when the API creates Checkout subscription sessions.
+- `STRIPE_PRICE_ID`: the per-unit seat price (one unit per writer) the API checks out, and whose quantity it keeps equal to the organization's paid seats. See `docs/payments-plan.md`, "Seat billing".
 - `BINDERSNAP_USER_EMAIL_DOMAIN`: Placeholder signup email domain. Default `users.bindersnap.local`.
 - `BINDERSNAP_SESSION_COOKIE_NAME`: Session cookie name. Default `bindersnap_session`.
 - `BINDERSNAP_SESSION_TTL_MS`: Server-side expiry for non-remembered sessions. Default `604800000` (7 days).

@@ -2,7 +2,7 @@
 
 ## Context
 
-Bindersnap needs a $100/month subscription paywall gating all workspace features. The flow: sign up → session created → subscription check → if no active sub → `/billing` → Stripe Checkout → webhook stores subscription → redirect back → workspace unlocked. PR #82 designed this but targeted a different file structure; this plan ports the logic into the real codebase.
+Bindersnap needs a subscription paywall, billed per seat ($39/month for each writer; see "Seat billing" below — this plan predates it and originally said $100/month flat), gating all workspace features. The flow: sign up → session created → subscription check → if no active sub → `/billing` → Stripe Checkout → webhook stores subscription → redirect back → workspace unlocked. PR #82 designed this but targeted a different file structure; this plan ports the logic into the real codebase.
 
 ## Flow Diagram
 
@@ -37,7 +37,7 @@ Browser                 API (services/api/)          Stripe
 
 Do in Stripe Dashboard / CLI:
 
-1. Create product "Bindersnap Pro" + price $100/month → copy **Price ID** (`price_...`)
+1. Create product "Bindersnap Pro" + a recurring **per-unit** price of $39/month (one unit = one writer seat) → copy **Price ID** (`price_...`)
 2. Enable **Customer Portal**: Dashboard → Settings → Billing → Customer Portal
 3. `stripe listen --forward-to localhost:8787/stripe/webhook --print-secret` → copy **webhook secret** (`whsec_...`)
 4. Note **Secret Key** (`sk_test_...`) and **Publishable Key** (`pk_test_...`)
@@ -198,7 +198,7 @@ if (pathname === "/stripe/webhook" && method === "POST") {
 
 - `requireSession` only
 - POST to `https://api.stripe.com/v1/checkout/sessions` with form-encoded body:
-  - `mode=subscription`, `line_items[0][price]={stripePriceId}`, `line_items[0][quantity]=1`
+  - `mode=subscription`, `line_items[0][price]={stripePriceId}`, `line_items[0][quantity]={paid seats}` (see "Seat billing")
   - `client_reference_id={username}`, `success_url={appOrigin}/billing?checkout=success`, `cancel_url={appOrigin}/billing`
 - Return `{ url: session.url }`
 
@@ -317,7 +317,7 @@ interface BillingPageProps {
 
 Two states:
 
-- **Unsubscribed** (`status === 'none'` or `'loading'`): eyebrow "Bindersnap Pro", headline "Start your subscription", plan card ($100/month, features), coral CTA "Subscribe now" → calls `onSubscribe`; `?checkout=success` query param shows a "Payment received — activating your workspace…" banner + inline spinner while polling
+- **Unsubscribed** (`status === 'none'` or `'loading'`): eyebrow "Bindersnap Pro", headline "Start your subscription", plan card ($39 per writer / month, with the organization's total, and features), coral CTA "Subscribe now" → calls `onSubscribe`; `?checkout=success` query param shows a "Payment received — activating your workspace…" banner + inline spinner while polling
 - **Subscribed** (`status === 'active'`): headline "Your subscription", shows renewal date, "Manage subscription" → calls `onManage`, "Return to workspace" link
 
 On `?checkout=success`: call `fetchBillingStatus()` on a 2-second interval, max 10 retries; when `active`, call `onSubscriptionConfirmed()` prop → parent navigates to home. Abort polling on unmount.
@@ -419,7 +419,7 @@ if (view === "billing") {
 # Stripe (required for subscription paywall)
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...   # from: stripe listen --forward-to localhost:8787/stripe/webhook --print-secret
-STRIPE_PRICE_ID=price_...         # $100/month price ID from Stripe Dashboard
+STRIPE_PRICE_ID=price_...         # $39/month per-unit (per writer) price ID from Stripe Dashboard
 ```
 
 **`.env.prod.example`** additions:
@@ -512,3 +512,26 @@ Stripe does not publish a stable, comprehensive list of webhook-sending IPs and 
 9. Cancel subscription in portal → webhook fires → next visit redirects to `/billing`
 10. `curl -b "bindersnap_session=<valid-session>" http://localhost:8787/api/app/documents` with no subscription → expect `402 Subscription required`
 11. `bun run test` → all existing tests pass (webhook tests added pass too)
+
+## Seat billing
+
+Added 2026-10-08. The subscription's one line item is the per-unit seat price
+(`STRIPE_PRICE_ID`, $39/month), and its quantity is the organization's paid
+seats: every person who can write in it (Owners, Admins, Editors), counted once.
+Reviewers and readers are free. The count is `countBillableSeats`
+(`services/api/gitea-client/orgs.ts`), derived from Gitea and never stored.
+
+- **Checkout** sends the current count as the quantity (at least 1).
+- **Changes**: any successful write to an organization's people or groups, a
+  binder's people or groups, binder creation or archiving, and an invitation
+  joining schedules a sync for that organization (`services/api/stripe/seats.ts`,
+  coalesced over 3 seconds). The sync updates the subscription item's quantity
+  with `proration_behavior: "create_prorations"`, so the next invoice carries
+  the difference.
+- **Sweep**: every 6 hours the API syncs every organization, for changes no
+  route saw (an account deleted, a role changed in Gitea directly).
+- **Billing status** returns `seats`, so the Billing page and paywall show
+  "N writers today: $X / month" before anyone pays.
+- **Customer portal**: turn off quantity changes in the portal configuration.
+  The count comes from Gitea, and a quantity edited in the portal is put back
+  at the next sync.

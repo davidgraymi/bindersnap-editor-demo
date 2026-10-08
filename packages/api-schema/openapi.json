@@ -2523,6 +2523,10 @@
               "formatted"
             ]
           },
+          "seats": {
+            "type": "integer",
+            "nullable": true
+          },
           "canManageBilling": {
             "type": "boolean"
           },
@@ -14615,6 +14619,10 @@
                         "interval",
                         "formatted"
                       ]
+                    },
+                    "seats": {
+                      "type": "integer",
+                      "nullable": true
                     },
                     "canManageBilling": {
                       "type": "boolean"

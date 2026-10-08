@@ -15,6 +15,7 @@ import "./app.css";
 import { AppShell } from "./components/AppShell";
 import { BillingPage } from "./components/BillingPage";
 import { PaywallDialog } from "./components/PaywallDialog";
+import type { OfferedPlan } from "./components/PlanOffer";
 import { PaywallProvider } from "./paywallContext";
 import { OrganizationSetupPage } from "./components/OrganizationSetupPage";
 import { BindersnapLogoMark } from "./components/BindersnapLogoMark";
@@ -435,12 +436,7 @@ export function App() {
   const [paywallOpen, setPaywallOpen] = useState(false);
   const paywall = useMemo(() => ({ open: () => setPaywallOpen(true) }), []);
   const [hasBillingAccount, setHasBillingAccount] = useState(false);
-  const [plan, setPlan] = useState<{
-    amount: number;
-    currency: string;
-    interval: string;
-    formatted: string;
-  } | null>(null);
+  const [plan, setPlan] = useState<OfferedPlan | null>(null);
   /**
    * Whose billing the app is showing: the organization on screen.
    *
@@ -482,7 +478,9 @@ export function App() {
       setCurrentPeriodEnd(billing.currentPeriodEnd);
       setCancelAtPeriodEnd(billing.cancelAtPeriodEnd);
       setCancelAt(billing.cancelAt);
-      setPlan(billing.plan);
+      setPlan(
+        billing.plan ? { ...billing.plan, seats: billing.seats ?? null } : null,
+      );
       setTrialEndsAt(billing.trialEndsAt);
       setCanManageBilling(billing.canManageBilling === true);
       setHasBillingAccount(billing.hasBillingAccount === true);
