@@ -25,6 +25,11 @@ export type OrganizationListPayload = z.infer<
 export const NewOrganizationBodySchema = z.object({
   /** What to call it. Slugified server-side into the Gitea org username. */
   name: z.string().min(1),
+  /**
+   * The version of the Terms of Service the owner ticked to accept them for
+   * the organization. Creating one refuses anything but the current version.
+   */
+  acceptedTerms: z.string().min(1),
 });
 export type NewOrganizationBody = z.infer<typeof NewOrganizationBodySchema>;
 

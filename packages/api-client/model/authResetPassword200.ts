@@ -10,7 +10,5 @@ export type AuthResetPassword200 = {
   /** @nullable */
   user: AuthResetPassword200User;
   /** @nullable */
-  token: string | null;
-  /** @nullable */
   suggestedOrganizationName?: string | null;
 };

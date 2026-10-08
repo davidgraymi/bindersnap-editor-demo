@@ -12,6 +12,7 @@ import { expect, test } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 test.describe.configure({ mode: "parallel", timeout: 120_000 });
 
@@ -106,6 +107,7 @@ const POLICY = {
 test("a policy is exported as a PDF and as a Word document", async () => {
   const session = await signUp();
   const { organization } = await post(session, "/api/app/organizations", {
+    acceptedTerms: LEGAL_VERSION,
     name: `Export ${randomUUID().slice(0, 6)}`,
   });
   const org = organization.name as string;
@@ -176,6 +178,7 @@ test("the document page offers PDF and Word for a policy written here", async ({
 }) => {
   const session = await signUp();
   const { organization } = await post(session, "/api/app/organizations", {
+    acceptedTerms: LEGAL_VERSION,
     name: `Export ${randomUUID().slice(0, 6)}`,
   });
   const org = organization.name as string;
@@ -215,6 +218,7 @@ test("the document page offers PDF and Word for a policy written here", async ({
 test("a document's audit packet is one zip, holding the record of every version", async () => {
   const session = await signUp();
   const { organization } = await post(session, "/api/app/organizations", {
+    acceptedTerms: LEGAL_VERSION,
     name: `Audit ${randomUUID().slice(0, 6)}`,
   });
   const org = organization.name as string;

@@ -5,6 +5,7 @@ import {
   RESERVED_ORGANIZATION_NAMES,
   slugifyOrganizationName,
 } from "../../../packages/utils/organizationName";
+import { AgreementCheckbox } from "./AgreementCheckbox";
 import { BindersnapLogoMark } from "./BindersnapLogoMark";
 
 /**
@@ -70,6 +71,7 @@ export function OrganizationSetupPage({
   const [path, setPath] = useState<"create" | "join">("create");
   const [name, setName] = useState(suggestedName?.trim() ?? "");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isMounted = useRef(true);
 
@@ -199,6 +201,14 @@ export function OrganizationSetupPage({
         onSubmit={async (event) => {
           event.preventDefault();
           if (!canSubmit) return;
+          // The organization is who the Terms are with, so its owner accepts
+          // them for it here, as well as for themselves at signup.
+          if (!agreed) {
+            setError(
+              "Accept the Terms of Service for the organization to create it.",
+            );
+            return;
+          }
 
           setIsSubmitting(true);
           setError(null);
@@ -248,6 +258,13 @@ export function OrganizationSetupPage({
             Includes a 14-day trial. No card needed.
           </p>
         ) : null}
+
+        <AgreementCheckbox
+          scope="organization"
+          organization={name.trim() || undefined}
+          checked={agreed}
+          onChange={setAgreed}
+        />
 
         <button
           className="bs-btn bs-btn-primary app-submit"

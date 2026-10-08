@@ -2,7 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
-import { LEGAL_VERSION } from "../../packages/utils/legal";
+import { createHash } from "node:crypto";
+
+import {
+  AGREEMENT_WORDS,
+  LEGAL_ACCEPT_AGAIN_VERSION,
+  LEGAL_VERSION,
+} from "../../packages/utils/legal";
 import {
   LEGAL_DOCUMENTS,
   parseLegalDocument,
@@ -56,6 +62,23 @@ describe("the legal pages", () => {
         LEGAL_VERSION,
       );
     }
+  });
+
+  test("the checkbox words move with the version they record", () => {
+    // An agreement stores only `LEGAL_VERSION`, so the sentence a person
+    // ticked is part of what that version means. Rewording a box without a
+    // new version would leave records that point at words nobody saw. Change
+    // the words, move `LEGAL_VERSION`, then update this pin.
+    const pin = createHash("sha256")
+      .update(JSON.stringify({ LEGAL_VERSION, AGREEMENT_WORDS }))
+      .digest("hex")
+      .slice(0, 16);
+    expect(pin).toBe("0d84ede404912d73");
+  });
+
+  test("nobody is asked to accept a version that is not published yet", () => {
+    expect(LEGAL_ACCEPT_AGAIN_VERSION <= LEGAL_VERSION).toBe(true);
+    expect(LEGAL_ACCEPT_AGAIN_VERSION).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
   test("the documents keep to what the renderer draws", () => {

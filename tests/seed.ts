@@ -26,6 +26,7 @@
 
 import { pathToFileURL } from "node:url";
 
+import * as Legal from "../packages/api-client/legal/legal";
 import * as Orgs from "../packages/api-client/organizations/organizations";
 import * as Binders from "../packages/api-client/workspaces/workspaces";
 import type { ListBinderChanges200ChangesItem } from "../packages/api-client/model/listBinderChanges200ChangesItem";
@@ -60,6 +61,7 @@ import {
   type SeedSignOffRule,
   type SeedThread,
 } from "./seed-scenario";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 const SCENARIO_URL = new URL("seed-data/dev.yaml", import.meta.url);
 
@@ -167,8 +169,12 @@ async function ensureOrganization(
     return name;
   }
 
-  const created = (await Orgs.createOrganization({ name: displayName }, as))
-    .data.organization.name;
+  const created = (
+    await Orgs.createOrganization(
+      { acceptedTerms: LEGAL_VERSION, name: displayName },
+      as,
+    )
+  ).data.organization.name;
   if (created !== name) {
     throw new Error(
       `The scenario names its organization "${name}", but creating "${displayName}" made "${created}". Make the two agree.`,
@@ -1203,6 +1209,38 @@ async function checkBinder(run: BinderRun): Promise<void> {
   run.log(`Read back: ${scenarioChanges.length} changes as described`);
 }
 
+/**
+ * Everyone's agreement to the Terms, and the organization's.
+ *
+ * The seed makes its accounts in Gitea directly, never through signup, so
+ * nobody would have one on record, and the app would stop every seeded login
+ * at "Accept our updated Terms" before anything else. Each person accepts
+ * whatever the API says is still missing, the way the app's own screen does,
+ * so a warm stack that is already up to date writes nothing.
+ */
+async function ensureAgreements(
+  scenario: SeedScenario,
+  sessions: Sessions,
+  log: (message: string) => void,
+): Promise<void> {
+  for (const user of scenario.users) {
+    const as = await sessions.options(user.username);
+    const status = (await Legal.getLegalStatus(as)).data;
+    if (!status.person && status.organizations.length === 0) continue;
+    await Legal.acceptLegal(
+      {
+        acceptedTerms: status.version,
+        person: status.person,
+        organizations: status.organizations.map(
+          (organization) => organization.name,
+        ),
+      },
+      as,
+    );
+    log(`Accepted the Terms (${status.version}) as ${user.username}`);
+  }
+}
+
 export { isTokenValid } from "./seed-accounts";
 
 export async function seedDevStack(
@@ -1220,6 +1258,7 @@ export async function seedDevStack(
   try {
     const org = await ensureOrganization(scenario, sessions, log);
     await ensurePeopleAndGroups(org, scenario, sessions, log);
+    await ensureAgreements(scenario, sessions, log);
 
     // **Binders at once, not one after another.** Each is its own repository
     // with its own changes, so nothing one writes is read by another — and

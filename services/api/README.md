@@ -4,7 +4,9 @@ Lightweight Bun auth/BFF service for the unified GitHub Pages SPA.
 
 ## What it does
 
-- `POST /auth/signup` signs the new account in and emails a link to confirm its address; until it is opened, every `/api/app/` route answers `403` with `code: "email_unverified"`. Signing up from an invitation sent to the same address (`invitation`) confirms it without the email.
+- `POST /auth/signup` signs the new account in and emails a link to confirm its address; until it is opened, every `/api/app/` route answers `403` with `code: "email_unverified"`. Signing up from an invitation sent to the same address (`invitation`) confirms it without the email. It requires `acceptedTerms` equal to `LEGAL_VERSION` (`packages/utils/legal.ts`), answers `400` with `code: "terms_not_accepted"` otherwise, and records the agreement in `legal_agreements`.
+- `POST /api/app/organizations` requires the same `acceptedTerms`: the person creating an organization accepts the Terms for it, recorded as an `organization` row with its Gitea id.
+- `GET /api/app/legal` says what the session still has to accept, for itself (`person`) and for organizations it owns, after a material change (`LEGAL_ACCEPT_AGAIN_VERSION`) or with nothing on record; `POST /api/app/legal/accept` records it. The app shows nothing else until both are clear.
 - `POST /auth/login` accepts `identifier`/`password` plus optional `rememberMe`
 - `POST /auth/logout`
 - `GET /auth/me` — includes `emailVerified`, and `pendingEmail` while it is false

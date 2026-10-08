@@ -38,6 +38,7 @@ import {
   createOrganization,
   createPortalSession,
   fetchBillingStatus,
+  fetchLegalStatus,
   fetchOrganizations,
   fetchSessionUser,
   login,
@@ -62,6 +63,9 @@ import {
 } from "./routes";
 import { resolveSignupPrefill } from "./authIntent";
 import { validateFullName } from "../../packages/utils/personName";
+import { AgreementCheckbox } from "./components/AgreementCheckbox";
+import { AcceptTermsPage } from "./components/AcceptTermsPage";
+import type { LegalStatusPayload } from "../../packages/api-schema/schemas/legal";
 
 type AuthView =
   | "loading"
@@ -73,6 +77,7 @@ type AuthView =
   | "unsubscribe"
   | "verifyEmail"
   | "confirmEmail"
+  | "acceptTerms"
   | "invitation"
   | "createOrganization"
   | "app";
@@ -140,6 +145,7 @@ function LoginPage({
   );
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string | null>(callbackError);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -173,6 +179,11 @@ function LoginPage({
 
       if (password !== confirmPassword) {
         setError("Passwords do not match.");
+        return;
+      }
+
+      if (!agreed) {
+        setError("Agree to the Terms of Service to create an account.");
         return;
       }
     } else if (!normalizedIdentifier || !password) {
@@ -323,6 +334,14 @@ function LoginPage({
                   autoComplete="new-password"
                 />
               </label>
+            ) : null}
+
+            {mode === "signup" ? (
+              <AgreementCheckbox
+                scope="person"
+                checked={agreed}
+                onChange={setAgreed}
+              />
             ) : null}
 
             <button
@@ -713,6 +732,32 @@ export function App() {
     navigateTo({ kind: "home" }, true);
   }, []);
 
+  // What this account still has to accept: read once it can use the app, and
+  // again whenever the account changes. A failed read lets them in rather
+  // than locking them out over an outage; the next load asks again.
+  const [legalStatus, setLegalStatus] = useState<LegalStatusPayload | null>(
+    null,
+  );
+  const canReadLegal = Boolean(user) && user?.emailVerified !== false;
+  useEffect(() => {
+    if (!canReadLegal) {
+      setLegalStatus(null);
+      return;
+    }
+    let cancelled = false;
+    fetchLegalStatus()
+      .then((status) => {
+        if (!cancelled) setLegalStatus(status);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [canReadLegal, user?.username]);
+  const termsPending =
+    legalStatus !== null &&
+    (legalStatus.person || legalStatus.organizations.length > 0);
+
   // Stable, because the join step polls with it on an interval it restarts
   // whenever this changes.
   const checkForOrganization = useCallback(async () => {
@@ -740,7 +785,7 @@ export function App() {
     // the app's routes — so this is the page, wherever they were going.
     const unconfirmed = user?.emailVerified === false;
 
-    if (route.kind === "home" && !unconfirmed) {
+    if (route.kind === "home" && !unconfirmed && !(user && termsPending)) {
       return user ? "app" : "landing";
     }
 
@@ -769,6 +814,12 @@ export function App() {
       return "confirmEmail";
     }
 
+    // After a material change to the Terms, or with none on record: nothing
+    // else until they accept, or sign out.
+    if (user && termsPending) {
+      return "acceptTerms";
+    }
+
     // Signed in or not: it says what it is either way, and asks for an
     // account only when it is time to accept.
     if (route.kind === "invitation") {
@@ -784,7 +835,14 @@ export function App() {
     }
 
     return user ? "app" : "login";
-  }, [accessSource, isCheckingSession, route, subscriptionStatus, user]);
+  }, [
+    accessSource,
+    isCheckingSession,
+    route,
+    subscriptionStatus,
+    termsPending,
+    user,
+  ]);
 
   useEffect(() => {
     document.body.setAttribute("data-app-view", view);
@@ -891,6 +949,21 @@ export function App() {
           await refreshSession();
           return true;
         }}
+        onSignOut={async () => {
+          await logoutSession();
+          setUser(null);
+          setCallbackError(null);
+          navigateTo({ kind: "home" }, true);
+        }}
+      />
+    );
+  }
+
+  if (view === "acceptTerms" && legalStatus) {
+    return (
+      <AcceptTermsPage
+        status={legalStatus}
+        onAccepted={setLegalStatus}
         onSignOut={async () => {
           await logoutSession();
           setUser(null);

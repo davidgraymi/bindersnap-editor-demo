@@ -23,6 +23,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 test.describe.configure({ mode: "parallel", timeout: 240_000 });
 
@@ -78,7 +79,10 @@ async function createOrganization(session: string): Promise<string> {
   const response = await fetch(`${API_BASE_URL}/api/app/organizations`, {
     method: "POST",
     headers: authHeaders(session),
-    body: JSON.stringify({ name: `Riverbend ${randomUUID().slice(0, 6)}` }),
+    body: JSON.stringify({
+      acceptedTerms: LEGAL_VERSION,
+      name: `Riverbend ${randomUUID().slice(0, 6)}`,
+    }),
   });
   const body = await response.text();
   expect(response.status, `create organization failed: ${body}`).toBe(201);

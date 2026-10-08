@@ -7,6 +7,7 @@ import { expect, test } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 test.describe.configure({ mode: "parallel", timeout: 120_000 });
 
@@ -65,6 +66,7 @@ test("a colleague asked to review sees it on the bell, and opening it clears it"
     "POST",
     "/api/app/organizations",
     {
+      acceptedTerms: LEGAL_VERSION,
       name: `Notify ${randomUUID().slice(0, 6)}`,
     },
   );

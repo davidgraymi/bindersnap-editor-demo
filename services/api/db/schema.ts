@@ -475,3 +475,42 @@ export const organizationInvitations = sqliteTable(
     ),
   ],
 );
+
+/**
+ * Who agreed to which Terms of Service, for whom, and when (#666).
+ *
+ * Two kinds of row. A `person` row is somebody agreeing for themselves: at
+ * signup, where the box is required, or when asked again after the Terms
+ * change. An `organization` row is an owner accepting the Terms for an
+ * organization, which is the Customer the Terms are with: when they create it,
+ * or when asked again. Each names the version (`LEGAL_VERSION` in
+ * `packages/utils/legal.ts`). A row is never changed: agreeing to a later
+ * version adds another. Account state rather than evidence about a document,
+ * so SQLite (ADR 0004).
+ *
+ * Rows outlive the account, like the record does: what a person agreed to is
+ * what settles a dispute about it later. The Privacy Policy keeps them six
+ * years after the account is deleted. `userId` is Gitea's, so a login freed
+ * by a deleted account and taken again cannot be mistaken for the first one.
+ */
+export const legalAgreements = sqliteTable(
+  "legal_agreements",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    /** Lower-cased: Gitea logins are case-insensitive. */
+    username: text("username").notNull(),
+    /** Gitea's user id. Null only on rows written before it was recorded. */
+    userId: integer("user_id"),
+    version: text("version").notNull(),
+    acceptedAt: integer("accepted_at").notNull(),
+    /** `person` for themselves, `organization` for the organization named. */
+    scope: text("scope").notNull().default("person"),
+    /** Gitea's organization id and its name then, on `organization` rows. */
+    organizationId: integer("organization_id"),
+    organizationName: text("organization_name"),
+  },
+  (table) => [
+    index("legal_agreements_username_idx").on(table.username),
+    index("legal_agreements_organization_idx").on(table.organizationId),
+  ],
+);

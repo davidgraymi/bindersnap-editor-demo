@@ -16,4 +16,6 @@ export interface SignupBody {
   /** @minLength 1 */
   password: string;
   invitation?: string;
+  /** @minLength 1 */
+  acceptedTerms: string;
 }

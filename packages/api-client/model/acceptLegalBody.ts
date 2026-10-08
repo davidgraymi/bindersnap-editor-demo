@@ -5,9 +5,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export interface NewOrganizationBody {
-  /** @minLength 1 */
-  name: string;
+export type AcceptLegalBody = {
   /** @minLength 1 */
   acceptedTerms: string;
-}
+  person?: boolean;
+  organizations?: string[];
+};

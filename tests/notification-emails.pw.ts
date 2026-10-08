@@ -11,6 +11,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
 import { signUpAndConfirm, waitForEmail } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 test.describe.configure({ mode: "parallel", timeout: 180_000 });
 
@@ -98,6 +99,7 @@ async function setUp() {
   const owner = await signUp("owner");
   const reviewer = await signUp("reviewer");
   const created = await call(owner.session, "POST", "/api/app/organizations", {
+    acceptedTerms: LEGAL_VERSION,
     name: `Mail ${randomUUID().slice(0, 6)}`,
   });
   const org = (created.organization as { name: string }).name;

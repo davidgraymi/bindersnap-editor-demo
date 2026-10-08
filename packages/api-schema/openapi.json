@@ -93,6 +93,10 @@
           },
           "invitation": {
             "type": "string"
+          },
+          "acceptedTerms": {
+            "type": "string",
+            "minLength": 1
           }
         },
         "required": [
@@ -100,7 +104,8 @@
           "lastName",
           "username",
           "email",
-          "password"
+          "password",
+          "acceptedTerms"
         ]
       },
       "ForgotPasswordBody": {
@@ -2164,10 +2169,15 @@
           "name": {
             "type": "string",
             "minLength": 1
+          },
+          "acceptedTerms": {
+            "type": "string",
+            "minLength": 1
           }
         },
         "required": [
-          "name"
+          "name",
+          "acceptedTerms"
         ]
       },
       "WorkspaceSummary": {
@@ -2790,6 +2800,10 @@
                   },
                   "invitation": {
                     "type": "string"
+                  },
+                  "acceptedTerms": {
+                    "type": "string",
+                    "minLength": 1
                   }
                 },
                 "required": [
@@ -2797,7 +2811,8 @@
                   "lastName",
                   "username",
                   "email",
-                  "password"
+                  "password",
+                  "acceptedTerms"
                 ]
               }
             }
@@ -3175,18 +3190,13 @@
                         "username"
                       ]
                     },
-                    "token": {
-                      "type": "string",
-                      "nullable": true
-                    },
                     "suggestedOrganizationName": {
                       "type": "string",
                       "nullable": true
                     }
                   },
                   "required": [
-                    "user",
-                    "token"
+                    "user"
                   ]
                 }
               }
@@ -4899,6 +4909,136 @@
         }
       }
     },
+    "/api/app/legal": {
+      "get": {
+        "operationId": "getLegalStatus",
+        "tags": [
+          "legal"
+        ],
+        "responses": {
+          "200": {
+            "description": "What the signed-in person still has to accept, for themselves and for organizations they own",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "version": {
+                      "type": "string"
+                    },
+                    "person": {
+                      "type": "boolean"
+                    },
+                    "organizations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "displayName"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "version",
+                    "person",
+                    "organizations"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/legal/accept": {
+      "post": {
+        "operationId": "acceptLegal",
+        "tags": [
+          "legal"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "acceptedTerms": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "person": {
+                    "type": "boolean"
+                  },
+                  "organizations": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "acceptedTerms"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Recorded; what is still left to accept",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "version": {
+                      "type": "string"
+                    },
+                    "person": {
+                      "type": "boolean"
+                    },
+                    "organizations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "displayName"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "version",
+                    "person",
+                    "organizations"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/app/organizations": {
       "get": {
         "operationId": "listOrganizations",
@@ -4960,10 +5100,15 @@
                   "name": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "acceptedTerms": {
+                    "type": "string",
+                    "minLength": 1
                   }
                 },
                 "required": [
-                  "name"
+                  "name",
+                  "acceptedTerms"
                 ]
               }
             }

@@ -27,6 +27,7 @@ import { expect, test } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 test.describe.configure({ mode: "parallel", timeout: 180_000 });
 
@@ -85,7 +86,7 @@ async function createOrganization(
   const response = await fetch(`${API_BASE_URL}/api/app/organizations`, {
     method: "POST",
     headers: authHeaders(session),
-    body: JSON.stringify({ name: displayName }),
+    body: JSON.stringify({ acceptedTerms: LEGAL_VERSION, name: displayName }),
   });
   const body = await response.text();
   expect(response.status, `create organization failed: ${body}`).toBe(201);

@@ -7,6 +7,7 @@ import { expect, test } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 test.describe.configure({ mode: "parallel", timeout: 120_000 });
 
@@ -54,6 +55,7 @@ test("a member cannot delete a binder; an owner can, by typing its name", async 
   const owner = await signUp();
   const member = await signUp();
   const created = await call(owner.session, "POST", "/api/app/organizations", {
+    acceptedTerms: LEGAL_VERSION,
     name: `Delete Binder ${randomUUID().slice(0, 6)}`,
   });
   const org = (await created.json()).organization.name as string;

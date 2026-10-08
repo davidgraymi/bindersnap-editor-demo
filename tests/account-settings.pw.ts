@@ -16,6 +16,7 @@ import {
   GITEA_URL,
 } from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 test.describe.configure({ mode: "parallel", timeout: 120_000 });
 
@@ -79,6 +80,7 @@ async function organizationWithBinder(
   session: string,
 ): Promise<{ org: string; binder: string }> {
   const created = await call(session, "POST", "/api/app/organizations", {
+    acceptedTerms: LEGAL_VERSION,
     name: `Account Org ${randomUUID().slice(0, 8)}`,
   });
   expect(created.status).toBe(201);

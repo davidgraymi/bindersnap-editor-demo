@@ -33,6 +33,8 @@ import {
 } from "./stripe-webhook";
 import { STRIPE_API_VERSION } from "../services/api/stripe/api-version";
 import { confirmFromEmail, signUpAndConfirm } from "./mailpit";
+import { acceptTermsForOrganization, agreeToTerms } from "./helpers";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 // ---------------------------------------------------------------------------
 // Environment
@@ -514,7 +516,10 @@ async function signUpOrganization(credentials: {
       "Content-Type": "application/json",
       Origin: APP_ORIGIN,
     },
-    body: JSON.stringify({ name: `Stripe Test ${credentials.username}` }),
+    body: JSON.stringify({
+      acceptedTerms: LEGAL_VERSION,
+      name: `Stripe Test ${credentials.username}`,
+    }),
   });
 
   if (!created.ok) {
@@ -930,6 +935,7 @@ test.describe("Stripe subscription lifecycle", () => {
       await page
         .getByLabel("Confirm Password", { exact: true })
         .fill(credentials.password);
+      await agreeToTerms(page);
       await page.getByRole("button", { name: "Create account" }).click();
       await confirmFromEmail(page, credentials.email);
 
@@ -948,6 +954,7 @@ test.describe("Stripe subscription lifecycle", () => {
       await page
         .getByLabel("Organization name")
         .fill(`Mercy Health ${randomUUID().slice(0, 6)}`);
+      await acceptTermsForOrganization(page);
       await page.getByRole("button", { name: "Create organization" }).click();
 
       // Wait for the workspace itself, not for the absence of /billing: a

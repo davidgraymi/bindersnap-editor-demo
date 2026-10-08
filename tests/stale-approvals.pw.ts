@@ -13,6 +13,7 @@ import { expect, test } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 test.describe.configure({ mode: "parallel", timeout: 180_000 });
 
@@ -118,6 +119,7 @@ async function setUp(): Promise<{
   const owner = await signUp();
   const reviewer = await signUp();
   const created = await json(owner.session, "POST", "/api/app/organizations", {
+    acceptedTerms: LEGAL_VERSION,
     name: `Stale ${randomUUID().slice(0, 6)}`,
   });
   const org = (created.organization as { name: string }).name;

@@ -9,6 +9,7 @@
 
 import { expect, type Page } from "@playwright/test";
 
+import { LEGAL_VERSION } from "../packages/utils/legal";
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
 
 export const MAILPIT_URL = `http://localhost:${process.env.MAILPIT_PORT ?? "8025"}`;
@@ -136,6 +137,19 @@ export async function confirmEmail(session: string): Promise<void> {
 }
 
 /**
+ * A signup body with the box ticked, as the form sends it, unless the spec
+ * says otherwise.
+ */
+function withTermsAccepted(init: RequestInit): RequestInit {
+  if (typeof init.body !== "string") return init;
+  const body = JSON.parse(init.body) as Record<string, unknown>;
+  return {
+    ...init,
+    body: JSON.stringify({ acceptedTerms: LEGAL_VERSION, ...body }),
+  };
+}
+
+/**
  * `fetch` for `POST /auth/signup` that also confirms the new account's email,
  * for the specs that need a working account rather than a signup. The answer
  * is the signup's own, unread.
@@ -144,7 +158,7 @@ export async function signUpAndConfirm(
   url: string,
   init: RequestInit,
 ): Promise<Response> {
-  const response = await fetch(url, init);
+  const response = await fetch(url, withTermsAccepted(init));
   if (response.status !== 200) return response;
   const session = (response.headers.get("set-cookie") ?? "").match(
     /bindersnap_session=([^;]+)/,

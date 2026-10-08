@@ -13,6 +13,8 @@ import {
   webhookEventStore,
 } from "./subscriptions";
 import { emailVerificationStore } from "./email-verification";
+import { legalAgreementStore } from "./legal-agreements";
+import { LEGAL_VERSION } from "../../packages/utils/legal";
 
 type MockedFetchCall = {
   path: string;
@@ -1357,6 +1359,169 @@ describe("admin subscription access overrides", () => {
       expect(blockers.status).not.toBe(403);
     } finally {
       emailVerificationStore().forget(username);
+      server.stop(true);
+    }
+  });
+
+  test("signup is refused without agreement to the current Terms", async () => {
+    const server = createApiServer();
+    const signup = (acceptedTerms?: string) =>
+      server.fetch(
+        new Request("http://localhost/auth/signup", {
+          method: "POST",
+          headers: {
+            Origin: config.appOrigin,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            firstName: "Jordan",
+            lastName: "Kim",
+            username: `terms-${randomUUID().slice(0, 8)}`,
+            email: "jordan@example.com",
+            password: "correct horse battery",
+            ...(acceptedTerms === undefined ? {} : { acceptedTerms }),
+          }),
+        }),
+      );
+
+    try {
+      const unticked = await signup();
+      expect(unticked.status).toBe(400);
+      expect(await unticked.json()).toMatchObject({
+        code: "terms_not_accepted",
+        error: expect.stringContaining("Agree to the Terms"),
+      });
+
+      // A page loaded before the Terms changed: told to reload, not to tick.
+      const stale = await signup("2000-01-01");
+      expect(stale.status).toBe(400);
+      expect(await stale.json()).toMatchObject({
+        code: "terms_not_accepted",
+        error: expect.stringContaining("Reload"),
+      });
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("creating an organization needs the Terms accepted for it", async () => {
+    const server = createApiServer();
+    const sessionId = await seedSession(`founder-${randomUUID()}`, {
+      withOrganization: false,
+    });
+    const create = (acceptedTerms?: string) =>
+      server.fetch(
+        makeSessionRequest("/api/app/organizations", sessionId, {
+          method: "POST",
+          body: {
+            name: "Riverside Care",
+            ...(acceptedTerms === undefined ? {} : { acceptedTerms }),
+          },
+        }),
+      );
+
+    try {
+      const unticked = await create();
+      expect(unticked.status).toBe(400);
+      expect(await unticked.json()).toMatchObject({
+        code: "terms_not_accepted",
+      });
+
+      const stale = await create("2000-01-01");
+      expect(stale.status).toBe(400);
+      expect(await stale.json()).toMatchObject({
+        error: expect.stringContaining("Reload"),
+      });
+      expect(
+        fetchCalls.some(
+          (call) => call.method === "POST" && call.path === "/api/v1/orgs",
+        ),
+      ).toBe(false);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("an owner with nothing on record is asked, and accepting answers it", async () => {
+    const server = createApiServer();
+    const username = `owner-${randomUUID()}`;
+    const sessionId = await seedSession(username);
+    const org = `${username}-org`;
+
+    try {
+      const before = await server.fetch(
+        makeSessionRequest("/api/app/legal", sessionId),
+      );
+      expect(await before.json()).toEqual({
+        version: LEGAL_VERSION,
+        person: true,
+        organizations: [{ name: org, displayName: org }],
+      });
+
+      const stale = await server.fetch(
+        makeSessionRequest("/api/app/legal/accept", sessionId, {
+          method: "POST",
+          body: { acceptedTerms: "2000-01-01", person: true },
+        }),
+      );
+      expect(stale.status).toBe(400);
+
+      const accepted = await server.fetch(
+        makeSessionRequest("/api/app/legal/accept", sessionId, {
+          method: "POST",
+          body: {
+            acceptedTerms: LEGAL_VERSION,
+            person: true,
+            organizations: [org],
+          },
+        }),
+      );
+      expect(accepted.status).toBe(200);
+      expect(await accepted.json()).toEqual({
+        version: LEGAL_VERSION,
+        person: false,
+        organizations: [],
+      });
+      expect(
+        legalAgreementStore()
+          .history(username)
+          .map((row) => [row.scope, row.organizationName]),
+      ).toEqual(
+        expect.arrayContaining([
+          ["person", null],
+          ["organization", org],
+        ]),
+      );
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("only an owner is asked, or may accept, for an organization", async () => {
+    const server = createApiServer();
+    const username = `member-${randomUUID()}`;
+    const sessionId = await seedSession(username, { owner: false });
+
+    try {
+      const status = await server.fetch(
+        makeSessionRequest("/api/app/legal", sessionId),
+      );
+      expect((await status.json()).organizations).toEqual([]);
+
+      const refused = await server.fetch(
+        makeSessionRequest("/api/app/legal/accept", sessionId, {
+          method: "POST",
+          body: {
+            acceptedTerms: LEGAL_VERSION,
+            person: true,
+            organizations: [`${username}-org`],
+          },
+        }),
+      );
+      expect(refused.status).toBe(403);
+      // All or nothing: the person's own agreement was not written either.
+      expect(legalAgreementStore().history(username)).toEqual([]);
+    } finally {
       server.stop(true);
     }
   });

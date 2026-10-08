@@ -17,6 +17,7 @@ import { expect, test } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 test.describe.configure({ mode: "serial", timeout: 240_000 });
 
@@ -49,7 +50,10 @@ async function provision(): Promise<{ session: string; org: string }> {
   const organization = await fetch(`${API_BASE_URL}/api/app/organizations`, {
     method: "POST",
     headers: authHeaders(session),
-    body: JSON.stringify({ name: `Riverbend ${suffix}` }),
+    body: JSON.stringify({
+      acceptedTerms: LEGAL_VERSION,
+      name: `Riverbend ${suffix}`,
+    }),
   });
   const org = (
     (await organization.json()) as { organization: { name: string } }

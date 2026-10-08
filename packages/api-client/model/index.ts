@@ -7,6 +7,9 @@
 
 export * from './acceptInvitation200.ts';
 export * from './acceptInvitation200Status.ts';
+export * from './acceptLegal200.ts';
+export * from './acceptLegal200OrganizationsItem.ts';
+export * from './acceptLegalBody.ts';
 export * from './accountBlockers.ts';
 export * from './accountDeletionBody.ts';
 export * from './accountRefusal.ts';
@@ -296,6 +299,8 @@ export * from './getHomeChanges200OpenItemRepo.ts';
 export * from './getHomeChanges200OpenItemRepoOwner.ts';
 export * from './getInvitation200.ts';
 export * from './getInvitation200Status.ts';
+export * from './getLegalStatus200.ts';
+export * from './getLegalStatus200OrganizationsItem.ts';
 export * from './getOnboarding200.ts';
 export * from './getOnboarding200StepsItem.ts';
 export * from './getOnboarding200StepsItemId.ts';

@@ -30,6 +30,14 @@ import {
   verifyEmailContent,
 } from "./email-verification";
 import {
+  legalAgreementStore,
+  type NewLegalAgreement,
+} from "./legal-agreements";
+import {
+  LEGAL_ACCEPT_AGAIN_VERSION,
+  LEGAL_VERSION,
+} from "../../packages/utils/legal";
+import {
   passwordChangedEmail,
   passwordResetStore,
   resetLinkEmail,
@@ -1938,6 +1946,190 @@ type EstablishedSession =
   | { ok: false; response: Response };
 
 /**
+ * A 400 unless `acceptedTerms` names the Terms as they stand.
+ *
+ * A form loaded before the Terms changed agreed to words that are no longer
+ * ours, so it is refused too, with a reason that says to reload.
+ */
+function refuseUnacceptedTerms(
+  acceptedTerms: unknown,
+  baseHeaders: Headers,
+): Response | null {
+  if (acceptedTerms === LEGAL_VERSION) return null;
+  return json(
+    400,
+    {
+      error:
+        typeof acceptedTerms === "string" && acceptedTerms !== ""
+          ? "Our Terms of Service changed since this page loaded. Reload it to read them, then try again."
+          : "Agree to the Terms of Service to go on.",
+      code: "terms_not_accepted",
+    },
+    baseHeaders,
+  );
+}
+
+/**
+ * Write an agreement, and never fail the request that made it.
+ *
+ * The account or organization already exists by now, and telling the person
+ * it failed would only send them to make another. A row that did not land is
+ * not lost either: the app asks for whatever agreement is missing on its next
+ * load (`GET /api/app/legal`), so the record catches up.
+ */
+function recordLegalAgreement(agreement: NewLegalAgreement): void {
+  try {
+    legalAgreementStore().record(agreement);
+  } catch (err) {
+    logger.error("Failed to record an agreement to the Terms", {
+      username: agreement.username,
+      version: agreement.version,
+      organization: agreement.organization?.name ?? null,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+/** Gitea's id for the signed-in account, or null if Gitea will not say. */
+async function sessionUserId(client: GiteaClient): Promise<number | null> {
+  const { data } = await client.GET("/user").catch(() => ({ data: undefined }));
+  return typeof data?.id === "number" ? data.id : null;
+}
+
+/**
+ * What the signed-in person still has to accept: for themselves, and for
+ * each organization they own.
+ *
+ * Asked after a material change to the Terms (`LEGAL_ACCEPT_AGAIN_VERSION`),
+ * and for anything with no agreement on record at all. Only owners are asked
+ * about an organization, because only they can accept for it, and one
+ * owner's acceptance answers for all of them.
+ */
+async function pendingLegalAgreements(auth: {
+  client: GiteaClient;
+  session: SessionRecord;
+}): Promise<{ person: boolean; organizations: SessionOrganization[] }> {
+  const store = legalAgreementStore();
+  const behind = (version: string | null) =>
+    version === null || version < LEGAL_ACCEPT_AGAIN_VERSION;
+
+  const person = behind(store.latestPersonVersion(auth.session.username));
+  const organizations: SessionOrganization[] = [];
+  for (const organization of await listSessionOrganizations(auth.client)) {
+    if (!behind(store.latestOrganizationVersion(organization.id))) continue;
+    const owner = await isOrganizationOwnerDirect({
+      client: auth.client,
+      org: organization.name,
+      username: auth.session.username,
+    }).catch(() => false);
+    if (owner) organizations.push(organization);
+  }
+  return { person, organizations };
+}
+
+async function legalStatusBody(auth: {
+  client: GiteaClient;
+  session: SessionRecord;
+}) {
+  const pending = await pendingLegalAgreements(auth);
+  return {
+    version: LEGAL_VERSION,
+    person: pending.person,
+    organizations: pending.organizations.map((organization) => ({
+      name: organization.name,
+      displayName: organization.displayName,
+    })),
+  };
+}
+
+async function handleLegalStatus(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  return json(200, await legalStatusBody(auth), baseHeaders);
+}
+
+/**
+ * Accept the Terms as they stand: for oneself, for organizations one owns, or
+ * both. Every organization named must be one the caller owns, or nothing is
+ * written.
+ */
+async function handleAcceptLegal(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const payload = await readJson<{
+    acceptedTerms?: unknown;
+    person?: unknown;
+    organizations?: unknown;
+  }>(req);
+  const refusal = refuseUnacceptedTerms(payload?.acceptedTerms, baseHeaders);
+  if (refusal) return refusal;
+
+  const requested = Array.isArray(payload?.organizations)
+    ? payload.organizations.filter(
+        (name): name is string => typeof name === "string",
+      )
+    : [];
+  const person = payload?.person === true;
+  if (!person && requested.length === 0) {
+    return json(400, { error: "Nothing to accept." }, baseHeaders);
+  }
+
+  const mine = await listSessionOrganizations(auth.client);
+  const organizations: SessionOrganization[] = [];
+  for (const name of requested) {
+    const organization = mine.find((each) => each.name === name);
+    const owner =
+      organization !== undefined &&
+      (await isOrganizationOwnerDirect({
+        client: auth.client,
+        org: organization.name,
+        username: auth.session.username,
+      }).catch(() => false));
+    if (!organization || !owner) {
+      return json(
+        403,
+        { error: "Only an owner can accept the Terms for an organization." },
+        baseHeaders,
+      );
+    }
+    organizations.push(organization);
+  }
+
+  const userId = await sessionUserId(auth.client);
+  const store = legalAgreementStore();
+  if (person) {
+    store.record({
+      username: auth.session.username,
+      userId,
+      version: LEGAL_VERSION,
+    });
+  }
+  for (const organization of organizations) {
+    store.record({
+      username: auth.session.username,
+      userId,
+      version: LEGAL_VERSION,
+      organization: { id: organization.id, name: organization.name },
+    });
+  }
+
+  logger.info("Terms accepted", {
+    username: auth.session.username,
+    version: LEGAL_VERSION,
+    person,
+    organizations: organizations.map((organization) => organization.name),
+  });
+  return json(200, await legalStatusBody(auth), baseHeaders);
+}
+
+/**
  * Mint the Gitea token, store the session, and build the cookie — without
  * writing the response yet, so signup can act as the new user (creating their
  * organization) before answering.
@@ -2113,7 +2305,9 @@ async function createGiteaUser(
   password: string,
   fullName: string,
 ): Promise<
-  { status: 502; error: string } | { status: number; error: string } | "created"
+  | { status: 502; error: string }
+  | { status: number; error: string }
+  | { created: true; id: number | null }
 > {
   const serviceHeaders = buildGiteaPrivilegedHeaders("admin", {
     "Content-Type": "application/json",
@@ -2149,7 +2343,13 @@ async function createGiteaUser(
   }
 
   if (response.ok || response.status === 201) {
-    return "created";
+    const body = (await response.json().catch(() => null)) as {
+      id?: unknown;
+    } | null;
+    return {
+      created: true,
+      id: typeof body?.id === "number" ? body.id : null,
+    };
   }
 
   return {
@@ -2223,6 +2423,7 @@ async function handleSignup(
     lastName?: unknown;
     organization?: unknown;
     invitation?: unknown;
+    acceptedTerms?: unknown;
   }>(req);
   const username =
     typeof payload?.username === "string" ? payload.username : "";
@@ -2246,6 +2447,12 @@ async function handleSignup(
     );
   }
 
+  // The box on the form, and the version of the Terms it pointed at. A page
+  // loaded before the Terms changed agreed to words that are no longer ours,
+  // so it is refused too, with a reason that says to reload.
+  const refusal = refuseUnacceptedTerms(payload?.acceptedTerms, baseHeaders);
+  if (refusal) return refusal;
+
   // **A name, not a login, is what the record writes.** An approval stamped
   // "jkim" is one a surveyor has to ask about; one stamped "Jordan Kim" is not.
   const nameError = validateFullName(firstName, lastName);
@@ -2261,7 +2468,7 @@ async function handleSignup(
     password,
     joinFullName(firstName, lastName),
   );
-  if (created !== "created") {
+  if (!("created" in created)) {
     logger.warn("Gitea user creation failed during signup", {
       username,
       status: created.status,
@@ -2275,6 +2482,11 @@ async function handleSignup(
     clientIp,
   });
 
+  recordLegalAgreement({
+    username,
+    userId: created.id,
+    version: LEGAL_VERSION,
+  });
   startEmailVerification(username, email, invitationToken);
 
   const loginName = await verifyUserCredentials(username, password).catch(
@@ -13582,7 +13794,9 @@ async function handleCreateOrganization(
   const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
 
-  const payload = await readJson<{ name?: unknown }>(req);
+  const payload = await readJson<{ name?: unknown; acceptedTerms?: unknown }>(
+    req,
+  );
   const name = typeof payload?.name === "string" ? payload.name.trim() : "";
   if (!name) {
     return json(
@@ -13591,6 +13805,11 @@ async function handleCreateOrganization(
       baseHeaders,
     );
   }
+
+  // The organization is the Customer the Terms are with, so the person making
+  // it accepts them for it, on the version the form showed.
+  const refusal = refuseUnacceptedTerms(payload?.acceptedTerms, baseHeaders);
+  if (refusal) return refusal;
 
   try {
     const result = await provisionSignup({
@@ -13613,6 +13832,16 @@ async function handleCreateOrganization(
         error: err instanceof Error ? err.message : String(err),
       });
       return null;
+    });
+
+    recordLegalAgreement({
+      username: auth.session.username,
+      userId: await sessionUserId(auth.client),
+      version: LEGAL_VERSION,
+      organization: {
+        id: result.organization.giteaOrgId,
+        name: result.organization.name,
+      },
     });
 
     logger.info("Organization created from the app", {
@@ -14540,6 +14769,10 @@ async function handleRequest(req: Request): Promise<Response> {
     response = await handleListWorkspaces(req, baseHeaders);
   } else if (pathname === "/api/app/organizations" && method === "GET") {
     response = await handleListOrganizations(req, baseHeaders);
+  } else if (pathname === "/api/app/legal" && method === "GET") {
+    response = await handleLegalStatus(req, baseHeaders);
+  } else if (pathname === "/api/app/legal/accept" && method === "POST") {
+    response = await handleAcceptLegal(req, baseHeaders);
   } else if (pathname === "/api/app/organizations" && method === "POST") {
     response = await handleCreateOrganization(req, baseHeaders);
   } else if (pathname === "/api/app/billing/status" && method === "GET") {
