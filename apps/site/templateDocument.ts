@@ -10,9 +10,9 @@ import type { SitePage } from "./siteContent";
  * is turned into the editor's ProseMirror JSON, the format a policy written in
  * Bindersnap is stored in, and that JSON goes through the same Word writer
  * every exported document does (`services/api/export`). So the downloaded
- * file is set in the editor's fonts and spacing, with nothing added, exactly as
- * a customer's own export would be, and the same JSON can later be put straight
- * into a binder.
+ * file is set in the editor's fonts and spacing, as a customer's own export
+ * would be, and the same JSON can later be put straight into a binder. The one
+ * thing added is the page's notice, at the top (`templateNote`).
  *
  * Only what the templates use is read: headings, paragraphs, bullet and
  * numbered lists, tables, and bold, italic and links inside them.
@@ -180,11 +180,40 @@ export function markdownToDocument(markdown: string): PmNode {
   return { type: "doc", content };
 }
 
-/** The template as a Word file, or null when the page has no template. */
-export async function templateDocx(page: SitePage): Promise<Uint8Array | null> {
+/**
+ * The page's notice, said again at the top of the file, since a downloaded
+ * file travels without its page. It is the one thing a template's Word file
+ * adds, and it asks to be deleted before the policy is adopted.
+ */
+export function templateNote(page: SitePage): string | null {
+  const notice = page.collection.notice;
+  if (!notice) return null;
+  return `Template from bindersnap.com${page.path}. ${notice} Delete this note before you adopt the policy.`;
+}
+
+/** The template as an editor document, opening with its note. */
+export function templateDocument(page: SitePage): PmNode | null {
   const markdown = templateMarkdown(page);
   if (!markdown) return null;
   const doc = markdownToDocument(markdown);
+  const note = templateNote(page);
+  if (!note) return doc;
+  return {
+    ...doc,
+    content: [
+      {
+        type: "paragraph",
+        content: [{ type: "text", text: note, marks: [{ type: "italic" }] }],
+      },
+      ...(doc.content ?? []),
+    ],
+  };
+}
+
+/** The template as a Word file, or null when the page has no template. */
+export async function templateDocx(page: SitePage): Promise<Uint8Array | null> {
+  const doc = templateDocument(page);
+  if (!doc) return null;
   return documentToDocx(documentBlocks(doc), { title: page.title });
 }
 

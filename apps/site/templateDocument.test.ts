@@ -7,6 +7,7 @@ import { publicSiteFiles } from "./publicSite";
 import {
   inlineNodes,
   markdownToDocument,
+  templateDocument,
   templateMarkdown,
 } from "./templateDocument";
 
@@ -71,6 +72,20 @@ describe("a template as a document of Bindersnap's own", () => {
 });
 
 describe("the Word downloads", () => {
+  test("open with the page's notice, which asks to be deleted", () => {
+    for (const page of templates) {
+      const doc = templateDocument(page)!;
+      expect(() => schema.nodeFromJSON(doc).check()).not.toThrow();
+      const note = doc.content![0]!.content![0]!;
+      expect(note.text).toContain("not legal or clinical advice");
+      expect(note.text).toContain(`bindersnap.com${page.path}`);
+      expect(note.text).toContain("Delete this note");
+      expect(note.marks).toEqual([{ type: "italic" }]);
+      // The policy's title still follows it.
+      expect(doc.content![1]!.type).toBe("heading");
+    }
+  });
+
   test("every template has one, and its page links to it", async () => {
     const binaries = await publicSiteBinaryFiles();
     const files = publicSiteFiles();

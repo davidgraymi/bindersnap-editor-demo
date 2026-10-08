@@ -29,7 +29,7 @@ _Based on PowerDMS's public website as of October 7, 2026. Products change, so c
 | Accreditation management                       | Yes; its site says healthcare facilities use it for "accredited status and daily survey readiness" | No                                                                                                           |
 | Write in the browser, or upload Word and PDF   | Check with vendor                                                                                  | Both                                                                                                         |
 | Reviewers and readers                          | Check with vendor                                                                                  | Free, in any number                                                                                          |
-| After you stop paying                          | Check with vendor                                                                                  | Reading and exporting stay free, always                                                                      |
+| After you stop paying                          | Check with vendor                                                                                  | Reading and exporting stay free while the account is open                                                    |
 
 ## Where PowerDMS does more
 
@@ -39,7 +39,7 @@ PowerDMS is a broader product. If you need staff to sign that they have read eac
 
 - **You pay for writers, not readers.** Only the people who write and publish policies are paid seats. Reviewers and staff who only read are free, and there's no multi-year contract.
 - **You can start today.** Create an account, upload the Word and PDF files you already have, and invite your approvers. The [getting started guide](/help/getting-started) shows how.
-- **It does one thing completely.** A change to a policy is proposed, reviewed and approved before it becomes the policy, and every version keeps its approvals forever. See [how a change becomes the record](/help/approvals).
+- **It does one thing completely.** A change to a policy is proposed, reviewed and approved before it becomes the policy, and every version keeps its approvals for as long as the binder exists. See [how a change becomes the record](/help/approvals).
 - **Your record stays yours.** If you stop paying, you can still read and export every version and its approval history.
 
 ## Frequently asked questions
