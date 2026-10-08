@@ -7,7 +7,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
 import { countEmails, waitForEmail } from "./mailpit";
@@ -301,4 +301,112 @@ test("the unsubscribe page asks before it acts, and settings turn emails back on
   await expect(
     page.getByLabel("A change you were part of is published"),
   ).not.toBeChecked();
+});
+
+async function signIn(page: Page, person: Person) {
+  await page.goto(`${APP_BASE_URL}/-/login`);
+  await page.getByLabel("Username or Email").fill(person.username);
+  await page.getByLabel("Password").fill(person.password);
+  await page.getByRole("button", { name: "Open workspace" }).click();
+  await expect(page).not.toHaveURL(/login/);
+}
+
+test("done in the app, each step emails the next person, and each link opens the change", async ({
+  browser,
+}) => {
+  const { owner, reviewer, org, binder } = await setUp();
+  const change = await addPolicy(owner.session, org, binder, "Hand Hygiene");
+  const ownerPage = await (await browser.newContext()).newPage();
+  const reviewerPage = await (await browser.newContext()).newPage();
+  await signIn(ownerPage, owner);
+  await signIn(reviewerPage, reviewer);
+
+  // The owner asks for a review from the change's own page.
+  await ownerPage.goto(`${APP_BASE_URL}/${org}/${binder}/-/changes/${change}`);
+  await ownerPage.getByRole("button", { name: "Reviewer" }).click();
+  await ownerPage.getByLabel("Search for a reviewer").fill(reviewer.username);
+  await ownerPage
+    .getByRole("button", { name: new RegExp(`@${reviewer.username}$`) })
+    .click();
+
+  // The reviewer follows the email's button, and is on the change.
+  const asked = await waitForEmail(reviewer.email, /^Review requested: /);
+  await reviewerPage.goto(
+    asked.links.find((href) => href.includes("/-/changes/"))!,
+  );
+  await expect(
+    reviewerPage.getByRole("heading", { name: "Add Hand Hygiene", level: 1 }),
+  ).toBeVisible();
+
+  // Asks for changes, in words the owner reads in the email.
+  await reviewerPage.getByRole("button", { name: "Ask for changes" }).click();
+  await reviewerPage
+    .getByRole("textbox", { name: "Describe what needs to change…" })
+    .fill("Name the soap dispensers by ward.");
+  await reviewerPage.getByRole("button", { name: "Send" }).click();
+  const changes = await waitForEmail(owner.email, /^Changes requested: /);
+  expect(changes.html).toContain("Name the soap dispensers by ward.");
+
+  // Then approves, and the owner hears it is ready.
+  await reviewerPage.getByRole("button", { name: "Approve" }).click();
+  await reviewerPage.getByRole("button", { name: "Confirm approval" }).click();
+  const ready = await waitForEmail(owner.email, /^Ready to publish: /, {
+    timeout: 60_000,
+  });
+
+  // The owner publishes from the ready email's link.
+  await ownerPage.goto(
+    ready.links.find((href) => href.includes("/-/changes/"))!,
+  );
+  await ownerPage.getByRole("button", { name: "Publish" }).click();
+  const published = await waitForEmail(reviewer.email, /^Published: /);
+  expect(published.html).toContain("Olivia Owens published");
+});
+
+test("one email turned off in settings stops that one, and only that one", async ({
+  page,
+}) => {
+  const { owner, reviewer, org, binder } = await setUp();
+
+  await signIn(page, reviewer);
+  await page.goto(`${APP_BASE_URL}/-/user_settings/profile#email`);
+  await page.getByLabel("Someone asks you to review a change").uncheck();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Saved." }),
+  ).toBeVisible();
+
+  const change = await addPolicy(owner.session, org, binder, "Fire Safety");
+  await call(
+    owner.session,
+    "PUT",
+    `/api/app/binders/${org}/${binder}/changes/${change}/assignments`,
+    { reviewers: [reviewer.username] },
+  );
+  await expect
+    .poll(
+      async () => {
+        await call(
+          reviewer.session,
+          "POST",
+          `/api/app/binders/${org}/${binder}/changes/${change}/reviews`,
+          { event: "APPROVE" },
+        );
+        return countEmailsMatching(owner.email, /^Ready to publish: /);
+      },
+      { timeout: 60_000, intervals: [3_000] },
+    )
+    .toBe(1);
+  await call(
+    owner.session,
+    "POST",
+    `/api/app/binders/${org}/${binder}/changes/${change}/publish`,
+    {},
+  );
+
+  // Published still comes. The outbox sends in order, so by the time it is
+  // here, a review request would have been too.
+  await waitForEmail(reviewer.email, /^Published: /);
+  expect(await countEmailsMatching(reviewer.email, /^Review requested: /)).toBe(
+    0,
+  );
 });
