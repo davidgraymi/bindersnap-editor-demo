@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
+import { signUpAndConfirm } from "./mailpit";
 
 test.describe.configure({ timeout: 120_000 });
 
@@ -34,7 +35,7 @@ async function call(
 
 async function signUpWithBinder(prefix: string) {
   const username = `${prefix}-${randomUUID().replace(/-/g, "").slice(0, 10)}`;
-  const signup = await fetch(`${API_BASE_URL}/auth/signup`, {
+  const signup = await signUpAndConfirm(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
     body: JSON.stringify({

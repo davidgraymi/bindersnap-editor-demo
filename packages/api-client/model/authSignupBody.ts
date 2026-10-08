@@ -15,4 +15,5 @@ export type AuthSignupBody = {
   email: string;
   /** @minLength 1 */
   password: string;
+  invitation?: string;
 };

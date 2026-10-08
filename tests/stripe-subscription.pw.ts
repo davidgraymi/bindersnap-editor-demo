@@ -32,6 +32,7 @@ import {
   stripeRunTag,
 } from "./stripe-webhook";
 import { STRIPE_API_VERSION } from "../services/api/stripe/api-version";
+import { confirmFromEmail, signUpAndConfirm } from "./mailpit";
 
 // ---------------------------------------------------------------------------
 // Environment
@@ -454,7 +455,7 @@ async function signUpUser(credentials: {
   email: string;
   password: string;
 }): Promise<string> {
-  const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+  const response = await signUpAndConfirm(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -930,6 +931,7 @@ test.describe("Stripe subscription lifecycle", () => {
         .getByLabel("Confirm Password", { exact: true })
         .fill(credentials.password);
       await page.getByRole("button", { name: "Create account" }).click();
+      await confirmFromEmail(page, credentials.email);
 
       // Signup no longer creates an organization behind the person's back, so
       // the account lands here to name one. Everything after this bills that

@@ -7,7 +7,9 @@
  * email, follow the link.
  */
 
-import { expect } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
+
+import { API_BASE_URL, APP_BASE_URL } from "./helpers";
 
 export const MAILPIT_URL = `http://localhost:${process.env.MAILPIT_PORT ?? "8025"}`;
 
@@ -109,4 +111,66 @@ export async function waitForEmail(
 /** How many emails `to` has received so far. */
 export async function countEmails(to: string): Promise<number> {
   return (await search(to)).length;
+}
+
+/**
+ * Confirm a new account's email the way its owner would: open the link in the
+ * email signup sent. Until then the API refuses the app's routes.
+ */
+export async function confirmEmail(session: string): Promise<void> {
+  const me = await fetch(`${API_BASE_URL}/auth/me`, {
+    headers: { Cookie: `bindersnap_session=${session}` },
+  });
+  const pending = ((await me.json()) as { user?: { pendingEmail?: string } })
+    .user?.pendingEmail;
+  if (!pending) return;
+  const email = await waitForEmail(pending, /^Confirm your email/);
+  const link = email.links.find((href) => href.includes("/-/verify_email?"));
+  const token = new URL(link!).searchParams.get("token");
+  const response = await fetch(`${API_BASE_URL}/auth/email/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
+    body: JSON.stringify({ token }),
+  });
+  expect(response.status, await response.text()).toBe(200);
+}
+
+/**
+ * `fetch` for `POST /auth/signup` that also confirms the new account's email,
+ * for the specs that need a working account rather than a signup. The answer
+ * is the signup's own, unread.
+ */
+export async function signUpAndConfirm(
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
+  const response = await fetch(url, init);
+  if (response.status !== 200) return response;
+  const session = (response.headers.get("set-cookie") ?? "").match(
+    /bindersnap_session=([^;]+)/,
+  )?.[1];
+  if (session) await confirmEmail(session);
+  return response;
+}
+
+/**
+ * Finish a signup made in the browser: the page asks for the email to be
+ * confirmed, so open the link from it, and continue into the app.
+ */
+export async function confirmFromEmail(
+  page: Page,
+  email: string,
+): Promise<void> {
+  await expect(
+    page.getByRole("heading", { name: "Confirm your email." }),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(email)).toBeVisible();
+  const confirmation = await waitForEmail(email, /^Confirm your email/);
+  await page.goto(
+    confirmation.links.find((href) => href.includes("/-/verify_email?"))!,
+  );
+  await expect(
+    page.getByRole("heading", { name: "Your email is confirmed." }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Continue" }).click();
 }

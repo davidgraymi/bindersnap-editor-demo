@@ -26,6 +26,12 @@
               },
               "isAdmin": {
                 "type": "boolean"
+              },
+              "emailVerified": {
+                "type": "boolean"
+              },
+              "pendingEmail": {
+                "type": "string"
               }
             },
             "required": [
@@ -84,6 +90,9 @@
           "password": {
             "type": "string",
             "minLength": 1
+          },
+          "invitation": {
+            "type": "string"
           }
         },
         "required": [
@@ -1988,6 +1997,12 @@
               },
               "isAdmin": {
                 "type": "boolean"
+              },
+              "emailVerified": {
+                "type": "boolean"
+              },
+              "pendingEmail": {
+                "type": "string"
               }
             },
             "required": [
@@ -2713,6 +2728,12 @@
                         },
                         "isAdmin": {
                           "type": "boolean"
+                        },
+                        "emailVerified": {
+                          "type": "boolean"
+                        },
+                        "pendingEmail": {
+                          "type": "string"
                         }
                       },
                       "required": [
@@ -2766,6 +2787,9 @@
                   "password": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "invitation": {
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -2799,6 +2823,12 @@
                         },
                         "isAdmin": {
                           "type": "boolean"
+                        },
+                        "emailVerified": {
+                          "type": "boolean"
+                        },
+                        "pendingEmail": {
+                          "type": "string"
                         }
                       },
                       "required": [
@@ -2846,6 +2876,12 @@
                         },
                         "isAdmin": {
                           "type": "boolean"
+                        },
+                        "emailVerified": {
+                          "type": "boolean"
+                        },
+                        "pendingEmail": {
+                          "type": "string"
                         }
                       },
                       "required": [
@@ -2879,6 +2915,111 @@
         "responses": {
           "204": {
             "description": "Session ended"
+          }
+        }
+      }
+    },
+    "/auth/email/verify": {
+      "post": {
+        "operationId": "authVerifyEmail",
+        "tags": [
+          "auth"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "token"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Confirmed — now, or by an earlier visit to the same link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "verified": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "verified"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not a link we sent"
+          },
+          "410": {
+            "description": "The link expired"
+          }
+        }
+      }
+    },
+    "/auth/email/resend": {
+      "post": {
+        "operationId": "authResendVerification",
+        "tags": [
+          "auth"
+        ],
+        "responses": {
+          "200": {
+            "description": "Already confirmed; nothing sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "verified": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "verified"
+                  ]
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "A new link is on its way",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "verified": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "verified"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "429": {
+            "description": "One went out a moment ago"
           }
         }
       }
@@ -3022,6 +3163,12 @@
                         },
                         "isAdmin": {
                           "type": "boolean"
+                        },
+                        "emailVerified": {
+                          "type": "boolean"
+                        },
+                        "pendingEmail": {
+                          "type": "string"
                         }
                       },
                       "required": [
@@ -4195,6 +4342,12 @@
                         },
                         "isAdmin": {
                           "type": "boolean"
+                        },
+                        "emailVerified": {
+                          "type": "boolean"
+                        },
+                        "pendingEmail": {
+                          "type": "string"
                         }
                       },
                       "required": [

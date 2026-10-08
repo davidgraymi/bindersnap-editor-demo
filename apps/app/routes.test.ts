@@ -22,6 +22,7 @@ test("getRoute maps the SPA home route to the landing/app home kind", () => {
   expect(getRoute("/-/login")).toEqual({ kind: "login" });
   expect(getRoute("/-/forgot_password")).toEqual({ kind: "forgotPassword" });
   expect(getRoute("/-/reset_password")).toEqual({ kind: "resetPassword" });
+  expect(getRoute("/-/verify_email")).toEqual({ kind: "verifyEmail" });
   expect(getRoute("/-/unsubscribe")).toEqual({ kind: "unsubscribe" });
   expect(getRoute("/-/invitations/abc_123-x")).toEqual({
     kind: "invitation",
@@ -217,6 +218,7 @@ test("routeToPath keeps home and workspace on the root URL", () => {
   expect(routeToPath({ kind: "login" })).toBe("/-/login");
   expect(routeToPath({ kind: "forgotPassword" })).toBe("/-/forgot_password");
   expect(routeToPath({ kind: "resetPassword" })).toBe("/-/reset_password");
+  expect(routeToPath({ kind: "verifyEmail" })).toBe("/-/verify_email");
   expect(routeToPath({ kind: "signup" })).toBe("/-/signup");
   expect(routeToPath({ kind: "adminSubscriptions" })).toBe(
     "/-/admin/subscriptions",

@@ -12,10 +12,14 @@ import type {
   AuthLogin200,
   AuthLoginBody,
   AuthMe200,
+  AuthResendVerification200,
+  AuthResendVerification202,
   AuthResetPassword200,
   AuthResetPasswordBody,
   AuthSignup200,
-  AuthSignupBody
+  AuthSignupBody,
+  AuthVerifyEmail200,
+  AuthVerifyEmailBody
 } from '../model';
 
 import { customFetch } from '.././mutator.ts';
@@ -146,6 +150,99 @@ export const getAuthLogoutUrl = () => {
 export const authLogout = async ( options?: Parameters<typeof customFetch>[1]): Promise<authLogoutResponse> => {
 
   return customFetch<authLogoutResponse>(getAuthLogoutUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+export type authVerifyEmailResponse200 = {
+  data: AuthVerifyEmail200
+  status: 200
+}
+
+export type authVerifyEmailResponse404 = {
+  data: void
+  status: 404
+}
+
+export type authVerifyEmailResponse410 = {
+  data: void
+  status: 410
+}
+
+export type authVerifyEmailResponseSuccess = (authVerifyEmailResponse200) & {
+  headers: Headers;
+};
+export type authVerifyEmailResponseError = (authVerifyEmailResponse404 | authVerifyEmailResponse410) & {
+  headers: Headers;
+};
+
+export type authVerifyEmailResponse = (authVerifyEmailResponseSuccess | authVerifyEmailResponseError)
+
+export const getAuthVerifyEmailUrl = () => {
+
+
+
+
+  return `/auth/email/verify`
+}
+
+export const authVerifyEmail = async (authVerifyEmailBody: AuthVerifyEmailBody, options?: Parameters<typeof customFetch>[1]): Promise<authVerifyEmailResponse> => {
+
+  return customFetch<authVerifyEmailResponse>(getAuthVerifyEmailUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(authVerifyEmailBody)
+  }
+);}
+
+
+export type authResendVerificationResponse200 = {
+  data: AuthResendVerification200
+  status: 200
+}
+
+export type authResendVerificationResponse202 = {
+  data: AuthResendVerification202
+  status: 202
+}
+
+export type authResendVerificationResponse401 = {
+  data: void
+  status: 401
+}
+
+export type authResendVerificationResponse429 = {
+  data: void
+  status: 429
+}
+
+export type authResendVerificationResponseSuccess = (authResendVerificationResponse200 | authResendVerificationResponse202) & {
+  headers: Headers;
+};
+export type authResendVerificationResponseError = (authResendVerificationResponse401 | authResendVerificationResponse429) & {
+  headers: Headers;
+};
+
+export type authResendVerificationResponse = (authResendVerificationResponseSuccess | authResendVerificationResponseError)
+
+export const getAuthResendVerificationUrl = () => {
+
+
+
+
+  return `/auth/email/resend`
+}
+
+export const authResendVerification = async ( options?: Parameters<typeof customFetch>[1]): Promise<authResendVerificationResponse> => {
+
+  return customFetch<authResendVerificationResponse>(getAuthResendVerificationUrl(),
   {
     ...options,
     method: 'POST'

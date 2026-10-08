@@ -403,6 +403,28 @@ export const emailPreferences = sqliteTable("email_preferences", {
 });
 
 /**
+ * Whether an account has shown it owns its email address (issue #665).
+ *
+ * Signup writes a row, unconfirmed; the emailed link confirms it. An account
+ * with no row predates this — the seed's, and every account made before it —
+ * and counts as confirmed. Account state rather than evidence, so SQLite
+ * (ADR 0004): Gitea marks every address an admin creates as activated, so its
+ * own flag cannot say whether this one was.
+ *
+ * Only a SHA-256 of the token is stored. It is kept after use, so opening the
+ * same link twice says "confirmed" rather than "this link does not work".
+ */
+export const emailVerifications = sqliteTable("email_verifications", {
+  /** Lower-cased: Gitea logins are case-insensitive. */
+  username: text("username").primaryKey(),
+  email: text("email").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  sentAt: integer("sent_at").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+  verifiedAt: integer("verified_at"),
+});
+
+/**
  * Invitations into an organization, by email (issue #426, design in
  * docs/design/org-access-architecture.md §2).
  *

@@ -20,10 +20,12 @@ import {
   SessionAuthStateSchema,
   LoginBodySchema,
   SignupBodySchema,
+  EmailVerificationStateSchema,
   ForgotPasswordBodySchema,
   ForgotPasswordResultSchema,
   ResetLinkStatusSchema,
   ResetPasswordBodySchema,
+  VerifyEmailBodySchema,
 } from "./schemas/auth";
 import {
   ChangeAssignmentsSchema,
@@ -234,6 +236,52 @@ registry.registerPath({
   tags: ["auth"],
   responses: {
     204: { description: "Session ended" },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/auth/email/verify",
+  operationId: "authVerifyEmail",
+  tags: ["auth"],
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: VerifyEmailBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Confirmed — now, or by an earlier visit to the same link",
+      content: {
+        "application/json": { schema: EmailVerificationStateSchema },
+      },
+    },
+    404: { description: "Not a link we sent" },
+    410: { description: "The link expired" },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/auth/email/resend",
+  operationId: "authResendVerification",
+  tags: ["auth"],
+  responses: {
+    200: {
+      description: "Already confirmed; nothing sent",
+      content: {
+        "application/json": { schema: EmailVerificationStateSchema },
+      },
+    },
+    202: {
+      description: "A new link is on its way",
+      content: {
+        "application/json": { schema: EmailVerificationStateSchema },
+      },
+    },
+    401: { description: "Not authenticated" },
+    429: { description: "One went out a moment ago" },
   },
 });
 

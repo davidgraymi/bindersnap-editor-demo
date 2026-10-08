@@ -4,6 +4,13 @@ export const SessionUserSchema = z.object({
   username: z.string(),
   fullName: z.string().optional(),
   isAdmin: z.boolean().optional(),
+  /**
+   * False until the account opens the link its signup emailed. The API refuses
+   * the app's routes until then (`403`, `code: "email_unverified"`).
+   */
+  emailVerified: z.boolean().optional(),
+  /** Where that link went, so the waiting page can say. */
+  pendingEmail: z.string().optional(),
 });
 export type SessionUser = z.infer<typeof SessionUserSchema>;
 
@@ -33,6 +40,11 @@ export const SignupBodySchema = z.object({
   username: z.string().min(1),
   email: z.string().email(),
   password: z.string().min(1),
+  /**
+   * The invitation link they signed up from, if any. One sent to this same
+   * address already proves it, so no confirmation email follows.
+   */
+  invitation: z.string().optional(),
 });
 export type SignupBody = z.infer<typeof SignupBodySchema>;
 
@@ -58,3 +70,14 @@ export const ResetPasswordBodySchema = z.object({
   password: z.string().min(1),
 });
 export type ResetPasswordBody = z.infer<typeof ResetPasswordBodySchema>;
+
+/** An emailed confirmation link's token. */
+export const VerifyEmailBodySchema = z.object({ token: z.string().min(1) });
+export type VerifyEmailBody = z.infer<typeof VerifyEmailBodySchema>;
+
+export const EmailVerificationStateSchema = z.object({
+  verified: z.boolean(),
+});
+export type EmailVerificationState = z.infer<
+  typeof EmailVerificationStateSchema
+>;

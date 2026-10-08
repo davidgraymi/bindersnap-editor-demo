@@ -21,8 +21,12 @@ import { BindersnapLogoMark } from "./components/BindersnapLogoMark";
 import { LandingPage } from "./components/LandingPage";
 import { WorkspaceSkeleton } from "./components/WorkspaceSkeleton";
 import { UnsubscribePage } from "./components/UnsubscribePage";
+import {
+  ConfirmEmailPage,
+  VerifyEmailPage,
+} from "./components/EmailVerificationPages";
 import { InvitationPage } from "./components/InvitationPage";
-import { takeReturnTo } from "./authReturn";
+import { pendingInvitationToken, takeReturnTo } from "./authReturn";
 import { navigateToHref } from "./appLink";
 import {
   ForgotPasswordPage,
@@ -67,6 +71,8 @@ type AuthView =
   | "forgotPassword"
   | "resetPassword"
   | "unsubscribe"
+  | "verifyEmail"
+  | "confirmEmail"
   | "invitation"
   | "createOrganization"
   | "app";
@@ -730,12 +736,22 @@ export function App() {
     // "Restore access" takes them there — but it is a destination now rather
     // than a wall.
 
-    if (route.kind === "home") {
+    // Until the account opens the link its signup emailed, the API refuses
+    // the app's routes — so this is the page, wherever they were going.
+    const unconfirmed = user?.emailVerified === false;
+
+    if (route.kind === "home" && !unconfirmed) {
       return user ? "app" : "landing";
     }
 
     if (isCheckingSession) {
       return "loading";
+    }
+
+    // The link works whoever is signed in here, or nobody: the token is the
+    // credential.
+    if (route.kind === "verifyEmail") {
+      return "verifyEmail";
     }
 
     // A reset link works whoever is signed in on this browser: it sets the
@@ -747,6 +763,10 @@ export function App() {
     // Reached from an email, signed in or not; the token is the credential.
     if (route.kind === "unsubscribe") {
       return "unsubscribe";
+    }
+
+    if (unconfirmed) {
+      return "confirmEmail";
     }
 
     // Signed in or not: it says what it is either way, and asks for an
@@ -832,6 +852,55 @@ export function App() {
     return <UnsubscribePage />;
   }
 
+  if (view === "verifyEmail") {
+    return (
+      <VerifyEmailPage
+        signedIn={Boolean(user)}
+        onContinue={async () => {
+          await refreshSession();
+          // Back to the invitation they signed up to accept, if that is how
+          // they got here; otherwise on to naming an organization, as a
+          // signup always goes.
+          const returnTo = takeReturnTo();
+          if (returnTo) {
+            navigateToHref(returnTo);
+            return;
+          }
+          // Read fresh: until a moment ago the API refused to say.
+          const list = await fetchOrganizations().catch(() => null);
+          navigateTo(
+            list?.length === 0
+              ? { kind: "createOrganization" }
+              : { kind: "home" },
+            true,
+          );
+        }}
+      />
+    );
+  }
+
+  if (view === "confirmEmail") {
+    return (
+      <ConfirmEmailPage
+        email={user?.pendingEmail ?? null}
+        onCheck={async () => {
+          // A bare read first: a full refresh draws the loading screen, and
+          // this runs every time the tab comes back into view.
+          const next = await fetchSessionUser();
+          if (next?.user?.emailVerified === false) return false;
+          await refreshSession();
+          return true;
+        }}
+        onSignOut={async () => {
+          await logoutSession();
+          setUser(null);
+          setCallbackError(null);
+          navigateTo({ kind: "home" }, true);
+        }}
+      />
+    );
+  }
+
   if (view === "invitation" && route.kind === "invitation") {
     return <InvitationPage token={route.token} user={user} />;
   }
@@ -903,6 +972,7 @@ export function App() {
             username,
             email,
             password,
+            pendingInvitationToken(),
           );
           // Carried from the signup form so the create-organization screen
           // arrives filled in rather than asking again.

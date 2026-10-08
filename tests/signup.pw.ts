@@ -19,6 +19,7 @@ import {
   OWNER,
   signOutCurrentUser,
 } from "./helpers";
+import { confirmFromEmail } from "./mailpit";
 
 function buildUniqueSignupCredentials() {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -102,10 +103,17 @@ async function attachScreenshot(
  * the binders, and the person who owns it is the one who should say what it is
  * called.
  */
+/**
+ * Nothing works until a new account's address is confirmed, so that is the
+ * page signup lands on: it names the address, and the email's link finishes it.
+ */
 async function signUpThroughOrganizationSetup(
   page: Page,
   username: string,
+  email: string,
 ): Promise<void> {
+  await confirmFromEmail(page, email);
+
   // Signup no longer creates an organization behind the person's back, so this
   // is where a new account lands: naming the thing that will own its binders.
   await expect(page).toHaveURL(/\/organizations\/new$/, { timeout: 30_000 });
@@ -162,7 +170,11 @@ async function signUpAndReturnToLogin(
     password: credentials.password,
   });
 
-  await signUpThroughOrganizationSetup(page, credentials.username);
+  await signUpThroughOrganizationSetup(
+    page,
+    credentials.username,
+    credentials.email,
+  );
   await attachScreenshot(
     page,
     testInfo,
@@ -249,6 +261,7 @@ test.describe("signup flow", () => {
     await openSignupForm(page);
     await fillSignupForm(page, credentials);
     await submitSignupForm(page);
+    await confirmFromEmail(page, credentials.email);
 
     await page.getByLabel(/Join my team/).check();
     await page.getByRole("button", { name: "Continue" }).click();
@@ -372,7 +385,11 @@ test.describe("signup flow", () => {
     await fillSignupForm(page, firstAccount);
     await submitSignupForm(page);
 
-    await signUpThroughOrganizationSetup(page, firstAccount.username);
+    await signUpThroughOrganizationSetup(
+      page,
+      firstAccount.username,
+      firstAccount.email,
+    );
     await signOutCurrentUser(page);
     await page.goto("/-/login");
     await expect(page).toHaveURL(/\/login$/);

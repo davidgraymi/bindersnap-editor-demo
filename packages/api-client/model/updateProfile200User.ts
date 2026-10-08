@@ -9,4 +9,6 @@ export type UpdateProfile200User = {
   username: string;
   fullName?: string;
   isAdmin?: boolean;
+  emailVerified?: boolean;
+  pendingEmail?: string;
 };

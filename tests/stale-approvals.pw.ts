@@ -12,6 +12,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
+import { signUpAndConfirm } from "./mailpit";
 
 test.describe.configure({ mode: "parallel", timeout: 180_000 });
 
@@ -26,7 +27,7 @@ function headers(session: string): Record<string, string> {
 async function signUp(): Promise<{ username: string; session: string }> {
   const suffix = randomUUID().slice(0, 12);
   const username = `stale-${suffix}`;
-  const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+  const response = await signUpAndConfirm(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
     body: JSON.stringify({
