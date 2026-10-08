@@ -7,6 +7,5 @@
 
 export type ChangePassword400 = {
   error: string;
-  binders?: string[];
   organizations?: string[];
 };

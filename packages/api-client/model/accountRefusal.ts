@@ -7,6 +7,5 @@
 
 export interface AccountRefusal {
   error: string;
-  binders?: string[];
   organizations?: string[];
 }

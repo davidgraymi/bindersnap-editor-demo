@@ -1962,23 +1962,6 @@
           "newPassword"
         ]
       },
-      "NewUsernameBody": {
-        "type": "object",
-        "properties": {
-          "newUsername": {
-            "type": "string",
-            "minLength": 1
-          },
-          "password": {
-            "type": "string",
-            "minLength": 1
-          }
-        },
-        "required": [
-          "newUsername",
-          "password"
-        ]
-      },
       "AccountDeletionBody": {
         "type": "object",
         "properties": {
@@ -2001,12 +1984,6 @@
         "properties": {
           "error": {
             "type": "string"
-          },
-          "binders": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
           },
           "organizations": {
             "type": "array",
@@ -2051,12 +2028,6 @@
           "serviceAccount": {
             "type": "boolean"
           },
-          "renameBlockedBy": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
           "deleteBlockedBy": {
             "type": "array",
             "items": {
@@ -2066,7 +2037,6 @@
         },
         "required": [
           "serviceAccount",
-          "renameBlockedBy",
           "deleteBlockedBy"
         ]
       },
@@ -4037,12 +4007,6 @@
                     "serviceAccount": {
                       "type": "boolean"
                     },
-                    "renameBlockedBy": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
                     "deleteBlockedBy": {
                       "type": "array",
                       "items": {
@@ -4052,7 +4016,6 @@
                   },
                   "required": [
                     "serviceAccount",
-                    "renameBlockedBy",
                     "deleteBlockedBy"
                   ]
                 }
@@ -4106,12 +4069,6 @@
                     "error": {
                       "type": "string"
                     },
-                    "binders": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
                     "organizations": {
                       "type": "array",
                       "items": {
@@ -4135,108 +4092,6 @@
                   "properties": {
                     "error": {
                       "type": "string"
-                    },
-                    "binders": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
-                    "organizations": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/app/account/username": {
-      "post": {
-        "operationId": "changeUsername",
-        "tags": [
-          "account"
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "newUsername": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "password": {
-                    "type": "string",
-                    "minLength": 1
-                  }
-                },
-                "required": [
-                  "newUsername",
-                  "password"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Renamed; drafts and sessions followed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "user": {
-                      "type": "object",
-                      "properties": {
-                        "username": {
-                          "type": "string"
-                        },
-                        "fullName": {
-                          "type": "string"
-                        },
-                        "isAdmin": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "username"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "user"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "The username is taken, or a binder's sign-off rules name this person",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    },
-                    "binders": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "organizations": {
                       "type": "array",
@@ -4298,12 +4153,6 @@
                   "properties": {
                     "error": {
                       "type": "string"
-                    },
-                    "binders": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
                     },
                     "organizations": {
                       "type": "array",

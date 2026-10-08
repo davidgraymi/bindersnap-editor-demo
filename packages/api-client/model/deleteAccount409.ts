@@ -7,6 +7,5 @@
 
 export type DeleteAccount409 = {
   error: string;
-  binders?: string[];
   organizations?: string[];
 };

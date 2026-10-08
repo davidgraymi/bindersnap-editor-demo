@@ -8,9 +8,6 @@ import type {
   ChangePassword400,
   ChangePassword403,
   ChangePasswordBody,
-  ChangeUsername200,
-  ChangeUsername409,
-  ChangeUsernameBody,
   DeleteAccount409,
   DeleteAccountBody,
   GetAccountBlockers200,
@@ -131,45 +128,6 @@ export const changePassword = async (changePasswordBody: ChangePasswordBody, opt
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(changePasswordBody)
-  }
-);}
-
-
-export type changeUsernameResponse200 = {
-  data: ChangeUsername200
-  status: 200
-}
-
-export type changeUsernameResponse409 = {
-  data: ChangeUsername409
-  status: 409
-}
-
-export type changeUsernameResponseSuccess = (changeUsernameResponse200) & {
-  headers: Headers;
-};
-export type changeUsernameResponseError = (changeUsernameResponse409) & {
-  headers: Headers;
-};
-
-export type changeUsernameResponse = (changeUsernameResponseSuccess | changeUsernameResponseError)
-
-export const getChangeUsernameUrl = () => {
-
-
-
-
-  return `/api/app/account/username`
-}
-
-export const changeUsername = async (changeUsernameBody: ChangeUsernameBody, options?: Parameters<typeof customFetch>[1]): Promise<changeUsernameResponse> => {
-
-  return customFetch<changeUsernameResponse>(getChangeUsernameUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(changeUsernameBody)
   }
 );}
 

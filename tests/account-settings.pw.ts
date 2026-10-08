@@ -169,49 +169,30 @@ test("a new password needs the current one, and signs out every other device", a
   expect((await call(otherSession, "GET", "/auth/me")).status).toBe(401);
 });
 
-test("a new username keeps the session, and the person's drafts follow it", async () => {
+test("a username is permanent: there is nothing to rename it with", async ({
+  page,
+}) => {
   const { username, password, session } = await signUp();
-  const { org, binder } = await organizationWithBinder(session);
-
-  const opened = await call(
-    session,
-    "POST",
-    `/api/app/binders/${org}/${binder}/draft`,
-    { name: "Annual review" },
-  );
-  expect(opened.status, await opened.clone().text()).toBeLessThan(300);
-
-  const renamedTo = `${username}-r`;
-  const wrong = await call(session, "POST", "/api/app/account/username", {
-    newUsername: renamedTo,
-    password: "not-it",
-  });
-  expect(wrong.status).toBe(403);
 
   const renamed = await call(session, "POST", "/api/app/account/username", {
-    newUsername: renamedTo,
+    newUsername: `${username}-r`,
     password,
   });
-  expect(renamed.status, await renamed.clone().text()).toBe(200);
-  expect((await renamed.json()).user.username).toBe(renamedTo);
+  expect(renamed.status).toBe(404);
 
-  // Same session, new name.
-  const me = await (await call(session, "GET", "/auth/me")).json();
-  expect(me.user.username).toBe(renamedTo);
-  expect(me.user.fullName).toBe("Jordan Kim");
-
-  // The draft is theirs under the new name, with the name they gave it.
-  const drafts = await (
-    await call(session, "GET", `/api/app/binders/${org}/${binder}/draft`)
-  ).json();
-  expect(
-    drafts.drafts.map((draft: { branch: string; name: string }) => [
-      draft.branch.split("/")[1],
-      draft.name,
-    ]),
-  ).toEqual([[renamedTo, "Annual review"]]);
-
-  expect(await signIn(renamedTo, password)).toBe(200);
+  await page
+    .context()
+    .addCookies([
+      { name: "bindersnap_session", value: session, url: APP_BASE_URL },
+    ]);
+  await page.goto(`${APP_BASE_URL}/-/user_settings/profile`);
+  await expect(
+    page.getByRole("button", { name: "Change password" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Change username" }),
+  ).toHaveCount(0);
+  expect(await signIn(username, password)).toBe(200);
 });
 
 test("the only owner cannot delete their account; a member can", async ({
