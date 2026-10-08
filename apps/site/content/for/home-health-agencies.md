@@ -55,7 +55,7 @@ Under §484.105 the governing body is responsible for the agency's operation. In
 
 ### Can aides and nurses read policies without paying for seats?
 
-Yes. People who only read, and reviewers who approve, cost nothing extra. Bindersnap is one price for your organization. See [pricing](/pricing).
+Yes. Staff who only read, and reviewers who approve, are free. Only the people who write and publish policies are paid seats. See [pricing](/pricing).
 
 ## Sources
 
