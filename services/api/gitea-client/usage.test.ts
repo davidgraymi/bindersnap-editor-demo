@@ -128,12 +128,14 @@ test("two requests running at once keep separate counts", async () => {
   expect(first).toEqual({
     calls: 3,
     sharedCalls: 0,
+    cachedCalls: 0,
     gateWaitMs: 3,
     giteaMs: 6,
   });
   expect(second).toEqual({
     calls: 1,
     sharedCalls: 0,
+    cachedCalls: 0,
     gateWaitMs: 0,
     giteaMs: 5,
   });
