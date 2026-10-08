@@ -264,17 +264,21 @@ async function sweepLeftoverOrgs(admin: GiteaClient): Promise<void> {
 }
 
 async function ensureFixtureOwner(admin: GiteaClient): Promise<void> {
+  // Look before creating: every test provisions through here, and Gitea's
+  // status for "user already exists" is not one to depend on (28.0.0 does not
+  // answer 422).
   try {
-    await post(admin, "/admin/users", {
-      username: FIXTURE_OWNER,
-      email: `${FIXTURE_OWNER}@example.invalid`,
-      password: randomUUID(),
-      must_change_password: false,
-    });
+    await get(admin, `/users/${FIXTURE_OWNER}`);
+    return;
   } catch (err) {
-    // Already there from an earlier run.
-    if (!(err instanceof GiteaApiError) || err.status !== 422) throw err;
+    if (!(err instanceof GiteaApiError) || err.status !== 404) throw err;
   }
+  await post(admin, "/admin/users", {
+    username: FIXTURE_OWNER,
+    email: `${FIXTURE_OWNER}@example.invalid`,
+    password: randomUUID(),
+    must_change_password: false,
+  });
 }
 
 /**
