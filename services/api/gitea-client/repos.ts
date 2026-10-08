@@ -360,10 +360,8 @@ function normalizeBranchProtection(
     blockOnRejectedReviews: raw.block_on_rejected_reviews ?? false,
     blockOnOfficialReviewRequests:
       raw.block_on_official_review_requests ?? false,
-    // Absent on Gitea 1.27.3, which is what production runs — so `false` here
-    // means "no per-folder gate", whether because it is switched off or
-    // because this Gitea has never heard of it. Those are the same fact to
-    // every caller: sign-off rules are not being enforced.
+    // `false` means "no per-folder gate": sign-off rules are not being
+    // enforced on this binder.
     blockOnCodeownerReviews: raw.block_on_codeowner_reviews ?? false,
     dismissStaleApprovals: raw.dismiss_stale_approvals ?? false,
     ignoreStaleApprovals: raw.ignore_stale_approvals ?? false,
@@ -433,9 +431,6 @@ export interface RepoBranchProtection {
    * for every CODEOWNERS rule matching a changed file, one of *that rule's*
    * owners must have approved. It ignores officialness entirely, which is why
    * a team code owner enforces under this gate and only under this gate.
-   *
-   * False on a Gitea that does not have the field, which is how the rest of
-   * the code tells the two versions apart without sniffing a version string.
    */
   blockOnCodeownerReviews: boolean;
   /**

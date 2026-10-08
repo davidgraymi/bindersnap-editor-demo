@@ -247,25 +247,13 @@ test("a member creates the binder, and it belongs to the organization", async ()
     "Owners",
     "staff",
   ]);
-  // **The two gates, and which one is on depends on the Gitea underneath.**
-  // `block_on_codeowner_reviews` (28.0.0) is the per-folder gate that actually
-  // enforces a sign-off rule and lets it name a team. `block_on_official_review_requests`
-  // (1.27) was only ever on to make CODEOWNERS block, which it never did for a
-  // team code owner — and left on beside the new gate it blocks on *manually*
+  // **The per-folder gate is on, and the review-request gate is off.**
+  // `block_on_codeowner_reviews` (Gitea 28.0.0) is what enforces a sign-off
+  // rule and lets it name a team. `block_on_official_review_requests` (1.27)
+  // never made a team code owner block, and left on it blocks on *manually*
   // requested reviews, so any member could stall a publish by requesting one.
-  //
-  // Provisioning writes the new field and reads the protection back to see
-  // whether it stuck, because a Gitea that does not have it accepts the write
-  // and silently drops it. So exactly one of these is true, and which one is
-  // the honest answer to "what version is this stack on".
-  if (protection.block_on_codeowner_reviews) {
-    expect(protection.block_on_official_review_requests).toBe(false);
-  } else {
-    // The 1.27 path: the older gate stays on, because it is then the only
-    // per-folder enforcement the binder has and turning it off would put
-    // nothing in its place.
-    expect(protection.block_on_official_review_requests).toBe(true);
-  }
+  expect(protection.block_on_codeowner_reviews).toBe(true);
+  expect(protection.block_on_official_review_requests).toBe(false);
 });
 
 test("a second binder of the same name is refused, not silently reused", async () => {
