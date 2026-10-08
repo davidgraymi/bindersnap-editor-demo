@@ -62,7 +62,7 @@ function page(params: {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escape(params.title)}</title>
 <meta name="description" content="${escape(params.description)}">
-<link rel="canonical" href="${params.path}">
+<link rel="canonical" href="${SITE}${params.path}">
 ${
   params.markdown
     ? `<link rel="alternate" type="text/markdown" href="${params.markdown}">\n`

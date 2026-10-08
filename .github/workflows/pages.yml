@@ -57,6 +57,7 @@ jobs:
           cp -R apps/app/public/. dist/
           bun scripts/build-help.ts
           bun scripts/build-legal.ts
+          bun scripts/build-site.ts
 
       - name: Disable Jekyll
         run: touch dist/.nojekyll

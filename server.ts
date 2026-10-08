@@ -7,6 +7,9 @@ import { HELP_GUIDES } from "./apps/app/helpGuides";
 import { helpContentType, helpFiles } from "./apps/help/renderHelp";
 import { readLegalDocuments } from "./apps/legal/legalDocuments";
 import { legalFiles } from "./apps/legal/renderLegal";
+import { publicSiteFiles } from "./apps/site/publicSite";
+import { siteContentType } from "./apps/site/renderSite";
+import { SITE_COLLECTIONS } from "./apps/site/siteContent";
 
 /**
  * Help is plain pages, not the app: the same files `scripts/build-help.ts`
@@ -35,6 +38,33 @@ function serveLegal(req: Request): Response {
 }
 
 /**
+ * The public site — pricing, templates and the other marketing pages, the
+ * sitemap, robots.txt and the llms files — read on each request, so an edit to
+ * a page in `apps/site/content` shows on reload. Anything it does not have
+ * is not the site's.
+ */
+async function serveSite(req: Request): Promise<Response> {
+  const path = new URL(req.url).pathname.replace(/\/+$/, "") || "/";
+  const body = publicSiteFiles().get(path);
+  return body === undefined
+    ? new Response("No such page.", { status: 404 })
+    : new Response(body, {
+        headers: { "Content-Type": siteContentType(path) },
+      });
+}
+
+/**
+ * Every address the public site has now, and every collection's prefix so a
+ * page added while the server runs is served too.
+ */
+const siteRoutes = Object.fromEntries([
+  ...[...publicSiteFiles().keys()].map((path) => [path, serveSite] as const),
+  ...SITE_COLLECTIONS.filter((collection) => collection.prefix).map(
+    (collection) => [`/${collection.prefix}/*`, serveSite] as const,
+  ),
+]);
+
+/**
  * The icons, the link-preview image and the fonts, at the site root where the
  * build copies them for GitHub Pages: `/favicon.ico`, `/fonts/fonts.css` and
  * the rest.
@@ -60,9 +90,9 @@ const server = serve({
   port: appPort,
   routes: {
     ...publicFiles,
+    ...siteRoutes,
     "/help": serveHelp,
     "/help/*": serveHelp,
-    "/llms.txt": serveHelp,
     "/legal": serveLegal,
     "/legal/*": serveLegal,
     "/": appIndex,

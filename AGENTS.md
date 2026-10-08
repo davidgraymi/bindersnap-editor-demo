@@ -94,8 +94,26 @@ Routes:
 - Reserved first segments (`RESERVED_ORGANIZATION_NAMES` in
   `packages/utils/organizationName.ts`) are only what cannot move off the
   root: `help` and `legal` (separate static sites, built from
-  `apps/help` and `apps/legal`), `auth` (`/auth/callback`, where
+  `apps/help` and `apps/legal`), the public site's sections (`pricing`,
+  `templates`, `requirements`, `for`, `compare`, `glossary`, built from
+  `apps/site`; see "The public site" below), `auth` (`/auth/callback`, where
   Gitea's sign-in returns), and the files browsers ask for at the root.
+
+### The public site
+
+`apps/site/` is the marketing site: pricing, policy templates, regulatory
+requirements, pages per kind of provider, comparisons and a glossary. Each page
+is Markdown with front matter in `apps/site/content/{collection}/{slug}.md`, so
+whoever checks a regulatory claim reviews it as a text diff. It is rendered the
+way `/help` and `/legal` are: plain HTML with nothing to run, a Markdown copy
+at `{path}.md`, JSON-LD, and listed in `/sitemap.xml`, `/llms.txt` and
+`/llms-full.txt` (`scripts/build-site.ts`, served live by `server.ts`).
+`apps/site/renderSite.test.ts` is the quality gate: length of titles and
+descriptions, minimum words, no broken internal links, no claims we cannot
+make (never "HIPAA compliant": Bindersnap holds no patient data), and every
+address reserved from organizations. Marketing copy may say "policy";
+the app says "document". Issue #718 moves the app to app.bindersnap.com so the
+public site stops taking organization names.
 
 ### The document editor
 
