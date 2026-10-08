@@ -16,7 +16,7 @@ A shared drive is good at storing files. It isn't built to keep the **record aro
 | -------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | Which version is current?                    | The file with the newest date, if nobody saved a copy elsewhere              | Exactly one version on record per policy                                              |
 | Who approved it, and when?                   | An email, meeting minutes or a signature page, kept separately from the file | Recorded against that exact version                                                   |
-| What did it say on the date of the incident? | Only if version history is on, kept long enough and never purged             | Every version, permanently                                                            |
+| What did it say on the date of the incident? | Only if version history is on, kept long enough and never purged             | Every version, as long as the binder exists                                           |
 | What changed in the last revision?           | Compare two files by eye                                                     | For policies written in Bindersnap, the change shown side by side, with its approvals |
 | Was it reviewed on schedule?                 | A date typed in the footer                                                   | A dated approval of the current version                                               |
 | Was a change approved before it took effect? | Only if everyone followed the process                                        | Yes: a change can't take effect until it's approved                                   |
@@ -25,7 +25,7 @@ A shared drive is good at storing files. It isn't built to keep the **record aro
 
 Some of it, with work. SharePoint document libraries have version history and can be set up with approval flows and retention rules. To make them hold up as a policy record, someone has to configure versioning limits, require check-out, build and maintain the approval flow, lock down who can edit published files, and make sure version history is never trimmed. That's a project, and it usually needs an IT person who stays.
 
-If you have that person and the system is already running, it can work. Bindersnap is for the organizations that don't: the approval process, the permanent history and the one current version come built in.
+If you have that person and the system is already running, it can work. Bindersnap is for the organizations that don't: the approval process, the full history and the one current version come built in.
 
 ## When a shared drive is enough
 

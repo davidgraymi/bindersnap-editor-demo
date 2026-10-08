@@ -34,12 +34,20 @@ const known = new Set<string>([
   ].map((match) => match[1]!),
 ]);
 
-/** Claims we cannot make: Bindersnap holds no patient data and certifies nothing. */
+/**
+ * Claims we cannot make: Bindersnap holds no patient data and certifies
+ * nothing, and the Terms keep nothing forever. Free reading is how we operate
+ * while an account is open (Terms Section 10), owners can delete a binder, and
+ * an ended account's records go after the export window (Section 14).
+ */
 const FORBIDDEN_CLAIMS = [
   /HIPAA[- ]compliant/i,
   /\bguarantee/i,
   /Bindersnap (is|has been) (certified|endorsed|accredited|approved)/i,
   /(certifies|guarantees|ensures) (your )?compliance/i,
+  /free,? always/i,
+  /\bforever\b/i,
+  /\bpermanent(ly)?\b/i,
 ];
 
 const TODAY = new Date().toISOString().slice(0, 10);
