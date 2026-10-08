@@ -8,6 +8,9 @@ Lightweight Bun auth/BFF service for the unified GitHub Pages SPA.
 - `POST /auth/login` accepts `identifier`/`password` plus optional `rememberMe`
 - `POST /auth/logout`
 - `GET /auth/me`
+- `POST /auth/password/forgot` emails a reset link if the address is an account's; the answer is the same either way
+- `GET /auth/password/reset?token=` says whether a reset link still works
+- `POST /auth/password/reset` sets the new password, ends every session, and signs in
 - `GET /api/app/documents`
 - & more
 

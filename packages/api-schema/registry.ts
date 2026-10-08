@@ -13,6 +13,10 @@ import {
   SessionAuthStateSchema,
   LoginBodySchema,
   SignupBodySchema,
+  ForgotPasswordBodySchema,
+  ForgotPasswordResultSchema,
+  ResetLinkStatusSchema,
+  ResetPasswordBodySchema,
 } from "./schemas/auth";
 import {
   ChangeAssignmentsSchema,
@@ -113,6 +117,10 @@ export const registry = new OpenAPIRegistry();
 registry.register("SessionAuthState", SessionAuthStateSchema);
 registry.register("LoginBody", LoginBodySchema);
 registry.register("SignupBody", SignupBodySchema);
+registry.register("ForgotPasswordBody", ForgotPasswordBodySchema);
+registry.register("ForgotPasswordResult", ForgotPasswordResultSchema);
+registry.register("ResetLinkStatus", ResetLinkStatusSchema);
+registry.register("ResetPasswordBody", ResetPasswordBodySchema);
 registry.register("WorkspaceDocumentSummary", WorkspaceDocumentSummarySchema);
 registry.register("DocumentDetailPayload", DocumentDetailPayloadSchema);
 registry.register("DocumentHistoryPayload", DocumentHistoryPayloadSchema);
@@ -217,6 +225,64 @@ registry.registerPath({
   tags: ["auth"],
   responses: {
     204: { description: "Session ended" },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/auth/password/forgot",
+  operationId: "authForgotPassword",
+  tags: ["auth"],
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: ForgotPasswordBodySchema } },
+    },
+  },
+  responses: {
+    202: {
+      description:
+        "Accepted. The same answer whether or not the address has an account.",
+      content: { "application/json": { schema: ForgotPasswordResultSchema } },
+    },
+    429: { description: "Too many attempts" },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/auth/password/reset",
+  operationId: "authCheckResetLink",
+  tags: ["auth"],
+  request: {
+    query: z.object({ token: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Whether the reset link still works",
+      content: { "application/json": { schema: ResetLinkStatusSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/auth/password/reset",
+  operationId: "authResetPassword",
+  tags: ["auth"],
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: ResetPasswordBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Password set; every other session ended; signed in",
+      content: { "application/json": { schema: SessionAuthStateSchema } },
+    },
+    400: { description: "Password too short" },
+    410: { description: "The link expired or was already used" },
   },
 });
 

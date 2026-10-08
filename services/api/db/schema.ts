@@ -352,3 +352,25 @@ export const emailOutbox = sqliteTable(
     uniqueIndex("idx_email_outbox_idempotency_key").on(table.idempotencyKey),
   ],
 );
+
+/**
+ * Outstanding "forgot password" links (issue #665).
+ *
+ * Only a SHA-256 of each token is kept, so a copy of this database cannot be
+ * used to reset anybody's password. A link works once (`used_at`) and for an
+ * hour (`expires_at`); asking again, or a reset going through, retires every
+ * other link the person had. The password itself lives in Gitea, and the
+ * reset sets it there.
+ */
+export const passwordResets = sqliteTable(
+  "password_resets",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    username: text("username").notNull(),
+    email: text("email").notNull(),
+    createdAt: integer("created_at").notNull(),
+    expiresAt: integer("expires_at").notNull(),
+    usedAt: integer("used_at"),
+  },
+  (table) => [index("idx_password_resets_username").on(table.username)],
+);

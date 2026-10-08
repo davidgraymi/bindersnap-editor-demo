@@ -4,7 +4,12 @@ import { config, type SessionCookieSameSite } from "./config";
 import { logger } from "./logger";
 import { jobStore, withGroupLock, type JobRecord } from "./jobs/store";
 import { startJobRunner } from "./jobs/runner";
-import { startMail } from "./mail";
+import { queueEmail, startMail } from "./mail";
+import {
+  passwordChangedEmail,
+  passwordResetStore,
+  resetLinkEmail,
+} from "./password-reset";
 import { reconcileBinders, type ReconcilerReport } from "./reconciler";
 import {
   PublishConflict,
@@ -668,9 +673,11 @@ async function getSessionFromRequest(
   return session;
 }
 
+type AuthRateLimitAction = "login" | "signup" | "forgot" | "reset";
+
 function consumeAuthRateLimit(
   req: Request,
-  action: "login" | "signup",
+  action: AuthRateLimitAction,
 ): { limited: boolean; retryAfterSeconds: number } {
   if (!config.authRateLimitEnabled) {
     return { limited: false, retryAfterSeconds: 0 };
@@ -702,7 +709,7 @@ function consumeAuthRateLimit(
   return { limited: false, retryAfterSeconds: 0 };
 }
 
-function resetAuthRateLimit(req: Request, action: "login" | "signup"): void {
+function resetAuthRateLimit(req: Request, action: AuthRateLimitAction): void {
   if (!config.authRateLimitEnabled) {
     return;
   }
@@ -2691,6 +2698,196 @@ async function handleChangePassword(
     username: session.username,
   });
   return new Response(null, { status: 204, headers: baseHeaders });
+}
+
+function rateLimitedResponse(
+  baseHeaders: Headers,
+  retryAfterSeconds: number,
+): Response {
+  return json(
+    429,
+    { error: "Too many attempts. Please try again shortly." },
+    mergeHeaders(baseHeaders, { "Retry-After": String(retryAfterSeconds) }),
+  );
+}
+
+/**
+ * "Forgot password?" — email a reset link, if the address is an account's.
+ *
+ * The answer is the same whether or not it is, and is given before anything
+ * slow happens, so neither the words nor the timing say which addresses have
+ * accounts. A link goes out at most once every two minutes per account.
+ */
+async function handleForgotPassword(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const rateLimit = consumeAuthRateLimit(req, "forgot");
+  if (rateLimit.limited) {
+    return rateLimitedResponse(baseHeaders, rateLimit.retryAfterSeconds);
+  }
+
+  const payload = await readJson<{ email?: unknown }>(req);
+  const email = typeof payload?.email === "string" ? payload.email.trim() : "";
+  if (!looksLikeEmailAddress(email)) {
+    return json(
+      400,
+      { error: "Enter the email address you signed up with." },
+      baseHeaders,
+    );
+  }
+
+  void sendResetLink(email).catch((err) =>
+    logger.error("Could not send a password reset link", {
+      error: err instanceof Error ? err.message : String(err),
+    }),
+  );
+
+  return json(202, { ok: true }, baseHeaders);
+}
+
+async function sendResetLink(email: string): Promise<void> {
+  const lookup = await findUsernameByEmail(email);
+  if (lookup.kind !== "authenticated") {
+    logger.info("Password reset asked for an address with no account");
+    return;
+  }
+  const username = lookup.username;
+  if (isServiceAccount(username)) return;
+
+  const resets = passwordResetStore();
+  resets.prune();
+  if (resets.recentlySent(username)) {
+    logger.info("Password reset link not resent: one went out moments ago", {
+      username,
+    });
+    return;
+  }
+
+  const token = resets.issue(username, email);
+  const link = `${config.appOrigin}/-/reset_password?token=${encodeURIComponent(token)}`;
+  queueEmail({
+    kind: "password-reset",
+    to: email,
+    content: resetLinkEmail({ link, username }),
+  });
+  logger.info("Password reset link queued", { username });
+}
+
+/** Whether a reset link still works, so the page can say so before typing. */
+async function handleCheckResetLink(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const rateLimit = consumeAuthRateLimit(req, "reset");
+  if (rateLimit.limited) {
+    return rateLimitedResponse(baseHeaders, rateLimit.retryAfterSeconds);
+  }
+  const token = new URL(req.url).searchParams.get("token") ?? "";
+  const record = token ? passwordResetStore().peek(token) : null;
+  return json(
+    200,
+    record ? { valid: true, username: record.username } : { valid: false },
+    baseHeaders,
+  );
+}
+
+/**
+ * Set a new password from a reset link, then sign the person in.
+ *
+ * The link is used up first, in one statement, so it cannot be raced. Every
+ * session the person had ends — whoever made them asked for a reset — and a
+ * note goes to the address on the link, in case it was not them.
+ */
+async function handleResetPassword(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const rateLimit = consumeAuthRateLimit(req, "reset");
+  if (rateLimit.limited) {
+    return rateLimitedResponse(baseHeaders, rateLimit.retryAfterSeconds);
+  }
+
+  const payload = await readJson<{ token?: unknown; password?: unknown }>(req);
+  const token = typeof payload?.token === "string" ? payload.token : "";
+  const password =
+    typeof payload?.password === "string" ? payload.password : "";
+
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return json(
+      400,
+      {
+        error: `Your new password needs at least ${MIN_PASSWORD_LENGTH} characters.`,
+      },
+      baseHeaders,
+    );
+  }
+
+  const resets = passwordResetStore();
+  const record = token ? resets.consume(token) : null;
+  if (!record) {
+    return json(
+      410,
+      {
+        error: "This link has expired or was already used. Ask for a new one.",
+      },
+      baseHeaders,
+    );
+  }
+
+  const serviceHeaders = buildGiteaPrivilegedHeaders("admin", {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  });
+  const response = serviceHeaders
+    ? await giteaFetch(
+        `/api/v1/admin/users/${encodeURIComponent(record.username)}`,
+        {
+          method: "PATCH",
+          headers: serviceHeaders,
+          body: JSON.stringify({
+            login_name: record.username,
+            source_id: 0,
+            password,
+            must_change_password: false,
+          }),
+        },
+      ).catch(() => null)
+    : null;
+
+  if (!response || !response.ok) {
+    // Nothing changed, so the link should still work for another try.
+    resets.release(token);
+    const error = response
+      ? await readGiteaErrorMessage(
+          response,
+          "Your password could not be changed.",
+        )
+      : "Your password could not be changed.";
+    return json(response?.status === 422 ? 400 : 502, { error }, baseHeaders);
+  }
+
+  resets.retireAll(record.username);
+  await endOtherSessions(record.username);
+  resetAuthRateLimit(req, "login");
+  queueEmail({
+    kind: "password-changed",
+    to: record.email,
+    content: passwordChangedEmail({
+      username: record.username,
+      signInUrl: `${config.appOrigin}/-/login`,
+    }),
+  });
+  logger.info("Password reset from an emailed link; every session ended", {
+    username: record.username,
+  });
+
+  return createAuthenticatedSession(
+    record.username,
+    password,
+    req,
+    baseHeaders,
+  );
 }
 
 /**
@@ -13279,6 +13476,12 @@ async function handleRequest(req: Request): Promise<Response> {
     response = await handleLogout(req, baseHeaders);
   } else if (pathname === "/auth/me" && method === "GET") {
     response = await handleAuthMe(req, baseHeaders);
+  } else if (pathname === "/auth/password/forgot" && method === "POST") {
+    response = await handleForgotPassword(req, baseHeaders);
+  } else if (pathname === "/auth/password/reset" && method === "GET") {
+    response = await handleCheckResetLink(req, baseHeaders);
+  } else if (pathname === "/auth/password/reset" && method === "POST") {
+    response = await handleResetPassword(req, baseHeaders);
   } else if (pathname === "/api/app/account/profile" && method === "PATCH") {
     response = await handleUpdateProfile(req, baseHeaders);
   } else if (pathname === "/api/app/account/password" && method === "POST") {
