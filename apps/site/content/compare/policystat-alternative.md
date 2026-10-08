@@ -17,17 +17,17 @@ _Based on RLDatix's public website as of October 7, 2026. Products change, so ch
 
 ## Side by side
 
-|                                              | RLDatix PolicyStat                                                         | Bindersnap                                                                                     |
-| -------------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Who it's built for                           | Healthcare organizations: hospitals, health systems and smaller facilities | Small healthcare providers: ASCs, clinics, home health, hospice, behavioral health             |
-| Price                                        | Not published; book a demo                                                 | Per paid seat (people who write policies); reviewers and readers free. See [pricing](/pricing) |
-| How you buy                                  | Book a live demo                                                           | Sign up and start a 14-day free trial, no card                                                 |
-| Revision tracking and approval workflows     | Yes                                                                        | Yes: every change approved before it takes effect, every version kept with its approvals       |
-| Manufacturer documents and standards         | Available, sold separately                                                 | No                                                                                             |
-| Connects to incident reporting               | Yes, with RLDatix RL6                                                      | No                                                                                             |
-| Write in the browser, or upload Word and PDF | Check with vendor                                                          | Both                                                                                           |
-| Reviewers and readers                        | Check with vendor                                                          | Free, in any number                                                                            |
-| After you stop paying                        | Check with vendor                                                          | Reading and exporting stay free, always                                                        |
+|                                              | RLDatix PolicyStat                                                         | Bindersnap                                                                                    |
+| -------------------------------------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Who it's built for                           | Healthcare organizations: hospitals, health systems and smaller facilities | Small healthcare providers: ASCs, clinics, home health, hospice, behavioral health            |
+| Price                                        | Not published; book a demo                                                 | $39/month per person who writes policies; reviewers and readers free. See [pricing](/pricing) |
+| How you buy                                  | Book a live demo                                                           | Sign up and start a 14-day free trial, no card                                                |
+| Revision tracking and approval workflows     | Yes                                                                        | Yes: every change approved before it takes effect, every version kept with its approvals      |
+| Manufacturer documents and standards         | Available, sold separately                                                 | No                                                                                            |
+| Connects to incident reporting               | Yes, with RLDatix RL6                                                      | No                                                                                            |
+| Write in the browser, or upload Word and PDF | Check with vendor                                                          | Both                                                                                          |
+| Reviewers and readers                        | Check with vendor                                                          | Free, in any number                                                                           |
+| After you stop paying                        | Check with vendor                                                          | Reading and exporting stay free, always                                                       |
 
 ## Where PolicyStat does more
 

@@ -387,7 +387,8 @@ function relatedHtml(
 
 /**
  * The product and its price, for a page whose front matter states one
- * (`price:`, per paid seat per month). No page does until a price is set.
+ * (`price:`, per paid seat per month). Only /pricing does, and the landing
+ * page's own JSON-LD must state the same offer (a test holds them together).
  */
 export function softwareApplicationLd(price: string, currency = "USD") {
   return {
@@ -406,6 +407,7 @@ export function softwareApplicationLd(price: string, currency = "USD") {
         "@type": "UnitPriceSpecification",
         price,
         priceCurrency: currency,
+        unitText: "per writer per month",
         unitCode: "MON",
         referenceQuantity: {
           "@type": "QuantitativeValue",
@@ -612,7 +614,7 @@ export function renderLlmsTxt(
     "",
     "> Bindersnap is policy and procedure management software for small healthcare providers — clinics, ambulatory surgery centers, home health agencies and behavioral health programs. Every policy keeps its current approved version, every earlier version, and the record of who approved each one and when, so the organization can answer a surveyor or accreditor in minutes.",
     "",
-    "- Pricing: per paid seat — the owners, admins and editors who write and publish policies. Reviewers who approve and staff who only read are free, in any number. Every organization starts with a 14-day free trial, no card required. See the pricing page.",
+    "- Pricing: $39 a month per paid seat — the owners, admins and editors who write and publish policies. Reviewers who approve and staff who only read are free, in any number. Every organization starts with a 14-day free trial, no card required. See the pricing page.",
     "- Not for patient health information: Bindersnap holds an organization's policies and procedures, never patient records.",
     "- Exports any version, and an audit packet of versions and approvals, to PDF and Word.",
     "",
