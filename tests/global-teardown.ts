@@ -117,6 +117,7 @@ export default async function globalTeardown(): Promise<void> {
     API_PROXY_PORT: String(stack.ports.API_PROXY_PORT),
     GITEA_PORT: String(stack.ports.GITEA_PORT),
     HOCUSPOCUS_PORT: String(stack.ports.HOCUSPOCUS_PORT),
+    MAILPIT_PORT: String(stack.ports.MAILPIT_PORT),
   };
   log(`tearing down ${stack.stackName} (slot ${stack.slot})`);
 

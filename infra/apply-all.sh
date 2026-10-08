@@ -200,6 +200,7 @@ if [[ "$ACTION" == "plan" ]]; then
   tf_run "compute"
   tf_run "secrets"
   tf_run "backups"
+  tf_run "email"
   tf_run "monitoring"
   tf_run "ci"
 
@@ -249,10 +250,15 @@ tf_run "backups" \
 LITESTREAM_BUCKET="$(tf_output backups litestream_bucket_name)"
 echo "  Backups outputs: litestream_bucket=${LITESTREAM_BUCKET}"
 
-# 4. Monitoring (needs instance ID)
+# 4. Email (needs instance role — the API sends through SES as the instance)
+tf_run "email" "ec2_instance_role_name=${INSTANCE_ROLE}"
+echo "  Email: add these records to the sending domain's DNS, then request SES production access:"
+terraform -chdir="${SCRIPT_DIR}/email" output -json dns_records 2>/dev/null || true
+
+# 5. Monitoring (needs instance ID)
 tf_run "monitoring" "instance_id=${INSTANCE_ID}"
 
-# 5. CI (SPA bucket + CloudFront dist come from tfvars — no upstream module yet)
+# 6. CI (SPA bucket + CloudFront dist come from tfvars — no upstream module yet)
 tf_run "ci"
 
 echo ""

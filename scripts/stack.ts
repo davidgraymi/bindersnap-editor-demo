@@ -47,6 +47,7 @@ export const PORT_KEYS = [
   "API_PROXY_PORT",
   "GITEA_PORT",
   "HOCUSPOCUS_PORT",
+  "MAILPIT_PORT",
 ] as const;
 
 export type PortKey = (typeof PORT_KEYS)[number];
@@ -55,7 +56,7 @@ export type Ports = Record<PortKey, number>;
 /**
  * Slot 0 is the main checkout and keeps the historical ports, so a developer
  * who has been typing `localhost:5173` for a year keeps typing it. Every other
- * worktree gets a contiguous block of five ports well clear of the defaults —
+ * worktree gets a contiguous block of six ports well clear of the defaults —
  * one block per slot, so a slot number is the only thing that has to be
  * unique.
  */
@@ -65,6 +66,7 @@ export const LEGACY_PORTS: Ports = {
   API_PROXY_PORT: 8788,
   GITEA_PORT: 3000,
   HOCUSPOCUS_PORT: 1234,
+  MAILPIT_PORT: 8025,
 };
 
 const SLOT_PORT_BASE = 21000;
@@ -77,6 +79,7 @@ const SLOT_OFFSETS: Record<PortKey, number> = {
   API_PROXY_PORT: 2,
   GITEA_PORT: 3,
   HOCUSPOCUS_PORT: 4,
+  MAILPIT_PORT: 5,
 };
 
 /**
@@ -153,7 +156,16 @@ export function readRegistry(): Registry {
     if (!parsed || !Array.isArray(parsed.stacks)) {
       return { ...EMPTY_REGISTRY, stacks: [] };
     }
-    return parsed;
+    // A record written before a port joined the block lacks it. The slot
+    // decides every port, so fill the gap from the slot rather than hand
+    // compose an "undefined" — or the shared default.
+    return {
+      ...parsed,
+      stacks: parsed.stacks.map((record) => ({
+        ...record,
+        ports: { ...portsForSlot(record.slot), ...record.ports },
+      })),
+    };
   } catch {
     // A truncated registry is recoverable: every record is re-derivable from
     // the worktree it names, and losing it costs at most a re-allocation.
@@ -600,6 +612,7 @@ export interface StackUrls {
   apiProxy: string;
   gitea: string;
   hocuspocus: string;
+  mail: string;
 }
 
 export function urlsFor(config: StackConfig): StackUrls {
@@ -610,6 +623,7 @@ export function urlsFor(config: StackConfig): StackUrls {
     apiProxy: `http://localhost:${p.API_PROXY_PORT}`,
     gitea: `http://localhost:${p.GITEA_PORT}`,
     hocuspocus: `ws://localhost:${p.HOCUSPOCUS_PORT}`,
+    mail: `http://localhost:${p.MAILPIT_PORT}`,
   };
 }
 
@@ -713,6 +727,7 @@ async function cmdUp(args: string[]): Promise<void> {
       `    API proxy  ${urls.apiProxy}`,
       `    Gitea      ${urls.gitea}`,
       `    Hocuspocus ${urls.hocuspocus}`,
+      `    Mail       ${urls.mail} (Mailpit — every email the stack sends)`,
       "",
       `    Sign in as alice, bob, carol or dan — password \`${seedPassword(config)}\`.`,
       "",
@@ -774,6 +789,7 @@ async function cmdStatus(args: string[]): Promise<void> {
       `  app     ${urls.app}`,
       `  api     ${urls.api} (proxy ${urls.apiProxy})`,
       `  gitea   ${urls.gitea}`,
+      `  mail    ${urls.mail}`,
       `  login   alice / bob / carol / dan — password \`${seedPassword(config)}\``,
       "",
     ].join("\n"),

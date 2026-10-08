@@ -311,3 +311,44 @@ export const jobs = sqliteTable(
     uniqueIndex("idx_jobs_idempotency_key").on(table.idempotencyKey),
   ],
 );
+
+/**
+ * Email waiting to be sent, and a short memory of what was (issue #665).
+ *
+ * The action that causes an email — a review requested, a reset asked for —
+ * writes a row here and is done; `mail/sender.ts` delivers it in the
+ * background and retries. So SES being slow or down never fails the action,
+ * and a deploy mid-send loses nothing, because the row was committed first.
+ *
+ * Not evidence: an email is a courtesy about something already on the record
+ * in Gitea. A sent row keeps who, what and when for 30 days for support, and
+ * its body is blanked as it goes out — a reset or invitation link is a
+ * credential, and the outbox is not where one should be kept.
+ *
+ * `idempotency_key` makes "send this once" a constraint, not a hope: the same
+ * event queued twice (a retried request, a webhook delivered again) is one
+ * email.
+ */
+export const emailOutbox = sqliteTable(
+  "email_outbox",
+  {
+    id: text("id").primaryKey(),
+    kind: text("kind").notNull(),
+    recipient: text("recipient").notNull(),
+    subject: text("subject").notNull(),
+    html: text("html").notNull(),
+    text: text("text").notNull(),
+    idempotencyKey: text("idempotency_key"),
+    status: text("status").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: integer("next_attempt_at").notNull(),
+    lastError: text("last_error"),
+    providerMessageId: text("provider_message_id"),
+    createdAt: integer("created_at").notNull(),
+    sentAt: integer("sent_at"),
+  },
+  (table) => [
+    index("idx_email_outbox_due").on(table.status, table.nextAttemptAt),
+    uniqueIndex("idx_email_outbox_idempotency_key").on(table.idempotencyKey),
+  ],
+);
