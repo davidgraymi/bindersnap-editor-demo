@@ -41,11 +41,16 @@ test("anybody can read help, and move between the guides on their own", async ({
 });
 
 test("an agent can read the guides as text", async ({ request }) => {
-  const index = await request.get(`${APP_BASE_URL}/llms.txt`);
+  const index = await request.get(`${APP_BASE_URL}/help/llms.txt`);
   expect(index.status()).toBe(200);
   const text = await index.text();
   expect(text).toContain("# Bindersnap Help");
   expect(text).toContain("(/help/approvals.md)");
+
+  // The site's own index, at the root, lists the guides among everything else.
+  const site = await (await request.get(`${APP_BASE_URL}/llms.txt`)).text();
+  expect(site).toMatch(/^# Bindersnap\n/);
+  expect(site).toContain("(https://bindersnap.com/help/approvals.md)");
 
   const guide = await request.get(`${APP_BASE_URL}/help/approvals.md`);
   expect(guide.status()).toBe(200);
