@@ -17,7 +17,7 @@ Because Bindersnap runs on one server in one region, a serious failure there wou
 
 - **In transit.** Every connection to Bindersnap uses TLS (HTTPS). On our server, Caddy manages the certificates, which come from Let's Encrypt. GitHub Pages provides the certificate for our public website. Our API refuses connections that aren't HTTPS.
 - **At rest.** The server's disks are encrypted with AWS-managed keys. Our backup storage (Amazon S3) blocks all public access and uses S3's default server-side encryption.
-- **Browser protections.** Our API and document server send security headers that stop other sites from framing them (`X-Frame-Options: DENY`), stop browsers from guessing file types (`nosniff`), and keep our addresses from leaking to other sites (same-origin referrer policy). Our public website and the app's files are served by GitHub Pages, which doesn't let us set these headers.
+- **Browser protections.** Our API and document server send security headers that stop other sites from framing them (`X-Frame-Options: DENY`), stop browsers from guessing file types (`nosniff`), and keep our addresses from leaking to other sites (same-origin referrer policy). Our public website and the app's files are served by GitHub Pages, which doesn't let us set these headers, so the app checks for itself: loaded inside another site's frame, it hides itself.
 
 ## Backups
 
