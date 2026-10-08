@@ -20,6 +20,7 @@ import {
   fetchBinderHistory,
   fetchBinderPeople,
   fetchBinderSettings,
+  fetchBillingStatus,
   fetchLibrary,
   fetchNotificationCount,
   fetchNotifications,
@@ -56,6 +57,8 @@ export const queryKeys = {
   organization: (org: string) => ["organizations", org] as const,
   organizationPeople: (org: string) =>
     ["organizations", org, "people"] as const,
+  organizationBilling: (org: string) =>
+    ["organizations", org, "billing"] as const,
   organizationBinders: (org: string) =>
     ["organizations", org, "binders"] as const,
 
@@ -130,6 +133,17 @@ export function organizationPeopleQuery(org: string) {
   return queryOptions({
     queryKey: queryKeys.organizationPeople(org),
     queryFn: ({ signal }) => fetchOrganizationPeople(org, { signal }),
+  });
+}
+
+/**
+ * An organization's billing: the price per writer and how many writers it
+ * has, which the People page shows before anyone's role changes.
+ */
+export function organizationBillingQuery(org: string) {
+  return queryOptions({
+    queryKey: queryKeys.organizationBilling(org),
+    queryFn: () => fetchBillingStatus(org),
   });
 }
 

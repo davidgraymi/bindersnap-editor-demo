@@ -14,7 +14,11 @@ import {
   searchWorkspaceUsers,
   setOrganizationPersonRole,
 } from "../api";
-import { organizationPeopleQuery } from "../data/queries";
+import {
+  organizationBillingQuery,
+  organizationPeopleQuery,
+  queryKeys,
+} from "../data/queries";
 import type { OrganizationPeoplePayload } from "../../../packages/api-schema/schemas/workspaces";
 import {
   GROUP_LEVELS,
@@ -26,6 +30,7 @@ import {
   slugifyGroupName,
 } from "../../../packages/utils/groupName";
 import { PersonAvatar } from "./PersonAvatar";
+import { describePlanPrice } from "./PlanOffer";
 import { ChevronRight, X } from "lucide-react";
 
 import { AppIcon } from "./AppIcon";
@@ -61,6 +66,10 @@ export function OrganizationPeople({ org }: OrganizationPeopleProps) {
   const isReadOnly = useIsReadOnly();
   const queryClient = useQueryClient();
   const read = useQuery(organizationPeopleQuery(org));
+  // What a role costs, said where roles change. Billing that cannot be read
+  // leaves the page as it was rather than failing it.
+  const billing = useQuery({ ...organizationBillingQuery(org), retry: false });
+  const seats = describeSeats(billing.data);
   const payload: OrganizationPeoplePayload | null = read.data ?? null;
   const [actionError, setError] = useState<string | null>(null);
   const error =
@@ -72,8 +81,13 @@ export function OrganizationPeople({ org }: OrganizationPeopleProps) {
    * A write answers with everybody; that answer is what every screen naming
    * these people now shows — the sidebar's names and quick find included.
    */
-  const setPayload = (next: OrganizationPeoplePayload) =>
+  const setPayload = (next: OrganizationPeoplePayload) => {
     queryClient.setQueryData(organizationPeopleQuery(org).queryKey, next);
+    // Who writes may have changed, and with it the number of paid seats.
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.organizationBilling(org),
+    });
+  };
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -102,6 +116,15 @@ export function OrganizationPeople({ org }: OrganizationPeopleProps) {
         </p>
       )}
 
+      {seats ? (
+        <p className="bs-note" data-testid="org-paid-seats">
+          {seats.summary} Owners, and anyone in a group that edits or
+          administers a binder, are paid seats
+          {seats.unit ? ` at ${seats.unit}` : ""}, counted once. Reviewers and
+          readers are free.
+        </p>
+      ) : null}
+
       <SettingsGroup
         id="org-people-members"
         title="Members"
@@ -124,6 +147,7 @@ export function OrganizationPeople({ org }: OrganizationPeopleProps) {
                 // The last owner cannot be demoted or removed, and the control
                 // says so in place of a tooltip rather than failing when pressed.
                 lastOwner={person.isOwner && ownerCount === 1}
+                seatPrice={seats?.unit ?? null}
                 isViewer={
                   person.login.toLowerCase() === payload.viewer.toLowerCase()
                 }
@@ -168,6 +192,37 @@ export function OrganizationPeople({ org }: OrganizationPeopleProps) {
   );
 }
 
+/**
+ * The organization's paid seats, as the People page says them: "3 writers
+ * today: $117 / month." Null when billing could not be read or has no count.
+ */
+export function describeSeats(
+  billing:
+    | {
+        plan: {
+          amount: number;
+          currency: string;
+          interval: string;
+          formatted: string;
+        } | null;
+        seats?: number | null;
+      }
+    | undefined,
+): { summary: string; unit: string | null } | null {
+  if (!billing || billing.seats === null || billing.seats === undefined) {
+    return null;
+  }
+  if (!billing.plan) {
+    const seats = Math.max(1, billing.seats);
+    return {
+      summary: `${seats} paid ${seats === 1 ? "seat" : "seats"} today.`,
+      unit: null,
+    };
+  }
+  const price = describePlanPrice({ ...billing.plan, seats: billing.seats });
+  return { summary: `${price.total}.`, unit: price.unit };
+}
+
 /** How many of a person's groups their row names before counting the rest. */
 const GROUPS_SHOWN = 3;
 
@@ -200,6 +255,7 @@ function OrgPersonRow({
   org,
   person,
   lastOwner,
+  seatPrice,
   isViewer,
   canManage,
   busy,
@@ -210,6 +266,8 @@ function OrgPersonRow({
   org: string;
   person: OrganizationPeoplePayload["people"][number];
   lastOwner: boolean;
+  /** "$39 per writer / month", or null when billing could not be read. */
+  seatPrice: string | null;
   isViewer: boolean;
   canManage: boolean;
   busy: boolean;
@@ -324,6 +382,12 @@ function OrgPersonRow({
           <p className="docs-list-item-meta">
             Owners can add and remove anyone, create and delete binders, and
             manage billing.
+          </p>
+          <p className="docs-list-item-meta">
+            An owner is a paid seat. Unless {name} already edits or administers
+            a binder, this adds one to the bill
+            {seatPrice ? `, at ${seatPrice}` : ""}, prorated on the next
+            invoice.
           </p>
           <div className="upload-modal-actions">
             <button

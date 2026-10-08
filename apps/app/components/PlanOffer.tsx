@@ -112,8 +112,8 @@ export function PlanOffer({
       <div className="bs-panel-foot">
         <span className="bs-panel-foot-note">
           {canManage
-            ? "Reading and exporting stay free, always. Checkout is handled by Stripe."
-            : `Only an owner of ${organizationName} can subscribe. Reading and exporting stay free, always.`}
+            ? "Reading and exporting stay free, subscribed or not. Checkout is handled by Stripe."
+            : `Only an owner of ${organizationName} can subscribe. Reading and exporting stay free, subscribed or not.`}
         </span>
         {secondary}
         {canManage ? (

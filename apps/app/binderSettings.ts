@@ -77,7 +77,7 @@ export const GROUP_LEVELS = [
   {
     value: "admin",
     label: "Admin",
-    note: "Runs the binders it is added to: their rules, people and folders.",
+    note: "Runs the binders it is added to: their rules, people and folders. Uses a seat.",
   },
 ] as const;
 
