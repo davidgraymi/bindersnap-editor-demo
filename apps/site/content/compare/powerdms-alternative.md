@@ -1,6 +1,6 @@
 ---
 title: Bindersnap vs. PowerDMS for small healthcare providers
-description: PowerDMS is a broad platform quoted after a demo. Bindersnap is a policy manual with an approval record, for small providers, at one published price.
+description: PowerDMS is a broad platform quoted after a demo. Bindersnap is a policy manual with an approval record for small providers, and reviewers are free.
 updated: 2026-10-07
 crumb: PowerDMS
 related: /pricing, /compare/policystat-alternative, /compare/shared-drive
@@ -13,7 +13,7 @@ _Based on PowerDMS's public website as of October 7, 2026. Products change, so c
 ## The short version
 
 - **Choose PowerDMS** if you need policy management **together with** staff training, tests, read-and-sign acknowledgments and accreditation management on one platform, and you are ready for a sales-led purchase.
-- **Choose Bindersnap** if you want a policy manual where every policy has its approved version, its full history and its approvals on record, set up yourself in an afternoon, at a price you can see before you talk to anyone.
+- **Choose Bindersnap** if you want a policy manual where every policy has its approved version, its full history and its approvals on record, set up yourself in an afternoon without a sales call, paying only for the people who write policies.
 
 ## Side by side
 
@@ -21,14 +21,14 @@ _Based on PowerDMS's public website as of October 7, 2026. Products change, so c
 | ---------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | Who it's built for                             | "The AI-Driven Platform for Public Safety", also serving healthcare, government and corporate      | Small healthcare providers: ASCs, clinics, home health, hospice, behavioral health                           |
 | Owner                                          | NEOGOV ("PowerDMS by NEOGOV")                                                                      | Solid Gray LLC                                                                                               |
-| Price                                          | Annual subscription quoted by request, based on organization size, products and integrations       | $100 a month per organization, published on [our pricing page](/pricing)                                     |
+| Price                                          | Annual subscription quoted by request, based on organization size, products and integrations       | Per paid seat (people who write policies); reviewers and readers free. See [pricing](/pricing)               |
 | How you buy                                    | Request a demo                                                                                     | Sign up and start a 14-day free trial, no card                                                               |
 | Policy revisions                               | Revise a policy and release it to staff; ask about approval workflows and version history          | Every change proposed and approved before it takes effect; every version kept, with who approved it and when |
 | Staff read-and-sign acknowledgments            | Yes                                                                                                | No                                                                                                           |
 | Training, tests and courses linked to policies | Yes                                                                                                | No                                                                                                           |
 | Accreditation management                       | Yes; its site says healthcare facilities use it for "accredited status and daily survey readiness" | No                                                                                                           |
 | Write in the browser, or upload Word and PDF   | Check with vendor                                                                                  | Both                                                                                                         |
-| Reviewers and readers                          | Check with vendor                                                                                  | Free; one price for the organization                                                                         |
+| Reviewers and readers                          | Check with vendor                                                                                  | Free, in any number                                                                                          |
 | After you stop paying                          | Check with vendor                                                                                  | Reading and exporting stay free, always                                                                      |
 
 ## Where PowerDMS does more
@@ -37,7 +37,7 @@ PowerDMS is a broader product. If you need staff to sign that they have read eac
 
 ## Where Bindersnap fits better
 
-- **You can see the price.** One plan, $100 a month for the whole organization. No per-user quote, no multi-year contract.
+- **You pay for writers, not readers.** Only the people who write and publish policies are paid seats. Reviewers and staff who only read are free, and there's no multi-year contract.
 - **You can start today.** Create an account, upload the Word and PDF files you already have, and invite your approvers. The [getting started guide](/help/getting-started) shows how.
 - **It does one thing completely.** A change to a policy is proposed, reviewed and approved before it becomes the policy, and every version keeps its approvals forever. See [how a change becomes the record](/help/approvals).
 - **Your record stays yours.** If you stop paying, you can still read and export every version and its approval history.

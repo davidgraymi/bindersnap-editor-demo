@@ -44,7 +44,7 @@ If any of those stops being true, you're keeping the record by hand, and it will
 3. Name the approvers for each binder.
 4. From then on, changes are proposed, approved and published, and every version keeps its approvals.
 
-It's one price for the organization, $100 a month, with reviewers and readers included. See [pricing](/pricing).
+You pay only for the people who write and publish policies. Reviewers and staff who only read are free. See [pricing](/pricing).
 
 ## Frequently asked questions
 
