@@ -68,6 +68,14 @@ export const SITE_COLLECTIONS: readonly SiteCollection[] = [
     notice: GUIDANCE_NOTICE,
   },
   {
+    key: "compare",
+    prefix: "compare",
+    label: "Compare",
+    intro:
+      "How Bindersnap compares with other ways to manage healthcare policies, from enterprise policy software to a shared drive, including where the others do more.",
+    minWords: 500,
+  },
+  {
     key: "templates",
     prefix: "templates",
     label: "Policy templates",
