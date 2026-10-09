@@ -385,3 +385,122 @@ output "deploy_role_subjects" {
   description = "GitHub OIDC subjects allowed to assume the deploy role"
   value       = local.github_subs
 }
+
+# ---------- Drift check (read-only) ----------
+#
+# .github/workflows/terraform-drift.yml runs `apply-all.sh drift` every day: a
+# plan of every module with the apply's output wiring, which fails when the
+# account no longer matches the code (#620 M3). It assumes this role, which can
+# read the infrastructure and nothing in it: no object in any bucket but the
+# state, no log line, no secret.
+
+variable "drift_environment" {
+  description = "GitHub environment whose jobs may assume the drift-check role"
+  type        = string
+  default     = "drift-check"
+}
+
+variable "tf_state_bucket" {
+  description = "The Terraform state bucket (`bucket` in ../state/backend.hcl), the only bucket whose objects the drift role may read"
+  type        = string
+}
+
+variable "ssm_config_parameters" {
+  description = "SSM leaves that hold settings, not secrets (infra/secrets config_parameters). The drift role may decrypt these and no others."
+  type        = list(string)
+  default     = ["gitea_admin_user", "bindersnap_user_email_domain", "litestream_s3_bucket", "stripe_price_id"]
+}
+
+data "aws_iam_policy_document" "drift_trust" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github_actions.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:sub"
+      values   = ["repo:${var.github_owner}/${var.github_repository}:environment:${var.drift_environment}"]
+    }
+  }
+}
+
+resource "aws_iam_role" "drift" {
+  name                 = "${var.project}-terraform-drift"
+  assume_role_policy   = data.aws_iam_policy_document.drift_trust.json
+  max_session_duration = 3600
+  tags                 = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "drift_read_only" {
+  role       = aws_iam_role.drift.name
+  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/ReadOnlyAccess"
+}
+
+data "aws_iam_policy_document" "drift" {
+  # ReadOnlyAccess can read every object in every bucket: the Litestream
+  # replicas hold every account and session. Only the state may be read.
+  statement {
+    sid           = "NoObjectsButState"
+    effect        = "Deny"
+    actions       = ["s3:GetObject", "s3:GetObjectVersion", "s3:GetObjectAttributes"]
+    not_resources = ["arn:${data.aws_partition.current.partition}:s3:::${var.tf_state_bucket}/*"]
+  }
+
+  # Logs carry usernames and IP addresses; SSM command output can carry more.
+  statement {
+    sid    = "NoLogContents"
+    effect = "Deny"
+    actions = [
+      "logs:GetLogEvents",
+      "logs:FilterLogEvents",
+      "logs:StartQuery",
+      "logs:GetQueryResults",
+      "logs:StartLiveTail",
+      "ssm:GetCommandInvocation",
+    ]
+    resources = ["*"]
+  }
+
+  # Refreshing infra/secrets reads its settings with decryption. Allow that
+  # for the setting leaves only; the secrets stay ciphertext.
+  statement {
+    sid       = "DecryptSettingsOnly"
+    effect    = "Allow"
+    actions   = ["kms:Decrypt"]
+    resources = [data.aws_kms_alias.ssm.target_key_arn]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["ssm.${var.aws_region}.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:EncryptionContext:PARAMETER_ARN"
+      values   = [for name in var.ssm_config_parameters : "${local.ssm_parameter_arn_base}/${name}"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "drift" {
+  name   = "${var.project}-terraform-drift-limits"
+  role   = aws_iam_role.drift.id
+  policy = data.aws_iam_policy_document.drift.json
+}
+
+output "drift_role_arn" {
+  description = "Role the drift-check workflow assumes (repository variable BINDERSNAP_DRIFT_ROLE_ARN)"
+  value       = aws_iam_role.drift.arn
+}
