@@ -363,5 +363,6 @@ not the legal text.
 - Phase 1 item 8 (Cloudflare, Tunnel, Gitea locked down) moves into the
   cutover, as S1–S3.
 - Non-negotiable #6 says "no serverless". Workers static assets serve files;
-  they run no code of ours. Record that reading in a short ADR (0006) along
-  with the move to Cloudflare, so the next reader doesn't have to guess.
+  they run no code of ours. ADR 0006
+  (`docs/adr/0006-cloudflare-workers-at-the-edge.md`) records that reading, and
+  the narrow rule for the first Worker that does run code: in-app feedback.
