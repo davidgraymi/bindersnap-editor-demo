@@ -55,12 +55,23 @@ function blankLineThenHeading(extra: boolean): Editor {
   return editor;
 }
 
-test("Tiptap's Enter throws on a blank line selected to the next block", () => {
-  // The bug this extension exists for. If this starts passing, Tiptap has
-  // fixed it and the extension can go.
-  expect(() => pressEnter(blankLineThenHeading(false))).toThrow(
-    /deeper than insertion position/,
-  );
+test("Tiptap's Enter gets a blank line selected to the next block wrong", () => {
+  // The bug this extension exists for. Tiptap used to throw ("deeper than
+  // insertion position"); since 3.31 it no longer throws but leaves the
+  // document with a stray trailing paragraph and the cursor off the heading.
+  // If this starts passing, Tiptap has fixed it and the extension can go.
+  const editor = blankLineThenHeading(false);
+  let threw = false;
+  try {
+    pressEnter(editor);
+  } catch (error) {
+    threw = /deeper than insertion position/.test(String(error));
+  }
+  const rightAnswer =
+    editor.getJSON().content?.length === 2 &&
+    editor.state.selection.$from.parent.type.name === "heading" &&
+    editor.state.selection.$from.parentOffset === 0;
+  expect(threw || !rightAnswer).toBe(true);
 });
 
 test("with it, Enter replaces the selection and splits, as ProseMirror's does", () => {
