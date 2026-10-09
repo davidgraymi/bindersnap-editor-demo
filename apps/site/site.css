@@ -3,101 +3,10 @@
  * comparisons and the glossary. Rendered by `apps/site/renderSite.ts`, after
  * the tokens, `chrome.css` and help's stylesheet.
  *
- * A page is the landing page's shape in miniature: a hero band with an
- * eyebrow and a Lora headline, the reading column with an "On this page" rail
- * beside it, and the landing page's closing card at the foot.
+ * A page is the landing page's shape in miniature: the hero band from
+ * `chrome.css`, the reading column with an "On this page" rail beside it, and
+ * the landing page's closing card at the foot.
  */
-
-/* ── Hero band ───────────────────────── */
-
-.site-hero {
-  position: relative;
-  padding: var(--brand-space-12) var(--brand-page-padding-x)
-    var(--brand-space-12);
-  border-bottom: 1px solid var(--bs-rule);
-  background:
-    radial-gradient(
-      ellipse 70% 90% at 50% 0%,
-      var(--bs-coral-glow) 0%,
-      transparent 70%
-    ),
-    var(--bs-surface-2);
-}
-
-.site-hero-inner {
-  max-width: var(--brand-max-width);
-  margin: 0 auto;
-}
-
-.site-hero h1 {
-  max-width: 880px;
-  margin: var(--brand-space-4) 0 0;
-  font-family: var(--brand-font-serif);
-  font-size: clamp(2rem, 4.2vw, var(--brand-text-h1));
-  font-weight: var(--brand-weight-bold);
-  line-height: var(--brand-leading-snug);
-  letter-spacing: var(--brand-tracking-snug);
-  color: var(--bs-text-primary);
-  text-wrap: balance;
-}
-
-.site-eyebrow {
-  margin: 0;
-}
-
-.site-eyebrow::after {
-  display: none;
-}
-
-.site-lede {
-  max-width: var(--brand-max-width-text);
-  margin: var(--brand-space-5) 0 0;
-  font-size: var(--brand-text-body-lg);
-  font-weight: var(--brand-weight-light);
-  line-height: var(--brand-leading-relaxed);
-  color: var(--bs-text-secondary);
-}
-
-.site-lede strong {
-  font-weight: var(--brand-weight-semibold);
-  color: var(--bs-text-primary);
-}
-
-.site-updated {
-  margin: var(--brand-space-5) 0 0;
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-ui-xs);
-  letter-spacing: var(--brand-tracking-wide);
-  text-transform: uppercase;
-  color: var(--bs-text-muted);
-}
-
-.site-crumbs ol {
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--brand-space-1-5);
-  margin: 0 0 var(--brand-space-6);
-  padding: 0;
-  font-size: var(--brand-text-sm);
-  color: var(--bs-text-muted);
-}
-
-.site-crumbs li + li::before {
-  content: "/";
-  margin-right: var(--brand-space-1-5);
-  color: var(--bs-text-faint);
-}
-
-.site-crumbs a {
-  color: var(--bs-text-secondary);
-  text-decoration: none;
-}
-
-.site-crumbs a:hover {
-  color: var(--bs-text-primary);
-  text-decoration: underline;
-}
 
 /* ── Reading column and rail ─────────── */
 
@@ -381,99 +290,6 @@
   color: var(--bs-coral-text);
 }
 
-/* ── Link cards: indexes, related, a provider's pages ── */
-
-.site-related,
-.site-facility {
-  margin-top: var(--brand-space-16);
-}
-
-.site-cards {
-  list-style: none;
-  margin: var(--brand-space-5) 0 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--brand-space-4);
-}
-
-.site-cards li {
-  margin: 0;
-}
-
-.site-index {
-  margin: 0;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: var(--brand-space-5);
-}
-
-.site-cards a {
-  position: relative;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: var(--brand-space-2);
-  padding: var(--brand-space-5) var(--brand-space-6);
-  overflow: hidden;
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-lg);
-  background: var(--bs-surface-1);
-  text-decoration: none;
-  transition:
-    transform var(--brand-transition-base),
-    box-shadow var(--brand-transition-base),
-    border-color var(--brand-transition-base);
-}
-
-/* The card hover pattern (AGENTS.md): lift, shadow, a coral rule from the left. */
-.site-cards a::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: var(--brand-coral);
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform var(--brand-transition-slow);
-}
-
-.site-cards a:hover,
-.site-cards a:focus-visible {
-  transform: translateY(-4px);
-  border-color: transparent;
-  box-shadow: var(--bs-shadow-lg);
-}
-
-.site-cards a:hover::before,
-.site-cards a:focus-visible::before {
-  transform: scaleX(1);
-}
-
-.site-card-title {
-  font-family: var(--brand-font-serif);
-  font-size: 1.125rem;
-  font-weight: var(--brand-weight-semibold);
-  line-height: var(--brand-leading-snug);
-  color: var(--bs-text-primary);
-}
-
-.site-card-summary {
-  flex: 1;
-  font-size: 0.9375rem;
-  line-height: var(--brand-leading-normal);
-  color: var(--bs-text-muted);
-}
-
-.site-card-more {
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-ui-xs);
-  letter-spacing: var(--brand-tracking-wide);
-  text-transform: uppercase;
-  color: var(--bs-coral-text);
-}
-
 /* ── Closing card: the landing page's ── */
 
 .site-closing {
@@ -595,7 +411,6 @@
 }
 
 @media (max-width: 900px) {
-  .site-hero,
   .site-layout,
   .site-closing {
     padding-left: var(--brand-page-padding-x-sm);
@@ -604,15 +419,8 @@
 }
 
 @media (max-width: 680px) {
-  .site-hero {
-    padding-top: var(--brand-space-8);
-    padding-bottom: var(--brand-space-8);
-  }
   .site-layout {
     padding-top: var(--brand-space-8);
-  }
-  .site-index {
-    grid-template-columns: 1fr;
   }
   .site-template {
     padding: var(--brand-space-5) var(--brand-space-4);

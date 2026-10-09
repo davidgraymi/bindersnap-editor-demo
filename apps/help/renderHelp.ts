@@ -2,7 +2,13 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { HelpGuide } from "../app/helpGuides";
-import { chromeCss, siteFooter, siteHeader } from "../site/chrome";
+import {
+  chromeCss,
+  linkCard,
+  pageHero,
+  siteFooter,
+  siteHeader,
+} from "../site/chrome";
 
 /**
  * The help guides as ordinary web pages: `/help`, `/help/{slug}`.
@@ -58,6 +64,7 @@ function page(params: {
   markdown?: string;
   guides: readonly HelpGuide[];
   current?: string;
+  hero: Parameters<typeof pageHero>[0];
   body: string;
 }): string {
   const nav = params.guides
@@ -103,6 +110,7 @@ ${
 <body>
 <a class="help-skip" href="#content">Skip to the guide</a>
 ${siteHeader(params.path)}
+${pageHero(params.hero)}
 <div class="help-layout">
   <nav class="help-nav" aria-label="Guides">
     <a class="help-nav-home" href="/help"${
@@ -132,11 +140,12 @@ function sectionHtml(section: HelpGuide["sections"][number]): string {
 
 export function renderHelpIndex(guides: readonly HelpGuide[]): string {
   const cards = guides
-    .map(
-      (guide) =>
-        `<li><a href="${helpHref(guide.slug)}"><span class="help-card-title">${escape(
-          guide.title,
-        )}</span><span class="help-card-summary">${escape(guide.summary)}</span></a></li>`,
+    .map((guide) =>
+      linkCard({
+        path: helpHref(guide.slug),
+        title: guide.title,
+        description: guide.summary,
+      }),
     )
     .join("");
   return page({
@@ -145,9 +154,12 @@ export function renderHelpIndex(guides: readonly HelpGuide[]): string {
       "Short answers to the questions everybody asks in their first week with Bindersnap.",
     path: "/help",
     guides,
-    body: `<h1>Help and guides</h1>
-<p class="help-lede">Short answers to the questions everybody asks in their first week.</p>
-<ul class="help-cards">${cards}</ul>`,
+    hero: {
+      eyebrow: "Help",
+      title: "Help and guides",
+      lede: "Short answers to the questions everybody asks in their first week.",
+    },
+    body: `<ul class="site-cards help-index">${cards}</ul>`,
   });
 }
 
@@ -174,9 +186,16 @@ export function renderHelpGuide(
     markdown: `${helpHref(guide.slug)}.md`,
     guides,
     current: guide.slug,
+    hero: {
+      eyebrow: "Help",
+      title: guide.title,
+      lede: escape(guide.summary),
+      crumbs: [
+        { name: "Help", path: helpHref() },
+        { name: guide.title, path: helpHref(guide.slug) },
+      ],
+    },
     body: `<article>
-<h1>${escape(guide.title)}</h1>
-<p class="help-lede">${escape(guide.summary)}</p>
 ${guide.sections.map(sectionHtml).join("\n")}
 </article>
 <nav class="help-pager" aria-label="More guides">${pager}</nav>`,
@@ -249,9 +268,10 @@ body {
   margin: 0;
   background: var(--bs-page-bg);
   color: var(--bs-text-secondary);
-  font-family: var(--brand-font-sans, "Geist", system-ui, sans-serif);
-  font-size: 16px;
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-body);
   line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
 }
 a { color: inherit; }
 .help-skip {
@@ -259,105 +279,126 @@ a { color: inherit; }
   left: -9999px;
 }
 .help-skip:focus {
-  left: 16px;
-  top: 12px;
+  left: var(--brand-space-4);
+  top: var(--brand-space-3);
+  z-index: calc(var(--brand-z-nav) + 1);
+  padding: var(--brand-space-2) var(--brand-space-3);
+  border-radius: var(--brand-radius-md);
   background: var(--bs-surface-1);
-  padding: 8px 12px;
-  border-radius: 8px;
-  z-index: 10;
 }
+/* content-box: the 1200px is the hero's, so the sidebar lines up under it. */
 .help-layout {
+  box-sizing: content-box;
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
-  gap: 48px;
-  max-width: 1080px;
+  grid-template-columns: 220px minmax(0, var(--brand-max-width-text));
+  gap: var(--brand-space-16);
+  max-width: var(--brand-max-width);
   margin: 0 auto;
-  padding: 40px 24px 80px;
+  padding: var(--brand-space-12) var(--brand-page-padding-x) var(--brand-space-20);
 }
-.help-nav { font-size: 14px; }
-.help-nav ul { list-style: none; margin: 8px 0 0; padding: 0; }
+.help-nav {
+  position: sticky;
+  top: calc(var(--brand-nav-height) + var(--brand-space-8));
+  align-self: start;
+  font-size: var(--brand-text-sm);
+}
+.help-nav ul {
+  list-style: none;
+  margin: var(--brand-space-3) 0 0;
+  padding: 0;
+  border-left: 1px solid var(--bs-rule);
+}
 .help-nav li { margin: 0; }
-.help-nav a {
+.help-nav ul a {
   display: block;
-  padding: 6px 10px;
-  border-radius: 6px;
+  margin-left: -1px;
+  padding: var(--brand-space-1-5) var(--brand-space-4);
+  border-left: 2px solid transparent;
+  line-height: var(--brand-leading-normal);
   text-decoration: none;
   color: var(--bs-text-secondary);
 }
-.help-nav a:hover { background: var(--bs-surface-2); }
-.help-nav a[aria-current="page"] {
-  background: var(--bs-surface-2);
+.help-nav ul a:hover { color: var(--bs-text-primary); }
+.help-nav ul a[aria-current="page"] {
+  border-left-color: var(--brand-coral);
   color: var(--bs-text-primary);
-  font-weight: 600;
+  font-weight: var(--brand-weight-semibold);
 }
-.help-nav-home { font-weight: 500; }
-.help-main { max-width: 680px; min-width: 0; }
-.help-main h1 {
-  font-family: var(--brand-font-serif, "Lora", Georgia, serif);
-  font-weight: 600;
-  font-size: 32px;
-  line-height: 1.2;
-  color: var(--bs-text-primary);
-  margin: 0 0 8px;
-}
-.help-main h2 {
-  font-family: var(--brand-font-serif, "Lora", Georgia, serif);
-  font-weight: 600;
-  font-size: 20px;
-  line-height: 1.3;
-  color: var(--bs-text-primary);
-  margin: 36px 0 8px;
-}
-.help-lede { font-size: 18px; color: var(--bs-text-muted); margin: 0 0 8px; }
-.help-main p { margin: 0 0 14px; }
-.help-main ol { margin: 0 0 14px; padding-left: 1.4em; }
-.help-main li { margin: 6px 0; }
-.help-cards {
-  list-style: none;
-  padding: 0;
-  margin: 28px 0 0;
-  display: grid;
-  gap: 12px;
-}
-.help-cards a {
-  display: block;
-  padding: 16px 18px;
-  border: 1px solid var(--bs-rule);
-  border-radius: 12px;
-  background: var(--bs-surface-1);
+.help-nav-home {
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-label);
+  letter-spacing: var(--brand-tracking-wide);
+  text-transform: uppercase;
   text-decoration: none;
+  color: var(--bs-text-muted);
 }
-.help-cards a:hover { border-color: var(--brand-coral); }
-.help-card-title {
-  display: block;
+.help-nav-home:hover,
+.help-nav-home[aria-current="page"] { color: var(--bs-text-primary); }
+.help-main { min-width: 0; }
+.help-main h2 {
+  margin: var(--brand-space-12) 0 var(--brand-space-3);
+  font-family: var(--brand-font-serif);
+  font-size: 1.625rem;
+  font-weight: var(--brand-weight-semibold);
+  line-height: var(--brand-leading-snug);
+  letter-spacing: var(--brand-tracking-snug);
   color: var(--bs-text-primary);
-  font-weight: 600;
 }
-.help-card-summary { display: block; color: var(--bs-text-muted); font-size: 15px; }
+.help-main article > :first-child h2,
+.help-main article > h2:first-child { margin-top: 0; }
+.help-main p { margin: 0 0 var(--brand-space-4); }
+.help-main ol { margin: 0 0 var(--brand-space-4); padding-left: 1.4em; }
+.help-main article li { margin: var(--brand-space-1-5) 0; }
+.help-index { margin: 0; }
 .help-pager {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 56px;
-  padding-top: 24px;
-  border-top: 1px solid var(--bs-rule);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--brand-space-4);
+  margin-top: var(--brand-space-16);
 }
 .help-pager a {
   display: flex;
   flex-direction: column;
+  gap: var(--brand-space-1);
+  padding: var(--brand-space-4) var(--brand-space-5);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
   text-decoration: none;
+  font-family: var(--brand-font-serif);
+  font-weight: var(--brand-weight-semibold);
   color: var(--bs-text-primary);
-  font-weight: 500;
+  transition: border-color var(--brand-transition-base);
 }
-.help-pager span { font-size: 13px; color: var(--bs-text-muted); font-weight: 400; }
-.help-pager-next { margin-left: auto; text-align: right; }
+.help-pager a:hover { border-color: var(--brand-coral); }
+.help-pager span {
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-label);
+  font-weight: var(--brand-weight-regular);
+  letter-spacing: var(--brand-tracking-wide);
+  text-transform: uppercase;
+  color: var(--bs-text-muted);
+}
+.help-pager-next { grid-column: 2; text-align: right; }
 a:focus-visible {
   outline: 2px solid var(--brand-coral);
   outline-offset: 2px;
 }
-@media (max-width: 760px) {
-  .help-layout { grid-template-columns: 1fr; gap: 24px; padding: 24px 16px 64px; }
-  .help-nav { order: 2; border-top: 1px solid var(--bs-rule); padding-top: 16px; }
-  .help-main h1 { font-size: 26px; }
+@media (max-width: 900px) {
+  .help-layout {
+    grid-template-columns: 1fr;
+    gap: var(--brand-space-10);
+    padding: var(--brand-space-8) var(--brand-page-padding-x-sm) var(--brand-space-16);
+  }
+  .help-nav {
+    position: static;
+    order: 2;
+    padding-top: var(--brand-space-6);
+    border-top: 1px solid var(--bs-rule);
+  }
+}
+@media (max-width: 560px) {
+  .help-pager { grid-template-columns: 1fr; }
+  .help-pager-next { grid-column: auto; }
 }
 `;

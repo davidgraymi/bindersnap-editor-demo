@@ -1,6 +1,6 @@
 import { markdownToHtml } from "../app/markdown";
 import { renderHelpCss } from "../help/renderHelp";
-import { siteFooter, siteHeader } from "../site/chrome";
+import { linkCard, pageHero, siteFooter, siteHeader } from "../site/chrome";
 import type { LegalDocument } from "./legalDocuments";
 
 /**
@@ -43,6 +43,7 @@ function page(params: {
   markdown?: string;
   documents: readonly LegalDocument[];
   current?: string;
+  hero: Parameters<typeof pageHero>[0];
   body: string;
 }): string {
   const nav = params.documents
@@ -83,6 +84,7 @@ ${
 <body>
 <a class="help-skip" href="#content">Skip to the text</a>
 ${siteHeader(params.path)}
+${pageHero(params.hero)}
 <div class="help-layout">
   <nav class="help-nav" aria-label="Legal documents">
     <a class="help-nav-home" href="/legal"${
@@ -126,11 +128,12 @@ export function renderLegalBody(markdown: string): string {
 
 export function renderLegalIndex(documents: readonly LegalDocument[]): string {
   const cards = documents
-    .map(
-      (document) =>
-        `<li><a href="${legalHref(document.slug)}"><span class="help-card-title">${escape(
-          document.title,
-        )}</span><span class="help-card-summary">${escape(document.summary)}</span></a></li>`,
+    .map((document) =>
+      linkCard({
+        path: legalHref(document.slug),
+        title: document.title,
+        description: document.summary,
+      }),
     )
     .join("");
   return page({
@@ -139,10 +142,13 @@ export function renderLegalIndex(documents: readonly LegalDocument[]): string {
       "Bindersnap's Terms of Service, Privacy Policy, Data Processing Addendum, subprocessors and security overview.",
     path: "/legal",
     documents,
-    body: `<h1>Legal</h1>
-<p class="help-lede">What you agree to when you use Bindersnap, and what we promise back.</p>
-<p class="legal-callout">Bindersnap is not for patient health information. Keep your policies and procedures here — never patient records.</p>
-<ul class="help-cards">${cards}</ul>`,
+    hero: {
+      eyebrow: "Legal",
+      title: "Legal",
+      lede: "What you agree to when you use Bindersnap, and what we promise back.",
+    },
+    body: `<p class="legal-callout">Bindersnap is not for patient health information. Keep your policies and procedures here — never patient records.</p>
+<ul class="site-cards help-index">${cards}</ul>`,
   });
 }
 
@@ -157,9 +163,17 @@ export function renderLegalDocument(
     markdown: `${legalHref(document.slug)}.md`,
     documents,
     current: document.slug,
+    hero: {
+      eyebrow: "Legal",
+      title: document.title,
+      lede: escape(document.summary),
+      meta: `Last updated ${escape(document.lastUpdated)} · Version ${escape(document.version)}`,
+      crumbs: [
+        { name: "Legal", path: legalHref() },
+        { name: document.title, path: legalHref(document.slug) },
+      ],
+    },
     body: `<article>
-<h1>${escape(document.title)}</h1>
-<p class="legal-dates">Last updated ${escape(document.lastUpdated)} · Version ${escape(document.version)}</p>
 ${renderLegalBody(document.body)}
 </article>`,
   });
@@ -188,54 +202,49 @@ export function legalFiles(
 }
 
 const LEGAL_CSS = `
-.legal-nav-help { display: block; margin-top: 16px; padding: 6px 10px; }
-.legal-dates {
-  font-family: var(--brand-font-mono, "Geist Mono", monospace);
-  font-size: 13px;
-  color: var(--bs-text-muted);
-  margin: 0 0 28px;
-}
+.legal-nav-help { display: block; margin-top: var(--brand-space-6); }
 .legal-callout {
-  margin: 20px 0 0;
-  padding: 12px 16px;
+  margin: 0 0 var(--brand-space-6);
+  padding: var(--brand-space-3) var(--brand-space-4);
   border: 1px solid var(--bs-status-warn-border);
-  border-radius: 10px;
+  border-radius: var(--brand-radius-md);
   background: var(--bs-status-warn-bg);
   color: var(--bs-status-warn-fg);
-  font-weight: 500;
+  font-weight: var(--brand-weight-medium);
 }
-.legal-main h2 { scroll-margin-top: 16px; }
+.legal-main h2,
+.legal-main h3 { scroll-margin-top: calc(var(--brand-nav-height) + var(--brand-space-4)); }
+.legal-main article > h2:first-child { margin-top: 0; }
 .legal-main h3 {
-  font-size: 16px;
-  font-weight: 600;
+  margin: var(--brand-space-6) 0 var(--brand-space-1-5);
+  font-size: var(--brand-text-body);
+  font-weight: var(--brand-weight-semibold);
   color: var(--bs-text-primary);
-  margin: 24px 0 6px;
-  scroll-margin-top: 16px;
 }
-.legal-main ul { margin: 0 0 14px; padding-left: 1.4em; }
-.legal-main strong { color: var(--bs-text-primary); font-weight: 600; }
+.legal-main article ul { margin: 0 0 var(--brand-space-4); padding-left: 1.4em; }
+.legal-main strong { color: var(--bs-text-primary); font-weight: var(--brand-weight-semibold); }
 .legal-main a { color: var(--bs-coral-text); }
 .legal-main blockquote {
-  margin: 0 0 14px;
-  padding: 10px 16px;
+  margin: 0 0 var(--brand-space-4);
+  padding: var(--brand-space-2-5) var(--brand-space-4);
   border-left: 3px solid var(--bs-rule-warm);
+  border-radius: 0 var(--brand-radius-md) var(--brand-radius-md) 0;
   background: var(--bs-surface-2);
-  border-radius: 0 8px 8px 0;
 }
 .legal-main blockquote p { margin: 0; }
 .legal-main table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 8px 0 20px;
-  font-size: 14px;
   display: block;
+  width: 100%;
   overflow-x: auto;
+  margin: var(--brand-space-2) 0 var(--brand-space-5);
+  border-collapse: collapse;
+  font-size: var(--brand-text-sm);
 }
 .legal-main th, .legal-main td {
+  padding: var(--brand-space-2) var(--brand-space-2-5);
   text-align: left;
   vertical-align: top;
-  padding: 8px 10px;
   border-bottom: 1px solid var(--bs-rule);
 }
-.legal-main th { color: var(--bs-text-primary); font-weight: 600; background: var(--bs-surface-2); }
+.legal-main th { color: var(--bs-text-primary); font-weight: var(--brand-weight-semibold); background: var(--bs-surface-2); }
 `;
