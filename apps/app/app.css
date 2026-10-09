@@ -5488,19 +5488,31 @@ a.bs-knot {
   flex: 1;
 }
 
+/* Help and Send feedback, stacked, with the collapse toggle beside the last
+   one: its 28px centred on that 32px row. */
 .app-sidebar-foot {
   padding: var(--brand-space-2) var(--brand-space-2);
   border-top: 1px solid var(--bs-rule);
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: var(--brand-space-2);
   font-size: var(--brand-text-ui-md);
 }
 
-/* Send feedback: a quiet row in the foot, the height of a sidebar entry, and
-   never coral — it is an aside, not the page's action. */
-.app-sidebar-feedback {
+.app-sidebar-foot > .app-sidebar-collapse {
+  margin-bottom: 2px;
+}
+
+.app-sidebar-foot-actions {
   flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+/* A quiet row, the height of a sidebar entry, and never coral: an aside, not
+   the page's action. */
+.app-sidebar-foot-item {
   min-width: 0;
   display: flex;
   align-items: center;
@@ -5514,29 +5526,30 @@ a.bs-knot {
   font: inherit;
   font-weight: var(--brand-weight-medium);
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
   transition:
     color var(--brand-transition-base),
     background var(--brand-transition-base);
 }
 
-.app-sidebar-feedback:hover,
-.app-sidebar-feedback:focus-visible {
+.app-sidebar-foot-item:hover,
+.app-sidebar-foot-item:focus-visible {
   color: var(--bs-text-primary);
   background: var(--bs-surface-2);
 }
 
-.app-sidebar-feedback:focus-visible {
+.app-sidebar-foot-item:focus-visible {
   outline: 2px solid var(--brand-coral);
   outline-offset: 1px;
 }
 
-.app-sidebar-feedback-icon {
+.app-sidebar-foot-icon {
   display: inline-flex;
   flex-shrink: 0;
 }
 
-.app-sidebar-feedback-label {
+.app-sidebar-foot-label {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -9454,7 +9467,7 @@ a.bs-row:focus-visible {
 .app-sidebar--collapsed .app-sidebar-item-count,
 .app-sidebar--collapsed .app-sidebar-label,
 .app-sidebar--collapsed .app-sidebar-binder-name,
-.app-sidebar--collapsed .app-sidebar-feedback-label {
+.app-sidebar--collapsed .app-sidebar-foot-label {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -9486,12 +9499,20 @@ a.bs-row:focus-visible {
 
 .app-sidebar--collapsed .app-sidebar-foot {
   flex-direction: column;
+  align-items: center;
   gap: var(--brand-space-1);
   padding: var(--brand-space-2) var(--brand-space-1);
 }
 
-.app-sidebar--collapsed .app-sidebar-feedback {
+.app-sidebar--collapsed .app-sidebar-foot > .app-sidebar-collapse {
+  margin-bottom: 0;
+}
+
+.app-sidebar--collapsed .app-sidebar-foot-actions {
   flex: 0 0 auto;
+}
+
+.app-sidebar--collapsed .app-sidebar-foot-item {
   justify-content: center;
   width: 32px;
   padding: 0;

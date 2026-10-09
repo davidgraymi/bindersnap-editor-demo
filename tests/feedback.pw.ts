@@ -107,7 +107,9 @@ test("a report carries who, where, and the API's request IDs", async ({
   await expect(dialog).toHaveCount(0);
 });
 
-test("on a phone it is in the account menu", async ({ page }) => {
+test("on a phone, help and feedback are in the account menu", async ({
+  page,
+}) => {
   await standInForCloudflare(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await signInAsAlice(page);
@@ -116,6 +118,10 @@ test("on a phone it is in the account menu", async ({ page }) => {
     page.getByRole("button", { name: "Send feedback" }),
   ).toBeHidden();
   await page.locator(".app-topnav-avatar").click();
+  // Help is down there with it on a desktop, so the menu carries both here.
+  await expect(
+    page.getByRole("menuitem", { name: "Help and guides" }),
+  ).toHaveAttribute("target", "_blank");
   await page.getByRole("menuitem", { name: "Send feedback" }).click();
   await expect(
     page.getByRole("dialog", { name: "Send feedback" }),

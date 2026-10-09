@@ -1,5 +1,6 @@
 import {
   Building2,
+  CircleHelp,
   CreditCard,
   FileText,
   FilePen,
@@ -402,24 +403,42 @@ export function AppSidebar({
       <div className="app-sidebar-spacer" />
 
       <div className="app-sidebar-foot">
-        {/* **Feedback, where the eye ends up when it is looking for a way
-            out.** It used to be the signed-in person's name, which the
-            avatar at the top right already says. Not a destination, so not
-            among them: it opens a dialog over wherever you are, and the
-            report carries where that was. */}
-        {onSendFeedback ? (
-          <button
-            type="button"
-            className="app-sidebar-feedback"
-            title={collapsed ? "Send feedback" : undefined}
-            onClick={onSendFeedback}
+        {/* **Help and feedback, where the eye ends up when it is looking for
+            a way out.** This was the signed-in person's name, which the
+            avatar at the top right already says. Neither is a destination,
+            so neither is among them: help opens beside the app, and feedback
+            opens a dialog over wherever you are. */}
+        <div className="app-sidebar-foot-actions">
+          {/* Ordinary pages anybody can read, signed in or not (apps/help),
+              in a new tab, so reading about a step keeps the place where you
+              were doing it. */}
+          <a
+            className="app-sidebar-foot-item"
+            href="/help"
+            target="_blank"
+            rel="noopener"
+            aria-label="Help and guides (opens in a new tab)"
+            title={collapsed ? "Help and guides" : undefined}
           >
-            <span className="app-sidebar-feedback-icon" aria-hidden="true">
-              <MessageSquarePlus size={16} strokeWidth={1.75} />
+            <span className="app-sidebar-foot-icon" aria-hidden="true">
+              <CircleHelp size={16} strokeWidth={1.75} />
             </span>
-            <span className="app-sidebar-feedback-label">Send feedback</span>
-          </button>
-        ) : null}
+            <span className="app-sidebar-foot-label">Help and guides</span>
+          </a>
+          {onSendFeedback ? (
+            <button
+              type="button"
+              className="app-sidebar-foot-item"
+              title={collapsed ? "Send feedback" : undefined}
+              onClick={onSendFeedback}
+            >
+              <span className="app-sidebar-foot-icon" aria-hidden="true">
+                <MessageSquarePlus size={16} strokeWidth={1.75} />
+              </span>
+              <span className="app-sidebar-foot-label">Send feedback</span>
+            </button>
+          ) : null}
+        </div>
         {/* **In the foot, at the far end**, which is where a control that acts
             on the panel itself belongs — not among the destinations, which are
             about where you are going rather than about the furniture. The

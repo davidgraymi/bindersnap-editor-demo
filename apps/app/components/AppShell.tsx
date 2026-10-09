@@ -104,6 +104,8 @@ function renderProfileMenuIcon(icon: string) {
       return <AppIcon icon={Shield} size="md" />;
     case "guide":
       return <AppIcon icon={MapIcon} size="md" />;
+    case "help":
+      return <AppIcon icon={CircleHelp} size="md" />;
     case "feedback":
       return <AppIcon icon={MessageSquarePlus} size="md" />;
     case "signout":
@@ -247,21 +249,6 @@ export function AppShell({
             onNavigate={onNavigate}
             onSearchLibrary={navigateToSearch}
           />
-
-          {/* **Help opens beside the app, not inside it.** It is ordinary
-              pages anybody can read, signed in or not (apps/help), and
-              reading about a step in a new tab keeps the place where you
-              were doing it. */}
-          <a
-            className="app-topnav-icon-btn"
-            href="/help"
-            target="_blank"
-            rel="noopener"
-            title="Help and guides (opens in a new tab)"
-            aria-label="Help and guides (opens in a new tab)"
-          >
-            <CircleHelp size={16} strokeWidth={1.5} aria-hidden="true" />
-          </a>
 
           {/* What happened on the changes you are part of — Gitea's own
               notifications, with the reason each one is yours. */}
@@ -432,8 +419,24 @@ export function AppShell({
                     role="group"
                     aria-label="Session"
                   >
-                    {/* On a phone the sidebar, and its Send feedback, is not
-                        drawn; this is the way to it there. */}
+                    {/* On a phone the sidebar is not drawn, and with it its
+                        Help and Send feedback; these are the way to them
+                        there. Help opens beside the app, in a new tab. */}
+                    <a
+                      className="app-profile-menu-item"
+                      role="menuitem"
+                      href="/help"
+                      target="_blank"
+                      rel="noopener"
+                      onClick={() => setProfileOpen(false)}
+                    >
+                      <span className="app-profile-menu-icon">
+                        {renderProfileMenuIcon("help")}
+                      </span>
+                      <span className="app-profile-menu-label">
+                        Help and guides
+                      </span>
+                    </a>
                     {canSendFeedback ? (
                       <button
                         type="button"
