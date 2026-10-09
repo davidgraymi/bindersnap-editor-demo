@@ -20,6 +20,8 @@ on:
       # Infra/deploy-only changes never affect the static site — don't republish.
       - "deploy/**"
       - "infra/**"
+      # The feedback Worker deploys itself (feedback-worker.yml).
+      - "services/feedback/**"
   workflow_dispatch:
 
 permissions:

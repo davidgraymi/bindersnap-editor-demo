@@ -23,6 +23,9 @@ Tests run with the rest: `bun run test:ops`, or `bun test services/feedback`.
 ## Setting it up, once
 
 The deploy workflow cannot do these; they need a person with the accounts.
+Merge first: `feedback-worker.yml` creates the Worker on its first run, and a
+secret can only be set on a Worker that exists. Until the secrets are in,
+every report answers 502 and nothing else is affected.
 
 1. **The repository.** Create `davidgraymi/bindersnap-feedback`, **private**.
    Reports can hold patient names and policy text.
@@ -31,8 +34,8 @@ The deploy workflow cannot do these; they need a person with the accounts.
    Repository permissions: **Issues: Read and write**, nothing else (Metadata:
    read is added for you). Install it on the feedback repository **only**.
    Note the App ID and generate a private key (a `.pem` download).
-3. **The secrets.** From the repository root, with a Cloudflare token that can
-   edit Workers:
+3. **The App's secrets.** From the repository root, with a Cloudflare token
+   that can edit Workers:
 
    ```bash
    cd services/feedback
@@ -41,8 +44,15 @@ The deploy workflow cannot do these; they need a person with the accounts.
    rm ~/Downloads/bindersnap-feedback.*.private-key.pem
    ```
 
-   `TURNSTILE_SECRET_KEY` is set by `infra/edge/put-turnstile-secret.sh`, which
-   reads it from the widget Terraform made.
+4. **Turnstile.** `CLOUDFLARE_ACCOUNT_ID=… ./put-turnstile-secret.sh` creates
+   the widget (or finds it), sets `TURNSTILE_SECRET_KEY` on the Worker, and
+   prints the site key. The site key is public: set it as the
+   `TURNSTILE_SITE_KEY` variable of the GitHub `production` environment, then
+   re-run `static-site.yml` so the app picks it up.
+
+Check it: `curl -si -X OPTIONS -H 'Origin: https://bindersnap.com'
+https://feedback.bindersnap.com/` answers 204, then send one from the app and
+watch the issue appear.
 
 ## Trying it locally
 
