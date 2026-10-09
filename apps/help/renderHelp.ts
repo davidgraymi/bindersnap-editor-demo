@@ -77,7 +77,7 @@ function page(params: {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escape(params.title)}</title>
 <meta name="description" content="${escape(params.description)}">
-<link rel="canonical" href="${params.path}">
+<link rel="canonical" href="${SITE}${params.path}">
 ${
   params.markdown
     ? `<link rel="alternate" type="text/markdown" href="${params.markdown}">\n`
@@ -229,8 +229,6 @@ export function helpFiles(guides: readonly HelpGuide[]): Map<string, string> {
   const files = new Map<string, string>([
     ["/help", renderHelpIndex(guides)],
     ["/help/llms.txt", renderLlmsTxt(guides)],
-    // Where an agent looks first, whatever the site.
-    ["/llms.txt", renderLlmsTxt(guides)],
     ["/help/help.css", renderHelpCss()],
   ]);
   for (const guide of guides) {

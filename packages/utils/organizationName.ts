@@ -14,15 +14,34 @@
  * `/-/user_settings/profile` — the way GitLab keeps its own, and no
  * organization can be called `-`. So almost every name is an organization's
  * to take. What is left is what the app cannot move: the help pages and the
- * legal pages, which are separate sites at `/help` and `/legal`; `/auth/callback`, where Gitea's sign-in
- * sends people back; and the files every browser asks for at the root.
+ * legal pages, which are separate sites at `/help` and `/legal`; the public
+ * site's sections and files (`apps/site`: `/pricing`, `/templates`,
+ * `/sitemap.xml` and the rest); `/auth/callback`, where Gitea's sign-in sends
+ * people back; and the files every browser asks for at the root.
+ *
+ * Each section the public site adds takes another word from organizations.
+ * Issue #718 ends that by moving the app to app.bindersnap.com.
  */
 export const RESERVED_ORGANIZATION_NAMES: ReadonlySet<string> = new Set([
   "-",
   "auth",
   "help",
   "legal",
+  // The public site (apps/site). Organizations' names never start with `_`,
+  // so its stylesheet at `/_site` needs no entry.
+  "pricing",
+  "pricing.md",
+  "templates",
+  "requirements",
+  "for",
+  "compare",
+  "glossary",
+  "tools",
+  "blog",
   "llms.txt",
+  "llms-full.txt",
+  "robots.txt",
+  "sitemap.xml",
   "apple-touch-icon.png",
   "favicon.ico",
   "favicon.svg",

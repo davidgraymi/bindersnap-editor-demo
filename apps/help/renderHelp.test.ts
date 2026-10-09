@@ -109,12 +109,12 @@ describe("the help pages", () => {
     expect(md).toContain("## How many approvals\n\nA new binder needs no");
   });
 
-  test("llms.txt lists every guide, at the site root too", () => {
+  test("llms.txt lists every guide; the site's own is apps/site's", () => {
     const text = renderLlmsTxt(HELP_GUIDES);
     for (const guide of HELP_GUIDES) {
       expect(text).toContain(`](/help/${guide.slug}.md): ${guide.summary}`);
     }
-    expect(files.get("/llms.txt")).toBe(text);
+    expect(files.has("/llms.txt")).toBe(false);
     expect(files.get("/help/llms.txt")).toBe(text);
   });
 
