@@ -6,8 +6,10 @@ import { REQUIRED_POLICIES, SITUATIONS } from "./requiredPolicies";
 import {
   analyticsTag,
   extractFaqs,
+  pageSections,
   pageTitle,
   renderSitePage,
+  splitLede,
   wordCount,
 } from "./renderSite";
 import {
@@ -309,6 +311,48 @@ describe("the landing page", () => {
     expect((app.offers as { price?: string } | undefined)?.price).toBe(
       pricing.meta.price,
     );
+  });
+});
+
+describe("a page's layout", () => {
+  test("lifts the opening paragraph into the hero, unless it leads into a list", () => {
+    expect(
+      splitLede("<p>One <strong>two</strong>.</p>\n<h2>Next</h2>"),
+    ).toEqual({
+      lede: "One <strong>two</strong>.",
+      rest: "\n<h2>Next</h2>",
+    });
+    const intro = "<p>It applies to:</p><ul><li>a</li></ul>";
+    expect(splitLede(intro)).toEqual({ lede: "", rest: intro });
+    expect(splitLede("<h2>First</h2>")).toEqual({
+      lede: "",
+      rest: "<h2>First</h2>",
+    });
+  });
+
+  test("the hero says the page's section, and the lede is not said twice", () => {
+    const html = files.get("/pricing")!;
+    const hero = html.match(
+      /<div class="site-hero">([\s\S]*?)<div class="site-layout/,
+    )![1]!;
+    expect(hero).toContain('<p class="bs-eyebrow site-eyebrow">Pricing</p>');
+    expect(hero).toContain('<p class="site-lede"><strong>$39 a month');
+    expect(html.match(/<strong>\$39 a month for each person/g)).toHaveLength(1);
+  });
+
+  test("a long page lists its sections beside the text, and each one exists", () => {
+    const html = files.get("/pricing")!;
+    const rail = html.match(/<aside class="site-rail"[\s\S]*?<\/aside>/)![0];
+    const article = html.match(/<article[\s\S]*?<\/article>/)![0];
+    const sections = pageSections(article);
+    expect(sections.length).toBeGreaterThanOrEqual(3);
+    for (const { id } of sections) expect(rail).toContain(`href="#${id}"`);
+  });
+
+  test("every page ends on the landing page's closing card", () => {
+    for (const path of ["/pricing", "/templates", "/glossary/qapi"]) {
+      expect(files.get(path)).toContain('<section class="site-closing"');
+    }
   });
 });
 
