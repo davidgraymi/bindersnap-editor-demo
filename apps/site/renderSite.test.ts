@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { RESERVED_ORGANIZATION_NAMES } from "../../packages/utils/organizationName";
 import { publicSiteFiles } from "./publicSite";
+import { REQUIRED_POLICIES, SITUATIONS } from "./requiredPolicies";
 import {
   analyticsTag,
   extractFaqs,
@@ -329,5 +330,57 @@ describe("the Google tag", () => {
       new URL("../app/index.html", import.meta.url),
     ).text();
     expect(landing).not.toContain("googletagmanager");
+  });
+});
+
+describe("the required policies checklist", () => {
+  test("every row names a situation the reader can tick, and links to pages that exist", () => {
+    const keys = new Set(SITUATIONS.map((situation) => situation.key));
+    for (const policy of REQUIRED_POLICIES) {
+      expect(policy.when.length).toBeGreaterThan(0);
+      for (const key of policy.when) expect(keys.has(key)).toBe(true);
+      if (policy.help) {
+        expect({ help: policy.help, exists: known.has(policy.help) }).toEqual({
+          help: policy.help,
+          exists: true,
+        });
+      }
+      expect(policy.url).toStartWith("https://www.ecfr.gov/current/");
+    }
+    for (const key of keys) {
+      expect(
+        REQUIRED_POLICIES.some((policy) => policy.when.includes(key)),
+      ).toBe(true);
+    }
+  });
+
+  test("its page shows every row without a script, and its Markdown lists them", () => {
+    const html = files.get("/tools/required-policies-checklist")!;
+    expect(html.match(/<tr data-when=/g)?.length).toBe(
+      REQUIRED_POLICIES.length,
+    );
+    expect(html).toContain(
+      '<form id="rp-filter" class="site-tool-filter" hidden>',
+    );
+    const md = files.get("/tools/required-policies-checklist.md")!;
+    for (const policy of REQUIRED_POLICIES)
+      expect(md).toContain(`| ${policy.name} |`);
+  });
+});
+
+describe("the landing page's links into the public site", () => {
+  test("go to sections that exist", async () => {
+    const landing = await Bun.file(
+      new URL("../app/index.html", import.meta.url),
+    ).text();
+    const hrefs = [
+      ...landing.matchAll(
+        /href="(\/(?:for|templates|requirements|tools|compare|glossary|pricing)[^"]*)"/g,
+      ),
+    ].map((match) => match[1]!);
+    expect(hrefs.length).toBeGreaterThan(5);
+    for (const href of hrefs) {
+      expect({ href, exists: files.has(href) }).toEqual({ href, exists: true });
+    }
   });
 });

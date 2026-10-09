@@ -131,10 +131,12 @@ function shell(params: {
   const sections = navCollections(params.pages);
   const pricing = rootPage(params.pages, "pricing");
   const navLinks = [
-    ...sections.map((collection) => ({
-      href: siteHref(collection),
-      label: collection.label,
-    })),
+    ...sections
+      .filter((collection) => !collection.footerOnly)
+      .map((collection) => ({
+        href: siteHref(collection),
+        label: collection.label,
+      })),
     ...(pricing ? [{ href: pricing.path, label: "Pricing" }] : []),
     { href: "/help", label: "Help" },
   ];
@@ -504,7 +506,7 @@ ${
   page.collection.notice
     ? `<p class="site-notice">${escape(page.collection.notice)}</p>\n`
     : ""
-}${frameTemplate(renderLegalBody(page.body))}
+}${page.tool?.html ?? ""}${frameTemplate(renderLegalBody(page.body))}
 </article>
 ${facilityHtml(page, pages)}
 ${relatedHtml(page, pages, listed)}
@@ -580,7 +582,8 @@ export function renderPageMarkdown(page: SitePage): string {
   const notice = page.collection.notice
     ? `> ${page.collection.notice}\n\n`
     : "";
-  return `# ${page.title}\n\n${page.description}\n\nUpdated: ${page.updated}\nSource: ${SITE}${page.path}\n\n${notice}${page.body}\n`;
+  const tool = page.tool ? `${page.tool.markdown}\n\n` : "";
+  return `# ${page.title}\n\n${page.description}\n\nUpdated: ${page.updated}\nSource: ${SITE}${page.path}\n\n${notice}${tool}${page.body}\n`;
 }
 
 /** Another site's page this one lists: help guides, legal documents, the landing page. */
@@ -859,6 +862,21 @@ const SITE_CSS = `
   font-family: var(--brand-font-serif, "Lora", Georgia, serif);
   font-size: 20px;
 }
+.site-tool { margin: 0 0 32px; }
+.site-tool-filter fieldset {
+  border: 1px solid var(--bs-rule);
+  border-radius: 12px;
+  background: var(--bs-surface-1);
+  padding: 16px 18px;
+  margin: 0 0 8px;
+  display: grid;
+  gap: 8px;
+}
+.site-tool-filter legend { font-weight: 600; color: var(--bs-text-primary); padding: 0 6px; }
+.site-tool-filter label { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; }
+.site-tool-filter input { margin-top: 4px; accent-color: var(--brand-coral); }
+#rp-count { font-size: 14px; color: var(--bs-text-muted); margin: 8px 0 12px; }
+.site-tool td a { color: var(--bs-coral-text); }
 .site-updated {
   font-family: var(--brand-font-mono, "Geist Mono", monospace);
   font-size: 13px;

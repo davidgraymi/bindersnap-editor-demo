@@ -31,6 +31,8 @@ export interface SiteCollection {
   minWords: number;
   /** Shown above every page's body: what a reader must know before using it. */
   notice?: string;
+  /** Listed in the footer only, not the top navigation. */
+  footerOnly?: boolean;
 }
 
 /**
@@ -59,6 +61,16 @@ export const SITE_COLLECTIONS: readonly SiteCollection[] = [
     notice: GUIDANCE_NOTICE,
   },
   {
+    key: "templates",
+    prefix: "templates",
+    label: "Policy templates",
+    intro:
+      "Free policy and procedure templates for small healthcare providers, written from the federal rules they answer to, with the citations to check them against.",
+    minWords: 800,
+    notice:
+      "A starting point, not legal or clinical advice. Each template follows the federal rules cited on the page. Your state, your accreditor and your own services may require more, so have the people responsible for this policy review it before you adopt it.",
+  },
+  {
     key: "requirements",
     prefix: "requirements",
     label: "Requirements, answered",
@@ -68,11 +80,21 @@ export const SITE_COLLECTIONS: readonly SiteCollection[] = [
     notice: GUIDANCE_NOTICE,
   },
   {
+    key: "tools",
+    prefix: "tools",
+    label: "Free tools",
+    intro:
+      "Free tools for the person who keeps the policy manual, built on the federal rules and the citations behind them.",
+    minWords: 250,
+    notice: GUIDANCE_NOTICE,
+  },
+  {
     key: "compare",
     prefix: "compare",
     label: "Compare",
     intro:
       "How Bindersnap compares with other ways to manage healthcare policies, from enterprise policy software to a shared drive, including where the others do more.",
+    footerOnly: true,
     minWords: 500,
   },
   {
@@ -81,18 +103,9 @@ export const SITE_COLLECTIONS: readonly SiteCollection[] = [
     label: "Glossary",
     intro:
       "Plain definitions of the survey, accreditation and policy management terms small healthcare providers meet, with the rule each comes from.",
+    footerOnly: true,
     minWords: 200,
     notice: GUIDANCE_NOTICE,
-  },
-  {
-    key: "templates",
-    prefix: "templates",
-    label: "Policy templates",
-    intro:
-      "Free policy and procedure templates for small healthcare providers, written from the federal rules they answer to, with the citations to check them against.",
-    minWords: 800,
-    notice:
-      "A starting point, not legal or clinical advice. Each template follows the federal rules cited on the page. Your state, your accreditor and your own services may require more, so have the people responsible for this policy review it before you adopt it.",
   },
 ];
 
@@ -121,6 +134,12 @@ export interface SitePage {
   meta: Record<string, string>;
   /** The Markdown after the front matter. */
   body: string;
+  /**
+   * A page built from data rather than a Markdown file (a free tool) adds its
+   * own HTML above the body, and the same content as Markdown for its `.md`
+   * copy and the llms files.
+   */
+  tool?: { html: string; markdown: string };
 }
 
 const CONTENT_DIR = join(import.meta.dir, "content");

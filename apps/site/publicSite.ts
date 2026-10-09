@@ -3,7 +3,8 @@ import { helpHref, renderGuideMarkdown } from "../help/renderHelp";
 import { readLegalDocuments } from "../legal/legalDocuments";
 import { legalHref } from "../legal/renderLegal";
 import { siteFiles, type ListedPage } from "./renderSite";
-import { readSitePages } from "./siteContent";
+import { TOOLS } from "./requiredPolicies";
+import { readSitePages, type SitePage } from "./siteContent";
 
 /**
  * The whole public site, read fresh: the pages in `content/`, plus the help
@@ -35,7 +36,11 @@ export function publicSiteFiles(): Map<string, string> {
       ? document.version
       : undefined,
   }));
-  return siteFiles(readSitePages(), {
+  const pages: SitePage[] = readSitePages().map((page) => {
+    const tool = page.collection.key === "tools" ? TOOLS[page.slug] : undefined;
+    return tool ? { ...page, tool: tool() } : page;
+  });
+  return siteFiles(pages, {
     help,
     legal,
     helpMarkdown: HELP_GUIDES.map(renderGuideMarkdown),
