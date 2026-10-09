@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { buildSessionLifetime, serializeSessionCookie } from "./server";
 
@@ -45,5 +47,26 @@ describe("API session cookies", () => {
     expect(cookie).not.toContain("Max-Age=");
     expect(cookie).not.toContain("Expires=");
     expect(cookie).not.toContain("Domain=");
+  });
+
+  // A browser drops a `__Host-` cookie unless it is Secure, Path=/ and has no
+  // Domain, so production's name and domain have to move together.
+  test("production names a host-only __Host- cookie", () => {
+    const compose = readFileSync(
+      join(import.meta.dir, "../../deploy/files/docker-compose.prod.yml"),
+      "utf8",
+    );
+
+    expect(compose).toContain(
+      "- BINDERSNAP_SESSION_COOKIE_NAME=__Host-bindersnap_session",
+    );
+    expect(compose).toMatch(/- BINDERSNAP_SESSION_COOKIE_DOMAIN=\n/);
+
+    const cookie = serializeSessionCookie(
+      new Request("https://api.bindersnap.com/auth/login"),
+      "session-123",
+    );
+    expect(cookie).toContain("Path=/");
+    expect(cookie).toContain("Secure");
   });
 });

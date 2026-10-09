@@ -128,7 +128,15 @@ services:
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:?set in the generated env file}
       - STRIPE_PRICE_ID=${STRIPE_PRICE_ID:?set in the generated env file}
       - BINDERSNAP_REMEMBER_ME_SESSION_TTL_MS=${BINDERSNAP_REMEMBER_ME_SESSION_TTL_MS:-2592000000}
-      - BINDERSNAP_SESSION_COOKIE_DOMAIN=${BINDERSNAP_SESSION_COOKIE_DOMAIN:-.bindersnap.com}
+      # Host-only: the session cookie goes to api.bindersnap.com and nowhere
+      # else. The SPA calls the API with `credentials: "include"`, and
+      # bindersnap.com and api.bindersnap.com are the same site, so SameSite=Lax
+      # still sends it. With `Domain=.bindersnap.com` it also went to the static
+      # host and every other subdomain, and any of them could set a cookie that
+      # shadowed it. The `__Host-` prefix makes the browser enforce all of that:
+      # it refuses the cookie unless it is Secure, Path=/ and has no Domain.
+      - BINDERSNAP_SESSION_COOKIE_NAME=__Host-bindersnap_session
+      - BINDERSNAP_SESSION_COOKIE_DOMAIN=
       - BINDERSNAP_SESSION_COOKIE_SAME_SITE=${BINDERSNAP_SESSION_COOKIE_SAME_SITE:-Lax}
       - BINDERSNAP_USER_EMAIL_DOMAIN=${BINDERSNAP_USER_EMAIL_DOMAIN:-users.bindersnap.com}
       - BINDERSNAP_GITEA_TOKEN_SCOPES=${BINDERSNAP_GITEA_TOKEN_SCOPES:-write:user,write:repository,write:issue,write:organization}
