@@ -244,6 +244,10 @@ tf_run "secrets" "ec2_instance_role_name=${INSTANCE_ROLE}"
 SSM_PATH="$(tf_output secrets ssm_parameter_path)"
 SSM_PATH="${SSM_PATH:-/bindersnap/prod}"
 
+# Secrets are not Terraform's: put-secrets.sh writes the missing ones straight
+# to SSM (generated, or prompted for). It changes nothing that is already set.
+"${SCRIPT_DIR}/secrets/put-secrets.sh"
+
 if needs_service_token_bootstrap "${SSM_PATH}"; then
   bootstrap_service_token_via_ssm "${INSTANCE_ID}"
 else
