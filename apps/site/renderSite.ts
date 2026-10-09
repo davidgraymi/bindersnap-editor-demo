@@ -1,5 +1,15 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { renderHelpCss } from "../help/renderHelp";
 import { renderLegalBody } from "../legal/renderLegal";
+import {
+  linkCard,
+  pageHero,
+  siteFooter,
+  siteHeader,
+  type Crumb,
+} from "./chrome";
 import {
   SITE_COLLECTIONS,
   siteHref,
@@ -44,8 +54,6 @@ const jsonLd = (value: unknown) =>
     /</g,
     "\\u003c",
   )}</script>`;
-
-const LOGO_MARK = `<svg viewBox="0 0 18 18" fill="none" aria-hidden="true" width="18" height="18"><rect x="2" y="1" width="9" height="13" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="6" y="4" width="9" height="13" rx="1.5" stroke="currentColor" stroke-width="1.5"/></svg>`;
 
 const THEME_SCRIPT = `(function(){try{var s=localStorage.getItem("bs-theme");var d=window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.setAttribute("data-theme",s||(d?"dark":"light"));}catch(e){}})();`;
 
@@ -97,24 +105,13 @@ export function pageTitle(title: string): string {
   return /bindersnap/i.test(title) ? title : `${title} | Bindersnap`;
 }
 
-/** The sections a page's navigation offers: every collection with an index. */
+/** Every collection with an index page. */
 function navCollections(pages: readonly SitePage[]): SiteCollection[] {
   return SITE_COLLECTIONS.filter(
     (collection) =>
       collection.prefix !== "" &&
       pages.some((page) => page.collection.key === collection.key),
   );
-}
-
-function rootPage(pages: readonly SitePage[], slug: string) {
-  return pages.find(
-    (page) => page.collection.prefix === "" && page.slug === slug,
-  );
-}
-
-interface Crumb {
-  name: string;
-  path: string;
 }
 
 function shell(params: {
@@ -125,43 +122,13 @@ function shell(params: {
   crumbs: Crumb[];
   structuredData: object[];
   pages: readonly SitePage[];
+  /** The band under the bar: an eyebrow, the heading, and what to expect. */
+  hero: { eyebrow: string; title: string; lede?: string; meta?: string };
   body: string;
+  /** Beside the body on a wide screen: where the page goes, and the trial. */
+  rail?: string;
   measurementId?: string;
 }): string {
-  const sections = navCollections(params.pages);
-  const pricing = rootPage(params.pages, "pricing");
-  const navLinks = [
-    ...sections
-      .filter((collection) => !collection.footerOnly)
-      .map((collection) => ({
-        href: siteHref(collection),
-        label: collection.label,
-      })),
-    ...(pricing ? [{ href: pricing.path, label: "Pricing" }] : []),
-    { href: "/help", label: "Help" },
-  ];
-  const nav = navLinks
-    .map(
-      (link) =>
-        `<a href="${link.href}"${
-          params.path === link.href || params.path.startsWith(`${link.href}/`)
-            ? ' aria-current="page"'
-            : ""
-        }>${escape(link.label)}</a>`,
-    )
-    .join("");
-
-  const crumbs =
-    params.crumbs.length > 1
-      ? `<nav class="site-crumbs" aria-label="Breadcrumb"><ol>${params.crumbs
-          .map((crumb, index) =>
-            index === params.crumbs.length - 1
-              ? `<li aria-current="page">${escape(crumb.name)}</li>`
-              : `<li><a href="${crumb.path}">${escape(crumb.name)}</a></li>`,
-          )
-          .join("")}</ol></nav>`
-      : "";
-
   const graph = [
     ORGANIZATION_LD,
     ...(params.crumbs.length > 1
@@ -179,49 +146,6 @@ function shell(params: {
       : []),
     ...params.structuredData,
   ];
-
-  const footerColumns = [
-    {
-      heading: "Product",
-      links: [
-        { href: "/", label: "Bindersnap" },
-        ...(pricing ? [{ href: pricing.path, label: "Pricing" }] : []),
-        { href: "/help", label: "Help and guides" },
-        { href: "/-/signup", label: "Create an account" },
-      ],
-    },
-    ...(sections.length
-      ? [
-          {
-            heading: "Resources",
-            links: sections.map((collection) => ({
-              href: siteHref(collection),
-              label: collection.label,
-            })),
-          },
-        ]
-      : []),
-    {
-      heading: "Legal",
-      links: [
-        { href: "/legal/terms", label: "Terms" },
-        { href: "/legal/privacy", label: "Privacy" },
-        { href: "/legal/security", label: "Security" },
-        { href: "/legal/subprocessors", label: "Subprocessors" },
-      ],
-    },
-  ];
-  const footer = footerColumns
-    .map(
-      (column) =>
-        `<div><h2>${escape(column.heading)}</h2><ul>${column.links
-          .map(
-            (link) =>
-              `<li><a href="${link.href}">${escape(link.label)}</a></li>`,
-          )
-          .join("")}</ul></div>`,
-    )
-    .join("");
 
   return `<!doctype html>
 <html lang="en" data-theme="light">
@@ -258,22 +182,18 @@ ${analyticsTag(params.measurementId ?? process.env.BINDERSNAP_GA_MEASUREMENT_ID)
 </head>
 <body>
 <a class="help-skip" href="#content">Skip to the page</a>
-<header class="help-bar site-bar">
-  <a class="help-brand" href="/">${LOGO_MARK}<span>Bindersnap</span></a>
-  <nav class="site-nav" aria-label="Site">${nav}</nav>
-  <div class="site-bar-actions">
-    <a class="site-signin" href="/-/login">Sign in</a>
-    <a class="help-open site-start" href="/-/signup">Start free trial</a>
-  </div>
-</header>
+${siteHeader(params.path)}
 <main id="content" class="site-main">
-${crumbs}
+${pageHero({ ...params.hero, crumbs: params.crumbs })}
+<div class="site-layout${params.rail ? " site-layout-rail" : ""}">
+<div class="site-content">
 ${params.body}
+</div>
+${params.rail ? `<aside class="site-rail" aria-label="On this page">${params.rail}</aside>` : ""}
+</div>
+${CTA}
 </main>
-<footer class="site-footer">
-  <div class="site-footer-inner">${footer}</div>
-  <p class="site-footer-note">© 2026 Solid Gray LLC · Bindersnap is for policies and procedures, never patient records.</p>
-</footer>
+${siteFooter()}
 </body>
 </html>
 `;
@@ -326,12 +246,50 @@ export function wordCount(markdown: string): number {
     .filter(Boolean).length;
 }
 
-/** The call to action at the foot of every page. */
-const CTA = `<aside class="site-cta">
-<h2>Keep the approval record with the policy</h2>
+/**
+ * The call to action at the foot of every page: the landing page's closing
+ * card, so a page read from a search result ends where the landing page does.
+ */
+const CTA = `<section class="site-closing" aria-labelledby="site-closing-heading">
+<div class="site-closing-card">
+<p class="site-closing-tag">Get started</p>
+<h2 id="site-closing-heading">Keep the approval record <em>with the policy.</em></h2>
 <p>Bindersnap keeps every policy's current version, every earlier one, and who approved each — ready when the surveyor asks.</p>
-<a class="site-cta-button" href="/-/signup">Start your 14-day free trial</a>
-</aside>`;
+<a class="site-closing-button" href="/-/signup">Start your 14-day free trial</a>
+<p class="site-closing-hint">No card required · Reviewers and readers are free</p>
+</div>
+</section>`;
+
+/** A page's second-level headings, for the rail's "On this page". */
+export function pageSections(html: string): { id: string; title: string }[] {
+  return [...html.matchAll(/<h2 id="([^"]+)">([\s\S]*?)<\/h2>/g)].map(
+    (match) => ({ id: match[1]!, title: match[2]!.replace(/<[^>]+>/g, "") }),
+  );
+}
+
+function railHtml(
+  sections: { id: string; title: string }[],
+): string | undefined {
+  if (sections.length < 3) return undefined;
+  return `<nav class="site-toc" aria-label="On this page"><p class="site-rail-label">On this page</p><ol>${sections
+    .map((section) => `<li><a href="#${section.id}">${section.title}</a></li>`)
+    .join("")}</ol></nav>
+<div class="site-rail-card">
+<p>Every version of every policy, and who approved each.</p>
+<a href="/-/signup">Try Bindersnap free</a>
+</div>`;
+}
+
+/**
+ * The body's opening paragraph, lifted into the hero as the page's lede, and
+ * the body without it. A body that opens with anything else keeps it, and so
+ * does one whose first paragraph ends in a colon: it introduces what follows.
+ */
+export function splitLede(html: string): { lede: string; rest: string } {
+  const match = html.match(/^\s*<p>([\s\S]*?)<\/p>/);
+  if (!match || /:\s*$/.test(match[1]!)) return { lede: "", rest: html };
+  return { lede: match[1]!, rest: html.slice(match[0].length) };
+}
 
 /**
  * On a provider's page (`/for/{slug}`), every other page written for that
@@ -359,13 +317,8 @@ function facilityHtml(page: SitePage, pages: readonly SitePage[]): string {
       (group) =>
         `<section class="site-facility"><h2>${escape(group.collection.label)} for ${escape(
           (page.meta.crumb ?? page.title).toLowerCase(),
-        )}</h2><ul class="help-cards">${group.pages
-          .map(
-            (entry) =>
-              `<li><a href="${entry.path}"><span class="help-card-title">${escape(
-                entry.title,
-              )}</span><span class="help-card-summary">${escape(entry.description)}</span></a></li>`,
-          )
+        )}</h2><ul class="site-cards">${group.pages
+          .map((entry) => linkCard(entry))
           .join("")}</ul></section>`,
     )
     .join("");
@@ -384,13 +337,8 @@ function relatedHtml(
     )
     .filter((entry): entry is ListedPage => entry !== undefined);
   if (!items.length) return "";
-  return `<nav class="site-related" aria-label="Related"><h2>Related</h2><ul class="help-cards">${items
-    .map(
-      (entry) =>
-        `<li><a href="${entry.path}"><span class="help-card-title">${escape(
-          entry.title,
-        )}</span><span class="help-card-summary">${escape(entry.description)}</span></a></li>`,
-    )
+  return `<nav class="site-related" aria-label="Related"><h2>Related</h2><ul class="site-cards">${items
+    .map((entry) => linkCard(entry))
     .join("")}</ul></nav>`;
 }
 
@@ -495,6 +443,19 @@ export function renderSitePage(
     });
   }
 
+  const body = frameTemplate(
+    renderLegalBody(page.body),
+    page.collection.key === "templates" ? page : undefined,
+  );
+  // A tool's own part comes first and its prose explains it after, so its
+  // hero says what it is in the page's description instead.
+  const { lede, rest } = page.tool
+    ? { lede: escape(page.description), rest: body }
+    : splitLede(body);
+  const eyebrow = page.collection.prefix
+    ? page.collection.label
+    : (page.meta.crumb ?? page.title);
+
   return shell({
     title: pageTitle(page.title),
     description: page.description,
@@ -503,23 +464,24 @@ export function renderSitePage(
     crumbs,
     structuredData,
     pages,
+    hero: {
+      eyebrow,
+      title: page.title,
+      lede,
+      meta: `Updated <time datetime="${page.updated}">${escape(
+        formatDate(page.updated),
+      )}</time>`,
+    },
     body: `<article class="site-article">
-<h1>${escape(page.title)}</h1>
-<p class="site-updated">Updated <time datetime="${page.updated}">${escape(
-      formatDate(page.updated),
-    )}</time></p>
 ${
   page.collection.notice
     ? `<p class="site-notice">${escape(page.collection.notice)}</p>\n`
     : ""
-}${page.tool?.html ?? ""}${frameTemplate(
-      renderLegalBody(page.body),
-      page.collection.key === "templates" ? page : undefined,
-    )}
+}${page.tool?.html ?? ""}${rest}
 </article>
 ${facilityHtml(page, pages)}
-${relatedHtml(page, pages, listed)}
-${CTA}`,
+${relatedHtml(page, pages, listed)}`,
+    rail: railHtml(pageSections(rest)),
   });
 }
 
@@ -553,17 +515,12 @@ export function renderCollectionIndex(
       },
     ],
     pages,
-    body: `<h1>${escape(collection.label)}</h1>
-<p class="help-lede">${escape(collection.intro)}</p>
-<ul class="help-cards site-index">${entries
-      .map(
-        (page) =>
-          `<li><a href="${page.path}"><span class="help-card-title">${escape(
-            page.title,
-          )}</span><span class="help-card-summary">${escape(page.description)}</span></a></li>`,
-      )
-      .join("")}</ul>
-${CTA}`,
+    hero: {
+      eyebrow: "Free resources",
+      title: collection.label,
+      lede: escape(collection.intro),
+    },
+    body: `<ul class="site-cards site-index">${entries.map(linkCard).join("")}</ul>`,
   });
 }
 
@@ -716,7 +673,10 @@ export function siteFiles(
   },
 ): Map<string, string> {
   const files = new Map<string, string>([
-    [SITE_CSS_PATH, `${renderHelpCss()}\n${SITE_CSS}`],
+    [
+      SITE_CSS_PATH,
+      `${renderHelpCss()}\n${readFileSync(join(import.meta.dir, "site.css"), "utf8")}`,
+    ],
     ["/robots.txt", renderRobotsTxt()],
     ["/llms.txt", renderLlmsTxt(pages, others)],
     ["/llms-full.txt", renderLlmsFullTxt(pages, others.helpMarkdown)],
@@ -769,190 +729,3 @@ export function siteContentType(path: string): string {
   if (path.endsWith(".xml")) return "application/xml; charset=utf-8";
   return "text/html; charset=utf-8";
 }
-
-const SITE_CSS = `
-.site-bar { flex-wrap: wrap; }
-.site-nav { display: flex; gap: 4px; flex-wrap: wrap; flex: 1; justify-content: center; }
-.site-nav a {
-  font-size: 14px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  text-decoration: none;
-  color: var(--bs-text-secondary);
-}
-.site-nav a:hover, .site-nav a[aria-current="page"] {
-  background: var(--bs-surface-2);
-  color: var(--bs-text-primary);
-}
-.site-bar-actions { display: flex; align-items: center; gap: 12px; }
-.site-signin { font-size: 14px; text-decoration: none; color: var(--bs-text-secondary); }
-.site-start { background: var(--brand-coral); border-color: var(--brand-coral); color: #fff; }
-.site-start:hover { background: var(--brand-coral); filter: brightness(0.95); }
-.site-main { max-width: 760px; margin: 0 auto; padding: 32px 24px 64px; }
-.site-main h1 {
-  font-family: var(--brand-font-serif, "Lora", Georgia, serif);
-  font-weight: 600;
-  font-size: 36px;
-  line-height: 1.15;
-  color: var(--bs-text-primary);
-  margin: 0 0 8px;
-}
-.site-main h2 {
-  font-family: var(--brand-font-serif, "Lora", Georgia, serif);
-  font-weight: 600;
-  font-size: 22px;
-  line-height: 1.3;
-  color: var(--bs-text-primary);
-  margin: 40px 0 10px;
-  scroll-margin-top: 16px;
-}
-.site-main h3 {
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--bs-text-primary);
-  margin: 24px 0 6px;
-  scroll-margin-top: 16px;
-}
-.site-main p, .site-main ul, .site-main ol { margin: 0 0 14px; }
-.site-main ul, .site-main ol { padding-left: 1.4em; }
-.site-main li { margin: 6px 0; }
-.site-main strong { color: var(--bs-text-primary); font-weight: 600; }
-.site-article a { color: var(--bs-coral-text); }
-.site-main blockquote {
-  margin: 0 0 14px;
-  padding: 10px 16px;
-  border-left: 3px solid var(--bs-rule-warm);
-  background: var(--bs-surface-2);
-  border-radius: 0 8px 8px 0;
-}
-.site-main blockquote p { margin: 0; }
-.site-main table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 8px 0 20px;
-  font-size: 15px;
-  display: block;
-  overflow-x: auto;
-}
-.site-main th, .site-main td {
-  text-align: left;
-  vertical-align: top;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--bs-rule);
-}
-.site-main th { color: var(--bs-text-primary); font-weight: 600; background: var(--bs-surface-2); }
-.site-main pre {
-  white-space: pre-wrap;
-  background: var(--bs-surface-2);
-  border: 1px solid var(--bs-rule);
-  border-radius: 10px;
-  padding: 14px 16px;
-  font-size: 14px;
-}
-.site-notice {
-  margin: 0 0 24px;
-  padding: 12px 16px;
-  border: 1px solid var(--bs-status-warn-border);
-  border-radius: 10px;
-  background: var(--bs-status-warn-bg);
-  color: var(--bs-status-warn-fg);
-  font-size: 15px;
-}
-.site-download {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 14px;
-  margin: 8px 0 14px;
-  font-size: 14px;
-  color: var(--bs-text-muted);
-}
-.site-download-button {
-  display: inline-block;
-  padding: 8px 14px;
-  border: 1px solid var(--bs-rule);
-  border-radius: 8px;
-  background: var(--bs-surface-1);
-  color: var(--bs-text-primary) !important;
-  font-weight: 600;
-  text-decoration: none;
-}
-.site-download-button:hover { border-color: var(--brand-coral); }
-.site-template {
-  margin: 12px 0 8px;
-  padding: 28px 32px;
-  border: 1px solid var(--bs-rule);
-  border-radius: 12px;
-  background: var(--bs-surface-1);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-}
-.site-template h3:first-child {
-  margin-top: 0;
-  font-family: var(--brand-font-serif, "Lora", Georgia, serif);
-  font-size: 20px;
-}
-.site-tool { margin: 0 0 32px; }
-.site-tool-filter fieldset {
-  border: 1px solid var(--bs-rule);
-  border-radius: 12px;
-  background: var(--bs-surface-1);
-  padding: 16px 18px;
-  margin: 0 0 8px;
-  display: grid;
-  gap: 8px;
-}
-.site-tool-filter legend { font-weight: 600; color: var(--bs-text-primary); padding: 0 6px; }
-.site-tool-filter label { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; }
-.site-tool-filter input { margin-top: 4px; accent-color: var(--brand-coral); }
-#rp-count { font-size: 14px; color: var(--bs-text-muted); margin: 8px 0 12px; }
-.site-tool td a { color: var(--bs-coral-text); }
-.site-updated {
-  font-family: var(--brand-font-mono, "Geist Mono", monospace);
-  font-size: 13px;
-  color: var(--bs-text-muted);
-  margin: 0 0 24px;
-}
-.site-crumbs ol { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0 0 20px; font-size: 14px; color: var(--bs-text-muted); }
-.site-crumbs li + li::before { content: "/"; margin-right: 6px; }
-.site-crumbs a { color: var(--bs-text-muted); }
-.site-related, .site-facility { margin-top: 48px; }
-.site-facility .help-cards, .site-cta {
-  margin: 48px 0 0;
-  padding: 24px;
-  border: 1px solid var(--bs-rule);
-  border-radius: 14px;
-  background: var(--bs-surface-1);
-}
-.site-cta h2 { margin-top: 0; }
-.site-cta-button {
-  display: inline-block;
-  margin-top: 4px;
-  padding: 10px 18px;
-  border-radius: 8px;
-  background: var(--brand-coral);
-  color: #fff;
-  font-weight: 600;
-  text-decoration: none;
-}
-.site-footer { border-top: 1px solid var(--bs-rule); padding: 40px 24px; }
-.site-footer-inner {
-  max-width: 1080px;
-  margin: 0 auto;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 24px;
-}
-.site-footer h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--bs-text-muted); margin: 0 0 8px; }
-.site-footer ul { list-style: none; padding: 0; margin: 0; font-size: 14px; }
-.site-footer li { margin: 4px 0; }
-.site-footer a { text-decoration: none; color: var(--bs-text-secondary); }
-.site-footer a:hover { color: var(--bs-text-primary); }
-.site-footer-note { max-width: 1080px; margin: 24px auto 0; font-size: 13px; color: var(--bs-text-muted); }
-@media (max-width: 760px) {
-  .site-nav { order: 3; flex-basis: 100%; justify-content: flex-start; }
-  .site-signin { display: none; }
-  .site-main { padding: 24px 16px 56px; }
-  .site-main h1 { font-size: 28px; }
-  .site-template { padding: 18px 16px; }
-}
-`;

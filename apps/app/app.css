@@ -4025,6 +4025,7 @@ a.bs-knot {
   justify-content: center;
   gap: var(--brand-space-3);
   margin-bottom: var(--brand-space-6);
+  text-decoration: none;
 }
 
 .app-login-logo-mark {
@@ -4033,8 +4034,9 @@ a.bs-knot {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--brand-coral);
-  background: var(--bs-coral-dim);
+  /* The public site's mark: ink tile, paper glyph (apps/site/chrome.css). */
+  color: var(--bs-page-bg);
+  background: var(--bs-text-primary);
   border-radius: var(--brand-radius-md);
   flex: 0 0 auto;
 }

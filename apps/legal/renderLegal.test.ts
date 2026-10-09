@@ -23,7 +23,11 @@ const atSiteRoot = (href: string) =>
   existsSync(join(import.meta.dir, "../app/public", href.slice(1)));
 
 function localLinks(html: string): string[] {
-  return [...html.matchAll(/href="(\/[^"#]*)"/g)].map((match) => match[1]!);
+  // The shared bar and footer are checked in apps/site/chrome.test.ts.
+  const own = html
+    .replace(/<header class="site-header">[\s\S]*?<\/header>/, "")
+    .replace(/<footer class="site-footer">[\s\S]*?<\/footer>/, "");
+  return [...own.matchAll(/href="(\/[^"#]*)"/g)].map((match) => match[1]!);
 }
 
 describe("the legal pages", () => {

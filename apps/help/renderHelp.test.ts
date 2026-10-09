@@ -19,7 +19,11 @@ const atSiteRoot = (href: string) =>
 
 /** Every `href` on a page that stays on this site. */
 function localLinks(html: string): string[] {
-  return [...html.matchAll(/href="(\/[^"#]*)"/g)].map((match) => match[1]!);
+  // The shared bar and footer are checked in apps/site/chrome.test.ts.
+  const own = html
+    .replace(/<header class="site-header">[\s\S]*?<\/header>/, "")
+    .replace(/<footer class="site-footer">[\s\S]*?<\/footer>/, "");
+  return [...own.matchAll(/href="(\/[^"#]*)"/g)].map((match) => match[1]!);
 }
 
 describe("the help pages", () => {

@@ -1,0 +1,435 @@
+/*
+ * The marketing pages: pricing, who it's for, templates, requirements, tools,
+ * comparisons and the glossary. Rendered by `apps/site/renderSite.ts`, after
+ * the tokens, `chrome.css` and help's stylesheet.
+ *
+ * A page is the landing page's shape in miniature: the hero band from
+ * `chrome.css`, the reading column with an "On this page" rail beside it, and
+ * the landing page's closing card at the foot.
+ */
+
+/* ── Reading column and rail ─────────── */
+
+/* content-box: the padding sits outside the 1200px, so the body's left edge
+   lines up with the hero's. */
+.site-layout {
+  box-sizing: content-box;
+  max-width: var(--brand-max-width);
+  margin: 0 auto;
+  padding: var(--brand-space-12) var(--brand-page-padding-x)
+    var(--brand-space-16);
+}
+
+.site-layout-rail {
+  display: grid;
+  grid-template-columns: minmax(0, var(--brand-max-width-text)) 260px;
+  justify-content: space-between;
+  gap: var(--brand-space-16);
+}
+
+.site-content {
+  min-width: 0;
+}
+
+/* A page you read keeps to a reading measure; an index uses the width. */
+.site-content:has(> .site-article) {
+  max-width: var(--brand-max-width-text);
+}
+
+.site-rail {
+  position: sticky;
+  top: calc(var(--brand-nav-height) + var(--brand-space-8));
+  align-self: start;
+  display: grid;
+  gap: var(--brand-space-6);
+}
+
+.site-rail-label {
+  margin: 0 0 var(--brand-space-3);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-label);
+  letter-spacing: var(--brand-tracking-wide);
+  text-transform: uppercase;
+  color: var(--bs-text-muted);
+}
+
+.site-toc ol {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 var(--brand-space-4);
+  border-left: 1px solid var(--bs-rule);
+  display: grid;
+  gap: var(--brand-space-2);
+  font-size: var(--brand-text-sm);
+  line-height: var(--brand-leading-normal);
+}
+
+.site-toc a {
+  color: var(--bs-text-secondary);
+  text-decoration: none;
+}
+
+.site-toc a:hover {
+  color: var(--bs-coral-text);
+}
+
+.site-rail-card {
+  padding: var(--brand-space-5);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  font-size: var(--brand-text-sm);
+}
+
+.site-rail-card p {
+  margin: 0 0 var(--brand-space-3);
+  color: var(--bs-text-secondary);
+}
+
+.site-rail-card a {
+  font-weight: var(--brand-weight-semibold);
+  color: var(--bs-coral-text);
+  text-decoration: none;
+}
+
+.site-rail-card a::after {
+  content: " →";
+}
+
+.site-rail-card a:hover {
+  text-decoration: underline;
+}
+
+/* ── Prose ───────────────────────────── */
+
+.site-content h2 {
+  margin: var(--brand-space-12) 0 var(--brand-space-3);
+  font-family: var(--brand-font-serif);
+  font-size: 1.625rem;
+  font-weight: var(--brand-weight-semibold);
+  line-height: var(--brand-leading-snug);
+  letter-spacing: var(--brand-tracking-snug);
+  color: var(--bs-text-primary);
+  scroll-margin-top: calc(var(--brand-nav-height) + var(--brand-space-4));
+}
+
+.site-article > :first-child,
+.site-content > :first-child {
+  margin-top: 0;
+}
+
+.site-content h3 {
+  margin: var(--brand-space-8) 0 var(--brand-space-2);
+  font-size: 1.0625rem;
+  font-weight: var(--brand-weight-semibold);
+  color: var(--bs-text-primary);
+  scroll-margin-top: calc(var(--brand-nav-height) + var(--brand-space-4));
+}
+
+.site-content p,
+.site-content ul,
+.site-content ol {
+  margin: 0 0 var(--brand-space-4);
+}
+
+.site-article ul,
+.site-article ol {
+  padding-left: 1.4em;
+}
+
+.site-content li {
+  margin: var(--brand-space-1-5) 0;
+}
+
+.site-content strong {
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.site-article a {
+  color: var(--bs-coral-text);
+}
+
+.site-content blockquote {
+  margin: 0 0 var(--brand-space-4);
+  padding: var(--brand-space-2-5) var(--brand-space-4);
+  border-left: 3px solid var(--bs-rule-warm);
+  border-radius: 0 var(--brand-radius-md) var(--brand-radius-md) 0;
+  background: var(--bs-surface-2);
+}
+
+.site-content blockquote p {
+  margin: 0;
+}
+
+.site-content table {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  margin: var(--brand-space-2) 0 var(--brand-space-5);
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+
+.site-content th,
+.site-content td {
+  padding: var(--brand-space-2) var(--brand-space-2-5);
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--bs-rule);
+}
+
+.site-content th {
+  font-weight: var(--brand-weight-semibold);
+  color: var(--bs-text-primary);
+  background: var(--bs-surface-2);
+}
+
+.site-content pre {
+  white-space: pre-wrap;
+  padding: var(--brand-space-3) var(--brand-space-4);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-2);
+  font-size: var(--brand-text-sm);
+}
+
+.site-notice {
+  margin: 0 0 var(--brand-space-8);
+  padding: var(--brand-space-3) var(--brand-space-4);
+  border: 1px solid var(--bs-status-warn-border);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-status-warn-bg);
+  color: var(--bs-status-warn-fg);
+  font-size: 0.9375rem;
+}
+
+/* ── Template sheet and download ─────── */
+
+.site-download {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--brand-space-2) var(--brand-space-3);
+  margin: var(--brand-space-2) 0 var(--brand-space-4);
+  font-size: var(--brand-text-sm);
+  color: var(--bs-text-muted);
+}
+
+.site-article .site-download-button {
+  display: inline-block;
+  padding: var(--brand-space-2) var(--brand-space-4);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-1);
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-semibold);
+  text-decoration: none;
+}
+
+.site-download-button:hover {
+  border-color: var(--brand-coral);
+}
+
+.site-template {
+  margin: var(--brand-space-3) 0 var(--brand-space-2);
+  padding: var(--brand-space-8);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  box-shadow: var(--bs-shadow-sm);
+}
+
+.site-template h3:first-child {
+  margin-top: 0;
+  font-family: var(--brand-font-serif);
+  font-size: 1.25rem;
+}
+
+/* ── The free tool ───────────────────── */
+
+.site-tool {
+  margin: 0 0 var(--brand-space-8);
+}
+
+.site-tool-filter fieldset {
+  display: grid;
+  gap: var(--brand-space-2);
+  margin: 0 0 var(--brand-space-2);
+  padding: var(--brand-space-4) var(--brand-space-5);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+}
+
+.site-tool-filter legend {
+  padding: 0 var(--brand-space-1-5);
+  font-weight: var(--brand-weight-semibold);
+  color: var(--bs-text-primary);
+}
+
+.site-tool-filter label {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--brand-space-2-5);
+  font-size: 0.9375rem;
+}
+
+.site-tool-filter input {
+  margin-top: var(--brand-space-1);
+  accent-color: var(--brand-coral);
+}
+
+#rp-count {
+  margin: var(--brand-space-2) 0 var(--brand-space-3);
+  font-size: var(--brand-text-sm);
+  color: var(--bs-text-muted);
+}
+
+.site-tool td a {
+  color: var(--bs-coral-text);
+}
+
+/* ── Closing card: the landing page's ── */
+
+.site-closing {
+  padding: var(--brand-space-20) var(--brand-page-padding-x);
+  border-top: 1px solid var(--bs-rule);
+  background: var(--bs-surface-2);
+}
+
+.site-closing-card {
+  position: relative;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: var(--brand-space-16) var(--brand-space-12);
+  overflow: hidden;
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-2xl);
+  background: var(--bs-surface-1);
+  box-shadow: var(--bs-shadow-lg);
+  text-align: center;
+}
+
+.site-closing-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(
+    to right,
+    var(--brand-coral),
+    var(--brand-amber-accent)
+  );
+}
+
+.site-closing-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  margin: 0 0 var(--brand-space-5);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-xs);
+  font-weight: var(--brand-weight-medium);
+  letter-spacing: var(--brand-tracking-wider);
+  text-transform: uppercase;
+  color: var(--brand-coral);
+}
+
+.site-closing-tag::before,
+.site-closing-tag::after {
+  content: "";
+  width: 20px;
+  height: 1px;
+  background: var(--brand-coral);
+  opacity: 0.4;
+}
+
+.site-closing-card h2 {
+  margin: 0 0 var(--brand-space-4);
+  font-family: var(--brand-font-serif);
+  font-size: clamp(1.75rem, 3.2vw, 2.5rem);
+  font-weight: var(--brand-weight-bold);
+  line-height: var(--brand-leading-tight);
+  letter-spacing: var(--brand-tracking-snug);
+  color: var(--bs-text-primary);
+}
+
+.site-closing-card h2 em {
+  font-style: italic;
+  color: var(--brand-coral);
+}
+
+.site-closing-card > p:not(.site-closing-tag):not(.site-closing-hint) {
+  max-width: 460px;
+  margin: 0 auto var(--brand-space-8);
+  font-weight: var(--brand-weight-light);
+  line-height: var(--brand-leading-relaxed);
+  color: var(--bs-text-muted);
+}
+
+/* Ink on coral: white on coral fails contrast (AGENTS.md). */
+.site-closing-button {
+  display: inline-block;
+  padding: var(--brand-space-3) var(--brand-space-6);
+  border-radius: var(--brand-radius-md);
+  background: var(--brand-coral);
+  color: var(--brand-on-coral);
+  font-weight: var(--brand-weight-semibold);
+  text-decoration: none;
+  box-shadow: var(--brand-shadow-coral);
+  transition:
+    background var(--brand-transition-base),
+    transform var(--brand-transition-fast);
+}
+
+.site-closing-button:hover,
+.site-closing-button:focus-visible {
+  background: var(--brand-coral-dark);
+  color: var(--brand-on-brand);
+  transform: translateY(-1px);
+}
+
+.site-closing-hint {
+  margin: var(--brand-space-4) 0 0;
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-label);
+  color: var(--bs-text-muted);
+}
+
+/* ── Narrow screens ──────────────────── */
+
+@media (max-width: 1024px) {
+  .site-layout-rail {
+    display: block;
+  }
+  .site-rail {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .site-layout,
+  .site-closing {
+    padding-left: var(--brand-page-padding-x-sm);
+    padding-right: var(--brand-page-padding-x-sm);
+  }
+}
+
+@media (max-width: 680px) {
+  .site-layout {
+    padding-top: var(--brand-space-8);
+  }
+  .site-template {
+    padding: var(--brand-space-5) var(--brand-space-4);
+  }
+  .site-closing {
+    padding-top: var(--brand-space-12);
+    padding-bottom: var(--brand-space-12);
+  }
+  .site-closing-card {
+    padding: var(--brand-space-12) var(--brand-space-6);
+  }
+}

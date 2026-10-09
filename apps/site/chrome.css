@@ -1,0 +1,445 @@
+/*
+ * The bar and footer every public page wears — the landing page, the
+ * marketing pages, help and legal — and the hero band and link cards the
+ * marketing pages, help and legal share. Markup comes from `apps/site/chrome.ts`
+ * (copied into `apps/app/index.html` for the landing page).
+ * Requires bindersnap-tokens.css first.
+ */
+
+/* ── Bar ─────────────────────────────── */
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: var(--brand-z-nav);
+  min-height: var(--brand-nav-height);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--brand-page-padding-x);
+  background: var(--bs-nav-bg);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border-bottom: 1px solid var(--bs-rule);
+}
+
+.site-header-inner {
+  width: 100%;
+  max-width: var(--brand-max-width);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--brand-space-4);
+}
+
+.site-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.site-logo-mark {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-text-primary);
+  color: var(--bs-page-bg);
+}
+
+.site-logo-name {
+  font-family: var(--brand-font-serif);
+  font-size: 18px;
+  font-weight: var(--brand-weight-semibold);
+  letter-spacing: -0.01em;
+  color: var(--bs-text-primary);
+}
+
+.site-header-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+}
+
+.site-header-link {
+  position: relative;
+  padding: 9px 14px;
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-sm);
+  letter-spacing: var(--brand-tracking-wide);
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-decoration: none;
+  color: var(--bs-text-secondary);
+  transition: color var(--brand-transition-base);
+}
+
+.site-header-link:hover,
+.site-header-link:focus-visible,
+.site-header-link[aria-current="page"] {
+  color: var(--bs-text-primary);
+}
+
+/* The section you are in: a coral rule under its name. */
+.site-header-link[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 2px;
+  height: 2px;
+  border-radius: var(--brand-radius-full);
+  background: var(--brand-coral);
+}
+
+/* White on coral fails contrast; ink on coral passes (AGENTS.md). */
+.site-header-cta {
+  margin-left: var(--brand-space-2);
+  padding: 9px 22px;
+  border-radius: var(--brand-radius-md);
+  background: var(--brand-coral);
+  color: var(--brand-on-coral);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-semibold);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    background var(--brand-transition-base),
+    transform var(--brand-transition-fast);
+}
+
+.site-header-cta:hover,
+.site-header-cta:focus-visible {
+  background: var(--brand-coral-dark);
+  color: var(--brand-on-brand);
+  transform: translateY(-1px);
+}
+
+/* ── Footer: always ink, in either theme ─ */
+
+.site-footer {
+  background: var(--brand-ink);
+  color: var(--brand-on-dark-secondary);
+  padding: var(--brand-space-16) var(--brand-page-padding-x)
+    var(--brand-space-8);
+}
+
+.site-footer-inner {
+  max-width: var(--brand-max-width);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: var(--brand-space-12);
+}
+
+.site-footer .site-logo-mark {
+  background: var(--brand-on-dark-wash);
+  border: 1px solid var(--brand-on-dark-wash-border);
+  color: var(--brand-on-dark-secondary);
+}
+
+.site-footer .site-logo-name {
+  color: var(--brand-on-dark-primary);
+}
+
+.site-footer-brand p {
+  margin: var(--brand-space-4) 0 0;
+  max-width: 320px;
+  font-size: var(--brand-text-sm);
+  font-weight: var(--brand-weight-light);
+  line-height: var(--brand-leading-relaxed);
+  color: var(--brand-on-dark-secondary);
+}
+
+.site-footer-brand strong {
+  font-weight: var(--brand-weight-medium);
+  color: var(--brand-on-dark-primary);
+}
+
+.site-footer-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--brand-space-8);
+}
+
+.site-footer h2 {
+  margin: 0 0 var(--brand-space-4);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-label);
+  font-weight: var(--brand-weight-medium);
+  letter-spacing: var(--brand-tracking-wide);
+  text-transform: uppercase;
+  color: var(--brand-on-dark-primary);
+}
+
+.site-footer ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--brand-space-2-5);
+  font-size: var(--brand-text-sm);
+}
+
+.site-footer a:not(.site-logo) {
+  color: var(--brand-on-dark-secondary);
+  text-decoration: none;
+}
+
+.site-footer a:not(.site-logo):hover,
+.site-footer a:not(.site-logo):focus-visible {
+  color: var(--brand-on-dark-primary);
+  text-decoration: underline;
+}
+
+.site-footer-bottom {
+  max-width: var(--brand-max-width);
+  margin: var(--brand-space-12) auto 0;
+  padding-top: var(--brand-space-6);
+  border-top: 1px solid var(--brand-on-dark-rule);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--brand-space-2) var(--brand-space-6);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-xs);
+  letter-spacing: var(--brand-tracking-wide);
+  color: var(--brand-on-dark-secondary);
+}
+
+.site-header a:focus-visible,
+.site-footer a:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 2px;
+  border-radius: var(--brand-radius-sm);
+}
+
+/* ── Hero band ───────────────────────── */
+
+.site-hero {
+  position: relative;
+  padding: var(--brand-space-12) var(--brand-page-padding-x)
+    var(--brand-space-12);
+  border-bottom: 1px solid var(--bs-rule);
+  background:
+    radial-gradient(
+      ellipse 70% 90% at 50% 0%,
+      var(--bs-coral-glow) 0%,
+      transparent 70%
+    ),
+    var(--bs-surface-2);
+}
+
+.site-hero-inner {
+  max-width: var(--brand-max-width);
+  margin: 0 auto;
+}
+
+.site-hero h1 {
+  max-width: 880px;
+  margin: var(--brand-space-4) 0 0;
+  font-family: var(--brand-font-serif);
+  font-size: clamp(2rem, 4.2vw, var(--brand-text-h1));
+  font-weight: var(--brand-weight-bold);
+  line-height: var(--brand-leading-snug);
+  letter-spacing: var(--brand-tracking-snug);
+  color: var(--bs-text-primary);
+  text-wrap: balance;
+}
+
+.site-eyebrow {
+  margin: 0;
+}
+
+.site-eyebrow::after {
+  display: none;
+}
+
+.site-lede {
+  max-width: var(--brand-max-width-text);
+  margin: var(--brand-space-5) 0 0;
+  font-size: var(--brand-text-body-lg);
+  font-weight: var(--brand-weight-light);
+  line-height: var(--brand-leading-relaxed);
+  color: var(--bs-text-secondary);
+}
+
+.site-lede strong {
+  font-weight: var(--brand-weight-semibold);
+  color: var(--bs-text-primary);
+}
+
+.site-updated {
+  margin: var(--brand-space-5) 0 0;
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-xs);
+  letter-spacing: var(--brand-tracking-wide);
+  text-transform: uppercase;
+  color: var(--bs-text-muted);
+}
+
+.site-crumbs ol {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--brand-space-1-5);
+  margin: 0 0 var(--brand-space-6);
+  padding: 0;
+  font-size: var(--brand-text-sm);
+  color: var(--bs-text-muted);
+}
+
+.site-crumbs li + li::before {
+  content: "/";
+  margin-right: var(--brand-space-1-5);
+  color: var(--bs-text-faint);
+}
+
+.site-crumbs a {
+  color: var(--bs-text-secondary);
+  text-decoration: none;
+}
+
+.site-crumbs a:hover {
+  color: var(--bs-text-primary);
+  text-decoration: underline;
+}
+
+/* ── Link cards: indexes, related, a provider's pages ── */
+
+.site-related,
+.site-facility {
+  margin-top: var(--brand-space-16);
+}
+
+.site-cards {
+  list-style: none;
+  margin: var(--brand-space-5) 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--brand-space-4);
+}
+
+.site-cards li {
+  margin: 0;
+}
+
+.site-index {
+  margin: 0;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: var(--brand-space-5);
+}
+
+.site-cards a {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-2);
+  padding: var(--brand-space-5) var(--brand-space-6);
+  overflow: hidden;
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  text-decoration: none;
+  transition:
+    transform var(--brand-transition-base),
+    box-shadow var(--brand-transition-base),
+    border-color var(--brand-transition-base);
+}
+
+/* The card hover pattern (AGENTS.md): lift, shadow, a coral rule from the left. */
+.site-cards a::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--brand-coral);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--brand-transition-slow);
+}
+
+.site-cards a:hover,
+.site-cards a:focus-visible {
+  transform: translateY(-4px);
+  border-color: transparent;
+  box-shadow: var(--bs-shadow-lg);
+}
+
+.site-cards a:hover::before,
+.site-cards a:focus-visible::before {
+  transform: scaleX(1);
+}
+
+.site-card-title {
+  font-family: var(--brand-font-serif);
+  font-size: 1.125rem;
+  font-weight: var(--brand-weight-semibold);
+  line-height: var(--brand-leading-snug);
+  color: var(--bs-text-primary);
+}
+
+.site-card-summary {
+  flex: 1;
+  font-size: 0.9375rem;
+  line-height: var(--brand-leading-normal);
+  color: var(--bs-text-muted);
+}
+
+.site-card-more {
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-xs);
+  letter-spacing: var(--brand-tracking-wide);
+  text-transform: uppercase;
+  color: var(--bs-coral-text);
+}
+
+@media (max-width: 900px) {
+  .site-header,
+  .site-footer,
+  .site-hero {
+    padding-left: var(--brand-page-padding-x-sm);
+    padding-right: var(--brand-page-padding-x-sm);
+  }
+  .site-header-link {
+    padding: 9px 10px;
+  }
+  .site-footer-inner {
+    grid-template-columns: 1fr;
+    gap: var(--brand-space-10);
+  }
+}
+
+/* The section links are all in the footer; a phone's bar keeps the mark,
+   Sign in and Sign up. */
+@media (max-width: 680px) {
+  .site-header-secondary {
+    display: none;
+  }
+  .site-hero {
+    padding-top: var(--brand-space-8);
+    padding-bottom: var(--brand-space-8);
+  }
+  .site-index {
+    grid-template-columns: 1fr;
+  }
+  .site-header-cta {
+    padding: 8px 16px;
+    font-size: var(--brand-text-ui-sm);
+  }
+}
+
+@media (max-width: 480px) {
+  .site-footer-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
