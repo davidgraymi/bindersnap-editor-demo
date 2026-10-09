@@ -45,7 +45,7 @@ jobs:
           BUN_PUBLIC_API_BASE_URL: https://api.bindersnap.com
           # The Google tag on the public site's pages only (apps/site), never
           # the app. Unset, there is no tag. See issue #718.
-          BINDERSNAP_GA_MEASUREMENT_ID: ${{ vars.GA_MEASUREMENT_ID }}
+          BINDERSNAP_GA_MEASUREMENT_ID: ${{ secrets.GA_MEASUREMENT_ID }}
         run: |
           rm -rf dist
           bun build ./apps/app/index.html \
