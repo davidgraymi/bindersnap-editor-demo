@@ -33,6 +33,9 @@ services:
       - USER_UID=1000
       - USER_GID=1000
       # --- Server ---
+      # A name only: nothing serves gitea.bindersnap.com (see Caddyfile.prod).
+      # Gitea builds the absolute URLs in its API answers from it, and the API
+      # never hands those to the browser.
       - GITEA__server__ROOT_URL=https://gitea.bindersnap.com
       - GITEA__server__HTTP_PORT=3000
       - GITEA__server__DISABLE_SSH=true
@@ -65,10 +68,8 @@ services:
       - GITEA__service__DEFAULT_ALLOW_CREATE_ORGANIZATION=true
       - GITEA__admin__DISABLE_REGULAR_ORG_CREATION=false
       # --- CORS ---
-      - GITEA__cors__ENABLED=true
-      - GITEA__cors__ALLOW_DOMAIN=https://bindersnap.com
-      - GITEA__cors__METHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
-      - GITEA__cors__ALLOW_CREDENTIALS=true
+      # Off: no browser calls Gitea, so no origin needs to.
+      - GITEA__cors__ENABLED=false
       # --- Logging ---
       # No Gravatar or other outside avatar service: Gitea draws its own, so no
       # hash of anybody's email leaves the host (the Privacy Policy says so).
@@ -90,6 +91,11 @@ services:
       - GITEA_ADMIN_PASS=${GITEA_ADMIN_PASS:-}
     volumes:
       - gitea-data:/data
+    # Loopback only, never the public interface: this is how an operator
+    # reaches the admin UI, through an SSM port-forwarding session to the host
+    # (docs/ops/break-glass.md, "Reaching Gitea").
+    ports:
+      - "127.0.0.1:3000:3000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/"]
       interval: 10s

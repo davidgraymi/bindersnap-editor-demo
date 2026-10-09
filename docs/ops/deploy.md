@@ -224,8 +224,10 @@ organizations and binders that will no longer exist.
    admin and the `bindersnap-service` account, then mints the read and admin
    tokens into SSM and the env file. `bindersnap-stack-up` then starts the rest.
 
-4. Check it came up: `curl -s https://gitea.bindersnap.com/api/v1/version`
+4. Check it came up: on the host (over SSM),
+   `docker exec bindersnap-gitea-prod curl -s http://localhost:3000/api/v1/version`
    reports the new version, and a fresh signup creates an organization.
+   Gitea has no public hostname.
 
 Some old data survives the wipe:
 
