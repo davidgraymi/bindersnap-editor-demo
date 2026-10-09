@@ -3,7 +3,13 @@ import { join } from "node:path";
 
 import { renderHelpCss } from "../help/renderHelp";
 import { renderLegalBody } from "../legal/renderLegal";
-import { siteFooter, siteHeader } from "./chrome";
+import {
+  linkCard,
+  pageHero,
+  siteFooter,
+  siteHeader,
+  type Crumb,
+} from "./chrome";
 import {
   SITE_COLLECTIONS,
   siteHref,
@@ -108,11 +114,6 @@ function navCollections(pages: readonly SitePage[]): SiteCollection[] {
   );
 }
 
-interface Crumb {
-  name: string;
-  path: string;
-}
-
 function shell(params: {
   title: string;
   description: string;
@@ -122,23 +123,12 @@ function shell(params: {
   structuredData: object[];
   pages: readonly SitePage[];
   /** The band under the bar: an eyebrow, the heading, and what to expect. */
-  hero: string;
+  hero: { eyebrow: string; title: string; lede?: string; meta?: string };
   body: string;
   /** Beside the body on a wide screen: where the page goes, and the trial. */
   rail?: string;
   measurementId?: string;
 }): string {
-  const crumbs =
-    params.crumbs.length > 1
-      ? `<nav class="site-crumbs" aria-label="Breadcrumb"><ol>${params.crumbs
-          .map((crumb, index) =>
-            index === params.crumbs.length - 1
-              ? `<li aria-current="page">${escape(crumb.name)}</li>`
-              : `<li><a href="${crumb.path}">${escape(crumb.name)}</a></li>`,
-          )
-          .join("")}</ol></nav>`
-      : "";
-
   const graph = [
     ORGANIZATION_LD,
     ...(params.crumbs.length > 1
@@ -194,10 +184,7 @@ ${analyticsTag(params.measurementId ?? process.env.BINDERSNAP_GA_MEASUREMENT_ID)
 <a class="help-skip" href="#content">Skip to the page</a>
 ${siteHeader(params.path)}
 <main id="content" class="site-main">
-<div class="site-hero"><div class="site-hero-inner">
-${crumbs}
-${params.hero}
-</div></div>
+${pageHero({ ...params.hero, crumbs: params.crumbs })}
 <div class="site-layout${params.rail ? " site-layout-rail" : ""}">
 <div class="site-content">
 ${params.body}
@@ -304,13 +291,6 @@ export function splitLede(html: string): { lede: string; rest: string } {
   return { lede: match[1]!, rest: html.slice(match[0].length) };
 }
 
-/** A page as a link card: its title, what it answers, and a way in. */
-function card(entry: ListedPage): string {
-  return `<li><a href="${entry.path}"><span class="site-card-title">${escape(
-    entry.title,
-  )}</span><span class="site-card-summary">${escape(entry.description)}</span><span class="site-card-more" aria-hidden="true">Read →</span></a></li>`;
-}
-
 /**
  * On a provider's page (`/for/{slug}`), every other page written for that
  * provider, by section: its templates, its requirements, the terms it meets.
@@ -338,7 +318,7 @@ function facilityHtml(page: SitePage, pages: readonly SitePage[]): string {
         `<section class="site-facility"><h2>${escape(group.collection.label)} for ${escape(
           (page.meta.crumb ?? page.title).toLowerCase(),
         )}</h2><ul class="site-cards">${group.pages
-          .map((entry) => card(entry))
+          .map((entry) => linkCard(entry))
           .join("")}</ul></section>`,
     )
     .join("");
@@ -358,7 +338,7 @@ function relatedHtml(
     .filter((entry): entry is ListedPage => entry !== undefined);
   if (!items.length) return "";
   return `<nav class="site-related" aria-label="Related"><h2>Related</h2><ul class="site-cards">${items
-    .map((entry) => card(entry))
+    .map((entry) => linkCard(entry))
     .join("")}</ul></nav>`;
 }
 
@@ -484,11 +464,14 @@ export function renderSitePage(
     crumbs,
     structuredData,
     pages,
-    hero: `<p class="bs-eyebrow site-eyebrow">${escape(eyebrow)}</p>
-<h1>${escape(page.title)}</h1>
-${lede ? `<p class="site-lede">${lede}</p>\n` : ""}<p class="site-updated">Updated <time datetime="${page.updated}">${escape(
-      formatDate(page.updated),
-    )}</time></p>`,
+    hero: {
+      eyebrow,
+      title: page.title,
+      lede,
+      meta: `Updated <time datetime="${page.updated}">${escape(
+        formatDate(page.updated),
+      )}</time>`,
+    },
     body: `<article class="site-article">
 ${
   page.collection.notice
@@ -532,10 +515,12 @@ export function renderCollectionIndex(
       },
     ],
     pages,
-    hero: `<p class="bs-eyebrow site-eyebrow">Free resources</p>
-<h1>${escape(collection.label)}</h1>
-<p class="site-lede">${escape(collection.intro)}</p>`,
-    body: `<ul class="site-cards site-index">${entries.map(card).join("")}</ul>`,
+    hero: {
+      eyebrow: "Free resources",
+      title: collection.label,
+      lede: escape(collection.intro),
+    },
+    body: `<ul class="site-cards site-index">${entries.map(linkCard).join("")}</ul>`,
   });
 }
 

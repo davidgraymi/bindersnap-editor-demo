@@ -121,6 +121,54 @@ export function siteFooter(): string {
 </footer>`;
 }
 
+export interface Crumb {
+  name: string;
+  path: string;
+}
+
+/**
+ * The band under the bar that opens every marketing, help and legal page:
+ * the trail back, a coral eyebrow naming the section, the Lora headline, a
+ * lede, and a line of small print (a date, a version).
+ */
+export function pageHero(params: {
+  eyebrow: string;
+  title: string;
+  /** HTML: an opening paragraph may carry its own emphasis. */
+  lede?: string;
+  /** HTML, set small in mono under the lede. */
+  meta?: string;
+  crumbs?: readonly Crumb[];
+}): string {
+  const crumbs =
+    params.crumbs && params.crumbs.length > 1
+      ? `<nav class="site-crumbs" aria-label="Breadcrumb"><ol>${params.crumbs
+          .map((crumb, index) =>
+            index === params.crumbs!.length - 1
+              ? `<li aria-current="page">${escape(crumb.name)}</li>`
+              : `<li><a href="${crumb.path}">${escape(crumb.name)}</a></li>`,
+          )
+          .join("")}</ol></nav>\n`
+      : "";
+  return `<div class="site-hero"><div class="site-hero-inner">
+${crumbs}<p class="bs-eyebrow site-eyebrow">${escape(params.eyebrow)}</p>
+<h1>${escape(params.title)}</h1>
+${params.lede ? `<p class="site-lede">${params.lede}</p>\n` : ""}${
+    params.meta ? `<p class="site-updated">${params.meta}</p>\n` : ""
+  }</div></div>`;
+}
+
+/** A page as a link card: its title, what it answers, and a way in. */
+export function linkCard(entry: {
+  path: string;
+  title: string;
+  description: string;
+}): string {
+  return `<li><a href="${entry.path}"><span class="site-card-title">${escape(
+    entry.title,
+  )}</span><span class="site-card-summary">${escape(entry.description)}</span><span class="site-card-more" aria-hidden="true">Read →</span></a></li>`;
+}
+
 const CHROME_CSS = join(import.meta.dir, "chrome.css");
 
 export function chromeCss(): string {
