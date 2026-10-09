@@ -462,6 +462,15 @@ export function renderSitePage(
       publisher: { "@id": ORGANIZATION_LD["@id"] },
     },
   ];
+  if (page.collection.key === "glossary") {
+    structuredData.push({
+      "@type": "DefinedTerm",
+      name: page.meta.term ?? page.title,
+      description: page.description,
+      url: `${SITE}${page.path}`,
+      inDefinedTermSet: `${SITE}${siteHref(page.collection)}`,
+    });
+  }
   if (page.meta.price) {
     structuredData.push(
       softwareApplicationLd(page.meta.price, page.meta.currency),

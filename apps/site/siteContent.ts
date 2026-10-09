@@ -76,6 +76,15 @@ export const SITE_COLLECTIONS: readonly SiteCollection[] = [
     minWords: 500,
   },
   {
+    key: "glossary",
+    prefix: "glossary",
+    label: "Glossary",
+    intro:
+      "Plain definitions of the survey, accreditation and policy management terms small healthcare providers meet, with the rule each comes from.",
+    minWords: 200,
+    notice: GUIDANCE_NOTICE,
+  },
+  {
     key: "templates",
     prefix: "templates",
     label: "Policy templates",
