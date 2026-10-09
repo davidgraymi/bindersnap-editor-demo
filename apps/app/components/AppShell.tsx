@@ -5,6 +5,7 @@ import {
   CreditCard,
   LogOut,
   Map as MapIcon,
+  MessageSquarePlus,
   Moon,
   Shield,
   UserRound,
@@ -28,7 +29,12 @@ import { ReviewQueuePage } from "./ReviewQueuePage";
 import { AppSidebar, type SidebarBinder } from "./AppSidebar";
 import { BinderExplorer } from "./BinderExplorer";
 import { AppBottomNav } from "./AppBottomNav";
-import { useDefaultOrganization } from "../useOrganizationDisplayName";
+import {
+  useDefaultOrganization,
+  useOrganizationDisplayName,
+} from "../useOrganizationDisplayName";
+import { feedbackEnabled } from "../feedback";
+import { FeedbackDialog } from "./FeedbackDialog";
 import { HomePage } from "./HomePage";
 import { NavSearch } from "./NavSearch";
 import { CreateMenu } from "./CreateMenu";
@@ -98,6 +104,8 @@ function renderProfileMenuIcon(icon: string) {
       return <AppIcon icon={Shield} size="md" />;
     case "guide":
       return <AppIcon icon={MapIcon} size="md" />;
+    case "feedback":
+      return <AppIcon icon={MessageSquarePlus} size="md" />;
     case "signout":
       return <AppIcon icon={LogOut} size="md" />;
     default:
@@ -172,6 +180,9 @@ export function AppShell({
     [route],
   );
   const [profileOpen, setProfileOpen] = useState(false);
+  const canSendFeedback = feedbackEnabled();
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const sidebarOrgName = useOrganizationDisplayName(sidebarOrg ?? "");
   // A search that was linked to or reloaded is still the search that is on
   // screen, so the box says so.
   const [initialSearch] = useState(
@@ -251,6 +262,24 @@ export function AppShell({
           >
             <CircleHelp size={16} strokeWidth={1.5} aria-hidden="true" />
           </a>
+
+          {/* Something broke, or could be better: say so from where it
+              happened, and the report carries where that was. */}
+          {canSendFeedback ? (
+            <button
+              type="button"
+              className="app-topnav-icon-btn app-topnav-feedback"
+              title="Send feedback"
+              aria-label="Send feedback"
+              onClick={() => setFeedbackOpen(true)}
+            >
+              <MessageSquarePlus
+                size={16}
+                strokeWidth={1.5}
+                aria-hidden="true"
+              />
+            </button>
+          ) : null}
 
           {/* What happened on the changes you are part of — Gitea's own
               notifications, with the reason each one is yours. */}
@@ -421,6 +450,26 @@ export function AppShell({
                     role="group"
                     aria-label="Session"
                   >
+                    {/* The top bar's feedback button is hidden on a phone;
+                        this is the way to it there. */}
+                    {canSendFeedback ? (
+                      <button
+                        type="button"
+                        className="app-profile-menu-item"
+                        role="menuitem"
+                        onClick={() => {
+                          setProfileOpen(false);
+                          setFeedbackOpen(true);
+                        }}
+                      >
+                        <span className="app-profile-menu-icon">
+                          {renderProfileMenuIcon("feedback")}
+                        </span>
+                        <span className="app-profile-menu-label">
+                          Send feedback
+                        </span>
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="app-profile-menu-item app-profile-menu-item--danger"
@@ -603,6 +652,28 @@ export function AppShell({
       {/* Below 768px the sidebar is not rendered and this is the navigation.
           Fixed to the bottom, so it sits outside the scrolling body. */}
       <AppBottomNav route={route} org={sidebarOrg} onNavigate={onNavigate} />
+
+      {feedbackOpen ? (
+        <FeedbackDialog
+          context={{
+            route,
+            user: user
+              ? { username: user.username, fullName: user.fullName }
+              : null,
+            organization: sidebarOrg
+              ? { name: sidebarOrg, displayName: sidebarOrgName }
+              : null,
+            state: {
+              readOnly: isReadOnly,
+              siteAdmin: user?.isAdmin === true,
+              theme:
+                document.documentElement.getAttribute("data-theme") ?? "light",
+              binderMissing: missingBinder !== null,
+            },
+          }}
+          onClose={() => setFeedbackOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

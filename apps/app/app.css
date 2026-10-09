@@ -4081,6 +4081,71 @@ a.bs-knot {
   width: min(100%, 620px);
 }
 
+/* Send feedback (FeedbackDialog). Long enough to write a real report in, and
+   scrolls inside itself on a short screen rather than off the page. */
+.feedback-dialog {
+  width: min(100%, 620px);
+  max-height: calc(100dvh - 2 * var(--brand-space-6));
+  overflow-y: auto;
+}
+
+/* A grid column grows to its widest line by default, and the trace's JSON
+   has long ones; this keeps it inside the dialog and scrolls the JSON. */
+.feedback-dialog,
+.feedback-dialog .create-document-form {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.feedback-dialog-lede {
+  margin: 0;
+  color: var(--bs-text-secondary);
+}
+
+.feedback-dialog-kinds {
+  flex-wrap: wrap;
+  justify-self: start;
+}
+
+.feedback-dialog-trace {
+  font-size: var(--brand-text-ui-sm);
+  color: var(--bs-text-secondary);
+}
+
+.feedback-dialog-trace summary {
+  cursor: pointer;
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-medium);
+}
+
+.feedback-dialog-trace ul {
+  margin: var(--brand-space-2) 0;
+  padding-left: var(--brand-space-5);
+  display: grid;
+  gap: var(--brand-space-1);
+}
+
+.feedback-dialog-trace code {
+  word-break: break-all;
+}
+
+/* Every byte that will be sent, for anyone who wants to check. */
+.feedback-dialog-json {
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  padding: var(--brand-space-3);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-2);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-sm);
+  white-space: pre;
+}
+
+.feedback-dialog-check:empty {
+  display: none;
+}
+
 .create-document-form {
   display: grid;
   gap: var(--brand-space-4);
@@ -4580,6 +4645,12 @@ a.bs-knot {
      the first chip of the strip under the top bar, so naming it here too
      would cost the search button beside it for a word already on screen. */
   .app-trail-step {
+    display: none;
+  }
+
+  /* The profile menu carries "Send feedback" on a phone; the bar has no room
+     for a fourth icon beside search. */
+  .app-topnav .app-topnav-feedback {
     display: none;
   }
 }

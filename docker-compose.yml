@@ -254,6 +254,12 @@ services:
       - VITE_GITEA_URL=http://localhost:${GITEA_PORT:-3000}
       - BUN_PUBLIC_HOCUSPOCUS_URL=ws://localhost:${HOCUSPOCUS_PORT:-1234}
       - VITE_HOCUSPOCUS_URL=ws://localhost:${HOCUSPOCUS_PORT:-1234}
+      # The feedback Worker (services/feedback) is not part of this stack.
+      # Nothing answers at this address: the integration tests stand in for
+      # the Worker, and `wrangler dev` can be pointed at to try the real one.
+      # The site key is Turnstile's documented always-pass test key.
+      - BUN_PUBLIC_FEEDBACK_URL=${BINDERSNAP_FEEDBACK_URL:-https://feedback.invalid/}
+      - BUN_PUBLIC_TURNSTILE_SITE_KEY=1x00000000000000000000AA
       - GITEA_INTERNAL_URL=${GITEA_INTERNAL_URL:-http://gitea:${GITEA_PORT:-3000}}
       - GITEA_ADMIN_USER=${GITEA_ADMIN_USER:-alice}
       - GITEA_ADMIN_PASS=${GITEA_ADMIN_PASS:-dev}

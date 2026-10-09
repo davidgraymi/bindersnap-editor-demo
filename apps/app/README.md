@@ -38,6 +38,24 @@ call comes back as an unparseable 200. Pointing it at a running stack does not
 help either — the API sends CORS headers only for `http://localhost:${APP_PORT}`,
 so a second SPA on a second port is blocked on every request.
 
+## Send feedback
+
+The top bar's feedback button (and "Send feedback" in the account menu) posts
+to the feedback Worker, `services/feedback`, with a trace of what the app knew
+(`feedbackTrace.ts`). It needs two build variables, and the app shows no button
+without both:
+
+- `BUN_PUBLIC_FEEDBACK_URL`: where reports go. Production:
+  `https://feedback.bindersnap.com/`. The local stack sets an address nothing
+  answers at; the integration tests stand in for the Worker.
+- `BUN_PUBLIC_TURNSTILE_SITE_KEY`: the Turnstile widget's public key. The
+  local stack uses Turnstile's always-pass test key.
+
+`BUN_PUBLIC_APP_VERSION` and `BUN_PUBLIC_APP_COMMIT` say which build a report
+came from; unset, both read "dev". Read any optional `BUN_PUBLIC_` variable
+through `publicEnv()`: Bun inlines only the ones a build has, and an unset one
+throws in a browser.
+
 ## Deployment note
 
 `bun run build` emits a single `dist/` artifact for GitHub Pages and copies
