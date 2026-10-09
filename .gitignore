@@ -64,3 +64,6 @@ infra/state/backend.hcl
 
 # wrangler dev state
 .wrangler/
+
+# Wrangler local secrets
+.dev.vars

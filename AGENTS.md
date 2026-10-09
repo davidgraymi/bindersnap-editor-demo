@@ -49,9 +49,11 @@ bindersnap-editor-demo/
 │   │   ├── server.ts               ← HTTP server entry point
 │   │   ├── sessions.ts             ← SQLite session store
 │   │   └── README.md               ← API env vars and routes
-│   └── hocuspocus/                 ← Yjs WebSocket collaboration server
-│       ├── server.ts               ← Hocuspocus server entry
-│       └── Dockerfile
+│   ├── hocuspocus/                 ← Yjs WebSocket collaboration server
+│   │   ├── server.ts               ← Hocuspocus server entry
+│   │   └── Dockerfile
+│   └── feedback/                   ← Cloudflare Worker: in-app feedback → GitHub issue (ADR 0006)
+│       └── README.md               ← Read before editing
 │
 ├── tests/                          ← Integration tests (Playwright)
 │   └── data/                       ← Seed files for local stack
@@ -400,6 +402,7 @@ Gitea-as-NAT plumbing were removed (epic #302). See
 | Gitea      | Same EC2 host  | `docker-compose.prod.yml`, same pyinfra run                           |
 | Hocuspocus | Same EC2 host  | `docker-compose.prod.yml`, same pyinfra run                           |
 | Caddy      | Same EC2 host  | `docker-compose.prod.yml`, same pyinfra run                           |
+| Feedback   | Cloudflare     | `feedback-worker.yml` (`wrangler deploy`) on push to `main`           |
 
 The SPA is built with `BUN_PUBLIC_API_BASE_URL=https://api.bindersnap.com`
 baked in at compile time. Locally, this is `http://localhost:8787`.
