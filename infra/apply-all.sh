@@ -204,6 +204,7 @@ fi
 
 # --- Plan mode: each module plans independently using its own tfvars ---
 if [[ "$ACTION" == "plan" ]]; then
+  tf_run "account-baseline"
   tf_run "compute"
   tf_run "secrets"
   tf_run "backups"
@@ -219,6 +220,10 @@ if [[ "$ACTION" == "plan" ]]; then
 fi
 
 # --- Apply mode: chain modules, wire outputs forward ---
+
+# 0. Account baseline (CloudTrail, GuardDuty, Budget, Access Analyzer). No
+#    inputs; first, so the trail records everything that follows.
+tf_run "account-baseline"
 
 # 1. Compute (no upstream deps — host configuration is applied by the pyinfra
 #    deploy after the instance exists, not by Terraform)

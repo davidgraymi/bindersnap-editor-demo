@@ -140,6 +140,51 @@ resource "aws_s3_bucket_public_access_block" "litestream" {
   restrict_public_buckets = true
 }
 
+# Encryption at rest, stated rather than inherited from S3's account default.
+resource "aws_s3_bucket_server_side_encryption_configuration" "litestream" {
+  bucket = aws_s3_bucket.litestream.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# Refuse any request that is not over TLS. The replicas are every account,
+# session and setting the API holds; nothing may read or write them in clear.
+data "aws_iam_policy_document" "litestream_tls_only" {
+  statement {
+    sid     = "DenyInsecureTransport"
+    effect  = "Deny"
+    actions = ["s3:*"]
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    resources = [
+      aws_s3_bucket.litestream.arn,
+      "${aws_s3_bucket.litestream.arn}/*",
+    ]
+
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "litestream" {
+  bucket = aws_s3_bucket.litestream.id
+  policy = data.aws_iam_policy_document.litestream_tls_only.json
+
+  # A bucket policy is refused while the public access block is being set.
+  depends_on = [aws_s3_bucket_public_access_block.litestream]
+}
+
 # IAM policy document for litestream S3 operations
 data "aws_iam_policy_document" "litestream_s3" {
   statement {
