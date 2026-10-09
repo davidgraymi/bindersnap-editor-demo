@@ -86,9 +86,14 @@ const STYLE_FILES = [
     !LITERAL_EXEMPT_FILES.some((e) => relative(REPO_ROOT, f) === e.file),
 );
 
-/** Everywhere a token could reasonably be referenced: CSS, HTML, TS/TSX. */
+/**
+ * Everywhere a token could reasonably be referenced: CSS, HTML, TS/TSX —
+ * including the public site's bar and footer (`apps/site/chrome.css`), which
+ * the landing page shares.
+ */
 const SOURCE_FILES = [
   ...walk(join(REPO_ROOT, "apps/app"), [".css", ".html", ".ts", ".tsx"]),
+  ...walk(join(REPO_ROOT, "apps/site"), [".css", ".ts"]),
   ...walk(join(REPO_ROOT, "packages/editor"), [".css", ".tsx", ".ts"]),
   TOKENS_CSS_PATH,
 ];
