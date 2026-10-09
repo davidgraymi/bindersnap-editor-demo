@@ -5,3 +5,7 @@ cloudflare_account_id = "0123456789abcdef0123456789abcdef"
 zone_id               = "0123456789abcdef0123456789abcdef"
 # zone_name           = "bindersnap.com"
 # api_hostname        = "api.bindersnap.com"
+state_bucket          = "bindersnap-tfstate-REPLACE_WITH_ACCOUNT_ID"
+# The inbox every @bindersnap.com address forwards to. This file is gitignored;
+# keep personal addresses out of anything committed.
+email_routing_destination = "you@example.com"
