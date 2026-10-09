@@ -152,6 +152,7 @@ export function workspaceChangeToRecord(
     updatedAt: change.updatedAt,
     commentCount: change.commentCount,
     isRejected: change.isRejected,
+    isApproved: change.isApproved,
   };
 }
 

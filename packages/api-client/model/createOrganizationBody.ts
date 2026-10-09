@@ -8,4 +8,6 @@
 export type CreateOrganizationBody = {
   /** @minLength 1 */
   name: string;
+  /** @minLength 1 */
+  acceptedTerms: string;
 };

@@ -22,6 +22,8 @@ import {
   createUserToken,
   GITEA_URL,
 } from "./helpers";
+import { signUpAndConfirm } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 test.describe.configure({ mode: "parallel", timeout: 120_000 });
 
@@ -41,10 +43,14 @@ function buildCredentials(): Credentials {
 }
 
 async function signUp(credentials: Credentials): Promise<string> {
-  const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+  const response = await signUpAndConfirm(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
-    body: JSON.stringify(credentials),
+    body: JSON.stringify({
+      firstName: "Test",
+      lastName: "User",
+      ...credentials,
+    }),
   });
 
   const body = await response.text();
@@ -73,13 +79,16 @@ async function createOrganization(
   const response = await fetch(`${API_BASE_URL}/api/app/organizations`, {
     method: "POST",
     headers: authHeaders(sessionCookie),
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, acceptedTerms: LEGAL_VERSION }),
   });
 
   const body = await response.text();
   expect(response.status, `create organization failed: ${body}`).toBe(201);
-  return (JSON.parse(body) as { organization: { id: number; name: string } })
-    .organization;
+  return (
+    JSON.parse(body) as {
+      organization: { id: number; name: string };
+    }
+  ).organization;
 }
 
 interface WorkspaceSummary {
@@ -173,7 +182,10 @@ test("a member creates the binder, and it belongs to the organization", async ()
   expect(workspace.owner).toBe(org.name);
   expect(workspace.fullName).toBe(`${org.name}/clinical-policies`);
 
-  expect(await listWorkspaces(sessionCookie)).toEqual([workspace]);
+  // The list carries a timestamp that moves as Gitea settles, so compare
+  // the binder itself rather than the whole record.
+  const listed = await listWorkspaces(sessionCookie);
+  expect(listed.map((w) => w.fullName)).toEqual([workspace.fullName]);
 
   const token = await createUserToken(
     credentials.username,
@@ -221,9 +233,11 @@ test("a member creates the binder, and it belongs to the organization", async ()
     block_on_codeowner_reviews?: boolean;
   }>(token, `/repos/${org.name}/clinical-policies/branch_protections/main`);
 
-  // Nothing reaches main except a merged, approved change.
+  // Nothing reaches main except a merged change. A new binder needs no
+  // approvals, so a customer moving in alone can publish; its admin raises the
+  // count in Settings.
   expect(protection.enable_push).toBe(false);
-  expect(protection.required_approvals).toBeGreaterThan(0);
+  expect(protection.required_approvals).toBe(0);
 
   // And the field the free-reviewer tier lives or dies on: without it Gitea
   // resolves "official reviewer" as "has write access", which would make every
@@ -238,25 +252,13 @@ test("a member creates the binder, and it belongs to the organization", async ()
     "Owners",
     "staff",
   ]);
-  // **The two gates, and which one is on depends on the Gitea underneath.**
-  // `block_on_codeowner_reviews` (28.0.0) is the per-folder gate that actually
-  // enforces a sign-off rule and lets it name a team. `block_on_official_review_requests`
-  // (1.27) was only ever on to make CODEOWNERS block, which it never did for a
-  // team code owner — and left on beside the new gate it blocks on *manually*
+  // **The per-folder gate is on, and the review-request gate is off.**
+  // `block_on_codeowner_reviews` (Gitea 28.0.0) is what enforces a sign-off
+  // rule and lets it name a team. `block_on_official_review_requests` (1.27)
+  // never made a team code owner block, and left on it blocks on *manually*
   // requested reviews, so any member could stall a publish by requesting one.
-  //
-  // Provisioning writes the new field and reads the protection back to see
-  // whether it stuck, because a Gitea that does not have it accepts the write
-  // and silently drops it. So exactly one of these is true, and which one is
-  // the honest answer to "what version is this stack on".
-  if (protection.block_on_codeowner_reviews) {
-    expect(protection.block_on_official_review_requests).toBe(false);
-  } else {
-    // The 1.27 path: the older gate stays on, because it is then the only
-    // per-folder enforcement the binder has and turning it off would put
-    // nothing in its place.
-    expect(protection.block_on_official_review_requests).toBe(true);
-  }
+  expect(protection.block_on_codeowner_reviews).toBe(true);
+  expect(protection.block_on_official_review_requests).toBe(false);
 });
 
 test("a second binder of the same name is refused, not silently reused", async () => {
@@ -1134,8 +1136,10 @@ test("a change says what it proposes, and what publishing it would write", async
     true,
   );
   expect(payload.change.approvalCount).toBe(0);
-  expect(payload.change.requiredApprovals).toBe(1);
-  expect(payload.change.isApproved).toBe(false);
+  // A new binder needs no approvals, and nobody was asked to review: Gitea
+  // would merge it now, so it is ready.
+  expect(payload.change.requiredApprovals).toBe(0);
+  expect(payload.change.isApproved).toBe(true);
 
   // What publishing would write, per document — a document being added says
   // v1 rather than showing no version at all.
@@ -1786,7 +1790,7 @@ test("the binder says who can act in it, and the rules it is under", async () =>
   // than only by a repository admin — the count is policy everyone reviewing
   // is entitled to, so it is read with the service account.
   expect(payload.rules.pushBlocked).toBe(true);
-  expect(payload.rules.requiredApprovals).toBe(1);
+  expect(payload.rules.requiredApprovals).toBe(0);
   expect(payload.rules.dismissStaleApprovals).toBe(true);
 
   // The teams granted onto the repository, asked of the repository — a binder's
@@ -3424,6 +3428,120 @@ test("a binder's thread rule is changed immediately, and read back", async () =>
   ).toBe(false);
 });
 
+test("an owner working alone needs no approvals and publishes their own policy", async () => {
+  // A clinic trying Bindersnap on its own has nobody else to approve its first
+  // policy, so a new binder starts needing none. The approval count is Gitea
+  // branch protection, and the binder's administrator sets it — as
+  // themselves, so Gitea is what allows it.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const before = await readSettings(sessionCookie, org.name, "clinical");
+  expect(before.rules.requiredApprovals).toBe(0);
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org.name}/clinical/rules`,
+    {
+      method: "PATCH",
+      headers: authHeaders(sessionCookie),
+      body: JSON.stringify({ requiredApprovals: 0 }),
+    },
+  );
+  const changed = (await response.json()) as {
+    requiredApprovals: number | null;
+    blockOnUnresolvedThreads: boolean;
+  };
+  expect(response.status).toBe(200);
+  expect(changed.requiredApprovals).toBe(0);
+  // One rule changed; the others are left as they were.
+  expect(changed.blockOnUnresolvedThreads).toBe(false);
+  expect(
+    (await readSettings(sessionCookie, org.name, "clinical")).rules
+      .requiredApprovals,
+  ).toBe(0);
+
+  const added = await addDocument(sessionCookie, org.name, "clinical", {
+    name: "Fire Safety",
+  });
+  expect(added.status, added.body).toBe(201);
+  const { pullRequestNumber } = JSON.parse(added.body) as {
+    pullRequestNumber: number;
+  };
+  const published = await publishChange(
+    sessionCookie,
+    org.name,
+    "clinical",
+    pullRequestNumber,
+  );
+  expect(published.status, published.body).toBe(200);
+
+  // Any count Gitea can store is the administrator's to set; a count that
+  // is not a whole number is refused, not rounded.
+  const rules = (body: object) =>
+    fetch(`${API_BASE_URL}/api/app/binders/${org.name}/clinical/rules`, {
+      method: "PATCH",
+      headers: authHeaders(sessionCookie),
+      body: JSON.stringify(body),
+    });
+  const board = await rules({ requiredApprovals: 99 });
+  expect(board.status).toBe(200);
+  expect(
+    (await readSettings(sessionCookie, org.name, "clinical")).rules
+      .requiredApprovals,
+  ).toBe(99);
+  expect((await rules({ requiredApprovals: 1.5 })).status).toBe(400);
+  expect((await rules({ requiredApprovals: -1 })).status).toBe(400);
+});
+
+test("the settings page takes a typed approval count, and says when nobody could meet it", async ({
+  page,
+}) => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  await page
+    .context()
+    .addCookies([
+      { name: "bindersnap_session", value: sessionCookie, url: APP_BASE_URL },
+    ]);
+  await page.goto(`${APP_BASE_URL}/${org.name}/clinical/-/settings`);
+  const count = page.getByLabel("Approvals needed before publishing");
+  // A new binder needs none, and none is something anybody can meet.
+  await expect(count).toHaveValue("0");
+  await expect(page.getByText(/Only 1 person can approve/)).toHaveCount(0);
+
+  await count.fill("12");
+  await count.press("Enter");
+  await expect
+    .poll(
+      async () =>
+        (await readSettings(sessionCookie, org.name, "clinical")).rules
+          .requiredApprovals,
+    )
+    .toBe(12);
+  // Alone in the binder, twelve is more than anyone can give.
+  await expect(page.getByText(/Only 1 person can approve/)).toBeVisible();
+
+  await count.fill("0");
+  await count.blur();
+  await expect(page.getByText(/Only 1 person can approve/)).toHaveCount(0);
+  await expect
+    .poll(
+      async () =>
+        (await readSettings(sessionCookie, org.name, "clinical")).rules
+          .requiredApprovals,
+    )
+    .toBe(0);
+});
+
 test("changing a binder's rules needs an answer, a real binder, and admin", async () => {
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
@@ -3489,6 +3607,16 @@ test("publishing stamps the policy in force onto the version's tag", async () =>
 
   const ownerToken = await createUserToken(owner.username, owner.password);
   const approver = await addApprover(ownerToken, org.name, "clinical");
+  // A new binder needs none; one makes the stamp carry an approver.
+  const rules = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org.name}/clinical/rules`,
+    {
+      method: "PATCH",
+      headers: authHeaders(ownerCookie),
+      body: JSON.stringify({ requiredApprovals: 1 }),
+    },
+  );
+  expect(rules.status, await rules.text()).toBe(200);
 
   const added = await addDocument(ownerCookie, org.name, "clinical", {
     name: "Infection Control Policy",
@@ -3533,15 +3661,17 @@ test("publishing stamps the policy in force onto the version's tag", async () =>
 
   expect(tag.message).toContain("The approval policy in force");
   expect(tag.message).toContain("Approvals required: 1");
-  expect(tag.message).toContain(
-    `Approved by: ${approver.credentials.username}`,
+  expect(tag.message).toMatch(
+    new RegExp(`Approved by: .*\\(${approver.credentials.username}\\)`),
   );
   // Both sides of every rule: one that was off is still a rule somebody chose,
   // and a stamp that only listed what was on would be silent about the rest.
   expect(tag.message).toContain(
     "Unresolved discussions blocked publishing: no",
   );
-  expect(tag.message).toContain(`Published by: ${owner.username}`);
+  expect(tag.message).toMatch(
+    new RegExp(`Published by: .*\\(${owner.username}\\)`),
+  );
   expect(tag.message).toContain(`From change: #${change!.number}`);
 });
 
@@ -5433,5 +5563,5 @@ test("two documents cannot claim one address", async () => {
     filename: "policy.pdf",
   });
   expect(second.status, second.body).toBe(409);
-  expect(second.body).toContain("nursing/policy");
+  expect(second.body).toContain("already waiting in a change request");
 });

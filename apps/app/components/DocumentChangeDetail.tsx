@@ -1,24 +1,23 @@
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
 import { Columns2, FileText, Pencil } from "lucide-react";
 
 import type { ChangeUpdate, RepoBranchProtection } from "../api";
-import {
-  listChangeUpdates,
-  publishDocument,
-  submitDocumentReview,
-} from "../api";
+import { publishDocument, submitDocumentReview } from "../api";
 import {
   describeChangeBody,
   describeChangeOpening,
   resolveReviewDecision,
 } from "../changeReview";
 import type { ChangeScope } from "../changeScope";
+import { changeUpdatesQuery } from "../data/queries";
 import type { ChangeRecord } from "../documentDisplay";
 import {
   describeChangeOutcome,
   getChangeStateBadgeClass,
   getChangeStateLabel,
+  isReadyToPublish,
 } from "../documentDisplay";
 import type { DocumentChangeView } from "../routes";
 import { ChangeReviewers } from "./ChangeReviewers";
@@ -46,6 +45,13 @@ interface DocumentChangeDetailProps {
   blockOnUnresolvedThreads: boolean;
   /** Whether this reader may set the reviewer list. */
   canManageAssignments: boolean;
+  /**
+   * What this reader may do with the change, by Gitea's own rules — from the
+   * server, which can see the binder's approval teams and this reader's write
+   * access. Null where the page has no such answer, and the protection
+   * whitelists decide as they always did.
+   */
+  decisionRights?: { canApprove: boolean; canPublish: boolean } | null;
   nextVersion: number;
   /**
    * How many documents this change touches, for the approve prompt — the
@@ -232,6 +238,8 @@ function ApprovalBars({ change }: { change: ChangeRecord }) {
  * the decision floats bottom right so it is reachable without scrolling back
  * to find it.
  */
+const NO_UPDATES: ChangeUpdate[] = [];
+
 export function DocumentChangeDetail({
   scope,
   currentUser,
@@ -241,6 +249,7 @@ export function DocumentChangeDetail({
   branchProtection,
   blockOnUnresolvedThreads,
   canManageAssignments,
+  decisionRights = null,
   nextVersion,
   documentCount = 1,
   byline,
@@ -271,8 +280,6 @@ export function DocumentChangeDetail({
   const [openThreadAuthors, setOpenThreadAuthors] = useState<
     ReadonlySet<string>
   >(() => new Set<string>());
-  const [updates, setUpdates] = useState<ChangeUpdate[]>([]);
-  const [resetsApprovals, setResetsApprovals] = useState(false);
   /** The title and description being rewritten, or null while they are not. */
   const [editing, setEditing] = useState<{
     title: string;
@@ -286,26 +293,11 @@ export function DocumentChangeDetail({
   // The updates are their own call: the Changes tab lists changes, and a list
   // has no use for the history inside each one. A failure costs the update
   // count and the update events, not the review.
-  useEffect(() => {
-    let cancelled = false;
-
-    void (async () => {
-      try {
-        const payload = await listChangeUpdates(scope, prNum);
-        if (cancelled) return;
-        setUpdates(payload.updates);
-        setResetsApprovals(payload.resetsApprovals);
-      } catch {
-        if (cancelled) return;
-        setUpdates([]);
-        setResetsApprovals(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [scope, prNum]);
+  const updatesRead = useQuery(
+    changeUpdatesQuery(scope.org, scope.binder, prNum),
+  );
+  const updates: ChangeUpdate[] = updatesRead.data?.updates ?? NO_UPDATES;
+  const resetsApprovals = updatesRead.data?.resetsApprovals ?? false;
 
   function updateActionState(update: Partial<PRActionState>) {
     setActionState((prev) => ({ ...prev, ...update }));
@@ -370,13 +362,26 @@ export function DocumentChangeDetail({
     }
   }
 
-  const reviewPerms = canUserReview(
-    currentUser,
-    change.submittedBy,
-    branchProtection,
-  );
-  const mergePerms = canUserMerge(currentUser, branchProtection);
-  const mergeReady = change.open && change.approvalState === "approved";
+  const reviewPerms =
+    decisionRights && !decisionRights.canApprove
+      ? {
+          allowed: false,
+          reason:
+            "Your approval would not count in this binder. A binder admin can add you to a group that reviews it.",
+        }
+      : canUserReview(currentUser, change.submittedBy, branchProtection);
+  const mergePerms =
+    decisionRights && !decisionRights.canPublish
+      ? {
+          allowed: false,
+          reason:
+            "Only an editor or admin of this binder can publish. Ask one of them to publish it.",
+        }
+      : canUserMerge(currentUser, branchProtection);
+  // The server's answer, which knows this binder's protection; the rule
+  // itself only for a change that arrived without one.
+  const mergeReady =
+    change.open && (change.isApproved ?? isReadyToPublish(change));
   // The server enforces this too; the disabled button just avoids a pointless
   // round trip that ends in a 409.
   const threadsBlockPublish = blockOnUnresolvedThreads && unresolvedCount > 0;
@@ -399,6 +404,12 @@ export function DocumentChangeDetail({
     mergeReady,
     canReview: reviewPerms.allowed,
     canMerge: mergePerms.allowed,
+    hasApproved: change.reviewers.some(
+      (reviewer) =>
+        reviewer.login === currentUser &&
+        reviewer.status === "approved" &&
+        !reviewer.stale,
+    ),
   });
   // A delinquent organization records no decisions. Folded into `decision`
   // rather than checked at each button because "none" is already the shape
@@ -449,11 +460,10 @@ export function DocumentChangeDetail({
         ? "One discussion is still open, and this binder holds the publish until every one is resolved."
         : `${unresolvedCount} discussions are still open, and this binder holds the publish until every one is resolved.`
       : null,
-    change.open && ownSubmission && reviewDecision !== "publish"
+    change.open && ownSubmission && !mergeReady
       ? "You submitted this change — it is waiting on its reviewers."
       : null,
-    change.open && !isAnonymous && !ownSubmission ? reviewPerms.reason : null,
-    mergeReady && !mergePerms.allowed ? mergePerms.reason : null,
+    // The reasons a dimmed button gives are said under the button itself.
   ].filter((line): line is string => Boolean(line));
 
   return (
@@ -618,6 +628,7 @@ export function DocumentChangeDetail({
                foot stacked under its own. */
             onOpenSignOffRules={onOpenSignOffRules}
             canManage={canManageAssignments && change.open}
+            decided={!change.open}
             onChanged={onChanged}
           />
         </div>
@@ -715,6 +726,42 @@ export function DocumentChangeDetail({
                   </button>
                 </div>
               </div>
+            ) : reviewDecision === "publish-locked" ? (
+              <>
+                <button
+                  className="bs-btn bs-btn--approve bs-btn--block"
+                  type="button"
+                  disabled
+                  aria-describedby="rev-decision-locked"
+                >
+                  Publish
+                </button>
+                <p className="rev-decision-locked" id="rev-decision-locked">
+                  {mergePerms.reason}
+                </p>
+              </>
+            ) : reviewDecision === "review-locked" ? (
+              <>
+                <button
+                  className="bs-btn bs-btn--approve bs-btn--block"
+                  type="button"
+                  disabled
+                  aria-describedby="rev-decision-locked"
+                >
+                  Approve
+                </button>
+                <button
+                  className="bs-btn bs-btn-secondary bs-btn--block"
+                  type="button"
+                  disabled
+                  aria-describedby="rev-decision-locked"
+                >
+                  Ask for changes
+                </button>
+                <p className="rev-decision-locked" id="rev-decision-locked">
+                  {reviewPerms.reason ?? "You cannot approve this change."}
+                </p>
+              </>
             ) : reviewDecision === "publish" ? (
               <button
                 className="bs-btn bs-btn--approve bs-btn--block"

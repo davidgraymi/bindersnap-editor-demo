@@ -190,6 +190,31 @@ describe("buildOpenChangeRows", () => {
     expect(rows[0]?.meta).not.toContain("approvals");
   });
 
+  test("a request nobody has answered is waiting even where no approval is needed", () => {
+    // A binder that needs no approvals is ready to publish the moment the
+    // change opens. Somebody asked to review it still owes an answer, and
+    // their Home is where they find that out.
+    const rows = buildOpenChangeRows(
+      [
+        document({
+          pendingPRs: [
+            change({
+              approvalCount: 0,
+              requiredApprovals: 0,
+              isApproved: true,
+              reviewers: [reviewer("david")],
+            }),
+          ],
+        }),
+      ],
+      "david",
+      NOW,
+    );
+
+    expect(rows[0]?.kind).toBe("needs_review");
+    expect(selectWaitingOnYou(rows)).toHaveLength(1);
+  });
+
   test("the reader's own open change names who it is waiting on", () => {
     const rows = buildOpenChangeRows(
       [
@@ -527,6 +552,7 @@ describe("naming what a row is about", () => {
               approvalCount: 3,
               requiredApprovals: 3,
               approvalState: "approved",
+              isApproved: true,
             }),
           ],
         }),
@@ -554,6 +580,7 @@ describe("naming what a row is about", () => {
               approvalCount: 3,
               requiredApprovals: 3,
               approvalState: "approved",
+              isApproved: true,
             }),
           ],
         }),

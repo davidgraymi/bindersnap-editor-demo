@@ -128,10 +128,14 @@ test("a document going into the archive says so, and offers what is going", asyn
 
   // The change publishes no version at all, so the old screen — which was
   // scoped to one versioned document — had nothing to show for it.
+  // A status in the file's bar, and nothing in a frame below it: a sentence
+  // there read as words in the document.
   await expect(page.locator(".cmp-kind--removed")).toContainText("Archiv");
-  await expect(page.locator(".cmp-removed-line")).toContainText(
-    "Nothing is lost",
-  );
+  await expect(
+    page
+      .locator(".cmp-file", { has: page.locator(".cmp-kind--removed") })
+      .locator(".cmp-file-body"),
+  ).toHaveCount(0);
 
   // Not a diff: a removal has no file on the branch. What it has is the last
   // version on record, which is the honest thing to offer instead.
@@ -254,7 +258,7 @@ test("the branch opens the binder at its root, and View opens the file", async (
 
   // A policy opened from there is still read on the branch.
   await page
-    .getByRole("link", { name: "Code Of Conduct", exact: true })
+    .getByRole("link", { name: "Code of Conduct", exact: true })
     .click();
   await expect(page).toHaveURL(/\/clinical\/-\/blob\/(?!main\/)[^/?]+\/[^?]+$/);
   await expect(page.locator("h1.bs-title")).toHaveText(/code of conduct/i);
@@ -275,8 +279,12 @@ test("every binder says which version its tree is, and switches to another", asy
   await expect(menu).toContainText("Change requests");
 
   // A change request's branch is one pick away, and the page stays the
-  // binder's own.
-  await menu.getByRole("menuitemradio").nth(1).click();
+  // binder's own. Picked by what it says, not where it sits: until the
+  // change requests load, the second row can be one of alice's drafts.
+  await menu
+    .getByRole("menuitemradio", { name: /Change \d+ ·/ })
+    .first()
+    .click();
   await expect(page).toHaveURL(/\/clinical\/-\/tree\/[^/?]+$/);
   await expect(page.locator("h1.bs-title")).toHaveText("Clinical");
   await expect(page.locator(".bs-refpick--branch")).toBeVisible();

@@ -1,6 +1,11 @@
 import type { components } from "./spec/gitea";
 
-import { toGiteaApiError, unwrap, type GiteaClient } from "./client";
+import {
+  readAllPages,
+  toGiteaApiError,
+  unwrap,
+  type GiteaClient,
+} from "./client";
 import { latestReviewByUser } from "../change-assignments";
 
 type PullRequest = components["schemas"]["PullRequest"];
@@ -191,25 +196,15 @@ async function listPullReviews(
   repo: string,
   pullNumber: number,
 ): Promise<PullReview[]> {
-  const allReviews: PullReview[] = [];
-  const limit = 100;
-
-  for (let page = 1; page < 100; page += 1) {
-    const reviews = await unwrap(
+  // `limit: 100` used to answer with 50, which read as a short page, so a
+  // change with more than 50 reviews lost the rest — approvals included.
+  const allReviews: PullReview[] = await readAllPages((query) =>
+    unwrap(
       client.GET("/repos/{owner}/{repo}/pulls/{index}/reviews", {
-        params: {
-          path: { owner, repo, index: pullNumber },
-          query: { limit, page },
-        },
+        params: { path: { owner, repo, index: pullNumber }, query },
       }),
-    );
-
-    allReviews.push(...reviews);
-
-    if (reviews.length < limit) {
-      break;
-    }
-  }
+    ),
+  );
 
   return allReviews;
 }
@@ -795,8 +790,12 @@ export async function findClosedChanges(params: {
   const PAGE_SIZE = 50;
   const MAX_PAGES = 40;
 
-  for (let page = 1; page <= MAX_PAGES && !done(); page += 1) {
-    const batch = await unwrap(
+  // Page 1 alone — the change asked about is usually recent — then three at a
+  // time. This runs on every binder page, and a document last changed long
+  // ago used to cost up to forty round trips one after another.
+  const WAVE = 3;
+  const readPage = (page: number) =>
+    unwrap(
       client.GET("/repos/{owner}/{repo}/pulls", {
         params: {
           path: { owner, repo },
@@ -809,7 +808,7 @@ export async function findClosedChanges(params: {
         },
       }),
     );
-
+  const take = (batch: Awaited<ReturnType<typeof readPage>> | undefined) => {
     for (const pullRequest of batch ?? []) {
       const number = pullRequest.number;
       if (number === undefined) continue;
@@ -818,8 +817,25 @@ export async function findClosedChanges(params: {
       const sha = pullRequest.merge_commit_sha ?? "";
       if (commits.has(sha)) byMergeCommit.set(sha, { number, title });
     }
+    return (batch ?? []).length === PAGE_SIZE;
+  };
 
-    if (!batch || batch.length < PAGE_SIZE) break;
+  if (!take(await readPage(1))) return { byNumber, byMergeCommit };
+
+  for (let page = 2; page <= MAX_PAGES && !done(); page += WAVE) {
+    const wave = Array.from(
+      { length: Math.min(WAVE, MAX_PAGES - page + 1) },
+      (_, offset) => page + offset,
+    );
+    const batches = await Promise.all(wave.map(readPage));
+    let more = true;
+    for (const batch of batches) {
+      if (!take(batch)) {
+        more = false;
+        break;
+      }
+    }
+    if (!more) break;
   }
 
   return { byNumber, byMergeCommit };
@@ -836,17 +852,53 @@ export async function findClosedChanges(params: {
 export async function listPullRequestsWithReviews(
   params: ListPullRequestsParams,
 ): Promise<PullRequestWithReviews[]> {
+  return attachReviews({
+    ...params,
+    pullRequests: await listPullRequestsWithoutReviews(params),
+  });
+}
+
+/**
+ * The changes themselves — number, branch, title, state — and not their
+ * reviews.
+ *
+ * {@link listPullRequestsWithReviews} reads every change's reviews, one call or
+ * more each, and most callers then keep only the number or the branch: a
+ * binder's document counts, the sign-off check, "is this change open". On a
+ * list page that was a third of every Gitea call made. Take this, narrow to
+ * the changes that matter, and {@link attachReviews} to those.
+ */
+export async function listPullRequestsWithoutReviews(
+  params: ListPullRequestsParams,
+): Promise<PullRequest[]> {
   const { client, owner, repo, state, page } = params;
 
-  const pullRequests = await unwrap(
-    client.GET("/repos/{owner}/{repo}/pulls", {
-      params: {
-        path: { owner, repo },
-        query: { state, page },
-      },
-    }),
-  );
+  // One page when the caller asked for one; otherwise all of them. Unpaged,
+  // Gitea answers with 30, and an open-changes list, a binder's "N in review"
+  // and Home all stopped at the thirtieth change.
+  return page === undefined
+    ? await readAllPages((query) =>
+        unwrap(
+          client.GET("/repos/{owner}/{repo}/pulls", {
+            params: { path: { owner, repo }, query: { state, ...query } },
+          }),
+        ),
+      )
+    : await unwrap(
+        client.GET("/repos/{owner}/{repo}/pulls", {
+          params: { path: { owner, repo }, query: { state, page } },
+        }),
+      );
+}
 
+/** Read the reviews of changes already listed, and derive their approval state. */
+export async function attachReviews(params: {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  pullRequests: readonly PullRequest[];
+}): Promise<PullRequestWithReviews[]> {
+  const { client, owner, repo, pullRequests } = params;
   return Promise.all(
     pullRequests.map(async (pullRequest) => {
       const reviews = pullRequest.number
@@ -865,6 +917,26 @@ export async function listPullRequests(
 }
 
 /** One change and its reviews, for the pages that show a single change. */
+/**
+ * A change's head: its branch, and the commit it is at now.
+ *
+ * Publish records the commit in its plan, so a change pushed to after it was
+ * checked is not merged on the strength of approvals for something else.
+ */
+export async function getPullRequestHead(
+  params: PullRequestRef,
+): Promise<{ ref: string; sha: string }> {
+  const { client, owner, repo, pullNumber } = params;
+
+  const pullRequest = await unwrap(
+    client.GET("/repos/{owner}/{repo}/pulls/{index}", {
+      params: { path: { owner, repo, index: pullNumber } },
+    }),
+  );
+
+  return { ref: pullRequest.head?.ref ?? "", sha: pullRequest.head?.sha ?? "" };
+}
+
 /**
  * A change's head branch, and nothing else.
  *
@@ -885,6 +957,27 @@ export async function getPullRequestHeadBranch(
   );
 
   return pullRequest.head?.ref ?? "";
+}
+
+/**
+ * The commit a merged change landed as on its base branch, or null.
+ *
+ * What a version tag has to point at. `main` is not the same thing: a second
+ * change published a moment later moves `main`, and a tag aimed at the branch
+ * name after that lands on the other change's merge — a wrong git coordinate
+ * in the evidence, and one nothing would ever notice.
+ */
+export async function readMergeCommitSha(
+  params: PullRequestRef,
+): Promise<string | null> {
+  const { client, owner, repo, pullNumber } = params;
+  const pullRequest = (await unwrap(
+    client.GET("/repos/{owner}/{repo}/pulls/{index}", {
+      params: { path: { owner, repo, index: pullNumber } },
+    }),
+  )) as { merged?: boolean; merge_commit_sha?: string | null };
+  if (!pullRequest?.merged) return null;
+  return pullRequest.merge_commit_sha || null;
 }
 
 export async function getPullRequestWithReviews(

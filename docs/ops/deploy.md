@@ -163,12 +163,10 @@ against a database stamped by a newer version. So bumping `gitea/gitea:<tag>` in
 alone cannot undo: reverting the tag brings back the old binary on top of an
 already-migrated database and the container will fail to start.
 
-**Dev and production are deliberately on different Gitea versions.** Dev runs a
-digest-pinned 28.0.0 nightly for `block_on_codeowner_reviews`, which is what
-makes per-folder sign-off enforce anything; production stays on the released
-`1.27.3` precisely because of the paragraph above — a nightly's migration would
-be a one-way door taken on a build nobody has released. The two compose files
-each say so. When 28.0.0 ships a real tag, they move together.
+**Dev and production run the same Gitea**, pinned by tag and digest in
+`docker-compose.yml` and `deploy/files/docker-compose.prod.yml`. Change both in
+one commit. Version 28.0.0 is the minimum: its `block_on_codeowner_reviews` is
+what makes per-folder sign-off enforce anything.
 
 Rolling a Gitea upgrade back means restoring the database too:
 
@@ -182,6 +180,61 @@ Rolling a Gitea upgrade back means restoring the database too:
 Because of this, treat a Gitea bump as its own deploy: merge it on its own,
 confirm the Litestream replica is current beforehand, and watch the container
 come up rather than batching it with application changes.
+
+### Starting production from nothing
+
+This is how production moved from Gitea 1.27.3 to 28.0.0. Nobody migrated
+anything; we erased the data and started again. Use it again only when every
+organization, binder, account and session in production can be thrown away.
+It is not a rollback.
+
+The API's SQLite (`api-data`) goes with Gitea's (`gitea-data`). Its rows name
+organizations and binders that will no longer exist.
+
+1. Merge the change that needs the clean start. Then stop the stack on the host.
+   The volume names are prefixed with the compose project, so list them first
+   and remove the two that end in `gitea-data` and `api-data`:
+
+   ```bash
+   cd /opt/bindersnap
+   docker compose --env-file .env.prod -f docker-compose.prod.yml down
+   docker volume ls --format '{{.Name}}' | grep -E '(gitea|api)-data$'
+   docker volume rm <the two names listed above>
+   ```
+
+2. Put both service-account tokens back to the bootstrap placeholder:
+
+   ```bash
+   for name in gitea_service_token gitea_admin_token; do
+     aws ssm put-parameter --overwrite --type SecureString \
+       --name "/bindersnap/prod/${name}" \
+       --value "BOOTSTRAP_WITH_scripts/bootstrap-gitea-service-account.ts"
+   done
+   ```
+
+   `gitea_admin_user` and `gitea_admin_pass` must still be in SSM. The
+   bootstrap creates the admin from them.
+
+3. Re-run the deploy (`deploy-pyinfra.yml` → _Run workflow_, or
+   `deploy/bin/ssm-connect.sh`). It renders the placeholder into `.env.prod`,
+   and `bindersnap-bootstrap-gitea` boots an empty Gitea. That creates the
+   admin and the `bindersnap-service` account, then mints the read and admin
+   tokens into SSM and the env file. `bindersnap-stack-up` then starts the rest.
+
+4. Check it came up: `curl -s https://gitea.bindersnap.com/api/v1/version`
+   reports the new version, and a fresh signup creates an organization.
+
+Some old data survives the wipe:
+
+- Litestream starts a new generation for each new database. It does not
+  restore on start, so the stack cannot bring the old data back. The old
+  generations stay in the S3 bucket until its lifecycle rule expires them.
+- The DLM snapshots of the data volume still hold the old data.
+- Stripe customers and subscriptions are not touched. A subscription that named
+  an old organization belongs to nobody now. Cancel it in Stripe.
+
+To truly erase the old data, delete those as well. Delete them only after
+the new stack has been checked.
 
 ## Validation Checklist
 

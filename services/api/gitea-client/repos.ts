@@ -8,7 +8,6 @@ import {
 } from "./client";
 
 type Repository = components["schemas"]["Repository"];
-type Tag = components["schemas"]["Tag"];
 type BranchProtection = components["schemas"]["BranchProtection"];
 type User = components["schemas"]["User"];
 type RepoCollaboratorPermission =
@@ -254,32 +253,6 @@ function normalizeRepoCollaboratorPermission(
   };
 }
 
-function parseDocTagVersion(tagName: string): number | null {
-  const match = /^doc\/v(\d{4})$/.exec(tagName);
-  if (!match) {
-    return null;
-  }
-
-  const version = Number.parseInt(match[1] ?? "", 10);
-  return Number.isFinite(version) && version > 0 ? version : null;
-}
-
-function normalizeDocTag(tag: Tag): DocTag | null {
-  const name = tag.name ?? "";
-  const version = parseDocTagVersion(name);
-
-  if (version === null) {
-    return null;
-  }
-
-  return {
-    name,
-    version,
-    sha: tag.commit?.sha ?? "",
-    created: tag.commit?.created ?? "",
-  };
-}
-
 export interface SearchWorkspaceReposParams {
   client: GiteaClient;
   /** Free-text keyword to filter repository names/descriptions. */
@@ -387,12 +360,11 @@ function normalizeBranchProtection(
     blockOnRejectedReviews: raw.block_on_rejected_reviews ?? false,
     blockOnOfficialReviewRequests:
       raw.block_on_official_review_requests ?? false,
-    // Absent on Gitea 1.27.3, which is what production runs — so `false` here
-    // means "no per-folder gate", whether because it is switched off or
-    // because this Gitea has never heard of it. Those are the same fact to
-    // every caller: sign-off rules are not being enforced.
+    // `false` means "no per-folder gate": sign-off rules are not being
+    // enforced on this binder.
     blockOnCodeownerReviews: raw.block_on_codeowner_reviews ?? false,
     dismissStaleApprovals: raw.dismiss_stale_approvals ?? false,
+    ignoreStaleApprovals: raw.ignore_stale_approvals ?? false,
     enablePush: raw.enable_push ?? false,
   };
 }
@@ -438,54 +410,6 @@ export async function bootstrapEmptyMainBranch(
   );
 }
 
-export async function getLatestDocTag(
-  client: GiteaClient,
-  owner: string,
-  repo: string,
-): Promise<DocTag | null> {
-  const tags = await unwrap(
-    client.GET("/repos/{owner}/{repo}/tags", {
-      params: {
-        path: { owner, repo },
-        query: { limit: 100 },
-      },
-    }),
-  );
-
-  const docTags = tags
-    .map(normalizeDocTag)
-    .filter((tag): tag is DocTag => tag !== null);
-
-  if (docTags.length === 0) {
-    return null;
-  }
-
-  docTags.sort((a, b) => b.version - a.version);
-  return docTags[0] ?? null;
-}
-
-export async function listDocTags(
-  client: GiteaClient,
-  owner: string,
-  repo: string,
-): Promise<DocTag[]> {
-  const tags = await unwrap(
-    client.GET("/repos/{owner}/{repo}/tags", {
-      params: {
-        path: { owner, repo },
-        query: { limit: 100 },
-      },
-    }),
-  );
-
-  const docTags = tags
-    .map(normalizeDocTag)
-    .filter((tag): tag is DocTag => tag !== null);
-
-  docTags.sort((a, b) => b.version - a.version);
-  return docTags;
-}
-
 export interface RepoBranchProtection {
   requiredApprovals: number;
   enableApprovalsWhitelist: boolean;
@@ -507,9 +431,6 @@ export interface RepoBranchProtection {
    * for every CODEOWNERS rule matching a changed file, one of *that rule's*
    * owners must have approved. It ignores officialness entirely, which is why
    * a team code owner enforces under this gate and only under this gate.
-   *
-   * False on a Gitea that does not have the field, which is how the rest of
-   * the code tells the two versions apart without sniffing a version string.
    */
   blockOnCodeownerReviews: boolean;
   /**
@@ -518,6 +439,8 @@ export interface RepoBranchProtection {
    * that actually gets published.
    */
   dismissStaleApprovals: boolean;
+  /** Stale approvals stop counting without being dismissed. */
+  ignoreStaleApprovals: boolean;
   /**
    * Whether anybody may push straight to the protected branch.
    *
@@ -544,14 +467,6 @@ export async function getRepoBranchProtection(
   const rule = exact ?? rules[0] ?? null;
 
   return rule ? normalizeBranchProtection(rule) : null;
-}
-
-export interface CreateDocTagParams {
-  client: GiteaClient;
-  owner: string;
-  repo: string;
-  version: number;
-  target: string;
 }
 
 export interface UpdateRepoBranchProtectionParams {

@@ -32,6 +32,9 @@ import {
   stripeRunTag,
 } from "./stripe-webhook";
 import { STRIPE_API_VERSION } from "../services/api/stripe/api-version";
+import { confirmFromEmail, signUpAndConfirm } from "./mailpit";
+import { acceptTermsForOrganization, agreeToTerms } from "./helpers";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 // ---------------------------------------------------------------------------
 // Environment
@@ -454,14 +457,18 @@ async function signUpUser(credentials: {
   email: string;
   password: string;
 }): Promise<string> {
-  const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+  const response = await signUpAndConfirm(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       // Origin is required — signup goes through CORS origin enforcement.
       Origin: APP_ORIGIN,
     },
-    body: JSON.stringify(credentials),
+    body: JSON.stringify({
+      firstName: "Test",
+      lastName: "User",
+      ...credentials,
+    }),
   });
 
   if (!response.ok) {
@@ -509,7 +516,10 @@ async function signUpOrganization(credentials: {
       "Content-Type": "application/json",
       Origin: APP_ORIGIN,
     },
-    body: JSON.stringify({ name: `Stripe Test ${credentials.username}` }),
+    body: JSON.stringify({
+      acceptedTerms: LEGAL_VERSION,
+      name: `Stripe Test ${credentials.username}`,
+    }),
   });
 
   if (!created.ok) {
@@ -914,7 +924,9 @@ test.describe("Stripe subscription lifecycle", () => {
     const credentials = uniqueCredentials();
 
     try {
-      await page.goto("/signup");
+      await page.goto("/-/signup");
+      await page.getByLabel("First name").fill("Test");
+      await page.getByLabel("Last name").fill("User");
       await page.getByLabel("Username").fill(credentials.username);
       await page.getByLabel("Email").fill(credentials.email);
       await page
@@ -923,7 +935,9 @@ test.describe("Stripe subscription lifecycle", () => {
       await page
         .getByLabel("Confirm Password", { exact: true })
         .fill(credentials.password);
+      await agreeToTerms(page);
       await page.getByRole("button", { name: "Create account" }).click();
+      await confirmFromEmail(page, credentials.email);
 
       // Signup no longer creates an organization behind the person's back, so
       // the account lands here to name one. Everything after this bills that
@@ -934,9 +948,13 @@ test.describe("Stripe subscription lifecycle", () => {
       // A fresh display name per run. The API steps a taken name to the next
       // free suffix and gives up at twenty, so a fixed one here quietly caps
       // this suite at twenty runs against any one stack.
+      // Somebody new is asked first whether they are starting or joining.
+      await page.getByLabel("Start a new organization").check();
+      await page.getByRole("button", { name: "Continue" }).click();
       await page
         .getByLabel("Organization name")
         .fill(`Mercy Health ${randomUUID().slice(0, 6)}`);
+      await acceptTermsForOrganization(page);
       await page.getByRole("button", { name: "Create organization" }).click();
 
       // Wait for the workspace itself, not for the absence of /billing: a
@@ -954,7 +972,7 @@ test.describe("Stripe subscription lifecycle", () => {
 
       // Subscribing is now a thing the customer chooses to do, so go and do it.
       // A trial: the page says so, and offers the one thing to do about it.
-      await page.goto("/billing", { waitUntil: "domcontentloaded" });
+      await page.goto("/-/billing", { waitUntil: "domcontentloaded" });
       await expect(page.getByRole("region", { name: "Plan" })).toContainText(
         "Trial",
         { timeout: 20_000 },

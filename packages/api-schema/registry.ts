@@ -1,12 +1,31 @@
 import "./init-openapi";
+import {
+  AcceptInvitationResultSchema,
+  CreateInvitationBodySchema,
+  InvitationListPayloadSchema,
+  InvitationPayloadSchema,
+  InvitationSummarySchema,
+} from "./schemas/invitations";
 import { OpenAPIRegistry } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
 
 // Import all schemas AFTER calling extendZodWithOpenApi in init-openapi
+import { OnboardingPayloadSchema } from "./schemas/onboarding";
+import {
+  NotificationCountPayloadSchema,
+  NotificationListPayloadSchema,
+  ReadNotificationsBodySchema,
+} from "./schemas/notifications";
 import {
   SessionAuthStateSchema,
   LoginBodySchema,
   SignupBodySchema,
+  EmailVerificationStateSchema,
+  ForgotPasswordBodySchema,
+  ForgotPasswordResultSchema,
+  ResetLinkStatusSchema,
+  ResetPasswordBodySchema,
+  VerifyEmailBodySchema,
 } from "./schemas/auth";
 import {
   ChangeAssignmentsSchema,
@@ -34,10 +53,26 @@ import {
 } from "./schemas/documents";
 import { SearchUsersPayloadSchema } from "./schemas/users";
 import {
+  AcceptLegalBodySchema,
+  LegalStatusPayloadSchema,
+} from "./schemas/legal";
+import {
+  AccountBlockersSchema,
+  AccountRefusalSchema,
+  AccountUserPayloadSchema,
+  ChangePasswordBodySchema,
+  DeleteAccountBodySchema,
+  ProfileNameBodySchema,
+  EmailPreferencesBodySchema,
+  EmailPreferencesPayloadSchema,
+} from "./schemas/account";
+import {
   NewOrganizationBodySchema,
   CreatedOrganizationPayloadSchema,
   OrganizationListPayloadSchema,
   OrganizationSummarySchema,
+  DeleteOrganizationBodySchema,
+  OrganizationDeletionSchema,
 } from "./schemas/organizations";
 import {
   PublishedWorkspaceChangePayloadSchema,
@@ -72,9 +107,12 @@ import {
   WorkspaceDocumentListPayloadSchema,
   CreatedWorkspaceDocumentPayloadSchema,
   CreatedWorkspacePayloadSchema,
+  ChangeConflictsPayloadSchema,
   NewWorkspaceBodySchema,
+  ResolveConflictsBodySchema,
   WorkspaceListPayloadSchema,
   WorkspaceSummarySchema,
+  DeleteBinderBodySchema,
 } from "./schemas/workspaces";
 import {
   BillingActionBodySchema,
@@ -94,6 +132,10 @@ export const registry = new OpenAPIRegistry();
 registry.register("SessionAuthState", SessionAuthStateSchema);
 registry.register("LoginBody", LoginBodySchema);
 registry.register("SignupBody", SignupBodySchema);
+registry.register("ForgotPasswordBody", ForgotPasswordBodySchema);
+registry.register("ForgotPasswordResult", ForgotPasswordResultSchema);
+registry.register("ResetLinkStatus", ResetLinkStatusSchema);
+registry.register("ResetPasswordBody", ResetPasswordBodySchema);
 registry.register("WorkspaceDocumentSummary", WorkspaceDocumentSummarySchema);
 registry.register("DocumentDetailPayload", DocumentDetailPayloadSchema);
 registry.register("DocumentHistoryPayload", DocumentHistoryPayloadSchema);
@@ -110,6 +152,13 @@ registry.register(
 registry.register("DiscussionSummary", DiscussionSummarySchema);
 registry.register("ChangeUpdatesPayload", ChangeUpdatesPayloadSchema);
 registry.register("SearchUsersPayload", SearchUsersPayloadSchema);
+registry.register("ProfileNameBody", ProfileNameBodySchema);
+registry.register("AccountUserPayload", AccountUserPayloadSchema);
+registry.register("NewPasswordBody", ChangePasswordBodySchema);
+registry.register("AccountDeletionBody", DeleteAccountBodySchema);
+registry.register("AccountRefusal", AccountRefusalSchema);
+registry.register("OrganizationDeletion", OrganizationDeletionSchema);
+registry.register("AccountBlockers", AccountBlockersSchema);
 registry.register("OrganizationSummary", OrganizationSummarySchema);
 registry.register("OrganizationListPayload", OrganizationListPayloadSchema);
 registry.register("NewOrganizationBody", NewOrganizationBodySchema);
@@ -194,6 +243,110 @@ registry.registerPath({
   },
 });
 
+registry.registerPath({
+  method: "post",
+  path: "/auth/email/verify",
+  operationId: "authVerifyEmail",
+  tags: ["auth"],
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: VerifyEmailBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Confirmed — now, or by an earlier visit to the same link",
+      content: {
+        "application/json": { schema: EmailVerificationStateSchema },
+      },
+    },
+    404: { description: "Not a link we sent" },
+    410: { description: "The link expired" },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/auth/email/resend",
+  operationId: "authResendVerification",
+  tags: ["auth"],
+  responses: {
+    200: {
+      description: "Already confirmed; nothing sent",
+      content: {
+        "application/json": { schema: EmailVerificationStateSchema },
+      },
+    },
+    202: {
+      description: "A new link is on its way",
+      content: {
+        "application/json": { schema: EmailVerificationStateSchema },
+      },
+    },
+    401: { description: "Not authenticated" },
+    429: { description: "One went out a moment ago" },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/auth/password/forgot",
+  operationId: "authForgotPassword",
+  tags: ["auth"],
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: ForgotPasswordBodySchema } },
+    },
+  },
+  responses: {
+    202: {
+      description:
+        "Accepted. The same answer whether or not the address has an account.",
+      content: { "application/json": { schema: ForgotPasswordResultSchema } },
+    },
+    429: { description: "Too many attempts" },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/auth/password/reset",
+  operationId: "authCheckResetLink",
+  tags: ["auth"],
+  request: {
+    query: z.object({ token: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Whether the reset link still works",
+      content: { "application/json": { schema: ResetLinkStatusSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/auth/password/reset",
+  operationId: "authResetPassword",
+  tags: ["auth"],
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: ResetPasswordBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Password set; every other session ended; signed in",
+      content: { "application/json": { schema: SessionAuthStateSchema } },
+    },
+    400: { description: "Password too short" },
+    410: { description: "The link expired or was already used" },
+  },
+});
+
 // Document routes
 registry.registerPath({
   method: "get",
@@ -211,6 +364,71 @@ registry.registerPath({
       description: "Every document in every binder this person can reach",
       content: {
         "application/json": { schema: LibraryPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/onboarding",
+  operationId: "getOnboarding",
+  tags: ["onboarding"],
+  responses: {
+    200: {
+      description:
+        "How far the reader has got with moving in, read from what exists",
+      content: { "application/json": { schema: OnboardingPayloadSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/notifications",
+  operationId: "listNotifications",
+  tags: ["notifications"],
+  request: { query: z.object({ all: z.enum(["1"]).optional() }) },
+  responses: {
+    200: {
+      description: "Your newest notifications, with the reason each is yours",
+      content: {
+        "application/json": { schema: NotificationListPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/notifications/count",
+  operationId: "countNotifications",
+  tags: ["notifications"],
+  responses: {
+    200: {
+      description: "How many notifications are unread",
+      content: {
+        "application/json": { schema: NotificationCountPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/notifications/read",
+  operationId: "readNotifications",
+  tags: ["notifications"],
+  request: {
+    body: {
+      content: { "application/json": { schema: ReadNotificationsBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Marked read; how many are still unread",
+      content: {
+        "application/json": { schema: NotificationCountPayloadSchema },
       },
     },
   },
@@ -260,6 +478,172 @@ const discussionParams = z.object({
 
 const threadParams = discussionParams.extend({ threadId: z.string() });
 
+// Account routes: the signed-in person's own account.
+registry.registerPath({
+  method: "patch",
+  path: "/api/app/account/profile",
+  operationId: "updateProfile",
+  tags: ["account"],
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: ProfileNameBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "The name was saved",
+      content: { "application/json": { schema: AccountUserPayloadSchema } },
+    },
+    400: { description: "A first or last name is missing or too long" },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/account/blockers",
+  operationId: "getAccountBlockers",
+  tags: ["account"],
+  responses: {
+    200: {
+      description: "What would refuse a rename or a deletion",
+      content: { "application/json": { schema: AccountBlockersSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/account/email-preferences",
+  operationId: "getEmailPreferences",
+  tags: ["account"],
+  responses: {
+    200: {
+      description: "Which change emails this person gets",
+      content: {
+        "application/json": { schema: EmailPreferencesPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "put",
+  path: "/api/app/account/email-preferences",
+  operationId: "updateEmailPreferences",
+  tags: ["account"],
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: EmailPreferencesBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Saved; the full set as it now stands",
+      content: {
+        "application/json": { schema: EmailPreferencesPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/email/unsubscribe",
+  operationId: "unsubscribeFromEmail",
+  tags: ["account"],
+  request: { query: z.object({ token: z.string() }) },
+  responses: {
+    200: {
+      description:
+        "Every change email off for the token's owner. The same answer for a token that matches nobody.",
+      content: {
+        "application/json": { schema: z.object({ ok: z.boolean() }) },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/account/password",
+  operationId: "changePassword",
+  tags: ["account"],
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: ChangePasswordBodySchema } },
+    },
+  },
+  responses: {
+    204: { description: "Changed; every other session was signed out" },
+    400: {
+      description: "The new password is too short",
+      content: { "application/json": { schema: AccountRefusalSchema } },
+    },
+    403: {
+      description: "The current password was wrong",
+      content: { "application/json": { schema: AccountRefusalSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "delete",
+  path: "/api/app/account",
+  operationId: "deleteAccount",
+  tags: ["account"],
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: DeleteAccountBodySchema } },
+    },
+  },
+  responses: {
+    204: { description: "Deleted, and signed out" },
+    409: {
+      description: "This person is the only owner of an organization",
+      content: { "application/json": { schema: AccountRefusalSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/orgs/{org}/deletion",
+  operationId: "getOrganizationDeletion",
+  tags: ["organizations"],
+  request: { params: z.object({ org: z.string() }) },
+  responses: {
+    200: {
+      description: "Whether this caller may delete it, and what is in the way",
+      content: { "application/json": { schema: OrganizationDeletionSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "delete",
+  path: "/api/app/orgs/{org}",
+  operationId: "deleteOrganization",
+  tags: ["organizations"],
+  request: {
+    params: z.object({ org: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: DeleteOrganizationBodySchema },
+      },
+    },
+  },
+  responses: {
+    204: { description: "Deleted" },
+    403: { description: "Only an owner can delete it" },
+    409: { description: "Binders are still in it, or billing is active" },
+  },
+});
+
 // Users route
 registry.registerPath({
   method: "get",
@@ -277,6 +661,40 @@ registry.registerPath({
     200: {
       description: "User search results",
       content: { "application/json": { schema: SearchUsersPayloadSchema } },
+    },
+  },
+});
+
+// Agreement to the Terms
+registry.registerPath({
+  method: "get",
+  path: "/api/app/legal",
+  operationId: "getLegalStatus",
+  tags: ["legal"],
+  responses: {
+    200: {
+      description:
+        "What the signed-in person still has to accept, for themselves and for organizations they own",
+      content: { "application/json": { schema: LegalStatusPayloadSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/legal/accept",
+  operationId: "acceptLegal",
+  tags: ["legal"],
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: AcceptLegalBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Recorded; what is still left to accept",
+      content: { "application/json": { schema: LegalStatusPayloadSchema } },
     },
   },
 });
@@ -394,6 +812,24 @@ registry.registerPath({
 });
 
 registry.registerPath({
+  method: "delete",
+  path: "/api/app/binders/{org}/{binder}",
+  operationId: "deleteBinder",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    body: {
+      required: true,
+      content: { "application/json": { schema: DeleteBinderBodySchema } },
+    },
+  },
+  responses: {
+    204: { description: "Deleted, with everything in it" },
+    403: { description: "Only an owner of the organization can delete it" },
+  },
+});
+
+registry.registerPath({
   method: "get",
   path: "/api/app/binders/{org}/{binder}/changes",
   operationId: "listBinderChanges",
@@ -448,6 +884,99 @@ registry.registerPath({
       content: {
         "application/json": { schema: OrganizationPeoplePayloadSchema },
       },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/orgs/{org}/invitations",
+  operationId: "listOrganizationInvitations",
+  tags: ["organizations"],
+  request: { params: z.object({ org: z.string() }) },
+  responses: {
+    200: {
+      description:
+        "Invitations not yet joined, revoked or expired. Owners only.",
+      content: {
+        "application/json": { schema: InvitationListPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/orgs/{org}/invitations",
+  operationId: "createOrganizationInvitation",
+  tags: ["organizations"],
+  request: {
+    params: z.object({ org: z.string() }),
+    body: {
+      required: true,
+      content: { "application/json": { schema: CreateInvitationBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "That address already had an invitation; it was sent again",
+      content: { "application/json": { schema: InvitationPayloadSchema } },
+    },
+    201: {
+      description: "Invited. Grants nothing until accepted.",
+      content: { "application/json": { schema: InvitationPayloadSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "delete",
+  path: "/api/app/orgs/{org}/invitations/{id}",
+  operationId: "revokeOrganizationInvitation",
+  tags: ["organizations"],
+  request: { params: z.object({ org: z.string(), id: z.string() }) },
+  responses: { 204: { description: "Revoked; the link stops working" } },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/orgs/{org}/invitations/{id}/resend",
+  operationId: "resendOrganizationInvitation",
+  tags: ["organizations"],
+  request: { params: z.object({ org: z.string(), id: z.string() }) },
+  responses: {
+    200: {
+      description: "Sent again with a new link and two more weeks",
+      content: { "application/json": { schema: InvitationPayloadSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/invitations/{token}",
+  operationId: "getInvitation",
+  tags: ["organizations"],
+  request: { params: z.object({ token: z.string() }) },
+  responses: {
+    200: {
+      description: "What the invitation is for. No session needed.",
+      content: { "application/json": { schema: InvitationSummarySchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/invitations/{token}/accept",
+  operationId: "acceptInvitation",
+  tags: ["organizations"],
+  request: { params: z.object({ token: z.string() }) },
+  responses: {
+    200: {
+      description:
+        "Accepted by the signed-in account, whose address must be the one invited",
+      content: { "application/json": { schema: AcceptInvitationResultSchema } },
     },
   },
 });
@@ -934,6 +1463,56 @@ registry.registerPath({
 });
 
 registry.registerPath({
+  method: "get",
+  path: "/api/app/binders/{org}/{binder}/audit/{documentPath}",
+  operationId: "exportBinderDocumentAudit",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({
+      org: z.string(),
+      binder: z.string(),
+      documentPath: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description:
+        "A zip: the audit packet PDF, approvals.csv, record.json, and every version's file",
+      content: { "application/zip": { schema: z.string() } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/binders/{org}/{binder}/export/{documentPath}",
+  operationId: "exportBinderDocument",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({
+      org: z.string(),
+      binder: z.string(),
+      documentPath: z.string(),
+    }),
+    /**
+     * A policy written in Bindersnap is laid out as either; an uploaded file
+     * is handed back as itself when it already is one, and refused with 415
+     * when it is not.
+     */
+    query: z.object({
+      format: z.enum(["pdf", "docx"]),
+      ref: z.string().optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "The document as a PDF or a Word document",
+      content: { "application/octet-stream": { schema: z.string() } },
+    },
+  },
+});
+
+registry.registerPath({
   method: "post",
   path: "/api/app/binders/{org}/{binder}/documents",
   operationId: "createBinderDocument",
@@ -1020,6 +1599,12 @@ registry.registerPath({
              * boolean looks like on the way in.
              */
             draft: z.string().optional(),
+            /**
+             * `editor` when the new version was written in Bindersnap's own
+             * editor, so the draft reads "Edit Hand Hygiene" rather than
+             * "Upload: document.json" — a file name nobody chose.
+             */
+            source: z.enum(["editor"]).optional(),
           }),
         },
       },
@@ -1646,6 +2231,64 @@ registry.registerPath({
   responses: {
     200: {
       description: "The change's branch now carries the binder's main",
+      content: {
+        "application/json": {
+          schema: z.object({
+            ok: z.boolean(),
+            /** False while Gitea is still recomputing the merge base. */
+            caughtUp: z.boolean(),
+          }),
+        },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/binders/{org}/{binder}/changes/{changeNumber}/conflicts",
+  operationId: "getBinderChangeConflicts",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({
+      org: z.string(),
+      binder: z.string(),
+      changeNumber: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description:
+        "Every document the change and the binder both changed, read where the change began, on the change, and as published since",
+      content: {
+        "application/json": { schema: ChangeConflictsPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/changes/{changeNumber}/conflicts",
+  operationId: "resolveBinderChangeConflicts",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({
+      org: z.string(),
+      binder: z.string(),
+      changeNumber: z.string(),
+    }),
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: ResolveConflictsBodySchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description:
+        "The conflicts are resolved as decided and the change is up to date",
       content: {
         "application/json": {
           schema: z.object({

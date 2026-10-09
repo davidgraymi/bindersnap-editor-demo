@@ -22,6 +22,8 @@ import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
+import { signUpAndConfirm } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 test.describe.configure({ mode: "parallel", timeout: 240_000 });
 
@@ -57,10 +59,14 @@ function authHeaders(session: string): Record<string, string> {
 }
 
 async function signUp(credentials: Credentials): Promise<string> {
-  const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+  const response = await signUpAndConfirm(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
-    body: JSON.stringify(credentials),
+    body: JSON.stringify({
+      firstName: "Test",
+      lastName: "User",
+      ...credentials,
+    }),
   });
   expect(
     response.status,
@@ -73,7 +79,10 @@ async function createOrganization(session: string): Promise<string> {
   const response = await fetch(`${API_BASE_URL}/api/app/organizations`, {
     method: "POST",
     headers: authHeaders(session),
-    body: JSON.stringify({ name: `Riverbend ${randomUUID().slice(0, 6)}` }),
+    body: JSON.stringify({
+      acceptedTerms: LEGAL_VERSION,
+      name: `Riverbend ${randomUUID().slice(0, 6)}`,
+    }),
   });
   const body = await response.text();
   expect(response.status, `create organization failed: ${body}`).toBe(201);
@@ -348,11 +357,15 @@ test("a folder opens, and stays open when you come back", async ({ page }) => {
   // says nothing is a folder nobody opens. Counted all the way down.
   await expect(nursing).toHaveAttribute("aria-expanded", "false");
   await expect(nursing).toContainText("2 documents");
-  await expect(page.getByText("Hand Hygiene")).toBeHidden();
+  await expect(
+    page.locator(".binder-tree").getByText("Hand Hygiene", { exact: true }),
+  ).toBeHidden();
 
   await nursing.click();
   await expect(nursing).toHaveAttribute("aria-expanded", "true");
-  await expect(page.getByText("Hand Hygiene")).toBeVisible();
+  await expect(
+    page.locator(".binder-tree").getByText("Hand Hygiene", { exact: true }),
+  ).toBeVisible();
 
   // The preference is the person's, and it survives the page going away.
   await page.reload();

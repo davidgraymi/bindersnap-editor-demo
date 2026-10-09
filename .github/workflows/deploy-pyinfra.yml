@@ -51,7 +51,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
@@ -59,7 +59,7 @@ jobs:
           bun-version-file: ".bun-version"
 
       - name: Restore Bun cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('.bun-version') }}-${{ hashFiles('bun.lock') }}
@@ -106,7 +106,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Validate deploy configuration
         run: |

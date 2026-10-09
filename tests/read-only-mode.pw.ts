@@ -25,6 +25,8 @@ import {
   GITEA_ADMIN_PASS,
   GITEA_ADMIN_USER,
 } from "./helpers";
+import { signUpAndConfirm } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 // Signup, organization creation, binder creation and two page loads, on a
 // stack that may be cold. The suite default is nowhere near enough.
@@ -63,10 +65,14 @@ function authHeaders(sessionCookie: string): Record<string, string> {
 }
 
 async function signUp(credentials: Credentials): Promise<string> {
-  const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+  const response = await signUpAndConfirm(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
-    body: JSON.stringify(credentials),
+    body: JSON.stringify({
+      firstName: "Test",
+      lastName: "User",
+      ...credentials,
+    }),
   });
   expect(
     response.status,
@@ -95,12 +101,15 @@ async function createOrganization(
   const response = await fetch(`${API_BASE_URL}/api/app/organizations`, {
     method: "POST",
     headers: authHeaders(sessionCookie),
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, acceptedTerms: LEGAL_VERSION }),
   });
   const body = await response.text();
   expect(response.status, `create organization failed: ${body}`).toBe(201);
-  return (JSON.parse(body) as { organization: { name: string } }).organization
-    .name;
+  return (
+    JSON.parse(body) as {
+      organization: { name: string };
+    }
+  ).organization.name;
 }
 
 async function createBinder(
@@ -302,6 +311,6 @@ test("a second organization is gated, offered and billed as itself", async ({
   ).toBeVisible();
 
   // And the first organization's billing still shows its trial.
-  await page.goto(`${APP_BASE_URL}/billing/${first}`);
+  await page.goto(`${APP_BASE_URL}/${first}/-/billing`);
   await expect(plan).toContainText("Trial");
 });

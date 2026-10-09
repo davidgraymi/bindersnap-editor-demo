@@ -951,3 +951,85 @@ test("describeMergeRefusal speaks the publisher's language", async () => {
     expect(sentence).not.toMatch(/branch|merge|head|base/i);
   }
 });
+
+test("readMergeCommitSha answers the merge commit, and null for an unmerged change", async () => {
+  const { readMergeCommitSha } = await import("./pullRequests");
+
+  const merged = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/pulls/{index}": () => ({
+        number: 12,
+        merged: true,
+        merge_commit_sha: "9f1c2e",
+      }),
+    },
+  });
+  expect(
+    await readMergeCommitSha({
+      client: merged.client,
+      owner: "mercy-health",
+      repo: "clinical",
+      pullNumber: 12,
+    }),
+  ).toBe("9f1c2e");
+
+  // An open change has no merge commit. Tagging would have to guess, and the
+  // guess the old code made — `main` — is the wrong one.
+  const open = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/pulls/{index}": () => ({
+        number: 12,
+        merged: false,
+        merge_commit_sha: null,
+      }),
+    },
+  });
+  expect(
+    await readMergeCommitSha({
+      client: open.client,
+      owner: "mercy-health",
+      repo: "clinical",
+      pullNumber: 12,
+    }),
+  ).toBeNull();
+});
+
+test("listPullRequestsWithoutReviews reads the changes and none of their reviews", async () => {
+  const { listPullRequestsWithoutReviews, attachReviews } =
+    await import("./pullRequests");
+  const reviewReads: number[] = [];
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/pulls": () => [
+        { number: 1, head: { ref: "upload/a/1" }, state: "open" },
+        { number: 2, head: { ref: "sign-off/rules" }, state: "open" },
+      ],
+      "/repos/{owner}/{repo}/pulls/{index}/reviews": (init: unknown) => {
+        reviewReads.push(
+          (init as { params: { path: { index: number } } }).params.path.index,
+        );
+        return [{ id: 1, state: "APPROVED", user: { login: "bob" } }];
+      },
+    },
+  });
+
+  const open = await listPullRequestsWithoutReviews({
+    client,
+    owner: "mercy-health",
+    repo: "clinical",
+    state: "open",
+  });
+  expect(open.map((pull) => pull.number)).toEqual([1, 2]);
+  expect(reviewReads).toEqual([]);
+
+  // Narrowed first, then reviewed: only the change that survives costs a read.
+  const withReviews = await attachReviews({
+    client,
+    owner: "mercy-health",
+    repo: "clinical",
+    pullRequests: open.filter((pull) => pull.number === 1),
+  });
+  expect(withReviews).toHaveLength(1);
+  expect(withReviews[0]!.reviews).toHaveLength(1);
+  expect(reviewReads).toEqual([1]);
+});

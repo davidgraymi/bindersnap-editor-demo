@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import {
   formatAge,
@@ -14,7 +14,9 @@ import {
   getReviewerDisplayName,
   getReviewerStatusLabel,
   getReviewStateLabel,
+  describeChangeStanding,
   hasEnoughApprovals,
+  isReadyToPublish,
   parseChangeTitle,
   parseSubmissionSummary,
   resolveDocumentStatus,
@@ -22,6 +24,7 @@ import {
   resolveWorkspaceDocumentStatus,
   toChangeRecord,
 } from "./documentDisplay";
+import type { ReviewerStatus } from "../../packages/api-schema/schemas/documents";
 
 test("formatDocumentName turns a repo slug into a title", () => {
   expect(formatDocumentName("quarterly-report")).toBe("Quarterly Report");
@@ -35,7 +38,7 @@ test("formatDocumentName keeps an initialism upper-case", () => {
     "HIPAA Training Policy",
   );
   expect(formatDocumentName("ppe-and-hand-hygiene")).toBe(
-    "PPE And Hand Hygiene",
+    "PPE and Hand Hygiene",
   );
   expect(formatDocumentName("hr")).toBe("HR");
 });
@@ -150,7 +153,7 @@ test("parseSubmissionSummary keeps a body a person wrote", () => {
   expect(parseSubmissionSummary(null)).toBeNull();
 });
 
-test("a generated upload is named after the file, not its submitter", () => {
+test("a generated upload is named after the document it adds, not its submitter or its file", () => {
   const change = toChangeRecord({
     number: 4,
     body: "Automated upload from Bindersnap file vault. Source file: CHANGELOG.md Document: changelog Uploaded by: bob",
@@ -162,7 +165,7 @@ test("a generated upload is named after the file, not its submitter", () => {
 
   // The row already says "submitted by Bob on 1 Feb"; a title that repeats it
   // is the same sentence twice.
-  expect(change.summary).toBe("New version of CHANGELOG.md");
+  expect(change.summary).toBe("Add Changelog");
 });
 
 test("getInitials handles one and two part names", () => {
@@ -285,14 +288,67 @@ test("approval progress counts sign-offs instead of saying 'awaiting'", () => {
   );
 });
 
-test("a document that demands no approvals gets no counter", () => {
+test("a document that demands no approvals gets no counter, and has enough", () => {
   // "0 of 0 approvals" is a number that answers nothing; the badge is better.
   expect(
     describeApprovalProgress({ approvalCount: 0, requiredApprovals: 0 }),
   ).toBeNull();
+  // Nothing to collect is everything collected: Gitea merges at once.
   expect(hasEnoughApprovals({ approvalCount: 0, requiredApprovals: 0 })).toBe(
-    false,
+    true,
   );
+});
+
+describe("ready to publish, by Gitea's rules", () => {
+  // Each case was checked against Gitea itself, on a branch protected the way
+  // a binder's `main` is (`block_on_rejected_reviews`,
+  // `block_on_official_review_requests`), with no approvals required.
+  const ready = (
+    requiredApprovals: number | null,
+    statuses: ReviewerStatus[],
+    approvalCount = 0,
+  ) =>
+    isReadyToPublish({
+      open: true,
+      approvalCount,
+      requiredApprovals,
+      reviewers: statuses.map((status) => ({ status })),
+    });
+
+  test("no approvals needed and nobody asked: ready at once", () => {
+    expect(ready(0, [])).toBe(true);
+  });
+
+  test("a reviewer asked and not yet heard from holds it", () => {
+    expect(ready(0, ["awaiting"])).toBe(false);
+  });
+
+  test("a comment is an answer; an approval more so", () => {
+    expect(ready(0, ["commented"])).toBe(true);
+    expect(ready(0, ["approved"], 1)).toBe(true);
+  });
+
+  test("changes requested holds it, whatever the count", () => {
+    expect(ready(0, ["changes_requested"])).toBe(false);
+    expect(ready(1, ["approved", "changes_requested"], 1)).toBe(false);
+  });
+
+  test("short of the binder's number is not ready", () => {
+    expect(ready(2, ["approved"], 1)).toBe(false);
+    expect(ready(2, ["approved", "approved"], 2)).toBe(true);
+  });
+
+  test("an unknown requirement, or a closed change, is never ready", () => {
+    expect(ready(null, [])).toBe(false);
+    expect(
+      isReadyToPublish({
+        open: false,
+        approvalCount: 0,
+        requiredApprovals: 0,
+        reviewers: [],
+      }),
+    ).toBe(false);
+  });
 });
 
 test("an unknown approval requirement is not a requirement of none", () => {
@@ -381,4 +437,75 @@ test("a file list says how long ago, at any age", () => {
   expect(formatAge(ago(150 * DAY), now)).toBe("5 months ago");
   expect(formatAge(ago(800 * DAY), now)).toBe("2 years ago");
   expect(formatAge("", now)).toBe("");
+});
+
+test("a generated new version says which document, in the product's words", () => {
+  const change = toChangeRecord({
+    number: 5,
+    body: "Update nursing/hand-hygiene\n\nA new version proposed from Bindersnap.\n\nSource file: hygiene-v4.docx\nDocument: nursing/hand-hygiene",
+    branchName: "upload/v4",
+    created_at: "2026-02-01T00:00:00Z",
+    approvalState: "in_review",
+    user: { login: "bob" },
+  });
+  expect(change.summary).toBe("New version of Hand Hygiene");
+});
+
+describe("where a change stands when the binder needs no approvals", () => {
+  const reviewer = (login: string, status: ReviewerStatus) => ({
+    login,
+    fullName: "",
+    avatarUrl: "",
+    status,
+    reviewedAt: "",
+    stale: false,
+    requested: true,
+  });
+
+  test("nobody holding it reads ready, with no counter", () => {
+    expect(
+      describeChangeStanding({
+        open: true,
+        approvalCount: 0,
+        requiredApprovals: 0,
+        reviewers: [],
+      }),
+    ).toEqual({ tone: "ready", progress: null, reason: "Ready to publish" });
+  });
+
+  test("a reviewer not yet heard from is named", () => {
+    expect(
+      describeChangeStanding({
+        open: true,
+        approvalCount: 0,
+        requiredApprovals: 0,
+        reviewers: [reviewer("bob", "awaiting")],
+      }),
+    ).toEqual({ tone: "progress", progress: null, reason: "Waiting on Bob" });
+  });
+
+  test("a binder that does not hold for requests is ready, by the server's word", () => {
+    // Gitea 28 binders turn `block_on_official_review_requests` off; only the
+    // server can read that, and says so as `isApproved`.
+    expect(
+      describeChangeStanding({
+        open: true,
+        approvalCount: 0,
+        requiredApprovals: 0,
+        reviewers: [reviewer("bob", "awaiting")],
+        isApproved: true,
+      })?.reason,
+    ).toBe("Ready to publish");
+  });
+
+  test("a full count still waits on somebody asked and silent", () => {
+    expect(
+      describeChangeStanding({
+        open: true,
+        approvalCount: 1,
+        requiredApprovals: 1,
+        reviewers: [reviewer("bob", "approved"), reviewer("carol", "awaiting")],
+      })?.reason,
+    ).toBe("Waiting on Carol");
+  });
 });

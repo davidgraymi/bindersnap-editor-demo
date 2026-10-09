@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 
-import { getHomeChanges, type HomeOpenDocument } from "../api";
+import { type HomeOpenDocument } from "../api";
+import { homeChangesQuery } from "../data/queries";
 import {
   buildQueueRows,
   countQueueRows,
@@ -46,30 +48,20 @@ export function ReviewQueuePage({
   onOpenChange,
   onBrowseDocuments,
 }: ReviewQueuePageProps) {
-  const [documents, setDocuments] = useState<HomeOpenDocument[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // The same question home asks, so the same answer — moving between the two
+  // asks nothing new.
+  const home = useQuery(homeChangesQuery());
+  const documents: HomeOpenDocument[] | null = home.data
+    ? home.data.open
+    : home.error
+      ? []
+      : null;
+  const error = home.error
+    ? home.error.message || "Unable to load your change requests."
+    : null;
   // Null until the rows land, because which filter to open on depends on
   // whether anything is waiting — see initialQueueFilter.
   const [filter, setFilter] = useState<QueueFilter | null>(null);
-
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      const { open } = await getHomeChanges();
-      setDocuments(open);
-    } catch (err) {
-      setError(
-        err instanceof Error && err.message.trim() !== ""
-          ? err.message
-          : "Unable to load your change requests.",
-      );
-      setDocuments([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   const rows = useMemo(
     () => (documents ? buildQueueRows(documents, currentUsername) : []),

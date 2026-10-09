@@ -1,15 +1,17 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { WorkspaceChangeDetailPayload } from "../../../packages/api-schema/schemas/workspaces";
+import { useMarkNotificationsRead } from "../data/notifications";
+import { binderChangeQuery, queryKeys } from "../data/queries";
 import {
   downloadBinderDocument,
   editBinderChange,
-  fetchBinderChange,
   updateBinderChange,
 } from "../api";
 import { followInApp } from "../appLink";
 import { describeChangedDocument } from "../binderChange";
-import { buildDocumentUrl } from "../binderDocument";
+import { buildDocumentUrl, isEditorDocumentFile } from "../binderDocument";
 import { buildBinderUrl } from "../binderShell";
 import { buildChangedDocumentRows } from "../changedDocuments";
 import type { ChangeScope } from "../changeScope";
@@ -18,6 +20,7 @@ import type { DocumentChangeView } from "../routes";
 import { nameFor, usePeopleNames } from "../usePeopleNames";
 import { ChangeByline } from "./ChangeByline";
 import { ChangeComparisonPage } from "./ChangeComparisonPage";
+import { ChangeConflictsPage } from "./ChangeConflictsPage";
 import { ChangeStateBadge, ChangeTabs } from "./ChangeTabs";
 import { DocumentChangeDetail } from "./DocumentChangeDetail";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
@@ -50,8 +53,19 @@ interface BinderChangePageProps {
    * "read what this proposes" is a navigation rather than a panel.
    */
   onOpenOnBranch: (slugPath: string, branch: string) => void;
+  /**
+   * Open a document in the editor, saving into this change: the author
+   * answering a reviewer without starting a second change to do it.
+   */
+  onEditInEditor?: (slugPath: string) => void;
   /** Open the whole binder on this change's branch, at its root. */
   onOpenBranch: (branch: string) => void;
+  /**
+   * Where the branch chip goes when the branch is one of your drafts: the
+   * draft itself, where you can keep working, rather than a read of it filed
+   * under the change. Null when it is not yours.
+   */
+  ownDraftHref?: (branch: string) => string | null;
   /** Something about the change moved: the binder's own counts have too. */
   onChanged: () => void;
   /** Where the required reviewers come from, for the reader who asks. */
@@ -82,39 +96,44 @@ export function BinderChangePage({
   onOpenSignOffRules,
   onOpenOnBranch,
   onOpenBranch,
+  ownDraftHref,
+  onEditInEditor,
 }: BinderChangePageProps) {
   const names = usePeopleNames(org);
-  const [detail, setDetail] = useState<WorkspaceChangeDetailPayload | null>(
-    null,
-  );
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const read = useQuery(binderChangeQuery(org, binder, changeNumber));
+  const detail: WorkspaceChangeDetailPayload | null = read.data ?? null;
+  const error = read.error
+    ? read.error.message || "Unable to open this change."
+    : null;
   /** Which of the change's documents the file screens are about. */
   const [viewing, setViewing] = useState<string | null>(null);
   const [catchingUp, setCatchingUp] = useState(false);
   const [catchUpError, setCatchUpError] = useState<string | null>(null);
 
+  /**
+   * Read the change again after acting on it. Approving, publishing or
+   * catching up all move the binder too — its lists and the counts in the tab
+   * bar above — so everything about the binder is read again, not only this.
+   */
   const load = useCallback(async () => {
-    try {
-      setDetail(await fetchBinderChange(org, binder, changeNumber));
-      setError(null);
-      // Approving, publishing or catching up all move the binder's own
-      // counts, and the tab bar above is showing them.
-      onChanged();
-    } catch (err) {
-      setError(
-        err instanceof Error && err.message.trim() !== ""
-          ? err.message
-          : "Unable to open this change.",
-      );
-    }
-  }, [org, binder, changeNumber, onChanged]);
+    // Home and the review queue list this change too.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.homeChanges() });
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.binder(org, binder),
+    });
+    onChanged();
+  }, [queryClient, org, binder, onChanged]);
+
+  // Having opened the change is having read what the bell said about it.
+  const { mutate: markRead } = useMarkNotificationsRead();
+  useEffect(() => {
+    markRead({ change: { org, binder, number: changeNumber } });
+  }, [org, binder, changeNumber, markRead]);
 
   useEffect(() => {
-    setDetail(null);
-    setError(null);
     setViewing(null);
-    void load();
-  }, [load]);
+  }, [org, binder, changeNumber]);
 
   const documents = detail?.documents ?? [];
   // Held as a path rather than an index so the choice survives a refetch.
@@ -163,8 +182,11 @@ export function BinderChangePage({
         ? {
             ...toChangeRecord(detail.change),
             // `toChangeRecord` serves the open-changes list, so it assumes
-            // open. A decided change is not still awaiting a decision.
+            // open. A decided change is not still awaiting a decision, and
+            // says how it ended — the approvals panel read "Awaiting review"
+            // on a change that had been published.
             open: detail.change.state === "open",
+            outcome: detail.outcome,
           }
         : null,
     [detail],
@@ -258,12 +280,15 @@ export function BinderChangePage({
   const isOpen = detail.change.state === "open";
   const nameOf = (login: string) => nameFor(names, login);
   const branchName = detail.change.branchName || null;
-  const branchHref = buildBinderUrl({
-    org,
-    binder,
-    ref: branchName,
-    change: changeNumber,
-  });
+  const branchLabel = detail.branchLabel ?? null;
+  const branchHref =
+    (branchName ? ownDraftHref?.(branchName) : null) ??
+    buildBinderUrl({
+      org,
+      binder,
+      ref: branchName,
+      change: changeNumber,
+    });
   const openBranch = () => {
     if (branchName) onOpenBranch(branchName);
   };
@@ -320,6 +345,44 @@ export function BinderChangePage({
    * which documents are folded, which are ticked, where the reader had got to
    * — is about *this* change and must not survive into the next one.
    */
+  const conflictsHref = buildBinderUrl({
+    org,
+    binder,
+    tab: "changes",
+    change: changeNumber,
+    view: "conflicts",
+  });
+
+  /**
+   * The documents that clash with the binder, and resolving them.
+   *
+   * Its own screen, like the comparison: resolving is reading two versions of
+   * each document side by side, which a panel beside a discussion cannot hold.
+   */
+  if (view === "conflicts") {
+    return (
+      <ChangeConflictsPage
+        key={changeNumber}
+        org={org}
+        binder={binder}
+        changeNumber={changeNumber}
+        title={record.summary}
+        changeHref={buildBinderUrl({
+          org,
+          binder,
+          tab: "changes",
+          change: changeNumber,
+        })}
+        onBack={() => onViewChange("discussion")}
+        onResolved={() => {
+          onChanged();
+          onViewChange("discussion");
+          void load();
+        }}
+      />
+    );
+  }
+
   if (view === "compare") {
     return (
       <div className="binder-pane">
@@ -340,6 +403,7 @@ export function BinderChangePage({
           focusDocument={shown?.slugPath ?? null}
           /* The branch's root: the binder as this change would leave it. */
           branchHref={branchHref}
+          branchLabel={branchLabel}
           onOpenBranch={openBranch}
           /* The same address `onOpenOnBranch` goes to, so View is a real link:
              it opens in a new tab and can be sent to somebody. */
@@ -374,31 +438,63 @@ export function BinderChangePage({
    * told you you were in. It is drawn inside the review now, where the reader
    * has the change's own name first.
    */
+  /* **A clash is not a dead end.** A change whose documents were also
+     changed in the binder cannot be merged by pressing a button, and saying
+     only "Bring up to date" led straight to Gitea's refusal. When Gitea
+     already knows it will clash, the way offered is the resolver; when it
+     does not know yet and the update fails, the error offers it too. */
+  const resolveLink = (
+    <a
+      className="bs-btn bs-btn--sm bs-btn-secondary"
+      href={conflictsHref}
+      onClick={(event) => followInApp(event, () => onViewChange("conflicts"))}
+    >
+      Resolve conflicts
+    </a>
+  );
   const behind =
     detail.isBehind && isOpen ? (
       <div className="bs-note bs-note--warn change-behind" role="status">
-        <p>
-          <strong>The binder has moved on since this change was made.</strong>{" "}
-          Updating it pulls in everything published since. Approvals already
-          given are dismissed, because they were for different content.
-        </p>
-        <button
-          className="bs-btn bs-btn--sm bs-btn-secondary"
-          type="button"
-          disabled={catchingUp}
-          onClick={() => void runCatchUp()}
-        >
-          {catchingUp ? "Bringing up to date…" : "Bring up to date"}
-        </button>
+        {detail.hasConflicts ? (
+          <p>
+            <strong>
+              The binder has moved on, and some of the same documents changed
+              there too.
+            </strong>{" "}
+            Choose what each clash should say to bring this change up to date.
+            {detail.clearsApprovalsOnEdit
+              ? " That changes what it proposes, so approvals already given are cleared and asked for again."
+              : " This binder keeps approvals already given through later edits."}
+          </p>
+        ) : (
+          <p>
+            <strong>The binder has moved on since this change was made.</strong>{" "}
+            Updating it pulls in everything published since. What this change
+            proposes stays the same, so approvals already given stay too.
+          </p>
+        )}
+        {detail.hasConflicts ? (
+          resolveLink
+        ) : (
+          <button
+            className="bs-btn bs-btn--sm bs-btn-secondary"
+            type="button"
+            disabled={catchingUp}
+            onClick={() => void runCatchUp()}
+          >
+            {catchingUp ? "Bringing up to date…" : "Bring up to date"}
+          </button>
+        )}
       </div>
     ) : null;
 
   return (
     <div className="binder-pane">
       {catchUpError ? (
-        <p className="bs-note bs-note--danger" role="alert">
-          {catchUpError}
-        </p>
+        <div className="bs-note bs-note--danger change-behind" role="alert">
+          <p>{catchUpError}</p>
+          {resolveLink}
+        </div>
       ) : null}
 
       <DocumentChangeDetail
@@ -411,6 +507,7 @@ export function BinderChangePage({
             open={isOpen}
             documents={documents.length}
             branch={branchName}
+            branchLabel={branchLabel}
             branchHref={branchHref}
             onOpenBranch={openBranch}
             openedAt={record.submittedAt}
@@ -443,8 +540,20 @@ export function BinderChangePage({
                     (row) => row.slugPath === document.slugPath,
                   )?.anchor;
 
+                  /* **Back into the words, in this change.** A reviewer's
+                     "please reword step 3" meant a new draft, the edit, and a
+                     second change for the same policy. Only its author, only
+                     while it is open, and only a policy the editor writes — a
+                     Word file is revised in Word and uploaded. */
+                  const editable =
+                    onEditInEditor &&
+                    record.open &&
+                    detail.change.branchName !== "" &&
+                    record.submittedBy === currentUser &&
+                    isEditorDocumentFile(document.path);
+
                   return (
-                    <li key={document.slugPath}>
+                    <li key={document.slugPath} className="change-does-item">
                       {/* **A way into its diff, not a selector.** Picking a
                           row used to repoint the rail at that document, so
                           seeing what changed was pick, then Compare — when
@@ -477,6 +586,16 @@ export function BinderChangePage({
                           <span className="bs-ver">{facts.effect}</span>
                         </span>
                       </a>
+                      {editable ? (
+                        <button
+                          className="bs-btn bs-btn--sm bs-btn-secondary"
+                          type="button"
+                          aria-label={`Edit ${facts.title}`}
+                          onClick={() => onEditInEditor?.(document.slugPath)}
+                        >
+                          Edit
+                        </button>
+                      ) : null}
                     </li>
                   );
                 })}
@@ -501,6 +620,7 @@ export function BinderChangePage({
         branchProtection={null}
         blockOnUnresolvedThreads={detail.blockOnUnresolvedThreads}
         canManageAssignments={detail.canManage}
+        decisionRights={detail.viewer}
         nextVersion={shown?.nextVersion ?? 1}
         documentCount={documents.length}
         // A change that touches no document is a change to this binder's

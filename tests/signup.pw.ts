@@ -11,7 +11,17 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
-import { signOutCurrentUser } from "./helpers";
+import {
+  API_BASE_URL,
+  APP_BASE_URL,
+  GITEA_ADMIN_PASS,
+  GITEA_ADMIN_USER,
+  OWNER,
+  acceptTermsForOrganization,
+  agreeToTerms,
+  signOutCurrentUser,
+} from "./helpers";
+import { confirmFromEmail } from "./mailpit";
 
 function buildUniqueSignupCredentials() {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -23,7 +33,7 @@ function buildUniqueSignupCredentials() {
 }
 
 async function openSignupForm(page: Page): Promise<void> {
-  await page.goto("/signup", { waitUntil: "domcontentloaded" });
+  await page.goto("/-/signup", { waitUntil: "domcontentloaded" });
   await expect(page).toHaveURL(/\/signup$/);
   await expect(
     page.getByRole("heading", {
@@ -41,13 +51,17 @@ async function fillSignupForm(
     password: string;
   },
   confirmPassword = credentials.password,
+  { agree = true } = {},
 ): Promise<void> {
+  await page.getByLabel("First name").fill("Test");
+  await page.getByLabel("Last name").fill("User");
   await page.getByLabel("Username").fill(credentials.username);
   await page.getByLabel("Email").fill(credentials.email);
   await page.getByLabel("Password", { exact: true }).fill(credentials.password);
   await page
     .getByLabel("Confirm Password", { exact: true })
     .fill(confirmPassword);
+  if (agree) await agreeToTerms(page);
 }
 
 async function submitSignupForm(page: Page): Promise<void> {
@@ -93,24 +107,43 @@ async function attachScreenshot(
  * the binders, and the person who owns it is the one who should say what it is
  * called.
  */
+/**
+ * Nothing works until a new account's address is confirmed, so that is the
+ * page signup lands on: it names the address, and the email's link finishes it.
+ */
 async function signUpThroughOrganizationSetup(
   page: Page,
   username: string,
+  email: string,
 ): Promise<void> {
+  await confirmFromEmail(page, email);
+
   // Signup no longer creates an organization behind the person's back, so this
   // is where a new account lands: naming the thing that will own its binders.
   await expect(page).toHaveURL(/\/organizations\/new$/, { timeout: 30_000 });
   await expect(
-    page.getByRole("heading", { name: /organization/i }),
+    page.getByRole("heading", { name: "Welcome to Bindersnap" }),
   ).toBeVisible({ timeout: 15_000 });
 
   // Authoring needs an organization, so create one the way a person would.
   // A fresh display name per run. The API steps a taken name to the next
   // free suffix and gives up at twenty, so a fixed one here quietly caps
   // this suite at twenty runs against any one stack.
+  // Somebody new is asked first whether they are starting or joining.
+  await page.getByLabel("Start a new organization").check();
+  await page.getByRole("button", { name: "Continue" }).click();
   await page
     .getByLabel("Organization name")
     .fill(`Mercy Health ${randomUUID().slice(0, 6)}`);
+  // The organization is who the Terms are with, so its owner accepts them for
+  // it here, not only for themselves at signup.
+  await page.getByRole("button", { name: "Create organization" }).click();
+  await expect(
+    page.getByText(
+      "Accept the Terms of Service for the organization to create it.",
+    ),
+  ).toBeVisible();
+  await acceptTermsForOrganization(page);
   await page.getByRole("button", { name: "Create organization" }).click();
 
   // Provisioning creates the organization, its first binder, three role teams
@@ -148,9 +181,14 @@ async function signUpAndReturnToLogin(
     username: credentials.username,
     email: credentials.email,
     password: credentials.password,
+    acceptedTerms: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
   });
 
-  await signUpThroughOrganizationSetup(page, credentials.username);
+  await signUpThroughOrganizationSetup(
+    page,
+    credentials.username,
+    credentials.email,
+  );
   await attachScreenshot(
     page,
     testInfo,
@@ -158,7 +196,7 @@ async function signUpAndReturnToLogin(
   );
 
   await signOutCurrentUser(page);
-  await page.goto("/login", { waitUntil: "domcontentloaded" });
+  await page.goto("/-/login", { waitUntil: "domcontentloaded" });
   await expect(page).toHaveURL(/\/login$/);
   await expect(
     page.getByRole("heading", { name: "Step into the clean version." }),
@@ -228,6 +266,56 @@ test.describe("signup flow", () => {
       }),
     ).toBeVisible();
     await expect(page.getByLabel("Email")).toHaveValue(email);
+  });
+
+  test("somebody joining a team is told what to send an owner, and lands inside once added", async ({
+    page,
+  }) => {
+    const credentials = buildUniqueSignupCredentials();
+    await openSignupForm(page);
+    await fillSignupForm(page, credentials);
+    await submitSignupForm(page);
+    await confirmFromEmail(page, credentials.email);
+
+    await page.getByLabel(/Join my team/).check();
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Ask to be added" }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Send them this")).toHaveValue(
+      new RegExp(`My username is ${credentials.username}\\.`),
+    );
+
+    // An owner adds them, the way People & access does.
+    const owner = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
+      body: JSON.stringify({
+        identifier: GITEA_ADMIN_USER,
+        password: GITEA_ADMIN_PASS,
+      }),
+    });
+    const session = (owner.headers.get("set-cookie") ?? "").match(
+      /bindersnap_session=([^;]+)/,
+    )![1]!;
+    const added = await fetch(`${API_BASE_URL}/api/app/orgs/${OWNER}/people`, {
+      method: "POST",
+      headers: {
+        Cookie: `bindersnap_session=${session}`,
+        "Content-Type": "application/json",
+        Origin: APP_BASE_URL,
+      },
+      body: JSON.stringify({ username: credentials.username }),
+    });
+    expect(added.status).toBeLessThan(300);
+
+    // The page moves on by itself, into the organization.
+    await expect(page).toHaveURL(`${APP_BASE_URL}/`, { timeout: 30_000 });
+    await expect(
+      page.locator(
+        `.app-topnav-avatar[aria-label="User: ${credentials.username}"]`,
+      ),
+    ).toBeVisible();
   });
 
   test("creates an account, signs out, and logs back in with a username", async ({
@@ -300,6 +388,60 @@ test.describe("signup flow", () => {
     expect(signupRequestCount).toBe(0);
   });
 
+  test("will not sign up until the Terms are agreed to, and links to them", async ({
+    page,
+  }) => {
+    const credentials = buildUniqueSignupCredentials();
+    let signupRequestCount = 0;
+    page.on("request", (request) => {
+      if (
+        request.url().endsWith("/auth/signup") &&
+        request.method() === "POST"
+      ) {
+        signupRequestCount += 1;
+      }
+    });
+
+    await openSignupForm(page);
+    await fillSignupForm(page, credentials, credentials.password, {
+      agree: false,
+    });
+    await submitSignupForm(page);
+
+    await expect(
+      page.getByText("Agree to the Terms of Service to create an account."),
+    ).toBeVisible();
+    expect(signupRequestCount).toBe(0);
+
+    // Each opens beside the form, so reading them loses nothing typed.
+    for (const [name, href] of [
+      ["Terms of Service", "/legal/terms"],
+      ["Privacy Policy", "/legal/privacy"],
+    ] as const) {
+      const link = page.getByRole("link", { name, exact: true });
+      await expect(link).toHaveAttribute("href", href);
+      await expect(link).toHaveAttribute("target", "_blank");
+      const response = await page.request.get(href);
+      expect(response.status()).toBe(200);
+      expect(await response.text()).toContain(`<h1>${name}</h1>`);
+    }
+  });
+
+  test("the API refuses a signup that skipped the box", async () => {
+    const credentials = buildUniqueSignupCredentials();
+    const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
+      body: JSON.stringify({
+        firstName: "Test",
+        lastName: "User",
+        ...credentials,
+      }),
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ code: "terms_not_accepted" });
+  });
+
   test("shows the signup API error when Gitea rejects the submitted email", async ({
     page,
   }) => {
@@ -311,9 +453,13 @@ test.describe("signup flow", () => {
     await fillSignupForm(page, firstAccount);
     await submitSignupForm(page);
 
-    await signUpThroughOrganizationSetup(page, firstAccount.username);
+    await signUpThroughOrganizationSetup(
+      page,
+      firstAccount.username,
+      firstAccount.email,
+    );
     await signOutCurrentUser(page);
-    await page.goto("/login");
+    await page.goto("/-/login");
     await expect(page).toHaveURL(/\/login$/);
 
     await openSignupForm(page);

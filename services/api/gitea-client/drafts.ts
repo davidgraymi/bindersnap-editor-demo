@@ -28,14 +28,24 @@
  * module guesses, and a draft carries a name its author wrote so that
  * "resume the one from Tuesday" has an answer. See `draft-names.ts`.
  *
- * **A draft is not a change request and must never be read as one.** It has no
- * reviewers, no approvals, and no claim on anybody's attention. The moment it
- * acquires a change request it stops being a draft and every list here drops
- * it — which is why {@link listBinderDrafts} subtracts the open changes rather
- * than trusting the prefix alone.
+ * **An unproposed draft is not a change request and must never be read as
+ * one.** It has no reviewers, no approvals, and no claim on anybody's
+ * attention. Once it acquires a change request it is also that change's
+ * branch — and it is **still its owner's draft**, the way a branch stays a
+ * branch on a code host after a pull request opens on it. The customer:
+ * *"A draft should still show up … if I own it and it's proposed so that I can
+ * edit the draft. JUST LIKE A BRANCH AND A PULL REQUEST."* So
+ * {@link listBinderDrafts} leaves proposed drafts out by default (other
+ * people's are change requests now, and theirs to read) and puts them back,
+ * each with its change's number, for the callers that ask.
  */
 
-import { unwrap, GiteaApiError, type GiteaClient } from "./client";
+import {
+  readAllPages,
+  unwrap,
+  GiteaApiError,
+  type GiteaClient,
+} from "./client";
 import { createUploadBranch } from "./uploads";
 
 /**
@@ -65,6 +75,13 @@ export interface BinderDraft {
   updatedAt: string | null;
   /** The last thing done to it, so a list of drafts reads as a list of work. */
   lastAct: string | null;
+  /**
+   * The change request open on it, once it has been proposed.
+   *
+   * Null for a draft nobody has proposed yet. Only ever set when the list was
+   * asked for proposed drafts too.
+   */
+  changeNumber: number | null;
 }
 
 /**
@@ -146,19 +163,25 @@ export async function listBinderDrafts(params: {
   workspace: string;
   /** Narrow to one person's drafts. Omit for every draft in the binder. */
   owner?: string;
+  /**
+   * Keep the drafts a change request is open on, each with its number.
+   *
+   * For the owner's own list — the picker, the editor, a save into one.
+   * Anywhere a draft means "private work in progress", leave it out.
+   */
+  proposed?: boolean;
 }): Promise<BinderDraft[]> {
-  const { client, org, workspace, owner } = params;
+  const { client, org, workspace, owner, proposed: withProposed } = params;
 
   let branches: BranchRow[];
   try {
-    branches = ((await unwrap(
-      client.GET("/repos/{owner}/{repo}/branches", {
-        params: {
-          path: { owner: org, repo: workspace },
-          query: { limit: 100 },
-        },
-      }),
-    )) ?? []) as BranchRow[];
+    branches = (await readAllPages((query) =>
+      unwrap(
+        client.GET("/repos/{owner}/{repo}/branches", {
+          params: { path: { owner: org, repo: workspace }, query },
+        }),
+      ),
+    )) as BranchRow[];
   } catch (err) {
     // A binder with no branches beyond `main` is not an error, and neither is
     // one Gitea has not finished creating.
@@ -170,17 +193,23 @@ export async function listBinderDrafts(params: {
   // reads every change's reviews as well, and this needs nothing but the list
   // of branches already spoken for. On a busy binder the difference is a
   // round trip per open change, paid to answer a question about branches.
-  const open = ((await unwrap(
-    client.GET("/repos/{owner}/{repo}/pulls", {
-      params: {
-        path: { owner: org, repo: workspace },
-        query: { state: "open", limit: 100 },
-      },
-    }),
-  )) ?? []) as Array<{ head?: { ref?: string } }>;
-  const proposed = new Set(
-    open.map((pull) => pull.head?.ref ?? "").filter((ref) => ref !== ""),
-  );
+  const open = (await readAllPages((query) =>
+    unwrap(
+      client.GET("/repos/{owner}/{repo}/pulls", {
+        params: {
+          path: { owner: org, repo: workspace },
+          query: { state: "open", ...query },
+        },
+      }),
+    ),
+  )) as Array<{ number?: number; head?: { ref?: string } }>;
+  const proposed = new Map<string, number>();
+  for (const pull of open) {
+    const ref = pull.head?.ref ?? "";
+    if (ref !== "" && typeof pull.number === "number") {
+      proposed.set(ref, pull.number);
+    }
+  }
 
   return branches
     .flatMap((branch) => {
@@ -188,7 +217,8 @@ export async function listBinderDrafts(params: {
       const branchOwner = draftOwner(name);
       if (branchOwner === null) return [];
       if (owner !== undefined && branchOwner !== owner) return [];
-      if (proposed.has(name)) return [];
+      const changeNumber = proposed.get(name) ?? null;
+      if (changeNumber !== null && !withProposed) return [];
 
       return [
         {
@@ -196,6 +226,7 @@ export async function listBinderDrafts(params: {
           owner: branchOwner,
           updatedAt: branch.commit?.timestamp ?? null,
           lastAct: firstLine(branch.commit?.message ?? "") || null,
+          changeNumber,
         },
       ];
     })
@@ -260,7 +291,13 @@ export async function startDraft(params: {
     from: "main",
   });
 
-  return { branch, owner: username, updatedAt: null, lastAct: null };
+  return {
+    branch,
+    owner: username,
+    updatedAt: null,
+    lastAct: null,
+    changeNumber: null,
+  };
 }
 
 /**
@@ -309,21 +346,23 @@ export async function readDraftActs(params: {
   const { client, org, workspace, branch } = params;
 
   try {
-    const commits = ((await unwrap(
-      client.GET("/repos/{owner}/{repo}/commits", {
-        params: {
-          path: { owner: org, repo: workspace },
-          query: {
-            sha: branch,
-            not: "main",
-            stat: false,
-            verification: false,
-            files: true,
-            limit: 100,
+    const commits = (await readAllPages((query) =>
+      unwrap(
+        client.GET("/repos/{owner}/{repo}/commits", {
+          params: {
+            path: { owner: org, repo: workspace },
+            query: {
+              sha: branch,
+              not: "main",
+              stat: false,
+              verification: false,
+              files: true,
+              ...query,
+            },
           },
-        },
-      }),
-    )) ?? []) as CommitRow[];
+        }),
+      ),
+    )) as CommitRow[];
 
     return commits.map((commit) => ({
       summary: firstLine(commit.commit?.message ?? ""),

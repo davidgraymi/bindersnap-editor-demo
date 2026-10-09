@@ -105,6 +105,13 @@ input {
   gap: var(--brand-space-2);
 }
 
+/* First and last name, side by side where there is room for both. */
+.app-field-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--brand-space-4);
+}
+
 .app-submit {
   width: 100%;
 }
@@ -121,6 +128,22 @@ input {
   width: 1rem;
   height: 1rem;
   accent-color: var(--brand-coral);
+}
+
+.app-terms-row {
+  align-items: flex-start;
+  line-height: var(--brand-leading-relaxed);
+}
+
+.app-terms-row .app-check-input {
+  flex: none;
+  margin-top: 0.2rem;
+}
+
+.app-terms-row a {
+  color: var(--bs-text-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .app-inline-error {
@@ -153,6 +176,22 @@ input {
 .app-login-switch-button:hover,
 .app-login-switch-button:focus-visible {
   color: var(--bs-coral-text);
+}
+
+/* "Forgot password?" under the password field. Quiet: the coral on this
+   panel belongs to the submit button. */
+.app-login-forgot {
+  justify-self: end;
+  margin-top: calc(-1 * var(--brand-space-2));
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-sm);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.app-login-forgot:hover,
+.app-login-forgot:focus-visible {
+  color: var(--bs-text-primary);
 }
 
 .app-login-hint {
@@ -1050,6 +1089,13 @@ input {
   box-shadow: inset 0 0 0 1px var(--brand-coral);
 }
 
+/* Read in one of your drafts: not the record, and not somebody's proposal. */
+.doc-version-pill--draft {
+  background: var(--bs-status-warn-bg);
+  color: var(--bs-status-warn-fg);
+  box-shadow: inset 0 0 0 1px var(--bs-status-warn-border);
+}
+
 /* The pill is also the version picker. */
 .doc-version-picker {
   position: relative;
@@ -1487,6 +1533,59 @@ input {
 .doc-preview-prose {
   font-size: var(--brand-text-body);
   line-height: var(--brand-leading-relaxed);
+}
+
+/* A picture written into a policy is at most the width of the page it is on,
+   here as in the editor — it is stored at up to 1600px wide. */
+.doc-preview-prose img {
+  max-width: 100%;
+  height: auto;
+}
+
+.doc-preview-prose .bs-toc {
+  margin: 0 0 1.25em;
+  padding: 0.5em 0;
+  border-top: 1px solid var(--brand-mockup-rule);
+  border-bottom: 1px solid var(--brand-mockup-rule);
+}
+
+.doc-preview-prose .bs-toc p {
+  margin: 0;
+  padding-block: 0.1em;
+}
+
+.doc-preview-prose .bs-toc .bs-toc-title {
+  margin-bottom: 0.3em;
+  font-weight: 600;
+}
+
+/* An entry with its heading still in the document is a link to it. */
+.doc-preview-prose .bs-toc-entry[role="link"] {
+  cursor: pointer;
+  border-radius: var(--brand-radius-xs);
+}
+
+.doc-preview-prose .bs-toc-entry[role="link"]:hover {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+}
+
+.doc-preview-prose .bs-toc-entry[role="link"]:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 2px;
+}
+
+.doc-preview-prose .bs-toc-entry--2 {
+  padding-left: 1.5em;
+}
+
+.doc-preview-prose .bs-toc-entry--3 {
+  padding-left: 3em;
+}
+
+.doc-preview-prose .bs-toc-empty {
+  color: var(--bs-text-muted);
+  font-style: italic;
 }
 
 .doc-preview-prose > :first-child {
@@ -5051,6 +5150,14 @@ a.bs-knot {
   white-space: nowrap;
 }
 
+.app-profile-menu-login {
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .app-profile-menu-section {
   display: grid;
   gap: var(--brand-space-1);
@@ -6445,6 +6552,26 @@ a.bs-knot {
   white-space: pre-wrap;
 }
 
+/* A picture has no text to tint or strike, so the mark is drawn around it:
+   green for one this change put in, coral and faded for one it took out. */
+.doc-compare-prose ins:has(img),
+.doc-compare-prose del:has(img) {
+  display: inline-block;
+  padding: var(--brand-space-0-5);
+  background: none;
+}
+
+.doc-compare-prose ins img {
+  outline: 3px solid var(--bs-status-ok-fg);
+  outline-offset: 2px;
+}
+
+.doc-compare-prose del img {
+  outline: 3px solid var(--bs-coral-text);
+  outline-offset: 2px;
+  opacity: 0.5;
+}
+
 /* Before and after, side by side — the only comparison a picture allows. */
 .doc-compare-columns {
   display: grid;
@@ -6741,6 +6868,12 @@ a.cmp-branch:focus-visible {
   color: var(--bs-coral-text);
 }
 
+.cmp-counts-note {
+  font-family: inherit;
+  font-weight: var(--brand-weight-medium);
+  color: var(--bs-status-info-fg);
+}
+
 /* ── One document's panel ──────────────────────────────────────────────── */
 
 .cmp-file {
@@ -6960,7 +7093,8 @@ a.cmp-file-act {
   display: none;
 }
 
-.cmp-file-head:has(+ .cmp-file-body:empty) {
+.cmp-file-head:has(+ .cmp-file-body:empty),
+.cmp-file-head:last-child {
   border-bottom: none;
   border-radius: var(--brand-radius-lg);
 }
@@ -6970,17 +7104,6 @@ a.cmp-file-act {
   max-width: var(--brand-measure);
   color: var(--bs-text-muted);
   font-size: var(--brand-text-ui-md);
-}
-
-/* ── What is coming off the record ─────────────────────────────────────── */
-
-.cmp-removed-line {
-  margin: 0;
-  max-width: var(--brand-measure);
-}
-
-.cmp-removed-line strong {
-  font-weight: var(--brand-weight-semibold);
 }
 
 @media (max-width: 900px) {
@@ -8412,6 +8535,16 @@ a.bs-row:focus-visible {
   width: 8.5rem;
 }
 
+.bs-input.bs-settings-count {
+  width: 6rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.bs-row-meta--warning {
+  color: var(--bs-status-warn-fg);
+}
+
 /* ── The offer ────────────────────────────────────────────────────────────
    One panel, in the paywall and on Billing: the plan, its price, what it
    gets you, and the button. */
@@ -9150,6 +9283,13 @@ a.bs-row:focus-visible {
   font-size: var(--brand-text-ui-sm);
 }
 
+.bs-draftmenu-empty {
+  margin: 0;
+  padding: var(--brand-space-2) var(--brand-space-3);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
 /* ── Which version of the binder the tree is ──────────────────────────────
    GitLab's branch selector, first in the tree's bar. Quiet on the record,
    where it is a choice nobody has made yet; tinted the branch chip's blue
@@ -9300,6 +9440,24 @@ a.bs-row:focus-visible {
 .change-does .bs-row-right {
   flex-shrink: 0;
   gap: var(--brand-space-2);
+}
+
+/* Its author's way back into a policy's words sits beside the row, not in
+   it: the row is a link to the diff, and a button inside a link is neither. */
+.change-does-item {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+}
+
+.change-does-item > .bs-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.change-does-item > .bs-btn {
+  flex-shrink: 0;
+  margin-right: var(--brand-space-3);
 }
 
 /* ── A change request in a list ────────────────────────────────────────────
@@ -10025,4 +10183,1433 @@ a.binder-latest-title:focus-visible {
 /* The busy spinner is spaced by that gap too, not by a margin of its own. */
 .bs-btn[aria-busy="true"]::before {
   margin-right: 0;
+}
+
+/* ─── Resolving a change's conflicts ─────────────────────────────────────
+   GitLab's merge-conflict page in the binder's grammar: one panel per
+   document, a bar with its path and what happened to it, and inside only the
+   places the two sides disagree — this change's wording beside the published
+   wording, a button under each. The side chosen takes the coral border the
+   radio cards use for a choice, so "which one did I pick" reads the same way
+   everywhere. */
+.conflicts-page {
+  padding-bottom: var(--brand-space-24);
+}
+
+.conflicts-lede {
+  max-width: var(--brand-measure-wide);
+  margin: 0;
+  color: var(--bs-text-secondary);
+  line-height: var(--brand-leading-normal);
+}
+
+.conflict-file-bar {
+  gap: var(--brand-space-2);
+}
+
+.conflict-file-name {
+  min-width: 0;
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.conflict-file-name strong {
+  font-weight: var(--brand-weight-semibold);
+}
+
+.conflict-file-folder,
+.conflict-file-ext {
+  color: var(--bs-text-muted);
+}
+
+.conflict-file-count {
+  margin-left: auto;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.conflict-file--decided .conflict-file-badge {
+  background: var(--bs-status-ok-bg);
+  color: var(--bs-status-ok-fg);
+}
+
+.conflict-note {
+  margin: 0;
+  padding: var(--brand-space-3) var(--brand-space-4);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+  line-height: var(--brand-leading-normal);
+}
+
+.conflict-whole {
+  display: grid;
+  gap: var(--brand-space-2);
+  padding-bottom: var(--brand-space-4);
+}
+
+.conflict-whole-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--brand-space-2);
+  padding: 0 var(--brand-space-4);
+}
+
+.conflict-whole-options .bs-choice + .bs-choice {
+  margin-top: 0;
+}
+
+.conflict-whole-body {
+  flex: 1;
+}
+
+.conflict-download {
+  align-self: flex-start;
+}
+
+.conflict-pieces {
+  display: grid;
+  gap: var(--brand-space-3);
+  margin: 0;
+  padding: var(--brand-space-4);
+  list-style: none;
+}
+
+.conflict-settled {
+  padding: var(--brand-space-1-5) var(--brand-space-3);
+  border-left: 2px solid var(--bs-rule);
+  color: var(--bs-text-faint);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.conflict-hunk {
+  display: grid;
+  gap: var(--brand-space-2);
+}
+
+.conflict-sides {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--brand-space-2);
+}
+
+.conflict-side {
+  min-width: 0;
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-1);
+  overflow: hidden;
+}
+
+.conflict-side--picked {
+  border-color: var(--bs-coral-border);
+  box-shadow: inset 0 0 0 1px var(--bs-coral-border);
+}
+
+.conflict-side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--brand-space-2);
+  padding: var(--brand-space-1-5) var(--brand-space-2) var(--brand-space-1-5)
+    var(--brand-space-3);
+  border-bottom: 1px solid var(--bs-rule-warm);
+  background: var(--bs-surface-2);
+}
+
+.conflict-side-label {
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-sm);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.conflict-side-prose {
+  padding: var(--brand-space-3) var(--brand-space-4);
+}
+
+.conflict-side-text {
+  margin: 0;
+  padding: var(--brand-space-3) var(--brand-space-4);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.conflict-side-empty {
+  margin: 0;
+  padding: var(--brand-space-3) var(--brand-space-4);
+  color: var(--bs-text-muted);
+  font-style: italic;
+}
+
+.conflict-hunk-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--brand-space-1);
+}
+
+.conflict-hunk-state {
+  margin-left: auto;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.conflict-side-head .bs-btn[aria-pressed="true"],
+.conflict-hunk-more .bs-btn[aria-pressed="true"] {
+  border-color: var(--bs-coral-border);
+  background: var(--bs-coral-glow);
+  color: var(--bs-coral-text);
+}
+
+/* The decision, kept in reach however long the list of documents is. */
+.conflicts-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: var(--brand-z-raised);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--brand-space-2) var(--brand-space-4);
+  padding: var(--brand-space-3) var(--brand-space-4);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  box-shadow: var(--bs-elevation-card);
+}
+
+.conflicts-bar-text {
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+  line-height: var(--brand-leading-normal);
+}
+
+.conflicts-bar-text strong {
+  color: var(--bs-text-primary);
+}
+
+.conflicts-bar .bs-note {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.conflicts-bar-actions {
+  display: flex;
+  gap: var(--brand-space-2);
+}
+
+@media (max-width: 768px) {
+  /* Above the tab bar, which is fixed over the foot of the page. */
+  .conflicts-bar {
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--brand-space-2) var(--brand-space-3);
+  }
+
+  .conflicts-bar-why {
+    display: none;
+  }
+
+  .conflicts-bar-actions {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .conflicts-bar-actions .bs-btn {
+    min-width: 0;
+    justify-content: center;
+    white-space: normal;
+  }
+}
+
+/* The change a resolution belongs to, named under the title as a way back. */
+.conflicts-page .bs-subtitle a {
+  color: var(--bs-text-secondary);
+  font-weight: var(--brand-weight-medium);
+  text-decoration: underline;
+  text-decoration-color: var(--bs-rule);
+  text-underline-offset: 3px;
+}
+
+.conflicts-page .bs-subtitle a:hover {
+  color: var(--bs-coral-text);
+  text-decoration-color: currentColor;
+}
+
+/* ─── A document open in the editor ──────────────────────────────────────
+   **Full page, the way Word opens a file.** The product's map and the binder's
+   files go while a document is open — beside a ribbon and a navigation pane
+   they left Letter at half size on a laptop — and the sheet fills the window
+   under the top bar. The header is one line, a title bar rather than a page
+   title: the policy's name, where Save goes, Close and Save. Everything under
+   it is the editor, sized to the window so the page scrolls inside it and the
+   ribbon and status bar stay put. `bs-writing` is set on <html> by the editor
+   page while it is mounted. */
+html.bs-writing .app-sidebar,
+html.bs-writing .app-explorer {
+  display: none;
+}
+
+html.bs-writing .app-canvas {
+  margin-left: var(--brand-space-2);
+}
+
+html.bs-writing .app-main-area {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  scrollbar-gutter: auto;
+}
+
+html.bs-writing .app-main {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.docw-page--writing {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+  max-width: none;
+  padding: 0;
+  gap: 0;
+}
+
+.doc-editor-page {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.doc-editor-head {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-4);
+  min-height: 52px;
+  padding: var(--brand-space-2) var(--brand-space-3) var(--brand-space-2)
+    var(--brand-space-5);
+  border-bottom: 1px solid var(--bs-rule);
+}
+
+.doc-editor-head-body {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  gap: var(--brand-space-3);
+  min-width: 0;
+}
+
+.doc-editor-title {
+  flex: none;
+  max-width: 50%;
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-body-lg);
+  font-weight: var(--brand-weight-semibold);
+  line-height: var(--brand-leading-snug);
+  color: var(--bs-text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The name, renamed where it is shown. Reads as the title at rest; the
+   pencil and a hover ground say it can be changed. */
+.doc-editor-title-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  max-width: 100%;
+  /* No negative margin to pull the name back into line: the heading sizes
+     to its content, and a margin taken off the button is width taken off
+     the name, which then ellipsed on the shortest title. */
+  margin: 0;
+  padding: var(--brand-space-0-5) var(--brand-space-1-5);
+  border: 1px solid transparent;
+  border-radius: var(--brand-radius-sm);
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: text;
+}
+
+.doc-editor-title-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-editor-title-button svg {
+  flex: none;
+  color: var(--bs-text-faint);
+  opacity: 0;
+  transition: opacity var(--brand-transition-fast);
+}
+
+.doc-editor-title-button:hover:not(:disabled) {
+  border-color: var(--bs-rule);
+}
+
+.doc-editor-title-button:hover svg,
+.doc-editor-title-button:focus-visible svg {
+  opacity: 1;
+}
+
+.doc-editor-title-button:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 1px;
+}
+
+.doc-editor-title-input {
+  width: 22rem;
+  max-width: 100%;
+  font: inherit;
+  color: var(--bs-text-primary);
+  background: var(--bs-surface-1);
+  border: 1.5px solid var(--brand-coral);
+  border-radius: var(--brand-radius-sm);
+  padding: 0 var(--brand-space-1-5);
+}
+
+.doc-editor-title-input:focus {
+  outline: none;
+}
+
+.doc-editor-where {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+  white-space: nowrap;
+}
+
+.doc-editor-where > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The draft picker, where Save says where it puts things: the binder bar's
+   control, a size down to sit in a line of text. */
+.doc-editor-where .bs-draftpick {
+  min-height: 26px;
+  font-size: var(--brand-text-ui-sm);
+}
+
+.doc-editor-where-label,
+.doc-editor-where-more {
+  flex: none;
+}
+
+.doc-editor-where svg {
+  flex: none;
+}
+
+.doc-editor-where strong {
+  color: var(--bs-text-secondary);
+  font-weight: var(--brand-weight-medium);
+}
+
+.doc-editor-head-actions {
+  display: flex;
+  flex: none;
+  gap: var(--brand-space-2);
+}
+
+/* AutoRecover's offer: a strip under the title bar, where Word puts its
+   Document Recovery pane's one question. */
+.doc-editor-recover {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-2) var(--brand-space-3) var(--brand-space-2)
+    var(--brand-space-5);
+  border-bottom: 1px solid var(--bs-status-warn-border);
+  background: var(--bs-status-warn-bg);
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-md);
+  line-height: var(--brand-leading-normal);
+}
+
+.doc-editor-recover > svg {
+  flex: none;
+  color: var(--bs-status-warn-fg);
+}
+
+.doc-editor-recover p {
+  flex: 1;
+  margin: 0;
+}
+
+.doc-editor-recover strong {
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.doc-editor-recover-actions {
+  display: flex;
+  flex: none;
+  gap: var(--brand-space-2);
+}
+
+.doc-editor-alert {
+  margin: var(--brand-space-2) var(--brand-space-5);
+}
+
+/* The draft's files beside the page, the way GitLab's Web IDE keeps its
+   tree beside the file: the same rows as the binder's file panel, in a panel
+   of the editor's own so the shell's rule hiding that one does not hide it. */
+.doc-editor-workspace {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.doc-files {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 248px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-right: 1px solid var(--bs-rule);
+  background: var(--bs-surface-1);
+}
+
+/* On a narrow window the panel opens over the page, not beside it. */
+.doc-editor-workspace {
+  position: relative;
+}
+
+.doc-files--floating {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 40px;
+  z-index: var(--brand-z-overlay);
+  box-shadow: var(--bs-elevation-menu);
+}
+
+.doc-files--shut {
+  align-items: center;
+  gap: var(--brand-space-1);
+  width: 40px;
+  padding-top: var(--brand-space-2);
+}
+
+/* The open policy has words not saved yet — the dot an IDE puts on a tab. */
+.doc-files-unsaved {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: var(--bs-status-warn-fg);
+}
+
+/* A Word file or a PDF is in the binder but not the editor's to open. */
+.doc-files-item--file {
+  color: var(--bs-text-muted);
+}
+
+/* A row and its acts: Rename, Move, Archive. The acts sit over the end of
+   the name on hover or focus — a narrow panel has no spare column for them,
+   and three icons on every row at rest made the tree a toolbar. */
+.doc-files-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.doc-files-row > .app-explorer-item,
+.doc-files-row > .app-explorer-folder {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.doc-files-acts {
+  position: absolute;
+  top: 50%;
+  right: var(--brand-space-1);
+  display: flex;
+  gap: var(--brand-space-0-5);
+  padding-left: var(--brand-space-2);
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--bs-surface-2) var(--brand-space-2)
+  );
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.doc-files-row:hover > .doc-files-acts,
+.doc-files-row:focus-within > .doc-files-acts {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.doc-files-acts .bs-rowact {
+  width: 24px;
+  height: 24px;
+}
+
+/* Touch has no hover: the acts are always there, at the row's end. */
+@media (hover: none) {
+  .doc-files-acts {
+    position: static;
+    background: none;
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+  }
+}
+
+.doc-files-item--renaming {
+  cursor: default;
+}
+
+.doc-files-item--renaming:hover {
+  background: transparent;
+}
+
+.doc-files-rename {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  color: var(--bs-text-primary);
+  background: var(--bs-surface-1);
+  border: 1.5px solid var(--brand-coral);
+  border-radius: var(--brand-radius-sm);
+  padding: 1px var(--brand-space-1-5);
+}
+
+.doc-files-rename:focus {
+  outline: none;
+}
+
+.doc-files-row--dragging {
+  opacity: 0.4;
+}
+
+/* A folder a drop would land in: inset, so aiming at it moves nothing. */
+.doc-files-group--drop {
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-coral-dim);
+  box-shadow: inset 0 0 0 2px var(--brand-coral);
+}
+
+.doc-files-root-drop {
+  margin: var(--brand-space-2) var(--brand-space-1);
+  padding: var(--brand-space-3);
+  border: 1.5px dashed var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  text-align: center;
+  font-size: var(--brand-text-ui-xs);
+  color: var(--bs-text-muted);
+}
+
+.doc-files-root-drop--over {
+  border-color: var(--brand-coral);
+  border-style: solid;
+  background: var(--bs-coral-dim);
+  color: var(--bs-text-primary);
+}
+
+.doc-editor-main {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.doc-editor-state {
+  padding: var(--brand-space-8);
+}
+
+.doc-editor-frame {
+  flex: 1 1 0;
+  min-height: 420px;
+  overflow: hidden;
+}
+
+/* The last policy, still on the page while the next is read: dimmed, and not
+   a place to type, for the moment it takes. */
+.doc-editor-frame--opening {
+  opacity: 0.55;
+  transition: opacity 120ms ease-out;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .doc-editor-frame--opening {
+    transition: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .doc-editor-where-more {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  /* A phone's shell is in block flow, so the editor takes a height of its
+     own: the window, less the top bar, the title bar and the tab bar. */
+  html.bs-writing .app-main-area,
+  html.bs-writing .app-main,
+  .docw-page--writing,
+  .doc-editor-page,
+  .doc-editor-workspace,
+  .doc-editor-main {
+    display: block;
+  }
+
+  /* No room for a tree beside a page on a phone; the binder's own list is
+     one Close away. */
+  .doc-files {
+    display: none;
+  }
+
+  .doc-editor-head {
+    padding-left: var(--brand-space-4);
+  }
+
+  .doc-editor-head-body {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+
+  .doc-editor-title {
+    max-width: 100%;
+  }
+
+  .doc-editor-frame {
+    height: calc(100dvh - var(--brand-nav-height) - 196px);
+  }
+}
+
+.doc-editor-status {
+  white-space: nowrap;
+}
+
+.doc-editor-status--unsaved {
+  color: var(--bs-status-warn-fg);
+}
+
+/* How a document is added: two choices, side by side where there is room. */
+.add-policy-mode {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--brand-space-2);
+}
+
+.add-policy-mode .bs-choice + .bs-choice {
+  margin-top: 0;
+}
+
+/* Numbered sections: 1. Purpose, 2.1 Wards. Drawn, never typed, so they
+   cannot fall out of step when a section is added in the middle. See
+   `NumberedHeadings.ts`. */
+.doc-preview-prose {
+  counter-reset: bs-section bs-subsection;
+}
+
+.doc-preview-prose h2.bs-numbered {
+  counter-increment: bs-section;
+  counter-reset: bs-subsection;
+}
+
+.doc-preview-prose h3.bs-numbered {
+  counter-increment: bs-subsection;
+}
+
+.doc-preview-prose h2.bs-numbered::before {
+  content: counter(bs-section) ".\00a0\00a0";
+}
+
+.doc-preview-prose h3.bs-numbered::before {
+  content: counter(bs-section) "." counter(bs-subsection) "\00a0\00a0";
+}
+
+/* ── A row's menu in the editor's file panel ─────────────────────────────
+   Right-click, the menu key or Shift+F10 on a row. The version menu's
+   shape, so the two menus in one panel read as one family. */
+.doc-files-menu {
+  position: fixed;
+  z-index: var(--brand-z-overlay);
+  display: grid;
+  min-width: 200px;
+  padding: var(--brand-space-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  box-shadow: var(--bs-elevation-menu);
+}
+
+.doc-files-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  width: 100%;
+  padding: var(--brand-space-1-5) var(--brand-space-2);
+  border: none;
+  border-radius: var(--brand-radius-md);
+  background: transparent;
+  color: var(--bs-text-primary);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.doc-files-menu-item svg {
+  flex: none;
+  color: var(--bs-text-muted);
+}
+
+.doc-files-menu-item:hover:not(:disabled),
+.doc-files-menu-item:focus-visible {
+  outline: none;
+  background: var(--bs-surface-2);
+}
+
+.doc-files-menu-item:disabled {
+  color: var(--bs-text-faint);
+  cursor: not-allowed;
+}
+
+.doc-files-menu-item--danger:hover:not(:disabled),
+.doc-files-menu-item--danger:focus-visible {
+  background: var(--bs-status-danger-bg);
+  color: var(--bs-status-danger-fg);
+}
+
+.doc-files-menu-item--danger:hover:not(:disabled) svg,
+.doc-files-menu-item--danger:focus-visible svg {
+  color: inherit;
+}
+
+.doc-files-menu-hint {
+  margin-left: auto;
+  color: var(--bs-text-faint);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-xs);
+}
+
+.doc-files-menu-sep {
+  height: 1px;
+  margin: var(--brand-space-1) var(--brand-space-1);
+  background: var(--bs-rule);
+}
+
+/* The row a menu is open on stays marked while you choose. */
+.doc-files-row--menu > .app-explorer-item,
+.doc-files-row--menu > .app-explorer-folder {
+  background: var(--bs-surface-2);
+  box-shadow: inset 0 0 0 1px var(--bs-rule);
+}
+
+/* A row this draft has changed: quiet, after the name — the binder tree's
+   mark, so "changed in this draft" looks the same in both places. */
+.doc-files-changed {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: var(--brand-radius-full);
+  background: var(--brand-coral);
+}
+
+/* Archived in this draft, with the way back, for as long as it is news. */
+.doc-files-undo {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  margin: var(--brand-space-2);
+  padding: var(--brand-space-1-5) var(--brand-space-2);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-2);
+  font-size: var(--brand-text-ui-sm);
+  color: var(--bs-text-secondary);
+}
+
+.doc-files-undo > span {
+  min-width: 0;
+}
+
+.doc-files-undo > button {
+  flex: none;
+  margin-left: auto;
+}
+
+/* The archive, at the foot of the files. */
+.doc-files-archive {
+  margin-top: auto;
+  padding: var(--brand-space-1) 0;
+  border-top: 1px solid var(--bs-rule);
+}
+
+.doc-files-archive-count {
+  margin-left: auto;
+  padding-right: var(--brand-space-2);
+  color: var(--bs-text-faint);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-xs);
+}
+
+.doc-files-item--archived {
+  color: var(--bs-text-muted);
+  cursor: default;
+}
+
+.doc-files-item--archived:hover {
+  background: transparent;
+  color: var(--bs-text-muted);
+}
+
+.doc-files-restore {
+  flex: none;
+  margin-right: var(--brand-space-1);
+}
+
+/* Where the open policy is filed, beside its title, and the way to move it. */
+.doc-editor-folder {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--brand-space-1);
+  min-width: 0;
+  max-width: 14rem;
+  padding: var(--brand-space-0-5) var(--brand-space-1-5);
+  border: 1px solid transparent;
+  border-radius: var(--brand-radius-sm);
+  background: none;
+  color: var(--bs-text-muted);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-sm);
+  cursor: pointer;
+}
+
+.doc-editor-folder > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-editor-folder svg {
+  flex: none;
+}
+
+.doc-editor-folder:hover:not(:disabled) {
+  border-color: var(--bs-rule);
+  color: var(--bs-text-primary);
+}
+
+.doc-editor-folder:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 1px;
+}
+
+/* ── Adding many documents at once ───────────────────────────────────────
+   A dropped folder can hold a hundred policies; the list scrolls inside the
+   dialog rather than pushing the button off the screen. */
+.bulk-list .bulk-rows {
+  max-height: 16rem;
+  overflow-y: auto;
+}
+
+.bulk-progress {
+  display: block;
+  width: 100%;
+  height: 4px;
+  accent-color: var(--brand-coral);
+}
+
+.bulk-skipped {
+  padding: var(--brand-space-1) var(--brand-space-2);
+  border-top: 1px solid var(--bs-rule);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.bulk-skipped summary {
+  cursor: pointer;
+}
+
+.bulk-skipped ul,
+.bulk-failures {
+  margin: var(--brand-space-1) 0 0;
+  padding-left: var(--brand-space-3);
+}
+
+.add-policy-folder-pick {
+  align-self: flex-start;
+  gap: var(--brand-space-1);
+}
+
+.reviewer-chooser {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.reviewer-chooser .bs-row {
+  gap: var(--brand-space-1-5, var(--brand-space-1));
+}
+
+.reviewer-chooser label.bs-row-body {
+  cursor: pointer;
+}
+
+/* PDF and Word, side by side where a single Download sits for an upload. */
+.doc-preview-exports {
+  display: inline-flex;
+  gap: var(--brand-space-1);
+}
+
+/* ── Notifications ────────────────────────────────────────────────────────
+   The bell's number is the one coral thing in the top bar when something is
+   waiting: it is the element that says "your turn". */
+.notif-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--brand-coral);
+  color: var(--bs-surface-1);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+.notif-panel {
+  width: min(380px, calc(100vw - 16px));
+  max-height: min(480px, calc(100vh - 80px));
+  padding: 0;
+  gap: 0;
+  align-content: start;
+}
+
+.notif-head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  padding: var(--brand-space-2) var(--brand-space-2) var(--brand-space-1-5)
+    var(--brand-space-3);
+  border-bottom: 1px solid var(--bs-rule);
+  background: var(--bs-surface-1);
+}
+
+.notif-title {
+  font-weight: 600;
+  font-size: var(--brand-text-ui-md);
+  color: var(--bs-text-primary);
+}
+
+.notif-filter {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-2);
+}
+
+.notif-filter button {
+  border: 0;
+  border-radius: var(--brand-radius-sm);
+  background: transparent;
+  padding: 2px var(--brand-space-1-5);
+  font: inherit;
+  font-size: var(--brand-text-ui-sm);
+  color: var(--bs-text-secondary);
+  cursor: pointer;
+}
+
+.notif-filter button.is-on {
+  background: var(--bs-surface-1);
+  color: var(--bs-text-primary);
+  box-shadow: var(--bs-shadow-sm);
+}
+
+.notif-markall {
+  margin-left: auto;
+  gap: var(--brand-space-1);
+}
+
+.notif-list {
+  list-style: none;
+  margin: 0;
+  padding: var(--brand-space-1);
+  display: grid;
+  gap: 2px;
+}
+
+.notif-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--brand-space-2);
+  padding: var(--brand-space-1-5) var(--brand-space-2);
+  border-radius: var(--brand-radius-md);
+  color: var(--bs-text-primary);
+  text-decoration: none;
+}
+
+.notif-row:hover,
+.notif-row:focus-visible {
+  background: var(--bs-surface-2);
+}
+
+.notif-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--bs-text-muted);
+}
+
+.notif-row--yours .notif-icon {
+  color: var(--brand-coral);
+}
+
+.notif-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.notif-name {
+  font-size: var(--brand-text-ui-md);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notif-row--unread .notif-name {
+  font-weight: 600;
+}
+
+.notif-meta {
+  font-size: var(--brand-text-ui-sm);
+  color: var(--bs-text-muted);
+}
+
+.notif-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--brand-coral);
+}
+
+.notif-empty {
+  margin: 0;
+  padding: var(--brand-space-4) var(--brand-space-3);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+  text-align: center;
+}
+
+/* ── Getting started ──────────────────────────────────────────────────────
+   One coral button — the next step — and quiet rows for the rest. */
+.guide {
+  margin-bottom: var(--brand-space-4);
+}
+
+.guide-bar-head {
+  gap: var(--brand-space-2);
+}
+
+.guide-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  margin-left: auto;
+  font-size: var(--brand-text-ui-sm);
+  color: var(--bs-text-muted);
+}
+
+.guide-progress-track {
+  width: 72px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--bs-surface-2);
+  overflow: hidden;
+}
+
+.guide-progress-fill {
+  display: block;
+  height: 100%;
+  background: var(--bs-status-ok-fg);
+}
+
+.guide-lead {
+  margin: 0;
+  padding: var(--brand-space-2) var(--brand-space-3) 0;
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-md);
+}
+
+.guide-lead code {
+  font-size: 0.9em;
+}
+
+.guide-steps {
+  list-style: none;
+  margin: 0;
+  padding: var(--brand-space-2) var(--brand-space-3) var(--brand-space-3);
+  display: grid;
+  gap: var(--brand-space-1);
+}
+
+.guide-step {
+  display: flex;
+  gap: var(--brand-space-2);
+  padding: var(--brand-space-1-5) var(--brand-space-2);
+  border-radius: var(--brand-radius-md);
+}
+
+.guide-step--current {
+  background: var(--bs-coral-glow);
+  border: 1px solid var(--bs-coral-border-soft);
+}
+
+.guide-step-mark {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--bs-rule);
+  font-size: var(--brand-text-ui-sm);
+  font-weight: 600;
+  color: var(--bs-text-muted);
+}
+
+.guide-step--done .guide-step-mark {
+  border-color: var(--bs-green-border);
+  background: var(--bs-status-ok-bg);
+  color: var(--bs-status-ok-fg);
+}
+
+.guide-step--current .guide-step-mark {
+  border-color: var(--brand-coral);
+  color: var(--brand-coral);
+}
+
+.guide-step-body {
+  display: grid;
+  gap: var(--brand-space-1);
+}
+
+.guide-step-title {
+  font-weight: 600;
+  font-size: var(--brand-text-ui-md);
+  color: var(--bs-text-primary);
+}
+
+.guide-step--done .guide-step-title {
+  color: var(--bs-text-muted);
+  font-weight: 500;
+}
+
+.guide-step-why {
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-md);
+  max-width: 60ch;
+}
+
+.guide-step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--brand-space-1-5);
+  margin-top: var(--brand-space-0-5);
+}
+
+.guide-step-actions .bs-btn {
+  gap: var(--brand-space-1);
+}
+
+/* Above every page but Home: as wide as the page under it, and as tall as its
+   words — the main area is a grid that would otherwise give it half the
+   screen. */
+.app-main:has(> .guide-strip) {
+  grid-template-rows: auto 1fr;
+}
+
+.guide-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-self: start;
+  justify-self: center;
+  gap: var(--brand-space-2) var(--brand-space-3);
+  width: min(1080px, calc(100% - 2 * var(--brand-space-8)));
+  margin-top: var(--brand-space-4);
+  padding: var(--brand-space-1-5) var(--brand-space-2);
+  border: 1px solid var(--bs-coral-border-soft);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-coral-glow);
+  font-size: var(--brand-text-ui-md);
+  color: var(--bs-text-secondary);
+}
+
+.guide-strip-count {
+  font-weight: 600;
+  color: var(--bs-text-primary);
+}
+
+.guide-strip-next {
+  flex: 1;
+  min-width: 12rem;
+}
+
+/* Where a policy written here came from, in the place an upload shows its
+   file name: in words, not in a monospace name nobody chose. */
+.doc-header-source {
+  font-size: var(--brand-text-ui-sm);
+  color: var(--bs-text-muted);
+}
+
+.doc-preview-filename-text--words {
+  font-family: inherit;
+}
+
+/* An account's settings are a handful of short fields; full width made a
+   first-name box wider than most people's whole name. */
+.account-settings .bs-settings {
+  max-width: 44rem;
+}
+
+/* What is in the way of a rename or a deletion, each a link to go fix it. */
+.account-blockers {
+  margin: var(--brand-space-2) 0 0;
+  padding-left: var(--brand-space-5);
+}
+
+.account-blockers a {
+  color: inherit;
+}
+
+/* ── Organization setup: choose, create, or ask to join ─────────────────── */
+.org-setup-lede {
+  color: var(--bs-text-muted);
+}
+
+.org-setup-note {
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-sm);
+}
+
+.org-setup-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--bs-text-muted);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.org-setup-link:hover {
+  color: var(--bs-text-primary);
+  text-decoration: underline;
+}
+
+.org-setup-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--brand-space-4);
+}
+
+.org-setup-identity {
+  display: grid;
+  gap: var(--brand-space-1);
+  margin: var(--brand-space-5) 0;
+  padding: var(--brand-space-4);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-page-bg);
+}
+
+.org-setup-username {
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-body-lg);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.org-setup-identity-name {
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-sm);
+}
+
+.org-setup-message {
+  resize: none;
+  margin-bottom: var(--brand-space-3);
+}
+
+/* Why a dimmed decision button is dimmed, said beside it. */
+.rev-decision-locked {
+  margin: 0;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+  line-height: 1.45;
+}
+
+.org-settings {
+  max-width: 44rem;
+}
+
+/* A person's picture, laid over their initials in the same circle: the
+   initials show until it arrives, and if it never does. */
+.rev-avatar,
+.app-topnav-avatar,
+.app-profile-menu-avatar,
+.app-sidebar-user-avatar {
+  position: relative;
+  overflow: hidden;
+}
+
+.avatar-face {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+/* Invite by email: the binder and the level side by side. */
+.org-invite-binder {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--brand-space-2);
+}
+
+.org-invitation-row .bs-row-right {
+  display: flex;
+  gap: var(--brand-space-1);
 }

@@ -111,7 +111,9 @@ export function parseBinderAddress(
           ? "compare"
           : parts[1] === "preview"
             ? "preview"
-            : "discussion";
+            : parts[1] === "conflicts"
+              ? "conflicts"
+              : "discussion";
       return { ...HOME, tab: "changes", change: number, view };
     }
     case "history":
@@ -151,7 +153,10 @@ export function parseLegacyBinderQuery(search: string): BinderAddress {
   return {
     tab: BINDER_TABS.find((tab) => tab === raw) ?? "documents",
     change: parsePositiveIntParam(search, "change"),
-    view: view === "preview" || view === "compare" ? view : "discussion",
+    view:
+      view === "preview" || view === "compare" || view === "conflicts"
+        ? view
+        : "discussion",
     ref: ref === "" ? null : ref,
     documentPath: null,
     archive: params.get("archive") === "1",
@@ -171,11 +176,18 @@ export function parseLegacyBinderQuery(search: string): BinderAddress {
  * editing" has one answer: the propose screen is reached from edit mode, is
  * left back into it, and cannot be true while `edit` is not.
  */
-export type BinderEditMode = "off" | "editing" | "proposing";
+export type BinderEditMode = "off" | "editing" | "proposing" | "writing";
 
+/**
+ * `writing` is a document open in the editor, which only means something on a
+ * document's address — a binder has nothing to type into. It is a screen of
+ * edit mode like proposing, because what the editor saves goes into the same
+ * draft every other edit does.
+ */
 export function editModeFromSearch(search: string): BinderEditMode {
   const raw = new URLSearchParams(search).get("edit");
   if (raw === "propose") return "proposing";
+  if (raw === "write") return "writing";
   return raw === "1" ? "editing" : "off";
 }
 
@@ -243,7 +255,13 @@ export function buildBinderUrl(params: {
       change === undefined
         ? "/-/changes"
         : `/-/changes/${change}${
-            view === "compare" ? "/diffs" : view === "preview" ? "/preview" : ""
+            view === "compare"
+              ? "/diffs"
+              : view === "preview"
+                ? "/preview"
+                : view === "conflicts"
+                  ? "/conflicts"
+                  : ""
           }`;
   } else if (tab === "history") {
     path = "/-/history";
@@ -257,6 +275,7 @@ export function buildBinderUrl(params: {
     // own address stays the short one.
     if (edit === "editing") query.set("edit", "1");
     if (edit === "proposing") query.set("edit", "propose");
+    if (edit === "writing") query.set("edit", "write");
     // Only while editing: a draft named on an address that is not an edit is
     // a claim about a state the page is not in.
     if (edit !== "off" && draft) query.set("draft", draft);

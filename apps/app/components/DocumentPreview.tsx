@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download, FileText } from "lucide-react";
 
 import { sanitizeHtml } from "../../../packages/utils/sanitizer";
@@ -10,6 +10,7 @@ import {
 import { docxToHtml } from "../docxHtml";
 import { markdownToHtml } from "../markdown";
 import { editorDocumentToHtml } from "../editorDocumentHtml";
+import { wireContentsLinks } from "../contentsLinks";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 interface DocumentPreviewProps {
@@ -34,6 +35,14 @@ interface DocumentPreviewProps {
    */
   onDownload: (loaded: Blob | null) => void;
   downloading: boolean;
+  /**
+   * Save a policy written in Bindersnap as a PDF or a Word document.
+   *
+   * Its stored file is the editor's JSON, which nobody outside the product
+   * can open — so for one of those, these replace Download rather than sit
+   * beside it.
+   */
+  onExport?: (format: "pdf" | "docx") => void;
   /**
    * Draw the document without its own name-and-download bar, for a screen
    * whose own bar already carries both — the change comparison, where every
@@ -80,9 +89,26 @@ export function DocumentPreview({
   fileName,
   onDownload,
   downloading,
+  onExport,
   bare = false,
 }: DocumentPreviewProps) {
   const [state, setState] = useState<PreviewState>({ status: "idle" });
+  const proseHtml = state.status === "richText" ? state.html : null;
+
+  // The contents list, followed: see `contentsLinks.ts`. Wired to whichever
+  // element the prose is drawn into, every time one is — not on the HTML
+  // changing. The page can draw the same document twice, once from what it
+  // already had and again when a fresh read lands, and the second element
+  // had the same HTML and no links.
+  const unwireContents = useRef<(() => void) | null>(null);
+  const proseRef = useCallback(
+    (root: HTMLElement | null) => {
+      unwireContents.current?.();
+      unwireContents.current =
+        root && proseHtml !== null ? wireContentsLinks(root) : null;
+    },
+    [proseHtml],
+  );
   // Kept so the Download button can save what is already on screen.
   const [loadedBlob, setLoadedBlob] = useState<Blob | null>(null);
   const kind = classifyDocumentFile(fileName);
@@ -223,18 +249,12 @@ export function DocumentPreview({
               : `${describeFileKind(fileName)} — this file type doesn’t preview in the browser.`}
           </span>
         </span>
-        <button
-          className="bs-btn bs-btn--sm bs-btn-secondary doc-preview-download"
-          title="Download"
-          type="button"
-          disabled={downloading || !fileName}
-          onClick={() => onDownload(loadedBlob)}
-        >
-          <Download size={14} strokeWidth={1.5} aria-hidden="true" />
-          <span className="doc-preview-download-label">
-            {downloading ? "Downloading…" : "Download"}
-          </span>
-        </button>
+        <DownloadButtons
+          fileName={fileName}
+          downloading={downloading}
+          onDownload={() => onDownload(loadedBlob)}
+          onExport={onExport}
+        />
       </div>
     );
   }
@@ -246,10 +266,16 @@ export function DocumentPreview({
           <span className="doc-preview-filename">
             <FileText size={14} strokeWidth={1.5} aria-hidden="true" />
             <span
-              className="doc-preview-filename-text"
+              className={`doc-preview-filename-text${
+                isWrittenHere(fileName)
+                  ? " doc-preview-filename-text--words"
+                  : ""
+              }`}
               title={fileName ?? undefined}
             >
-              {fileName ?? "No file"}
+              {isWrittenHere(fileName)
+                ? "Written in Bindersnap"
+                : (fileName ?? "No file")}
             </span>
           </span>
           <span className="doc-preview-toolbar-spacer" />
@@ -260,18 +286,12 @@ export function DocumentPreview({
               {formatFileSize(state.size)}
             </span>
           ) : null}
-          <button
-            className="bs-btn bs-btn--sm bs-btn-secondary doc-preview-download"
-            title="Download"
-            type="button"
-            disabled={downloading || !fileName}
-            onClick={() => onDownload(loadedBlob)}
-          >
-            <Download size={14} strokeWidth={1.5} aria-hidden="true" />
-            <span className="doc-preview-download-label">
-              {downloading ? "Downloading…" : "Download"}
-            </span>
-          </button>
+          <DownloadButtons
+            fileName={fileName}
+            downloading={downloading}
+            onDownload={() => onDownload(loadedBlob)}
+            onExport={onExport}
+          />
         </header>
       )}
 
@@ -304,6 +324,7 @@ export function DocumentPreview({
           </div>
         ) : state.status === "richText" ? (
           <article
+            ref={proseRef}
             className="doc-preview-sheet doc-preview-prose"
             // Mammoth emits a small semantic subset of HTML, and the result is
             // sanitized before it lands here.
@@ -330,5 +351,69 @@ export function DocumentPreview({
         ) : null}
       </div>
     </section>
+  );
+}
+
+/** Whether a file is a document written in Bindersnap, stored as the editor's JSON. */
+export function isWrittenHere(fileName: string | null): boolean {
+  return fileName?.toLowerCase().endsWith(".json") ?? false;
+}
+
+function DownloadButtons({
+  fileName,
+  downloading,
+  onDownload,
+  onExport,
+}: {
+  fileName: string | null;
+  downloading: boolean;
+  onDownload: () => void;
+  onExport?: (format: "pdf" | "docx") => void;
+}) {
+  if (onExport && isWrittenHere(fileName)) {
+    return (
+      <span
+        className="doc-preview-exports"
+        role="group"
+        aria-label="Download as"
+      >
+        <button
+          className="bs-btn bs-btn--sm bs-btn-secondary doc-preview-download"
+          type="button"
+          title="Download as a PDF"
+          disabled={downloading}
+          onClick={() => onExport("pdf")}
+        >
+          <Download size={14} strokeWidth={1.5} aria-hidden="true" />
+          <span className="doc-preview-download-label">
+            {downloading ? "Preparing…" : "PDF"}
+          </span>
+        </button>
+        <button
+          className="bs-btn bs-btn--sm bs-btn-secondary doc-preview-download"
+          type="button"
+          title="Download as a Word document"
+          disabled={downloading}
+          onClick={() => onExport("docx")}
+        >
+          <Download size={14} strokeWidth={1.5} aria-hidden="true" />
+          <span className="doc-preview-download-label">Word</span>
+        </button>
+      </span>
+    );
+  }
+  return (
+    <button
+      className="bs-btn bs-btn--sm bs-btn-secondary doc-preview-download"
+      title="Download"
+      type="button"
+      disabled={downloading || !fileName}
+      onClick={onDownload}
+    >
+      <Download size={14} strokeWidth={1.5} aria-hidden="true" />
+      <span className="doc-preview-download-label">
+        {downloading ? "Downloading…" : "Download"}
+      </span>
+    </button>
   );
 }

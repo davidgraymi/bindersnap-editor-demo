@@ -5,11 +5,21 @@
  * OpenAPI spec version: 1.0.0
  */
 import type {
+  AuthCheckResetLink200,
+  AuthCheckResetLinkParams,
+  AuthForgotPassword202,
+  AuthForgotPasswordBody,
   AuthLogin200,
   AuthLoginBody,
   AuthMe200,
+  AuthResendVerification200,
+  AuthResendVerification202,
+  AuthResetPassword200,
+  AuthResetPasswordBody,
   AuthSignup200,
-  AuthSignupBody
+  AuthSignupBody,
+  AuthVerifyEmail200,
+  AuthVerifyEmailBody
 } from '../model';
 
 import { customFetch } from '.././mutator.ts';
@@ -145,6 +155,221 @@ export const authLogout = async ( options?: Parameters<typeof customFetch>[1]): 
     method: 'POST'
 
 
+  }
+);}
+
+
+export type authVerifyEmailResponse200 = {
+  data: AuthVerifyEmail200
+  status: 200
+}
+
+export type authVerifyEmailResponse404 = {
+  data: void
+  status: 404
+}
+
+export type authVerifyEmailResponse410 = {
+  data: void
+  status: 410
+}
+
+export type authVerifyEmailResponseSuccess = (authVerifyEmailResponse200) & {
+  headers: Headers;
+};
+export type authVerifyEmailResponseError = (authVerifyEmailResponse404 | authVerifyEmailResponse410) & {
+  headers: Headers;
+};
+
+export type authVerifyEmailResponse = (authVerifyEmailResponseSuccess | authVerifyEmailResponseError)
+
+export const getAuthVerifyEmailUrl = () => {
+
+
+
+
+  return `/auth/email/verify`
+}
+
+export const authVerifyEmail = async (authVerifyEmailBody: AuthVerifyEmailBody, options?: Parameters<typeof customFetch>[1]): Promise<authVerifyEmailResponse> => {
+
+  return customFetch<authVerifyEmailResponse>(getAuthVerifyEmailUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(authVerifyEmailBody)
+  }
+);}
+
+
+export type authResendVerificationResponse200 = {
+  data: AuthResendVerification200
+  status: 200
+}
+
+export type authResendVerificationResponse202 = {
+  data: AuthResendVerification202
+  status: 202
+}
+
+export type authResendVerificationResponse401 = {
+  data: void
+  status: 401
+}
+
+export type authResendVerificationResponse429 = {
+  data: void
+  status: 429
+}
+
+export type authResendVerificationResponseSuccess = (authResendVerificationResponse200 | authResendVerificationResponse202) & {
+  headers: Headers;
+};
+export type authResendVerificationResponseError = (authResendVerificationResponse401 | authResendVerificationResponse429) & {
+  headers: Headers;
+};
+
+export type authResendVerificationResponse = (authResendVerificationResponseSuccess | authResendVerificationResponseError)
+
+export const getAuthResendVerificationUrl = () => {
+
+
+
+
+  return `/auth/email/resend`
+}
+
+export const authResendVerification = async ( options?: Parameters<typeof customFetch>[1]): Promise<authResendVerificationResponse> => {
+
+  return customFetch<authResendVerificationResponse>(getAuthResendVerificationUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+export type authForgotPasswordResponse202 = {
+  data: AuthForgotPassword202
+  status: 202
+}
+
+export type authForgotPasswordResponse429 = {
+  data: void
+  status: 429
+}
+
+export type authForgotPasswordResponseSuccess = (authForgotPasswordResponse202) & {
+  headers: Headers;
+};
+export type authForgotPasswordResponseError = (authForgotPasswordResponse429) & {
+  headers: Headers;
+};
+
+export type authForgotPasswordResponse = (authForgotPasswordResponseSuccess | authForgotPasswordResponseError)
+
+export const getAuthForgotPasswordUrl = () => {
+
+
+
+
+  return `/auth/password/forgot`
+}
+
+export const authForgotPassword = async (authForgotPasswordBody: AuthForgotPasswordBody, options?: Parameters<typeof customFetch>[1]): Promise<authForgotPasswordResponse> => {
+
+  return customFetch<authForgotPasswordResponse>(getAuthForgotPasswordUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(authForgotPasswordBody)
+  }
+);}
+
+
+export type authCheckResetLinkResponse200 = {
+  data: AuthCheckResetLink200
+  status: 200
+}
+
+export type authCheckResetLinkResponseSuccess = (authCheckResetLinkResponse200) & {
+  headers: Headers;
+};
+;
+
+export type authCheckResetLinkResponse = (authCheckResetLinkResponseSuccess)
+
+export const getAuthCheckResetLinkUrl = (params: AuthCheckResetLinkParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/auth/password/reset?${stringifiedParams}` : `/auth/password/reset`
+}
+
+export const authCheckResetLink = async (params: AuthCheckResetLinkParams, options?: Parameters<typeof customFetch>[1]): Promise<authCheckResetLinkResponse> => {
+
+  return customFetch<authCheckResetLinkResponse>(getAuthCheckResetLinkUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type authResetPasswordResponse200 = {
+  data: AuthResetPassword200
+  status: 200
+}
+
+export type authResetPasswordResponse400 = {
+  data: void
+  status: 400
+}
+
+export type authResetPasswordResponse410 = {
+  data: void
+  status: 410
+}
+
+export type authResetPasswordResponseSuccess = (authResetPasswordResponse200) & {
+  headers: Headers;
+};
+export type authResetPasswordResponseError = (authResetPasswordResponse400 | authResetPasswordResponse410) & {
+  headers: Headers;
+};
+
+export type authResetPasswordResponse = (authResetPasswordResponseSuccess | authResetPasswordResponseError)
+
+export const getAuthResetPasswordUrl = () => {
+
+
+
+
+  return `/auth/password/reset`
+}
+
+export const authResetPassword = async (authResetPasswordBody: AuthResetPasswordBody, options?: Parameters<typeof customFetch>[1]): Promise<authResetPasswordResponse> => {
+
+  return customFetch<authResetPasswordResponse>(getAuthResetPasswordUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(authResetPasswordBody)
   }
 );}
 

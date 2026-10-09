@@ -36,6 +36,8 @@ interface RenderOptions {
   reason?: "blocked-write" | null;
   onCreate?: (name: string) => Promise<void>;
   onSkip?: () => void;
+  /** Which way in to take on the first screen, for somebody new. */
+  path?: "create" | "join";
 }
 
 function render(options: RenderOptions = {}) {
@@ -53,9 +55,33 @@ function render(options: RenderOptions = {}) {
         reason: options.reason ?? null,
         onCreate: options.onCreate ?? (async () => {}),
         onSkip: options.onSkip ?? (() => {}),
+        username: "jkim",
+        fullName: "Jordan Kim",
+        checkForOrganization: async () => false,
+        onJoined: () => {},
       }),
     );
   });
+
+  // Somebody new is asked first whether they are starting or joining.
+  const choosing = container.querySelector('input[name="org-setup-path"]');
+  if (choosing && options.path !== undefined) {
+    const radios = [
+      ...container.querySelectorAll<HTMLInputElement>(
+        'input[name="org-setup-path"]',
+      ),
+    ];
+    flushSync(() => {
+      radios[options.path === "join" ? 1 : 0]!.click();
+    });
+    flushSync(() => {
+      container
+        .querySelector("form")!
+        .dispatchEvent(
+          new Event("submit", { bubbles: true, cancelable: true }),
+        );
+    });
+  }
 
   return {
     container,
@@ -70,14 +96,14 @@ function render(options: RenderOptions = {}) {
 test("shows the address the typed name will actually become", () => {
   // "Mercy Health" cannot be a Gitea org username, so the person is choosing
   // `mercy-health` whether they know it or not. Show them before they commit.
-  const page = render({ suggestedName: "Mercy Health" });
+  const page = render({ suggestedName: "Mercy Health", path: "create" });
 
   expect(page.html()).toContain("mercy-health");
   page.cleanup();
 });
 
 test("promises a trial only when this would be their first organization", () => {
-  const first = render({ isFirstOrganization: true });
+  const first = render({ isFirstOrganization: true, path: "create" });
   expect(first.html()).toContain("14-day trial");
   first.cleanup();
 
@@ -92,18 +118,16 @@ test("offers no way to join an organization by typing its name", () => {
   // Binders are private. A join-by-name field would let anyone who guesses a
   // customer's name walk into their policy manual, so joining is something an
   // owner does to you, never something you do to them.
-  const page = render();
-  const inputs = page.container.querySelectorAll("input");
+  const page = render({ path: "join" });
 
-  expect(inputs).toHaveLength(1);
-  expect(inputs[0]!.getAttribute("name")).toBe("organization-name");
-  expect(page.html()).toContain("Ask an owner to add you");
+  expect(page.container.querySelectorAll("input")).toHaveLength(0);
+  expect(page.html()).toContain("Ask to be added");
   page.cleanup();
 });
 
 test("can be skipped", () => {
   let skipped = false;
-  const page = render({ onSkip: () => (skipped = true) });
+  const page = render({ onSkip: () => (skipped = true), path: "create" });
 
   const skip = [...page.container.querySelectorAll("button")].find((button) =>
     button.textContent?.includes("Skip for now"),
@@ -121,5 +145,37 @@ test("a blocked write says why they are here", () => {
   const page = render({ reason: "blocked-write" });
 
   expect(page.html()).toContain("to start writing");
+  page.cleanup();
+});
+
+test("somebody new is asked whether they are starting an organization or joining one", () => {
+  const page = render();
+
+  expect(page.html()).toContain("Start a new organization");
+  expect(page.html()).toContain("Join my team");
+  // Nothing to name yet: the choice comes first.
+  expect(
+    page.container.querySelector('input[name="organization-name"]'),
+  ).toBeNull();
+  page.cleanup();
+});
+
+test("somebody who already has an organization goes straight to naming another", () => {
+  const page = render({ isFirstOrganization: false });
+
+  expect(page.html()).not.toContain("Join my team");
+  expect(
+    page.container.querySelector('input[name="organization-name"]'),
+  ).not.toBeNull();
+  page.cleanup();
+});
+
+test("joining says what to send an owner, with the username in it", () => {
+  const page = render({ path: "join" });
+
+  expect(page.html()).toContain("jkim");
+  const message = page.container.querySelector("textarea")!.value;
+  expect(message).toContain("My username is jkim");
+  expect(message).toContain("People & access");
   page.cleanup();
 });

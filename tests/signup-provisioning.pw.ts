@@ -26,6 +26,8 @@ import {
   createUserToken,
   GITEA_URL,
 } from "./helpers";
+import { signUpAndConfirm } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 test.describe.configure({ mode: "serial", timeout: 120_000 });
 
@@ -61,10 +63,15 @@ function buildOrgName(): string {
 
 /** Sign up, and return the session cookie the rest of the test acts with. */
 async function signUp(credentials: Credentials): Promise<string> {
-  const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+  const response = await signUpAndConfirm(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
-    body: JSON.stringify({ ...credentials, organization: buildOrgName() }),
+    body: JSON.stringify({
+      firstName: "Test",
+      lastName: "User",
+      ...credentials,
+      organization: buildOrgName(),
+    }),
   });
 
   // Read the body once. `expect`'s message argument is evaluated eagerly, so
@@ -92,7 +99,7 @@ async function createOrganization(
       // A mutation, so it goes through the state-changing origin check.
       Origin: APP_BASE_URL,
     },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, acceptedTerms: LEGAL_VERSION }),
   });
 
   const body = await response.text();

@@ -26,6 +26,8 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
+import { signUpAndConfirm } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 test.describe.configure({ mode: "parallel", timeout: 180_000 });
 
@@ -61,10 +63,14 @@ function authHeaders(session: string): Record<string, string> {
 }
 
 async function signUp(credentials: Credentials): Promise<string> {
-  const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+  const response = await signUpAndConfirm(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
-    body: JSON.stringify(credentials),
+    body: JSON.stringify({
+      firstName: "Test",
+      lastName: "User",
+      ...credentials,
+    }),
   });
   expect(
     response.status,
@@ -80,7 +86,7 @@ async function createOrganization(
   const response = await fetch(`${API_BASE_URL}/api/app/organizations`, {
     method: "POST",
     headers: authHeaders(session),
-    body: JSON.stringify({ name: displayName }),
+    body: JSON.stringify({ acceptedTerms: LEGAL_VERSION, name: displayName }),
   });
   const body = await response.text();
   expect(response.status, `create organization failed: ${body}`).toBe(201);
@@ -282,6 +288,88 @@ test("the author writes the title, and proposing it opens the change request", a
 
   // And the draft is gone, because a proposed draft is a change request.
   expect((await readDraft(session, org, binder)).draft).toBeNull();
+});
+
+/**
+ * **A proposed draft is still its owner's draft** — a branch with a pull
+ * request open on it. The customer: "A draft should still show up … if I own
+ * it and it's proposed so that I can edit the draft. JUST LIKE A BRANCH AND A
+ * PULL REQUEST." It keeps its name, it is still listed, a save into it lands
+ * in the change, and it cannot be proposed a second time or thrown away out
+ * from under its reviewers.
+ */
+test("a proposed draft stays yours: named, listed, and still editable", async () => {
+  const { session, org, binder } = await provision("draft-proposed");
+
+  const opened = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/draft`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({ name: "Sort into departments" }),
+    },
+  );
+  expect(opened.status).toBe(201);
+  const branch = ((await opened.json()) as DraftPayload).draft!.branch;
+
+  await makeFolder(session, org, binder, "Nursing", { draft: branch });
+  const proposed = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({ title: "Departments", draft: branch }),
+    },
+  );
+  expect(proposed.status).toBe(201);
+  const { changeNumber } = (await proposed.json()) as { changeNumber: number };
+
+  // Asked for by name, it is there, with the change it is waiting in.
+  const read = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/draft?draft=${encodeURIComponent(branch)}`,
+    { headers: authHeaders(session) },
+  );
+  const payload = (await read.json()) as {
+    draft: { branch: string; name: string; changeNumber: number | null };
+    drafts: Array<{ branch: string; changeNumber: number | null }>;
+  };
+  expect(payload.draft.branch).toBe(branch);
+  expect(payload.draft.name).toBe("Sort into departments");
+  expect(payload.draft.changeNumber).toBe(changeNumber);
+  expect(payload.drafts).toContainEqual(
+    expect.objectContaining({ branch, changeNumber }),
+  );
+
+  // A save into it is a save into the change.
+  const more = await makeFolder(session, org, binder, "Pharmacy", {
+    draft: branch,
+  });
+  expect(more.status, await more.clone().text()).toBe(201);
+  const change = (await (
+    await fetch(
+      `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes/${changeNumber}`,
+      { headers: authHeaders(session) },
+    )
+  ).json()) as { branchLabel: string | null; change: { branchName: string } };
+  expect(change.change.branchName).toBe(branch);
+  // The chip under the change's title reads the draft's name.
+  expect(change.branchLabel).toBe("Sort into departments");
+
+  // Not proposed twice, and not discarded under its reviewers.
+  const again = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({ title: "Again", draft: branch }),
+    },
+  );
+  expect(again.status).toBe(409);
+  const discard = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/draft?draft=${encodeURIComponent(branch)}`,
+    { method: "DELETE", headers: authHeaders(session) },
+  );
+  expect(discard.status).toBe(409);
 });
 
 test("an empty draft has nothing to propose", async () => {

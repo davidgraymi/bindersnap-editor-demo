@@ -201,7 +201,20 @@ test("the timeline opens with the change being opened", () => {
 
 test("update 1 is the opening, not an update event", () => {
   const entries = buildReviewTimeline({
-    change: change(),
+    change: change({
+      // Carol approved the first version; the second one cleared it.
+      reviewers: [
+        {
+          login: "carol",
+          fullName: "Carol",
+          avatarUrl: "",
+          status: "approved",
+          reviewedAt: "2026-08-20T12:00:00Z",
+          stale: true,
+          requested: true,
+        },
+      ],
+    }),
     threads: [],
     updates: [
       update(1, "aaa", "2026-08-20T09:14:00Z"),
@@ -213,7 +226,9 @@ test("update 1 is the opening, not an update event", () => {
   const updates = entries.filter((entry) => entry.kind === "update");
   expect(updates).toHaveLength(1);
   expect(updates[0]?.event?.tag).toBe("(update 2)");
-  expect(updates[0]?.event?.note).toBe("earlier approvals were reset");
+  expect(updates[0]?.event?.note).toBe(
+    "the approvals given before this were cleared",
+  );
   expect(updates[0]?.event?.updateSha).toBe("bbb");
 });
 
@@ -399,6 +414,52 @@ test("an approved change can still be objected to by someone who cannot publish"
   ).toBe("review");
 });
 
+test("a button somebody cannot use is shown dimmed, not hidden", () => {
+  const reading = { open: true, isAnonymous: false, ownSubmission: false };
+
+  // Asked to look, but not somebody whose approval counts here.
+  expect(
+    resolveReviewDecision({
+      ...reading,
+      mergeReady: false,
+      canReview: false,
+      canMerge: false,
+    }),
+  ).toBe("review-locked");
+
+  // Ready to publish, by somebody else.
+  expect(
+    resolveReviewDecision({
+      ...reading,
+      mergeReady: true,
+      canReview: false,
+      canMerge: false,
+    }),
+  ).toBe("publish-locked");
+
+  // A reviewer whose approval is in, on a change somebody else publishes.
+  expect(
+    resolveReviewDecision({
+      ...reading,
+      mergeReady: true,
+      canReview: true,
+      canMerge: false,
+      hasApproved: true,
+    }),
+  ).toBe("publish-locked");
+
+  // Their own approved change, which they cannot publish themselves.
+  expect(
+    resolveReviewDecision({
+      ...reading,
+      ownSubmission: true,
+      mergeReady: true,
+      canReview: false,
+      canMerge: false,
+    }),
+  ).toBe("publish-locked");
+});
+
 test("a closed change has no decision left, and neither has a visitor", () => {
   const settled = {
     ownSubmission: false,
@@ -434,4 +495,19 @@ test("the timeline and the opening line name people, not logins", () => {
   });
   expect(entries[0]?.event?.actor).toBe("Maya Okafor");
   expect(describeChangeOpening(change(), 4, nameOf).who).toBe("Maya Okafor");
+});
+
+test("an update on a change nobody had approved says nothing about approvals", () => {
+  const entries = buildReviewTimeline({
+    change: change(),
+    threads: [],
+    updates: [
+      update(1, "aaa", "2026-08-20T09:14:00Z"),
+      update(2, "bbb", "2026-08-21T15:00:00Z"),
+    ],
+    resetsApprovals: true,
+  });
+  expect(
+    entries.find((entry) => entry.kind === "update")?.event?.note,
+  ).toBeNull();
 });

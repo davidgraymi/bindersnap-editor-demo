@@ -19,12 +19,11 @@ services:
     restart: "no"
 
   gitea:
-    # Stays on 1.27.3 while dev runs a 28.0.0 nightly — see the long note in
-    # the repository's own `docker-compose.yml`. Short version: a Gitea schema
-    # migration is a one-way door and Litestream replicates the migrated schema
-    # faithfully, so production moves only on a released tag, never on a
-    # nightly. When 28.0.0 ships, this line and that one move together.
-    image: gitea/gitea:1.27.3
+    # The same pinned 28.0.0 as the repository's own `docker-compose.yml`;
+    # change both in one commit. A Gitea upgrade migrates `gitea.db` on start
+    # and cannot be reverted by reverting this line — see docs/ops/deploy.md,
+    # "Gitea version changes are not covered by a git revert".
+    image: gitea/gitea:28.0.0@sha256:a9dc25679ebdd33356242d2e0667cc220043745e8339922879f187c20329a42e
     container_name: bindersnap-gitea-prod
     restart: unless-stopped
     depends_on:
@@ -47,6 +46,12 @@ services:
       # --- Database ---
       - GITEA__database__DB_TYPE=sqlite3
       - GITEA__database__PATH=/data/gitea.db
+      # WAL, stated here rather than inherited. Litestream switches gitea.db to
+      # WAL when it starts (it needs it to replicate), which is the only reason
+      # prod ran in WAL before this line — so removing or delaying the sidecar
+      # silently dropped Gitea back to the rollback journal, where concurrent
+      # API calls convoy on the write lock. Dev sets the same.
+      - GITEA__database__SQLITE_JOURNAL_MODE=WAL
       # --- Service (registration disabled) ---
       - GITEA__service__DISABLE_REGISTRATION=true
       - GITEA__service__REQUIRE_SIGNIN_VIEW=true
@@ -65,6 +70,10 @@ services:
       - GITEA__cors__METHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
       - GITEA__cors__ALLOW_CREDENTIALS=true
       # --- Logging ---
+      # No Gravatar or other outside avatar service: Gitea draws its own, so no
+      # hash of anybody's email leaves the host (the Privacy Policy says so).
+      - GITEA__picture__DISABLE_GRAVATAR=true
+      - GITEA__picture__ENABLE_FEDERATED_AVATAR=false
       - GITEA__log__LEVEL=warn
       - GITEA__log__MODE=console
       # --- Security ---
@@ -111,7 +120,10 @@ services:
       - NODE_ENV=production
       - GITEA_INTERNAL_URL=http://gitea:3000
       - BINDERSNAP_GITEA_SERVICE_TOKEN=${GITEA_SERVICE_TOKEN:?set in the generated env file}
+      # Empty until the deploy mints it; the API then uses the service token.
+      - BINDERSNAP_GITEA_ADMIN_TOKEN=${GITEA_ADMIN_TOKEN:-}
       - BINDERSNAP_APP_ORIGIN=https://bindersnap.com
+      - BINDERSNAP_API_ORIGIN=https://api.bindersnap.com
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:?set in the generated env file}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:?set in the generated env file}
       - STRIPE_PRICE_ID=${STRIPE_PRICE_ID:?set in the generated env file}
@@ -123,6 +135,14 @@ services:
       - BINDERSNAP_REQUIRE_HTTPS=true
       - BINDERSNAP_AUTH_RATE_LIMIT_ENABLED=true
       - BINDERSNAP_SESSIONS_DB_PATH=/var/lib/bindersnap/sessions.db
+      # --- Email (issue #665) ---
+      # The API sends through Amazon SES with the instance role (infra/email);
+      # there is no mail secret. Off until the domain verifies: set the SSM
+      # leaf `mail_transport` to `ses` and redeploy. While off, emails queue
+      # in the outbox and wait.
+      - BINDERSNAP_MAIL_TRANSPORT=${MAIL_TRANSPORT:-off}
+      - BINDERSNAP_MAIL_FROM=${MAIL_FROM:-Bindersnap <notifications@bindersnap.com>}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
     volumes:
       - api-data:/var/lib/bindersnap
 

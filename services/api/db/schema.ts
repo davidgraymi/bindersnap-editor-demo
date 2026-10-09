@@ -4,6 +4,7 @@ import {
   primaryKey,
   sqliteTable,
   text,
+  uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
 // Canonical schema for the API's SQLite database (one file on the EBS data
@@ -260,5 +261,256 @@ export const binderDrafts = sqliteTable(
   (table) => [
     primaryKey({ columns: [table.giteaRepoId, table.branch] }),
     index("idx_binder_drafts_owner").on(table.giteaRepoId, table.owner),
+  ],
+);
+
+/**
+ * Work the API has promised to finish: a multi-step Gitea write recorded
+ * before its first step runs. See `jobs/` and ADR 0004's note on operational
+ * state.
+ *
+ * **Not evidence, and never read as such.** A row says what is left to do —
+ * merge change 12, then tag these documents at these versions — and nothing
+ * here answers "was this approved" or "what version is live"; Gitea answers
+ * those. Once a job is done its row can be deleted without losing anything,
+ * which is the test ADR 0004 sets for state that may live outside Gitea. The
+ * Stripe `webhook_events` table is the precedent.
+ */
+export const jobs = sqliteTable(
+  "jobs",
+  {
+    id: text("id").primaryKey(),
+    /** `publish` — what the plan is for, and which runner reads it. */
+    kind: text("kind").notNull(),
+    /** `org/repo`. Jobs in one group run one at a time, in order. */
+    groupKey: text("group_key").notNull(),
+    /** What it acts on within the group — `change:12` — for finding it again. */
+    subject: text("subject").notNull(),
+    /** From the request's `Idempotency-Key`, so a retried click gets this job. */
+    idempotencyKey: text("idempotency_key"),
+    /** JSON: everything needed to finish without the request that made it. */
+    plan: text("plan").notNull(),
+    /** `pending`, `running`, `done` or `failed`. */
+    status: text("status").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    /** Epoch ms. A running job whose lease has lapsed is picked up again. */
+    leaseUntil: integer("lease_until"),
+    lastError: text("last_error"),
+    /** JSON: what the finished job reports back. */
+    result: text("result"),
+    /** Who asked. The audit fields come from here, not from whoever resumes. */
+    createdBy: text("created_by").notNull(),
+    /** Their session, whose token a resumed run may use while it lasts. */
+    sessionId: text("session_id"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    index("idx_jobs_status").on(table.status, table.leaseUntil),
+    index("idx_jobs_subject").on(table.groupKey, table.subject),
+    uniqueIndex("idx_jobs_idempotency_key").on(table.idempotencyKey),
+  ],
+);
+
+/**
+ * Email waiting to be sent, and a short memory of what was (issue #665).
+ *
+ * The action that causes an email — a review requested, a reset asked for —
+ * writes a row here and is done; `mail/sender.ts` delivers it in the
+ * background and retries. So SES being slow or down never fails the action,
+ * and a deploy mid-send loses nothing, because the row was committed first.
+ *
+ * Not evidence: an email is a courtesy about something already on the record
+ * in Gitea. A sent row keeps who, what and when for 30 days for support, and
+ * its body is blanked as it goes out — a reset or invitation link is a
+ * credential, and the outbox is not where one should be kept.
+ *
+ * `idempotency_key` makes "send this once" a constraint, not a hope: the same
+ * event queued twice (a retried request, a webhook delivered again) is one
+ * email.
+ */
+export const emailOutbox = sqliteTable(
+  "email_outbox",
+  {
+    id: text("id").primaryKey(),
+    kind: text("kind").notNull(),
+    recipient: text("recipient").notNull(),
+    subject: text("subject").notNull(),
+    html: text("html").notNull(),
+    text: text("text").notNull(),
+    /** Extra headers, as a JSON object — `List-Unsubscribe` and its kin. */
+    headers: text("headers"),
+    idempotencyKey: text("idempotency_key"),
+    status: text("status").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: integer("next_attempt_at").notNull(),
+    lastError: text("last_error"),
+    providerMessageId: text("provider_message_id"),
+    createdAt: integer("created_at").notNull(),
+    sentAt: integer("sent_at"),
+  },
+  (table) => [
+    index("idx_email_outbox_due").on(table.status, table.nextAttemptAt),
+    uniqueIndex("idx_email_outbox_idempotency_key").on(table.idempotencyKey),
+  ],
+);
+
+/**
+ * Outstanding "forgot password" links (issue #665).
+ *
+ * Only a SHA-256 of each token is kept, so a copy of this database cannot be
+ * used to reset anybody's password. A link works once (`used_at`) and for an
+ * hour (`expires_at`); asking again, or a reset going through, retires every
+ * other link the person had. The password itself lives in Gitea, and the
+ * reset sets it there.
+ */
+export const passwordResets = sqliteTable(
+  "password_resets",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    username: text("username").notNull(),
+    email: text("email").notNull(),
+    createdAt: integer("created_at").notNull(),
+    expiresAt: integer("expires_at").notNull(),
+    usedAt: integer("used_at"),
+  },
+  (table) => [index("idx_password_resets_username").on(table.username)],
+);
+
+/**
+ * Which emails each person wants (issue #665). Settings, so SQLite (ADR 0004).
+ *
+ * No row means every topic on: a person who never opened the settings gets
+ * what everybody gets. `unsubscribe_token` is random, per person, and is what
+ * an email's unsubscribe link carries — so turning email off needs no sign-in,
+ * and the link cannot be guessed for anybody else.
+ */
+export const emailPreferences = sqliteTable("email_preferences", {
+  /** Lower-cased: Gitea logins are case-insensitive. */
+  username: text("username").primaryKey(),
+  reviewRequested: integer("review_requested", { mode: "boolean" })
+    .notNull()
+    .default(true),
+  changesRequested: integer("changes_requested", { mode: "boolean" })
+    .notNull()
+    .default(true),
+  readyToPublish: integer("ready_to_publish", { mode: "boolean" })
+    .notNull()
+    .default(true),
+  published: integer("published", { mode: "boolean" }).notNull().default(true),
+  unsubscribeToken: text("unsubscribe_token").notNull().unique(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+/**
+ * Whether an account has shown it owns its email address (issue #665).
+ *
+ * Signup writes a row, unconfirmed; the emailed link confirms it. An account
+ * with no row predates this — the seed's, and every account made before it —
+ * and counts as confirmed. Account state rather than evidence, so SQLite
+ * (ADR 0004): Gitea marks every address an admin creates as activated, so its
+ * own flag cannot say whether this one was.
+ *
+ * Only a SHA-256 of the token is stored. It is kept after use, so opening the
+ * same link twice says "confirmed" rather than "this link does not work".
+ */
+export const emailVerifications = sqliteTable("email_verifications", {
+  /** Lower-cased: Gitea logins are case-insensitive. */
+  username: text("username").primaryKey(),
+  email: text("email").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  sentAt: integer("sent_at").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+  verifiedAt: integer("verified_at"),
+});
+
+/**
+ * Invitations into an organization, by email (issue #426, design in
+ * docs/design/org-access-architecture.md §2).
+ *
+ * Gitea cannot hold a pending invitation or invite anyone by email, and an
+ * unaccepted invitation is not evidence about a document — so, by ADR 0004's
+ * own procedure, it is configuration and lives here. Losing the table loses
+ * pending invitations and no access: membership itself is only ever Gitea's
+ * team membership.
+ *
+ * - **Grants nothing until it is accepted.** Acceptance is what adds the
+ *   person to the organization's teams, in Gitea.
+ * - **Bound to the address.** Only an account whose email is the invited one
+ *   can accept, so a forwarded link is not a key.
+ * - **Joined as an owner.** The add is made with an owner's own session token,
+ *   never the service account's. If no owner of the organization is signed in
+ *   when it is accepted, it waits (`accepted_at` set, `joined_at` not) and
+ *   finishes as soon as one is.
+ *
+ * Only a SHA-256 of the link's token is kept, like a password reset's.
+ */
+export const organizationInvitations = sqliteTable(
+  "organization_invitations",
+  {
+    id: text("id").primaryKey(),
+    tokenHash: text("token_hash").notNull().unique(),
+    giteaOrgId: integer("gitea_org_id").notNull(),
+    /** For display and Gitea calls; the id above is the identity. */
+    orgName: text("org_name").notNull(),
+    email: text("email").notNull(),
+    /** `owner` or `member`. */
+    orgRole: text("org_role").notNull(),
+    /** A binder to land them in, and at which level, or null for neither. */
+    binder: text("binder"),
+    binderLevel: text("binder_level"),
+    invitedBy: text("invited_by").notNull(),
+    createdAt: integer("created_at").notNull(),
+    expiresAt: integer("expires_at").notNull(),
+    revokedAt: integer("revoked_at"),
+    acceptedAt: integer("accepted_at"),
+    acceptedBy: text("accepted_by"),
+    joinedAt: integer("joined_at"),
+  },
+  (table) => [
+    index("idx_organization_invitations_org").on(table.giteaOrgId),
+    index("idx_organization_invitations_waiting").on(
+      table.acceptedAt,
+      table.joinedAt,
+    ),
+  ],
+);
+
+/**
+ * Who agreed to which Terms of Service, for whom, and when (#666).
+ *
+ * Two kinds of row. A `person` row is somebody agreeing for themselves: at
+ * signup, where the box is required, or when asked again after the Terms
+ * change. An `organization` row is an owner accepting the Terms for an
+ * organization, which is the Customer the Terms are with: when they create it,
+ * or when asked again. Each names the version (`LEGAL_VERSION` in
+ * `packages/utils/legal.ts`). A row is never changed: agreeing to a later
+ * version adds another. Account state rather than evidence about a document,
+ * so SQLite (ADR 0004).
+ *
+ * Rows outlive the account, like the record does: what a person agreed to is
+ * what settles a dispute about it later. The Privacy Policy keeps them six
+ * years after the account is deleted. `userId` is Gitea's, so a login freed
+ * by a deleted account and taken again cannot be mistaken for the first one.
+ */
+export const legalAgreements = sqliteTable(
+  "legal_agreements",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    /** Lower-cased: Gitea logins are case-insensitive. */
+    username: text("username").notNull(),
+    /** Gitea's user id. Null only on rows written before it was recorded. */
+    userId: integer("user_id"),
+    version: text("version").notNull(),
+    acceptedAt: integer("accepted_at").notNull(),
+    /** `person` for themselves, `organization` for the organization named. */
+    scope: text("scope").notNull().default("person"),
+    /** Gitea's organization id and its name then, on `organization` rows. */
+    organizationId: integer("organization_id"),
+    organizationName: text("organization_name"),
+  },
+  (table) => [
+    index("legal_agreements_username_idx").on(table.username),
+    index("legal_agreements_organization_idx").on(table.organizationId),
   ],
 );

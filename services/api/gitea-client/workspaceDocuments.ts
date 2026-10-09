@@ -8,7 +8,12 @@ import {
 } from "../../../packages/utils/documentPath";
 
 import { readStampedChange, readVersionStamp } from "../version-stamp";
-import { GiteaApiError, unwrap, type GiteaClient } from "./client";
+import {
+  GiteaApiError,
+  readAllPages,
+  unwrap,
+  type GiteaClient,
+} from "./client";
 
 /**
  * Reading the documents out of a binder.
@@ -196,29 +201,52 @@ export async function listWorkspaceDocuments(
   return (await readWorkspaceTree(params)).documents;
 }
 
+/**
+ * How to name `ref` to Gitea's tree endpoint.
+ *
+ * **A name as long as a commit hash is read as one.** Gitea's
+ * `git/trees/{sha}` takes any 40- or 64-character string for a SHA and never
+ * looks it up as a branch, so it answered "sha not found" for a real branch —
+ * and a draft is `draft/<username>/<17-digit stamp>`, which is exactly 40
+ * characters for every 16-character username. Every press of Edit by such a
+ * person opened an editor that said their draft did not exist. Spelled out in
+ * full, the name is too long to be a hash and Gitea resolves it.
+ */
+export function treeRefCandidates(ref: string): string[] {
+  const hashLength = ref.length === 40 || ref.length === 64;
+  if (!hashLength || /^[0-9a-f]+$/i.test(ref)) return [ref];
+  return [`refs/heads/${ref}`, `refs/tags/${ref}`];
+}
+
 async function readTreeEntries(
   params: ListWorkspaceDocumentsParams,
 ): Promise<GitTreeEntry[]> {
   const { client, org, workspace, ref = "main" } = params;
+  const candidates = treeRefCandidates(ref);
 
-  try {
-    const tree = (await unwrap(
-      client.GET("/repos/{owner}/{repo}/git/trees/{sha}", {
-        params: {
-          path: { owner: org, repo: workspace, sha: ref },
-          query: { recursive: true },
-        },
-      }),
-    )) as { tree?: GitTreeEntry[] };
-    return tree.tree ?? [];
-  } catch (err) {
-    // A binder whose `main` has no commits yet answers 404 for its tree. That
-    // is an empty binder, which is a state, not a problem.
-    if (err instanceof GiteaApiError && err.status === 404) {
-      return [];
+  for (const [index, candidate] of candidates.entries()) {
+    try {
+      const tree = (await unwrap(
+        client.GET("/repos/{owner}/{repo}/git/trees/{sha}", {
+          params: {
+            path: { owner: org, repo: workspace, sha: candidate },
+            query: { recursive: true },
+          },
+        }),
+      )) as { tree?: GitTreeEntry[] };
+      return tree.tree ?? [];
+    } catch (err) {
+      // A branch by that name is not there: it may be a tag.
+      if (index < candidates.length - 1) continue;
+      // A binder whose `main` has no commits yet answers 404 for its tree.
+      // That is an empty binder, which is a state, not a problem.
+      if (err instanceof GiteaApiError && err.status === 404) {
+        return [];
+      }
+      throw err;
     }
-    throw err;
   }
+  return [];
 }
 
 export interface FindWorkspaceDocumentParams {
@@ -309,9 +337,14 @@ export interface GitTag {
  * `01J8XZ4K7M…/v1`, `…/v2`, and nothing else. Tags this app did not write are
  * ignored rather than counted as versions.
  *
- * One call per document, so it is for the pages that are about one document.
- * {@link listVersionsByDocument} answers the same question for a whole binder
- * in a single read, and is what every list uses.
+ * **Every page of tags, not Gitea's first.** Gitea answers an unpaged tag
+ * read with 30, newest first, so a document whose versions had scrolled past
+ * the thirtieth tag in its binder listed none — and publish, numbering off
+ * that, chose `v1` for a document that already had one, merged, and then had
+ * its tag write refused as a duplicate. The merge landed with no version.
+ *
+ * For the pages that are about one document. {@link listVersionsByDocument}
+ * answers the same question for a whole binder, and is what every list uses.
  */
 export async function listDocumentVersions(params: {
   client: GiteaClient;
@@ -329,13 +362,25 @@ export async function listDocumentVersions(params: {
   const { client, org, workspace, uid } = params;
   if (uid === null) return [];
 
-  const tags = (await unwrap(
-    client.GET("/repos/{owner}/{repo}/tags", {
-      params: { path: { owner: org, repo: workspace } },
-    }),
-  )) as GitTag[];
+  const tags = await listAllTags({ client, owner: org, repo: workspace });
+  return documentVersionsFrom(tags, uid);
+}
 
-  return (tags ?? [])
+/**
+ * One document's versions, out of tags the caller already holds.
+ *
+ * The joining rule {@link listDocumentVersions} applies, on its own, so a
+ * handler that has read every tag for another reason — publish reads them for
+ * the archive stamps — can number versions off the same read instead of making
+ * a second one.
+ */
+export function documentVersionsFrom(
+  tags: readonly GitTag[],
+  uid: string | null,
+): DocumentVersion[] {
+  if (uid === null) return [];
+
+  return tags
     .flatMap((tag) => {
       const name = tag.name ?? "";
       if (documentUidFromVersionTag(name) !== uid) return [];
@@ -655,10 +700,6 @@ export async function createDocumentVersionTag(params: {
   };
 }
 
-interface GitBranch {
-  name?: string;
-}
-
 /**
  * A document proposed at this address but not yet published, if there is one.
  *
@@ -666,6 +707,13 @@ interface GitBranch {
  * uploads race for one address: both are accepted, and they collide later as
  * two files answering to a single URL. The upload branch carries the identity
  * (`upload/<slugPath>/…`), which is what makes pending work visible here.
+ *
+ * **Proposed means a change request is open on it**, not merely that a branch
+ * with the prefix exists. An upload is three writes — branch, commit, change
+ * request — and a run that stopped after the first two left a branch nobody
+ * had proposed. Counting it blocked the address for good: every later upload
+ * was told the document was "already waiting in a change request" that did not
+ * exist. Such a branch is left where it is; it no longer holds the address.
  *
  * Answers with the branch name so the caller can say which change already
  * claims the address, rather than only that something does.
@@ -679,22 +727,25 @@ export async function findPendingDocumentBranch(params: {
   const { client, org, workspace, slugPath } = params;
 
   try {
-    const branches = (await unwrap(
-      client.GET("/repos/{owner}/{repo}/branches", {
-        params: {
-          path: { owner: org, repo: workspace },
-          query: { limit: 100 },
-        },
-      }),
-    )) as GitBranch[];
+    const open = (await readAllPages((query) =>
+      unwrap(
+        client.GET("/repos/{owner}/{repo}/pulls", {
+          params: {
+            path: { owner: org, repo: workspace },
+            query: { state: "open", ...query },
+          },
+        }),
+      ),
+    )) as Array<{ head?: { ref?: string } }>;
 
     const prefix = `upload/${slugPath}/`;
     return (
-      (branches ?? []).find((branch) => (branch.name ?? "").startsWith(prefix))
-        ?.name ?? null
+      open
+        .map((pull) => pull.head?.ref ?? "")
+        .find((ref) => ref.startsWith(prefix)) ?? null
     );
   } catch (err) {
-    // A binder with no branches yet is not a conflict.
+    // A binder with nothing proposed yet is not a conflict.
     if (err instanceof GiteaApiError && err.status === 404) return null;
     throw err;
   }
@@ -739,31 +790,20 @@ export async function listAllTags(params: {
 }): Promise<GitTag[]> {
   const { client, owner, repo } = params;
 
-  // Gitea's ceiling. Asking for more is not an error, it is silently this.
-  const PAGE_SIZE = 50;
   // A stop that cannot be reached by any real binder — 500 pages is 25,000
   // versions — but that turns a Gitea that ignored `page` from an infinite
   // loop into a bounded read.
-  const MAX_PAGES = 500;
-
-  const all: GitTag[] = [];
-
-  for (let page = 1; page <= MAX_PAGES; page += 1) {
-    const batch = (await unwrap(
-      client.GET("/repos/{owner}/{repo}/tags", {
-        params: {
-          path: { owner, repo },
-          query: { page, limit: PAGE_SIZE },
-        },
-      }),
-    )) as GitTag[];
-
-    if (!batch || batch.length === 0) break;
-    all.push(...batch);
-    if (batch.length < PAGE_SIZE) break;
-  }
-
-  return all;
+  return (await readAllPages(
+    (query) =>
+      unwrap(
+        client.GET("/repos/{owner}/{repo}/tags", {
+          params: { path: { owner, repo }, query },
+        }),
+      ),
+    // A mature binder's tags are the one list here that runs to many pages,
+    // and every binder page reads them: three at a time after the first.
+    { maxPages: 500, parallel: 3 },
+  )) as GitTag[];
 }
 
 /**
@@ -1003,6 +1043,38 @@ export function latestChangeByDocument(
       rest,
     ]),
   );
+}
+
+/**
+ * The version each merge commit published, for a list that shows one number
+ * per change.
+ *
+ * Every version tag a publish writes points at that change's merge commit, so
+ * the tags grouped by commit are the change's versions. A change that took
+ * several documents to different numbers — v3 of one, v7 of another — has no
+ * single "published as", and is left out rather than labelled with whichever
+ * came first.
+ */
+export function publishedVersionByMergeCommit(
+  tags: readonly GitTag[],
+): Map<string, number> {
+  const versionsAt = new Map<string, Set<number>>();
+  for (const tag of tags) {
+    const name = tag.name ?? "";
+    const sha = tag.commit?.sha ?? "";
+    if (sha === "" || documentUidFromVersionTag(name) === null) continue;
+    const version = versionFromTag(name);
+    if (version === null) continue;
+    const seen = versionsAt.get(sha) ?? new Set<number>();
+    seen.add(version);
+    versionsAt.set(sha, seen);
+  }
+
+  const bySha = new Map<string, number>();
+  for (const [sha, versions] of versionsAt) {
+    if (versions.size === 1) bySha.set(sha, [...versions][0]!);
+  }
+  return bySha;
 }
 
 export function groupVersionsByDocument(

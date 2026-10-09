@@ -180,6 +180,12 @@ export function buildDocumentUrl(params: {
    * policy renamed a moment ago actually has the name it was clicked under.
    */
   edit?: boolean;
+  /**
+   * Read it in one of your drafts: the binder in edit mode, on that draft,
+   * where Edit carries on in it. Wins over everything else, because a draft is
+   * a place you work rather than a version you look at.
+   */
+  draft?: string | null;
 }): string {
   const {
     org,
@@ -189,10 +195,14 @@ export function buildDocumentUrl(params: {
     change = null,
     ref = null,
     edit = false,
+    draft = null,
   } = params;
   const base = `/${org}/${binder}/-/blob/${encodeURIComponent(
     ref ?? "main",
   )}/${documentPath}`;
+  if (draft) {
+    return `${base}?${new URLSearchParams({ edit: "1", draft }).toString()}`;
+  }
 
   const query = new URLSearchParams();
   if (edit) query.set("edit", "1");
@@ -208,4 +218,75 @@ export function buildDocumentUrl(params: {
 
   const search = query.toString();
   return search === "" ? base : `${base}?${search}`;
+}
+
+/**
+ * Whether a document is one the editor writes — its file is the editor's JSON.
+ *
+ * By extension, which is what the file is on disk: a policy written here is
+ * `hand-hygiene.<uid>.json`, and a Word file or a PDF is edited in the program
+ * that made it. The editor still checks the contents when it opens one.
+ */
+export function isEditorDocumentFile(path: string): boolean {
+  return /\.json$/i.test(path);
+}
+
+/**
+ * Which policy Edit on a binder opens in the editor.
+ *
+ * **The one you were last writing**, from the draft's own acts — Edit on a
+ * binder you were halfway through a policy in picks up there, as Word opens on
+ * the file you had last. Otherwise the first the binder lists: at its root
+ * before inside a folder, then by name. Null when nothing in the binder is
+ * one the editor writes — all Word files and PDFs — and the tree is the only
+ * place to be.
+ */
+export function pickPolicyToWrite(
+  documents: readonly { path: string; slugPath: string }[],
+  acts: readonly { at: string | null; paths: readonly string[] }[],
+): string | null {
+  const writable = documents.filter((entry) =>
+    isEditorDocumentFile(entry.path),
+  );
+  const newestFirst = [...acts].sort(
+    (a, b) => Date.parse(b.at ?? "") - Date.parse(a.at ?? "") || 0,
+  );
+  for (const act of newestFirst) {
+    for (const path of act.paths) {
+      const hit = writable.find((entry) => entry.path === path);
+      if (hit) return hit.slugPath;
+    }
+  }
+  const depth = (slugPath: string) => slugPath.split("/").length;
+  const first = [...writable].sort(
+    (a, b) =>
+      depth(a.slugPath) - depth(b.slugPath) ||
+      a.slugPath.localeCompare(b.slugPath),
+  )[0];
+  return first?.slugPath ?? null;
+}
+
+/**
+ * A document open in the editor: `/{org}/{binder}/-/blob/main/{path}?edit=write&draft=…`.
+ *
+ * The document's own address, in edit mode, naming the draft the editor saves
+ * into — so a reload lands back in the same words in the same draft, and the
+ * way out is the address without `edit`.
+ */
+export function buildDocumentEditUrl(params: {
+  org: string;
+  binder: string;
+  documentPath: string;
+  draft: string | null;
+  /**
+   * An open change request to save into instead of a draft: the author
+   * answering a reviewer, in the words under review. Wins over `draft`.
+   */
+  change?: number | null;
+}): string {
+  const { org, binder, documentPath, draft, change = null } = params;
+  const query = new URLSearchParams({ edit: "write" });
+  if (change !== null) query.set("change", String(change));
+  else if (draft) query.set("draft", draft);
+  return `${buildDocumentUrl({ org, binder, documentPath, version: null })}?${query.toString()}`;
 }

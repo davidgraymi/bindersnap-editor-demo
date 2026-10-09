@@ -1,3 +1,6 @@
+import { useQueryClient } from "@tanstack/react-query";
+
+import { organizationsQuery, queryKeys } from "./data/queries";
 import {
   type FormEvent,
   useCallback,
@@ -17,12 +20,25 @@ import { OrganizationSetupPage } from "./components/OrganizationSetupPage";
 import { BindersnapLogoMark } from "./components/BindersnapLogoMark";
 import { LandingPage } from "./components/LandingPage";
 import { WorkspaceSkeleton } from "./components/WorkspaceSkeleton";
+import { UnsubscribePage } from "./components/UnsubscribePage";
+import {
+  ConfirmEmailPage,
+  VerifyEmailPage,
+} from "./components/EmailVerificationPages";
+import { InvitationPage } from "./components/InvitationPage";
+import { pendingInvitationToken, takeReturnTo } from "./authReturn";
+import { navigateToHref } from "./appLink";
+import {
+  ForgotPasswordPage,
+  ResetPasswordPage,
+} from "./components/PasswordResetPages";
 import {
   type SessionUser,
   createCheckoutSession,
   createOrganization,
   createPortalSession,
   fetchBillingStatus,
+  fetchLegalStatus,
   fetchOrganizations,
   fetchSessionUser,
   login,
@@ -41,15 +57,30 @@ import {
   asShellRoute,
   canonicalLocation,
   getRoute,
-  isLegacyInboxPath,
   isProtectedAppRoute,
   routeToPath,
   type AppRoute,
 } from "./routes";
 import { resolveSignupPrefill } from "./authIntent";
+import { validateFullName } from "../../packages/utils/personName";
+import { AgreementCheckbox } from "./components/AgreementCheckbox";
+import { AcceptTermsPage } from "./components/AcceptTermsPage";
+import type { LegalStatusPayload } from "../../packages/api-schema/schemas/legal";
 
 type AuthView =
-  "loading" | "callback" | "landing" | "login" | "createOrganization" | "app";
+  | "loading"
+  | "callback"
+  | "landing"
+  | "login"
+  | "forgotPassword"
+  | "resetPassword"
+  | "unsubscribe"
+  | "verifyEmail"
+  | "confirmEmail"
+  | "acceptTerms"
+  | "invitation"
+  | "createOrganization"
+  | "app";
 type AuthMode = "signin" | "signup";
 
 interface LoginPageProps {
@@ -62,6 +93,7 @@ interface LoginPageProps {
     rememberMe: boolean,
   ) => Promise<void>;
   onSignup: (
+    name: { first: string; last: string },
     username: string,
     email: string,
     password: string,
@@ -105,12 +137,15 @@ function LoginPage({
   onLogin,
   onSignup,
 }: LoginPageProps) {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [username, setUsername] = useState("");
   const [identifier, setIdentifier] = useState(
     mode === "signup" ? prefilledEmail : "",
   );
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string | null>(callbackError);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -125,6 +160,11 @@ function LoginPage({
     const normalizedIdentifier = identifier.trim();
 
     if (mode === "signup") {
+      const nameError = validateFullName(firstName, lastName);
+      if (nameError) {
+        setError(nameError);
+        return;
+      }
       if (
         !normalizedUsername ||
         !normalizedIdentifier ||
@@ -141,6 +181,11 @@ function LoginPage({
         setError("Passwords do not match.");
         return;
       }
+
+      if (!agreed) {
+        setError("Agree to the Terms of Service to create an account.");
+        return;
+      }
     } else if (!normalizedIdentifier || !password) {
       setError("Enter your username or email and password.");
       return;
@@ -153,7 +198,12 @@ function LoginPage({
       if (mode === "signin") {
         await onLogin(normalizedIdentifier, password, true);
       } else {
-        await onSignup(normalizedUsername, normalizedIdentifier, password);
+        await onSignup(
+          { first: firstName, last: lastName },
+          normalizedUsername,
+          normalizedIdentifier,
+          password,
+        );
       }
     } catch (submitError) {
       if (submitError instanceof Error && submitError.message.trim() !== "") {
@@ -185,6 +235,33 @@ function LoginPage({
           </h1>
 
           <form className="app-form" onSubmit={handleSubmit}>
+            {mode === "signup" ? (
+              // What every approval of theirs will be signed with, so it is
+              // asked for first and in full.
+              <div className="app-field-pair">
+                <label className="app-field">
+                  <span className="bs-label">First name</span>
+                  <input
+                    className="bs-input"
+                    type="text"
+                    value={firstName}
+                    onChange={(event) => setFirstName(event.target.value)}
+                    autoComplete="given-name"
+                  />
+                </label>
+                <label className="app-field">
+                  <span className="bs-label">Last name</span>
+                  <input
+                    className="bs-input"
+                    type="text"
+                    value={lastName}
+                    onChange={(event) => setLastName(event.target.value)}
+                    autoComplete="family-name"
+                  />
+                </label>
+              </div>
+            ) : null}
+
             {mode === "signup" ? (
               <label className="app-field">
                 <span className="bs-label">Username</span>
@@ -232,6 +309,19 @@ function LoginPage({
               />
             </label>
 
+            {mode === "signin" ? (
+              <a
+                className="app-login-forgot"
+                href="/-/forgot_password"
+                onClick={(event) => {
+                  event.preventDefault();
+                  navigateTo({ kind: "forgotPassword" });
+                }}
+              >
+                Forgot password?
+              </a>
+            ) : null}
+
             {mode === "signup" ? (
               <label className="app-field">
                 <span className="bs-label">Confirm Password</span>
@@ -244,6 +334,14 @@ function LoginPage({
                   autoComplete="new-password"
                 />
               </label>
+            ) : null}
+
+            {mode === "signup" ? (
+              <AgreementCheckbox
+                scope="person"
+                checked={agreed}
+                onChange={setAgreed}
+              />
             ) : null}
 
             <button
@@ -287,6 +385,7 @@ function LoginPage({
 }
 
 export function App() {
+  const queryClient = useQueryClient();
   const [route, setRoute] = useState<AppRoute>(() => {
     settleAddress();
     return getRoute(window.location.pathname);
@@ -448,9 +547,18 @@ export function App() {
       if (resolvedUser) {
         setSubscriptionStatus("loading");
         setHasBillingStatusError(false);
-        setOrganizations(await fetchOrganizations().catch(() => null));
+        // Read fresh, and into the shared cache, so the switcher and every
+        // header naming an organization start from the same answer.
+        setOrganizations(
+          await queryClient
+            .fetchQuery({ ...organizationsQuery(), staleTime: 0 })
+            .catch(() => null),
+        );
         await loadBilling();
       } else {
+        // Nobody signed in: nothing the last person was shown may be shown
+        // to the next one.
+        queryClient.clear();
         setOrganizations(null);
         setOrganizationSetupReason(null);
         setSubscriptionStatus(null);
@@ -478,16 +586,7 @@ export function App() {
     } finally {
       setIsCheckingSession(false);
     }
-  }, [loadBilling]);
-
-  // `/inbox` is gone — Home shows what used to be there. Rewrite the address
-  // bar so an old link lands somewhere that still exists and stays bookmarkable.
-  useEffect(() => {
-    if (isLegacyInboxPath(window.location.pathname)) {
-      navigateTo({ kind: "workspace" }, true);
-      return;
-    }
-  }, [route]);
+  }, [loadBilling, queryClient]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -515,8 +614,8 @@ export function App() {
     void loadBilling();
   }, [billingOrganization, isCheckingSession, loadBilling, signedIn]);
 
-  // `/billing` from before billing was per organization: say which one it is
-  // showing, in the address bar, once the server has answered.
+  // `/-/billing`, which names no organization: say which one it is showing,
+  // in the address bar, once the server has answered.
   useEffect(() => {
     if (
       route.kind === "billing" &&
@@ -546,7 +645,12 @@ export function App() {
     const isAdminSubscriptionRoute =
       route.kind === "adminSubscriptions" && user?.isAdmin;
 
-    if (user && (route.kind === "login" || route.kind === "signup")) {
+    if (
+      user &&
+      (route.kind === "login" ||
+        route.kind === "signup" ||
+        route.kind === "forgotPassword")
+    ) {
       navigateTo({ kind: "home" }, true);
       return;
     }
@@ -628,6 +732,39 @@ export function App() {
     navigateTo({ kind: "home" }, true);
   }, []);
 
+  // What this account still has to accept: read once it can use the app, and
+  // again whenever the account changes. A failed read lets them in rather
+  // than locking them out over an outage; the next load asks again.
+  const [legalStatus, setLegalStatus] = useState<LegalStatusPayload | null>(
+    null,
+  );
+  const canReadLegal = Boolean(user) && user?.emailVerified !== false;
+  useEffect(() => {
+    if (!canReadLegal) {
+      setLegalStatus(null);
+      return;
+    }
+    let cancelled = false;
+    fetchLegalStatus()
+      .then((status) => {
+        if (!cancelled) setLegalStatus(status);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [canReadLegal, user?.username]);
+  const termsPending =
+    legalStatus !== null &&
+    (legalStatus.person || legalStatus.organizations.length > 0);
+
+  // Stable, because the join step polls with it on an interval it restarts
+  // whenever this changes.
+  const checkForOrganization = useCallback(async () => {
+    const list = await fetchOrganizations();
+    return list.length > 0;
+  }, []);
+
   const view: AuthView = useMemo(() => {
     if (route.kind === "callback") {
       return "callback";
@@ -636,7 +773,7 @@ export function App() {
     // A session with no organization reads "none" here, because it has no
     // access — but it has not failed to pay, and there is nothing for it to
     // buy. Letting this branch answer for it sent it to the card form no
-    // matter where it was going, which is what made `/organizations/new`
+    // matter where it was going, which is what made `/-/organizations/new`
     // render billing and left the setup screen reachable only by people who
     // already had an organization.
     // A delinquent organization no longer replaces the app with the card
@@ -644,7 +781,11 @@ export function App() {
     // "Restore access" takes them there — but it is a destination now rather
     // than a wall.
 
-    if (route.kind === "home") {
+    // Until the account opens the link its signup emailed, the API refuses
+    // the app's routes — so this is the page, wherever they were going.
+    const unconfirmed = user?.emailVerified === false;
+
+    if (route.kind === "home" && !unconfirmed && !(user && termsPending)) {
       return user ? "app" : "landing";
     }
 
@@ -652,12 +793,56 @@ export function App() {
       return "loading";
     }
 
+    // The link works whoever is signed in here, or nobody: the token is the
+    // credential.
+    if (route.kind === "verifyEmail") {
+      return "verifyEmail";
+    }
+
+    // A reset link works whoever is signed in on this browser: it sets the
+    // password of the account it was sent for, and signs that account in.
+    if (route.kind === "resetPassword") {
+      return "resetPassword";
+    }
+
+    // Reached from an email, signed in or not; the token is the credential.
+    if (route.kind === "unsubscribe") {
+      return "unsubscribe";
+    }
+
+    if (unconfirmed) {
+      return "confirmEmail";
+    }
+
+    // After a material change to the Terms, or with none on record: nothing
+    // else until they accept, or sign out.
+    if (user && termsPending) {
+      return "acceptTerms";
+    }
+
+    // Signed in or not: it says what it is either way, and asks for an
+    // account only when it is time to accept.
+    if (route.kind === "invitation") {
+      return "invitation";
+    }
+
+    if (route.kind === "forgotPassword" && !user) {
+      return "forgotPassword";
+    }
+
     if (route.kind === "createOrganization" && user) {
       return "createOrganization";
     }
 
     return user ? "app" : "login";
-  }, [accessSource, isCheckingSession, route, subscriptionStatus, user]);
+  }, [
+    accessSource,
+    isCheckingSession,
+    route,
+    subscriptionStatus,
+    termsPending,
+    user,
+  ]);
 
   useEffect(() => {
     document.body.setAttribute("data-app-view", view);
@@ -685,6 +870,11 @@ export function App() {
         reason={organizationSetupReason}
         onCreate={async (name) => {
           await createOrganization(name);
+          // Every screen that names organizations reads this list; without a
+          // fresh one the sidebar showed the new one by its slug.
+          await queryClient.invalidateQueries({
+            queryKey: queryKeys.organizations(),
+          });
           // The organization changes what this session can do, so re-read
           // access rather than guessing at it. If that read fails the
           // organization still exists, and stranding someone on this form —
@@ -699,6 +889,109 @@ export function App() {
           // Skipping has to actually leave. Reading is free, so the workspace
           // is a legitimate place to be without an organization.
           setOrganizationSetupReason(null);
+          navigateTo({ kind: "home" }, true);
+        }}
+        username={user?.username ?? ""}
+        fullName={user?.fullName ?? null}
+        checkForOrganization={checkForOrganization}
+        onJoined={async () => {
+          await queryClient.invalidateQueries({
+            queryKey: queryKeys.organizations(),
+          });
+          await refreshSession().catch(() => undefined);
+          setOrganizationSetupReason(null);
+          navigateTo({ kind: "home" }, true);
+        }}
+      />
+    );
+  }
+
+  if (view === "unsubscribe") {
+    return <UnsubscribePage />;
+  }
+
+  if (view === "verifyEmail") {
+    return (
+      <VerifyEmailPage
+        signedIn={Boolean(user)}
+        onContinue={async () => {
+          await refreshSession();
+          // Back to the invitation they signed up to accept, if that is how
+          // they got here; otherwise on to naming an organization, as a
+          // signup always goes.
+          const returnTo = takeReturnTo();
+          if (returnTo) {
+            navigateToHref(returnTo);
+            return;
+          }
+          // Read fresh: until a moment ago the API refused to say.
+          const list = await fetchOrganizations().catch(() => null);
+          navigateTo(
+            list?.length === 0
+              ? { kind: "createOrganization" }
+              : { kind: "home" },
+            true,
+          );
+        }}
+      />
+    );
+  }
+
+  if (view === "confirmEmail") {
+    return (
+      <ConfirmEmailPage
+        email={user?.pendingEmail ?? null}
+        onCheck={async () => {
+          // A bare read first: a full refresh draws the loading screen, and
+          // this runs every time the tab comes back into view.
+          const next = await fetchSessionUser();
+          if (next?.user?.emailVerified === false) return false;
+          await refreshSession();
+          return true;
+        }}
+        onSignOut={async () => {
+          await logoutSession();
+          setUser(null);
+          setCallbackError(null);
+          navigateTo({ kind: "home" }, true);
+        }}
+      />
+    );
+  }
+
+  if (view === "acceptTerms" && legalStatus) {
+    return (
+      <AcceptTermsPage
+        status={legalStatus}
+        onAccepted={setLegalStatus}
+        onSignOut={async () => {
+          await logoutSession();
+          setUser(null);
+          setCallbackError(null);
+          navigateTo({ kind: "home" }, true);
+        }}
+      />
+    );
+  }
+
+  if (view === "invitation" && route.kind === "invitation") {
+    return <InvitationPage token={route.token} user={user} />;
+  }
+
+  if (view === "forgotPassword") {
+    return <ForgotPasswordPage />;
+  }
+
+  if (view === "resetPassword") {
+    return (
+      <ResetPasswordPage
+        onSignedIn={async () => {
+          const nextUser = await refreshSession();
+          if (!nextUser) {
+            throw new Error(
+              "Your password is saved, but signing in failed. Sign in with it.",
+            );
+          }
           navigateTo({ kind: "home" }, true);
         }}
       />
@@ -737,10 +1030,23 @@ export function App() {
               "Sign-in completed, but the session could not be verified.",
             );
           }
+          // Back to the invitation they signed in to accept, if that is how
+          // they got here.
+          const returnTo = takeReturnTo();
+          if (returnTo) {
+            navigateToHref(returnTo);
+            return;
+          }
           navigateTo({ kind: "home" }, true);
         }}
-        onSignup={async (username, email, password) => {
-          const authenticatedSession = await signup(username, email, password);
+        onSignup={async (name, username, email, password) => {
+          const authenticatedSession = await signup(
+            name,
+            username,
+            email,
+            password,
+            pendingInvitationToken(),
+          );
           // Carried from the signup form so the create-organization screen
           // arrives filled in rather than asking again.
           setSuggestedOrganizationName(
@@ -763,6 +1069,13 @@ export function App() {
           // so naming one is the next step — not a wall they hit on the way
           // somewhere else. They arrive un-blocked, and may skip.
           setOrganizationSetupReason(null);
+          // Invited: the invitation is their organization, so it comes before
+          // the offer to make one.
+          const returnTo = takeReturnTo();
+          if (returnTo) {
+            navigateToHref(returnTo);
+            return;
+          }
           navigateTo({ kind: "createOrganization" }, true);
         }}
       />
@@ -827,6 +1140,12 @@ export function App() {
               />
             }
             onNavigate={navigateTo}
+            // Just the person, not the whole session: a full refresh draws the
+            // loading screen, which would take the settings page with it.
+            onAccountChanged={async () => {
+              const next = await fetchSessionUser();
+              if (next?.user) setUser(next.user);
+            }}
             onSignOut={async () => {
               await logoutSession();
               setUser(null);

@@ -1,6 +1,11 @@
 import type { components } from "./spec/gitea";
 
-import { GiteaApiError, unwrap, type GiteaClient } from "./client";
+import {
+  GiteaApiError,
+  readAllPages,
+  unwrap,
+  type GiteaClient,
+} from "./client";
 import { bootstrapEmptyMainBranch } from "./repos";
 import {
   addTeamMember,
@@ -31,8 +36,16 @@ type CreateBranchProtectionOption =
  * hand-cleaning the org.
  */
 
-/** How many approvals a change needs before it can publish, by default. */
-export const DEFAULT_REQUIRED_APPROVALS = 1;
+/**
+ * How many approvals a change needs before it can publish, by default: none.
+ *
+ * A new customer is usually one person moving their documents in, and nobody
+ * can approve their own change — so a binder that started at one could not
+ * publish anything until a second person joined, and the first thing the
+ * product did was stop them. The binder's admin raises it in Settings the day
+ * somebody else is there to sign off.
+ */
+export const DEFAULT_REQUIRED_APPROVALS = 0;
 
 export interface WorkspaceSummary {
   id: number;
@@ -44,6 +57,13 @@ export interface WorkspaceSummary {
   openChangeCount: number;
   /** When anything last moved in it, as Gitea records it. */
   updatedAt: string;
+  /**
+   * What the caller whose token read this may do here — Gitea answers it on
+   * the same read. See {@link readWorkspaceAccess} for why this is the honest
+   * source; a handler that has the binder already has this, and need not ask
+   * for the repository a second time.
+   */
+  access: { push: boolean; admin: boolean };
 }
 
 export interface ProvisionedWorkspace {
@@ -65,6 +85,10 @@ function normalizeWorkspace(repo: Repository): WorkspaceSummary {
     description: repo.description ?? "",
     openChangeCount: repo.open_pr_counter ?? 0,
     updatedAt: repo.updated_at ?? "",
+    access: {
+      push: repo.permissions?.push === true,
+      admin: repo.permissions?.admin === true,
+    },
   };
 }
 
@@ -122,11 +146,15 @@ export async function listOrganizationWorkspaces(
 ): Promise<WorkspaceSummary[]> {
   const { client, org } = params;
 
-  const repos = await unwrap(
-    client.GET("/orgs/{org}/repos", { params: { path: { org } } }),
+  // Every page: an unpaged read stops at Gitea's 30, and binders past that
+  // vanished from the list, the library and quick-find.
+  const repos = await readAllPages((query) =>
+    unwrap(
+      client.GET("/orgs/{org}/repos", { params: { path: { org }, query } }),
+    ),
   );
 
-  return (repos ?? []).map(normalizeWorkspace);
+  return repos.map(normalizeWorkspace);
 }
 
 export interface WorkspacePathExistsParams {
@@ -258,7 +286,7 @@ export interface ProtectWorkspaceMainParams {
  */
 export async function protectWorkspaceMain(
   params: ProtectWorkspaceMainParams,
-): Promise<{ codeownerGate: boolean }> {
+): Promise<void> {
   const {
     client,
     org,
@@ -277,17 +305,15 @@ export async function protectWorkspaceMain(
     approvals_whitelist_teams: approvalsWhitelistTeams,
     enable_merge_whitelist: false,
     block_on_rejected_reviews: true,
-    // **Left on deliberately, and turned off below only once the new gate is
-    // known to work.** This is the 1.27 gate. Dev runs a Gitea 28.0.0 nightly
-    // and production runs 1.27.3, which does not have
-    // `block_on_codeowner_reviews` at all — it accepts the field on a write
-    // and silently drops it. So writing `false` here unconditionally would
-    // remove the only working per-folder gate in production and put nothing in
-    // its place, which is the decorative-reviewer failure ADR 0004 has already
-    // caught once.
-    block_on_official_review_requests: true,
-    // Ignored by a Gitea that does not have it, which is exactly what makes
-    // reading it back the capability check.
+    // **Off, and on purpose.** This is the 1.27 gate. It was only ever on to
+    // make CODEOWNERS block, which it never did for a team code owner. Left on
+    // beside the gate below, it blocks on *manually* requested reviews, so any
+    // member could stall a publish by requesting one.
+    block_on_official_review_requests: false,
+    // The per-folder gate (Gitea 28.0.0, go-gitea PR #34995): for every
+    // CODEOWNERS rule matching a changed file, one of that rule's owners must
+    // approve. 28.0.0 is the floor for both environments, so this is written,
+    // not probed for.
     block_on_codeowner_reviews: true,
     block_on_outdated_branch: true,
     dismiss_stale_approvals: true,
@@ -317,64 +343,6 @@ export async function protectWorkspaceMain(
       }),
     );
   }
-
-  return settleCodeownerGate({ client, org, workspace });
-}
-
-/**
- * Find out whether this Gitea actually enforces per-folder sign-off, and set
- * the older gate accordingly.
- *
- * **The capability is read back, not inferred from a version string.** Gitea
- * 28.0.0's binary self-reports `1.28.0+dev`, the released numbering is being
- * renamed, and dev and production are deliberately on different versions — so
- * anything parsing a version number here would be wrong on at least one of
- * them. Writing the field and asking what stuck is the only answer that cannot
- * be wrong: a Gitea without the field accepts the write and drops it.
- *
- * When the new gate is there, `block_on_official_review_requests` is switched
- * off. It was only ever on to make CODEOWNERS block, which it never did for a
- * team code owner; left on it now blocks on *manually* requested reviews, so
- * any member could stall a publish by requesting one. When the new gate is not
- * there, it stays on, because it is then the only per-folder enforcement the
- * binder has.
- */
-async function settleCodeownerGate(params: {
-  client: GiteaClient;
-  org: string;
-  workspace: string;
-}): Promise<{ codeownerGate: boolean }> {
-  const { client, org, workspace } = params;
-
-  // **The probe can never fail provisioning.** The protection is already
-  // written at this point; this call only asks which Gitea we are talking to.
-  // A read that fails answers "we do not know", and the safe reading of that is
-  // "assume the new gate is not there" — which leaves
-  // `block_on_official_review_requests` on, so the binder keeps whatever
-  // per-folder enforcement the older gate gives it. The opposite default would
-  // turn a control off because a status call timed out.
-  let written: { block_on_codeowner_reviews?: boolean };
-  try {
-    written = await unwrap(
-      client.GET("/repos/{owner}/{repo}/branch_protections/{name}", {
-        params: { path: { owner: org, repo: workspace, name: "main" } },
-      }),
-    );
-  } catch {
-    return { codeownerGate: false };
-  }
-
-  const codeownerGate = written.block_on_codeowner_reviews === true;
-  if (!codeownerGate) return { codeownerGate: false };
-
-  await unwrap(
-    client.PATCH("/repos/{owner}/{repo}/branch_protections/{name}", {
-      params: { path: { owner: org, repo: workspace, name: "main" } },
-      body: { block_on_official_review_requests: false },
-    }),
-  );
-
-  return { codeownerGate: true };
 }
 
 interface FindMainBranchProtectionParams {

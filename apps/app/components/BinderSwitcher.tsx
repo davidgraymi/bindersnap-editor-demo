@@ -1,7 +1,8 @@
+import { useQuery } from "@tanstack/react-query";
 import { Check, ChevronDown } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { fetchOrganizationBinders } from "../api";
+import { organizationBindersQuery } from "../data/queries";
 import { followInApp } from "../appLink";
 import { formatDocumentName } from "../documentDisplay";
 import type { WorkspaceSummary } from "../../../packages/api-schema/schemas/workspaces";
@@ -43,19 +44,20 @@ export function BinderSwitcher({
 }: BinderSwitcherProps) {
   const nameRef = useRef<HTMLElement>(null);
   const [open, setOpen] = useState(false);
-  const [binders, setBinders] = useState<WorkspaceSummary[] | null>(null);
-  const [failed, setFailed] = useState(false);
+  // Asked for when first opened, and kept per organization — another
+  // organization's binders are another list, and another key.
+  const [asked, setAsked] = useState(false);
+  const list = useQuery({
+    ...organizationBindersQuery(org),
+    enabled: asked,
+  });
+  const binders: WorkspaceSummary[] | null = list.data ?? null;
+  const failed = list.isError;
   const [anchor, setAnchor] = useState<{ top: number; left: number } | null>(
     null,
   );
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-
-  // Another organization's binders are another list.
-  useEffect(() => {
-    setBinders(null);
-    setFailed(false);
-  }, [org]);
 
   const place = useCallback(() => {
     const rect = (
@@ -65,19 +67,8 @@ export function BinderSwitcher({
   }, []);
 
   useEffect(() => {
-    if (!open || binders !== null || failed) return;
-    let cancelled = false;
-    fetchOrganizationBinders(org)
-      .then((rows) => {
-        if (!cancelled) setBinders(rows);
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, org, binders, failed]);
+    if (open) setAsked(true);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;

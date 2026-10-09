@@ -41,6 +41,8 @@ import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
+import { signUpAndConfirm } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 test.describe.configure({ mode: "parallel", timeout: 240_000 });
 
@@ -147,10 +149,14 @@ async function provision(): Promise<{
   binder: string;
 }> {
   const credentials = buildCredentials();
-  const signup = await fetch(`${API_BASE_URL}/auth/signup`, {
+  const signup = await signUpAndConfirm(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
-    body: JSON.stringify(credentials),
+    body: JSON.stringify({
+      firstName: "Test",
+      lastName: "User",
+      ...credentials,
+    }),
   });
   expect(signup.status, await signup.clone().text()).toBe(200);
   const session = (signup.headers.get("set-cookie") ?? "").match(
@@ -160,7 +166,10 @@ async function provision(): Promise<{
   const organization = await fetch(`${API_BASE_URL}/api/app/organizations`, {
     method: "POST",
     headers: authHeaders(session),
-    body: JSON.stringify({ name: `Riverbend ${randomUUID().slice(0, 6)}` }),
+    body: JSON.stringify({
+      acceptedTerms: LEGAL_VERSION,
+      name: `Riverbend ${randomUUID().slice(0, 6)}`,
+    }),
   });
   const org = (
     (await organization.json()) as { organization: { name: string } }
@@ -254,7 +263,7 @@ test("every row of controls in the product is one size", async ({ page }) => {
     ["the binder's settings", `${APP_BASE_URL}/${org}/${binder}?tab=settings`],
     ["the change requests", `${APP_BASE_URL}/${org}/${binder}?tab=changes`],
     ["the organization's people", `${APP_BASE_URL}/${org}?tab=people`],
-    ["the library", `${APP_BASE_URL}/documents`],
+    ["the library", `${APP_BASE_URL}/-/documents`],
     ["home", `${APP_BASE_URL}/home`],
   ];
 
@@ -317,9 +326,12 @@ test("the fields in a form are one size, picker included", async ({ page }) => {
   // measures a form that is still one field short.
   await expect(page.locator("#change-target")).toBeVisible({ timeout: 30_000 });
 
+  // Text fields and pickers, the controls that sit in a column together. A
+  // radio button is a mark inside a choice card, not a field, and is its own
+  // size everywhere in the app.
   const heights = await page
     .locator(
-      ".create-document-form input:not([type='file']), .create-document-form select",
+      ".create-document-form input:not([type='file']):not([type='radio']):not([type='checkbox']), .create-document-form select",
     )
     .evaluateAll((elements) =>
       elements.map(
@@ -365,8 +377,8 @@ test("every page begins in the same place, at the same size", async ({
 
   const screens: Array<[string, string]> = [
     ["home", `${APP_BASE_URL}/home`],
-    ["the library", `${APP_BASE_URL}/documents`],
-    ["the review queue", `${APP_BASE_URL}/changes`],
+    ["the library", `${APP_BASE_URL}/-/documents`],
+    ["the review queue", `${APP_BASE_URL}/-/changes`],
     ["the binder", `${APP_BASE_URL}/${org}/${binder}`],
     ["the organization", `${APP_BASE_URL}/${org}`],
   ];
@@ -529,7 +541,7 @@ test("the marketing eyebrow never labels a field in the app", async ({
     ["its settings", `${APP_BASE_URL}/${org}/${binder}?tab=settings`],
     ["the organization", `${APP_BASE_URL}/${org}`],
     ["the organization's people", `${APP_BASE_URL}/${org}?tab=people`],
-    ["the library", `${APP_BASE_URL}/documents`],
+    ["the library", `${APP_BASE_URL}/-/documents`],
   ];
 
   for (const [where, url] of screens) {
@@ -635,8 +647,8 @@ test("no heading on a page outranks the page's own title", async ({ page }) => {
 
   const screens: Array<[string, string]> = [
     ["home", `${APP_BASE_URL}/home`],
-    ["the library", `${APP_BASE_URL}/documents`],
-    ["the review queue", `${APP_BASE_URL}/changes`],
+    ["the library", `${APP_BASE_URL}/-/documents`],
+    ["the review queue", `${APP_BASE_URL}/-/changes`],
     ["the binder", `${APP_BASE_URL}/${org}/${binder}`],
     ["the organization", `${APP_BASE_URL}/${org}`],
   ];
@@ -720,7 +732,7 @@ test("a popover is not clipped by the panel it opens from", async ({
   // tree's own bar — another `.bs-panel`, another squircle.
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
   await settleOnRealShell(page);
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Organize", exact: true }).click();
   const pick = page.locator(".bs-draftpick");
   await pick.waitFor({ timeout: 30_000 });
   await pick.click();

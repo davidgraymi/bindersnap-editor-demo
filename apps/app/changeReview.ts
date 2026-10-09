@@ -310,7 +310,20 @@ export function buildReviewTimeline(params: {
         emphasiseVerb: false,
         tag: `(update ${update.index})`,
         when: formatEventDate(update.at),
-        note: resetsApprovals ? "earlier approvals were reset" : null,
+        // Only when there was something to clear: an approval given before
+        // this update, which the update then made stale. Saying approvals
+        // were reset on a change nobody had approved yet was a false alarm.
+        note:
+          resetsApprovals &&
+          change.reviewers.some(
+            (reviewer) =>
+              reviewer.stale &&
+              reviewer.status === "approved" &&
+              reviewer.reviewedAt !== "" &&
+              timeOf(reviewer.reviewedAt) <= timeOf(update.at),
+          )
+            ? "the approvals given before this were cleared"
+            : null,
         updateSha: update.sha,
       },
     }));
@@ -378,7 +391,14 @@ export function buildReviewTimeline(params: {
  * Request changes: a full approval count does not end the argument, and an
  * objection to an approved change is exactly when one matters most.
  */
-export type ReviewDecision = "review" | "publish" | "none";
+export type ReviewDecision =
+  | "review"
+  | "publish"
+  /** Shown, dimmed: they may not approve here, and are told why. */
+  | "review-locked"
+  /** Shown, dimmed: ready to publish, but not by them. */
+  | "publish-locked"
+  | "none";
 
 export function resolveReviewDecision(params: {
   open: boolean;
@@ -387,12 +407,29 @@ export function resolveReviewDecision(params: {
   mergeReady: boolean;
   canReview: boolean;
   canMerge: boolean;
+  /** This reader's approval already stands on the change. */
+  hasApproved?: boolean;
 }): ReviewDecision {
-  const { open, isAnonymous, ownSubmission, mergeReady, canReview, canMerge } =
-    params;
+  const {
+    open,
+    isAnonymous,
+    ownSubmission,
+    mergeReady,
+    canReview,
+    canMerge,
+    hasApproved = false,
+  } = params;
 
   if (!open || isAnonymous) return "none";
   if (mergeReady && canMerge) return "publish";
-  if (ownSubmission) return "none";
-  return canReview ? "review" : "none";
+  // **A button they cannot use is drawn dimmed, never hidden.** A change ready
+  // to publish that this reader cannot publish shows Publish greyed out with
+  // the reason beside it, so they know it is somebody else's step rather than
+  // wondering where the button went.
+  if (ownSubmission) return mergeReady ? "publish-locked" : "none";
+  // Their approval is in and the change is ready: what is left is somebody
+  // else's Publish, which is what they are shown.
+  if (mergeReady && hasApproved) return "publish-locked";
+  if (canReview) return "review";
+  return mergeReady ? "publish-locked" : "review-locked";
 }

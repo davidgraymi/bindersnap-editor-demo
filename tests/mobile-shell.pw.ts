@@ -155,8 +155,8 @@ test("no page scrolls sideways on a phone", async ({ page }) => {
     "/riverside-health/corporate?tab=history",
     "/riverside-health/clinical?tab=settings",
     "/riverside-health",
-    "/changes",
-    "/documents",
+    "/-/changes",
+    "/-/documents",
     "/",
   ]) {
     await page.goto(`${APP_BASE_URL}${path}`);

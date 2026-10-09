@@ -1,11 +1,5 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Archive,
   Check,
@@ -19,12 +13,15 @@ import { useIsReadOnly } from "../readOnlyContext";
 
 import {
   archiveBinderDocument,
-  fetchBinderArchive,
-  fetchBinderDocuments,
   renameBinderDocument,
   renameBinderFolder,
   restoreBinderDocument,
 } from "../api";
+import {
+  binderArchiveQuery,
+  binderDocumentsQuery,
+  queryKeys,
+} from "../data/queries";
 import type {
   BinderArchivePayload,
   DraftAct,
@@ -176,6 +173,8 @@ type Renaming =
  * not made and the name you have just changed away from — three renames in a
  * row would all appear to snap back.
  */
+const NO_FOLDERS: string[] = [];
+
 export function BinderDocuments({
   org,
   binder,
@@ -196,12 +195,24 @@ export function BinderDocuments({
   refPicker = null,
 }: BinderDocumentsProps) {
   const isReadOnly = useIsReadOnly();
-  const [documents, setDocuments] = useState<
-    WorkspaceDocumentListEntry[] | null
-  >(null);
-  const [folders, setFolders] = useState<string[]>([]);
-  const [archivedCount, setArchivedCount] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const listing = useQuery(
+    binderDocumentsQuery(org, binder, { draft, ref: atRef }),
+  );
+  const documents: WorkspaceDocumentListEntry[] | null =
+    listing.data?.documents ?? null;
+  // **Folders from the binder, not from the documents.** A folder with nothing
+  // filed in it holds a `.gitkeep` and no document, so deriving the list from
+  // the rows would hide one somebody made, had approved and had published.
+  const folders = listing.data?.folders ?? NO_FOLDERS;
+  const archivedCount = listing.data?.archivedCount ?? 0;
+  // A draft that is not there any more — discarded in another tab, or already
+  // proposed — is the one failure this page can do something about, and what
+  // it does is stop pretending to be in edit mode (below).
+  const error =
+    listing.error && !draft
+      ? listing.error.message || "Unable to open this binder."
+      : null;
   const [renaming, setRenaming] = useState<Renaming | null>(null);
   const [actError, setActError] = useState<string | null>(null);
   const [committing, setCommitting] = useState(false);
@@ -216,91 +227,44 @@ export function BinderDocuments({
   const { isOpen, toggle } = useOpenFolders(org, binder, activeDocument);
   /** What the bar's filter holds. Empty is the whole binder. */
   const [filter, setFilter] = useState("");
-  /** The archive, once somebody has opened it in the tree. */
-  const [archived, setArchived] = useState<
-    BinderArchivePayload["documents"] | null
-  >(null);
   const [archiveOpen, setArchiveOpen] = useState(false);
-  const [restoring, setRestoring] = useState<string | null>(null);
-
-  const load = useCallback(() => {
-    let cancelled = false;
-    setError(null);
-
-    fetchBinderDocuments(
-      org,
-      binder,
-      draft ?? undefined,
-      undefined,
-      atRef ?? undefined,
-    )
-      .then((payload) => {
-        if (cancelled) return;
-        setDocuments(payload.documents);
-        // **Folders from the binder, not from the documents.** A folder with
-        // nothing filed in it holds a `.gitkeep` and no document, so deriving
-        // the list from the rows would hide one somebody made, had approved
-        // and had published.
-        setFolders(payload.folders);
-        setArchivedCount(payload.archivedCount ?? 0);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        // A draft that is not there any more — discarded in another tab, or
-        // already proposed — is the one failure this page can do something
-        // about, and what it does is stop pretending to be in edit mode.
-        if (draft) {
-          onDraftLost?.();
-          return;
-        }
-        setError(
-          err instanceof Error && err.message.trim() !== ""
-            ? err.message
-            : "Unable to open this binder.",
-        );
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [org, binder, draft, atRef, reloadKey, onDraftLost]);
-
-  useEffect(() => {
-    setDocuments(null);
-    return load();
-  }, [load]);
-
   /**
    * The archive, read when it is opened rather than with the tree.
    *
    * It is a section somebody opens on purpose, and most edits never touch it,
-   * so the binder does not pay for the read on every visit.
+   * so the binder does not pay for the read on every visit. **At the draft's
+   * ref while editing**, because that is where the count beside this section
+   * was counted: a policy archived a moment ago is off the draft's tree and
+   * still on `main`.
    */
+  const archiveRead = useQuery({
+    ...binderArchiveQuery(org, binder, draft ?? undefined),
+    enabled: archiveOpen,
+  });
+  const archived: BinderArchivePayload["documents"] | null =
+    archiveRead.data?.documents ?? null;
+  const [restoring, setRestoring] = useState<string | null>(null);
+
   useEffect(() => {
-    if (!archiveOpen || archived !== null) return;
+    if (listing.error && draft) onDraftLost?.();
+  }, [listing.error, draft, onDraftLost]);
 
-    let cancelled = false;
-    // **At the draft's ref while editing**, because that is where the count
-    // beside this section was counted. A policy archived a moment ago is off
-    // the draft's tree and still on `main`, so reading from `main` listed
-    // nothing under a heading that said one thing was in there.
-    fetchBinderArchive(org, binder, draft ?? undefined)
-      .then((payload) => {
-        if (!cancelled) setArchived(payload.documents);
-      })
-      // The tree is the page; failing to read the archive closes the section
-      // rather than taking the binder down with it.
-      .catch(() => {
-        if (!cancelled) {
-          setArchiveOpen(false);
-          setActError("Unable to read the archive.");
-        }
-      });
+  // An act somewhere other than the tree — a modal, in practice — asks for
+  // the binder to be read again.
+  useEffect(() => {
+    if (reloadKey === 0) return;
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.binder(org, binder),
+    });
+  }, [reloadKey, org, binder, queryClient]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [archiveOpen, archived, org, binder, draft]);
+  // The tree is the page; failing to read the archive closes the section
+  // rather than taking the binder down with it.
+  useEffect(() => {
+    if (!archiveRead.error) return;
+    setArchiveOpen(false);
+    setActError("Unable to read the archive.");
+  }, [archiveRead.error]);
 
   // Leaving edit mode ends any rename in progress. The input has nowhere to
   // commit to once the draft is gone, and leaving it on screen would offer a
@@ -358,12 +322,12 @@ export function BinderDocuments({
     try {
       await act();
       onEdited?.();
-      // Every act can move the archive — archiving puts a policy in it and
-      // restoring takes one out — and the section is read once and kept. Drop
-      // what was read so an open archive re-reads with the rest of the tree,
-      // rather than showing the answer from before the act.
-      setArchived(null);
-      load();
+      // Every read of this binder, the archive included — archiving puts a
+      // policy in it and restoring takes one out — so the tree ends up saying
+      // what was written rather than what was asked for.
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.binder(org, binder),
+      });
     } catch (err) {
       setActError(
         err instanceof Error && err.message.trim() !== ""
@@ -1005,14 +969,16 @@ function isRenaming(renaming: Renaming | null, node: BinderTreeNode): boolean {
  * input, which fires blur, which would otherwise commit the very edit that was
  * just abandoned. The ref is what makes "one of the two, once" true.
  */
-function InlineRename({
+export function InlineRename({
   initial,
   onCommit,
   onCancel,
+  className = "binder-tree-rename",
 }: {
   initial: string;
   onCommit: (value: string) => void;
   onCancel: () => void;
+  className?: string;
 }) {
   const [value, setValue] = useState(initial);
   const settled = useRef(false);
@@ -1025,7 +991,7 @@ function InlineRename({
 
   return (
     <input
-      className="binder-tree-rename"
+      className={className}
       type="text"
       value={value}
       autoFocus

@@ -32,7 +32,7 @@ test("the queue gathers changes from every binder into one list", async ({
   page,
 }) => {
   await signInAsAlice(page);
-  await page.goto(`${APP_BASE_URL}/changes`);
+  await page.goto(`${APP_BASE_URL}/-/changes`);
 
   await expect(
     page.getByRole("heading", { name: "Change requests" }),
@@ -64,7 +64,7 @@ test("the counters are the filters, and they agree with the list", async ({
   page,
 }) => {
   await signInAsAlice(page);
-  await page.goto(`${APP_BASE_URL}/changes`);
+  await page.goto(`${APP_BASE_URL}/-/changes`);
   await expect(
     page.getByRole("heading", { name: "Change requests" }),
   ).toBeVisible({ timeout: 30_000 });
@@ -109,7 +109,7 @@ test("the counters are the filters, and they agree with the list", async ({
 
 test("a row opens the change it names", async ({ page }) => {
   await signInAsAlice(page);
-  await page.goto(`${APP_BASE_URL}/changes`);
+  await page.goto(`${APP_BASE_URL}/-/changes`);
   await page
     .locator(".queue-counters")
     .getByRole("button", { name: /All changes/ })
@@ -134,7 +134,7 @@ test("a row's standing is one word, and the row says nothing else", async ({
   page,
 }) => {
   await signInAsAlice(page);
-  await page.goto(`${APP_BASE_URL}/changes`);
+  await page.goto(`${APP_BASE_URL}/-/changes`);
   await page
     .locator(".queue-counters")
     .getByRole("button", { name: /All changes/ })

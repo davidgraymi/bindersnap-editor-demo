@@ -12,4 +12,6 @@ export type SessionAuthStateUser = {
   username: string;
   fullName?: string;
   isAdmin?: boolean;
+  emailVerified?: boolean;
+  pendingEmail?: string;
 } | null;

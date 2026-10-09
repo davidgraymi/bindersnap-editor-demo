@@ -12,6 +12,7 @@
  * looking for "how is a document's name decided" goes first.
  */
 export { formatDocumentName } from "../../packages/utils/documentTitle";
+import { formatDocumentName } from "../../packages/utils/documentTitle";
 
 import type {
   ChangeReviewer,
@@ -298,6 +299,8 @@ export interface ChangeRecord {
   commentCount?: number;
   /** Whether a reviewer has asked for changes and not withdrawn it. */
   isRejected?: boolean;
+  /** The server's "Gitea would merge it now". */
+  isApproved?: boolean;
 }
 
 export type ChangeOutcome = "published" | "declined" | "withdrawn";
@@ -316,6 +319,11 @@ export function parseChangeTitle(
   const fallback = `Submitted by ${capitalizeFirst(submittedBy || "someone")}`;
   if (!body) return fallback;
 
+  if (body.includes(GENERATED_REVISION)) {
+    const named = generatedDocumentName(body);
+    if (named) return `New version of ${named}`;
+  }
+
   if (!body.includes("Automated upload from Bindersnap")) {
     // **The first line, not the whole body.** The convention has always been a
     // one-line summary, for which this is the same answer — but a change whose
@@ -328,9 +336,27 @@ export function parseChangeTitle(
     return trimmed.split("\n")[0]!.trim() || fallback;
   }
 
+  const named = generatedDocumentName(body);
+  if (named) return `Add ${named}`;
   const file = body.match(/Source file:\s*(\S+)/)?.[1] ?? null;
-  return file ? `New version of ${file}` : fallback;
+  return file ? `Add ${file}` : fallback;
 }
+
+/**
+ * The document a generated change is about, as the product names it.
+ *
+ * Generated bodies carry a `Document: nursing/hand-hygiene` line. The title a
+ * reviewer reads is "Add Hand Hygiene", not the file somebody happened to
+ * upload it from and not the path it is filed at.
+ */
+function generatedDocumentName(body: string): string | null {
+  const slug = body.match(/Document:\s*(\S+)/)?.[1] ?? null;
+  if (!slug) return null;
+  return formatDocumentName(slug.split("/").pop() ?? slug);
+}
+
+/** A new version proposed from an upload, before titles said so in words. */
+const GENERATED_REVISION = "A new version proposed from Bindersnap.";
 
 /**
  * What the submitter said, for the opening post of the discussion.
@@ -342,6 +368,10 @@ export function parseChangeTitle(
  */
 export function describeSubmission(body: string | null | undefined): string {
   if (!body) return "";
+  if (body.includes(GENERATED_REVISION)) {
+    const file = body.match(/Source file:\s*(\S+)/)?.[1] ?? null;
+    return file ? `A new version, uploaded from ${file}.` : "";
+  }
   if (!body.includes("Automated upload from Bindersnap")) {
     // Everything after the first line, which `parseChangeTitle` took as the
     // title. A one-line body — the common case — leaves nothing here, and
@@ -352,7 +382,7 @@ export function describeSubmission(body: string | null | undefined): string {
   }
 
   const file = body.match(/Source file:\s*(\S+)/)?.[1] ?? null;
-  return file ? `Submitted ${file} for review.` : "";
+  return file ? `Uploaded from ${file}.` : "";
 }
 
 export function toChangeRecord(pullRequest: {
@@ -491,13 +521,52 @@ export function describeApprovalProgress(change: {
   return `${change.approvalCount} of ${required} approvals`;
 }
 
-/** True once a change has collected every approval it needs. */
+/**
+ * True once a change has collected every approval it needs — at once, when it
+ * needs none. Unknown is not none: a requirement the server could not read
+ * never counts as met.
+ */
 export function hasEnoughApprovals(change: {
   approvalCount: number;
   requiredApprovals: number | null;
 }): boolean {
   const required = change.requiredApprovals;
-  return required !== null && required > 0 && change.approvalCount >= required;
+  return required !== null && change.approvalCount >= required;
+}
+
+/**
+ * Whether Gitea will merge this change now: the one answer to "can it
+ * publish?", asked the way the binder's protected branch asks it.
+ *
+ * Gitea refuses a merge while anybody's latest answer is "changes requested",
+ * while anybody asked to review has not answered (a comment counts as an
+ * answer), and while the approvals are short of the binder's number. Nothing
+ * else. So a binder that needs no approvals publishes a change with no
+ * reviewers at once, and one with a reviewer as soon as they have had their
+ * say. Waiting for an approval here, as this used to, held back every change
+ * in such a binder for an approval nothing asked for.
+ */
+export function isReadyToPublish(change: {
+  open?: boolean;
+  approvalCount: number;
+  requiredApprovals: number | null;
+  reviewers: readonly { status: ReviewerStatus }[];
+}): boolean {
+  // The binder's protection says whether an unanswered request holds the
+  // merge, and only the server can read it (see `readMergeRules`). Its answer
+  // arrives as `isApproved` and is preferred where there is one; this is the
+  // stricter reading, for a change that came without it.
+  if (change.open === false) return false;
+  if (
+    change.reviewers.some(
+      (reviewer) =>
+        reviewer.status === "changes_requested" ||
+        reviewer.status === "awaiting",
+    )
+  ) {
+    return false;
+  }
+  return hasEnoughApprovals(change);
 }
 
 /**
@@ -535,9 +604,10 @@ function joinNames(reviewers: { login: string; fullName: string }[]): string {
  * a blocker outranks a full count, because a full count cannot publish past it.
  *
  * Returns null for a closed change (its outcome is the whole story) and for a
- * document that demands no approvals — or whose policy could not be read — and
- * has no blocker, where there is simply nothing to report. The caller falls
- * back to the state badge in that case.
+ * change whose approval requirement could not be read and has no blocker,
+ * where there is simply nothing to report. The caller falls back to the state
+ * badge in that case. A binder that needs no approvals is not that: its
+ * change is ready the moment nobody is holding it.
  */
 /**
  * The four fields the standing is decided from.
@@ -552,6 +622,8 @@ export interface ChangeStandingInput {
   approvalCount: number;
   requiredApprovals: number | null;
   reviewers: ChangeReviewer[];
+  /** The server's "Gitea would merge it now", when it sent one. */
+  isApproved?: boolean;
 }
 
 export function describeChangeStanding(
@@ -586,16 +658,21 @@ export function describeChangeStanding(
     };
   }
 
-  if (hasEnoughApprovals(change)) {
-    return { tone: "ready", progress, reason: "Ready to publish" };
-  }
-
-  if (progress === null) return null;
-
-  const missing = (change.requiredApprovals ?? 0) - change.approvalCount;
+  // Somebody asked to review and not yet heard from holds the publish, full
+  // count or none, on a Gitea that blocks on review requests. The server
+  // knows which kind this binder is on; without its word, assume the stricter.
   const waiting = change.reviewers.filter(
     (reviewer) => standingOf(reviewer) === "awaiting",
   );
+  const ready =
+    change.isApproved ?? (waiting.length === 0 && hasEnoughApprovals(change));
+  if (ready) {
+    return { tone: "ready", progress, reason: "Ready to publish" };
+  }
+
+  if (progress === null && waiting.length === 0) return null;
+
+  const missing = (change.requiredApprovals ?? 0) - change.approvalCount;
   return {
     tone: "progress",
     progress,
@@ -619,16 +696,44 @@ const CHANGE_OUTCOME_BADGE_TONES: Record<ChangeOutcome, string> = {
 };
 
 /** The badge on a change: where it stands, or how it ended. */
+/**
+ * An open change's state, as its badge should read it.
+ *
+ * Gitea's review state says "approved" only once somebody has approved, which
+ * in a binder that needs no approvals never has to happen. There the badge
+ * says what the Publish button already knows: ready, or waiting on a review.
+ */
+function openChangeState(change: ChangeRecord): string {
+  if (change.requiredApprovals !== 0) return change.approvalState;
+  if (change.approvalState === "changes_requested") return change.approvalState;
+  return (change.isApproved ?? isReadyToPublish(change))
+    ? "ready"
+    : "awaiting_review";
+}
+
+const OPEN_CHANGE_LABELS: Record<string, string> = {
+  ready: "Ready to publish",
+  awaiting_review: "Awaiting review",
+};
+
 export function getChangeStateLabel(change: ChangeRecord): string {
-  return change.outcome
-    ? CHANGE_OUTCOME_LABELS[change.outcome]
-    : getApprovalStateLabel(change.approvalState);
+  if (change.outcome) return CHANGE_OUTCOME_LABELS[change.outcome];
+  const state = openChangeState(change);
+  return OPEN_CHANGE_LABELS[state] ?? getApprovalStateLabel(state);
 }
 
 export function getChangeStateBadgeClass(change: ChangeRecord): string {
-  return change.outcome
-    ? `bs-status ${CHANGE_OUTCOME_BADGE_TONES[change.outcome]}`
-    : getApprovalStateBadgeClass(change.approvalState);
+  if (change.outcome) {
+    return `bs-status ${CHANGE_OUTCOME_BADGE_TONES[change.outcome]}`;
+  }
+  const state = openChangeState(change);
+  return getApprovalStateBadgeClass(
+    state === "ready"
+      ? "approved"
+      : state === "awaiting_review"
+        ? "in_review"
+        : state,
+  );
 }
 
 /**

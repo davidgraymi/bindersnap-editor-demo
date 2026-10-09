@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  BookCheck,
   Check,
   ChevronDown,
   GitPullRequestArrow,
@@ -42,9 +43,15 @@ interface BinderDraftPickerProps {
   /** Every draft of yours, newest first, and everybody else's. */
   drafts: BinderDraftPayload["drafts"];
   others: BinderDraftPayload["others"];
-  /** The branch being edited. */
-  current: string;
+  /** The branch being edited, or null while reading the record. */
+  current: string | null;
   busy: boolean;
+  /**
+   * Back to the record, offered as the first row. Given where the picker is
+   * also the way into a draft from reading — the binder's own page — so the
+   * record is one of the places it can say you are.
+   */
+  onRecord?: () => void;
   onSwitch: (branch: string) => void;
   onStart: (name: string) => void | Promise<void>;
   onRename: (branch: string, name: string) => void | Promise<void>;
@@ -63,7 +70,12 @@ export function describeDraft(draft: OwnDraft): string {
   const when = draft.updatedAt
     ? `edited ${formatAge(draft.updatedAt)}`
     : "not edited yet";
-  return `${changes} · ${when}`;
+  // **Proposed, and still yours** — a branch with a pull request open on it.
+  // It stays in this list so it stays editable; the row says that a save into
+  // it is one reviewers see.
+  return draft.changeNumber !== null
+    ? `Proposed as change ${draft.changeNumber} · ${changes}`
+    : `${changes} · ${when}`;
 }
 
 export function BinderDraftPicker({
@@ -75,6 +87,7 @@ export function BinderDraftPicker({
   onSwitch,
   onStart,
   onRename,
+  onRecord,
 }: BinderDraftPickerProps) {
   const names = usePeopleNames(org);
   const [open, setOpen] = useState(false);
@@ -117,8 +130,11 @@ export function BinderDraftPicker({
           setNaming(null);
         }}
       >
-        <AppIcon icon={GitPullRequestArrow} size="sm" />
-        {mine?.name ?? "Your draft"}
+        <AppIcon
+          icon={current === null ? BookCheck : GitPullRequestArrow}
+          size="sm"
+        />
+        {current === null ? "On the record" : (mine?.name ?? "Your draft")}
         {mine ? (
           <span className="bs-draftpick-count">
             · {mine.actCount === 1 ? "1 change" : `${mine.actCount} changes`}
@@ -129,9 +145,37 @@ export function BinderDraftPicker({
 
       {open ? (
         <div className="bs-draftmenu" role="menu" style={style}>
-          <div className="bs-panel-bar">
+          {onRecord ? (
+            <div className={`bs-row${current === null ? " bs-row--on" : ""}`}>
+              <span className="bs-row-icon" aria-hidden="true">
+                {current === null ? <AppIcon icon={Check} size="sm" /> : null}
+              </span>
+              <button
+                type="button"
+                className="bs-row-body bs-draftmenu-pick"
+                disabled={busy}
+                onClick={() => {
+                  setOpen(false);
+                  if (current !== null) onRecord();
+                }}
+              >
+                <span className="bs-row-name">On the record</span>
+                <span className="bs-row-meta">Published, and in force</span>
+              </button>
+            </div>
+          ) : null}
+
+          <div
+            className={`bs-panel-bar${onRecord ? " bs-draftmenu-split" : ""}`}
+          >
             <span className="bs-section-title">Your drafts</span>
           </div>
+
+          {drafts.length === 0 ? (
+            <p className="bs-draftmenu-empty">
+              None yet. A draft is where changes wait until you propose them.
+            </p>
+          ) : null}
 
           {drafts.map((draft) => {
             const on = draft.branch === current;
@@ -269,7 +313,7 @@ export function BinderDraftPicker({
                 }
               >
                 <AppIcon icon={Plus} size="sm" />
-                Start another draft
+                {drafts.length === 0 ? "Start a draft" : "Start another draft"}
               </button>
             )}
           </div>

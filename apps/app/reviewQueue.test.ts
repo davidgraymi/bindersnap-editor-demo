@@ -31,7 +31,19 @@ function reviewer(
 }
 
 function change(overrides: Partial<PendingPR> = {}): PendingPR {
+  // What the server would say, unless a test says otherwise: every approval in
+  // and nobody holding it.
+  const approvals = overrides.approvalCount ?? 0;
+  const required = overrides.requiredApprovals ?? 1;
+  const isApproved =
+    required !== null &&
+    approvals >= required &&
+    !(overrides.reviewers ?? []).some(
+      (entry) =>
+        entry.status === "changes_requested" || entry.status === "awaiting",
+    );
   return {
+    isApproved,
     id: 1,
     number: 1,
     title: "A change",
@@ -42,7 +54,6 @@ function change(overrides: Partial<PendingPR> = {}): PendingPR {
     branchName: "upload/nursing/hand-hygiene/20260909/alice",
     approvalCount: 0,
     requiredApprovals: 1,
-    isApproved: false,
     isRejected: false,
     reviewers: [],
     body: "Tighter hand hygiene auditing.",
@@ -135,6 +146,7 @@ test("every approval in reads as approved, in one word", () => {
           approvalCount: 1,
           requiredApprovals: 1,
           reviewers: [reviewer("bob", "approved")],
+          isApproved: true,
         }),
       ]),
     ],
@@ -205,6 +217,23 @@ test("a ready change waits on whoever can publish it", () => {
   expect(
     buildQueueRows([binder("clinical", [ready])], "bob", NOW)[0]?.waitingOnYou,
   ).toBe(false);
+});
+
+test("an unanswered request is waiting on, even on a change ready to publish", () => {
+  // A binder that needs no approvals: Gitea would merge this now, and the
+  // person asked to review it has still not been heard from.
+  const ready = {
+    ...change({
+      approvalCount: 0,
+      requiredApprovals: 0,
+      reviewers: [reviewer("bob", "awaiting")],
+    }),
+    isApproved: true,
+  };
+
+  expect(
+    buildQueueRows([binder("clinical", [ready])], "bob", NOW)[0]?.waitingOnYou,
+  ).toBe(true);
 });
 
 test("a change can be blocked and waiting on you at once", () => {

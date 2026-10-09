@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 
-import { fetchBinderChanges } from "../api";
+import { binderChangesQuery } from "../data/queries";
 import type { WorkspaceChangeSummary } from "../../../packages/api-schema/schemas/workspaces";
 import {
   describeChangeDocuments,
@@ -33,54 +34,30 @@ export function BinderChanges({
   onOpenChange,
 }: BinderChangesProps) {
   const [filter, setFilter] = useState<ChangeFilter>("open");
-  const [open, setOpen] = useState<WorkspaceChangeSummary[] | null>(null);
-  // Null until the closed list has been asked for: most visits never open it,
-  // and a binder's closed changes are its whole history.
-  const [closed, setClosed] = useState<WorkspaceChangeSummary[] | null>(null);
-  const [closedLoading, setClosedLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [closedError, setClosedError] = useState<string | null>(null);
+  const openQuery = useQuery(binderChangesQuery(org, binder, "open"));
+  // Not asked for until the Closed filter is: most visits never open it, and
+  // a binder's closed changes are its whole history.
+  const [wantClosed, setWantClosed] = useState(false);
+  const closedQuery = useQuery({
+    ...binderChangesQuery(org, binder, "closed"),
+    enabled: wantClosed,
+  });
 
-  useEffect(() => {
-    let cancelled = false;
-    setOpen(null);
-    setClosed(null);
-    setError(null);
+  const open: WorkspaceChangeSummary[] | null = openQuery.data?.changes ?? null;
+  const closed: WorkspaceChangeSummary[] | null =
+    closedQuery.data?.changes ?? null;
+  const closedLoading = closedQuery.isFetching && !closedQuery.data;
+  const error = openQuery.error
+    ? openQuery.error.message || "Unable to list this binder's changes."
+    : null;
+  const closedError = closedQuery.error
+    ? closedQuery.error.message || "Unable to load the decided changes."
+    : null;
 
-    fetchBinderChanges(org, binder, "open")
-      .then((payload) => {
-        if (!cancelled) setOpen(payload.changes);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(
-          err instanceof Error && err.message.trim() !== ""
-            ? err.message
-            : "Unable to list this binder's changes.",
-        );
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [org, binder]);
-
-  const loadClosed = useCallback(async () => {
-    setClosedLoading(true);
-    setClosedError(null);
-    try {
-      const payload = await fetchBinderChanges(org, binder, "closed");
-      setClosed(payload.changes);
-    } catch (err) {
-      setClosedError(
-        err instanceof Error && err.message.trim() !== ""
-          ? err.message
-          : "Unable to load the decided changes.",
-      );
-    } finally {
-      setClosedLoading(false);
-    }
-  }, [org, binder]);
+  const loadClosed = () => {
+    if (wantClosed) void closedQuery.refetch();
+    else setWantClosed(true);
+  };
 
   if (error) {
     return (
@@ -109,14 +86,14 @@ export function BinderChanges({
         onFilterChange={(next) => {
           setFilter(next);
           if (next === "closed" && closed === null && !closedLoading) {
-            void loadClosed();
+            loadClosed();
           }
         }}
         onOpenChange={onOpenChange}
         changeHref={(change) =>
           buildBinderUrl({ org, binder, tab: "changes", change })
         }
-        onRetryClosed={() => void loadClosed()}
+        onRetryClosed={loadClosed}
         org={org}
       />
     </div>

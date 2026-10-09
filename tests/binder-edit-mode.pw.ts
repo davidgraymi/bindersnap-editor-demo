@@ -23,6 +23,8 @@ import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL, openTreeFolder } from "./helpers";
+import { signUpAndConfirm } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 test.describe.configure({ mode: "parallel", timeout: 240_000 });
 
@@ -58,10 +60,14 @@ function authHeaders(session: string): Record<string, string> {
 }
 
 async function signUp(credentials: Credentials): Promise<string> {
-  const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+  const response = await signUpAndConfirm(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
-    body: JSON.stringify(credentials),
+    body: JSON.stringify({
+      firstName: "Test",
+      lastName: "User",
+      ...credentials,
+    }),
   });
   expect(
     response.status,
@@ -74,7 +80,10 @@ async function createOrganization(session: string): Promise<string> {
   const response = await fetch(`${API_BASE_URL}/api/app/organizations`, {
     method: "POST",
     headers: authHeaders(session),
-    body: JSON.stringify({ name: `Riverbend ${randomUUID().slice(0, 6)}` }),
+    body: JSON.stringify({
+      acceptedTerms: LEGAL_VERSION,
+      name: `Riverbend ${randomUUID().slice(0, 6)}`,
+    }),
   });
   const body = await response.text();
   expect(response.status, `create organization failed: ${body}`).toBe(201);
@@ -342,7 +351,7 @@ test("Edit opens a draft, and the address says so", async ({ page }) => {
   // Nothing about drafts until somebody asks for one.
   await expect(page.locator(".bs-draftbar")).toBeHidden();
 
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Organize", exact: true }).click();
 
   const bar = page.locator(".bs-draftbar");
   await expect(bar).toBeVisible({ timeout: 30_000 });
@@ -371,7 +380,7 @@ test("a rename in the tree lands in the draft, and the row keeps it", async ({
   // `?edit=1` with no draft drops back out rather than conjuring one — so the
   // draft is opened through the button, the way a person would.
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Organize", exact: true }).click();
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   // Hand Hygiene is filed in Nursing, and folders start shut.
@@ -385,7 +394,7 @@ test("a rename in the tree lands in the draft, and the row keeps it", async ({
   // The row says what was written — titled the way the tree titles every
   // name, which is where the stray "And" comes from.
   await expect(
-    page.locator(".binder-tree-label", { hasText: "Hand Hygiene And PPE" }),
+    page.locator(".binder-tree-label", { hasText: "Hand Hygiene and PPE" }),
   ).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(".bs-draftbar")).toContainText("1 change");
 
@@ -404,7 +413,7 @@ test("Escape leaves the name alone", async ({ page }) => {
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Organize", exact: true }).click();
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   await page.getByRole("button", { name: "Rename Staff Handbook" }).click();
@@ -426,7 +435,7 @@ test("Propose opens the change request, with the words the author wrote", async 
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Organize", exact: true }).click();
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   // Hand Hygiene is filed in Nursing, and folders start shut.
@@ -476,7 +485,7 @@ test("Discard throws the draft away and leaves the binder as it was", async ({
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Organize", exact: true }).click();
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   // Hand Hygiene is filed in Nursing, and folders start shut.
@@ -555,7 +564,7 @@ test("a policy dragged onto a folder is filed there", async ({ page }) => {
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Organize", exact: true }).click();
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   const handbook = page
@@ -658,7 +667,7 @@ test("the Move button files something without a pointer", async ({ page }) => {
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Organize", exact: true }).click();
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   await page.getByRole("button", { name: "Move Staff Handbook" }).click();
@@ -683,7 +692,7 @@ test("a policy dragged out of its folder lands at the top level", async ({
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Organize", exact: true }).click();
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   await openTreeFolder(page, "Nursing");
@@ -787,7 +796,7 @@ test("clicking a renamed policy in the tree opens it, not an error", async ({
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Organize", exact: true }).click();
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   // Hand Hygiene is filed in Nursing, and folders start shut.
@@ -798,7 +807,7 @@ test("clicking a renamed policy in the tree opens it, not an error", async ({
   await box.press("Enter");
 
   const row = page.locator(".binder-tree-label", {
-    hasText: "Hand Hygiene And PPE",
+    hasText: "Hand Hygiene and PPE",
   });
   await expect(row).toBeVisible({ timeout: 30_000 });
   await row.click();
@@ -809,7 +818,7 @@ test("clicking a renamed policy in the tree opens it, not an error", async ({
   // `.app-main h1` is a strict-mode violation rather than an assertion.
   await expect(
     page.locator(".app-main h1:not(.doc-preview-prose h1)"),
-  ).toHaveText("Hand Hygiene And PPE", { timeout: 30_000 });
+  ).toHaveText("Hand Hygiene and PPE", { timeout: 30_000 });
   await expect(page.locator(".app-main")).not.toContainText("No such document");
   // Still editing, which is also the way back to what they were doing.
   expect(page.url()).toContain("edit=1");
@@ -1131,12 +1140,22 @@ test("proposing sends the draft it was asked to send", async () => {
     },
   );
   expect(proposed.status, await proposed.clone().text()).toBe(201);
-  expect(((await proposed.json()) as { branch: string }).branch).toBe(first);
+  const sent = (await proposed.json()) as {
+    branch: string;
+    changeNumber: number;
+  };
+  expect(sent.branch).toBe(first);
 
-  // The proposed one stops being a draft; the other is untouched.
-  const { drafts } = await readDrafts(session, org, binder);
-  expect(drafts.map((entry) => entry.branch)).not.toContain(first);
-  expect(drafts).toHaveLength(1);
+  // The proposed one is still its author's, and says which change it is in;
+  // the other is untouched and still unproposed.
+  const { drafts } = (await readDrafts(session, org, binder)) as {
+    drafts: Array<{ branch: string; changeNumber: number | null }>;
+  };
+  expect(drafts).toHaveLength(2);
+  expect(drafts.find((entry) => entry.branch === first)?.changeNumber).toBe(
+    sent.changeNumber,
+  );
+  expect(drafts.filter((entry) => entry.changeNumber === null)).toHaveLength(1);
 });
 
 /**
@@ -1496,7 +1515,7 @@ test("the contents beside a change's policy are the change's", async ({
 
   // The branch's name for it, which `main` has never heard of.
   await expect(
-    page.locator(".app-explorer-item", { hasText: "Hand Hygiene And PPE" }),
+    page.locator(".app-explorer-item", { hasText: "Hand Hygiene and PPE" }),
   ).toBeVisible({ timeout: 30_000 });
 
   // And a row leads somewhere that exists on the branch being read.

@@ -63,7 +63,7 @@ test("a policy's name loses its extension and its identity segment", () => {
     path(
       "/riverside-health/clinical/code-of-conduct.01J8XZ4K7MQ9V3B0RN7YHS2E1D.pdf",
     ),
-  ).toEqual(["Code Of Conduct"]);
+  ).toEqual(["Code of Conduct"]);
 });
 
 test("a change request is under its binder's change requests, and links back up", () => {
@@ -93,15 +93,19 @@ test("a change's comparison is one step under the change, which becomes a link",
   expect(trail.path[2]!.href).toBeNull();
 });
 
-test("a branch is the binder somewhere else, not a screen of a change", () => {
-  // Its path is the file's own, and the tree at it is the binder's page: the
-  // branch is the primitive, and says which change sits on it by itself.
+test("a policy read on a change's branch is filed in its folders, not under the change", () => {
+  // The branch is the version picker's to say; the trail is the way up the
+  // tree, to the binder's root.
   expect(
     path(
       "/riverside-health/clinical/nursing/hand-hygiene?ref=upload%2Fx&change=7",
     ),
   ).toEqual(["Nursing", "Hand Hygiene"]);
   expect(path("/riverside-health/clinical/-/tree/upload%2Fx")).toEqual([]);
+  // And the binder is a link, back to the record.
+  expect(
+    trailFor("/riverside-health/clinical/-/tree/upload%2Fx").binder?.href,
+  ).toBe("/riverside-health/clinical");
 });
 
 test("each of a binder's screens is one step into the binder", () => {
@@ -142,7 +146,7 @@ test("the organization's binder list is the organization itself", () => {
 });
 
 test("pages across the organization have no path: their title names them", () => {
-  for (const address of ["/changes", "/documents", "/billing", "/"]) {
+  for (const address of ["/-/changes", "/-/documents", "/-/billing", "/"]) {
     expect(trailFor(address)).toEqual({
       binder: null,
       path: [],

@@ -87,6 +87,8 @@ interface ChangeComparisonPageProps {
    * change would leave it. Where the branch under the title links to.
    */
   branchHref: string;
+  /** What its author called the draft it came from, for the chip. */
+  branchLabel?: string | null;
   /** Go to the branch's root, in the app. */
   onOpenBranch: () => void;
   /**
@@ -176,13 +178,42 @@ function WordCounts({
   summary: ComparisonSummary | null | undefined;
 }) {
   if (!summary || summary.identical) return null;
+  // Same words, different look: a count of +0 −0 would read as nothing.
+  if (summary.restyled) {
+    return <span className="cmp-counts cmp-counts-note">Formatting</span>;
+  }
+  const words = summary.additions + summary.deletions > 0;
+  const pictures = (count: number) =>
+    `${count} ${count === 1 ? "picture" : "pictures"}`;
+  const said = [
+    words
+      ? `${summary.additions} words added, ${summary.deletions} removed`
+      : null,
+    summary.picturesAdded > 0
+      ? `${pictures(summary.picturesAdded)} added`
+      : null,
+    summary.picturesRemoved > 0
+      ? `${pictures(summary.picturesRemoved)} removed`
+      : null,
+  ].filter(Boolean);
   return (
-    <span
-      className="cmp-counts"
-      aria-label={`${summary.additions} words added, ${summary.deletions} removed`}
-    >
-      <span className="cmp-counts-add">+{summary.additions}</span>
-      <span className="cmp-counts-del">−{summary.deletions}</span>
+    <span className="cmp-counts" aria-label={said.join(", ")}>
+      {words ? (
+        <>
+          <span className="cmp-counts-add">+{summary.additions}</span>
+          <span className="cmp-counts-del">−{summary.deletions}</span>
+        </>
+      ) : null}
+      {summary.picturesAdded > 0 ? (
+        <span className="cmp-counts-add">
+          +{pictures(summary.picturesAdded)}
+        </span>
+      ) : null}
+      {summary.picturesRemoved > 0 ? (
+        <span className="cmp-counts-del">
+          −{pictures(summary.picturesRemoved)}
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -223,6 +254,7 @@ export function ChangeComparisonPage({
   headRef,
   focusDocument = null,
   branchHref,
+  branchLabel = null,
   onOpenBranch,
   fileHref,
   onReadFile,
@@ -531,6 +563,7 @@ export function ChangeComparisonPage({
               open={open}
               documents={rows.length}
               branch={headRef}
+              branchLabel={branchLabel}
               branchHref={branchHref}
               onOpenBranch={onOpenBranch}
               openedAt={openedAt}
@@ -838,23 +871,29 @@ function ChangedDocumentSection({
           happening to it, and every act on it — so the bar that follows the
           reader down a long diff is also the one with the buttons in it. */}
       <header className="bs-panel-bar cmp-file-head">
-        <button
-          className="cmp-file-fold"
-          type="button"
-          aria-expanded={!collapsed}
-          aria-controls={`${row.anchor}-body`}
-          onClick={onToggle}
-        >
-          <ChevronDown
-            className={collapsed ? "cmp-file-chevron--shut" : undefined}
-            size={16}
-            strokeWidth={1.75}
-            aria-hidden="true"
-          />
-          <span className="sr-only">
-            {collapsed ? `Show ${row.name}` : `Hide ${row.name}`}
-          </span>
-        </button>
+        {/* Nothing to fold on a file that is leaving: a placeholder the
+            chevron's width keeps its path in line with the others. */}
+        {row.kind === "removed" ? (
+          <span className="cmp-file-fold" aria-hidden="true" />
+        ) : (
+          <button
+            className="cmp-file-fold"
+            type="button"
+            aria-expanded={!collapsed}
+            aria-controls={`${row.anchor}-body`}
+            onClick={onToggle}
+          >
+            <ChevronDown
+              className={collapsed ? "cmp-file-chevron--shut" : undefined}
+              size={16}
+              strokeWidth={1.75}
+              aria-hidden="true"
+            />
+            <span className="sr-only">
+              {collapsed ? `Show ${row.name}` : `Hide ${row.name}`}
+            </span>
+          </button>
+        )}
 
         <h2 className="cmp-file-title">
           <FilePath row={row} />
@@ -938,52 +977,46 @@ function ChangedDocumentSection({
         )}
       </header>
 
-      <div
-        className="cmp-file-body"
-        id={`${row.anchor}-body`}
-        hidden={collapsed}
-      >
-        {collapsed ? null : !mounted ? (
-          // A placeholder with the section's own height, so collapsing and
-          // scrolling do not make the page jump under the reader.
-          <p className="cmp-file-waiting">Ready when you scroll to it.</p>
-        ) : row.kind === "removed" ? (
-          /* A tinted block, which the grammar keeps for consequences — and a
-             document leaving the record is the one consequence on this page
-             that no diff can draw. */
-          <div className="bs-note cmp-removed">
-            <p className="cmp-removed-line">
-              {open ? "This change archives " : "This change archived "}
-              <strong>{row.name}</strong>.{" "}
-              {row.base
-                ? `Nothing is lost: ${row.base.label} and every version before it stay in the history, and can still be read, exported and restored.`
-                : "It never published a version, so there is nothing on the record to keep."}
-            </p>
-          </div>
-        ) : row.base === null ? (
-          // New: nothing to read it against, so it is read whole. The badge
-          // in the bar already says why there is no diff.
-          <DocumentPreview
-            loadFile={loadFile}
-            gitRef={headRef}
-            fileName={row.fileName}
-            downloading={false}
-            onDownload={() => onDownload(headRef)}
-            bare
-          />
-        ) : (
-          <DocumentComparison
-            scope={scope}
-            base={row.base}
-            headRef={headRef}
-            headLabel={open ? "This change" : "What it published"}
-            fileName={row.fileName}
-            imageMode={imageMode}
-            onDownload={onDownload}
-            onSummary={onSummary}
-          />
-        )}
-      </div>
+      {/* **An archive is a status, and the bar carries it.** The body held a
+          tinted paragraph — "This change archives Access Control Standard.
+          Nothing is lost…" — inside the frame where every other file shows
+          its words, so it read as part of the document. "Archiving" in the
+          bar is the whole fact; the file itself is not on the branch. */}
+      {row.kind === "removed" ? null : (
+        <div
+          className="cmp-file-body"
+          id={`${row.anchor}-body`}
+          hidden={collapsed}
+        >
+          {collapsed ? null : !mounted ? (
+            // A placeholder with the section's own height, so collapsing and
+            // scrolling do not make the page jump under the reader.
+            <p className="cmp-file-waiting">Ready when you scroll to it.</p>
+          ) : row.base === null ? (
+            // New: nothing to read it against, so it is read whole. The badge
+            // in the bar already says why there is no diff.
+            <DocumentPreview
+              loadFile={loadFile}
+              gitRef={headRef}
+              fileName={row.fileName}
+              downloading={false}
+              onDownload={() => onDownload(headRef)}
+              bare
+            />
+          ) : (
+            <DocumentComparison
+              scope={scope}
+              base={row.base}
+              headRef={headRef}
+              headLabel={open ? "This change" : "What it published"}
+              fileName={row.fileName}
+              imageMode={imageMode}
+              onDownload={onDownload}
+              onSummary={onSummary}
+            />
+          )}
+        </div>
+      )}
     </section>
   );
 }

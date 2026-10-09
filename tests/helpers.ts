@@ -15,7 +15,6 @@ import {
   validateToken,
 } from "../services/api/gitea-client/auth";
 import { seedDevStack } from "./seed";
-import { seedDocumentUid } from "./seed-scenario";
 
 // ---------------------------------------------------------------------------
 // Environment constants
@@ -56,23 +55,42 @@ export const API_BASE_URL =
 // document was a repository of its own.
 export const OWNER = "riverside-health";
 export const REPO = "corporate";
-export const SEEDED_BRANCH =
-  "upload/quarterly-report/20260210/091500Z-alice-4b1c9de2";
+/** The seeded change every fixture-dependent test reads: an open one, sent back by bob. */
+export const SEEDED_CHANGE_TITLE = "Q2 amendments — GDPR section update";
 
 /**
- * The seeded document's filename, identity segment and all.
+ * Where that change lives, read off the stack rather than written down here.
  *
- * Derived rather than written out, by the same function the seed commits with
- * (ADR 0005). A document's identity is minted per upload and the seed's is
- * derived from where it is filed — so hard-coding one here would be a second
- * copy of a rule that is already stated once, and it would go stale the moment
- * the scenario moved the document.
+ * The seed goes through the API, and the API names a draft's branch and mints
+ * a document's identity itself — so neither is known until the seed has run.
+ * {@link resolveAndStoreToken} fills these in; read them after it.
  */
-export const SEEDED_DOC_PATH = `quarterly-report.${seedDocumentUid(
-  OWNER,
-  REPO,
-  "quarterly-report",
-)}.json`;
+export const SEEDED = { branch: "", docPath: "" };
+
+async function resolveSeededChange(token: string): Promise<void> {
+  const headers = { Authorization: `token ${token}` };
+  const repo = `${GITEA_URL}/api/v1/repos/${OWNER}/${REPO}`;
+  const pulls = (await (
+    await fetch(`${repo}/pulls?state=open&limit=50`, { headers })
+  ).json()) as Array<{ number: number; title: string; head: { ref: string } }>;
+  const pull = pulls.find((candidate) =>
+    candidate.title.startsWith(SEEDED_CHANGE_TITLE),
+  );
+  if (!pull) {
+    throw new Error(`The seeded change "${SEEDED_CHANGE_TITLE}" is not open.`);
+  }
+  const files = (await (
+    await fetch(`${repo}/pulls/${pull.number}/files`, { headers })
+  ).json()) as Array<{ filename: string }>;
+  const document = files.find((file) =>
+    file.filename.startsWith("quarterly-report."),
+  );
+  if (!document) {
+    throw new Error("The seeded change carries no quarterly-report file.");
+  }
+  SEEDED.branch = pull.head.ref;
+  SEEDED.docPath = document.filename;
+}
 
 // ---------------------------------------------------------------------------
 // In-memory Storage
@@ -171,6 +189,7 @@ export async function resolveAndStoreToken(
   }
 
   storeToken(resolved);
+  await resolveSeededChange(resolved);
   return resolved;
 }
 
@@ -349,7 +368,7 @@ export async function signInAsAlice(page: Page): Promise<void> {
     await clearBrowserAuthState(page);
   }
 
-  await page.goto("/login");
+  await page.goto("/-/login");
   await page.waitForURL(/\/login$/, { timeout: 5_000 });
   await expect(page.getByLabel("Username or Email")).toBeVisible({
     timeout: 10_000,
@@ -391,7 +410,7 @@ export async function signInAsBob(page: Page): Promise<void> {
     await clearBrowserAuthState(page);
   }
 
-  await page.goto("/login");
+  await page.goto("/-/login");
   await page.waitForURL(/\/login$/, { timeout: 5_000 });
   await expect(page.getByLabel("Username or Email")).toBeVisible({
     timeout: 10_000,
@@ -438,7 +457,7 @@ export async function navigateToDocument(
   docName: string,
 ): Promise<void> {
   // Navigate to Documents page with a search query for the specific document
-  await page.goto(`/documents?q=${encodeURIComponent(docName)}`);
+  await page.goto(`/-/documents?q=${encodeURIComponent(docName)}`);
   await page.waitForLoadState("domcontentloaded");
 
   // DocumentsPage uses .docs-list-item
@@ -728,3 +747,19 @@ export async function openNewDocumentModal(page: Page): Promise<void> {
  * the question is always shown here — with exactly one binder it is skipped,
  * because choosing from a list of one teaches nothing.
  */
+
+/**
+ * Tick the signup form's agreement to the Terms, which it will not submit
+ * without.
+ */
+export async function agreeToTerms(page: Page): Promise<void> {
+  await page.getByRole("checkbox", { name: /I agree to the Terms/ }).check();
+}
+
+/**
+ * Tick the create-organization form's acceptance of the Terms for the
+ * organization, which it will not submit without.
+ */
+export async function acceptTermsForOrganization(page: Page): Promise<void> {
+  await page.getByRole("checkbox", { name: /I accept the Terms/ }).check();
+}

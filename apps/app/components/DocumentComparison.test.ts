@@ -106,6 +106,14 @@ async function render(element: ReactElement) {
   };
 }
 
+/** The summary arrives in an effect, a tick after the skeleton goes. */
+async function settled(summaries: unknown[]) {
+  for (let attempt = 0; attempt < 100 && summaries.length === 0; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    flushSync(() => {});
+  }
+}
+
 function comparison(overrides: Record<string, unknown> = {}) {
   return createElement(DocumentComparison, {
     scope: { kind: "document", owner: "alice", repo: "contract" },
@@ -143,12 +151,38 @@ test("two identical versions draw nothing rather than announce it", async () => 
 
   // The file's bar says what happened — a rename shows both paths — so the
   // body has nothing to add, and no sentence saying so.
+  await settled(summaries);
   expect(container.textContent).toBe("");
   expect(summaries.at(-1)).toEqual({
     additions: 0,
     deletions: 0,
+    picturesAdded: 0,
+    picturesRemoved: 0,
+    restyled: false,
     identical: true,
   });
+
+  unmount();
+});
+
+test("the same words made bold are a change, and only the document is drawn", async () => {
+  files["v3"] = "Wash your hands.";
+  files["change-4"] = "Wash your **hands**.";
+
+  const summaries: { restyled?: boolean; identical?: boolean }[] = [];
+  const { container, unmount } = await render(
+    comparison({
+      onSummary: (summary: { restyled: boolean; identical: boolean }) =>
+        summaries.push(summary),
+    }),
+  );
+
+  await settled(summaries);
+  expect(summaries.at(-1)).toMatchObject({ restyled: true, identical: false });
+  // The file's bar says "Formatting"; a note inside the frame read as a
+  // paragraph the change had added.
+  expect(container.querySelector('[role="note"]')).toBeNull();
+  expect(container.querySelector("strong")?.textContent).toBe("hands");
 
   unmount();
 });

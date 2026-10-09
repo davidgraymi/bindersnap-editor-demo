@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 import { JSDOM } from "jsdom";
 
 import { CreateMenu } from "./CreateMenu";
+import { withQueryClient } from "../data/testing";
 
 /**
  * The top bar's "+", rendered.
@@ -71,7 +72,7 @@ function render(element: ReactElement) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
-  flushSync(() => root.render(element));
+  flushSync(() => root.render(withQueryClient(element)));
 
   return {
     container,

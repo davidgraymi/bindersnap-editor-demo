@@ -99,8 +99,23 @@ export interface WorkspaceSettingsBackend {
     changedBy: string;
     now?: number;
   }): Promise<SettingsEventRecord[]>;
+  /**
+   * Record a change to a rule that lives somewhere else.
+   *
+   * The approval count and "a new version clears the approvals" are Gitea
+   * branch protection, not rows here — Gitea enforces them, so Gitea holds
+   * them. Who changed one, and when, is still this table's question: the
+   * administrative trail should not have a hole shaped like the rules that
+   * matter most.
+   */
+  record(events: SettingsEventRecord[]): Promise<void>;
   /** Newest first. For the administrative view, not for any gate. */
   history(giteaRepoId: number, limit?: number): Promise<SettingsEventRecord[]>;
+  /**
+   * The binder is gone: drop its settings row. Its events stay — the trail
+   * is append-only, and "who deleted it" is the last line of it.
+   */
+  forget(giteaRepoId: number): Promise<void>;
 }
 
 export class WorkspaceSettingsStore implements WorkspaceSettingsBackend {
@@ -180,6 +195,11 @@ export class WorkspaceSettingsStore implements WorkspaceSettingsBackend {
     return [event];
   }
 
+  async record(events: SettingsEventRecord[]): Promise<void> {
+    if (events.length === 0) return;
+    this.db.insert(settingsEvents).values(events).run();
+  }
+
   async history(
     giteaRepoId: number,
     limit = 50,
@@ -224,6 +244,13 @@ export class WorkspaceSettingsStore implements WorkspaceSettingsBackend {
       .orderBy(desc(settingsEvents.changedAt), desc(settingsEvents.id))
       .all();
   }
+
+  async forget(giteaRepoId: number): Promise<void> {
+    this.db
+      .delete(workspaceSettings)
+      .where(eq(workspaceSettings.giteaRepoId, giteaRepoId))
+      .run();
+  }
 }
 
 // Lazy so importing this module never opens the SQLite file.
@@ -247,8 +274,16 @@ class LazyWorkspaceSettingsStore implements WorkspaceSettingsBackend {
     return this.store.set(params);
   }
 
+  record(events: SettingsEventRecord[]): Promise<void> {
+    return this.store.record(events);
+  }
+
   history(giteaRepoId: number, limit?: number): Promise<SettingsEventRecord[]> {
     return this.store.history(giteaRepoId, limit);
+  }
+
+  forget(giteaRepoId: number): Promise<void> {
+    return this.store.forget(giteaRepoId);
   }
 }
 

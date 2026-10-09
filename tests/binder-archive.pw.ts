@@ -28,6 +28,8 @@ import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL, openTreeFolder } from "./helpers";
+import { signUpAndConfirm } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 test.describe.configure({ mode: "parallel", timeout: 240_000 });
 
@@ -63,10 +65,14 @@ function authHeaders(session: string): Record<string, string> {
 }
 
 async function signUp(credentials: Credentials): Promise<string> {
-  const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+  const response = await signUpAndConfirm(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
-    body: JSON.stringify(credentials),
+    body: JSON.stringify({
+      firstName: "Test",
+      lastName: "User",
+      ...credentials,
+    }),
   });
   expect(
     response.status,
@@ -79,7 +85,10 @@ async function createOrganization(session: string): Promise<string> {
   const response = await fetch(`${API_BASE_URL}/api/app/organizations`, {
     method: "POST",
     headers: authHeaders(session),
-    body: JSON.stringify({ name: `Riverbend ${randomUUID().slice(0, 6)}` }),
+    body: JSON.stringify({
+      acceptedTerms: LEGAL_VERSION,
+      name: `Riverbend ${randomUUID().slice(0, 6)}`,
+    }),
   });
   const body = await response.text();
   expect(response.status, `create organization failed: ${body}`).toBe(201);
@@ -461,7 +470,7 @@ test("Archive is an act of edit mode, and the draft is the undo", async ({
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Organize", exact: true }).click();
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   // Folders start shut, so the policy is reached the way a person reaches it.
@@ -496,7 +505,7 @@ test("a folder cannot be archived, because that is a different act", async ({
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Organize", exact: true }).click();
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   await expect(
@@ -578,7 +587,7 @@ test("the archive opens in the tree, and Restore goes into the draft", async ({
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
 
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Organize", exact: true }).click();
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   // Editing offers the archive in place; the link to the page of its own is

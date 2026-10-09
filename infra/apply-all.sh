@@ -37,14 +37,15 @@ tf_output() {
   terraform -chdir="${SCRIPT_DIR}/${dir}" output -raw "${key}" 2>/dev/null || echo ""
 }
 
-# Returns 0 (true) if the Gitea service token SSM parameter still holds the
-# bootstrap placeholder and the bootstrap therefore needs to run.
-# Returns 1 (false) if a real token is already stored, so the bootstrap can be
+# Returns 0 (true) if either Gitea service-account token SSM parameter
+# (gitea_service_token, gitea_admin_token) still holds the bootstrap
+# placeholder and the bootstrap therefore needs to run.
+# Returns 1 (false) if real tokens are already stored, so the bootstrap can be
 # skipped entirely without dispatching any SSM command.
 needs_service_token_bootstrap() {
   local ssm_path="$1"
-  local parameter="${ssm_path}/gitea_service_token"
   local placeholder="BOOTSTRAP_WITH_scripts/bootstrap-gitea-service-account.ts"
+  local leaf
   local current_value
 
   if ! command -v aws >/dev/null 2>&1; then
@@ -53,17 +54,19 @@ needs_service_token_bootstrap() {
     return 0
   fi
 
-  current_value="$(
-    aws ssm get-parameter \
-      --name "${parameter}" \
-      --with-decryption \
-      --query 'Parameter.Value' \
-      --output text 2>/dev/null
-  )" || true  # treat a missing parameter the same as the placeholder
+  for leaf in gitea_service_token gitea_admin_token; do
+    current_value="$(
+      aws ssm get-parameter \
+        --name "${ssm_path}/${leaf}" \
+        --with-decryption \
+        --query 'Parameter.Value' \
+        --output text 2>/dev/null
+    )" || true  # treat a missing parameter the same as the placeholder
 
-  if [[ -z "${current_value}" || "${current_value}" == "${placeholder}" ]]; then
-    return 0  # needs bootstrap
-  fi
+    if [[ -z "${current_value}" || "${current_value}" == "${placeholder}" ]]; then
+      return 0  # needs bootstrap
+    fi
+  done
 
   return 1  # already bootstrapped
 }
@@ -197,6 +200,7 @@ if [[ "$ACTION" == "plan" ]]; then
   tf_run "compute"
   tf_run "secrets"
   tf_run "backups"
+  tf_run "email"
   tf_run "monitoring"
   tf_run "ci"
 
@@ -246,10 +250,15 @@ tf_run "backups" \
 LITESTREAM_BUCKET="$(tf_output backups litestream_bucket_name)"
 echo "  Backups outputs: litestream_bucket=${LITESTREAM_BUCKET}"
 
-# 4. Monitoring (needs instance ID)
+# 4. Email (needs instance role — the API sends through SES as the instance)
+tf_run "email" "ec2_instance_role_name=${INSTANCE_ROLE}"
+echo "  Email: add these records to the sending domain's DNS, then request SES production access:"
+terraform -chdir="${SCRIPT_DIR}/email" output -json dns_records 2>/dev/null || true
+
+# 5. Monitoring (needs instance ID)
 tf_run "monitoring" "instance_id=${INSTANCE_ID}"
 
-# 5. CI (SPA bucket + CloudFront dist come from tfvars — no upstream module yet)
+# 6. CI (SPA bucket + CloudFront dist come from tfvars — no upstream module yet)
 tf_run "ci"
 
 echo ""

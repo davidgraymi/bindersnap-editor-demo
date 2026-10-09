@@ -77,25 +77,109 @@ present. There is no separate `apps/landing/` directory.
 Routes:
 
 - `/` — landing page (unauthenticated) or workspace home (authenticated)
-- `/login`, `/signup` — credential forms
-- `/documents` — document list
-- `/docs/:owner/:repo` — document detail and review
-- `/docs/:owner/:repo/changes` — open and closed change requests
-- `/docs/:owner/:repo/changes/:number` — one change: its discussion and decision
-- `/docs/:owner/:repo/changes/:number/preview` — the file that change proposes
-- `/docs/:owner/:repo/changes/:number/compare` — that file against the version
-  it replaces, rendered with the additions and deletions marked
-- `/docs/:owner/:repo/collaborators` — collaborator management
-- `/activity` — audit log (`/inbox` was folded into `/`, which now lists the
-  change requests the reader is part of)
+- **The app's own pages are behind `/-/`**, the way GitLab keeps
+  `/-/user_settings/profile` apart from `/{group}`. No organization can be
+  called `-`, so none of them can shadow one, and an organization may be named
+  almost anything. Add new app-wide pages here, never as a bare first segment.
+  - `/-/login`, `/-/signup` — credential forms
+  - `/-/documents` — the library; `/-/changes` — every change in flight
+  - `/-/organizations/new` — create (or ask to join) an organization
+  - `/-/user_settings/profile` — the signed-in person's own account
+  - `/-/billing` — the session's organization's billing, rewritten to
+    `/{org}/-/billing`; `/-/admin/subscriptions` — site admins only
+- `/{org}` — an organization; `/{org}/-/people`, `/{org}/-/billing`,
+  `/{org}/-/settings`, `/{org}/-/binders/new`
+- `/{org}/{binder}` — a binder; its screens and documents are behind its own
+  `/-/` (`/-/changes/3`, `/-/blob/main/{path}`, `/-/settings`)
+- Reserved first segments (`RESERVED_ORGANIZATION_NAMES` in
+  `packages/utils/organizationName.ts`) are only what cannot move off the
+  root: `help` and `legal` (separate static sites, built from
+  `apps/help` and `apps/legal`), `auth` (`/auth/callback`, where
+  Gitea's sign-in returns), and the files browsers ask for at the root.
 
-### The shared editor
+### The document editor
 
-`packages/editor/` is imported by the SPA.
+`packages/editor/` is a word processor for policies, imported by the SPA and
+laid out the way Word is: a ribbon (Home, Insert, View, and a Table tab while
+the cursor is in one) over a sheet of Letter on a desk, the headings and find
+and replace in a navigation pane, page and word counts and zoom in a status
+bar. `apps/app/components/DocumentEditorPage.tsx` is the page around it, at
+`/{org}/{binder}/-/blob/main/{path}?edit=write&draft=…`: **Save commits the document to
+the author's draft** through the ordinary revise endpoint, so the version on
+record does not move until the draft is proposed and published. Edit on a
+document's page opens (or resumes) that draft first. Only a file the editor
+writes — `*.json` — is offered it; a Word file or a PDF is edited in the
+program that made it and uploaded as a new version. It opens **full page**:
+while it is mounted it sets `bs-writing` on `<html>`, and the shell drops the
+sidebar and the binder's file panel so Letter fits at 100% on a laptop. The
+editor has **its own file panel** (`components/DraftFiles.tsx`), read at the
+draft: a policy opens beside the last one, and New starts one, without leaving
+the editor. **Several policies are open at once**: moving to another keeps
+the words typed in each (`OpenPolicy` buffers in `DocumentEditorPage.tsx`,
+keyed by `uid`, so a rename or move keeps the same open file and its
+editor); the panel marks every policy with unsaved words, the status bar
+counts the others, and Save all commits them, one act each. Only leaving
+the editor — Close, Propose, another draft — asks, and offers Save all. **The editor owns the draft**: "Saving to" is the `BinderDraftPicker`
+(switch or start a draft on the same policy) and Propose opens the propose
+step for that draft, returning to the policy on Back. Close lands on the
+document at `?edit=1&draft=`, with the draft bar (Propose, Discard) at the foot
+as on the binder's own page. It says "In <draft>" and lists your drafts
+in the file panel's "What you are reading". The binder's own page offers the
+same picker while reading, with "On the record" as a place. **Edit on a
+binder opens the editor** (`pickPolicyToWrite`: the policy last written in the
+draft, else the first) — only a binder with nothing the editor writes opens
+the tree. **The editor's file panel organizes the draft in place**: each row
+renames (pencil, double-click on the open one, or F2), moves (drag onto a
+folder, or Move), and a policy archives; New folder is in its head. A
+right-click, the menu key or Shift+F10 on a row opens the same acts as a
+menu, and a folder's adds "New document here" and "New folder here". Every act
+goes into the same draft. When one moves the open policy — renaming it,
+refiling it, or renaming a folder above it — its unsaved words are saved first
+and the editor follows it by identity (`uid`) to its new address; archived, it
+goes on to the next policy to write (`actInEditor` in `BinderShell.tsx`).
+The title in the editor's header is the open policy's name and renames it
+the same way.
+Archiving from the panel offers Undo, and the panel's foot lists the archive
+with Restore, both into the same draft. Organize on the binder's header is the
+same tree on the binder's own page. **An open change request is edited in
+place by its author**: Edit on its Proposed version card opens the editor at
+`?edit=write&change=N`, which reads the change's branch and saves with
+`changeNumber` (the server's `resolveChangeToJoin`) — no draft, no Propose,
+and Close returns to the change.
+**A proposed draft is still its owner's draft**, like a branch with a pull
+request open on it: `listBinderDrafts({ proposed: true })` keeps it, with its
+`changeNumber`, in the owner's picker and in `?draft=` reads; a save into it
+lands in the change; it keeps its name, which the change's branch chip shows
+(`branchLabel`) and links back to. It cannot be proposed again or discarded —
+the bar and the editor offer "Change N" instead. Publishing deletes a draft
+branch. Other people's proposed drafts are change requests, not "others".
+
+**Pictures are embedded, not linked** (`packages/editor/imageFiles.ts`): chosen,
+pasted or dropped, a picture is scaled to at most 1600px and written into the
+document as a `data:image/…;base64` source, so it is versioned with the words
+in the same commit and cannot change under an approved version. Raster types
+only; the sanitizer (`isSafeImageSrc`) refuses SVG and every other `data:`
+address. Limit 1.5 MB per picture after scaling. A picture's size is its
+`width` attribute alone, in pixels at 100% zoom (`extensions/PictureSize.ts`,
+the corner handles, and the Picture tab's presets); a height is never stored,
+so it cannot be saved squashed.
+
+**AutoRecover** (`apps/app/editorRecovery.ts`): unsaved words are kept in this
+browser's `localStorage`, per org/binder/draft/policy, 800ms after the last
+change, and offered back (Restore / Discard) the next time that policy opens
+in that draft. Dropped on save and on any deliberate "without saving". It is a
+device-local safety net only — nothing reaches Gitea until Save.
+
+`documentSchema.ts` is the one list of Tiptap extensions both the editor and
+the reader (`apps/app/editorDocumentHtml.ts`) load. Add a node or an attribute
+there, never to one side: ProseMirror drops what its schema does not declare,
+so formatting added only to the editor vanishes for every reviewer. The
+sanitizer keeps a filtered set of inline styles (`safeStyle` in
+`packages/utils/sanitizer.ts`) for the same reason.
 
 If you change anything in `packages/editor/` that affects visual appearance, note it
 in your PR description. The landing page no longer embeds the editor, so there is
-nothing to re-sync — but the editor is still the authoring surface inside the app.
+nothing to re-sync.
 
 ### The change comparison
 
@@ -193,6 +277,29 @@ actually keeps a policy manual in.
 Added text is green and removed text is coral, and both carry an underline or
 a strike as well as a colour, so the comparison still reads without one.
 
+### Resolving a change's conflicts
+
+A change that is behind `main` and would not merge — a document changed both
+in the change and in the binder since it began — offers **Resolve conflicts**
+where it would offer Bring up to date. The resolver is
+`apps/app/components/ChangeConflictsPage.tsx` at
+`/{org}/{binder}/-/changes/N/conflicts`.
+
+The server (`services/api/gitea-client/conflicts.ts`) reads the three trees —
+the merge base, the change, and `main` — and lists every file changed on both
+sides, **paired by identity** (ADR 0005) so a policy renamed on one side and
+edited on the other settles itself instead of reading as a deletion. The page
+merges a document the editor wrote a block at a time and a text file a line at
+a time (`apps/app/threeWayMerge.ts`, git's diff3), asks only about the places
+both sides changed, and offers a Word file or a PDF as a whole choice.
+
+Gitea cannot write a merge commit with chosen contents, so a resolution is
+three steps on the change's branch: commit the published version of each
+conflicting file, run the ordinary update merge (which now has nothing to
+disagree about), then commit what the person chose. A failed merge is undone
+with a commit restoring the change's own versions. The request names the heads
+the page read, and is refused if either has moved.
+
 ### The BFF (`services/api`)
 
 All browser-to-data calls go through the BFF. The browser never contacts Gitea
@@ -222,6 +329,8 @@ directly.
 - `POST /api/app/documents/:owner/:repo/pull-requests/:n/discussions/:threadId/resolve` — resolve/unresolve
 - `PUT /api/app/documents/:owner/:repo/pull-requests/:n/discussions/:threadId/comments/:commentId/reactions` — leave or take back a reaction
 - `POST /api/app/documents/:owner/:repo/pull-requests/:n/publish` — merge + tag
+- `GET/POST /api/app/binders/:org/:binder/changes/:n/conflicts` — what clashes
+  with the binder, read three ways; and resolving it
 - `GET /api/app/documents/:owner/:repo/download` — proxy file download
 - `GET/PUT/DELETE /api/app/documents/:owner/:repo/collaborators/:user` — manage access
 - `GET /api/app/users/search` — user search
@@ -943,7 +1052,7 @@ These apply to any changes touching `deploy/`, `deploy/files/docker-compose.prod
 2. **Registration is disabled in prod.** `GITEA__service__DISABLE_REGISTRATION=true` is non-negotiable for production. Dev compose may differ.
 3. **`INSTALL_LOCK=true` in prod.** Prevents Gitea setup wizard from re-running after first boot.
 4. **Rotate credentials on first deploy.** Generate with `openssl rand -base64 20` for passwords and `openssl rand -base64 32` for secret keys.
-5. **Service account token is required in prod.** `BINDERSNAP_GITEA_SERVICE_TOKEN` must be set; the API exits at startup if it is missing in production.
+5. **Service account tokens are split by power.** `BINDERSNAP_GITEA_SERVICE_TOKEN` (read scopes only) must be set; the API exits at startup if it is missing in production. `BINDERSNAP_GITEA_ADMIN_TOKEN` (`write:admin` only) is used solely for signup, password changes, account deletion and token revocation. Never give the read token a write scope, and never use the admin token for a read: the read token runs on nearly every request. Anything a person can do in Gitea themselves — renaming their own draft, say — is done with their own session token, not either of these.
 
 ---
 

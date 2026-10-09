@@ -360,6 +360,31 @@ roughly three Gitea calls per document to a handful per workspace.
 | Settings change history                                  | SQLite, append-only                   | Administrative telemetry                  |
 | Stripe customer, subscription, trial, overrides          | SQLite                                | Commercial                                |
 | Document version state, list and queue read models       | SQLite, derived                       | Speed only; rebuildable                   |
+| Work in progress: a publish's plan until it has finished | SQLite `jobs`, deleted once done      | Operational; never read as evidence       |
+
+### Work in progress is operational state
+
+A multi-step write — a merge and then a version tag per document — has no
+transaction across its Gitea calls, so the API records what it is about to do
+in a `jobs` row before the first irreversible step, and a runner finishes any
+row a crash or a deploy left behind (`services/api/jobs/`). This is not a
+fourth kind of state and does not bend the tripwire below:
+
+- A row records **work still to do**, never what happened. Nothing reads it to
+  answer "was this approved" or "what version is live"; every step re-asks
+  Gitea before acting, and Gitea's answer wins.
+- **Dropping the table loses no evidence.** At worst a half-finished publish
+  stays half-finished until somebody presses Publish again — the same state the
+  product was in before jobs existed. A finished row is kept 30 days for
+  debugging and is then deleted.
+- **A resumed run acts as a person, not as the service account.** It uses the
+  publisher's session while it lasts, and otherwise waits for whoever presses
+  Publish next. The service token has no write access to binders, and this
+  does not give it any — so who appears to have written a tag is still somebody
+  who could.
+
+The Stripe `processed_webhook_events` table is the precedent: operational state
+whose loss costs a retry, not a fact.
 
 ### What this costs, honestly
 

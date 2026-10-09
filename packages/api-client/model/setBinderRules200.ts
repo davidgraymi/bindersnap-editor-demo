@@ -9,4 +9,8 @@ export type SetBinderRules200 = {
   organization: string;
   workspace: string;
   blockOnUnresolvedThreads: boolean;
+  /** @nullable */
+  requiredApprovals: number | null;
+  /** @nullable */
+  dismissStaleApprovals: boolean | null;
 };

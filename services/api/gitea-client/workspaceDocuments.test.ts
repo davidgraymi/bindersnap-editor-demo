@@ -13,6 +13,7 @@ import {
   nextVersionFrom,
   nextVersionTag,
   toDocumentEntry,
+  treeRefCandidates,
   isRestoredFromArchive,
 } from "./workspaceDocuments";
 
@@ -195,6 +196,48 @@ test("listWorkspaceDocuments treats a binder with no commits as empty", async ()
   ).toEqual([]);
 });
 
+test("a branch named as long as a commit hash is read as the branch", async () => {
+  // `draft/` + a 16-character username + `/` + a 17-digit stamp is exactly
+  // 40 characters, which Gitea's tree endpoint takes for a SHA.
+  const draft = "draft/cmp-993dfc34-d91/20260930181634401";
+  expect(draft).toHaveLength(40);
+  expect(treeRefCandidates(draft)).toEqual([
+    `refs/heads/${draft}`,
+    `refs/tags/${draft}`,
+  ]);
+  // A real hash, and every ordinary name, is passed as it is.
+  const hash = "e122f4cb296e6816bc212c7289c5051d8af5c2eb";
+  expect(treeRefCandidates(hash)).toEqual([hash]);
+  expect(treeRefCandidates("main")).toEqual(["main"]);
+
+  const asked: string[] = [];
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/git/trees/{sha}": (init) => {
+        asked.push(init.params.path.sha);
+        return {
+          tree: [
+            {
+              path: `admissions.${ADMISSIONS}.md`,
+              type: "blob",
+              size: 20,
+              sha: "a",
+            },
+          ],
+        };
+      },
+    },
+  });
+  const tree = await readWorkspaceTree({
+    client,
+    org: "mercy-health",
+    workspace: "clinical",
+    ref: draft,
+  });
+  expect(asked).toEqual([`refs/heads/${draft}`]);
+  expect(tree.documents).toHaveLength(1);
+});
+
 test("listDocumentVersions counts only this document's tags", async () => {
   const { client } = createMockClient({
     GET: {
@@ -225,6 +268,39 @@ test("listDocumentVersions counts only this document's tags", async () => {
     { tag: `${HANDOVER}/v2`, version: 2, commitSha: "bbb", publishedAt: "" },
     { tag: `${HANDOVER}/v1`, version: 1, commitSha: "aaa", publishedAt: "" },
   ]);
+});
+
+test("listDocumentVersions finds a version past Gitea's first page of tags", async () => {
+  // Gitea answers an unpaged tag read with 30, newest first. This document's
+  // v1 is older than 60 other tags, so it is on the second page — which is
+  // exactly where publish used to stop looking, number the next version v1,
+  // merge, and then have its tag refused as a duplicate.
+  const others = Array.from({ length: 60 }, (_, index) => ({
+    name: `${ADMISSIONS}/v${60 - index}`,
+    commit: { sha: `other-${index}` },
+  }));
+  const all = [...others, { name: `${HANDOVER}/v1`, commit: { sha: "aaa" } }];
+
+  const { client, mockGet } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/tags": (init) => {
+        const { page = 1, limit = 30 } = init?.params?.query ?? {};
+        return all.slice((page - 1) * limit, page * limit);
+      },
+    },
+  });
+
+  const versions = await listDocumentVersions({
+    client,
+    org: "mercy-health",
+    workspace: "clinical",
+    uid: HANDOVER,
+  });
+
+  expect(versions.map((version) => version.version)).toEqual([1]);
+  expect(nextVersionFrom(versions)).toBe(2);
+  // Page 1, then one wave of three: two round trips, not a page at a time.
+  expect(mockGet).toHaveBeenCalledTimes(4);
 });
 
 test("a file with no identity has published nothing, and costs no call", async () => {
@@ -700,4 +776,64 @@ test("a restore is told from a revision by what the tags last recorded", () => {
       mergeCommitSha: null,
     }),
   ).toBe(false);
+});
+
+test("publishedVersionByMergeCommit numbers a change by the tags on its merge", async () => {
+  const { publishedVersionByMergeCommit } =
+    await import("./workspaceDocuments");
+
+  const bySha = publishedVersionByMergeCommit([
+    // One document, one merge: that change published v3.
+    { name: `${HANDOVER}/v3`, commit: { sha: "merge-a" } },
+    // Two documents to the same number on one merge: still one answer.
+    { name: `${HANDOVER}/v4`, commit: { sha: "merge-b" } },
+    { name: `${ADMISSIONS}/v4`, commit: { sha: "merge-b" } },
+    // Two documents to different numbers: no single "published as".
+    { name: `${HANDOVER}/v5`, commit: { sha: "merge-c" } },
+    { name: `${ADMISSIONS}/v9`, commit: { sha: "merge-c" } },
+    // The retired shape, and a tag this app did not write.
+    { name: "doc/v0007", commit: { sha: "merge-d" } },
+    { name: "release-2026", commit: { sha: "merge-e" } },
+  ]);
+
+  expect([...bySha]).toEqual([
+    ["merge-a", 3],
+    ["merge-b", 4],
+  ]);
+});
+
+test("an upload branch nobody proposed does not hold its address", async () => {
+  const { findPendingDocumentBranch } = await import("./workspaceDocuments");
+  const { client } = createMockClient({
+    GET: {
+      // Branches are not asked about at all: a branch left by an upload that
+      // stopped before its change request is not a proposal.
+      "/repos/{owner}/{repo}/branches": () => [
+        { name: "upload/nursing/handover/20260901-orphan" },
+      ],
+      "/repos/{owner}/{repo}/pulls": () => [
+        {
+          number: 3,
+          head: { ref: "upload/nursing/admissions/20260902-alice" },
+        },
+      ],
+    },
+  });
+
+  expect(
+    await findPendingDocumentBranch({
+      client,
+      org: "mercy-health",
+      workspace: "clinical",
+      slugPath: "nursing/handover",
+    }),
+  ).toBeNull();
+  expect(
+    await findPendingDocumentBranch({
+      client,
+      org: "mercy-health",
+      workspace: "clinical",
+      slugPath: "nursing/admissions",
+    }),
+  ).toBe("upload/nursing/admissions/20260902-alice");
 });

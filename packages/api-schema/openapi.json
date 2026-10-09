@@ -26,6 +26,12 @@
               },
               "isAdmin": {
                 "type": "boolean"
+              },
+              "emailVerified": {
+                "type": "boolean"
+              },
+              "pendingEmail": {
+                "type": "string"
               }
             },
             "required": [
@@ -65,6 +71,14 @@
       "SignupBody": {
         "type": "object",
         "properties": {
+          "firstName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "lastName": {
+            "type": "string",
+            "minLength": 1
+          },
           "username": {
             "type": "string",
             "minLength": 1
@@ -76,11 +90,75 @@
           "password": {
             "type": "string",
             "minLength": 1
+          },
+          "invitation": {
+            "type": "string"
+          },
+          "acceptedTerms": {
+            "type": "string",
+            "minLength": 1
           }
         },
         "required": [
+          "firstName",
+          "lastName",
           "username",
           "email",
+          "password",
+          "acceptedTerms"
+        ]
+      },
+      "ForgotPasswordBody": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "ForgotPasswordResult": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ]
+      },
+      "ResetLinkStatus": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "valid"
+        ]
+      },
+      "ResetPasswordBody": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "minLength": 1
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "token",
           "password"
         ]
       },
@@ -1893,6 +1971,149 @@
           "hasMore"
         ]
       },
+      "ProfileNameBody": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "lastName": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "firstName",
+          "lastName"
+        ]
+      },
+      "AccountUserPayload": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "type": "object",
+            "properties": {
+              "username": {
+                "type": "string"
+              },
+              "fullName": {
+                "type": "string"
+              },
+              "isAdmin": {
+                "type": "boolean"
+              },
+              "emailVerified": {
+                "type": "boolean"
+              },
+              "pendingEmail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "username"
+            ]
+          }
+        },
+        "required": [
+          "user"
+        ]
+      },
+      "NewPasswordBody": {
+        "type": "object",
+        "properties": {
+          "currentPassword": {
+            "type": "string",
+            "minLength": 1
+          },
+          "newPassword": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ]
+      },
+      "AccountDeletionBody": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string",
+            "minLength": 1
+          },
+          "confirm": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "password",
+          "confirm"
+        ]
+      },
+      "AccountRefusal": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "organizations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "OrganizationDeletion": {
+        "type": "object",
+        "properties": {
+          "canDelete": {
+            "type": "boolean"
+          },
+          "isOwner": {
+            "type": "boolean"
+          },
+          "binders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "billingActive": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "canDelete",
+          "isOwner",
+          "binders",
+          "billingActive"
+        ]
+      },
+      "AccountBlockers": {
+        "type": "object",
+        "properties": {
+          "serviceAccount": {
+            "type": "boolean"
+          },
+          "deleteBlockedBy": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "serviceAccount",
+          "deleteBlockedBy"
+        ]
+      },
       "OrganizationSummary": {
         "type": "object",
         "properties": {
@@ -1948,10 +2169,15 @@
           "name": {
             "type": "string",
             "minLength": 1
+          },
+          "acceptedTerms": {
+            "type": "string",
+            "minLength": 1
           }
         },
         "required": [
-          "name"
+          "name",
+          "acceptedTerms"
         ]
       },
       "WorkspaceSummary": {
@@ -2512,6 +2738,12 @@
                         },
                         "isAdmin": {
                           "type": "boolean"
+                        },
+                        "emailVerified": {
+                          "type": "boolean"
+                        },
+                        "pendingEmail": {
+                          "type": "string"
                         }
                       },
                       "required": [
@@ -2546,6 +2778,14 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "firstName": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "lastName": {
+                    "type": "string",
+                    "minLength": 1
+                  },
                   "username": {
                     "type": "string",
                     "minLength": 1
@@ -2557,12 +2797,22 @@
                   "password": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "invitation": {
+                    "type": "string"
+                  },
+                  "acceptedTerms": {
+                    "type": "string",
+                    "minLength": 1
                   }
                 },
                 "required": [
+                  "firstName",
+                  "lastName",
                   "username",
                   "email",
-                  "password"
+                  "password",
+                  "acceptedTerms"
                 ]
               }
             }
@@ -2588,6 +2838,12 @@
                         },
                         "isAdmin": {
                           "type": "boolean"
+                        },
+                        "emailVerified": {
+                          "type": "boolean"
+                        },
+                        "pendingEmail": {
+                          "type": "string"
                         }
                       },
                       "required": [
@@ -2635,6 +2891,12 @@
                         },
                         "isAdmin": {
                           "type": "boolean"
+                        },
+                        "emailVerified": {
+                          "type": "boolean"
+                        },
+                        "pendingEmail": {
+                          "type": "string"
                         }
                       },
                       "required": [
@@ -2668,6 +2930,283 @@
         "responses": {
           "204": {
             "description": "Session ended"
+          }
+        }
+      }
+    },
+    "/auth/email/verify": {
+      "post": {
+        "operationId": "authVerifyEmail",
+        "tags": [
+          "auth"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "token"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Confirmed — now, or by an earlier visit to the same link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "verified": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "verified"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not a link we sent"
+          },
+          "410": {
+            "description": "The link expired"
+          }
+        }
+      }
+    },
+    "/auth/email/resend": {
+      "post": {
+        "operationId": "authResendVerification",
+        "tags": [
+          "auth"
+        ],
+        "responses": {
+          "200": {
+            "description": "Already confirmed; nothing sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "verified": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "verified"
+                  ]
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "A new link is on its way",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "verified": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "verified"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "429": {
+            "description": "One went out a moment ago"
+          }
+        }
+      }
+    },
+    "/auth/password/forgot": {
+      "post": {
+        "operationId": "authForgotPassword",
+        "tags": [
+          "auth"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "email"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. The same answer whether or not the address has an account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many attempts"
+          }
+        }
+      }
+    },
+    "/auth/password/reset": {
+      "get": {
+        "operationId": "authCheckResetLink",
+        "tags": [
+          "auth"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "token",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Whether the reset link still works",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "valid": {
+                      "type": "boolean"
+                    },
+                    "username": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "valid"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "authResetPassword",
+        "tags": [
+          "auth"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "token",
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password set; every other session ended; signed in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "username": {
+                          "type": "string"
+                        },
+                        "fullName": {
+                          "type": "string"
+                        },
+                        "isAdmin": {
+                          "type": "boolean"
+                        },
+                        "emailVerified": {
+                          "type": "boolean"
+                        },
+                        "pendingEmail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "username"
+                      ]
+                    },
+                    "suggestedOrganizationName": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "user"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Password too short"
+          },
+          "410": {
+            "description": "The link expired or was already used"
           }
         }
       }
@@ -2835,6 +3374,261 @@
                     "documents",
                     "binders",
                     "hasMore"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/onboarding": {
+      "get": {
+        "operationId": "getOnboarding",
+        "tags": [
+          "onboarding"
+        ],
+        "responses": {
+          "200": {
+            "description": "How far the reader has got with moving in, read from what exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "steps": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "enum": [
+                              "organization",
+                              "binder",
+                              "documents",
+                              "approvers",
+                              "publish"
+                            ]
+                          },
+                          "done": {
+                            "type": "boolean"
+                          },
+                          "href": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "done",
+                          "href"
+                        ]
+                      }
+                    },
+                    "complete": {
+                      "type": "boolean"
+                    },
+                    "org": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "binder": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "steps",
+                    "complete",
+                    "org",
+                    "binder"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/notifications": {
+      "get": {
+        "operationId": "listNotifications",
+        "tags": [
+          "notifications"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            },
+            "required": false,
+            "name": "all",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Your newest notifications, with the reason each is yours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "notifications": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "unread": {
+                            "type": "boolean"
+                          },
+                          "org": {
+                            "type": "string"
+                          },
+                          "binder": {
+                            "type": "string"
+                          },
+                          "changeNumber": {
+                            "type": "number"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string",
+                            "enum": [
+                              "review_requested",
+                              "your_change",
+                              "published",
+                              "closed",
+                              "activity"
+                            ]
+                          },
+                          "actor": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "actorName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "unread",
+                          "org",
+                          "binder",
+                          "changeNumber",
+                          "title",
+                          "reason",
+                          "actor",
+                          "actorName",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "notifications"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/notifications/count": {
+      "get": {
+        "operationId": "countNotifications",
+        "tags": [
+          "notifications"
+        ],
+        "responses": {
+          "200": {
+            "description": "How many notifications are unread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "unread": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "unread"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/notifications/read": {
+      "post": {
+        "operationId": "readNotifications",
+        "tags": [
+          "notifications"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "number"
+                  },
+                  "change": {
+                    "type": "object",
+                    "properties": {
+                      "org": {
+                        "type": "string"
+                      },
+                      "binder": {
+                        "type": "string"
+                      },
+                      "number": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "org",
+                      "binder",
+                      "number"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Marked read; how many are still unread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "unread": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "unread"
                   ]
                 }
               }
@@ -3509,6 +4303,519 @@
         }
       }
     },
+    "/api/app/account/profile": {
+      "patch": {
+        "operationId": "updateProfile",
+        "tags": [
+          "account"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "firstName": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "lastName": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "firstName",
+                  "lastName"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The name was saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "type": "object",
+                      "properties": {
+                        "username": {
+                          "type": "string"
+                        },
+                        "fullName": {
+                          "type": "string"
+                        },
+                        "isAdmin": {
+                          "type": "boolean"
+                        },
+                        "emailVerified": {
+                          "type": "boolean"
+                        },
+                        "pendingEmail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "username"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "user"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A first or last name is missing or too long"
+          }
+        }
+      }
+    },
+    "/api/app/account/blockers": {
+      "get": {
+        "operationId": "getAccountBlockers",
+        "tags": [
+          "account"
+        ],
+        "responses": {
+          "200": {
+            "description": "What would refuse a rename or a deletion",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "serviceAccount": {
+                      "type": "boolean"
+                    },
+                    "deleteBlockedBy": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "serviceAccount",
+                    "deleteBlockedBy"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/account/email-preferences": {
+      "get": {
+        "operationId": "getEmailPreferences",
+        "tags": [
+          "account"
+        ],
+        "responses": {
+          "200": {
+            "description": "Which change emails this person gets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "preferences": {
+                      "type": "object",
+                      "properties": {
+                        "reviewRequested": {
+                          "type": "boolean"
+                        },
+                        "changesRequested": {
+                          "type": "boolean"
+                        },
+                        "readyToPublish": {
+                          "type": "boolean"
+                        },
+                        "published": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "reviewRequested",
+                        "changesRequested",
+                        "readyToPublish",
+                        "published"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "preferences"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateEmailPreferences",
+        "tags": [
+          "account"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reviewRequested": {
+                    "type": "boolean"
+                  },
+                  "changesRequested": {
+                    "type": "boolean"
+                  },
+                  "readyToPublish": {
+                    "type": "boolean"
+                  },
+                  "published": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved; the full set as it now stands",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "preferences": {
+                      "type": "object",
+                      "properties": {
+                        "reviewRequested": {
+                          "type": "boolean"
+                        },
+                        "changesRequested": {
+                          "type": "boolean"
+                        },
+                        "readyToPublish": {
+                          "type": "boolean"
+                        },
+                        "published": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "reviewRequested",
+                        "changesRequested",
+                        "readyToPublish",
+                        "published"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "preferences"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/unsubscribe": {
+      "post": {
+        "operationId": "unsubscribeFromEmail",
+        "tags": [
+          "account"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "token",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Every change email off for the token's owner. The same answer for a token that matches nobody.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/account/password": {
+      "post": {
+        "operationId": "changePassword",
+        "tags": [
+          "account"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "currentPassword": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "newPassword": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "currentPassword",
+                  "newPassword"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Changed; every other session was signed out"
+          },
+          "400": {
+            "description": "The new password is too short",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "organizations": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The current password was wrong",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "organizations": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/account": {
+      "delete": {
+        "operationId": "deleteAccount",
+        "tags": [
+          "account"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "password": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "confirm": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "password",
+                  "confirm"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Deleted, and signed out"
+          },
+          "409": {
+            "description": "This person is the only owner of an organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "organizations": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/orgs/{org}/deletion": {
+      "get": {
+        "operationId": "getOrganizationDeletion",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Whether this caller may delete it, and what is in the way",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "canDelete": {
+                      "type": "boolean"
+                    },
+                    "isOwner": {
+                      "type": "boolean"
+                    },
+                    "binders": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "billingActive": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "canDelete",
+                    "isOwner",
+                    "binders",
+                    "billingActive"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/orgs/{org}": {
+      "delete": {
+        "operationId": "deleteOrganization",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "confirm": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "confirm"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "403": {
+            "description": "Only an owner can delete it"
+          },
+          "409": {
+            "description": "Binders are still in it, or billing is active"
+          }
+        }
+      }
+    },
     "/api/app/users/search": {
       "get": {
         "operationId": "searchUsers",
@@ -3602,6 +4909,136 @@
         }
       }
     },
+    "/api/app/legal": {
+      "get": {
+        "operationId": "getLegalStatus",
+        "tags": [
+          "legal"
+        ],
+        "responses": {
+          "200": {
+            "description": "What the signed-in person still has to accept, for themselves and for organizations they own",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "version": {
+                      "type": "string"
+                    },
+                    "person": {
+                      "type": "boolean"
+                    },
+                    "organizations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "displayName"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "version",
+                    "person",
+                    "organizations"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/legal/accept": {
+      "post": {
+        "operationId": "acceptLegal",
+        "tags": [
+          "legal"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "acceptedTerms": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "person": {
+                    "type": "boolean"
+                  },
+                  "organizations": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "acceptedTerms"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Recorded; what is still left to accept",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "version": {
+                      "type": "string"
+                    },
+                    "person": {
+                      "type": "boolean"
+                    },
+                    "organizations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "displayName"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "version",
+                    "person",
+                    "organizations"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/app/organizations": {
       "get": {
         "operationId": "listOrganizations",
@@ -3663,10 +5100,15 @@
                   "name": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "acceptedTerms": {
+                    "type": "string",
+                    "minLength": 1
                   }
                 },
                 "required": [
-                  "name"
+                  "name",
+                  "acceptedTerms"
                 ]
               }
             }
@@ -4026,6 +5468,57 @@
                 }
               }
             }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteBinder",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "confirm": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "confirm"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Deleted, with everything in it"
+          },
+          "403": {
+            "description": "Only an owner of the organization can delete it"
           }
         }
       }
@@ -4706,6 +6199,576 @@
                     "binders",
                     "canManage",
                     "viewer"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/orgs/{org}/invitations": {
+      "get": {
+        "operationId": "listOrganizationInvitations",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invitations not yet joined, revoked or expired. Owners only.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "invitations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "orgRole": {
+                            "type": "string",
+                            "enum": [
+                              "owner",
+                              "member"
+                            ]
+                          },
+                          "binder": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "binderLevel": {
+                            "type": "string",
+                            "nullable": true,
+                            "enum": [
+                              "admin",
+                              "editor",
+                              "reviewer",
+                              null
+                            ]
+                          },
+                          "grant": {
+                            "type": "string"
+                          },
+                          "invitedBy": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "number"
+                          },
+                          "expiresAt": {
+                            "type": "number"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "accepted",
+                              "joined",
+                              "revoked",
+                              "expired"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "email",
+                          "orgRole",
+                          "binder",
+                          "binderLevel",
+                          "grant",
+                          "invitedBy",
+                          "createdAt",
+                          "expiresAt",
+                          "status"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "invitations"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createOrganizationInvitation",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "owner": {
+                    "type": "boolean"
+                  },
+                  "binder": {
+                    "type": "string"
+                  },
+                  "level": {
+                    "type": "string",
+                    "enum": [
+                      "admin",
+                      "editor",
+                      "reviewer"
+                    ]
+                  }
+                },
+                "required": [
+                  "email"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "That address already had an invitation; it was sent again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "invitation": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "orgRole": {
+                          "type": "string",
+                          "enum": [
+                            "owner",
+                            "member"
+                          ]
+                        },
+                        "binder": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "binderLevel": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "admin",
+                            "editor",
+                            "reviewer",
+                            null
+                          ]
+                        },
+                        "grant": {
+                          "type": "string"
+                        },
+                        "invitedBy": {
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "number"
+                        },
+                        "expiresAt": {
+                          "type": "number"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "accepted",
+                            "joined",
+                            "revoked",
+                            "expired"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "email",
+                        "orgRole",
+                        "binder",
+                        "binderLevel",
+                        "grant",
+                        "invitedBy",
+                        "createdAt",
+                        "expiresAt",
+                        "status"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "invitation"
+                  ]
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Invited. Grants nothing until accepted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "invitation": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "orgRole": {
+                          "type": "string",
+                          "enum": [
+                            "owner",
+                            "member"
+                          ]
+                        },
+                        "binder": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "binderLevel": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "admin",
+                            "editor",
+                            "reviewer",
+                            null
+                          ]
+                        },
+                        "grant": {
+                          "type": "string"
+                        },
+                        "invitedBy": {
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "number"
+                        },
+                        "expiresAt": {
+                          "type": "number"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "accepted",
+                            "joined",
+                            "revoked",
+                            "expired"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "email",
+                        "orgRole",
+                        "binder",
+                        "binderLevel",
+                        "grant",
+                        "invitedBy",
+                        "createdAt",
+                        "expiresAt",
+                        "status"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "invitation"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/orgs/{org}/invitations/{id}": {
+      "delete": {
+        "operationId": "revokeOrganizationInvitation",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Revoked; the link stops working"
+          }
+        }
+      }
+    },
+    "/api/app/orgs/{org}/invitations/{id}/resend": {
+      "post": {
+        "operationId": "resendOrganizationInvitation",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sent again with a new link and two more weeks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "invitation": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "orgRole": {
+                          "type": "string",
+                          "enum": [
+                            "owner",
+                            "member"
+                          ]
+                        },
+                        "binder": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "binderLevel": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "admin",
+                            "editor",
+                            "reviewer",
+                            null
+                          ]
+                        },
+                        "grant": {
+                          "type": "string"
+                        },
+                        "invitedBy": {
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "number"
+                        },
+                        "expiresAt": {
+                          "type": "number"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "accepted",
+                            "joined",
+                            "revoked",
+                            "expired"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "email",
+                        "orgRole",
+                        "binder",
+                        "binderLevel",
+                        "grant",
+                        "invitedBy",
+                        "createdAt",
+                        "expiresAt",
+                        "status"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "invitation"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/invitations/{token}": {
+      "get": {
+        "operationId": "getInvitation",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "token",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "What the invitation is for. No session needed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "organizationName": {
+                      "type": "string"
+                    },
+                    "invitedBy": {
+                      "type": "string"
+                    },
+                    "grant": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "accepted",
+                        "joined",
+                        "revoked",
+                        "expired"
+                      ]
+                    },
+                    "acceptedByYou": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "organizationName",
+                    "invitedBy",
+                    "grant",
+                    "email",
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/invitations/{token}/accept": {
+      "post": {
+        "operationId": "acceptInvitation",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "token",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Accepted by the signed-in account, whose address must be the one invited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "accepted",
+                        "joined",
+                        "revoked",
+                        "expired"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status"
                   ]
                 }
               }
@@ -6834,6 +8897,9 @@
                     },
                     "canManage": {
                       "type": "boolean"
+                    },
+                    "canDelete": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -6842,7 +8908,8 @@
                     "teams",
                     "rules",
                     "signOff",
-                    "canManage"
+                    "canManage",
+                    "canDelete"
                   ]
                 }
               }
@@ -6884,11 +8951,16 @@
                 "properties": {
                   "blockOnUnresolvedThreads": {
                     "type": "boolean"
+                  },
+                  "requiredApprovals": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "dismissStaleApprovals": {
+                    "type": "boolean"
                   }
-                },
-                "required": [
-                  "blockOnUnresolvedThreads"
-                ]
+                }
               }
             }
           }
@@ -6909,12 +8981,22 @@
                     },
                     "blockOnUnresolvedThreads": {
                       "type": "boolean"
+                    },
+                    "requiredApprovals": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "dismissStaleApprovals": {
+                      "type": "boolean",
+                      "nullable": true
                     }
                   },
                   "required": [
                     "organization",
                     "workspace",
-                    "blockOnUnresolvedThreads"
+                    "blockOnUnresolvedThreads",
+                    "requiredApprovals",
+                    "dismissStaleApprovals"
                   ]
                 }
               }
@@ -7884,6 +9966,118 @@
         }
       }
     },
+    "/api/app/binders/{org}/{binder}/audit/{documentPath}": {
+      "get": {
+        "operationId": "exportBinderDocumentAudit",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "documentPath",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A zip: the audit packet PDF, approvals.csv, record.json, and every version's file",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/export/{documentPath}": {
+      "get": {
+        "operationId": "exportBinderDocument",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "documentPath",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pdf",
+                "docx"
+              ]
+            },
+            "required": true,
+            "name": "format",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "ref",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The document as a PDF or a Word document",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/app/binders/{org}/{binder}/document-revisions": {
       "post": {
         "operationId": "reviseBinderDocument",
@@ -7928,6 +10122,12 @@
                   },
                   "draft": {
                     "type": "string"
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "editor"
+                    ]
                   }
                 },
                 "required": [
@@ -8327,6 +10527,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "changeNumber": {
+                          "type": "number",
+                          "nullable": true
+                        },
                         "acts": {
                           "type": "array",
                           "items": {
@@ -8364,6 +10568,7 @@
                         "named",
                         "owner",
                         "updatedAt",
+                        "changeNumber",
                         "acts"
                       ]
                     },
@@ -8388,6 +10593,10 @@
                           "lastAct": {
                             "type": "string",
                             "nullable": true
+                          },
+                          "changeNumber": {
+                            "type": "number",
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -8395,7 +10604,8 @@
                           "name",
                           "updatedAt",
                           "actCount",
-                          "lastAct"
+                          "lastAct",
+                          "changeNumber"
                         ]
                       }
                     },
@@ -8513,6 +10723,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "changeNumber": {
+                          "type": "number",
+                          "nullable": true
+                        },
                         "acts": {
                           "type": "array",
                           "items": {
@@ -8550,6 +10764,7 @@
                         "named",
                         "owner",
                         "updatedAt",
+                        "changeNumber",
                         "acts"
                       ]
                     },
@@ -8574,6 +10789,10 @@
                           "lastAct": {
                             "type": "string",
                             "nullable": true
+                          },
+                          "changeNumber": {
+                            "type": "number",
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -8581,7 +10800,8 @@
                           "name",
                           "updatedAt",
                           "actCount",
-                          "lastAct"
+                          "lastAct",
+                          "changeNumber"
                         ]
                       }
                     },
@@ -8706,6 +10926,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "changeNumber": {
+                          "type": "number",
+                          "nullable": true
+                        },
                         "acts": {
                           "type": "array",
                           "items": {
@@ -8743,6 +10967,7 @@
                         "named",
                         "owner",
                         "updatedAt",
+                        "changeNumber",
                         "acts"
                       ]
                     },
@@ -8767,6 +10992,10 @@
                           "lastAct": {
                             "type": "string",
                             "nullable": true
+                          },
+                          "changeNumber": {
+                            "type": "number",
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -8774,7 +11003,8 @@
                           "name",
                           "updatedAt",
                           "actCount",
-                          "lastAct"
+                          "lastAct",
+                          "changeNumber"
                         ]
                       }
                     },
@@ -9545,6 +11775,10 @@
                         "approvalState"
                       ]
                     },
+                    "branchLabel": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "documents": {
                       "type": "array",
                       "items": {
@@ -9716,6 +11950,9 @@
                     "isBehind": {
                       "type": "boolean"
                     },
+                    "hasConflicts": {
+                      "type": "boolean"
+                    },
                     "blockOnUnresolvedThreads": {
                       "type": "boolean"
                     },
@@ -9745,19 +11982,52 @@
                         "users",
                         "teams"
                       ]
+                    },
+                    "viewer": {
+                      "type": "object",
+                      "properties": {
+                        "canApprove": {
+                          "type": "boolean"
+                        },
+                        "canPublish": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "canApprove",
+                        "canPublish"
+                      ]
+                    },
+                    "outcome": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "published",
+                        "declined",
+                        "withdrawn",
+                        null
+                      ]
+                    },
+                    "clearsApprovalsOnEdit": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "organization",
                     "workspace",
                     "change",
+                    "branchLabel",
                     "documents",
                     "removedDocuments",
                     "isBehind",
+                    "hasConflicts",
                     "blockOnUnresolvedThreads",
                     "unresolvedThreadCount",
                     "canManage",
-                    "requiredReviewers"
+                    "requiredReviewers",
+                    "viewer",
+                    "outcome",
+                    "clearsApprovalsOnEdit"
                   ]
                 }
               }
@@ -9956,6 +12226,298 @@
         "responses": {
           "200": {
             "description": "The change's branch now carries the binder's main",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "caughtUp": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "caughtUp"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/changes/{changeNumber}/conflicts": {
+      "get": {
+        "operationId": "getBinderChangeConflicts",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "changeNumber",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Every document the change and the binder both changed, read where the change began, on the change, and as published since",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "changeNumber": {
+                      "type": "number"
+                    },
+                    "open": {
+                      "type": "boolean"
+                    },
+                    "upToDate": {
+                      "type": "boolean"
+                    },
+                    "headSha": {
+                      "type": "string"
+                    },
+                    "baseSha": {
+                      "type": "string"
+                    },
+                    "canResolve": {
+                      "type": "boolean"
+                    },
+                    "files": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "path": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "editor",
+                              "text",
+                              "binary"
+                            ]
+                          },
+                          "automatic": {
+                            "type": "string",
+                            "nullable": true,
+                            "enum": [
+                              "ours",
+                              "theirs",
+                              null
+                            ]
+                          },
+                          "base": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "size": {
+                                "type": "number"
+                              },
+                              "content": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "size",
+                              "content"
+                            ]
+                          },
+                          "ours": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "size": {
+                                "type": "number"
+                              },
+                              "content": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "size",
+                              "content"
+                            ]
+                          },
+                          "theirs": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "size": {
+                                "type": "number"
+                              },
+                              "content": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "size",
+                              "content"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "path",
+                          "kind",
+                          "automatic",
+                          "base",
+                          "ours",
+                          "theirs"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "changeNumber",
+                    "open",
+                    "upToDate",
+                    "headSha",
+                    "baseSha",
+                    "canResolve",
+                    "files"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "resolveBinderChangeConflicts",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "changeNumber",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "headSha": {
+                    "type": "string"
+                  },
+                  "baseSha": {
+                    "type": "string"
+                  },
+                  "resolutions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string"
+                        },
+                        "take": {
+                          "type": "string",
+                          "enum": [
+                            "ours",
+                            "theirs",
+                            "none",
+                            "content"
+                          ]
+                        },
+                        "base64Content": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "key",
+                        "take"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "headSha",
+                  "baseSha",
+                  "resolutions"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The conflicts are resolved as decided and the change is up to date",
             "content": {
               "application/json": {
                 "schema": {

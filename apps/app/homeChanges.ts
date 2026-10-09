@@ -8,7 +8,6 @@ import {
   describeApprovalProgress,
   formatDocumentName,
   getReviewerDisplayName,
-  hasEnoughApprovals,
   parseChangeTitle,
 } from "./documentDisplay";
 import type { ChangeStandingTone } from "./changeRow";
@@ -185,14 +184,20 @@ function classify(
   const isMine = change.user?.login === username;
   const ownsDocument = document.repo.owner.login === username;
 
-  // Every approval is in. Whoever can publish it is the one being waited on —
-  // the person who submitted it, or the person who owns the document.
-  if (hasEnoughApprovals(change) && !change.isRejected) {
+  // **Asked and not yet answered comes first.** A binder that needs no
+  // approvals is ready to publish the moment it opens, but somebody who was
+  // asked to review it still owes an answer — and dropping the change from
+  // their list because Gitea would merge it anyway left the request in their
+  // bell and nowhere else.
+  if (!isMine && isAwaitingReviewFrom(change, username)) return "needs_review";
+
+  // Gitea would merge it now. Whoever can publish it is the one being waited
+  // on — the person who submitted it, or the person who owns the document.
+  // The server decides this, by the same rule the change page does.
+  if (change.isApproved) {
     if (isMine || ownsDocument) return "ready_to_publish";
     return null;
   }
-
-  if (!isMine && isAwaitingReviewFrom(change, username)) return "needs_review";
   if (isMine) return "submission";
 
   // A change on a document the reader owns, or was asked to review and already
@@ -280,6 +285,7 @@ export function buildOpenChangeRows(
           approvalCount: change.approvalCount ?? 0,
           requiredApprovals: change.requiredApprovals ?? null,
           isRejected: change.isRejected ?? false,
+          isApproved: change.isApproved,
         }),
         commentCount: (change as { comments?: number }).comments ?? 0,
         movedAt: toTime(

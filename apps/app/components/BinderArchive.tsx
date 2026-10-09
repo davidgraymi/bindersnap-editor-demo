@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Archive } from "lucide-react";
 
-import { fetchBinderArchive, restoreBinderDocument } from "../api";
+import { restoreBinderDocument } from "../api";
+import { binderArchiveQuery } from "../data/queries";
 import type { BinderArchivePayload } from "../../../packages/api-schema/schemas/workspaces";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
@@ -72,8 +74,15 @@ export function BinderArchive({
   onBack,
   onProposed,
 }: BinderArchiveProps) {
-  const [payload, setPayload] = useState<BinderArchivePayload | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const archive = useQuery(binderArchiveQuery(org, binder));
+  const payload: BinderArchivePayload | null = archive.data ?? null;
+  /** A restore that failed; the archive's own read failing is the other. */
+  const [restoreError, setError] = useState<string | null>(null);
+  const error =
+    restoreError ??
+    (archive.error
+      ? archive.error.message || "Unable to read the archive."
+      : null);
   /** Which row is mid-restore, so only its own button says so. */
   const [restoring, setRestoring] = useState<string | null>(null);
 
@@ -95,29 +104,6 @@ export function BinderArchive({
     }
   };
 
-  useEffect(() => {
-    let cancelled = false;
-    setPayload(null);
-    setError(null);
-
-    fetchBinderArchive(org, binder)
-      .then((answer) => {
-        if (!cancelled) setPayload(answer);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(
-          err instanceof Error && err.message.trim() !== ""
-            ? err.message
-            : "Unable to read the archive.",
-        );
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [org, binder]);
-
   return (
     <div className="binder-pane">
       <div className="archive-head">
@@ -136,8 +122,7 @@ export function BinderArchive({
         {/* The one thing restoring does that is not obvious: it waits. */}
         <p className="propose-lede">
           Restoring one opens a change request. It rejoins the binder once that
-          is approved and published, at the next version after the one it left
-          on.
+          is published, at the next version after the one it left on.
         </p>
       </div>
 

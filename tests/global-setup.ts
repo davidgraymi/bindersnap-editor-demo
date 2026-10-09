@@ -102,6 +102,7 @@ let API_PORT: string;
 let API_PROXY_PORT: string;
 let GITEA_PORT: string;
 let HOCUSPOCUS_PORT: string;
+let MAILPIT_PORT: string;
 let APP_BASE_URL: string;
 let API_READY_URL: string;
 let API_PROXY_BASE_URL: string;
@@ -122,6 +123,7 @@ async function resolveStack(): Promise<void> {
   API_PROXY_PORT = String(stack.ports.API_PROXY_PORT);
   GITEA_PORT = String(stack.ports.GITEA_PORT);
   HOCUSPOCUS_PORT = String(stack.ports.HOCUSPOCUS_PORT);
+  MAILPIT_PORT = String(stack.ports.MAILPIT_PORT);
 
   // Playwright's baseURL and the test helpers read these from the
   // environment, and playwright.config.ts has already been evaluated by now.
@@ -131,6 +133,7 @@ async function resolveStack(): Promise<void> {
   process.env.API_PROXY_PORT = API_PROXY_PORT;
   process.env.GITEA_PORT = GITEA_PORT;
   process.env.HOCUSPOCUS_PORT = HOCUSPOCUS_PORT;
+  process.env.MAILPIT_PORT = MAILPIT_PORT;
 
   APP_BASE_URL = `http://localhost:${APP_PORT}`;
   API_READY_URL = `http://localhost:${API_PORT}/auth/me`;
@@ -343,6 +346,7 @@ export default async function globalSetup(): Promise<void> {
     API_PROXY_PORT,
     GITEA_PORT,
     HOCUSPOCUS_PORT,
+    MAILPIT_PORT,
     STRIPE_SECRET_KEY:
       process.env.STRIPE_SECRET_KEY || DEFAULT_STRIPE_SECRET_KEY,
     STRIPE_PRICE_ID: process.env.STRIPE_PRICE_ID || DEFAULT_STRIPE_PRICE_ID,

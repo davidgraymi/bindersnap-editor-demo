@@ -1,7 +1,8 @@
 import { useState } from "react";
 
-import { proposeBinderDraft } from "../api";
+import { proposeBinderDraft, updateChangeAssignments } from "../api";
 import type { DraftAct } from "../../../packages/api-schema/schemas/workspaces";
+import { ReviewerChooser } from "./ReviewerChooser";
 
 /**
  * Writing up a draft, which is the moment it becomes a change request.
@@ -46,16 +47,52 @@ interface ProposeChangePageProps {
   name: string;
   /** Newest first, as the draft returns them. */
   acts: readonly DraftAct[];
+  /** The author, who is never offered as their own reviewer. */
+  currentUser: string;
   onCancel: () => void;
   onProposed: (changeNumber: number) => void;
 }
 
+/**
+ * Put a change that has just opened on its reviewers' desks.
+ *
+ * **Never the reason a change fails to open.** The change exists by the time
+ * this runs; a reviewer who cannot be asked is one the author can still ask
+ * from the change's own page, and losing the change over it would be worse.
+ */
+export async function askReviewers(
+  org: string,
+  binder: string,
+  changeNumber: number,
+  reviewers: readonly string[],
+): Promise<void> {
+  if (reviewers.length === 0) return;
+  await updateChangeAssignments(
+    { org, binder, documentPath: "" },
+    changeNumber,
+    { reviewers: [...reviewers] },
+  ).catch(() => undefined);
+}
+
 /** The acts as a description somebody can edit rather than start from nothing. */
+/** What the draft did, oldest first, each thing once. */
+export function distinctActs(acts: readonly DraftAct[]): DraftAct[] {
+  const seen = new Set<string>();
+  return [...acts].reverse().filter((act) => {
+    if (seen.has(act.summary)) return false;
+    seen.add(act.summary);
+    return true;
+  });
+}
+
 export function describeActs(acts: readonly DraftAct[]): string {
-  return [...acts]
-    .reverse()
-    .map((act) => `- ${act.summary}`)
-    .join("\n");
+  // Each thing once. Saving the same policy three times is one edit to the
+  // people reading this, not three lines saying the same words.
+  const counts = new Map<string, number>();
+  for (const act of [...acts].reverse()) {
+    counts.set(act.summary, (counts.get(act.summary) ?? 0) + 1);
+  }
+  return [...counts.keys()].map((summary) => `- ${summary}`).join("\n");
 }
 
 export function ProposeChangePage({
@@ -64,11 +101,14 @@ export function ProposeChangePage({
   draft,
   name,
   acts,
+  currentUser,
   onCancel,
   onProposed,
 }: ProposeChangePageProps) {
+  const [reviewers, setReviewers] = useState<string[]>([]);
   const [title, setTitle] = useState(name);
   const [description, setDescription] = useState(() => describeActs(acts));
+  const distinct = distinctActs(acts);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -85,6 +125,7 @@ export function ProposeChangePage({
         description,
         draft,
       );
+      await askReviewers(org, binder, proposed.changeNumber, reviewers);
       onProposed(proposed.changeNumber);
     } catch (err) {
       setError(
@@ -102,10 +143,10 @@ export function ProposeChangePage({
         <div className="bs-pagehead-body">
           <h1 className="bs-title">Propose your changes</h1>
           <p className="bs-subtitle">
-            {acts.length === 1
+            {distinct.length === 1
               ? "One change, going to the people who sign this binder off."
-              : `${acts.length} changes, going to the people who sign this binder off.`}{" "}
-            Nothing joins the binder until it is approved and published.
+              : `${distinct.length} changes, going to the people who sign this binder off.`}{" "}
+            Nothing joins the binder until it is published.
           </p>
         </div>
       </div>
@@ -149,6 +190,15 @@ export function ProposeChangePage({
             />
           </div>
 
+          <ReviewerChooser
+            org={org}
+            binder={binder}
+            currentUser={currentUser}
+            selected={reviewers}
+            onChange={setReviewers}
+            disabled={submitting}
+          />
+
           {error ? (
             <p className="bs-note bs-note--danger" role="alert">
               {error}
@@ -184,11 +234,13 @@ export function ProposeChangePage({
           <div className="bs-panel">
             <div className="bs-panel-bar">
               <h2 className="bs-panel-bar-title">
-                {acts.length === 1 ? "1 change" : `${acts.length} changes`}
+                {distinct.length === 1
+                  ? "1 change"
+                  : `${distinct.length} changes`}
               </h2>
             </div>
             <ol className="bs-row-list">
-              {[...acts].reverse().map((act) => (
+              {distinct.map((act) => (
                 <li className="bs-row" key={act.sha}>
                   <span className="bs-row-body">
                     <span className="bs-row-name bs-row-name--wrap">

@@ -22,28 +22,19 @@ services:
       - ./data/gitea:/data
 
   gitea:
-    # Dev runs a 28.0.0 nightly; production stays on 1.27.3. The two disagree
-    # on purpose, and this is the note that stops somebody "fixing" the skew.
+    # Gitea 28.0.0, the same release production runs — the two compose files
+    # move together, and `deploy/files/docker-compose.prod.yml` says so too.
     #
-    # `block_on_codeowner_reviews` (go-gitea PR #34995, milestone 28.0.0) is
-    # what turns CODEOWNERS from a file that assigns reviewers into a gate that
-    # blocks a merge, and it is what lets a sign-off rule name a *team* rather
-    # than the list of people ADR 0004 was forced into. There is no released
-    # 28 tag yet — no rc either — so `main-nightly` is the only image carrying
-    # the code.
+    # 28.0.0 is the floor, not a preference: `block_on_codeowner_reviews`
+    # (go-gitea PR #34995) is what turns CODEOWNERS from a file that assigns
+    # reviewers into a gate that blocks a merge, and per-folder sign-off
+    # enforces nothing without it.
     #
-    # **Pinned by digest, not by tag.** `main-nightly` is rebuilt daily, so
-    # pinning the tag pins nothing: two developers on "the same" nightly would
-    # be on different builds with different migration state. This digest is
-    # the 2026-09-08 build, `1.28.0+dev-477-g8b6ad49a5f`.
-    #
-    # Production waits for a released tag because **a Gitea migration is a
-    # one-way door**: 28.0.0 runs `v1_28/v345.go` on start, there is no
-    # downgrade, and Litestream faithfully replicates the migrated schema — so
-    # rolling back would mean restoring to a point in time before the start and
-    # losing everything written since. A dev database is disposable; the
-    # production one is the customer's record.
-    image: gitea/gitea@sha256:b40d17f0baebdd2c0db4b8a745ff514cb66c3c5680d6d1e0d7a06f3bf1a92975
+    # **Pinned by digest as well as tag.** A tag can be re-pushed; the digest
+    # cannot, so every developer, CI run and the production host boot the same
+    # bytes. Docker uses the digest and treats the tag as a label for humans.
+    # To upgrade, change both here and in production in one commit.
+    image: gitea/gitea:28.0.0@sha256:a9dc25679ebdd33356242d2e0667cc220043745e8339922879f187c20329a42e
     container_name: ${STACK_NAME:-bindersnap}-gitea
     restart: unless-stopped
     depends_on:
@@ -81,6 +72,10 @@ services:
       - GITEA__cors__ALLOW_DOMAIN=http://localhost:${APP_PORT:-5173}
       - GITEA__cors__METHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
       - GITEA__cors__ALLOW_CREDENTIALS=true
+      # No Gravatar or other outside avatar service: Gitea draws its own, so no
+      # hash of anybody's email leaves the host (the Privacy Policy says so).
+      - GITEA__picture__DISABLE_GRAVATAR=true
+      - GITEA__picture__ENABLE_FEDERATED_AVATAR=false
       - GITEA__log__LEVEL=warn
       # Local-only: the seed accounts share the password `dev`. Gitea's
       # default minimum would reject it.
@@ -97,12 +92,46 @@ services:
       retries: 12
       start_period: 20s
 
+  # Catches every email the API sends (services/api/mail). Nothing leaves the
+  # machine. The Playwright suite reads messages back through its API
+  # (tests/mailpit.ts); people read them at the stack's `mail` URL.
+  mailpit:
+    image: axllent/mailpit:v1.27
+    container_name: ${STACK_NAME:-bindersnap}-mailpit
+    environment:
+      - MP_MAX_MESSAGES=2000
+    ports:
+      - "${MAILPIT_PORT:-8025}:8025"
+
+  # The accounts, made straight in Gitea — the one part of the seed that has
+  # to come before the API, which signs its own service calls in as the
+  # install's admin. Everything else is `seed`, below.
+  seed-accounts:
+    image: oven/bun:1
+    container_name: ${STACK_NAME:-bindersnap}-seed-accounts
+    depends_on:
+      gitea:
+        condition: service_healthy
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace:ro
+    command: ["bun", "tests/seed-accounts.ts"]
+    environment:
+      - GITEA_URL=http://gitea:${GITEA_PORT:-3000}
+      - GITEA_ADMIN_USER=${GITEA_ADMIN_USER:-alice}
+      - GITEA_ADMIN_PASS=${GITEA_ADMIN_PASS:-dev}
+      - APP_PORT=${APP_PORT:-5173}
+
+  # What those people have made: the organization, its binders, documents and
+  # changes. After the API, so a seed that talks to it has one to talk to.
   seed:
     image: oven/bun:1
     container_name: ${STACK_NAME:-bindersnap}-seed
     depends_on:
-      gitea:
+      api:
         condition: service_healthy
+      caddy:
+        condition: service_started
     working_dir: /workspace
     volumes:
       - ./:/workspace:ro
@@ -112,6 +141,9 @@ services:
       - GITEA_ADMIN_USER=${GITEA_ADMIN_USER:-alice}
       - GITEA_ADMIN_PASS=${GITEA_ADMIN_PASS:-dev}
       - APP_PORT=${APP_PORT:-5173}
+      # Through the proxy, as the browser reaches it: the API refuses plain
+      # HTTP, and the proxy is what says the request arrived over HTTPS.
+      - BUN_PUBLIC_API_BASE_URL=http://caddy:${API_PROXY_PORT:-8788}
 
   hocuspocus:
     build:
@@ -133,8 +165,22 @@ services:
     depends_on:
       gitea:
         condition: service_healthy
-      seed:
+      seed-accounts:
         condition: service_completed_successfully
+      mailpit:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "const r = await fetch(`http://localhost:$${process.env.PORT}/healthz`); process.exit(r.ok ? 0 : 1)",
+        ]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
     environment:
       - API_PORT=${API_PORT:-8787}
       - PORT=${API_PORT:-8787}
@@ -155,6 +201,12 @@ services:
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
       - STRIPE_PRICE_ID=${STRIPE_PRICE_ID:-}
       - STRIPE_RUN_TAG=${STRIPE_RUN_TAG:-}
+      # Email goes to Mailpit, never out — read it at the stack's `mail` URL.
+      - BINDERSNAP_MAIL_TRANSPORT=mailpit
+      - BINDERSNAP_MAILPIT_URL=http://mailpit:8025
+      - BINDERSNAP_MAIL_FROM=Bindersnap <notifications@bindersnap.local>
+      # The API as the browser reaches it, for an email's one-click unsubscribe.
+      - BINDERSNAP_API_ORIGIN=http://localhost:${API_PROXY_PORT:-8788}
     ports:
       - "${API_PORT:-8787}:${API_PORT:-8787}"
     volumes:

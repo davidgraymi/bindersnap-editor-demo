@@ -1,3 +1,4 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
@@ -17,10 +18,7 @@ import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
 import {
   addBinderPerson,
   describeBinder,
-  fetchBinder,
   fetchBinderPeople,
-  fetchBinderSettings,
-  fetchOrganizationPeople,
   grantBinderGroup,
   proposeBinderSignOff,
   removeBinderPerson,
@@ -29,7 +27,15 @@ import {
   setBinderPersonLevel,
   setBinderRules,
   setBinderVisibility,
+  deleteBinder,
 } from "../api";
+import {
+  binderPeopleQuery,
+  binderQuery,
+  binderSettingsQuery,
+  organizationPeopleQuery,
+  queryKeys,
+} from "../data/queries";
 import type {
   BinderPeoplePayload,
   BinderPerson,
@@ -38,7 +44,13 @@ import type {
   SignOffRuleView,
   WorkspaceSettingsPayload,
 } from "../../../packages/api-schema/schemas/workspaces";
-import { GROUP_LEVELS, groupLevelLabel } from "../binderSettings";
+import {
+  countApprovers,
+  GROUP_LEVELS,
+  groupLevelLabel,
+  parseApprovalCount,
+  unreachableApprovalsNote,
+} from "../binderSettings";
 import { formatDocumentName } from "../documentDisplay";
 import { describeGroupName } from "../../../packages/utils/groupName";
 import { AppIcon } from "./AppIcon";
@@ -89,6 +101,8 @@ interface BinderSettingsProps {
   /** Its description changed, so the header that shows it has to re-read. */
   onDescribed?: () => void;
   onOpenChange: (changeNumber: number) => void;
+  /** The binder is gone; leave its pages. */
+  onDeleted?: () => void;
 }
 
 function errorMessage(err: unknown, fallback: string): string {
@@ -104,52 +118,50 @@ export function BinderSettings({
   onRenamed,
   onDescribed,
   onOpenChange,
+  onDeleted,
 }: BinderSettingsProps) {
   // The same fold every other editable surface uses: a delinquent organization
   // draws no controls, by the one flag that already decides whether controls
   // exist.
   const isReadOnly = useIsReadOnly();
-  const [settings, setSettings] = useState<WorkspaceSettingsPayload | null>(
-    null,
-  );
-  const [people, setPeople] = useState<BinderPeoplePayload | null>(null);
-  const [description, setDescription] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const settingsRead = useQuery(binderSettingsQuery(org, binder));
+  const peopleRead = useQuery(binderPeopleQuery(org, binder));
+  // The description is a nicety on this page, not its point: a binder whose
+  // overview cannot be read still has settings to change.
+  const overviewRead = useQuery(binderQuery(org, binder));
+  const settings: WorkspaceSettingsPayload | null = settingsRead.data ?? null;
+  const people: BinderPeoplePayload | null = peopleRead.data ?? null;
+  const description: string | null = overviewRead.data
+    ? (overviewRead.data.workspace.description ?? "")
+    : overviewRead.isError
+      ? ""
+      : null;
+  const failure = settingsRead.error ?? peopleRead.error;
+  const error = failure
+    ? errorMessage(failure, "Unable to read this binder's settings.")
+    : null;
+
+  /**
+   * The organization's list of binders shows each one's name, description
+   * and whether it is open — so a rename, a deletion or a change of who can
+   * read it is read again there too.
+   */
+  const refreshOrganization = () =>
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.organizationBinders(org),
+    });
+
+  /** A write answers with the new state; it becomes what every reader sees. */
+  const setPeople = (next: BinderPeoplePayload) => {
+    queryClient.setQueryData(queryKeys.binderPeople(org, binder), next);
+    refreshOrganization();
+  };
+  const setSettings = (next: WorkspaceSettingsPayload) =>
+    queryClient.setQueryData(queryKeys.binderSettings(org, binder), next);
 
   const peopleRef = useRef<HTMLElement>(null);
   const signOffRef = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setSettings(null);
-    setPeople(null);
-    setDescription(null);
-    setError(null);
-
-    Promise.all([
-      fetchBinderSettings(org, binder),
-      fetchBinderPeople(org, binder),
-      // The description is a nicety on this page, not its point: a binder
-      // whose overview cannot be read still has settings to change.
-      fetchBinder(org, binder)
-        .then((overview) => overview.workspace.description ?? "")
-        .catch(() => ""),
-    ])
-      .then(([nextSettings, nextPeople, nextDescription]) => {
-        if (cancelled) return;
-        setSettings(nextSettings);
-        setPeople(nextPeople);
-        setDescription(nextDescription);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(errorMessage(err, "Unable to read this binder's settings."));
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [org, binder]);
 
   const loaded = settings !== null && people !== null && description !== null;
 
@@ -195,9 +207,19 @@ export function BinderSettings({
             org={org}
             binder={binder}
             description={description}
-            onRenamed={onRenamed}
+            onRenamed={(workspace) => {
+              refreshOrganization();
+              onRenamed?.(workspace);
+            }}
             onDescribed={(next) => {
-              setDescription(next);
+              queryClient.setQueryData(
+                binderQuery(org, binder).queryKey,
+                (overview) =>
+                  overview && {
+                    ...overview,
+                    workspace: { ...overview.workspace, description: next },
+                  },
+              );
               onDescribed?.();
             }}
           />
@@ -247,7 +269,101 @@ export function BinderSettings({
           onChanged={setSettings}
         />
       </SettingsGroup>
+
+      {settings.canDelete && !isReadOnly ? (
+        <SettingsGroup
+          id="binder-settings-delete"
+          title="Delete this binder"
+          note="Permanent. Only an owner of the organization can do this."
+        >
+          <DeleteBinder
+            org={org}
+            binder={binder}
+            onDeleted={() => {
+              refreshOrganization();
+              onDeleted?.();
+            }}
+          />
+        </SettingsGroup>
+      ) : null}
     </div>
+  );
+}
+
+/**
+ * Deleting the binder — the one act here that loses the record.
+ *
+ * Everything else on this page is reversible, and everything in the binder is
+ * evidence: every version, who approved it, what was discussed. So the page
+ * says that plainly, points at the audit packets first, and asks for the name
+ * typed out, the way Gitea confirms the same act.
+ */
+function DeleteBinder({
+  org,
+  binder,
+  onDeleted,
+}: {
+  org: string;
+  binder: string;
+  onDeleted?: () => void;
+}) {
+  const [confirm, setConfirm] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const confirmed = confirm.trim().toLowerCase() === binder.toLowerCase();
+
+  return (
+    <form
+      className="bs-fields"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        if (!confirmed) return;
+        setDeleting(true);
+        setNotice(null);
+        try {
+          await deleteBinder(org, binder, confirm.trim());
+          onDeleted?.();
+        } catch (err) {
+          setNotice(errorMessage(err, "Unable to delete this binder."));
+          setDeleting(false);
+        }
+      }}
+    >
+      <p className="bs-section-note">
+        Every document in it goes, with every version, approval and discussion —
+        the whole record, with no way to restore it. If a surveyor may ever ask
+        about these documents, download each one&rsquo;s audit packet first.
+      </p>
+      <div className="bs-field">
+        <label className="bs-field-label" htmlFor="binder-delete-confirm">
+          Type <strong>{binder}</strong> to confirm
+        </label>
+        <input
+          className="bs-input bs-input--sm"
+          id="binder-delete-confirm"
+          type="text"
+          autoComplete="off"
+          spellCheck={false}
+          value={confirm}
+          disabled={deleting}
+          onChange={(event) => setConfirm(event.target.value)}
+        />
+      </div>
+      {notice ? (
+        <p className="bs-note bs-note--danger" role="alert">
+          {notice}
+        </p>
+      ) : null}
+      <div className="bs-field-row">
+        <button
+          type="submit"
+          className="bs-btn bs-btn--sm bs-btn--danger"
+          disabled={deleting || !confirmed}
+        >
+          {deleting ? "Deleting…" : "Delete this binder"}
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -772,27 +888,16 @@ function GroupsSection({
   busy: boolean;
   onChanged: (act: () => Promise<BinderPeoplePayload>) => void;
 }) {
-  const [available, setAvailable] = useState<OrganizationGroup[] | null>(null);
+  // Only an admin can compose, so only an admin pays for the picker. Losing
+  // the picker costs the footer, not the page.
+  const groupsRead = useQuery({
+    ...organizationPeopleQuery(org),
+    enabled: canManage,
+  });
+  const available: OrganizationGroup[] | null = groupsRead.isError
+    ? []
+    : (groupsRead.data?.groups ?? null);
   const [adding, setAdding] = useState("");
-
-  useEffect(() => {
-    // Only an admin can compose, so only an admin pays for the picker.
-    if (!canManage) return;
-
-    let cancelled = false;
-    fetchOrganizationPeople(org)
-      .then((payload) => {
-        if (!cancelled) setAvailable(payload.groups);
-      })
-      // Losing the picker costs the footer, not the page.
-      .catch(() => {
-        if (!cancelled) setAvailable([]);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [org, canManage]);
 
   const granted = new Set(groups.map((group) => group.name.toLowerCase()));
   const candidates = (available ?? []).filter(
@@ -1438,7 +1543,7 @@ function SignOffSection({
           <div className="bs-panel-foot">
             <span className="bs-panel-foot-note">
               {opened !== null
-                ? "We opened a change request for these rules. Nothing takes effect until it is approved and published."
+                ? "We opened a change request for these rules. Nothing takes effect until it is published."
                 : "A change to these rules is already waiting for a decision."}
             </span>
             <button
@@ -1488,13 +1593,68 @@ function RuleRow({
 /* ── How changes are approved ─────────────────────────────────────────── */
 
 /**
+ * The approval count, typed.
+ *
+ * A number field rather than a menu, because the count is whatever the
+ * binder's administrator says it is — a board of twelve that signs off on
+ * everything needs twelve, and Gitea stores any number. It saves when the
+ * field is left or Enter is pressed, not on every keystroke, so typing "12"
+ * never briefly asks for one approval. Escape puts it back.
+ */
+function ApprovalCountField({
+  value,
+  disabled,
+  onCommit,
+}: {
+  value: number;
+  disabled: boolean;
+  onCommit: (count: number) => void;
+}) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => setText(String(value)), [value]);
+  const count = parseApprovalCount(text);
+
+  function commit() {
+    if (count === null) {
+      setText(String(value));
+      return;
+    }
+    if (count !== value) onCommit(count);
+  }
+
+  return (
+    <input
+      id="binder-approvals"
+      className="bs-input bs-input--sm bs-settings-count"
+      type="number"
+      inputMode="numeric"
+      min={0}
+      step={1}
+      value={text}
+      disabled={disabled}
+      aria-invalid={count === null}
+      onChange={(event) => setText(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          commit();
+        } else if (event.key === "Escape") {
+          setText(String(value));
+        }
+      }}
+    />
+  );
+}
+
+/**
  * The rules every change in the binder meets, as rows rather than a bulleted
  * paragraph.
  *
- * The approval count and "a new version clears the approvals" are Gitea branch
- * protection, which this page does not edit yet — so they are stated, not
- * drawn as controls that do nothing. Whether discussions must be resolved has
- * no Gitea equivalent and takes effect straight away.
+ * **The binder's administrator can change every one of them.** A clinic
+ * trying Bindersnap on its own has nobody else to approve its first policy, and
+ * a rule its own administrator cannot change leaves them stuck. Each takes
+ * effect straight away and is recorded with who changed it.
  */
 function ApprovalSection({
   org,
@@ -1511,9 +1671,20 @@ function ApprovalSection({
 }) {
   const rules = settings.rules;
   const [saving, setSaving] = useState(false);
+  const unreachable =
+    rules.requiredApprovals === null
+      ? null
+      : unreachableApprovalsNote(
+          rules.requiredApprovals,
+          countApprovers(settings.teams),
+        );
   const [notice, setNotice] = useState<string | null>(null);
 
-  async function toggleThreads(next: boolean) {
+  async function change(next: {
+    blockOnUnresolvedThreads?: boolean;
+    requiredApprovals?: number;
+    dismissStaleApprovals?: boolean;
+  }) {
     setSaving(true);
     setNotice(null);
     try {
@@ -1523,6 +1694,10 @@ function ApprovalSection({
         rules: {
           ...rules,
           blockOnUnresolvedThreads: updated.blockOnUnresolvedThreads,
+          requiredApprovals:
+            updated.requiredApprovals ?? rules.requiredApprovals,
+          dismissStaleApprovals:
+            updated.dismissStaleApprovals ?? rules.dismissStaleApprovals,
         },
       });
     } catch (err: unknown) {
@@ -1559,24 +1734,69 @@ function ApprovalSection({
         <ul className="bs-row-list">
           <li className="bs-row">
             <span className="bs-row-body">
-              <span className="bs-row-name">
+              <label className="bs-row-name" htmlFor="binder-approvals">
                 Approvals needed before publishing
+              </label>
+              <span className="bs-row-meta">
+                {rules.requiredApprovals === 0
+                  ? "Anyone who can publish may do so without an approval. Right for a binder only you work in."
+                  : "Nobody can approve their own change, so the author never counts toward this."}
               </span>
+              {unreachable ? (
+                <span
+                  className="bs-row-meta bs-row-meta--warning"
+                  role="status"
+                >
+                  {unreachable}
+                </span>
+              ) : null}
             </span>
             <span className="bs-row-right bs-settings-value">
-              {rules.requiredApprovals === null
-                ? "Could not be read"
-                : rules.requiredApprovals}
+              {rules.requiredApprovals === null ? (
+                "Could not be read"
+              ) : canManage ? (
+                <ApprovalCountField
+                  value={rules.requiredApprovals}
+                  disabled={saving}
+                  onCommit={(count) =>
+                    void change({ requiredApprovals: count })
+                  }
+                />
+              ) : (
+                rules.requiredApprovals
+              )}
             </span>
           </li>
           <li className="bs-row">
             <span className="bs-row-body">
-              <span className="bs-row-name">
+              <label className="bs-row-name" htmlFor="binder-dismiss-stale">
                 A new version clears the approvals already collected
+              </label>
+              {/* The consequence either way, since both are defensible and
+                  the record reads differently under each. */}
+              <span className="bs-row-meta">
+                {rules.dismissStaleApprovals
+                  ? "When a change request is edited after someone approved it, their approval is cleared and they are asked again. Every approval is for exactly what was published."
+                  : "Approvals stand when a change request is edited afterwards. Reviewers are not asked to look again."}
               </span>
             </span>
             <span className="bs-row-right bs-settings-value">
-              {rules.dismissStaleApprovals ? "Yes" : "No"}
+              {canManage ? (
+                <input
+                  id="binder-dismiss-stale"
+                  className="bs-checkbox"
+                  type="checkbox"
+                  checked={rules.dismissStaleApprovals}
+                  disabled={saving}
+                  onChange={(event) =>
+                    void change({ dismissStaleApprovals: event.target.checked })
+                  }
+                />
+              ) : rules.dismissStaleApprovals ? (
+                "Yes"
+              ) : (
+                "No"
+              )}
             </span>
           </li>
           <li className="bs-row">
@@ -1593,7 +1813,11 @@ function ApprovalSection({
                   type="checkbox"
                   checked={rules.blockOnUnresolvedThreads}
                   disabled={saving}
-                  onChange={(event) => void toggleThreads(event.target.checked)}
+                  onChange={(event) =>
+                    void change({
+                      blockOnUnresolvedThreads: event.target.checked,
+                    })
+                  }
                 />
               ) : rules.blockOnUnresolvedThreads ? (
                 "Yes"

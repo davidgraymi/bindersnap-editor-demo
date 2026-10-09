@@ -1,3 +1,4 @@
+import { RESERVED_ORGANIZATION_NAMES } from "../../packages/utils/organizationName";
 import { buildDocumentUrl } from "./binderDocument";
 import {
   buildBinderUrl,
@@ -11,17 +12,29 @@ export type AppRoute =
   | { kind: "home" }
   | { kind: "login" }
   | { kind: "signup" }
+  /** "Forgot password?": ask for a reset link. `/-/forgot_password`. */
+  | { kind: "forgotPassword" }
+  /** Where the emailed link lands: `/-/reset_password?token=…`. */
+  | { kind: "resetPassword" }
+  /** Where the signup confirmation link lands: `/-/verify_email?token=…`. */
+  | { kind: "verifyEmail" }
+  /** Where an email's unsubscribe link lands: `/-/unsubscribe?token=…`. */
+  | { kind: "unsubscribe" }
+  /** Where an invitation email lands: `/-/invitations/{token}`. */
+  | { kind: "invitation"; token: string }
   | { kind: "callback" }
   | { kind: "workspace" }
   | { kind: "documents" }
   | { kind: "changes" }
   | { kind: "adminSubscriptions" }
+  /** The signed-in person's own account: `/-/user_settings/profile`. */
+  | { kind: "accountSettings" }
   /**
    * One organization's billing: `/{org}/-/billing`.
    *
-   * Billing is per organization, so the page names the one it is about. Bare
-   * `/billing` is an address that predates that — the app answers it with the
-   * session's oldest organization and rewrites the address to say so.
+   * Billing is per organization, so the page names the one it is about.
+   * `/-/billing` names none — the app answers it with the session's oldest
+   * organization and rewrites the address to say so.
    */
   | { kind: "billing"; org?: string }
   | { kind: "createOrganization" }
@@ -80,10 +93,17 @@ export type AppRoute =
        * arrived from a change keeps the way back.
        */
       ref?: string;
+      /** In one of your drafts, as the editor saves into. */
+      draft?: string;
     };
-export type DocumentChangeView = "discussion" | "preview" | "compare";
+export type DocumentChangeView =
+  | "discussion"
+  | "preview"
+  | "compare"
+  /** The documents that conflict with the binder, and resolving them. */
+  | "conflicts";
 /** The organization's own tabs. Binders is the one it opens on. */
-export type OrganizationTab = "binders" | "people";
+export type OrganizationTab = "binders" | "people" | "settings";
 
 /**
  * The two tabs that became one.
@@ -122,11 +142,6 @@ export function isHomePath(pathname: string): boolean {
   return normalizePathname(pathname) === "/";
 }
 
-/** A link to the retired `/inbox` page. Its contents now live on Home. */
-export function isLegacyInboxPath(pathname: string): boolean {
-  return normalizePathname(pathname) === "/inbox";
-}
-
 /**
  * First path segments that are the app's own, not an organization's.
  *
@@ -135,18 +150,27 @@ export function isLegacyInboxPath(pathname: string): boolean {
  * `login` and the rest. Anything added here must also be refused as an
  * organization name, or somebody's binder becomes unreachable.
  */
-export const RESERVED_FIRST_SEGMENTS = new Set([
-  "activity",
-  "admin",
-  "auth",
-  "billing",
-  "changes",
-  "docs",
-  "documents",
-  "login",
-  "organizations",
-  "signup",
-]);
+export const RESERVED_FIRST_SEGMENTS = RESERVED_ORGANIZATION_NAMES;
+
+/** The app's own pages, by address. Every one is behind `/-/`. */
+const APP_PAGES: Readonly<Record<string, AppRoute>> = {
+  "/-/login": { kind: "login" },
+  "/-/signup": { kind: "signup" },
+  "/-/forgot_password": { kind: "forgotPassword" },
+  "/-/reset_password": { kind: "resetPassword" },
+  "/-/unsubscribe": { kind: "unsubscribe" },
+  "/-/verify_email": { kind: "verifyEmail" },
+  "/-/documents": { kind: "documents" },
+  // Every change in flight, across every binder. The counterpart to a
+  // binder's own Change requests tab, which can only answer for one binder.
+  "/-/changes": { kind: "changes" },
+  "/-/user_settings/profile": { kind: "accountSettings" },
+  "/-/admin/subscriptions": { kind: "adminSubscriptions" },
+  "/-/organizations/new": { kind: "createOrganization" },
+  // Billing belongs to an organization, at `/{org}/-/billing`. This one asks
+  // for the session's oldest, and the app rewrites the address to say which.
+  "/-/billing": { kind: "billing" },
+};
 
 export function getRoute(pathname: string): AppRoute {
   const normalizedPath = normalizePathname(pathname);
@@ -155,54 +179,16 @@ export function getRoute(pathname: string): AppRoute {
     return { kind: "callback" };
   }
 
-  if (normalizedPath === "/login") {
-    return { kind: "login" };
-  }
+  // **The app's own pages, behind `/-/`.** The way GitLab keeps
+  // `/-/user_settings/profile` apart from `/{group}`: no organization can be
+  // called `-`, so none of these can ever shadow one, and an organization can
+  // be called "Billing" or "Documents" without losing its address.
+  const own = APP_PAGES[normalizedPath];
+  if (own) return own;
 
-  if (normalizedPath === "/signup") {
-    return { kind: "signup" };
-  }
-
-  if (normalizedPath === "/documents") {
-    return { kind: "documents" };
-  }
-
-  // Every change in flight, across every binder. The counterpart to a binder's
-  // own Change requests tab, which can only answer for one binder.
-  if (normalizedPath === "/changes") {
-    return { kind: "changes" };
-  }
-
-  // The redesign folded the inbox into Home — every change request that was
-  // waiting there is now the first thing Home shows. Old links still resolve;
-  // `App` rewrites the address bar so nobody bookmarks a page that is gone.
-  if (isLegacyInboxPath(normalizedPath)) {
-    return { kind: "workspace" };
-  }
-
-  // There was an Activity page, a "coming soon" placeholder. An address
-  // somebody kept for it lands on Home rather than on an organization called
-  // "activity", which is why the name stays reserved.
-  if (normalizedPath === "/activity") {
-    return { kind: "workspace" };
-  }
-
-  if (
-    normalizedPath === "/admin/subscriptions" ||
-    normalizedPath === "/admin/pro-access"
-  ) {
-    return { kind: "adminSubscriptions" };
-  }
-
-  if (normalizedPath === "/organizations/new") {
-    return { kind: "createOrganization" };
-  }
-  if (normalizedPath === "/billing") {
-    return { kind: "billing" };
-  }
-  const billingMatch = normalizedPath.match(/^\/billing\/([^/]+)$/);
-  if (billingMatch) {
-    return { kind: "billing", org: decodeSegment(billingMatch[1]!) };
+  const invitation = normalizedPath.match(/^\/-\/invitations\/([^/]+)$/);
+  if (invitation) {
+    return { kind: "invitation", token: decodeURIComponent(invitation[1]!) };
   }
 
   // `/{org}/{binder}` and `/{org}/{binder}/{path}`, the address Gitea and
@@ -222,7 +208,11 @@ export function getRoute(pathname: string): AppRoute {
     return {
       kind: "organization",
       org,
-      ...(screen === "people" ? { tab: "people" as const } : {}),
+      ...(screen === "people"
+        ? { tab: "people" as const }
+        : screen === "settings"
+          ? { tab: "settings" as const }
+          : {}),
     };
   }
 
@@ -270,21 +260,33 @@ export function getRoute(pathname: string): AppRoute {
 export function routeToPath(route: AppRoute): string {
   switch (route.kind) {
     case "login":
-      return "/login";
+      return "/-/login";
     case "signup":
-      return "/signup";
+      return "/-/signup";
+    case "forgotPassword":
+      return "/-/forgot_password";
+    case "resetPassword":
+      return "/-/reset_password";
+    case "unsubscribe":
+      return "/-/unsubscribe";
+    case "verifyEmail":
+      return "/-/verify_email";
+    case "invitation":
+      return `/-/invitations/${encodeURIComponent(route.token)}`;
     case "callback":
       return "/auth/callback";
     case "documents":
-      return "/documents";
+      return "/-/documents";
     case "changes":
-      return "/changes";
+      return "/-/changes";
+    case "accountSettings":
+      return "/-/user_settings/profile";
     case "adminSubscriptions":
-      return "/admin/subscriptions";
+      return "/-/admin/subscriptions";
     case "billing":
-      return route.org ? `/${route.org}/-/billing` : "/billing";
+      return route.org ? `/${route.org}/-/billing` : "/-/billing";
     case "createOrganization":
-      return "/organizations/new";
+      return "/-/organizations/new";
     case "organization":
       return route.tab && route.tab !== "binders"
         ? `/${route.org}/-/${route.tab}`
@@ -306,6 +308,7 @@ export function routeToPath(route: AppRoute): string {
         version: route.version ?? null,
         change: route.change ?? null,
         ref: route.ref ?? null,
+        draft: route.draft ?? null,
       });
     case "home":
     case "workspace":
@@ -318,8 +321,8 @@ export function routeToPath(route: AppRoute): string {
  * Where an address written before `/-/` lives now, or null when it is current.
  *
  * `?tab=changes&change=4&view=compare` is `/-/changes/4/diffs`,
- * `/{org}/{binder}/{path}?ref=x` is `/-/blob/x/{path}`, `/billing/{org}` is
- * `/{org}/-/billing` and `?tab=people` on an organization is `/-/people`.
+ * `/{org}/{binder}/{path}?ref=x` is `/-/blob/x/{path}`, and `?tab=people`
+ * on an organization is `/-/people`.
  * Links that were sent, bookmarked or pasted into a ticket keep working; the
  * app replaces them in the address bar before anything reads them, so there
  * is only ever one grammar on screen.
@@ -332,12 +335,7 @@ export function canonicalLocation(
   const path = normalizePathname(pathname);
   const params = new URLSearchParams(search);
   const [first = "", second, ...rest] = path.slice(1).split("/");
-  if (first === "" || RESERVED_FIRST_SEGMENTS.has(first)) {
-    const billing = path.match(/^\/billing\/([^/]+)$/);
-    // The query is kept: Stripe returns here with `?checkout=success`, and
-    // that is what tells the page a payment has just landed.
-    return billing ? `/${billing[1]}/-/billing${search}${hash}` : null;
-  }
+  if (first === "" || RESERVED_FIRST_SEGMENTS.has(first)) return null;
 
   // `/{org}?tab=people`, `/{org}?new=binder`.
   if (second === undefined) {
@@ -402,6 +400,7 @@ export function isProtectedAppRoute(route: AppRoute): boolean {
     route.kind === "workspace" ||
     route.kind === "documents" ||
     route.kind === "changes" ||
+    route.kind === "accountSettings" ||
     route.kind === "adminSubscriptions" ||
     // An organization's own pages need a session to resolve at all: which
     // binders you can see is a question about you.

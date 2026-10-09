@@ -1,25 +1,29 @@
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
 import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
 import { BookOpen, FilePen } from "lucide-react";
 
-import { fetchOrganizationBinders } from "../api";
+import { organizationBindersQuery } from "../data/queries";
 import type { WorkspaceSummary } from "../../../packages/api-schema/schemas/workspaces";
 import { useWriteAction } from "../paywallContext";
 import { followInApp } from "../appLink";
 import { buildBinderUrl } from "../binderShell";
 import { formatAge, formatDocumentName } from "../documentDisplay";
+import { OrganizationSettings } from "./OrganizationSettings";
 import { NewBinderPage } from "./NewBinderPage";
 import { OrganizationPeople } from "./OrganizationPeople";
 import { SkeletonPanel } from "./Skeleton";
 
 /** The organization's tabs. Binders is the one it opens on. */
-const ORG_TABS = ["binders", "people"] as const;
+const ORG_TABS = ["binders", "people", "settings"] as const;
 type OrgTab = (typeof ORG_TABS)[number];
 
 /** `/{org}/-/people` is People; anything else of the organization's is Binders. */
 function orgTabFromPath(pathname: string): OrgTab {
-  return /^\/[^/]+\/-\/people\/?$/.test(pathname) ? "people" : "binders";
+  if (/^\/[^/]+\/-\/people\/?$/.test(pathname)) return "people";
+  if (/^\/[^/]+\/-\/settings\/?$/.test(pathname)) return "settings";
+  return "binders";
 }
 
 /** `/{org}/-/binders/new`: the new-binder form, as an address of its own. */
@@ -52,39 +56,19 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
   const [tab, setTab] = useState<OrgTab>(() =>
     orgTabFromPath(window.location.pathname),
   );
-  const [binders, setBinders] = useState<WorkspaceSummary[] | null>(null);
+  const read = useQuery(organizationBindersQuery(org));
+  const binders: WorkspaceSummary[] | null = read.data ?? null;
   // What the list's own bar narrows it to — the binder's "Filter this
   // binder…", one level up.
   const [filter, setFilter] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const error = read.error
+    ? read.error.message || "Unable to open this organization."
+    : null;
   // Behind the header's "New binder", at an address of its own rather than a
   // drawer over the list: it can be sent, reloaded and left with Back.
   const [creating, setCreating] = useState(() =>
     isCreatingFromPath(window.location.pathname),
   );
-
-  useEffect(() => {
-    let cancelled = false;
-    setBinders(null);
-    setError(null);
-
-    fetchOrganizationBinders(org)
-      .then((rows) => {
-        if (!cancelled) setBinders(rows);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(
-          err instanceof Error && err.message.trim() !== ""
-            ? err.message
-            : "Unable to open this organization.",
-        );
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [org]);
 
   // Back and forward are how somebody leaves a tab, so the page follows the
   // address bar rather than its own memory of what was clicked.
@@ -151,7 +135,11 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
           >
             {/* The sidebar's word for the same page. Two names for one
                 screen made "People" and "People & access" read as two. */}
-            {entry === "binders" ? "Binders" : "People & access"}
+            {entry === "binders"
+              ? "Binders"
+              : entry === "people"
+                ? "People & access"
+                : "Settings"}
             {entry === "binders" && binders !== null && binders.length > 0 ? (
               <span className="doc-tab-count">{binders.length}</span>
             ) : null}
@@ -182,6 +170,15 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
         onCancel={() => goTo("binders")}
         onCreated={(created) => onOpenBinder(created.name)}
       />
+    );
+  }
+
+  if (tab === "settings") {
+    return (
+      <section className="docw-page">
+        {header}
+        <OrganizationSettings org={org} displayName={displayName} />
+      </section>
     );
   }
 

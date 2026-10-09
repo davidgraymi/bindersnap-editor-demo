@@ -1,7 +1,77 @@
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 
 import { config, type SessionCookieSameSite } from "./config";
 import { logger } from "./logger";
+import { jobStore, withGroupLock, type JobRecord } from "./jobs/store";
+import { startJobRunner } from "./jobs/runner";
+import { queueEmail, startMail } from "./mail";
+import {
+  changeEmail,
+  changeEmailKey,
+  changeUrl,
+  OPT_OUT_REASON,
+  recipientsFor,
+  TOPIC_OF,
+  type ChangeEmailEvent,
+} from "./change-emails";
+import { emailPreferenceStore, parsePreferences } from "./email-preferences";
+import {
+  describeGrant,
+  invitationEmail,
+  invitationStatus,
+  invitationStore,
+  maskAddress,
+  sameAddress,
+  type BinderLevel,
+  type Invitation,
+} from "./invitations";
+import {
+  emailVerificationStore,
+  verifyEmailContent,
+} from "./email-verification";
+import {
+  legalAgreementStore,
+  type NewLegalAgreement,
+} from "./legal-agreements";
+import {
+  LEGAL_ACCEPT_AGAIN_VERSION,
+  LEGAL_VERSION,
+} from "../../packages/utils/legal";
+import {
+  passwordChangedEmail,
+  passwordResetStore,
+  resetLinkEmail,
+} from "./password-reset";
+import { identiconSvg } from "./identicon";
+import { reconcileBinders, type ReconcilerReport } from "./reconciler";
+import {
+  PublishConflict,
+  runPublish,
+  type PublishDeps,
+  type PublishPlan,
+  type PublishResult,
+} from "./jobs/publish";
+import {
+  adminToken,
+  mintDevServiceTokens,
+  serviceToken,
+  type ServiceTokenKind,
+} from "./dev-service-token";
+import {
+  createGiteaUsage,
+  currentGiteaUsage,
+  giteaUsageLogFields,
+  currentRequestScope,
+  forgetRequestMemo,
+  memoizeForRequest,
+  recordGiteaCall,
+  withGiteaUsage,
+} from "./gitea-client/usage";
+import {
+  giteaRequestGate,
+  MAX_CONCURRENT_GITEA_REQUESTS,
+} from "./gitea-client/request-gate";
+import { GITEA_CALL_TIMEOUT_MS } from "./gitea-client/client";
 import { runSessionReaper } from "./session-reaper";
 import { sessionStore, type SessionRecord } from "./sessions";
 import {
@@ -23,6 +93,10 @@ import { claimLegacyBillingForOrganization } from "./legacy-billing-claim";
 import { provisionSignup } from "./signup-provisioning";
 import { slugifyOrganizationName } from "../../packages/utils/organizationName";
 import { slugifyGroupName } from "../../packages/utils/groupName";
+import {
+  joinFullName,
+  validateFullName,
+} from "../../packages/utils/personName";
 import {
   buildDocumentFilePath,
   buildDocumentSlugPath,
@@ -52,8 +126,10 @@ import {
   readBinderTimeline,
   isRestoredFromArchive,
   listAllTags,
+  publishedVersionByMergeCommit,
   listChangedDocuments,
   listDocumentVersions,
+  documentVersionsFrom,
   listRemovedDocuments,
   readArchivedDocument,
   listVersionsByDocument,
@@ -131,6 +207,7 @@ import {
   createGiteaBasicAuthClient,
   createGiteaClient,
   GiteaApiError,
+  toGiteaApiError,
   unwrap,
   type GiteaClient,
 } from "./gitea-client/client";
@@ -142,10 +219,22 @@ import {
   setDiscussionResolution,
 } from "./gitea-client/discussions";
 import { isSupportedReaction } from "./gitea-client/reactions";
+import { buildAuditPacket } from "./export/auditPacket";
+import { onboardingState, type OnboardingOrganization } from "./onboarding";
+import { pullKey, readSubjectUrl, toAppNotifications } from "./notifications";
+import type { components } from "./gitea-client/spec/gitea";
+import { gatherAuditRecord } from "./export/auditRecord";
+import {
+  EXPORT_TYPES,
+  exportDocument,
+  exportFilename,
+  parseExportFormat,
+} from "./export/exportDocument";
 import {
   DEFAULT_WORKSPACE_SETTINGS,
   workspaceSettingsStore,
   type ReviewSettings,
+  type SettingsEventRecord,
 } from "./workspace-settings";
 import {
   buildClosedChanges,
@@ -162,11 +251,10 @@ import type {
 } from "../../packages/api-schema/schemas/workspaces";
 import {
   getCurrentUserRepoPermission,
-  getLatestDocTag,
   getRepoBranchProtection,
+  updateRepoBranchProtection,
   findUser,
   getRepoInfo,
-  listDocTags,
   listRepoCollaborators,
   searchUsers,
   type RepoCollaboratorPermissionSummary,
@@ -192,11 +280,15 @@ import {
 import {
   createPullRequest,
   getPullRequestWithReviews,
+  getPullRequestHeadBranch,
+  getPullRequestHead,
+  listPullRequestsWithoutReviews,
+  attachReviews,
+  readMergeCommitSha,
   listBranchUpdates,
   listPullRequests,
   findClosedChanges,
   listPullRequestsWithReviews,
-  getPullRequestHeadBranch,
   searchInvolvedChanges,
   type InvolvedChangeRef,
   mergeWorkspaceChange,
@@ -210,8 +302,18 @@ import {
   type PullRequestWithReviews,
 } from "./gitea-client/pullRequests";
 import {
+  ConflictResolutionError,
+  findConflictingFiles,
+  readBlob,
+  readTreeBlobs,
+  resolveChangeConflicts,
+  type ConflictingFile,
+  type FileResolution,
+} from "./gitea-client/conflicts";
+import {
   buildChangeReviewers,
-  approverLogins,
+  approverSignatures,
+  signatureOf,
   countApprovals,
   planReviewerChanges,
   readAssignee,
@@ -219,6 +321,12 @@ import {
 } from "./change-assignments";
 import { buildChangeUpdates } from "./change-updates";
 import type { DraftNameRecord } from "./draft-names";
+import {
+  findSoleOwnerships,
+  listOwnedDrafts,
+  listUserOrganizations,
+  renameBranch,
+} from "./account";
 import {
   defaultDraftName,
   describeUnnamedDraft,
@@ -332,25 +440,22 @@ function buildTokenAuthHeader(token: string): string {
   return `token ${token}`;
 }
 
-function buildGiteaServiceHeaders(
-  extraHeaders?: HeadersInit,
-): HeadersInit | null {
-  if (!config.giteaServiceToken) {
-    return null;
-  }
-
-  return {
-    Authorization: buildTokenAuthHeader(config.giteaServiceToken),
-    ...extraHeaders,
-  };
-}
-
+/**
+ * Headers for a call the person themselves could not make, or null.
+ *
+ * `"read"` is the service account's read-only token, for the privileged reads
+ * made on ordinary requests; `"admin"` is its `write:admin` token, for the
+ * few account acts that need it. See `dev-service-token.ts`. Dev and test
+ * stacks without either fall back to the admin's basic auth.
+ */
 function buildGiteaPrivilegedHeaders(
+  kind: ServiceTokenKind,
   extraHeaders?: HeadersInit,
 ): HeadersInit | null {
-  const serviceHeaders = buildGiteaServiceHeaders(extraHeaders);
-  if (serviceHeaders) {
-    return serviceHeaders;
+  // The configured token, or the dev one this process minted at startup.
+  const token = kind === "admin" ? adminToken() : serviceToken();
+  if (token) {
+    return { Authorization: buildTokenAuthHeader(token), ...extraHeaders };
   }
 
   if (
@@ -601,9 +706,11 @@ async function getSessionFromRequest(
   return session;
 }
 
+type AuthRateLimitAction = "login" | "signup" | "forgot" | "reset" | "verify";
+
 function consumeAuthRateLimit(
   req: Request,
-  action: "login" | "signup",
+  action: AuthRateLimitAction,
 ): { limited: boolean; retryAfterSeconds: number } {
   if (!config.authRateLimitEnabled) {
     return { limited: false, retryAfterSeconds: 0 };
@@ -635,7 +742,7 @@ function consumeAuthRateLimit(
   return { limited: false, retryAfterSeconds: 0 };
 }
 
-function resetAuthRateLimit(req: Request, action: "login" | "signup"): void {
+function resetAuthRateLimit(req: Request, action: AuthRateLimitAction): void {
   if (!config.authRateLimitEnabled) {
     return;
   }
@@ -681,8 +788,43 @@ async function readJson<T>(req: Request): Promise<T | null> {
   }
 }
 
+/**
+ * A raw Gitea call — login, token minting and revocation, `GET /user`, the
+ * document download — for the few places the typed client does not fit.
+ *
+ * **Through the same gate as everything else.** These used to skip it, and
+ * `/auth/me` runs on every app load: unqueued load on Gitea exactly when a
+ * page's fan-out was already pressing hardest. A raw call never awaits another
+ * Gitea call while holding its slot, so routing it through cannot deadlock.
+ */
 async function giteaFetch(path: string, init?: RequestInit): Promise<Response> {
-  return fetch(new URL(path, config.giteaUrl), init);
+  const method = (init?.method ?? "GET").toUpperCase();
+  const writes = method !== "GET" && method !== "HEAD";
+  if (writes) forgetRequestMemo();
+  const queuedAt = performance.now();
+  const { lane, signal } = currentRequestScope();
+  return giteaRequestGate.run(
+    async () => {
+      const startedAt = performance.now();
+      const timeout = AbortSignal.timeout(GITEA_CALL_TIMEOUT_MS);
+      const signals = [timeout, signal, init?.signal ?? undefined].filter(
+        (entry): entry is AbortSignal => entry !== undefined,
+      );
+      try {
+        return await fetch(new URL(path, config.giteaUrl), {
+          ...init,
+          signal: AbortSignal.any(signals),
+        });
+      } finally {
+        if (writes) forgetRequestMemo();
+        recordGiteaCall({
+          waitMs: startedAt - queuedAt,
+          durationMs: performance.now() - startedAt,
+        });
+      }
+    },
+    { lane, signal },
+  );
 }
 
 async function readResponsePayload(response: Response): Promise<unknown> {
@@ -751,7 +893,7 @@ function createSessionGiteaClient(session: SessionRecord): GiteaClient {
 }
 
 function createServiceGiteaClient(): GiteaClient {
-  return createGiteaClient(config.giteaUrl, config.giteaServiceToken);
+  return createGiteaClient(config.giteaUrl, serviceToken() ?? "");
 }
 
 /**
@@ -768,6 +910,25 @@ function createServiceGiteaClient(): GiteaClient {
  * so "this document needs no approvals" stays distinguishable from "we could
  * not find out how many it needs".
  */
+/**
+ * A binder's branch protection, read with the service account, once per
+ * request.
+ *
+ * Three helpers below each want a different field of the same rule, and a
+ * page that shows a change asks all three. Each used to be its own Gitea call.
+ */
+function readBranchProtectionForRequest(
+  client: GiteaClient,
+  owner: string,
+  repo: string,
+  branch: string,
+): Promise<RepoBranchProtection | null> {
+  return memoizeForRequest(
+    `privileged:protection:${owner}/${repo}@${branch}`,
+    () => getRepoBranchProtection(client, owner, repo, branch),
+  );
+}
+
 async function readRequiredApprovals(
   owner: string,
   repo: string,
@@ -777,7 +938,7 @@ async function readRequiredApprovals(
   if (!client) return null;
 
   try {
-    const protection = await getRepoBranchProtection(
+    const protection = await readBranchProtectionForRequest(
       client,
       owner,
       repo,
@@ -815,7 +976,7 @@ async function readSignOffGate(
   if (!client) return null;
 
   try {
-    const protection = await getRepoBranchProtection(
+    const protection = await readBranchProtectionForRequest(
       client,
       owner,
       repo,
@@ -828,6 +989,58 @@ async function readSignOffGate(
     };
   } catch (err) {
     logger.error("Failed to read a binder's sign-off gate", {
+      owner,
+      repo,
+      branch,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
+/**
+ * What Gitea checks before it merges into a binder's `main`, as far as a
+ * change's own reviews decide it: how many approvals, and whether a review
+ * asked for and not yet given holds the merge. That second one differs by
+ * Gitea — see `settleCodeownerGate` — so it is read, never assumed.
+ *
+ * Null when it cannot be read; nothing is then called ready.
+ */
+interface MergeRules {
+  requiredApprovals: number;
+  heldByReviewRequests: boolean;
+  /**
+   * Whether an approval left on an earlier version stops counting — because
+   * the binder dismisses stale approvals, or ignores them. Off, and Gitea
+   * merges on an approval that stood through later edits.
+   */
+  ignoresStale: boolean;
+}
+
+async function readMergeRules(
+  owner: string,
+  repo: string,
+  branch = "main",
+): Promise<MergeRules | null> {
+  const client = createPrivilegedGiteaClient();
+  if (!client) return null;
+
+  try {
+    const protection = await readBranchProtectionForRequest(
+      client,
+      owner,
+      repo,
+      branch,
+    );
+    return {
+      requiredApprovals: protection?.requiredApprovals ?? 0,
+      heldByReviewRequests: protection?.blockOnOfficialReviewRequests ?? false,
+      ignoresStale:
+        (protection?.dismissStaleApprovals ?? true) ||
+        (protection?.ignoreStaleApprovals ?? false),
+    };
+  } catch (err) {
+    logger.error("Failed to read a binder's merge rules", {
       owner,
       repo,
       branch,
@@ -875,7 +1088,7 @@ async function resolveDocumentAccess(
     return {
       client: serviceClient,
       username: null,
-      token: config.giteaServiceToken,
+      token: serviceToken() ?? "",
     };
   } catch (err) {
     if (err instanceof GiteaApiError && err.status === 404) {
@@ -1414,7 +1627,27 @@ async function readMultipartBody(req: Request): Promise<FormData | null> {
   }
 }
 
-function downloadHeaders(baseHeaders: Headers, response: Response): Headers {
+/** A commit id: the one kind of ref whose files can never change. */
+const COMMIT_REF = /^[0-9a-f]{40}$/i;
+
+/**
+ * The headers a document's bytes go out with.
+ *
+ * **Gitea's caching is for a commit, and most refs here are branches.** Gitea
+ * answers a raw read with `private, max-age=21600` whatever the ref, and that
+ * was passed straight on: a browser that had read a policy on a draft — the
+ * editor does, to open it — kept that copy for six hours. Save moved the
+ * branch; the document page, and both sides of a change's comparison, went on
+ * reading the words from before the save, so an edit looked lost and a change
+ * showed a document as edited with nothing in it to see. A branch, `main` and
+ * a tag can all move, so only a commit id keeps Gitea's answer; everything
+ * else is asked again each time.
+ */
+export function downloadHeaders(
+  baseHeaders: Headers,
+  response: Response,
+  ref: string,
+): Headers {
   const headers = mergeHeaders(baseHeaders);
   for (const key of [
     "content-type",
@@ -1428,6 +1661,11 @@ function downloadHeaders(baseHeaders: Headers, response: Response): Headers {
     if (value) {
       headers.set(key, value);
     }
+  }
+  if (!COMMIT_REF.test(ref)) {
+    headers.set("cache-control", "no-store");
+    headers.delete("etag");
+    headers.delete("last-modified");
   }
   return headers;
 }
@@ -1579,7 +1817,7 @@ function looksLikeEmailAddress(value: string): boolean {
 }
 
 async function findUsernameByEmail(email: string): Promise<LoginResolution> {
-  const serviceHeaders = buildGiteaPrivilegedHeaders({
+  const serviceHeaders = buildGiteaPrivilegedHeaders("read", {
     Accept: "application/json",
   });
   if (!serviceHeaders) {
@@ -1706,6 +1944,190 @@ async function resolveLoginUsername(
 type EstablishedSession =
   | { ok: true; session: SessionRecord; headers: Headers }
   | { ok: false; response: Response };
+
+/**
+ * A 400 unless `acceptedTerms` names the Terms as they stand.
+ *
+ * A form loaded before the Terms changed agreed to words that are no longer
+ * ours, so it is refused too, with a reason that says to reload.
+ */
+function refuseUnacceptedTerms(
+  acceptedTerms: unknown,
+  baseHeaders: Headers,
+): Response | null {
+  if (acceptedTerms === LEGAL_VERSION) return null;
+  return json(
+    400,
+    {
+      error:
+        typeof acceptedTerms === "string" && acceptedTerms !== ""
+          ? "Our Terms of Service changed since this page loaded. Reload it to read them, then try again."
+          : "Agree to the Terms of Service to go on.",
+      code: "terms_not_accepted",
+    },
+    baseHeaders,
+  );
+}
+
+/**
+ * Write an agreement, and never fail the request that made it.
+ *
+ * The account or organization already exists by now, and telling the person
+ * it failed would only send them to make another. A row that did not land is
+ * not lost either: the app asks for whatever agreement is missing on its next
+ * load (`GET /api/app/legal`), so the record catches up.
+ */
+function recordLegalAgreement(agreement: NewLegalAgreement): void {
+  try {
+    legalAgreementStore().record(agreement);
+  } catch (err) {
+    logger.error("Failed to record an agreement to the Terms", {
+      username: agreement.username,
+      version: agreement.version,
+      organization: agreement.organization?.name ?? null,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+/** Gitea's id for the signed-in account, or null if Gitea will not say. */
+async function sessionUserId(client: GiteaClient): Promise<number | null> {
+  const { data } = await client.GET("/user").catch(() => ({ data: undefined }));
+  return typeof data?.id === "number" ? data.id : null;
+}
+
+/**
+ * What the signed-in person still has to accept: for themselves, and for
+ * each organization they own.
+ *
+ * Asked after a material change to the Terms (`LEGAL_ACCEPT_AGAIN_VERSION`),
+ * and for anything with no agreement on record at all. Only owners are asked
+ * about an organization, because only they can accept for it, and one
+ * owner's acceptance answers for all of them.
+ */
+async function pendingLegalAgreements(auth: {
+  client: GiteaClient;
+  session: SessionRecord;
+}): Promise<{ person: boolean; organizations: SessionOrganization[] }> {
+  const store = legalAgreementStore();
+  const behind = (version: string | null) =>
+    version === null || version < LEGAL_ACCEPT_AGAIN_VERSION;
+
+  const person = behind(store.latestPersonVersion(auth.session.username));
+  const organizations: SessionOrganization[] = [];
+  for (const organization of await listSessionOrganizations(auth.client)) {
+    if (!behind(store.latestOrganizationVersion(organization.id))) continue;
+    const owner = await isOrganizationOwnerDirect({
+      client: auth.client,
+      org: organization.name,
+      username: auth.session.username,
+    }).catch(() => false);
+    if (owner) organizations.push(organization);
+  }
+  return { person, organizations };
+}
+
+async function legalStatusBody(auth: {
+  client: GiteaClient;
+  session: SessionRecord;
+}) {
+  const pending = await pendingLegalAgreements(auth);
+  return {
+    version: LEGAL_VERSION,
+    person: pending.person,
+    organizations: pending.organizations.map((organization) => ({
+      name: organization.name,
+      displayName: organization.displayName,
+    })),
+  };
+}
+
+async function handleLegalStatus(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  return json(200, await legalStatusBody(auth), baseHeaders);
+}
+
+/**
+ * Accept the Terms as they stand: for oneself, for organizations one owns, or
+ * both. Every organization named must be one the caller owns, or nothing is
+ * written.
+ */
+async function handleAcceptLegal(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const payload = await readJson<{
+    acceptedTerms?: unknown;
+    person?: unknown;
+    organizations?: unknown;
+  }>(req);
+  const refusal = refuseUnacceptedTerms(payload?.acceptedTerms, baseHeaders);
+  if (refusal) return refusal;
+
+  const requested = Array.isArray(payload?.organizations)
+    ? payload.organizations.filter(
+        (name): name is string => typeof name === "string",
+      )
+    : [];
+  const person = payload?.person === true;
+  if (!person && requested.length === 0) {
+    return json(400, { error: "Nothing to accept." }, baseHeaders);
+  }
+
+  const mine = await listSessionOrganizations(auth.client);
+  const organizations: SessionOrganization[] = [];
+  for (const name of requested) {
+    const organization = mine.find((each) => each.name === name);
+    const owner =
+      organization !== undefined &&
+      (await isOrganizationOwnerDirect({
+        client: auth.client,
+        org: organization.name,
+        username: auth.session.username,
+      }).catch(() => false));
+    if (!organization || !owner) {
+      return json(
+        403,
+        { error: "Only an owner can accept the Terms for an organization." },
+        baseHeaders,
+      );
+    }
+    organizations.push(organization);
+  }
+
+  const userId = await sessionUserId(auth.client);
+  const store = legalAgreementStore();
+  if (person) {
+    store.record({
+      username: auth.session.username,
+      userId,
+      version: LEGAL_VERSION,
+    });
+  }
+  for (const organization of organizations) {
+    store.record({
+      username: auth.session.username,
+      userId,
+      version: LEGAL_VERSION,
+      organization: { id: organization.id, name: organization.name },
+    });
+  }
+
+  logger.info("Terms accepted", {
+    username: auth.session.username,
+    version: LEGAL_VERSION,
+    person,
+    organizations: organizations.map((organization) => organization.name),
+  });
+  return json(200, await legalStatusBody(auth), baseHeaders);
+}
 
 /**
  * Mint the Gitea token, store the session, and build the cookie — without
@@ -1864,7 +2286,7 @@ async function revokeUserToken(session: SessionRecord): Promise<void> {
     return;
   }
 
-  const serviceHeaders = buildGiteaPrivilegedHeaders({
+  const serviceHeaders = buildGiteaPrivilegedHeaders("admin", {
     Accept: "application/json",
   });
   if (!serviceHeaders) {
@@ -1881,10 +2303,13 @@ async function createGiteaUser(
   username: string,
   email: string,
   password: string,
+  fullName: string,
 ): Promise<
-  { status: 502; error: string } | { status: number; error: string } | "created"
+  | { status: 502; error: string }
+  | { status: number; error: string }
+  | { created: true; id: number | null }
 > {
-  const serviceHeaders = buildGiteaPrivilegedHeaders({
+  const serviceHeaders = buildGiteaPrivilegedHeaders("admin", {
     "Content-Type": "application/json",
     Accept: "application/json",
   });
@@ -1902,6 +2327,7 @@ async function createGiteaUser(
       username,
       password,
       email,
+      full_name: fullName,
       must_change_password: false,
       restricted: false,
       send_notify: false,
@@ -1917,7 +2343,13 @@ async function createGiteaUser(
   }
 
   if (response.ok || response.status === 201) {
-    return "created";
+    const body = (await response.json().catch(() => null)) as {
+      id?: unknown;
+    } | null;
+    return {
+      created: true,
+      id: typeof body?.id === "number" ? body.id : null,
+    };
   }
 
   return {
@@ -1987,15 +2419,25 @@ async function handleSignup(
     username?: unknown;
     email?: unknown;
     password?: unknown;
+    firstName?: unknown;
+    lastName?: unknown;
     organization?: unknown;
+    invitation?: unknown;
+    acceptedTerms?: unknown;
   }>(req);
   const username =
     typeof payload?.username === "string" ? payload.username : "";
   const email = typeof payload?.email === "string" ? payload.email : "";
   const password =
     typeof payload?.password === "string" ? payload.password : "";
+  const firstName =
+    typeof payload?.firstName === "string" ? payload.firstName : "";
+  const lastName =
+    typeof payload?.lastName === "string" ? payload.lastName : "";
   const organization =
     typeof payload?.organization === "string" ? payload.organization : "";
+  const invitationToken =
+    typeof payload?.invitation === "string" ? payload.invitation : "";
 
   if (!username || !email || !password) {
     return json(
@@ -2005,10 +2447,28 @@ async function handleSignup(
     );
   }
 
+  // The box on the form, and the version of the Terms it pointed at. A page
+  // loaded before the Terms changed agreed to words that are no longer ours,
+  // so it is refused too, with a reason that says to reload.
+  const refusal = refuseUnacceptedTerms(payload?.acceptedTerms, baseHeaders);
+  if (refusal) return refusal;
+
+  // **A name, not a login, is what the record writes.** An approval stamped
+  // "jkim" is one a surveyor has to ask about; one stamped "Jordan Kim" is not.
+  const nameError = validateFullName(firstName, lastName);
+  if (nameError) {
+    return json(400, { error: nameError }, baseHeaders);
+  }
+
   logger.debug("Attempting Gitea user creation", { username, clientIp });
 
-  const created = await createGiteaUser(username, email, password);
-  if (created !== "created") {
+  const created = await createGiteaUser(
+    username,
+    email,
+    password,
+    joinFullName(firstName, lastName),
+  );
+  if (!("created" in created)) {
     logger.warn("Gitea user creation failed during signup", {
       username,
       status: created.status,
@@ -2021,6 +2481,13 @@ async function handleSignup(
     username,
     clientIp,
   });
+
+  recordLegalAgreement({
+    username,
+    userId: created.id,
+    version: LEGAL_VERSION,
+  });
+  startEmailVerification(username, email, invitationToken);
 
   const loginName = await verifyUserCredentials(username, password).catch(
     () => null,
@@ -2159,6 +2626,8 @@ async function handleLogin(
   );
   if (response.ok) {
     resetAuthRateLimit(req, "login");
+    // An owner signing in can finish invitations that were waiting for one.
+    void completeWaitingInvitations().catch(() => undefined);
     logger.debug("Session created after login", {
       username: resolution.username,
       clientIp,
@@ -2210,6 +2679,9 @@ async function handleAuthMe(
   });
 
   const giteaUser = await fetchSessionGiteaUser(session);
+  const pendingAddress = emailVerificationStore().pendingAddress(
+    session.username,
+  );
 
   return json(
     200,
@@ -2218,11 +2690,775 @@ async function handleAuthMe(
         username: giteaUser?.username ?? session.username,
         fullName: giteaUser?.fullName ?? undefined,
         isAdmin: giteaUser?.isAdmin === true,
+        emailVerified: pendingAddress === null,
+        ...(pendingAddress ? { pendingEmail: pendingAddress } : {}),
       },
       // No Gitea token: see `sessionResponse`.
     },
     baseHeaders,
   );
+}
+
+/**
+ * Change the name every record of theirs is signed with.
+ *
+ * On the person's own token, because Gitea lets anybody edit their own
+ * `full_name` and nobody needs the service account to do it. Published
+ * versions keep the name they were stamped with — a tag is immutable, which is
+ * the point of it — and everything still open picks up the new one.
+ */
+async function handleUpdateProfile(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const payload = await readJson<{ firstName?: unknown; lastName?: unknown }>(
+    req,
+  );
+  const firstName =
+    typeof payload?.firstName === "string" ? payload.firstName : "";
+  const lastName =
+    typeof payload?.lastName === "string" ? payload.lastName : "";
+  const nameError = validateFullName(firstName, lastName);
+  if (nameError) return json(400, { error: nameError }, baseHeaders);
+
+  const response = await giteaFetch("/api/v1/user/settings", {
+    method: "PATCH",
+    headers: {
+      Authorization: buildTokenAuthHeader(auth.session.giteaToken),
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ full_name: joinFullName(firstName, lastName) }),
+  }).catch(() => null);
+
+  if (!response || !response.ok) {
+    logger.warn("Failed to update a profile name", {
+      username: auth.session.username,
+      status: response?.status ?? null,
+    });
+    return json(
+      502,
+      { error: "Your name could not be saved. Please try again." },
+      baseHeaders,
+    );
+  }
+
+  const user = await fetchSessionGiteaUser(auth.session);
+  return json(
+    200,
+    {
+      user: {
+        username: user?.username ?? auth.session.username,
+        fullName: user?.fullName ?? undefined,
+        isAdmin: user?.isAdmin === true,
+      },
+    },
+    baseHeaders,
+  );
+}
+
+/**
+ * The current password, checked again, before anything that changes who the
+ * account is or how it signs in.
+ *
+ * Rate-limited with login, because it is a password guess by another name: a
+ * session left open on a shared computer must not become a way to try
+ * thousands of them.
+ */
+async function confirmCurrentPassword(
+  req: Request,
+  session: SessionRecord,
+  password: string,
+  baseHeaders: Headers,
+): Promise<Response | null> {
+  const rateLimit = consumeAuthRateLimit(req, "login");
+  if (rateLimit.limited) {
+    return json(
+      429,
+      { error: "Too many attempts. Please try again shortly." },
+      mergeHeaders(baseHeaders, {
+        "Retry-After": String(rateLimit.retryAfterSeconds),
+      }),
+    );
+  }
+  const verified = password
+    ? await verifyUserCredentials(session.username, password).catch(() => null)
+    : null;
+  if (!verified) {
+    return json(
+      403,
+      { error: "That is not your current password." },
+      baseHeaders,
+    );
+  }
+  return null;
+}
+
+/** Gitea's own default, which is what the signup form already lives with. */
+const MIN_PASSWORD_LENGTH = 8;
+
+/** The service account's own login, which no person may delete. */
+function isServiceAccount(username: string): boolean {
+  return username.toLowerCase() === config.giteaAdminUsername.toLowerCase();
+}
+
+/** End every other session of this person's, and revoke each one's token. */
+async function endOtherSessions(
+  username: string,
+  except?: string,
+): Promise<void> {
+  const ended = await sessionStore.deleteForUser(username, except);
+  await Promise.all(
+    ended.map((session) => revokeUserToken(session).catch(() => undefined)),
+  );
+}
+
+/**
+ * What stands in the way of a deletion, asked before it.
+ *
+ * The same check the deletion makes, run when the page opens, so a button
+ * that can only be refused is drawn dimmed with the reason rather than
+ * offered and then refused after somebody has typed their password.
+ */
+async function handleAccountBlockers(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const username = auth.session.username;
+
+  if (isServiceAccount(username)) {
+    return json(
+      200,
+      { serviceAccount: true, deleteBlockedBy: [] },
+      baseHeaders,
+    );
+  }
+
+  const client = createPrivilegedGiteaClient();
+  if (!client) {
+    return json(
+      502,
+      { error: "Your account cannot be read right now." },
+      baseHeaders,
+    );
+  }
+  try {
+    const orgs = await listUserOrganizations(client, username);
+    const deleteBlockedBy = await findSoleOwnerships({
+      client,
+      username,
+      orgs,
+    });
+    return json(200, { serviceAccount: false, deleteBlockedBy }, baseHeaders);
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Your account cannot be read right now.",
+    );
+  }
+}
+
+/**
+ * A new password, and every other device signed out.
+ *
+ * Gitea has no "change my own password" API, so the service account sets it —
+ * after the current one has been checked here. The other sessions end because
+ * that is the reason most people change a password.
+ */
+async function handleChangePassword(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { session } = auth;
+
+  const payload = await readJson<{
+    currentPassword?: unknown;
+    newPassword?: unknown;
+  }>(req);
+  const currentPassword =
+    typeof payload?.currentPassword === "string" ? payload.currentPassword : "";
+  const newPassword =
+    typeof payload?.newPassword === "string" ? payload.newPassword : "";
+
+  if (newPassword.length < MIN_PASSWORD_LENGTH) {
+    return json(
+      400,
+      {
+        error: `Your new password needs at least ${MIN_PASSWORD_LENGTH} characters.`,
+      },
+      baseHeaders,
+    );
+  }
+
+  const refused = await confirmCurrentPassword(
+    req,
+    session,
+    currentPassword,
+    baseHeaders,
+  );
+  if (refused) return refused;
+
+  const serviceHeaders = buildGiteaPrivilegedHeaders("admin", {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  });
+  if (!serviceHeaders) {
+    return json(
+      502,
+      { error: "Passwords cannot be changed right now." },
+      baseHeaders,
+    );
+  }
+
+  const response = await giteaFetch(
+    `/api/v1/admin/users/${encodeURIComponent(session.username)}`,
+    {
+      method: "PATCH",
+      headers: serviceHeaders,
+      body: JSON.stringify({
+        login_name: session.username,
+        source_id: 0,
+        password: newPassword,
+        must_change_password: false,
+      }),
+    },
+  ).catch(() => null);
+
+  if (!response || !response.ok) {
+    const error = response
+      ? await readGiteaErrorMessage(
+          response,
+          "Your password could not be changed.",
+        )
+      : "Your password could not be changed.";
+    return json(response?.status === 422 ? 400 : 502, { error }, baseHeaders);
+  }
+
+  await endOtherSessions(session.username, session.id);
+  logger.info("Password changed; other sessions ended", {
+    username: session.username,
+  });
+  return new Response(null, { status: 204, headers: baseHeaders });
+}
+
+function rateLimitedResponse(
+  baseHeaders: Headers,
+  retryAfterSeconds: number,
+): Response {
+  return json(
+    429,
+    { error: "Too many attempts. Please try again shortly." },
+    mergeHeaders(baseHeaders, { "Retry-After": String(retryAfterSeconds) }),
+  );
+}
+
+/**
+ * "Forgot password?" — email a reset link, if the address is an account's.
+ *
+ * The answer is the same whether or not it is, and is given before anything
+ * slow happens, so neither the words nor the timing say which addresses have
+ * accounts. A link goes out at most once every two minutes per account.
+ */
+/**
+ * After signup: the account must show it owns its address before it can use
+ * the app (see `email-verification.ts`). Signing up from an invitation sent to
+ * the same address already shows it, so that skips the email.
+ */
+function startEmailVerification(
+  username: string,
+  email: string,
+  invitationToken: string,
+): void {
+  const invitation = invitationToken
+    ? invitationStore().byToken(invitationToken)
+    : null;
+  const invited =
+    invitation !== null &&
+    invitationStatus(invitation) === "pending" &&
+    sameAddress(invitation.email, email);
+  const verifications = emailVerificationStore();
+  const token = verifications.start(username, email, { confirmed: invited });
+  if (invited) {
+    logger.info("Signed up from an invitation; address confirmed by it", {
+      username,
+    });
+    return;
+  }
+  queueEmail({
+    kind: "verify-email",
+    to: email,
+    content: verifyEmailContent({
+      link: `${config.appOrigin}/-/verify_email?token=${encodeURIComponent(token)}`,
+      username,
+    }),
+  });
+}
+
+/**
+ * Open an emailed confirmation link. No session needed: it is often opened on
+ * a phone, away from the browser that signed up. The token is the credential.
+ */
+async function handleVerifyEmail(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const rateLimit = consumeAuthRateLimit(req, "verify");
+  if (rateLimit.limited) {
+    return rateLimitedResponse(baseHeaders, rateLimit.retryAfterSeconds);
+  }
+  const payload = await readJson<{ token?: unknown }>(req);
+  const token = typeof payload?.token === "string" ? payload.token : "";
+  const result = token
+    ? emailVerificationStore().verify(token)
+    : ({ ok: false, reason: "unknown" } as const);
+  if (!result.ok) {
+    return json(
+      result.reason === "expired" ? 410 : 404,
+      {
+        error:
+          result.reason === "expired"
+            ? "This link has expired. Sign in, and send yourself a new one."
+            : "This link does not work. Sign in, and send yourself a new one.",
+      },
+      baseHeaders,
+    );
+  }
+  // Only failures count toward the limit: it is there to slow guessing, and
+  // one office behind one address confirms many accounts in a day.
+  resetAuthRateLimit(req, "verify");
+  logger.info("Email address confirmed", { username: result.username });
+  return json(200, { verified: true }, baseHeaders);
+}
+
+/** Send the signed-in person a new confirmation link. */
+async function handleResendVerification(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { username } = auth.session;
+  const sent = emailVerificationStore().resend(username);
+  if (sent === "cooldown") {
+    return json(
+      429,
+      { error: "A link went out a moment ago. Give it a minute to arrive." },
+      mergeHeaders(baseHeaders, { "Retry-After": "60" }),
+    );
+  }
+  if (sent === null) {
+    return json(200, { verified: true }, baseHeaders);
+  }
+  queueEmail({
+    kind: "verify-email",
+    to: sent.email,
+    content: verifyEmailContent({
+      link: `${config.appOrigin}/-/verify_email?token=${encodeURIComponent(sent.token)}`,
+      username,
+    }),
+  });
+  logger.info("Email confirmation link resent", { username });
+  return json(202, { verified: false }, baseHeaders);
+}
+
+/**
+ * Routes an account that has not confirmed its address may still use. Its
+ * own invitation's page says what it is for, and deleting the account is
+ * always allowed. Everything else under `/api/app/` waits for the link.
+ */
+function allowedBeforeEmailConfirmed(pathname: string, method: string) {
+  if (method === "GET" && /^\/api\/app\/invitations\/[^/]+$/.test(pathname)) {
+    return true;
+  }
+  if (method === "GET" && pathname.startsWith("/api/app/avatars/")) return true;
+  if (pathname === "/api/app/account" && method === "DELETE") return true;
+  if (pathname === "/api/app/account/blockers" && method === "GET") return true;
+  return false;
+}
+
+async function emailConfirmationGate(
+  req: Request,
+  pathname: string,
+  method: string,
+  baseHeaders: Headers,
+): Promise<Response | null> {
+  if (!pathname.startsWith("/api/app/")) return null;
+  if (allowedBeforeEmailConfirmed(pathname, method)) return null;
+  const session = await getSessionFromRequest(req);
+  if (!session) return null;
+  if (!emailVerificationStore().isUnconfirmed(session.username)) return null;
+  return json(
+    403,
+    {
+      error: "Confirm your email address first. The link is in your inbox.",
+      code: "email_unverified" as const,
+    },
+    baseHeaders,
+  );
+}
+
+async function handleForgotPassword(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const rateLimit = consumeAuthRateLimit(req, "forgot");
+  if (rateLimit.limited) {
+    return rateLimitedResponse(baseHeaders, rateLimit.retryAfterSeconds);
+  }
+
+  const payload = await readJson<{ email?: unknown }>(req);
+  const email = typeof payload?.email === "string" ? payload.email.trim() : "";
+  if (!looksLikeEmailAddress(email)) {
+    return json(
+      400,
+      { error: "Enter the email address you signed up with." },
+      baseHeaders,
+    );
+  }
+
+  void sendResetLink(email).catch((err) =>
+    logger.error("Could not send a password reset link", {
+      error: err instanceof Error ? err.message : String(err),
+    }),
+  );
+
+  return json(202, { ok: true }, baseHeaders);
+}
+
+async function sendResetLink(email: string): Promise<void> {
+  const lookup = await findUsernameByEmail(email);
+  if (lookup.kind !== "authenticated") {
+    logger.info("Password reset asked for an address with no account");
+    return;
+  }
+  const username = lookup.username;
+  if (isServiceAccount(username)) return;
+
+  const resets = passwordResetStore();
+  resets.prune();
+  if (resets.recentlySent(username)) {
+    logger.info("Password reset link not resent: one went out moments ago", {
+      username,
+    });
+    return;
+  }
+
+  const token = resets.issue(username, email);
+  const link = `${config.appOrigin}/-/reset_password?token=${encodeURIComponent(token)}`;
+  queueEmail({
+    kind: "password-reset",
+    to: email,
+    content: resetLinkEmail({ link, username }),
+  });
+  logger.info("Password reset link queued", { username });
+}
+
+/** Whether a reset link still works, so the page can say so before typing. */
+async function handleCheckResetLink(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const rateLimit = consumeAuthRateLimit(req, "reset");
+  if (rateLimit.limited) {
+    return rateLimitedResponse(baseHeaders, rateLimit.retryAfterSeconds);
+  }
+  const token = new URL(req.url).searchParams.get("token") ?? "";
+  const record = token ? passwordResetStore().peek(token) : null;
+  return json(
+    200,
+    record ? { valid: true, username: record.username } : { valid: false },
+    baseHeaders,
+  );
+}
+
+/**
+ * Set a new password from a reset link, then sign the person in.
+ *
+ * The link is used up first, in one statement, so it cannot be raced. Every
+ * session the person had ends — whoever made them asked for a reset — and a
+ * note goes to the address on the link, in case it was not them.
+ */
+async function handleResetPassword(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const rateLimit = consumeAuthRateLimit(req, "reset");
+  if (rateLimit.limited) {
+    return rateLimitedResponse(baseHeaders, rateLimit.retryAfterSeconds);
+  }
+
+  const payload = await readJson<{ token?: unknown; password?: unknown }>(req);
+  const token = typeof payload?.token === "string" ? payload.token : "";
+  const password =
+    typeof payload?.password === "string" ? payload.password : "";
+
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return json(
+      400,
+      {
+        error: `Your new password needs at least ${MIN_PASSWORD_LENGTH} characters.`,
+      },
+      baseHeaders,
+    );
+  }
+
+  const resets = passwordResetStore();
+  const record = token ? resets.consume(token) : null;
+  if (!record) {
+    return json(
+      410,
+      {
+        error: "This link has expired or was already used. Ask for a new one.",
+      },
+      baseHeaders,
+    );
+  }
+
+  const serviceHeaders = buildGiteaPrivilegedHeaders("admin", {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  });
+  const response = serviceHeaders
+    ? await giteaFetch(
+        `/api/v1/admin/users/${encodeURIComponent(record.username)}`,
+        {
+          method: "PATCH",
+          headers: serviceHeaders,
+          body: JSON.stringify({
+            login_name: record.username,
+            source_id: 0,
+            password,
+            must_change_password: false,
+          }),
+        },
+      ).catch(() => null)
+    : null;
+
+  if (!response || !response.ok) {
+    // Nothing changed, so the link should still work for another try.
+    resets.release(token);
+    const error = response
+      ? await readGiteaErrorMessage(
+          response,
+          "Your password could not be changed.",
+        )
+      : "Your password could not be changed.";
+    return json(response?.status === 422 ? 400 : 502, { error }, baseHeaders);
+  }
+
+  resets.retireAll(record.username);
+  // The link went to this address, so whoever used it owns it.
+  emailVerificationStore().confirm(record.username, record.email);
+  await endOtherSessions(record.username);
+  resetAuthRateLimit(req, "login");
+  queueEmail({
+    kind: "password-changed",
+    to: record.email,
+    content: passwordChangedEmail({
+      username: record.username,
+      signInUrl: `${config.appOrigin}/-/login`,
+    }),
+  });
+  logger.info("Password reset from an emailed link; every session ended", {
+    username: record.username,
+  });
+
+  return createAuthenticatedSession(
+    record.username,
+    password,
+    req,
+    baseHeaders,
+  );
+}
+
+/**
+ * The account, gone for good — and the record it signed, kept.
+ *
+ * Gitea's own rule decides what blocks it: an organization with no other owner
+ * cannot be left without one, so the person is told which to hand over or
+ * delete first. Otherwise their drafts are retired so a future account with
+ * the same login cannot pick them up, and Gitea deletes the account. Their
+ * approvals, comments and published versions stay; each version's tag names
+ * them in full.
+ *
+ * **As the person, wherever Gitea lets a person act.** Retiring a draft is a
+ * branch rename in their own binder, so it is made with their own token —
+ * Gitea records it as theirs, and the service account needs no write access
+ * to anybody's documents. Only the deletion itself is an admin act, and it
+ * purges: Gitea then takes them out of every organization and team on its
+ * own, which nobody but an organization owner could otherwise do. Purging also
+ * deletes repositories the person owns themselves; Bindersnap never creates
+ * one, since every binder belongs to an organization.
+ */
+async function handleDeleteAccount(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { session, client: ownClient } = auth;
+  const username = session.username;
+
+  const payload = await readJson<{ password?: unknown; confirm?: unknown }>(
+    req,
+  );
+  const password =
+    typeof payload?.password === "string" ? payload.password : "";
+  const confirm =
+    typeof payload?.confirm === "string" ? payload.confirm.trim() : "";
+
+  if (confirm.toLowerCase() !== username.toLowerCase()) {
+    return json(400, { error: "Type your username to confirm." }, baseHeaders);
+  }
+  if (isServiceAccount(username)) {
+    return json(
+      403,
+      { error: "This account runs Bindersnap itself and cannot be deleted." },
+      baseHeaders,
+    );
+  }
+
+  const refused = await confirmCurrentPassword(
+    req,
+    session,
+    password,
+    baseHeaders,
+  );
+  if (refused) return refused;
+
+  const client = createPrivilegedGiteaClient();
+  const serviceHeaders = buildGiteaPrivilegedHeaders("admin", {
+    Accept: "application/json",
+  });
+  if (!client || !serviceHeaders) {
+    return json(
+      502,
+      { error: "Accounts cannot be deleted right now." },
+      baseHeaders,
+    );
+  }
+
+  // Reads go through the service token; what changes in Gitea before the
+  // account itself goes is done as the person, whose token carries the write
+  // scopes the service token deliberately lacks.
+  try {
+    const orgs = await listUserOrganizations(client, username);
+    const sole = await findSoleOwnerships({ client, username, orgs });
+    if (sole.length > 0) {
+      return json(
+        409,
+        {
+          error:
+            "You are the only owner of an organization. Make someone else an owner, or delete the organization, first.",
+          organizations: sole,
+        },
+        baseHeaders,
+      );
+    }
+
+    // Retired, not deleted: an unproposed draft is still somebody's work, and
+    // a proposed one is a change request's branch. Renamed out of `draft/`,
+    // no account can claim either by taking the login.
+    const drafts = await listOwnedDrafts({ client, username, orgs });
+    for (const draft of drafts) {
+      const stamp = draft.branch.split("/")[2] ?? "";
+      await renameBranch({
+        client: ownClient,
+        org: draft.org,
+        binder: draft.binder,
+        from: draft.branch,
+        to: `retired/${username}/${stamp}`,
+      }).catch((err) =>
+        logger.error("A deleted account's draft could not be retired", {
+          username,
+          branch: draft.branch,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+      await draftNameStore.forget(draft.giteaRepoId, draft.branch);
+    }
+
+    await endOtherSessions(username, session.id);
+    const response = await giteaFetch(
+      `/api/v1/admin/users/${encodeURIComponent(username)}?purge=true`,
+      { method: "DELETE", headers: serviceHeaders },
+    ).catch(() => null);
+    if (!response || !response.ok) {
+      const error = response
+        ? await readGiteaErrorMessage(
+            response,
+            "Your account could not be deleted.",
+          )
+        : "Your account could not be deleted.";
+      return json(response?.status === 422 ? 409 : 502, { error }, baseHeaders);
+    }
+
+    // The token died with the account; only the row is left.
+    await sessionStore.delete(session.id);
+    emailVerificationStore().forget(username);
+    logger.info("Account deleted", {
+      username,
+      organizationsLeft: orgs.length,
+    });
+    return new Response(null, {
+      status: 204,
+      headers: mergeHeaders(baseHeaders, {
+        "Set-Cookie": clearSessionCookie(req),
+      }),
+    });
+  } catch (err) {
+    logger.error("Failed to delete an account", {
+      username,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return json(
+      502,
+      { error: "Your account could not be deleted." },
+      baseHeaders,
+    );
+  }
+}
+
+/**
+ * Somebody's face: a pattern drawn from their login, here, by us.
+ *
+ * Not Gravatar. Asking Gravatar for a face hands Automattic a hash of the
+ * person's email and the viewer's IP address, for a picture almost nobody at a
+ * clinic has ever uploaded, so the Privacy Policy promises that nobody else
+ * sees who uses Bindersnap and this keeps the promise. The pattern is the
+ * kind Gravatar drew for everybody without a photo: a mirrored five-by-five
+ * grid in one colour, so no two people look alike and one person looks the
+ * same on every page. Signed-in only: the faces of an organization's people
+ * are not for anybody who guesses a login.
+ */
+async function handleAvatar(
+  req: Request,
+  baseHeaders: Headers,
+  login: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const url = new URL(req.url);
+  const requested = Number.parseInt(url.searchParams.get("s") ?? "", 10);
+  const size =
+    Number.isFinite(requested) && requested > 0 ? Math.min(requested, 512) : 80;
+
+  return new Response(identiconSvg(login, size), {
+    status: 200,
+    headers: mergeHeaders(baseHeaders, {
+      "Content-Type": "image/svg+xml",
+      "Cache-Control": "private, max-age=86400",
+    }),
+  });
 }
 
 /**
@@ -2286,9 +3522,11 @@ type HomePendingChangeRow = PendingChangeRow & {
 
 function buildPendingChangeRow(
   entry: PullRequestWithReviews,
-  requiredApprovals: number | null,
+  rules: MergeRules | null,
 ) {
-  const approvalCount = countApprovals(entry.reviews);
+  const requiredApprovals = rules?.requiredApprovals ?? null;
+  const ignoresStale = rules?.ignoresStale ?? true;
+  const approvalCount = countApprovals(entry.reviews, ignoresStale);
 
   // Declared in the response contract from the beginning and never populated,
   // so `isRejected` read `undefined` everywhere — and `undefined` is falsy.
@@ -2298,23 +3536,33 @@ function buildPendingChangeRow(
   // already folds each reviewer's latest answer, which is the same rule Gitea
   // merges on, so both answers are here for free.
   const isRejected = entry.pullRequest.approvalState === "changes_requested";
+  const reviewers = buildChangeReviewers({
+    requested: readRequestedReviewers(entry.pullRequest),
+    reviews: entry.reviews,
+    submittedBy: entry.pullRequest.user?.login ?? "",
+    ignoresStale,
+  });
 
   return {
     ...entry.pullRequest,
-    reviewers: buildChangeReviewers({
-      requested: readRequestedReviewers(entry.pullRequest),
-      reviews: entry.reviews,
-      submittedBy: entry.pullRequest.user?.login ?? "",
-    }),
+    reviewers,
     assignee: readAssignee(entry.pullRequest),
     approvalCount,
     requiredApprovals,
     isRejected,
+    // **Whether Gitea would merge it now**, by the binder's own protection:
+    // nobody's latest answer is "changes requested", the approvals reach the
+    // binder's number — which may be none — and, where the binder holds the
+    // merge for them, nobody asked to review is still silent.
+    // `isReadyToPublish` in the app asks the same things of the same fields.
     isApproved:
       !isRejected &&
-      requiredApprovals !== null &&
-      requiredApprovals > 0 &&
-      approvalCount >= requiredApprovals,
+      rules !== null &&
+      approvalCount >= rules.requiredApprovals &&
+      !(
+        rules.heldByReviewRequests &&
+        reviewers.some((reviewer) => reviewer.status === "awaiting")
+      ),
   };
 }
 
@@ -2332,7 +3580,7 @@ async function loadOpenChangeSummary(
   repo: string,
 ) {
   try {
-    const [versionsByDocument, openWithReviews] = await Promise.all([
+    const [versionsByDocument, open] = await Promise.all([
       // **The binder's own version tags, not `doc/vNNNN`.** That pattern is the
       // old one-repo-per-document model's, which nothing writes any more — so
       // this used to find nothing, `latestTag` was always null, and Home told
@@ -2342,11 +3590,19 @@ async function loadOpenChangeSummary(
       listVersionsByDocument({ client, org: owner, workspace: repo }).catch(
         () => new Map<string, DocumentVersion[]>(),
       ),
-      listPullRequestsWithReviews({ client, owner, repo, state: "open" }),
+      listPullRequestsWithoutReviews({ client, owner, repo, state: "open" }),
     ]);
-    const pending = openWithReviews.filter((entry) =>
-      (entry.pullRequest.head?.ref ?? "").startsWith("upload/"),
-    );
+    // **Every open change, whatever its branch is called.** This used to keep
+    // only `upload/…` branches, which is how a change was made before drafts —
+    // so a change proposed from a draft, the way the app now makes nearly all
+    // of them, never reached Home or the review queue. The seed made only
+    // upload branches, which is why nobody saw it.
+    const pending = await attachReviews({
+      client,
+      owner,
+      repo,
+      pullRequests: open,
+    });
     // The approval policy only ever answers "how many approvals does this
     // change still need", so a document with nothing in flight has no question
     // to ask — and most of them don't. Asking anyway spent a Gitea round trip
@@ -2354,8 +3610,8 @@ async function loadOpenChangeSummary(
     //
     // A row is worth showing without its approval policy; it is not worth
     // failing the whole list for.
-    const requiredApprovals =
-      pending.length > 0 ? await readRequiredApprovals(owner, repo) : null;
+    const mergeRules =
+      pending.length > 0 ? await readMergeRules(owner, repo) : null;
 
     return {
       pendingPRs: pending
@@ -2373,7 +3629,7 @@ async function loadOpenChangeSummary(
             : [];
 
           return {
-            ...buildPendingChangeRow(entry, requiredApprovals),
+            ...buildPendingChangeRow(entry, mergeRules),
             documentSlugPath: slugPath,
             nextVersion: slugPath === null ? null : nextVersionFrom(versions),
           };
@@ -2553,6 +3809,322 @@ async function readLibrary(params: {
  * Gitea can answer it directly, so the search picks the candidates and the
  * expensive per-change reads are spent only where they can produce a row.
  */
+/**
+ * How far this person has got with moving in — see `onboarding.ts`.
+ *
+ * Read as them, so the guide describes what they can see. Bounded: a person
+ * setting up a first organization has one or two, with a binder or three, and
+ * somebody in fifty organizations finished moving in long ago — the first few
+ * are enough to say so.
+ */
+async function handleOnboarding(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { client, session } = auth;
+
+  const count = async (promise: Promise<{ data?: unknown }>) =>
+    promise
+      .then((response) =>
+        Array.isArray(response.data) ? response.data.length : 0,
+      )
+      .catch(() => 0);
+
+  try {
+    const orgs = ((await unwrap(
+      client.GET("/user/orgs", {
+        params: { query: { limit: ONBOARDING_ORGS } },
+      }),
+    )) ?? []) as { username?: string; name?: string }[];
+
+    // **Somebody who can already see a published version is past setting up**
+    // — they moved in, or were invited into an organization that did. One
+    // search across every change they can see answers that without walking
+    // their organizations.
+    const decided = (await client
+      .GET("/repos/issues/search", {
+        params: { query: { type: "pulls", state: "closed", limit: 10 } },
+      })
+      .then((response) => response.data ?? [])
+      .catch(() => [])) as { pull_request?: { merged?: boolean } | null }[];
+    if (decided.some((entry) => entry.pull_request?.merged === true)) {
+      return json(200, onboardingState([], { published: true }), baseHeaders);
+    }
+
+    // One organization at a time, stopping at the first that is fully set
+    // up: somebody who has finished moving in is answered after one or two,
+    // and only a person still setting up pays for the whole scan.
+    const facts: OnboardingOrganization[] = [];
+    for (const org of orgs.slice(0, ONBOARDING_ORGS)) {
+      const name = org.username ?? org.name ?? "";
+      const [members, repos] = await Promise.all([
+        count(
+          client.GET("/orgs/{org}/members", {
+            params: { path: { org: name }, query: { limit: 2 } },
+          }),
+        ),
+        client
+          .GET("/orgs/{org}/repos", {
+            params: {
+              path: { org: name },
+              query: { limit: ONBOARDING_BINDERS },
+            },
+          })
+          .then((response) => (response.data ?? []) as { name?: string }[])
+          .catch(() => [] as { name?: string }[]),
+      ]);
+      const binders = await Promise.all(
+        repos.slice(0, ONBOARDING_BINDERS).map(async (repo) => {
+          const repoName = repo.name ?? "";
+          const path = { owner: name, repo: repoName };
+          const [tags, pulls, protection] = await Promise.all([
+            count(
+              client.GET("/repos/{owner}/{repo}/tags", {
+                params: { path, query: { limit: 1 } },
+              }),
+            ),
+            count(
+              client.GET("/repos/{owner}/{repo}/pulls", {
+                params: { path, query: { state: "all", limit: 1 } },
+              }),
+            ),
+            readWorkspaceProtection(name, repoName),
+          ]);
+          return {
+            name: repoName,
+            hasDocuments: tags > 0 || pulls > 0,
+            hasPublished: tags > 0,
+            requiredApprovals: protection?.requiredApprovals ?? null,
+          };
+        }),
+      );
+      const entry = { name, hasColleagues: members > 1, binders };
+      facts.push(entry);
+      if (onboardingState([entry]).complete) break;
+    }
+
+    return json(200, onboardingState(facts), baseHeaders);
+  } catch (err) {
+    logger.error("Failed to read onboarding progress", {
+      username: session.username,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to read your progress.");
+  }
+}
+
+const ONBOARDING_ORGS = 20;
+const ONBOARDING_BINDERS = 6;
+
+/**
+ * Your notifications: Gitea's threads, each with the reason it is for you.
+ *
+ * Read with your own token — Gitea's notifications are per user, and that is
+ * the permission check. `?all=1` includes the ones already read.
+ */
+async function handleListNotifications(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { client, session } = auth;
+
+  try {
+    const all = new URL(req.url).searchParams.get("all") === "1";
+    const threads = (await unwrap(
+      client.GET("/notifications", {
+        params: {
+          query: { all, "subject-type": ["pull"], limit: NOTIFICATION_PAGE },
+        },
+      }),
+    )) as components["schemas"]["NotificationThread"][];
+
+    // One read per change, to say why it is here: asked of you, yours,
+    // published. A change that cannot be read keeps its thread, unexplained.
+    const subjects = new Map<
+      string,
+      { org: string; binder: string; number: number }
+    >();
+    for (const thread of threads ?? []) {
+      const subject = readSubjectUrl(thread.subject?.url);
+      if (subject)
+        subjects.set(
+          pullKey(subject.org, subject.binder, subject.number),
+          subject,
+        );
+    }
+    const pulls = new Map(
+      await Promise.all(
+        [...subjects].map(async ([key, subject]) => {
+          const pull = await client
+            .GET("/repos/{owner}/{repo}/pulls/{index}", {
+              params: {
+                path: {
+                  owner: subject.org,
+                  repo: subject.binder,
+                  index: subject.number,
+                },
+              },
+            })
+            .then((response) => response.data ?? null)
+            .catch(() => null);
+          return [key, pull] as const;
+        }),
+      ),
+    );
+
+    return json(
+      200,
+      {
+        notifications: toAppNotifications(
+          threads ?? [],
+          pulls,
+          session.username,
+        ),
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    const scope = notificationScopeMissing(err, baseHeaders);
+    if (scope) return scope;
+    logger.error("Failed to read notifications", {
+      username: session.username,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to read your notifications.",
+    );
+  }
+}
+
+/** How many are unread — what the bell's number is. Cheap: one Gitea call. */
+async function handleNotificationCount(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  try {
+    const counted = (await unwrap(
+      auth.client.GET("/notifications/new", {}),
+    )) as { new?: number };
+    return json(200, { unread: counted?.new ?? 0 }, baseHeaders);
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to count your notifications.",
+    );
+  }
+}
+
+/**
+ * Mark notifications read: one (`id`), every one about a change (`change`),
+ * or, with neither, all of them.
+ *
+ * `change` is what opening a change page sends: having read the change is
+ * having read what the bell was saying about it.
+ */
+async function handleReadNotifications(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { client } = auth;
+
+  try {
+    const body = ((await readJsonBody(req)) ?? {}) as {
+      id?: unknown;
+      change?: { org?: unknown; binder?: unknown; number?: unknown };
+    };
+
+    const markThread = (id: number) =>
+      unwrap(
+        client.PATCH("/notifications/threads/{id}", {
+          params: { path: { id: String(id) }, query: { "to-status": "read" } },
+        }),
+      );
+
+    if (typeof body.id === "number") {
+      await markThread(body.id);
+    } else if (body.change && typeof body.change === "object") {
+      const { org, binder, number } = body.change;
+      if (
+        typeof org !== "string" ||
+        typeof binder !== "string" ||
+        typeof number !== "number"
+      ) {
+        return json(
+          400,
+          { error: "Say which change: org, binder and number." },
+          baseHeaders,
+        );
+      }
+      const unread = (await unwrap(
+        client.GET("/notifications", {
+          params: {
+            query: { "subject-type": ["pull"], limit: NOTIFICATION_PAGE },
+          },
+        }),
+      )) as components["schemas"]["NotificationThread"][];
+      const matching = (unread ?? []).filter((thread) => {
+        const subject = readSubjectUrl(thread.subject?.url);
+        return (
+          subject?.org === org &&
+          subject.binder === binder &&
+          subject.number === number
+        );
+      });
+      await Promise.all(
+        matching.map((thread) =>
+          thread.id === undefined ? null : markThread(thread.id),
+        ),
+      );
+    } else {
+      await unwrap(client.PUT("/notifications", { params: { query: {} } }));
+    }
+
+    const counted = (await unwrap(client.GET("/notifications/new", {}))) as {
+      new?: number;
+    };
+    return json(200, { unread: counted?.new ?? 0 }, baseHeaders);
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to mark notifications read.",
+    );
+  }
+}
+
+/**
+ * A session that began before notifications existed holds a Gitea token
+ * without the scope for them, and Gitea says so in words nobody should see.
+ * Signing in again mints a token that has it.
+ */
+function notificationScopeMissing(
+  err: unknown,
+  baseHeaders: Headers,
+): Response | null {
+  const message = err instanceof Error ? err.message : String(err);
+  if (!/notification/.test(message) || !/scope/.test(message)) return null;
+  return json(
+    409,
+    { error: "Sign out and back in to turn on notifications." },
+    baseHeaders,
+  );
+}
+
+/** A bell is a glance, not an inbox: the newest thirty are enough. */
+const NOTIFICATION_PAGE = 30;
+
 async function handleHomeChanges(
   req: Request,
   baseHeaders: Headers,
@@ -2653,10 +4225,12 @@ function groupRefsByRepo(
 }
 
 /**
- * Named decided changes from one document.
+ * Named decided changes from one binder.
  *
  * The tags are what turn a merged change into "published as v3", so they are
- * read per document rather than per change.
+ * read once per binder rather than per change. They are the binder's own
+ * `<uid>/vN` tags: this used to read the pre-ADR-0004 `doc/vNNNN` shape, which
+ * nothing writes any more, so every decided change came back unnumbered.
  */
 async function loadDecidedChanges(
   client: GiteaClient,
@@ -2666,7 +4240,7 @@ async function loadDecidedChanges(
 ) {
   try {
     const [tags, requiredApprovals, entries] = await Promise.all([
-      listDocTags(client, owner, repo),
+      listAllTags({ client, owner, repo }),
       readRequiredApprovals(owner, repo),
       Promise.all(
         numbers.map((pullNumber) =>
@@ -2678,7 +4252,11 @@ async function loadDecidedChanges(
     return {
       owner,
       repo,
-      changes: buildClosedChanges(entries, tags, requiredApprovals),
+      changes: buildClosedChanges(
+        entries,
+        publishedVersionByMergeCommit(tags),
+        requiredApprovals,
+      ),
     };
   } catch (err) {
     // A document that will not answer contributes nothing to the section
@@ -2690,6 +4268,281 @@ async function loadDecidedChanges(
     });
     return { owner, repo, changes: [] as ClosedChange[] };
   }
+}
+
+/**
+ * Email the people a change event concerns (issue #665).
+ *
+ * Fire and forget: the action that caused it has already happened, and an
+ * email that cannot be worked out — Gitea slow, an address missing — must not
+ * turn that action into an error. Everything is read with the service
+ * account, because a person's own token sees other people's addresses as
+ * Gitea's no-reply ones.
+ */
+function notifyChange(params: {
+  owner: string;
+  repo: string;
+  number: number;
+  actor: string;
+  event: ChangeEmailEvent;
+  /** What makes this occurrence distinct — a review id, a head commit. */
+  occurrence: string;
+}): void {
+  void sendChangeEmails(params).catch((err) =>
+    logger.error("Could not queue change emails", {
+      organization: params.owner,
+      workspace: params.repo,
+      pullNumber: params.number,
+      event: params.event.kind,
+      error: err instanceof Error ? err.message : String(err),
+    }),
+  );
+}
+
+async function readPerson(
+  client: GiteaClient,
+  login: string,
+): Promise<{ email: string | null; name: string }> {
+  const { data } = await client
+    .GET("/users/{username}", { params: { path: { username: login } } })
+    .catch(() => ({ data: undefined }));
+  const raw = typeof data?.email === "string" ? data.email.trim() : "";
+  const fullName =
+    typeof data?.full_name === "string" ? data.full_name.trim() : "";
+  return {
+    email: looksLikeEmailAddress(raw) ? raw : null,
+    name: fullName || login,
+  };
+}
+
+async function sendChangeEmails(params: {
+  owner: string;
+  repo: string;
+  number: number;
+  actor: string;
+  event: ChangeEmailEvent;
+  occurrence: string;
+}): Promise<void> {
+  const { owner, repo, number, actor, event, occurrence } = params;
+  const client = createPrivilegedGiteaClient();
+  if (!client) return;
+
+  const { pullRequest } = await getPullRequestWithReviews({
+    client,
+    owner,
+    repo,
+    pullNumber: number,
+  });
+  const author = pullRequest.user?.login ?? "";
+  const recipients = recipientsFor(event, { author, actor });
+  if (recipients.length === 0) return;
+
+  const topic = TOPIC_OF[event.kind];
+  const preferences = emailPreferenceStore();
+  const facts = {
+    owner,
+    repo,
+    number,
+    title: pullRequest.title?.trim() || `Change ${number}`,
+    author,
+    actor,
+    actorName: (await readPerson(client, actor)).name,
+  };
+  const link = changeUrl(config.appOrigin, facts);
+  const content = changeEmail(event, facts, link);
+
+  for (const recipient of recipients) {
+    if (isServiceAccount(recipient)) continue;
+    if (!preferences.wants(recipient, topic)) continue;
+    // Never to an address nobody has shown is theirs.
+    if (emailVerificationStore().isUnconfirmed(recipient)) continue;
+    const { email } = await readPerson(client, recipient);
+    if (!email) continue;
+    const token = preferences.tokenFor(recipient);
+    queueEmail({
+      kind: `change-${event.kind}`,
+      to: email,
+      content: {
+        ...content,
+        optOut: {
+          reason: OPT_OUT_REASON[topic],
+          settingsUrl: `${config.appOrigin}/-/user_settings/profile#email`,
+          unsubscribeUrl: `${config.appOrigin}/-/unsubscribe?token=${encodeURIComponent(token)}`,
+        },
+      },
+      idempotencyKey: changeEmailKey(event, facts, recipient, occurrence),
+      oneClickUnsubscribeUrl: `${config.apiOrigin}/email/unsubscribe?token=${encodeURIComponent(token)}`,
+    });
+  }
+}
+
+/**
+ * After an approval: if that made the change publishable, tell its author.
+ * "Publishable" is the same test Home and the library use (`isApproved`), so
+ * the email never says ready when the page says waiting. Once per version of
+ * the change — a later push that needs approving again can be ready again.
+ */
+function notifyIfReadyToPublish(params: {
+  owner: string;
+  repo: string;
+  number: number;
+  actor: string;
+}): void {
+  void (async () => {
+    const client = createPrivilegedGiteaClient();
+    if (!client) return;
+    const [entry, rules] = await Promise.all([
+      getPullRequestWithReviews({
+        client,
+        owner: params.owner,
+        repo: params.repo,
+        pullNumber: params.number,
+      }),
+      readMergeRules(params.owner, params.repo),
+    ]);
+    if (!buildPendingChangeRow(entry, rules).isApproved) return;
+    notifyChange({
+      ...params,
+      event: { kind: "ready-to-publish" },
+      occurrence: entry.pullRequest.head?.sha ?? "head",
+    });
+  })().catch((err) =>
+    logger.error("Could not check whether a change is ready to publish", {
+      organization: params.owner,
+      workspace: params.repo,
+      pullNumber: params.number,
+      error: err instanceof Error ? err.message : String(err),
+    }),
+  );
+}
+
+/** Everybody a just-opened change asks to review it. */
+function notifyRequestedReviewers(params: {
+  owner: string;
+  repo: string;
+  number: number;
+  actor: string;
+}): void {
+  void (async () => {
+    const client = createPrivilegedGiteaClient();
+    if (!client) return;
+    const { pullRequest } = await getPullRequestWithReviews({
+      client,
+      owner: params.owner,
+      repo: params.repo,
+      pullNumber: params.number,
+    });
+    const reviewers = readRequestedReviewers(pullRequest)
+      .map((user) => user.login?.trim() ?? "")
+      .filter(Boolean);
+    if (reviewers.length === 0) return;
+    notifyChange({
+      ...params,
+      event: { kind: "review-requested", reviewers },
+      occurrence: "opened",
+    });
+  })().catch((err) =>
+    logger.error("Could not read who a new change asks to review it", {
+      organization: params.owner,
+      workspace: params.repo,
+      pullNumber: params.number,
+      error: err instanceof Error ? err.message : String(err),
+    }),
+  );
+}
+
+/** The author and everyone who reviewed or was asked to: it is published. */
+function notifyPublished(params: {
+  owner: string;
+  repo: string;
+  number: number;
+  actor: string;
+}): void {
+  void (async () => {
+    const client = createPrivilegedGiteaClient();
+    if (!client) return;
+    const { pullRequest, reviews } = await getPullRequestWithReviews({
+      client,
+      owner: params.owner,
+      repo: params.repo,
+      pullNumber: params.number,
+    });
+    const participants = [
+      ...reviews.map((review) => review.user?.login ?? ""),
+      ...readRequestedReviewers(pullRequest).map((user) => user.login ?? ""),
+    ].filter(Boolean);
+    notifyChange({
+      ...params,
+      event: { kind: "published", participants },
+      occurrence: "published",
+    });
+  })().catch((err) =>
+    logger.error("Could not read who to tell about a publish", {
+      organization: params.owner,
+      workspace: params.repo,
+      pullNumber: params.number,
+      error: err instanceof Error ? err.message : String(err),
+    }),
+  );
+}
+
+/** The signed-in person's email settings. */
+async function handleReadEmailPreferences(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  return json(
+    200,
+    { preferences: emailPreferenceStore().get(auth.session.username) },
+    baseHeaders,
+  );
+}
+
+async function handleUpdateEmailPreferences(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const changes = parsePreferences(await readJson<unknown>(req));
+  if (!changes) {
+    return json(
+      400,
+      { error: "Each email setting must be true or false." },
+      baseHeaders,
+    );
+  }
+  return json(
+    200,
+    {
+      preferences: emailPreferenceStore().set(auth.session.username, changes),
+    },
+    baseHeaders,
+  );
+}
+
+/**
+ * Turn every change email off, by the token in an email's unsubscribe link.
+ *
+ * No session: whoever holds the link can do this one harmless thing. It is
+ * also the one-click target of `List-Unsubscribe-Post` (RFC 8058), which a
+ * mail client POSTs with no Origin — so it is routed before the origin check.
+ * The same answer for a token that matches nobody, so tokens cannot be probed.
+ */
+async function handleOneClickUnsubscribe(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const token = new URL(req.url).searchParams.get("token") ?? "";
+  const username = token ? emailPreferenceStore().unsubscribe(token) : null;
+  if (username) {
+    logger.info("Change emails turned off from an unsubscribe link", {
+      username,
+    });
+  }
+  return json(200, { ok: true }, baseHeaders);
 }
 
 /** Distinct, trimmed usernames, in the order they were given. */
@@ -2803,6 +4656,17 @@ async function handleUpdateChangeAssignments(
         reviewers: add,
       });
 
+      if (add.length > 0) {
+        notifyChange({
+          owner,
+          repo,
+          number: prNumber,
+          actor: auth.session.username,
+          event: { kind: "review-requested", reviewers: add },
+          occurrence: String(Date.now()),
+        });
+      }
+
       await removePullReviewers({
         client,
         owner,
@@ -2812,15 +4676,17 @@ async function handleUpdateChangeAssignments(
       });
     }
 
-    const [after, requiredApprovals] = await Promise.all([
+    const [after, mergeRules] = await Promise.all([
       getPullRequestWithReviews({
         client,
         owner,
         repo,
         pullNumber: prNumber,
       }),
-      readRequiredApprovals(owner, repo),
+      readMergeRules(owner, repo),
     ]);
+    const requiredApprovals = mergeRules?.requiredApprovals ?? null;
+    const ignoresStale = mergeRules?.ignoresStale ?? true;
 
     return json(
       200,
@@ -2830,8 +4696,9 @@ async function handleUpdateChangeAssignments(
           requested: readRequestedReviewers(after.pullRequest),
           reviews: after.reviews,
           submittedBy: after.pullRequest.user?.login ?? submittedBy,
+          ignoresStale,
         }),
-        approvalCount: countApprovals(after.reviews),
+        approvalCount: countApprovals(after.reviews, ignoresStale),
         requiredApprovals,
       },
       baseHeaders,
@@ -3873,6 +5740,265 @@ async function handleStripeWebhook(
  * resolution, and the BFF is the only path to a merge, so it cannot be
  * bypassed from the browser. Checked before the merge, never after.
  */
+/** What publishing needs from the rest of the server. See `jobs/publish.ts`. */
+const publishDeps: PublishDeps = {
+  merge: (params) => mergeWorkspaceChange(params),
+  // **The policy in force, stamped onto the event.** ADR 0004: when
+  // configuration shapes what happened, do not version the configuration —
+  // write it into the annotated tag, where it is immutable, attached to the
+  // exact publish, and readable from a bare clone with no application and no
+  // database running.
+  //
+  // Read after the merge, because the approvals that count are the ones that
+  // stood when Gitea accepted it — an approval dismissed on the way in is not
+  // a signature on what was published. A resumed run reads the same: a merged
+  // change's reviews do not move.
+  stampedPolicy: async (client, plan) => {
+    const [protection, merged, requiredApprovals] = await Promise.all([
+      readWorkspaceProtection(plan.org, plan.repo),
+      getPullRequestWithReviews({
+        client,
+        owner: plan.org,
+        repo: plan.repo,
+        pullNumber: plan.pullNumber,
+      }).catch(() => null),
+      readRequiredApprovals(plan.org, plan.repo),
+    ]);
+    return {
+      requiredApprovals,
+      approvedBy: merged
+        ? approverSignatures(
+            merged.reviews,
+            (protection?.dismissStaleApprovals ?? true) ||
+              (protection?.ignoreStaleApprovals ?? false),
+          )
+        : [],
+      signOffEnforced: protection?.blockOnCodeownerReviews ?? false,
+    };
+  },
+  versionStamp: buildVersionStamp,
+  archiveStamp: buildArchiveStamp,
+  readTagCommits: async ({ client, owner, repo }) =>
+    new Map(
+      (await listAllTags({ client, owner, repo })).flatMap((tag) =>
+        tag.name && tag.commit?.sha
+          ? [[tag.name, tag.commit.sha] as const]
+          : [],
+      ),
+    ),
+  // **A published draft is finished**, and its branch goes the way a merged
+  // branch does on a code host. Left behind, it has nothing on it that `main`
+  // lacks, so its owner's picker offered it back as an empty draft: work they
+  // had just published, looking like work they had never started. Its name is
+  // kept, so the change it became still says what it was called.
+  discardDraftIfAny: async (client, plan) => {
+    if (!isDraftBranch(plan.branch)) return;
+    await discardDraft({
+      client,
+      org: plan.org,
+      workspace: plan.repo,
+      branch: plan.branch,
+    });
+  },
+};
+
+type PublishOutcome =
+  | { kind: "done"; jobId: string; result: PublishResult }
+  /** Failed before the merge: nothing happened, and the job is gone. */
+  | { kind: "abandoned"; error: unknown }
+  /** Merged, and stopped on something waiting will not fix. */
+  | { kind: "conflict"; jobId: string; error: string }
+  /** Merged, versions not all written yet; the runner will keep at it. */
+  | { kind: "unfinished"; jobId: string; error: string }
+  /** Another run holds it right now. */
+  | { kind: "busy"; jobId: string };
+
+/**
+ * Run a publish job once, and record how it went.
+ *
+ * **Whether the merge happened is the line.** A run that fails before the
+ * merge changed nothing, so its job is dropped and the person sees the refusal
+ * exactly as before — no approval yet, a conflict, an unresolved thread. A run
+ * that fails after the merge has left something half-done, so its job stays:
+ * the runner retries it, and Publish pressed again resumes it.
+ */
+async function executePublishJob(
+  job: JobRecord,
+  client: GiteaClient,
+): Promise<PublishOutcome> {
+  const store = jobStore();
+  if (!store.claim(job.id)) return { kind: "busy", jobId: job.id };
+  const plan = job.plan as PublishPlan;
+
+  try {
+    const result = await runPublish({ client, plan, deps: publishDeps });
+    store.complete(job.id, result);
+    notifyPublished({
+      owner: plan.org,
+      repo: plan.repo,
+      number: plan.pullNumber,
+      actor: job.createdBy,
+    });
+    logger.info("Workspace change published", {
+      username: job.createdBy,
+      organization: plan.org,
+      workspace: plan.repo,
+      pullNumber: plan.pullNumber,
+      jobId: job.id,
+      attempts: job.attempts + 1,
+      tags: result.tags.map((tag) => tag.tag),
+      archived: result.archived.map((tag) => tag.tag),
+    });
+    return { kind: "done", jobId: job.id, result };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const merged = await readMergeCommitSha({
+      client,
+      owner: plan.org,
+      repo: plan.repo,
+      pullNumber: plan.pullNumber,
+    }).catch(() => "unknown");
+
+    if (merged === null) {
+      store.delete(job.id);
+      return { kind: "abandoned", error: err };
+    }
+
+    logger.error("A publish stopped after its merge", {
+      organization: plan.org,
+      workspace: plan.repo,
+      pullNumber: plan.pullNumber,
+      jobId: job.id,
+      error: message,
+    });
+    if (err instanceof PublishConflict) {
+      store.fail(job.id, message, { permanent: true });
+      return { kind: "conflict", jobId: job.id, error: message };
+    }
+    store.fail(job.id, message);
+    return { kind: "unfinished", jobId: job.id, error: message };
+  }
+}
+
+function publishJobResponse(
+  outcome: PublishOutcome,
+  baseHeaders: Headers,
+): Response {
+  switch (outcome.kind) {
+    case "done":
+      return json(
+        200,
+        {
+          ok: true,
+          tags: outcome.result.tags,
+          archived: outcome.result.archived,
+          jobId: outcome.jobId,
+        },
+        baseHeaders,
+      );
+    case "abandoned":
+      if (outcome.error instanceof PublishConflict) {
+        return json(409, { error: outcome.error.message }, baseHeaders);
+      }
+      return responseFromError(
+        outcome.error,
+        baseHeaders,
+        "Unable to publish the change.",
+      );
+    case "conflict":
+      return json(
+        409,
+        { error: outcome.error, jobId: outcome.jobId },
+        baseHeaders,
+      );
+    case "unfinished":
+      // Accepted rather than failed: the change is merged and the rest will
+      // follow. The page can poll the job, or simply read the change again.
+      return json(
+        202,
+        {
+          ok: false,
+          // The documented shape, empty: none are written yet.
+          tags: [],
+          jobId: outcome.jobId,
+          error:
+            "The change is published, and its versions are still being written. They will appear shortly.",
+        },
+        baseHeaders,
+      );
+    case "busy":
+      return json(
+        409,
+        {
+          error: "This change is being published right now.",
+          jobId: outcome.jobId,
+        },
+        baseHeaders,
+      );
+  }
+}
+
+/**
+ * The runner's turn at a publish: resume it as the person who started it.
+ *
+ * Their session's token, because writing tags takes write access to the
+ * binder and the service token — deliberately — has none. A publish whose
+ * person has since signed out waits in `failed` until somebody who can write
+ * to the binder presses Publish again, which resumes it as them.
+ */
+async function resumePublishJob(job: JobRecord): Promise<void> {
+  const session = job.sessionId ? await sessionStore.get(job.sessionId) : null;
+  if (!session || session.expiresAt <= Date.now()) {
+    jobStore().fail(
+      job.id,
+      "The person who published this has signed out. Its versions will be written when somebody with write access presses Publish again.",
+      { permanent: true },
+    );
+    return;
+  }
+  await executePublishJob(job, createSessionGiteaClient(session));
+}
+
+/**
+ * Where a job stands, for a page that was told to wait for one.
+ *
+ * Readable by anybody who can read the binder it acts on — asked of Gitea, as
+ * every read here is.
+ */
+async function handleReadJob(
+  req: Request,
+  baseHeaders: Headers,
+  jobId: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const job = jobStore().get(jobId);
+  const [org, repo] = job?.groupKey.split("/") ?? [];
+  const visible =
+    job && org && repo
+      ? await findWorkspaceRepo({ client: auth.client, org, name: repo }).catch(
+          () => null,
+        )
+      : null;
+  if (!job || !visible) {
+    return json(404, { error: "No such job." }, baseHeaders);
+  }
+
+  return json(
+    200,
+    {
+      id: job.id,
+      kind: job.kind,
+      status: job.status,
+      attempts: job.attempts,
+      error: job.lastError,
+      result: job.result,
+    },
+    baseHeaders,
+  );
+}
+
 async function handlePublishWorkspaceChange(
   req: Request,
   baseHeaders: Headers,
@@ -3900,295 +6026,314 @@ async function handlePublishWorkspaceChange(
   // this session cannot see answers 404 from Gitea, which is the same answer a
   // binder that does not exist gives — and the right one either way.
   const owner = orgName;
+  const groupKey = `${owner}/${workspaceName}`;
+  const subject = `change:${pullNumber}`;
 
-  try {
-    const workspace = await findWorkspaceRepo({
-      client,
-      org: owner,
-      name: workspaceName,
-    });
-    if (!workspace) {
-      return json(404, { error: "No such binder." }, baseHeaders);
-    }
+  // One publish at a time per binder, so two cannot both number v4.
+  return withGroupLock(groupKey, async () => {
+    try {
+      // **A publish that did not finish is finished, not refused.** A change
+      // merged by a run that died before its tags used to be unpublishable for
+      // good: "already merged". Pressing Publish again now resumes that run, with
+      // the plan it recorded, as whoever pressed it.
+      const unfinished = jobStore().openFor(groupKey, subject);
+      if (unfinished) {
+        return publishJobResponse(
+          await executePublishJob(unfinished, client),
+          baseHeaders,
+        );
+      }
 
-    // Which documents this change covers has to be known before the merge:
-    // afterwards the branch is gone, and with it the question's cheapest
-    // answer.
-    const documents = await listChangedDocuments({
-      client,
-      org: owner,
-      workspace: workspaceName,
-      pullNumber,
-    });
+      const workspace = await findWorkspaceRepo({
+        client,
+        org: owner,
+        name: workspaceName,
+      });
+      if (!workspace) {
+        return json(404, { error: "No such binder." }, baseHeaders);
+      }
 
-    // **What this change takes off the record, as against what it moves.**
-    // Gitea reports a rename as `deleted` plus `added`, so the removed half
-    // alone would call every rename an archiving. A UID that is also in the
-    // added half moved; only a UID absent from the merged tree entirely was
-    // archived. Read before the merge, like everything else here, so a failure
-    // changes nothing.
-    const stillHere = new Set(
-      documents.flatMap((document) => (document.uid ? [document.uid] : [])),
-    );
-    const archived = (
-      await listRemovedDocuments({
+      // Which documents this change covers has to be known before the merge:
+      // afterwards the branch is gone, and with it the question's cheapest
+      // answer.
+      const documents = await listChangedDocuments({
         client,
         org: owner,
         workspace: workspaceName,
         pullNumber,
-      })
-    ).filter(
-      (document) => document.uid !== null && !stillHere.has(document.uid),
-    );
+      });
 
-    // **Three kinds of change legitimately version nothing.** A sign-off change
-    // rewrites `.gitea/CODEOWNERS` — who has to approve what — a shape change
-    // can be a folder made and nothing filed in it yet, and a draft holds
-    // whatever its author put in it, which may be neither. All are real acts
-    // with nothing to tag.
-    //
-    // The refusal is still right for everything else: a change that versions
-    // nothing is a mistake, and publishing it silently would leave somebody
-    // waiting for a version that never arrives.
-    //
-    // Told apart by the branch, the same way an upload is
-    // (`upload/<slugPath>/…`). Neither prefix is under that one, deliberately:
-    // the binder reads an upload branch to work out which document a change is
-    // about, and a folder rename is about no single document — one that moved
-    // twelve would have to pick one to be named after.
-    const changeBranch = await getPullRequestHeadBranch({
-      client,
-      owner,
-      repo: workspaceName,
-      pullNumber,
-    });
-    const mayVersionNothing =
-      changeBranch.startsWith("sign-off/") ||
-      changeBranch.startsWith("shape/") ||
-      isDraftBranch(changeBranch) ||
-      // A fourth, and this one is a fact rather than a branch name: a change
-      // that only archives versions nothing by definition — the document is
-      // leaving the record, not arriving on it. Asked of what the change does
-      // rather than of what its branch is called, because that is the more
-      // reliable question and the branch prefixes are already carrying more
-      // meaning than is comfortable.
-      archived.length > 0;
-
-    if (documents.length === 0 && !mayVersionNothing) {
-      return json(
-        409,
-        { error: "This change does not touch any document." },
-        baseHeaders,
+      // **What this change takes off the record, as against what it moves.**
+      // Gitea reports a rename as `deleted` plus `added`, so the removed half
+      // alone would call every rename an archiving. A UID that is also in the
+      // added half moved; only a UID absent from the merged tree entirely was
+      // archived. Read before the merge, like everything else here, so a failure
+      // changes nothing.
+      const stillHere = new Set(
+        documents.flatMap((document) => (document.uid ? [document.uid] : [])),
       );
-    }
-
-    // **A content file with no identity segment is refused, loudly** (ADR
-    // 0005). Every document Bindersnap writes carries a UID in its filename,
-    // and that UID is what its version tags are named after. A file without one
-    // cannot be versioned: publishing it would merge the change and then
-    // silently write no tag, leaving somebody waiting for a version that never
-    // arrives — and the next publish would do the same thing again.
-    //
-    // Refusing before the merge is the point. ADR 0004 names degrading quietly
-    // as the failure to avoid twice over: the old config parser falling back to
-    // the permissive policy, and Gitea's CODEOWNERS parser dropping a line it
-    // cannot compile. This is the same shape and gets the same answer.
-    const unidentified = documents.filter((document) => document.uid === null);
-    if (unidentified.length > 0) {
-      return json(
-        409,
-        {
-          error:
-            unidentified.length === 1
-              ? `"${unidentified[0]!.path}" was not added through Bindersnap, so it has no version history to add to. Remove it from this change, or add it as a document.`
-              : `${unidentified.length} files in this change were not added through Bindersnap, so they have no version history to add to: ${unidentified
-                  .map((document) => `"${document.path}"`)
-                  .join(", ")}.`,
-        },
-        baseHeaders,
+      const archived = (
+        await listRemovedDocuments({
+          client,
+          org: owner,
+          workspace: workspaceName,
+          pullNumber,
+        })
+      ).filter(
+        (document) => document.uid !== null && !stillHere.has(document.uid),
       );
-    }
 
-    const reviewSettings = await readBinderSettings(workspace);
-    // Read here rather than beside the tag write, so a failure to read the
-    // protection cannot happen after the merge has already landed.
-    const protection = await readWorkspaceProtection(owner, workspaceName);
-
-    if (reviewSettings.blockOnUnresolvedThreads) {
-      const discussions = await listDiscussions({
+      // **Three kinds of change legitimately version nothing.** A sign-off change
+      // rewrites `.gitea/CODEOWNERS` — who has to approve what — a shape change
+      // can be a folder made and nothing filed in it yet, and a draft holds
+      // whatever its author put in it, which may be neither. All are real acts
+      // with nothing to tag.
+      //
+      // The refusal is still right for everything else: a change that versions
+      // nothing is a mistake, and publishing it silently would leave somebody
+      // waiting for a version that never arrives.
+      //
+      // Told apart by the branch, the same way an upload is
+      // (`upload/<slugPath>/…`). Neither prefix is under that one, deliberately:
+      // the binder reads an upload branch to work out which document a change is
+      // about, and a folder rename is about no single document — one that moved
+      // twelve would have to pick one to be named after.
+      const head = await getPullRequestHead({
         client,
         owner,
         repo: workspaceName,
         pullNumber,
       });
+      const changeBranch = head.ref;
+      const mayVersionNothing =
+        changeBranch.startsWith("sign-off/") ||
+        changeBranch.startsWith("shape/") ||
+        isDraftBranch(changeBranch) ||
+        // A fourth, and this one is a fact rather than a branch name: a change
+        // that only archives versions nothing by definition — the document is
+        // leaving the record, not arriving on it. Asked of what the change does
+        // rather than of what its branch is called, because that is the more
+        // reliable question and the branch prefixes are already carrying more
+        // meaning than is comfortable.
+        archived.length > 0;
 
-      if (discussions.unresolvedCount > 0) {
+      if (documents.length === 0 && !mayVersionNothing) {
+        return json(
+          409,
+          { error: "This change does not touch any document." },
+          baseHeaders,
+        );
+      }
+
+      // **A content file with no identity segment is refused, loudly** (ADR
+      // 0005). Every document Bindersnap writes carries a UID in its filename,
+      // and that UID is what its version tags are named after. A file without one
+      // cannot be versioned: publishing it would merge the change and then
+      // silently write no tag, leaving somebody waiting for a version that never
+      // arrives — and the next publish would do the same thing again.
+      //
+      // Refusing before the merge is the point. ADR 0004 names degrading quietly
+      // as the failure to avoid twice over: the old config parser falling back to
+      // the permissive policy, and Gitea's CODEOWNERS parser dropping a line it
+      // cannot compile. This is the same shape and gets the same answer.
+      const unidentified = documents.filter(
+        (document) => document.uid === null,
+      );
+      if (unidentified.length > 0) {
         return json(
           409,
           {
             error:
-              discussions.unresolvedCount === 1
-                ? "This change has 1 unresolved discussion thread. Resolve it before publishing."
-                : `This change has ${discussions.unresolvedCount} unresolved discussion threads. Resolve them before publishing.`,
-            unresolvedCount: discussions.unresolvedCount,
+              unidentified.length === 1
+                ? `"${unidentified[0]!.path}" was not added through Bindersnap, so it has no version history to add to. Remove it from this change, or add it as a document.`
+                : `${unidentified.length} files in this change were not added through Bindersnap, so they have no version history to add to: ${unidentified
+                    .map((document) => `"${document.path}"`)
+                    .join(", ")}.`,
           },
           baseHeaders,
         );
       }
-    }
 
-    // Each document's next version is its own: they are versioned separately
-    // and a binder's documents do not advance in lockstep. Read before the
-    // merge so a failure here changes nothing.
-    const nextVersions = await Promise.all(
-      documents.map(async (document) => ({
-        document,
-        version: nextVersionFrom(
-          await listDocumentVersions({
-            client,
-            org: owner,
-            workspace: workspaceName,
-            uid: document.uid,
-          }),
-        ),
-      })),
-    );
+      const reviewSettings = await readBinderSettings(workspace);
 
-    await mergeWorkspaceChange({
-      client,
-      owner,
-      repo: workspaceName,
-      pullNumber,
-      mergeStyle,
-    });
-
-    // **The policy in force, stamped onto the event.** ADR 0004: when
-    // configuration shapes what happened, do not version the configuration —
-    // write it into the annotated tag, where it is immutable, attached to the
-    // exact publish, and readable from a bare clone with no application and no
-    // database running. That is what makes it evidence rather than a settings
-    // row a surveyor would have to be told to trust.
-    //
-    // Read after the merge, because the approvals that count are the ones that
-    // stood when Gitea accepted it — an approval dismissed on the way in is not
-    // a signature on what was published.
-    const merged = await getPullRequestWithReviews({
-      client,
-      owner,
-      repo: workspaceName,
-      pullNumber,
-    }).catch(() => null);
-
-    const stampedPolicy = {
-      requiredApprovals: await readRequiredApprovals(owner, workspaceName),
-      approvedBy: merged ? approverLogins(merged.reviews) : [],
-      blockOnUnresolvedThreads: reviewSettings.blockOnUnresolvedThreads,
-      signOffEnforced: protection?.blockOnCodeownerReviews ?? false,
-      publishedBy: session.username,
-      changeNumber: pullNumber,
-    };
-
-    // Sequential: Gitea serializes repository writes, and a partial failure
-    // here is easier to read in order than interleaved.
-    const tags = [];
-    for (const { document, version } of nextVersions) {
-      tags.push(
-        await createDocumentVersionTag({
+      if (reviewSettings.blockOnUnresolvedThreads) {
+        const discussions = await listDiscussions({
           client,
-          org: owner,
-          workspace: workspaceName,
-          // Not null: the guard above refused this change if any file lacked
-          // an identity, which is what makes this assertion safe rather than
-          // hopeful.
-          uid: document.uid!,
-          slugPath: document.slugPath,
-          version,
-          target: "main",
-          message: buildVersionStamp({
-            ...stampedPolicy,
-            // The title the product shows, by the rule the product shows it
-            // with. A tag reading "hand-hygiene-and-ppe" while every screen
-            // says "Hand Hygiene and PPE" is two names for one policy in the
-            // hands of somebody holding a clone and a screenshot.
-            title: formatDocumentName(document.name),
-            slugPath: document.slugPath,
-            path: document.path,
-            version,
-          }),
-        }),
-      );
-    }
+          owner,
+          repo: workspaceName,
+          pullNumber,
+        });
 
-    // **The audit line for anything taken off the record**, written in this
-    // same pass so it is atomic with the merge by construction rather than by
-    // a webhook holding two writes together. The blob is already safe — every
-    // version tag still points at the commit that held it and git never
-    // collects a commit reachable from a ref — so what this adds is who
-    // archived it, when, and under which change.
-    const archivedTags = [];
-    if (archived.length > 0) {
+        if (discussions.unresolvedCount > 0) {
+          return json(
+            409,
+            {
+              error:
+                discussions.unresolvedCount === 1
+                  ? "This change has 1 unresolved discussion thread. Resolve it before publishing."
+                  : `This change has ${discussions.unresolvedCount} unresolved discussion threads. Resolve them before publishing.`,
+              unresolvedCount: discussions.unresolvedCount,
+            },
+            baseHeaders,
+          );
+        }
+      }
+
+      // Each document's next version is its own: they are versioned separately
+      // and a binder's documents do not advance in lockstep. Every tag, every
+      // page, read once and before the merge, so a failure here changes nothing
+      // — and so the archive stamps below number off the same read.
       const allTags = await listAllTags({
         client,
         owner,
         repo: workspaceName,
       });
+      const nextVersions = documents.map((document) => ({
+        document,
+        version: nextVersionFrom(documentVersionsFrom(allTags, document.uid)),
+      }));
 
-      for (const document of archived) {
-        const uid = document.uid!;
-        const versions = allTags
-          .map((tag) => tag.name ?? "")
-          .filter((name) => documentUidFromVersionTag(name) === uid)
-          .map((name) => versionFromTag(name) ?? 0);
-        // Archived, restored, archived again: each is its own fact about its
-        // own date, so the tag is numbered rather than overwritten.
-        const sequence =
-          allTags.filter(
-            (tag) => documentUidFromArchivedTag(tag.name ?? "") === uid,
-          ).length + 1;
+      const publisher = await fetchSessionGiteaUser(session).catch(() => null);
 
-        archivedTags.push(
-          await createDocumentArchivedTag({
-            client,
-            org: owner,
-            workspace: workspaceName,
+      // **Everything this publish will write, decided now and written down
+      // before the first Gitea write.** The merge and the tags are separate
+      // calls with no transaction across them; recorded first, a run that dies
+      // between them leaves a plan that says exactly what is left, and the next
+      // run — the job runner, or Publish pressed again — finishes it.
+      const plan: PublishPlan = {
+        org: owner,
+        repo: workspaceName,
+        pullNumber,
+        mergeStyle,
+        headSha: head.sha,
+        branch: changeBranch,
+        documents: nextVersions.map(({ document, version }) => ({
+          // Not null: the guard above refused this change if any file lacked an
+          // identity, which is what makes this assertion safe rather than
+          // hopeful.
+          uid: document.uid!,
+          slugPath: document.slugPath,
+          path: document.path,
+          // The title the product shows, by the rule the product shows it with.
+          // A tag reading "hand-hygiene-and-ppe" while every screen says "Hand
+          // Hygiene and PPE" is two names for one policy in the hands of
+          // somebody holding a clone and a screenshot.
+          title: formatDocumentName(document.name),
+          version,
+        })),
+        // **The audit line for anything taken off the record.** Archived,
+        // restored, archived again: each is its own fact about its own date, so
+        // the tag is numbered rather than overwritten.
+        archived: archived.map((document) => {
+          const uid = document.uid!;
+          const versions = allTags
+            .map((tag) => tag.name ?? "")
+            .filter((name) => documentUidFromVersionTag(name) === uid)
+            .map((name) => versionFromTag(name) ?? 0);
+          return {
             uid,
-            sequence,
-            target: "main",
-            message: buildArchiveStamp({
-              title: formatDocumentName(document.name),
-              slugPath: document.slugPath,
-              path: document.path,
-              lastVersion: versions.length === 0 ? null : Math.max(...versions),
-              sequence,
-              archivedBy: session.username,
-              changeNumber: pullNumber,
-            }),
-          }),
-        );
-      }
+            slugPath: document.slugPath,
+            path: document.path,
+            title: formatDocumentName(document.name),
+            sequence:
+              allTags.filter(
+                (tag) => documentUidFromArchivedTag(tag.name ?? "") === uid,
+              ).length + 1,
+            lastVersion: versions.length === 0 ? null : Math.max(...versions),
+          };
+        }),
+        publishedBy: signatureOf(session.username, publisher?.fullName ?? ""),
+        publisherLogin: session.username,
+        blockOnUnresolvedThreads: reviewSettings.blockOnUnresolvedThreads,
+      };
+
+      const job = jobStore().create({
+        kind: "publish",
+        groupKey,
+        subject,
+        plan,
+        createdBy: session.username,
+        sessionId: session.id,
+        idempotencyKey: req.headers.get("Idempotency-Key"),
+      });
+
+      return publishJobResponse(
+        await executePublishJob(job, client),
+        baseHeaders,
+      );
+    } catch (err) {
+      logger.error("Failed to publish a workspace change", {
+        username: session.username,
+        organization: owner,
+        workspace: workspaceName,
+        pullNumber,
+        error: err instanceof Error ? err.message : String(err),
+        cause: err instanceof Error ? err.cause : undefined,
+      });
+      return responseFromError(
+        err,
+        baseHeaders,
+        "Unable to publish the change.",
+      );
     }
+  });
+}
 
-    logger.info("Workspace change published", {
-      username: session.username,
-      organization: owner,
-      workspace: workspaceName,
-      pullNumber,
-      tags: tags.map((tag) => tag.tag),
-      archived: archivedTags.map((tag) => tag.tag),
-    });
+/**
+ * What the person reading a change may do with it: approve, and publish.
+ *
+ * Asked of Gitea's own rules rather than worked out in the browser, which
+ * could only see the branch protection's username whitelists — empty on every
+ * binder, because officialness is team membership — and so offered Approve
+ * and Publish to people Gitea would refuse or not count:
+ *
+ * - **Publish** is a merge, which takes write access to the binder.
+ * - **Approve** counts only from somebody in one of the protection's approval
+ *   teams (`protectWorkspaceMain`). Anybody who can read the change can leave
+ *   an approval, but one that satisfies nothing is a button that lies.
+ */
+async function readDecisionRights(params: {
+  org: string;
+  binder: string;
+  username: string;
+  canWrite: boolean;
+}): Promise<{ canApprove: boolean; canPublish: boolean }> {
+  const { org, binder, username, canWrite } = params;
+  const client = createPrivilegedGiteaClient();
+  if (!client) return { canApprove: canWrite, canPublish: canWrite };
 
-    return json(200, { ok: true, tags, archived: archivedTags }, baseHeaders);
-  } catch (err) {
-    logger.error("Failed to publish a workspace change", {
-      username: session.username,
-      organization: owner,
-      workspace: workspaceName,
-      pullNumber,
-      error: err instanceof Error ? err.message : String(err),
-      cause: err instanceof Error ? err.cause : undefined,
-    });
-    return responseFromError(err, baseHeaders, "Unable to publish the change.");
+  const protection = await readBranchProtectionForRequest(
+    client,
+    org,
+    binder,
+    "main",
+  ).catch(() => null);
+
+  // No whitelist: Gitea treats write access as official.
+  if (!protection?.enableApprovalsWhitelist) {
+    return { canApprove: canWrite, canPublish: canWrite };
   }
+
+  const login = username.toLowerCase();
+  if (
+    protection.approvalsWhitelistUsernames.some(
+      (name) => name.toLowerCase() === login,
+    )
+  ) {
+    return { canApprove: true, canPublish: canWrite };
+  }
+
+  const whitelisted = new Set(protection.approvalsWhitelistTeams);
+  const teams = await listOrganizationTeams({ client, org }).catch(() => []);
+  for (const team of teams) {
+    if (!whitelisted.has(team.name)) continue;
+    const { response } = await client.GET("/teams/{id}/members/{username}", {
+      params: { path: { id: team.id, username } },
+    });
+    if (response.ok) return { canApprove: true, canPublish: canWrite };
+  }
+
+  return { canApprove: false, canPublish: canWrite };
 }
 
 /**
@@ -4249,13 +6394,14 @@ async function handleWorkspaceChangeDetail(
       entry,
       documents,
       absent,
-      requiredApprovals,
+      mergeRules,
       reviewSettings,
       discussions,
       access,
       signOff,
       gate,
       tags,
+      mainTree,
     ] = await Promise.all([
       getPullRequestWithReviews({
         client,
@@ -4275,7 +6421,7 @@ async function handleWorkspaceChangeDetail(
         workspace: workspaceName,
         pullNumber,
       }),
-      readRequiredApprovals(orgName, workspaceName),
+      readMergeRules(orgName, workspaceName),
       readBinderSettings(workspace),
       listDiscussions({
         client,
@@ -4283,7 +6429,8 @@ async function handleWorkspaceChangeDetail(
         repo: workspaceName,
         pullNumber,
       }),
-      readWorkspaceAccess({ client, org: orgName, name: workspaceName }),
+      // Already on the binder read above; not a second `/repos` call.
+      workspace.access,
       // The rules as they stand on the base branch, which is where Gitea reads
       // them from when it decides who to ask.
       readSignOffRules({
@@ -4292,11 +6439,19 @@ async function handleWorkspaceChangeDetail(
         workspace: workspaceName,
       }).catch(() => ({ exists: false, rules: [], unreadable: [] })),
       readSignOffGate(orgName, workspaceName),
-      // Every tag, once, so a restore can be told from a revision. A read that
-      // fails costs the label and not the page.
-      listAllTags({ client, owner: orgName, repo: workspaceName }).catch(
-        () => [],
-      ),
+      // Every tag, once: each document's versions and whether it is being
+      // restored are both read off it. Not caught — a page that could not
+      // read the tags would offer "Publish v1" for a document on v4, and a
+      // version number is the one thing this page cannot guess at.
+      listAllTags({ client, owner: orgName, repo: workspaceName }),
+      // The tree on `main`, which is every binder's base: read now rather than
+      // after the change says so, so it costs no round trip of its own. A
+      // change based elsewhere reads its own base below.
+      readWorkspaceTree({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+      }).catch(() => null),
     ]);
 
     const pullState = entry.pullRequest as {
@@ -4311,29 +6466,28 @@ async function handleWorkspaceChangeDetail(
     // does not (ADR 0005), so this is the address the same identity has on the
     // branch this change would land on. A read that fails costs the sentence
     // and not the page: nothing below it is a gate.
-    const onBase = await readWorkspaceTree({
-      client,
-      org: orgName,
-      workspace: workspaceName,
-      ref: entry.pullRequest.base?.ref || "main",
-    }).catch(() => null);
+    const baseRef = entry.pullRequest.base?.ref || "main";
+    const onBase =
+      baseRef === "main"
+        ? mainTree
+        : await readWorkspaceTree({
+            client,
+            org: orgName,
+            workspace: workspaceName,
+            ref: baseRef,
+          }).catch(() => null);
     const baseAddresses = new Map<string, string>(
       (onBase?.documents ?? []).flatMap((document) =>
         document.uid ? [[document.uid, document.slugPath] as const] : [],
       ),
     );
 
-    // The version each document reaches if this is published. One call per
-    // document the change touches — which is a handful, on a page about one
-    // change, and it is the difference between "Publish" and "Publish v4".
+    // The version each document reaches if this is published — the
+    // difference between "Publish" and "Publish v4". Off the tags already in
+    // hand, rather than another tag read per document.
     const withVersions = await Promise.all(
       documents.map(async (document) => {
-        const versions = await listDocumentVersions({
-          client,
-          org: orgName,
-          workspace: workspaceName,
-          uid: document.uid,
-        });
+        const versions = documentVersionsFrom(tags, document.uid);
         const was = document.uid ? baseAddresses.get(document.uid) : undefined;
         return {
           ...document,
@@ -4369,31 +6523,60 @@ async function handleWorkspaceChangeDetail(
           (document) => document.uid !== null && !stillHere.has(document.uid),
         )
         .map(async (document) => {
-          const versions = await listDocumentVersions({
-            client,
-            org: orgName,
-            workspace: workspaceName,
-            uid: document.uid,
-          });
+          const versions = documentVersionsFrom(tags, document.uid);
           return { ...document, lastVersion: versions[0] ?? null };
         }),
     );
+
+    // **What its author called the draft it came from.** The branch chip read
+    // "Bob's draft", worked out from the branch's shape, when Bob had called
+    // it "Retire the 2019 supplier terms" — the one sentence about the work
+    // that was his, in the one place it was not shown.
+    const changeRow = buildPendingChangeRow(entry, mergeRules);
+    const branchLabel = isDraftBranch(changeRow.branchName)
+      ? ((
+          await draftNameStore
+            .forBranches(workspace.id, [changeRow.branchName])
+            .catch(() => new Map<string, DraftNameRecord>())
+        ).get(changeRow.branchName)?.name ?? null)
+      : null;
 
     return json(
       200,
       {
         organization: orgName,
         workspace: workspaceName,
-        change: buildPendingChangeRow(entry, requiredApprovals),
+        change: changeRow,
+        // How it ended, for a change that has: the panel that reads "Ready to
+        // publish" or "Awaiting review" on an open change has to read
+        // "Published" on one that was.
+        outcome: changeOpen
+          ? null
+          : resolveClosedOutcome(entry.pullRequest, entry.reviews).outcome,
+        branchLabel,
         documents: withVersions,
         removedDocuments,
         // `main` has moved on if the change's merge base is no longer the base
         // branch's head. Both are on the pull request Gitea already returned,
         // so knowing this costs nothing.
         isBehind: isChangeBehindBase(entry.pullRequest),
+        // Behind *and* not mergeable is the one state "Bring up to date"
+        // cannot fix: the merge has files both sides changed.
+        hasConflicts:
+          isChangeBehindBase(entry.pullRequest) &&
+          (entry.pullRequest as { mergeable?: boolean }).mergeable === false,
         blockOnUnresolvedThreads: reviewSettings.blockOnUnresolvedThreads,
         unresolvedThreadCount: discussions.unresolvedCount,
+        // Whether an approval stops counting once what the change proposes
+        // moves on — the binder's "A new version clears the approvals" rule.
+        clearsApprovalsOnEdit: mergeRules?.ignoresStale ?? true,
         canManage: access.push,
+        viewer: await readDecisionRights({
+          org: orgName,
+          binder: workspaceName,
+          username: auth.session.username,
+          canWrite: access.push,
+        }),
         // Who this change is actually held for, out of the people its rules
         // named. Read rather than guessed: see `requiredReviewers.ts`.
         requiredReviewers: requiredReviewersFor({
@@ -4578,6 +6761,344 @@ async function handleWorkspaceChangeUpdate(
   }
 }
 
+/** A file's side of a conflict as the page reads it: where, how big, what. */
+interface ConflictSidePayload {
+  path: string;
+  size: number;
+  /** The bytes, base64 — null past the size a page should be sent. */
+  content: string | null;
+}
+
+/** Larger than this and a side is offered as a download, not inline. */
+const CONFLICT_INLINE_LIMIT = 4 * 1024 * 1024;
+
+/** How the page can show a file: rendered, as text, or only as a choice. */
+function conflictFileKind(path: string): "editor" | "text" | "binary" {
+  const extension = path.split(".").pop()?.toLowerCase() ?? "";
+  if (extension === "json") return "editor";
+  if (
+    ["md", "markdown", "txt", "csv", "html", "htm", "yml", "yaml"].includes(
+      extension,
+    )
+  ) {
+    return "text";
+  }
+  // `.gitea/CODEOWNERS` and the placeholders that hold folders open.
+  if (!path.split("/").pop()?.includes(".") || path.startsWith(".gitea/")) {
+    return "text";
+  }
+  return "binary";
+}
+
+interface ChangeHeads {
+  branch: string;
+  headSha: string;
+  baseSha: string;
+  mergeBase: string;
+  open: boolean;
+}
+
+async function readChangeHeads(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  pullNumber: number;
+}): Promise<ChangeHeads> {
+  const { client, org, workspace, pullNumber } = params;
+  const pull = (await unwrap(
+    client.GET("/repos/{owner}/{repo}/pulls/{index}", {
+      params: { path: { owner: org, repo: workspace, index: pullNumber } },
+    }),
+  )) as {
+    state?: string;
+    merge_base?: string;
+    head?: { ref?: string; sha?: string } | null;
+    base?: { sha?: string } | null;
+  };
+  return {
+    branch: pull.head?.ref ?? "",
+    headSha: pull.head?.sha ?? "",
+    baseSha: pull.base?.sha ?? "",
+    mergeBase: pull.merge_base ?? "",
+    open: pull.state === "open",
+  };
+}
+
+async function readChangeConflicts(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  heads: ChangeHeads;
+}): Promise<ConflictingFile[]> {
+  const { client, org, workspace, heads } = params;
+  if (!heads.mergeBase || heads.mergeBase === heads.baseSha) return [];
+  const [base, ours, theirs] = await Promise.all(
+    [heads.mergeBase, heads.headSha, heads.baseSha].map((sha) =>
+      readTreeBlobs({ client, org, workspace, sha }),
+    ),
+  );
+  return findConflictingFiles(base!, ours!, theirs!);
+}
+
+/**
+ * The documents a change and the binder both changed, read three ways.
+ *
+ * The page that resolves them needs each file where the change began, as the
+ * change has it, and as it has been published since — and it needs them
+ * together, because the decision is made looking at all three. So the bytes
+ * come with the answer, up to a size a page should be sent; past it a side is
+ * named and offered as a download instead.
+ *
+ * A read, so never gated.
+ */
+async function handleWorkspaceChangeConflicts(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+  pullNumber: number,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { client } = auth;
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const [heads, access] = await Promise.all([
+      readChangeHeads({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+        pullNumber,
+      }),
+      readWorkspaceAccess({ client, org: orgName, name: workspaceName }),
+    ]);
+    const conflicts = heads.open
+      ? await readChangeConflicts({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          heads,
+        })
+      : [];
+
+    const side = async (
+      entry: { path: string; sha: string } | null,
+    ): Promise<ConflictSidePayload | null> => {
+      if (!entry) return null;
+      const blob = await readBlob({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+        sha: entry.sha,
+      });
+      return {
+        path: entry.path,
+        size: blob.size,
+        content: blob.size <= CONFLICT_INLINE_LIMIT ? blob.base64 : null,
+      };
+    };
+
+    const files = await Promise.all(
+      conflicts.map(async (conflict) => ({
+        key: conflict.key,
+        path: conflict.path,
+        kind: conflictFileKind(conflict.path),
+        automatic: conflict.automatic,
+        base: await side(conflict.base),
+        ours: await side(conflict.ours),
+        theirs: await side(conflict.theirs),
+      })),
+    );
+
+    return json(
+      200,
+      {
+        organization: orgName,
+        workspace: workspaceName,
+        changeNumber: pullNumber,
+        open: heads.open,
+        upToDate: !heads.mergeBase || heads.mergeBase === heads.baseSha,
+        headSha: heads.headSha,
+        baseSha: heads.baseSha,
+        canResolve: access.push,
+        files,
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to read a change's conflicts", {
+      username: auth.session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      pullNumber,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to read what conflicts in this change.",
+    );
+  }
+}
+
+/**
+ * Resolve a change's conflicts as decided, and bring it up to date.
+ *
+ * **Checked against the heads the page was looking at.** A resolution is a
+ * decision about three particular versions of each file; if either the change
+ * or the binder has moved since the page read them, the decision is about
+ * versions that are no longer the ones being merged, and it is refused rather
+ * than applied to the wrong ones.
+ */
+async function handleResolveWorkspaceChangeConflicts(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+  pullNumber: number,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { client, session } = auth;
+
+  const body = await readJsonBody<{
+    headSha?: unknown;
+    baseSha?: unknown;
+    resolutions?: unknown;
+  }>(req);
+  const resolutions = parseResolutions(body?.resolutions);
+  if (
+    !body ||
+    typeof body.headSha !== "string" ||
+    typeof body.baseSha !== "string" ||
+    resolutions === null
+  ) {
+    return json(
+      400,
+      { error: "headSha, baseSha and resolutions are required." },
+      baseHeaders,
+    );
+  }
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const heads = await readChangeHeads({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      pullNumber,
+    });
+    if (!heads.open) {
+      return json(
+        409,
+        { error: "This change is no longer open." },
+        baseHeaders,
+      );
+    }
+    if (heads.headSha !== body.headSha || heads.baseSha !== body.baseSha) {
+      return json(
+        409,
+        {
+          error:
+            "The change or the binder has moved on since this page was opened. Reload it to resolve against the latest versions.",
+        },
+        baseHeaders,
+      );
+    }
+
+    const conflicts = await readChangeConflicts({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      heads,
+    });
+    if (conflicts.length === 0) {
+      return json(
+        409,
+        {
+          error:
+            "Nothing in this change conflicts with the binder. Bring it up to date instead.",
+        },
+        baseHeaders,
+      );
+    }
+
+    const { caughtUp } = await resolveChangeConflicts({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      pullNumber,
+      branch: heads.branch,
+      conflicts,
+      resolutions,
+      username: session.username,
+    });
+
+    logger.info("Binder change conflicts resolved", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      pullNumber,
+      files: conflicts.length,
+      caughtUp,
+    });
+
+    return json(200, { ok: true, caughtUp }, baseHeaders);
+  } catch (err) {
+    if (err instanceof ConflictResolutionError) {
+      return json(err.status, { error: err.message }, baseHeaders);
+    }
+    logger.error("Failed to resolve a change's conflicts", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      pullNumber,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to resolve this change's conflicts.",
+    );
+  }
+}
+
+/** The page's decisions, or null when they are not the shape they must be. */
+function parseResolutions(raw: unknown): FileResolution[] | null {
+  if (!Array.isArray(raw)) return null;
+  const parsed: FileResolution[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== "object" || entry === null) return null;
+    const { key, take, base64Content } = entry as Record<string, unknown>;
+    if (typeof key !== "string") return null;
+    if (take === "ours" || take === "theirs" || take === "none") {
+      parsed.push({ key, take });
+    } else if (take === "content" && typeof base64Content === "string") {
+      parsed.push({ key, take, base64Content });
+    } else {
+      return null;
+    }
+  }
+  return parsed;
+}
+
 /**
  * Approve a binder change, ask for work on it, or just say something.
  *
@@ -4645,6 +7166,24 @@ async function handleWorkspaceChangeReview(
       body: reviewBody,
     });
 
+    if (event === "REQUEST_CHANGES") {
+      notifyChange({
+        owner: orgName,
+        repo: workspaceName,
+        number: pullNumber,
+        actor: auth.session.username,
+        event: { kind: "changes-requested", comment: reviewBody },
+        occurrence: String(review?.id ?? Date.now()),
+      });
+    } else if (event === "APPROVE") {
+      notifyIfReadyToPublish({
+        owner: orgName,
+        repo: workspaceName,
+        number: pullNumber,
+        actor: auth.session.username,
+      });
+    }
+
     return json(200, { review }, baseHeaders);
   } catch (err) {
     logger.error("Failed to review a binder change", {
@@ -4684,26 +7223,21 @@ async function handleWorkspaceOverview(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    const [documents, openChanges] = await Promise.all([
-      listWorkspaceDocuments({
-        client: auth.client,
-        org: orgName,
-        workspace: workspaceName,
-      }),
-      listPullRequests({
-        client: auth.client,
-        owner: orgName,
-        repo: workspaceName,
-        state: "open",
-      }),
-    ]);
+    const documents = await listWorkspaceDocuments({
+      client: auth.client,
+      org: orgName,
+      workspace: workspaceName,
+    });
 
     return json(
       200,
       {
         workspace,
         documentCount: documents.length,
-        openChangeCount: openChanges.length,
+        // Gitea's own count, on the repository read above. Listing the open
+        // changes to count them also read every one's reviews, a call or more
+        // each, for a number the repository already carries.
+        openChangeCount: workspace.openChangeCount,
       },
       baseHeaders,
     );
@@ -4789,14 +7323,14 @@ async function handleListWorkspaceChanges(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    const [entries, requiredApprovals, versionsByDocument] = await Promise.all([
+    const [entries, mergeRules, versionsByDocument] = await Promise.all([
       listPullRequestsWithReviews({
         client,
         owner: orgName,
         repo: workspaceName,
         state,
       }),
-      readRequiredApprovals(orgName, workspaceName),
+      readMergeRules(orgName, workspaceName),
       listVersionsByDocument({
         client,
         org: orgName,
@@ -4824,10 +7358,7 @@ async function handleListWorkspaceChanges(
 
     const changes = entries
       .map(({ pullRequest, reviews }) => {
-        const row = buildPendingChangeRow(
-          { pullRequest, reviews },
-          requiredApprovals,
-        );
+        const row = buildPendingChangeRow({ pullRequest, reviews }, mergeRules);
         const isOpen = pullRequest.state === "open";
         const decided = isOpen
           ? null
@@ -5054,7 +7585,8 @@ async function handleWorkspaceSettings(
       // a repository admin.
       readWorkspaceProtection(orgName, workspaceName),
       readBinderSettings(workspace),
-      readWorkspaceAccess({ client, org: orgName, name: workspaceName }),
+      // Already on the binder read above; not a second `/repos` call.
+      workspace.access,
       readSignOffRules({
         client,
         org: orgName,
@@ -5076,7 +7608,8 @@ async function handleWorkspaceSettings(
       // Listing them needs org ownership, so a binder admin who is not an owner
       // falls back to the teams granted here rather than losing the page.
       listOrganizationTeams({ client, org: orgName }).catch(() => null),
-      listPullRequests({
+      // Branches only, to find a sign-off change in flight.
+      listPullRequestsWithoutReviews({
         client,
         owner: orgName,
         repo: workspaceName,
@@ -5178,6 +7711,13 @@ async function handleWorkspaceSettings(
             )?.number ?? null,
         },
         canManage: access.admin,
+        // Gitea deletes a repository only for its owners — an organization's
+        // binder, for the organization's owners. Asked, not assumed.
+        canDelete: await isOrganizationOwnerDirect({
+          client,
+          org: orgName,
+          username: auth.session.username,
+        }).catch(() => false),
       },
       baseHeaders,
     );
@@ -5193,7 +7733,333 @@ async function handleWorkspaceSettings(
 }
 
 /**
- * Change a binder's rules.
+ * Delete a binder, and everything in it, for good.
+ *
+ * Asked of Gitea on the person's own token, so Gitea's rule decides who may:
+ * a repository is deleted only by its owners, which for an organization's
+ * binder means the organization's owners. The confirmation is the binder's
+ * name typed out, the way Gitea confirms. What is lost is the whole record —
+ * every version, approval and discussion — so the page says so first and
+ * offers each document's audit packet; the server's job is to refuse anything
+ * short of the name.
+ */
+async function handleDeleteBinder(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { client, session } = auth;
+
+  const payload = await readJson<{ confirm?: unknown }>(req);
+  const confirm =
+    typeof payload?.confirm === "string" ? payload.confirm.trim() : "";
+  if (confirm.toLowerCase() !== workspaceName.toLowerCase()) {
+    return json(
+      400,
+      { error: "Type the binder's name to confirm." },
+      baseHeaders,
+    );
+  }
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const { error, response } = await client.DELETE("/repos/{owner}/{repo}", {
+      params: { path: { owner: orgName, repo: workspaceName } },
+    });
+    if (error !== undefined || !response.ok) {
+      if (response.status === 403) {
+        return json(
+          403,
+          { error: "Only an owner of the organization can delete a binder." },
+          baseHeaders,
+        );
+      }
+      throw toGiteaApiError(response.status, error);
+    }
+
+    // The rows that were about it. Its settings history stays, with this as
+    // its last line, because that trail is append-only.
+    await workspaceSettingsStore.record([
+      {
+        giteaRepoId: workspace.id,
+        setting: "binder",
+        previousValue: `${orgName}/${workspaceName}`,
+        newValue: "deleted",
+        changedBy: session.username,
+        changedAt: Math.floor(Date.now() / 1000),
+      },
+    ]);
+    await workspaceSettingsStore.forget(workspace.id);
+    await draftNameStore.forgetBinder(workspace.id);
+
+    logger.info("Binder deleted", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+    });
+    return new Response(null, { status: 204, headers: baseHeaders });
+  } catch (err) {
+    logger.error("Failed to delete a binder", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to delete the binder.");
+  }
+}
+
+/**
+ * What stands between an organization and its deletion, said before anyone
+ * tries.
+ *
+ * Gitea's rules: only an owner may delete it, and not while it still owns any
+ * binder — a binder is the record, so it goes by its own deliberate act first.
+ * Ours: not while a Stripe subscription would keep charging for it.
+ */
+async function readOrganizationDeletion(
+  client: GiteaClient,
+  org: string,
+  username: string,
+): Promise<{
+  canDelete: boolean;
+  isOwner: boolean;
+  binders: string[];
+  billingActive: boolean;
+}> {
+  const organization = await findOrganization({ client, org });
+  if (!organization) {
+    throw new GiteaApiError(404, "No such organization.");
+  }
+  const [isOwner, binders, subscription] = await Promise.all([
+    isOrganizationOwnerDirect({ client, org, username }).catch(() => false),
+    listOrganizationWorkspaces({ client, org }).catch(() => []),
+    subscriptionStore.getByOrganization(organization.id).catch(() => null),
+  ]);
+  // Charging, and not already set to stop. A subscription cancelled at the
+  // period's end charges nothing more, so it is no reason to refuse.
+  const billingActive =
+    subscription !== null &&
+    ["active", "trialing", "past_due", "unpaid"].includes(
+      subscription.status,
+    ) &&
+    !subscription.cancelAtPeriodEnd &&
+    subscription.cancelAt === null;
+  return {
+    canDelete: isOwner && binders.length === 0 && !billingActive,
+    isOwner,
+    binders: binders.map((binder) => binder.name),
+    billingActive,
+  };
+}
+
+async function handleOrganizationDeletion(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  try {
+    const deletion = await readOrganizationDeletion(
+      auth.client,
+      orgName,
+      auth.session.username,
+    );
+    return json(200, deletion, baseHeaders);
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to read the organization.",
+    );
+  }
+}
+
+/**
+ * Delete an organization: its people, groups and name, for good.
+ *
+ * Asked of Gitea on the owner's own token, so Gitea's rule is the one that
+ * holds — and checked here first, so the refusal names what is in the way
+ * rather than repeating Gitea's sentence about repositories.
+ */
+async function handleDeleteOrganization(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { client, session } = auth;
+
+  const payload = await readJson<{ confirm?: unknown }>(req);
+  const confirm =
+    typeof payload?.confirm === "string" ? payload.confirm.trim() : "";
+  if (confirm.toLowerCase() !== orgName.toLowerCase()) {
+    return json(
+      400,
+      { error: "Type the organization's name to confirm." },
+      baseHeaders,
+    );
+  }
+
+  try {
+    const deletion = await readOrganizationDeletion(
+      client,
+      orgName,
+      session.username,
+    );
+    if (!deletion.isOwner) {
+      return json(
+        403,
+        { error: "Only an owner can delete the organization." },
+        baseHeaders,
+      );
+    }
+    if (deletion.binders.length > 0) {
+      return json(
+        409,
+        {
+          error: "Delete or move every binder in it first.",
+          binders: deletion.binders,
+        },
+        baseHeaders,
+      );
+    }
+    if (deletion.billingActive) {
+      return json(
+        409,
+        { error: "Cancel its subscription in Billing first." },
+        baseHeaders,
+      );
+    }
+
+    const organization = await findOrganization({ client, org: orgName });
+    const { error, response } = await client.DELETE("/orgs/{org}", {
+      params: { path: { org: orgName } },
+    });
+    if (error !== undefined || !response.ok) {
+      throw toGiteaApiError(response.status, error);
+    }
+
+    // **The row stays**, renamed: it is what remembers that this person has
+    // had their trial, and deleting it would make deleting an organization a
+    // way to get another.
+    if (organization) {
+      const record = await organizationStore.get(organization.id);
+      if (record) {
+        await organizationStore.upsert({
+          ...record,
+          name: `${record.name} (deleted)`,
+        });
+      }
+    }
+
+    logger.info("Organization deleted", {
+      username: session.username,
+      organization: orgName,
+    });
+    return new Response(null, { status: 204, headers: baseHeaders });
+  } catch (err) {
+    logger.error("Failed to delete an organization", {
+      username: session.username,
+      organization: orgName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to delete the organization.",
+    );
+  }
+}
+
+/**
+ * The most approvals a binder can ask for: whatever Gitea stores.
+ *
+ * Gitea keeps the count as a 64-bit integer and accepts any of it, so the only
+ * limit here is the largest whole number JSON carries exactly. A count nobody
+ * could meet is the administrator's call to make; the settings page says when
+ * a binder has fewer people who can approve than it asks for.
+ */
+const MAX_REQUIRED_APPROVALS = Number.MAX_SAFE_INTEGER;
+
+/**
+ * What a request to change a binder's rules asks for, or why it cannot be read.
+ *
+ * Every field is optional and at least one is required, so the page can change
+ * one rule without restating the others — and a stale copy of one it did not
+ * touch can never be written back over a colleague's change.
+ */
+export function parseBinderRulesRequest(
+  body: {
+    blockOnUnresolvedThreads?: unknown;
+    requiredApprovals?: unknown;
+    dismissStaleApprovals?: unknown;
+  } | null,
+):
+  | {
+      blockOnUnresolvedThreads?: boolean;
+      requiredApprovals?: number;
+      dismissStaleApprovals?: boolean;
+    }
+  | string {
+  if (!body || typeof body !== "object") {
+    return "Say which rule to change.";
+  }
+  const out: {
+    blockOnUnresolvedThreads?: boolean;
+    requiredApprovals?: number;
+    dismissStaleApprovals?: boolean;
+  } = {};
+  if (body.blockOnUnresolvedThreads !== undefined) {
+    if (typeof body.blockOnUnresolvedThreads !== "boolean") {
+      return "Say whether a change must have every discussion resolved before it can be published.";
+    }
+    out.blockOnUnresolvedThreads = body.blockOnUnresolvedThreads;
+  }
+  if (body.requiredApprovals !== undefined) {
+    const count = body.requiredApprovals;
+    if (
+      typeof count !== "number" ||
+      !Number.isInteger(count) ||
+      count < 0 ||
+      count > MAX_REQUIRED_APPROVALS
+    ) {
+      return "Approvals needed must be a whole number, 0 or more.";
+    }
+    out.requiredApprovals = count;
+  }
+  if (body.dismissStaleApprovals !== undefined) {
+    if (typeof body.dismissStaleApprovals !== "boolean") {
+      return "Say whether a new version clears the approvals already given.";
+    }
+    out.dismissStaleApprovals = body.dismissStaleApprovals;
+  }
+  if (Object.keys(out).length === 0) {
+    return "Say which rule to change.";
+  }
+  return out;
+}
+
+/**
+ * Change a binder's rules: the approval count, whether a new version clears
+ * approvals, and whether discussions must be resolved.
+ *
+ * **An administrator of the binder can change every one of them.** A binder
+ * run by one person needs to publish without a second approver, and a binder
+ * whose rules its own administrator cannot change is not theirs.
  *
  * **Immediate, unlike the sign-off rules two functions down, and the difference
  * is worth stating.** A sign-off rule decides *who has to approve* a change, so
@@ -5227,17 +8093,13 @@ async function handleBinderRules(
   try {
     const body = (await req.json().catch(() => null)) as {
       blockOnUnresolvedThreads?: unknown;
+      requiredApprovals?: unknown;
+      dismissStaleApprovals?: unknown;
     } | null;
 
-    if (typeof body?.blockOnUnresolvedThreads !== "boolean") {
-      return json(
-        400,
-        {
-          error:
-            "Say whether a change must have every discussion resolved before it can be published.",
-        },
-        baseHeaders,
-      );
+    const rules = parseBinderRulesRequest(body);
+    if (typeof rules === "string") {
+      return json(400, { error: rules }, baseHeaders);
     }
 
     const workspace = await findWorkspaceRepo({
@@ -5249,11 +8111,9 @@ async function handleBinderRules(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    const access = await readWorkspaceAccess({
-      client,
-      org: orgName,
-      name: workspaceName,
-    });
+    // On the binder read above: Gitea answers the caller's permissions on
+    // the same repository call, so asking again was a second identical read.
+    const access = workspace.access;
     if (!access.admin) {
       return json(
         403,
@@ -5262,13 +8122,81 @@ async function handleBinderRules(
       );
     }
 
-    const events = await workspaceSettingsStore.set({
-      giteaRepoId: workspace.id,
-      organization: orgName,
-      workspace: workspaceName,
-      settings: { blockOnUnresolvedThreads: body.blockOnUnresolvedThreads },
-      changedBy: session.username,
-    });
+    const events: SettingsEventRecord[] = [];
+
+    if (rules.blockOnUnresolvedThreads !== undefined) {
+      events.push(
+        ...(await workspaceSettingsStore.set({
+          giteaRepoId: workspace.id,
+          organization: orgName,
+          workspace: workspaceName,
+          settings: {
+            blockOnUnresolvedThreads: rules.blockOnUnresolvedThreads,
+          },
+          changedBy: session.username,
+        })),
+      );
+    }
+
+    // **Written with the caller's own token.** The approval count is Gitea
+    // branch protection, and Gitea lets only a repository administrator edit
+    // it — so Gitea, not this handler, is what says this person may. The
+    // check above only turns its refusal into a sentence ahead of time.
+    let protection = await readWorkspaceProtection(orgName, workspaceName);
+    if (
+      rules.requiredApprovals !== undefined ||
+      rules.dismissStaleApprovals !== undefined
+    ) {
+      if (!protection) {
+        return json(
+          409,
+          {
+            error:
+              "This binder's approval rules could not be read, so they were not changed. Try again in a moment.",
+          },
+          baseHeaders,
+        );
+      }
+      const before = protection;
+      protection = await updateRepoBranchProtection({
+        client,
+        owner: orgName,
+        repo: workspaceName,
+        ruleName: "main",
+        requiredApprovals: rules.requiredApprovals,
+        dismissStaleApprovals: rules.dismissStaleApprovals,
+      });
+      const now = Math.floor(Date.now() / 1000);
+      const recorded: SettingsEventRecord[] = [];
+      if (
+        rules.requiredApprovals !== undefined &&
+        before.requiredApprovals !== protection.requiredApprovals
+      ) {
+        recorded.push({
+          giteaRepoId: workspace.id,
+          setting: "requiredApprovals",
+          previousValue: String(before.requiredApprovals),
+          newValue: String(protection.requiredApprovals),
+          changedBy: session.username,
+          changedAt: now,
+        });
+      }
+      if (
+        rules.dismissStaleApprovals !== undefined &&
+        before.dismissStaleApprovals !== protection.dismissStaleApprovals
+      ) {
+        recorded.push({
+          giteaRepoId: workspace.id,
+          setting: "dismissStaleApprovals",
+          previousValue: String(before.dismissStaleApprovals),
+          newValue: String(protection.dismissStaleApprovals),
+          changedBy: session.username,
+          changedAt: now,
+        });
+      }
+      await workspaceSettingsStore.record(recorded);
+      events.push(...recorded);
+    }
 
     logger.info("Binder rules changed", {
       username: session.username,
@@ -5277,12 +8205,16 @@ async function handleBinderRules(
       changed: events.map((event) => event.setting),
     });
 
+    const settings = await readBinderSettings(workspace);
+
     return json(
       200,
       {
         organization: orgName,
         workspace: workspaceName,
-        blockOnUnresolvedThreads: body.blockOnUnresolvedThreads,
+        blockOnUnresolvedThreads: settings.blockOnUnresolvedThreads,
+        requiredApprovals: protection?.requiredApprovals ?? null,
+        dismissStaleApprovals: protection?.dismissStaleApprovals ?? null,
       },
       baseHeaders,
     );
@@ -5393,7 +8325,7 @@ async function handleBinderSignOffRules(
     // One open sign-off change at a time. Two would leave competing versions
     // of the rules in review, and whichever merged last would silently win —
     // with no screen able to say that the other one had been overwritten.
-    const open = await listPullRequests({
+    const open = await listPullRequestsWithoutReviews({
       client,
       owner: orgName,
       repo: workspaceName,
@@ -5426,6 +8358,13 @@ async function handleBinderSignOffRules(
           .map((entry) => [entry.uid!, formatDocumentName(entry.name)]),
       ),
       author: session.username,
+    });
+
+    notifyRequestedReviewers({
+      owner: orgName,
+      repo: workspaceName,
+      number: proposed.changeNumber,
+      actor: session.username,
     });
 
     logger.info("Sign-off rules proposed", {
@@ -5602,7 +8541,7 @@ async function readWorkspaceProtection(
   if (!client) return null;
 
   try {
-    return await getRepoBranchProtection(client, owner, repo, "main");
+    return await readBranchProtectionForRequest(client, owner, repo, "main");
   } catch (err) {
     logger.error("Failed to read a binder's branch protection", {
       owner,
@@ -5790,23 +8729,503 @@ async function refuseLastOwner(params: {
   return `${org} needs at least one owner. Make someone else an owner first.`;
 }
 
+// ---------------------------------------------------------------------------
+// Invitations by email (issue #426; docs/design/org-access-architecture.md §2)
+// ---------------------------------------------------------------------------
+
+/**
+ * The link in the email. It carries the address too, so the page can fill in
+ * the signup form for somebody with no account — it is their own inbox the
+ * link was sent to.
+ */
+function invitationLink(token: string, email: string): string {
+  return `${config.appOrigin}/-/invitations/${encodeURIComponent(token)}?email=${encodeURIComponent(email)}`;
+}
+
+/** An invitation as an owner's pending list shows it. */
+function invitationRow(invitation: Invitation) {
+  return {
+    id: invitation.id,
+    email: invitation.email,
+    orgRole: invitation.orgRole,
+    binder: invitation.binder,
+    binderLevel: invitation.binderLevel,
+    grant: describeGrant(invitation),
+    invitedBy: invitation.invitedBy,
+    createdAt: invitation.createdAt,
+    expiresAt: invitation.expiresAt,
+    status: invitationStatus(invitation),
+  };
+}
+
+/**
+ * The organization, and whether this session owns it — the gate on every
+ * invitation route but the invitee's own. Nothing in Gitea is written until
+ * an invitation is accepted, so Gitea cannot refuse a non-owner here the way
+ * it refuses a team add; this asks it the same question first.
+ */
+async function requireOrganizationOwner(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  /**
+   * Sending an invitation is a write and is paywalled like adding somebody
+   * directly. Reading the list and withdrawing one cost nothing (ADR 0004).
+   */
+  { sends }: { sends: boolean },
+) {
+  const auth = sends
+    ? await requireSubscription(req, baseHeaders)
+    : await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const organization = await findOrganization({
+    client: auth.client,
+    org: orgName,
+  });
+  if (!organization) {
+    return json(404, { error: "No such organization." }, baseHeaders);
+  }
+  const owner = await isOrganizationOwnerDirect({
+    client: auth.client,
+    org: orgName,
+    username: auth.session.username,
+  });
+  if (!owner) {
+    return json(
+      403,
+      { error: "Only an owner of this organization can invite people." },
+      baseHeaders,
+    );
+  }
+  return { ...auth, organization };
+}
+
+async function sendInvitationEmail(
+  invitation: Invitation,
+  token: string,
+  displayName: string,
+): Promise<void> {
+  const client = createPrivilegedGiteaClient();
+  const inviterName = client
+    ? (await readPerson(client, invitation.invitedBy)).name
+    : invitation.invitedBy;
+  queueEmail({
+    kind: "organization-invitation",
+    to: invitation.email,
+    content: invitationEmail({
+      inviterName,
+      orgName: displayName,
+      grant: describeGrant(invitation),
+      email: invitation.email,
+      link: invitationLink(token, invitation.email),
+    }),
+  });
+}
+
+async function handleListInvitations(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+): Promise<Response> {
+  const auth = await requireOrganizationOwner(req, baseHeaders, orgName, {
+    sends: false,
+  });
+  if (auth instanceof Response) return auth;
+  return json(
+    200,
+    {
+      invitations: invitationStore()
+        .open(auth.organization.id)
+        .map(invitationRow),
+    },
+    baseHeaders,
+  );
+}
+
+/**
+ * Invite somebody by email: a row, and an email with a link. Grants nothing
+ * yet — and so it works for somebody with no account, which the direct add
+ * cannot. Inviting an address with an open invitation sends it again rather
+ * than making a second.
+ */
+async function handleCreateInvitation(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+): Promise<Response> {
+  const auth = await requireOrganizationOwner(req, baseHeaders, orgName, {
+    sends: true,
+  });
+  if (auth instanceof Response) return auth;
+  const { client, session, organization } = auth;
+
+  const body =
+    (await readJson<{
+      email?: unknown;
+      owner?: unknown;
+      binder?: unknown;
+      level?: unknown;
+    }>(req)) ?? {};
+  const email = typeof body.email === "string" ? body.email.trim() : "";
+  if (!looksLikeEmailAddress(email)) {
+    return json(400, { error: "Enter the address to invite." }, baseHeaders);
+  }
+  const orgRole = body.owner === true ? "owner" : "member";
+  const binder =
+    typeof body.binder === "string" && body.binder.trim() !== ""
+      ? body.binder.trim()
+      : null;
+  const level =
+    typeof body.level === "string" && body.level in BINDER_LEVEL_ROLES
+      ? (body.level as BinderLevel)
+      : null;
+  if (binder && !level) {
+    return json(
+      400,
+      {
+        error:
+          "Say whether they join the binder as an admin, editor or reviewer.",
+      },
+      baseHeaders,
+    );
+  }
+  if (binder) {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: binder,
+    }).catch(() => null);
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+  }
+
+  const store = invitationStore();
+  const existing = store.openFor(organization.id, email);
+  if (existing && existing.acceptedAt === null) {
+    const token = store.renew(existing.id);
+    await sendInvitationEmail(
+      existing,
+      token,
+      organization.fullName || organization.name,
+    );
+    return json(
+      200,
+      { invitation: invitationRow(store.get(existing.id)!) },
+      baseHeaders,
+    );
+  }
+
+  const { invitation, token } = store.create({
+    giteaOrgId: organization.id,
+    orgName: organization.name,
+    email,
+    orgRole,
+    binder,
+    binderLevel: binder ? level : null,
+    invitedBy: session.username,
+  });
+  await sendInvitationEmail(
+    invitation,
+    token,
+    organization.fullName || organization.name,
+  );
+  logger.info("Organization invitation sent", {
+    username: session.username,
+    organization: orgName,
+    invitationId: invitation.id,
+    orgRole,
+    binder,
+  });
+  return json(201, { invitation: invitationRow(invitation) }, baseHeaders);
+}
+
+async function handleInvitationAction(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  invitationId: string,
+  action: "revoke" | "resend",
+): Promise<Response> {
+  const auth = await requireOrganizationOwner(req, baseHeaders, orgName, {
+    sends: action === "resend",
+  });
+  if (auth instanceof Response) return auth;
+  const store = invitationStore();
+  const invitation = store.get(invitationId);
+  if (!invitation || invitation.giteaOrgId !== auth.organization.id) {
+    return json(404, { error: "No such invitation." }, baseHeaders);
+  }
+  if (action === "revoke") {
+    if (!store.revoke(invitation.id)) {
+      return json(
+        409,
+        { error: "That invitation was already accepted or revoked." },
+        baseHeaders,
+      );
+    }
+    return new Response(null, { status: 204, headers: baseHeaders });
+  }
+  if (invitationStatus(invitation) === "accepted" || invitation.revokedAt) {
+    return json(
+      409,
+      { error: "That invitation was already accepted or revoked." },
+      baseHeaders,
+    );
+  }
+  const token = store.renew(invitation.id);
+  await sendInvitationEmail(
+    invitation,
+    token,
+    auth.organization.fullName || auth.organization.name,
+  );
+  return json(
+    200,
+    { invitation: invitationRow(store.get(invitation.id)!) },
+    baseHeaders,
+  );
+}
+
+/**
+ * What an invitation link is for, so its page can say so before anybody signs
+ * in. Nothing here a link-holder does not already know from the email, and
+ * the address is masked.
+ */
+async function handleReadInvitation(
+  req: Request,
+  baseHeaders: Headers,
+  token: string,
+): Promise<Response> {
+  const invitation = invitationStore().byToken(token);
+  if (!invitation) {
+    return json(
+      404,
+      { error: "This invitation link does not work." },
+      baseHeaders,
+    );
+  }
+  const client = createPrivilegedGiteaClient();
+  const organization = client
+    ? await findOrganization({ client, org: invitation.orgName }).catch(
+        () => null,
+      )
+    : null;
+  const inviterName = client
+    ? (await readPerson(client, invitation.invitedBy)).name
+    : invitation.invitedBy;
+  const session = await getSessionFromRequest(req);
+  return json(
+    200,
+    {
+      organization: invitation.orgName,
+      organizationName: organization?.fullName || invitation.orgName,
+      invitedBy: inviterName,
+      grant: describeGrant(invitation),
+      email: maskAddress(invitation.email),
+      status: invitationStatus(invitation),
+      // Only to the account it was accepted by: whether they are in yet.
+      ...(session && invitation.acceptedBy === session.username
+        ? { acceptedByYou: true }
+        : {}),
+    },
+    baseHeaders,
+  );
+}
+
+/**
+ * Accept, as the signed-in person — whose account's address must be the one
+ * invited, so the link is not a key anybody it is forwarded to can use. The
+ * join itself is `completeInvitation`'s.
+ */
+async function handleAcceptInvitation(
+  req: Request,
+  baseHeaders: Headers,
+  token: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { session } = auth;
+  const store = invitationStore();
+  const invitation = store.byToken(token);
+  if (!invitation) {
+    return json(
+      404,
+      { error: "This invitation link does not work." },
+      baseHeaders,
+    );
+  }
+  const status = invitationStatus(invitation);
+  if (status === "revoked" || status === "expired") {
+    return json(
+      410,
+      {
+        error:
+          status === "revoked"
+            ? "This invitation was withdrawn. Ask whoever sent it for a new one."
+            : "This invitation has expired. Ask whoever sent it for a new one.",
+      },
+      baseHeaders,
+    );
+  }
+  if (status !== "pending") {
+    if (invitation.acceptedBy === session.username) {
+      return json(200, { status }, baseHeaders);
+    }
+    return json(
+      409,
+      { error: "This invitation was already accepted." },
+      baseHeaders,
+    );
+  }
+
+  const client = createPrivilegedGiteaClient();
+  const { email } = client
+    ? await readPerson(client, session.username)
+    : { email: null };
+  if (!email || !sameAddress(email, invitation.email)) {
+    return json(
+      403,
+      {
+        error: `This invitation is for ${maskAddress(invitation.email)}. Sign in with the account that uses that address, or create one with it.`,
+      },
+      baseHeaders,
+    );
+  }
+
+  const accepted = store.accept(invitation.id, session.username);
+  if (!accepted) {
+    return json(
+      409,
+      { error: "This invitation was already accepted." },
+      baseHeaders,
+    );
+  }
+  logger.info("Organization invitation accepted", {
+    username: session.username,
+    organization: accepted.orgName,
+    invitationId: accepted.id,
+  });
+
+  const joined = await completeInvitation(accepted);
+  return json(200, { status: joined ? "joined" : "accepted" }, baseHeaders);
+}
+
+/**
+ * Add an accepted invitee in Gitea, as an owner, with that owner's own token.
+ *
+ * The inviter first, then any other owner — whoever has a live session. The
+ * service account is never used: it has no write access to anybody's
+ * organization, by design. With no owner signed in, the invitation waits
+ * (accepted, not joined) and the sweep finishes it as soon as one is.
+ */
+async function completeInvitation(invitation: Invitation): Promise<boolean> {
+  const username = invitation.acceptedBy;
+  if (!username || invitation.joinedAt !== null) return false;
+
+  const candidates = [invitation.invitedBy];
+  const privileged = createPrivilegedGiteaClient();
+  if (privileged) {
+    const owners = await findOrganizationTeam({
+      client: privileged,
+      org: invitation.orgName,
+      name: OWNERS_TEAM_NAME,
+    }).catch(() => null);
+    if (owners) {
+      const members = await listTeamMembers({
+        client: privileged,
+        teamId: owners.id,
+      }).catch(() => []);
+      for (const member of members) {
+        if (!candidates.some((c) => sameAddress(c, member.login))) {
+          candidates.push(member.login);
+        }
+      }
+    }
+  }
+
+  for (const owner of candidates) {
+    for (const session of await sessionStore.liveForUser(owner)) {
+      const client = createSessionGiteaClient(session);
+      try {
+        const refused = await addToOrganization({
+          client,
+          org: invitation.orgName,
+          username,
+          owner: invitation.orgRole === "owner",
+        });
+        if (refused) throw new Error(refused);
+        if (invitation.binder && invitation.binderLevel) {
+          await addToBinder({
+            client,
+            org: invitation.orgName,
+            workspace: invitation.binder,
+            username,
+            role: BINDER_LEVEL_ROLES[invitation.binderLevel]!,
+          });
+        }
+        invitationStore().markJoined(invitation.id);
+        logger.info("Invited person joined the organization", {
+          organization: invitation.orgName,
+          subject: username,
+          addedWithSessionOf: owner,
+          invitationId: invitation.id,
+        });
+        return true;
+      } catch (err) {
+        logger.warn("Could not finish an invitation with this session", {
+          organization: invitation.orgName,
+          invitationId: invitation.id,
+          owner,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  }
+  return false;
+}
+
+/** Finish every accepted invitation that was waiting for an owner. */
+async function completeWaitingInvitations(): Promise<void> {
+  for (const invitation of invitationStore().waitingToJoin()) {
+    await completeInvitation(invitation).catch(() => false);
+  }
+}
+
+/**
+ * The Gitea half of adding somebody to an organization, shared by an owner's
+ * direct add and an accepted invitation: `staff`, then `Owners` if asked.
+ * Answers a refusal to show, or null. Made with whatever token `client`
+ * carries — always an owner's own.
+ */
+async function addToOrganization(params: {
+  client: GiteaClient;
+  org: string;
+  username: string;
+  owner: boolean;
+}): Promise<string | null> {
+  const { client, org, username, owner } = params;
+  await ensureOrganizationMembership({ client, org, username });
+  if (!owner) return null;
+  const owners = await findOrganizationTeam({
+    client,
+    org,
+    name: OWNERS_TEAM_NAME,
+  });
+  if (!owners) return "This organization has no owners team.";
+  await addTeamMember({ client, teamId: owners.id, username });
+  return null;
+}
+
 /**
  * Put somebody in the organization.
  *
- * **There is no invitation, and that is a decision rather than an omission.**
- * Gitea has no invitation primitive — `/orgs/{org}/members` is `GET` only, and
- * the only way in is `PUT /teams/{id}/members/{username}`, which needs the
- * account to exist. Building the pending-invitation half means a SQLite table,
- * four routes, address-bound acceptance and an email nobody can send yet: this
- * repository has no mail infrastructure at all. So an owner adds a person who
- * has already signed up, and the rest is the invitations issue, 426.
- *
- * Two consequences worth being straight about, because both are visible from
- * the outside. Somebody with no account cannot be added at all — hence the
- * refusal below, which names that cause rather than letting Gitea answer 404
- * and having every layer above read it as "no such organization". And nobody
- * consents to being added. Neither is a bug to be found later; they are the
- * shape of the MVP.
+ * **The direct add, beside the invitation.** Gitea's only way in is
+ * `PUT /teams/{id}/members/{username}`, which needs the account to exist, so
+ * this adds a person who has already signed up, at once and without asking
+ * them. Somebody with no account — or anybody who should agree first — is
+ * invited by email instead (`handleCreateInvitation`); the refusal below
+ * points there rather than letting Gitea answer 404 and having every layer
+ * above read it as "no such organization".
  *
  * `staff` before `Owners`, the same order every other path into the
  * organization uses: a failure part-way leaves them a member who can read the
@@ -5857,37 +9276,19 @@ async function handleAddOrganizationPerson(
         {
           error:
             `${username} does not have a Bindersnap account yet. ` +
-            `They need to sign up first — then you can add them here.`,
+            `Invite them by email instead — they can sign up on the way in.`,
         },
         baseHeaders,
       );
     }
 
-    await ensureOrganizationMembership({
+    const refused = await addToOrganization({
       client,
       org: orgName,
       username: account.login,
+      owner,
     });
-
-    if (owner) {
-      const owners = await findOrganizationTeam({
-        client,
-        org: orgName,
-        name: OWNERS_TEAM_NAME,
-      });
-      if (!owners) {
-        return json(
-          404,
-          { error: "This organization has no owners team." },
-          baseHeaders,
-        );
-      }
-      await addTeamMember({
-        client,
-        teamId: owners.id,
-        username: account.login,
-      });
-    }
+    if (refused) return json(404, { error: refused }, baseHeaders);
 
     logger.info("Organization member added", {
       username: session.username,
@@ -6462,6 +9863,35 @@ async function readBinderPeople(
 }
 
 /**
+ * The Gitea half of putting somebody in a binder at a role, shared by the
+ * binder's People tab and an accepted invitation.
+ */
+async function addToBinder(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  username: string;
+  role: WorkspaceRole;
+}): Promise<void> {
+  const { client, org, workspace, username, role } = params;
+  await ensureOrganizationMembership({ client, org, username });
+
+  // Leave whatever role they held here first, so a move cannot end with them
+  // in two of this binder's teams and their effective access decided by
+  // whichever ranks higher.
+  await removeFromRoleTeams({ client, org, workspace, username, except: role });
+
+  const team = await createWorkspaceRoleTeam({ client, org, workspace, role });
+  // Idempotent, and needed on the first use of a team that already existed
+  // but had been revoked. Before the membership, so a failure leaves the
+  // person out rather than in a team that reaches nothing.
+  await grantTeamOnRepo({ client, teamId: team.id, org, repo: workspace });
+  await addTeamMember({ client, teamId: team.id, username });
+
+  await recomputeApprovalsWhitelist({ client, org, workspace });
+}
+
+/**
  * Add somebody to this binder at a level, or move them between its levels.
  *
  * **The role team is created on first use, not at provisioning.** A binder that
@@ -6539,44 +9969,12 @@ async function handleBinderPerson(
       if (refusal) return json(409, { error: refusal }, baseHeaders);
     }
 
-    await ensureOrganizationMembership({
-      client,
-      org: orgName,
-      username,
-    });
-
-    // Leave whatever role they held here first, so a move cannot end with them
-    // in two of this binder's teams and their effective access decided by
-    // whichever ranks higher.
-    await removeFromRoleTeams({
+    await addToBinder({
       client,
       org: orgName,
       workspace: workspaceName,
       username,
-      except: role,
-    });
-
-    const team = await createWorkspaceRoleTeam({
-      client,
-      org: orgName,
-      workspace: workspaceName,
       role,
-    });
-    // Idempotent, and needed on the first use of a team that already existed
-    // but had been revoked. Before the membership, so a failure leaves the
-    // person out rather than in a team that reaches nothing.
-    await grantTeamOnRepo({
-      client,
-      teamId: team.id,
-      org: orgName,
-      repo: workspaceName,
-    });
-    await addTeamMember({ client, teamId: team.id, username });
-
-    await recomputeApprovalsWhitelist({
-      client,
-      org: orgName,
-      workspace: workspaceName,
     });
 
     return json(
@@ -7272,13 +10670,13 @@ async function handleListWorkspaceDocuments(
     const changeNumber = Number.parseInt(changeRaw ?? "", 10);
     const onChange =
       !draft && !readable && Number.isFinite(changeNumber) && changeNumber > 0
-        ? await getPullRequestWithReviews({
+        ? await getPullRequestHeadBranch({
             client: auth.client,
             owner: orgName,
             repo: workspaceName,
             pullNumber: changeNumber,
           })
-            .then((entry) => entry.pullRequest.branchName || null)
+            .then((branch) => branch || null)
             .catch(() => null)
         : null;
 
@@ -7365,7 +10763,14 @@ async function readBinderDocuments(params: {
   // either way; it was only the folders being thrown away.
   const [tree, openChanges, tags] = await Promise.all([
     readWorkspaceTree({ client, org, workspace, ...(ref ? { ref } : {}) }),
-    listPullRequests({ client, owner: org, repo: workspace, state: "open" }),
+    // Numbers only: which documents each change touches is read below, and
+    // nothing here shows a review.
+    listPullRequestsWithoutReviews({
+      client,
+      owner: org,
+      repo: workspace,
+      state: "open",
+    }),
     listAllTags({ client, owner: org, repo: workspace }),
   ]);
   const documents = tree.documents;
@@ -7584,6 +10989,26 @@ async function resolveReadableRef(params: {
   return { ref: asked };
 }
 
+/**
+ * Start a read now and collect it later.
+ *
+ * For a handler that starts independent reads together and awaits each where
+ * it is used: the failure is held rather than raised as an unhandled
+ * rejection when the handler returns early (a 404, a refused draft) before
+ * asking for it, and it is thrown to whoever does ask.
+ */
+function settle<T>(pending: Promise<T>): () => Promise<T> {
+  const outcome = pending.then(
+    (value) => ({ ok: true as const, value }),
+    (error: unknown) => ({ ok: false as const, error }),
+  );
+  return async () => {
+    const result = await outcome;
+    if (!result.ok) throw result.error;
+    return result.value;
+  };
+}
+
 async function handleWorkspaceDocumentDetail(
   req: Request,
   baseHeaders: Headers,
@@ -7598,11 +11023,80 @@ async function handleWorkspaceDocumentDetail(
   if (auth instanceof Response) return auth;
 
   try {
-    const workspace = await findWorkspaceRepo({
-      client: auth.client,
-      org: orgName,
-      name: workspaceName,
-    });
+    const changeNumber = Number.parseInt(changeRaw ?? "", 10);
+    const asksForChange = Number.isFinite(changeNumber) && changeNumber > 0;
+    const namesRef = (refRaw ?? "").trim() !== "";
+    const namesDraft = typeof draftRaw === "string" && draftRaw.trim() !== "";
+
+    // **Everything that does not depend on something else, asked at once.**
+    // The binder, the ref check, the change's branch and your own draft used
+    // to be read one after another before the tree read even started — four
+    // round trips, each waiting on a gate slot, on the page people open most.
+    // The tags and the open changes need only the binder's name, so they start
+    // here too and are awaited where they are used. `settle` holds a failure
+    // until then, so a binder that 404s does not leave a rejection unhandled.
+    const binder = settle(
+      findWorkspaceRepo({
+        client: auth.client,
+        org: orgName,
+        name: workspaceName,
+      }),
+    );
+    const readableRef = settle(
+      resolveReadableRef({
+        client: auth.client,
+        org: orgName,
+        workspace: workspaceName,
+        username: auth.session.username,
+        refRaw,
+      }),
+    );
+    const changeBranch = settle(
+      asksForChange
+        ? getPullRequestHeadBranch({
+            client: auth.client,
+            owner: orgName,
+            repo: workspaceName,
+            pullNumber: changeNumber,
+          })
+            .then((branch) => branch || null)
+            .catch(() => null)
+        : Promise.resolve(null),
+    );
+    const ownDraft = settle(
+      resolveOwnDraftBranch({
+        client: auth.client,
+        org: orgName,
+        workspace: workspaceName,
+        username: auth.session.username,
+        draftRaw,
+      }),
+    );
+    // When nothing names another ref the tree is `main`'s, and it can be read
+    // alongside everything else rather than after it.
+    const mainTree =
+      !namesRef && !asksForChange && !namesDraft
+        ? settle(
+            readWorkspaceTree({
+              client: auth.client,
+              org: orgName,
+              workspace: workspaceName,
+            }),
+          )
+        : null;
+    const tags = settle(
+      listAllTags({ client: auth.client, owner: orgName, repo: workspaceName }),
+    );
+    const openChanges = settle(
+      listPullRequestsWithoutReviews({
+        client: auth.client,
+        owner: orgName,
+        repo: workspaceName,
+        state: "open",
+      }),
+    );
+
+    const workspace = await binder();
     if (!workspace) {
       return json(404, { error: "No such binder." }, baseHeaders);
     }
@@ -7616,13 +11110,7 @@ async function handleWorkspaceDocumentDetail(
      * view instead of the change view."* A change request is one thing that
      * happens to a branch; the branch is the thing the file is on.
      */
-    const readable = await resolveReadableRef({
-      client: auth.client,
-      org: orgName,
-      workspace: workspaceName,
-      username: auth.session.username,
-      refRaw,
-    });
+    const readable = await readableRef();
     if (readable && "error" in readable) {
       return json(409, { error: readable.error }, baseHeaders);
     }
@@ -7642,31 +11130,14 @@ async function handleWorkspaceDocumentDetail(
      * A closed change keeps working: the branch may be gone, in which case the
      * read below falls back and the page says what it can.
      */
-    const changeNumber = Number.parseInt(changeRaw ?? "", 10);
-    const onChange =
-      Number.isFinite(changeNumber) && changeNumber > 0
-        ? await getPullRequestWithReviews({
-            client: auth.client,
-            owner: orgName,
-            repo: workspaceName,
-            pullNumber: changeNumber,
-          })
-            .then((entry) => entry.pullRequest.branchName || null)
-            .catch(() => null)
-        : null;
+    const onChange = await changeBranch();
 
     // **A policy renamed a moment ago is only at that name in the draft.**
     // Clicking a row in the tree while editing opened this on `main`, where
     // the new address has never existed, and the answer was that the document
     // does not exist — of a document sitting on screen. Your own draft only,
     // which is the rule every draft-aware read here follows.
-    const draft = await resolveOwnDraftBranch({
-      client: auth.client,
-      org: orgName,
-      workspace: workspaceName,
-      username: auth.session.username,
-      draftRaw,
-    });
+    const draft = await ownDraft();
     if (draft && "error" in draft) {
       return json(409, { error: draft.error }, baseHeaders);
     }
@@ -7698,11 +11169,13 @@ async function handleWorkspaceDocumentDetail(
           workspace: workspaceName,
           ref: readAt,
         }).catch(() => null)
-      : await readWorkspaceTree({
-          client: auth.client,
-          org: orgName,
-          workspace: workspaceName,
-        });
+      : mainTree
+        ? await mainTree()
+        : await readWorkspaceTree({
+            client: auth.client,
+            org: orgName,
+            workspace: workspaceName,
+          });
 
     if (!tree) {
       return json(
@@ -7756,20 +11229,23 @@ async function handleWorkspaceDocumentDetail(
     }
 
     const resolved = document;
-    const [versions, openChanges] = await Promise.all([
-      listDocumentVersions({
+    const versions = documentVersionsFrom(await tags(), resolved.uid);
+
+    // Reviews for the changes that touch this document, and no others: the
+    // rest of the binder's changes are narrowed away below, and reading their
+    // reviews first was a call or more each for nothing.
+    const touching = await attachReviews({
+      client: auth.client,
+      owner: orgName,
+      repo: workspaceName,
+      pullRequests: await filterChangesTouching({
         client: auth.client,
         org: orgName,
         workspace: workspaceName,
-        uid: resolved.uid,
+        openChanges: await openChanges(),
+        slugPath: resolved.slugPath,
       }),
-      listPullRequests({
-        client: auth.client,
-        owner: orgName,
-        repo: workspaceName,
-        state: "open",
-      }),
-    ]);
+    });
 
     // A document read on a branch and never published is proposed: the branch
     // is the only place it exists. One that has versions is on the record and
@@ -7787,13 +11263,7 @@ async function handleWorkspaceDocumentDetail(
         versions,
         latestVersion: versions[0] ?? null,
         folders: tree.folders,
-        openChanges: await filterChangesTouching({
-          client: auth.client,
-          org: orgName,
-          workspace: workspaceName,
-          openChanges,
-          slugPath: resolved.slugPath,
-        }),
+        openChanges: touching.map((entry) => entry.pullRequest),
       },
       baseHeaders,
     );
@@ -7880,7 +11350,7 @@ async function handleWorkspaceDocumentRaw(
 
     return new Response(response.body, {
       status: response.status,
-      headers: downloadHeaders(baseHeaders, response),
+      headers: downloadHeaders(baseHeaders, response, ref),
     });
   } catch (err) {
     logger.error("Failed to download a binder document", {
@@ -7895,6 +11365,244 @@ async function handleWorkspaceDocumentRaw(
       err,
       baseHeaders,
       "Unable to download the document.",
+    );
+  }
+}
+
+/**
+ * A document's audit packet: every version, who approved it, what was said,
+ * and the fingerprints that let a third party check none of it was changed.
+ *
+ * Read with the caller's own token, so the packet holds exactly what they can
+ * already see — and a packet is available to anybody who can read the
+ * document, because a surveyor's question is not a paid feature (ADR 0004).
+ */
+async function handleWorkspaceDocumentAudit(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+  documentPath: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  try {
+    const document = await findWorkspaceDocument({
+      client: auth.client,
+      org: orgName,
+      workspace: workspaceName,
+      documentPath,
+      ref: "main",
+    });
+    if (!document) {
+      return json(404, { error: "No such document." }, baseHeaders);
+    }
+    if (!document.uid) {
+      return json(
+        409,
+        {
+          error:
+            "This document was not added through Bindersnap, so it has no approval record to export.",
+        },
+        baseHeaders,
+      );
+    }
+
+    const readFile = async (path: string, ref: string) => {
+      const response = await giteaFetch(
+        `/api/v1/repos/${encodeURIComponent(orgName)}/${encodeURIComponent(workspaceName)}/raw/${path
+          .split("/")
+          .map(encodeURIComponent)
+          .join("/")}?ref=${encodeURIComponent(ref)}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: buildTokenAuthHeader(auth.session.giteaToken),
+            Accept: "*/*",
+          },
+        },
+      );
+      if (!response.ok) throw new Error(`Could not read ${path} at ${ref}.`);
+      return new Uint8Array(await response.arrayBuffer());
+    };
+
+    const gathered = await gatherAuditRecord({
+      client: auth.client,
+      readFile,
+      org: orgName,
+      binder: workspaceName,
+      document: {
+        title: formatDocumentName(document.name),
+        slugPath: document.slugPath,
+        uid: document.uid,
+        path: document.path,
+      },
+      exportedBy: auth.session.username,
+    });
+    const packet = await buildAuditPacket(gathered);
+
+    logger.info("Audit packet exported", {
+      username: auth.session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      documentPath: document.path,
+      versions: gathered.record.versions.length,
+    });
+
+    const headers = mergeHeaders(baseHeaders);
+    headers.set("content-type", "application/zip");
+    headers.set(
+      "content-disposition",
+      `attachment; filename="${
+        document.slugPath.split("/").pop() || "document"
+      }-audit-packet-${gathered.record.exportedAt.slice(0, 10)}.zip"`,
+    );
+    headers.set("cache-control", "no-store");
+    headers.set("access-control-expose-headers", "content-disposition");
+    return new Response(new Blob([packet as Uint8Array<ArrayBuffer>]), {
+      status: 200,
+      headers,
+    });
+  } catch (err) {
+    logger.error("Failed to export an audit packet", {
+      username: auth.session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      documentPath,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to export the audit packet.",
+    );
+  }
+}
+
+/**
+ * One document as Word or PDF, at whatever ref is asked for.
+ *
+ * A policy written in the editor is laid out afresh; an uploaded file that is
+ * already in the format asked for is handed back as it came, and one that is
+ * not is refused with a sentence rather than approximated. Addressed under
+ * `export/` for the same reason `raw/` is: the document's path is the rest of
+ * the URL.
+ *
+ * Never gated, like `raw/`: reading and exporting stay free forever (ADR 0004).
+ */
+async function handleWorkspaceDocumentExport(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+  documentPath: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const params = new URL(req.url).searchParams;
+  const ref = params.get("ref")?.trim() || "main";
+  const format = parseExportFormat(params.get("format"));
+  if (!format) {
+    return json(400, { error: "Say which format: pdf or docx." }, baseHeaders);
+  }
+
+  try {
+    const document = await findWorkspaceDocument({
+      client: auth.client,
+      org: orgName,
+      workspace: workspaceName,
+      documentPath,
+      ref,
+    });
+    if (!document) {
+      return json(404, { error: "No such document." }, baseHeaders);
+    }
+
+    const [response, versions] = await Promise.all([
+      giteaFetch(
+        `/api/v1/repos/${encodeURIComponent(orgName)}/${encodeURIComponent(workspaceName)}/raw/${document.path
+          .split("/")
+          .map(encodeURIComponent)
+          .join("/")}?ref=${encodeURIComponent(ref)}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: buildTokenAuthHeader(auth.session.giteaToken),
+            Accept: "*/*",
+          },
+        },
+      ),
+      listDocumentVersions({
+        client: auth.client,
+        org: orgName,
+        workspace: workspaceName,
+        uid: document.uid,
+      }),
+    ]);
+
+    if (!response.ok) {
+      const errorMessage = await readGiteaErrorMessage(
+        response,
+        "Unable to export the document.",
+      );
+      return json(response.status, { error: errorMessage }, baseHeaders);
+    }
+
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const proposed =
+      ref !== "main" && !versions.some((version) => version.tag === ref);
+    const version =
+      ref === "main"
+        ? (versions[0]?.version ?? null)
+        : (versions.find((entry) => entry.tag === ref)?.version ?? null);
+    const result = await exportDocument({
+      path: document.path,
+      bytes,
+      format,
+      // The name the product shows, not the slug the file is saved under.
+      title: formatDocumentName(document.name),
+    });
+
+    if (result.kind === "refused") {
+      return json(415, { error: result.reason }, baseHeaders);
+    }
+
+    const headers = mergeHeaders(baseHeaders);
+    headers.set("content-type", EXPORT_TYPES[format]);
+    headers.set(
+      "content-disposition",
+      `attachment; filename="${exportFilename({
+        slugPath: document.slugPath,
+        version,
+        proposed,
+        format,
+      })}"`,
+    );
+    headers.set("cache-control", "no-store");
+    // The app is on another origin, and the file's name — which version it is
+    // — is the one thing it needs from the headers.
+    headers.set("access-control-expose-headers", "content-disposition");
+    const body = result.kind === "converted" ? result.bytes : bytes;
+    return new Response(new Blob([body as Uint8Array<ArrayBuffer>]), {
+      status: 200,
+      headers,
+    });
+  } catch (err) {
+    logger.error("Failed to export a binder document", {
+      username: auth.session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      documentPath,
+      ref,
+      format,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to export the document.",
     );
   }
 }
@@ -7927,7 +11635,7 @@ async function resolveChangeToJoin(params: {
     return { error: "That is not a change request number." };
   }
 
-  const open = await listPullRequests({
+  const open = await listPullRequestsWithoutReviews({
     client,
     owner: org,
     repo: workspace,
@@ -8039,9 +11747,11 @@ async function resolveWorkTarget(params: {
  * able to do to another by guessing a name, and "other people's drafts are
  * visible; their contents are not" is the rule the binder is built on.
  *
- * Three conditions, in the order they get cheaper to be wrong about: it has to
- * be shaped like a draft branch, it has to still be a draft (a proposed one is
- * a change request and has reviewers), and it has to be yours.
+ * Two conditions: it has to be shaped like a draft branch, and it has to be
+ * yours. **A proposed draft is still yours** — it is the change's branch now,
+ * and a save into it is a save its reviewers see, exactly as a push to a pull
+ * request's branch is — so it resolves too, carrying the change's number for
+ * the callers that must not treat it as unproposed (propose, discard).
  *
  * Deliberately does **not** understand `true`. Opening a draft is a write, and
  * the read that shows a binder at its draft must not create one — a person who
@@ -8054,7 +11764,9 @@ async function resolveOwnDraftBranch(params: {
   workspace: string;
   username: string;
   draftRaw: unknown;
-}): Promise<{ branch: string } | { error: string } | null> {
+}): Promise<
+  { branch: string; changeNumber: number | null } | { error: string } | null
+> {
   const { client, org, workspace, username, draftRaw } = params;
 
   // Absent in every shape it can be absent in. A multipart form has no nulls —
@@ -8085,15 +11797,16 @@ async function resolveOwnDraftBranch(params: {
     org,
     workspace,
     owner: username,
+    proposed: true,
   });
-  if (!mine.some((draft) => draft.branch === branch)) {
+  const found = mine.find((draft) => draft.branch === branch);
+  if (!found) {
     return {
-      error:
-        "That draft is not yours, or it has already been proposed as a change request.",
+      error: "That draft is not yours, or it is gone.",
     };
   }
 
-  return { branch };
+  return { branch, changeNumber: found.changeNumber };
 }
 
 /**
@@ -8175,17 +11888,23 @@ async function handleBinderDraft(
       client,
       org: orgName,
       workspace: workspaceName,
+      proposed: true,
     });
     const own = drafts.filter((draft) => draft.owner === session.username);
 
     // **Which one you are in is the address's to say, not this route's to
     // guess.** A person may have several, and the page carries the branch it
-    // is editing in `?draft=`. A branch that is not yours, or that has been
-    // proposed since the link was made, falls back to the newest rather than
-    // failing — this is a read, and landing somebody in their most recent work
-    // is a better answer than an error about a branch name they never typed.
+    // is editing in `?draft=`, proposed or not. A branch that is not yours, or
+    // that is gone, falls back to the newest one nobody has proposed rather
+    // than failing — this is a read, and landing somebody in their most recent
+    // work is a better answer than an error about a branch name they never
+    // typed. Not a proposed one: arriving unasked in work reviewers are
+    // reading is a surprise, where arriving in it by name is the point.
     const asked = new URL(req.url).searchParams.get("draft")?.trim() ?? "";
-    const mine = own.find((draft) => draft.branch === asked) ?? own[0] ?? null;
+    const mine =
+      own.find((draft) => draft.branch === asked) ??
+      own.find((draft) => draft.changeNumber === null) ??
+      null;
 
     return json(
       200,
@@ -8315,6 +12034,7 @@ async function handleOpenBinderDraft(
       client,
       org: orgName,
       workspace: workspaceName,
+      proposed: true,
     });
 
     logger.info("Binder draft opened", {
@@ -8352,9 +12072,9 @@ async function handleOpenBinderDraft(
 /**
  * Throw your draft away.
  *
- * Only your own, and only while it is still a draft: {@link listBinderDrafts}
- * has already subtracted every branch a change request sits on, so a proposed
- * branch is not in the list and cannot be deleted out from under its reviewers.
+ * Only your own, and only while nobody has proposed it: a proposed draft is a
+ * change request's branch, and deleting it would pull the change out from
+ * under its reviewers.
  */
 async function handleDiscardBinderDraft(
   req: Request,
@@ -8403,6 +12123,17 @@ async function handleDiscardBinderDraft(
       return json(
         404,
         { error: "You have no draft in this binder." },
+        baseHeaders,
+      );
+    }
+    // Deleting a proposed draft's branch would take a change request under
+    // review with it. Withdrawing the change is its own act, on the change.
+    if (mine.changeNumber !== null) {
+      return json(
+        409,
+        {
+          error: `This draft is proposed as change ${mine.changeNumber}. Close that change first to throw the draft away.`,
+        },
         baseHeaders,
       );
     }
@@ -8509,6 +12240,7 @@ async function handleRenameBinderDraft(
       client,
       org: orgName,
       workspace: workspaceName,
+      proposed: true,
     });
     const renamed =
       drafts.find((draft) => draft.branch === mine.branch) ?? null;
@@ -8617,6 +12349,15 @@ async function handleProposeBinderDraft(
         baseHeaders,
       );
     }
+    if (mine.changeNumber !== null) {
+      return json(
+        409,
+        {
+          error: `This draft is already proposed, as change ${mine.changeNumber}. Saving into it updates that change.`,
+        },
+        baseHeaders,
+      );
+    }
 
     // A draft with no commits is a branch identical to `main`. Gitea would
     // refuse the pull request with a message about no differences; this says
@@ -8659,11 +12400,20 @@ ${description}`,
       );
     }
 
-    // **It has stopped being a draft**, so it stops having a draft's name: the
-    // title the author just wrote is on the change request now, which is in
-    // Gitea and is the record. Keeping the row would put a proposed branch in
-    // the picker beside work nobody has seen.
-    await draftNameStore.forget(workspace.id, mine.branch).catch(() => {});
+    // Gitea asks the CODEOWNERS of what the change touches to review it as it
+    // opens. Tell them.
+    notifyRequestedReviewers({
+      owner: orgName,
+      repo: workspaceName,
+      number: change.number,
+      actor: session.username,
+    });
+
+    // **The name stays.** It used to be forgotten here, on the reasoning that
+    // a proposed branch had stopped being a draft — so the change request's
+    // branch chip fell back to "Bob's draft" and the owner's picker lost the
+    // work entirely. A proposed draft is still its owner's, still editable,
+    // and still called what they called it.
 
     logger.info("Binder draft proposed", {
       username: session.username,
@@ -8709,7 +12459,8 @@ ${description}`,
  * - `drafts` is every draft of yours, so the picker has something to pick
  *   between. Each carries the name its author wrote and how many acts are in
  *   it; the mockup's row is "Reorganise nursing · 3 changes · edited 4 minutes
- *   ago" and every word of that comes from here.
+ *   ago" and every word of that comes from here. A proposed one is still
+ *   yours and still listed, with the number of the change open on it.
  * - `others` is everybody else's, **without their contents**. Knowing somebody
  *   is editing the binder is what stops two people making the same folder
  *   twice; reading what they have not proposed yet is not a thing a draft
@@ -8787,6 +12538,7 @@ async function describeDraft(params: {
           named: authoredName(mine),
           owner: mine.owner,
           updatedAt: mine.updatedAt,
+          changeNumber: mine.changeNumber,
           acts: acts.map((act) => ({
             summary: act.summary,
             sha: act.sha,
@@ -8801,9 +12553,15 @@ async function describeDraft(params: {
       updatedAt: draft.updatedAt,
       actCount: (actsByBranch.get(draft.branch) ?? []).length,
       lastAct: draft.lastAct,
+      changeNumber: draft.changeNumber,
     })),
+    // Somebody else's proposed draft is a change request now, readable by
+    // anybody who can read the binder, and it is listed with the changes —
+    // not here, as work nobody may look at.
     others: drafts
-      .filter((draft) => draft.owner !== username)
+      .filter(
+        (draft) => draft.owner !== username && draft.changeNumber === null,
+      )
       .map((draft) => ({
         branch: draft.branch,
         owner: draft.owner,
@@ -8926,6 +12684,17 @@ async function handleBinderShapeChange(
           ].join("\n"),
         });
 
+    // A new change: Gitea has asked the CODEOWNERS of what it touches to
+    // review it. Tell them. (Into an existing change, nobody new is asked.)
+    if (!target && proposed.changeNumber !== null) {
+      notifyRequestedReviewers({
+        owner: orgName,
+        repo: workspaceName,
+        number: proposed.changeNumber,
+        actor: session.username,
+      });
+    }
+
     logger.info("Binder shape change proposed", {
       username: session.username,
       organization: orgName,
@@ -9019,6 +12788,7 @@ async function handleReviseWorkspaceDocument(
   const documentPath = parseOptionalString(form.get("documentPath"));
   const joinRaw = parseOptionalString(form.get("changeNumber"));
   const draftRaw = parseOptionalString(form.get("draft"));
+  const fromEditor = parseOptionalString(form.get("source")) === "editor";
 
   if (!file || !documentPath) {
     return json(
@@ -9047,14 +12817,31 @@ async function handleReviseWorkspaceDocument(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    // Read from `main`, deliberately. A revision revises what is on the record;
-    // a document that only exists inside somebody else's open change is not
-    // something to build a second change on top of.
+    const target = await resolveWorkTarget({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      username: session.username,
+      changeRaw: joinRaw,
+      draftRaw,
+    });
+    if (target && "error" in target) {
+      return json(409, { error: target.error }, baseHeaders);
+    }
+
+    // **Read where the new version is going.** Opening a change of its own, a
+    // revision revises what is on the record, so it reads `main` — a document
+    // that only exists inside somebody else's open change is not something to
+    // build a second change on top of. Into your draft or a change you are
+    // joining, it reads that branch: a policy started in a draft is only
+    // there, and the editor saving it a second time is revising it, not
+    // adding it again.
     const existing = await findWorkspaceDocument({
       client,
       org: orgName,
       workspace: workspaceName,
       documentPath,
+      ...(target ? { ref: target.branch } : {}),
     });
 
     if (!existing) {
@@ -9104,18 +12891,6 @@ async function handleReviseWorkspaceDocument(
             { kind: "write", path: nextPath, base64Content },
           ];
 
-    const target = await resolveWorkTarget({
-      client,
-      org: orgName,
-      workspace: workspaceName,
-      username: session.username,
-      changeRaw: joinRaw,
-      draftRaw,
-    });
-    if (target && "error" in target) {
-      return json(409, { error: target.error }, baseHeaders);
-    }
-
     const branch = buildUploadBranchName(
       existing.slugPath,
       session.username,
@@ -9129,6 +12904,11 @@ async function handleReviseWorkspaceDocument(
       uploadBranch: target ? target.branch : branch,
       uploaderSlug: session.username,
       fileHashSha256: fullHash,
+      // Written here, so said as an edit: "Edit Hand Hygiene", which is what
+      // the draft bar lists and the change request's description prefills.
+      ...(fromEditor
+        ? { subject: `Edit ${formatDocumentName(existing.name)}` }
+        : {}),
     });
 
     const proposed = target
@@ -9147,9 +12927,9 @@ async function handleReviseWorkspaceDocument(
           branch,
           operations,
           message,
-          title: `Update ${existing.slugPath}`,
+          title: `New version of ${formatDocumentName(existing.slugPath.split("/").pop() ?? existing.slugPath)}`,
           body: [
-            `Update ${existing.slugPath}`,
+            `New version of ${formatDocumentName(existing.slugPath.split("/").pop() ?? existing.slugPath)}`,
             "",
             "A new version proposed from Bindersnap.",
             "",
@@ -9160,6 +12940,17 @@ async function handleReviseWorkspaceDocument(
             `File hash (SHA-256): ${fullHash}`,
           ].join("\n"),
         });
+
+    // A new change: Gitea has asked the CODEOWNERS of what it touches to
+    // review it. Tell them. (Into an existing change, nobody new is asked.)
+    if (!target && proposed.changeNumber !== null) {
+      notifyRequestedReviewers({
+        owner: orgName,
+        repo: workspaceName,
+        number: proposed.changeNumber,
+        actor: session.username,
+      });
+    }
 
     logger.info("Workspace document revised", {
       username: session.username,
@@ -9319,7 +13110,9 @@ async function handleCreateWorkspaceDocument(
       return json(
         409,
         {
-          error: `An unpublished change already claims "${slugPath}" (${pending}).`,
+          // The branch is how we found it, not something the person can act
+          // on — they need to know it is already waiting, and what to do.
+          error: `${formatDocumentName(slugPath.split("/").pop() ?? slugPath)} is already waiting in a change request. Add this file to that change, or wait until it is decided.`,
         },
         baseHeaders,
       );
@@ -9406,9 +13199,11 @@ async function handleCreateWorkspaceDocument(
           branch: branchName,
           operations,
           message: commitMessage,
-          title: `Add ${slugPath}`,
+          // In words: the reviewer reads "Add Fire Safety Plan", not the path
+          // it is filed at. The path is still on the Document line below.
+          title: `Add ${formatDocumentName(slugPath.split("/").pop() ?? slugPath)}`,
           body: [
-            `Add ${slugPath}`,
+            `Add ${formatDocumentName(slugPath.split("/").pop() ?? slugPath)}`,
             "",
             "Automated upload from Bindersnap.",
             "",
@@ -9419,6 +13214,17 @@ async function handleCreateWorkspaceDocument(
             `File hash (SHA-256): ${fullHash}`,
           ].join("\n"),
         });
+
+    // A new change: Gitea has asked the CODEOWNERS of what it touches to
+    // review it. Tell them. (Into an existing change, nobody new is asked.)
+    if (!target && proposed.changeNumber !== null) {
+      notifyRequestedReviewers({
+        owner: orgName,
+        repo: workspaceName,
+        number: proposed.changeNumber,
+        actor: session.username,
+      });
+    }
 
     logger.info("Workspace document created", {
       username: session.username,
@@ -9531,6 +13337,137 @@ async function handleListOrganizationWorkspaces(
   }
 }
 
+/** What creating a binder will do, recorded before it starts. */
+interface ProvisionBinderPlan {
+  org: string;
+  name: string;
+  description?: string;
+  openToOrganization: boolean;
+}
+
+type ProvisionOutcome =
+  | { kind: "done"; jobId: string; workspace: WorkspaceSummary }
+  /** Failed before the repository existed: nothing to finish. */
+  | { kind: "abandoned"; error: unknown }
+  /** The repository exists, its setup is not finished; the runner keeps at it. */
+  | {
+      kind: "unfinished";
+      jobId: string;
+      workspace: WorkspaceSummary;
+      error: string;
+    }
+  | { kind: "busy"; jobId: string };
+
+/**
+ * Create a binder from its plan, once, and record how it went.
+ *
+ * **Every step is already safe to repeat** — the repository is found if it
+ * exists, the README is removed only if it is there, the team grant and the
+ * branch protection are "set to this" calls. What made a half-made binder
+ * permanent was the handler refusing a name that already existed. Now a
+ * binder whose setup stopped — worst of all, before its `main` was protected,
+ * which left anybody with write access free to push to it unreviewed — is
+ * finished by the runner, or by creating it again under the same name.
+ */
+async function executeProvisionJob(
+  job: JobRecord,
+  client: GiteaClient,
+): Promise<ProvisionOutcome> {
+  const store = jobStore();
+  if (!store.claim(job.id)) return { kind: "busy", jobId: job.id };
+  const plan = job.plan as ProvisionBinderPlan;
+
+  try {
+    const provisioned = await provisionWorkspace({
+      client,
+      org: plan.org,
+      name: plan.name,
+      description: plan.description,
+      openToOrganization: plan.openToOrganization,
+    });
+    store.complete(job.id, { workspace: provisioned.workspace.name });
+    logger.info("Workspace created", {
+      username: job.createdBy,
+      organization: plan.org,
+      workspace: provisioned.workspace.name,
+      jobId: job.id,
+      attempts: job.attempts + 1,
+    });
+    return { kind: "done", jobId: job.id, workspace: provisioned.workspace };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: plan.org,
+      name: plan.name,
+    }).catch(() => null);
+
+    if (!workspace) {
+      store.delete(job.id);
+      return { kind: "abandoned", error: err };
+    }
+
+    logger.error("A binder was created but its setup did not finish", {
+      organization: plan.org,
+      workspace: plan.name,
+      jobId: job.id,
+      error: message,
+    });
+    store.fail(job.id, message);
+    return { kind: "unfinished", jobId: job.id, workspace, error: message };
+  }
+}
+
+function provisionJobResponse(
+  outcome: ProvisionOutcome,
+  baseHeaders: Headers,
+): Response {
+  switch (outcome.kind) {
+    case "done":
+      return json(201, { workspace: outcome.workspace }, baseHeaders);
+    case "abandoned":
+      return responseFromError(
+        outcome.error,
+        baseHeaders,
+        "Unable to create the binder.",
+      );
+    case "unfinished":
+      return json(
+        202,
+        {
+          workspace: outcome.workspace,
+          jobId: outcome.jobId,
+          error:
+            "The binder exists and is still being set up. It will be ready shortly.",
+        },
+        baseHeaders,
+      );
+    case "busy":
+      return json(
+        409,
+        {
+          error: "This binder is being created right now.",
+          jobId: outcome.jobId,
+        },
+        baseHeaders,
+      );
+  }
+}
+
+/** The runner's turn at a binder: finish it as the person who created it. */
+async function resumeProvisionJob(job: JobRecord): Promise<void> {
+  const session = job.sessionId ? await sessionStore.get(job.sessionId) : null;
+  if (!session || session.expiresAt <= Date.now()) {
+    jobStore().fail(
+      job.id,
+      "The person who created this binder has signed out. Creating it again under the same name finishes setting it up.",
+      { permanent: true },
+    );
+    return;
+  }
+  await executeProvisionJob(job, createSessionGiteaClient(session));
+}
+
 async function handleCreateWorkspace(
   req: Request,
   baseHeaders: Headers,
@@ -9564,46 +13501,68 @@ async function handleCreateWorkspace(
       ? payload.description.trim()
       : undefined;
 
-  try {
-    const existing = await findWorkspaceRepo({
-      client: auth.client,
-      org: orgName,
-      name,
-    });
-    if (existing) {
-      return json(
-        409,
-        { error: `A binder named "${name}" already exists.` },
+  const groupKey = `${orgName}/${name}`;
+  return withGroupLock(groupKey, async () => {
+    try {
+      // A binder of this name whose setup never finished is finished now,
+      // rather than refused as a name already taken.
+      const unfinished = jobStore().openFor(groupKey, "binder");
+      if (unfinished) {
+        return provisionJobResponse(
+          await executeProvisionJob(unfinished, auth.client),
+          baseHeaders,
+        );
+      }
+
+      const existing = await findWorkspaceRepo({
+        client: auth.client,
+        org: orgName,
+        name,
+      });
+      if (existing) {
+        return json(
+          409,
+          { error: `A binder named "${name}" already exists.` },
+          baseHeaders,
+        );
+      }
+
+      const job = jobStore().create<ProvisionBinderPlan>({
+        kind: "provision-binder",
+        groupKey,
+        subject: "binder",
+        plan: {
+          org: orgName,
+          name,
+          description,
+          // Absent means open, which is the decided default — an older client
+          // that does not ask gets the answer the product would have given
+          // anyway.
+          openToOrganization: payload?.openToOrganization !== false,
+        },
+        createdBy: auth.session.username,
+        sessionId: auth.session.id,
+        idempotencyKey: req.headers.get("Idempotency-Key"),
+      });
+
+      return provisionJobResponse(
+        await executeProvisionJob(job, auth.client),
         baseHeaders,
       );
+    } catch (err) {
+      logger.error("Failed to create a workspace", {
+        username: auth.session.username,
+        organization: orgName,
+        workspace: name,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return responseFromError(
+        err,
+        baseHeaders,
+        "Unable to create the binder.",
+      );
     }
-
-    const provisioned = await provisionWorkspace({
-      client: auth.client,
-      org: orgName,
-      name,
-      description,
-      // Absent means open, which is the decided default — an older client that
-      // does not ask gets the answer the product would have given anyway.
-      openToOrganization: payload?.openToOrganization !== false,
-    });
-
-    logger.info("Workspace created", {
-      username: auth.session.username,
-      organization: orgName,
-      workspace: provisioned.workspace.name,
-    });
-
-    return json(201, { workspace: provisioned.workspace }, baseHeaders);
-  } catch (err) {
-    logger.error("Failed to create a workspace", {
-      username: auth.session.username,
-      organization: orgName,
-      workspace: name,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return responseFromError(err, baseHeaders, "Unable to create the binder.");
-  }
+  });
 }
 
 /**
@@ -9646,11 +13605,9 @@ async function handleRenameBinder(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    const access = await readWorkspaceAccess({
-      client,
-      org: orgName,
-      name: workspaceName,
-    });
+    // On the binder read above: Gitea answers the caller's permissions on
+    // the same repository call, so asking again was a second identical read.
+    const access = workspace.access;
     if (!access.admin) {
       return json(
         403,
@@ -9753,11 +13710,9 @@ async function handleDescribeBinder(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    const access = await readWorkspaceAccess({
-      client,
-      org: orgName,
-      name: workspaceName,
-    });
+    // On the binder read above: Gitea answers the caller's permissions on
+    // the same repository call, so asking again was a second identical read.
+    const access = workspace.access;
     if (!access.admin) {
       return json(
         403,
@@ -9839,7 +13794,9 @@ async function handleCreateOrganization(
   const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
 
-  const payload = await readJson<{ name?: unknown }>(req);
+  const payload = await readJson<{ name?: unknown; acceptedTerms?: unknown }>(
+    req,
+  );
   const name = typeof payload?.name === "string" ? payload.name.trim() : "";
   if (!name) {
     return json(
@@ -9848,6 +13805,11 @@ async function handleCreateOrganization(
       baseHeaders,
     );
   }
+
+  // The organization is the Customer the Terms are with, so the person making
+  // it accepts them for it, on the version the form showed.
+  const refusal = refuseUnacceptedTerms(payload?.acceptedTerms, baseHeaders);
+  if (refusal) return refusal;
 
   try {
     const result = await provisionSignup({
@@ -9870,6 +13832,16 @@ async function handleCreateOrganization(
         error: err instanceof Error ? err.message : String(err),
       });
       return null;
+    });
+
+    recordLegalAgreement({
+      username: auth.session.username,
+      userId: await sessionUserId(auth.client),
+      version: LEGAL_VERSION,
+      organization: {
+        id: result.organization.giteaOrgId,
+        name: result.organization.name,
+      },
     });
 
     logger.info("Organization created from the app", {
@@ -10488,865 +14460,1207 @@ function startCleanupTimer(): ReturnType<typeof setInterval> {
   }, 60_000);
 }
 
+/**
+ * The request gate, right now: how many Gitea calls hold a slot and how many
+ * wait for one. Admin-only — it describes everyone's load, not the caller's.
+ *
+ * The per-request half is on every response log line (`giteaCalls`,
+ * `giteaGateWaitMs`, `giteaMs`); this is the process-wide half, for telling a
+ * slow page from a full queue while it is happening.
+ */
+async function handleGiteaDiagnostics(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireAdminSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  return json(
+    200,
+    {
+      gate: {
+        limit: MAX_CONCURRENT_GITEA_REQUESTS,
+        inFlight: giteaRequestGate.inFlight,
+        queued: giteaRequestGate.queued,
+      },
+    },
+    baseHeaders,
+  );
+}
+
+/** The reconciler's last pass, for the admin diagnostics endpoint. */
+let lastReconcilerReport: ReconcilerReport | null = null;
+
+/**
+ * One reconciler pass over every organization this API knows about, with the
+ * service account's read access. Findings are logged one per line so the log
+ * alarm can count them. See `reconciler.ts`.
+ */
+async function runReconcilerPass(): Promise<void> {
+  const client = createPrivilegedGiteaClient();
+  if (!client) return;
+  const organizations = (await organizationStore.list()).map(
+    (record) => record.name,
+  );
+
+  const report = await reconcileBinders({
+    client,
+    organizations,
+    touchedDocuments: async ({ org, binder, changeNumber }) => {
+      const [changed, removed] = await Promise.all([
+        listChangedDocuments({
+          client,
+          org,
+          workspace: binder,
+          pullNumber: changeNumber,
+        }),
+        listRemovedDocuments({
+          client,
+          org,
+          workspace: binder,
+          pullNumber: changeNumber,
+        }),
+      ]);
+      return changed.length > 0 || removed.length > 0;
+    },
+  });
+  lastReconcilerReport = report;
+
+  for (const finding of report.findings) {
+    logger.error("Reconciler finding", { ...finding });
+  }
+  logger.info("Reconciler pass finished", {
+    binders: report.binders,
+    findings: report.findings.length,
+    errors: report.errors.length,
+  });
+}
+
+/** Admin only: what the reconciler found last time it looked. */
+async function handleReconcilerReport(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireAdminSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  return json(200, { report: lastReconcilerReport }, baseHeaders);
+}
+
 export function createApiServer() {
   return Bun.serve({
     port: config.apiPort,
     idleTimeout: 30,
-    async fetch(req) {
-      const startMs = Date.now();
-      const url = new URL(req.url);
-      const { pathname } = url;
-      const method = req.method;
-      const origin = requestOrigin(req);
-      const clientIp = requestClientIp(req);
+    // Each request gets its own Gitea usage record, which every Gitea call
+    // made while serving it adds to. See `gitea-client/usage.ts`.
+    fetch: (req) =>
+      withGiteaUsage(createGiteaUsage(), () => handleRequest(req), {
+        // A read the browser has abandoned stops queueing Gitea calls nobody
+        // will see. A write is never cut off by a disconnect: stopping a
+        // publish between its merge and its tags is worse than finishing it.
+        signal:
+          req.method === "GET" || req.method === "HEAD"
+            ? req.signal
+            : undefined,
+      }),
+  });
+}
 
-      logger.info("Incoming request", {
+async function handleRequest(req: Request): Promise<Response> {
+  const startMs = Date.now();
+  const url = new URL(req.url);
+  const { pathname } = url;
+  const method = req.method;
+  const origin = requestOrigin(req);
+  const clientIp = requestClientIp(req);
+
+  logger.info("Incoming request", {
+    method,
+    path: pathname,
+    origin,
+    clientIp,
+  });
+
+  // Liveness probe: must respond before any auth/origin/HTTPS gate.
+  // Returns 200 once the process accepts connections; deeper readiness
+  // (e.g. Gitea reachability) would live on /readyz if it lands.
+  if (pathname === "/healthz" && (method === "GET" || method === "HEAD")) {
+    const durationMs = Date.now() - startMs;
+    logger.info("Response sent", {
+      method,
+      path: pathname,
+      status: 200,
+      durationMs,
+    });
+    return new Response(method === "HEAD" ? null : "ok\n", {
+      status: 200,
+      headers: { "content-type": "text/plain; charset=utf-8" },
+    });
+  }
+
+  const baseHeaders = corsHeaders(req);
+  const transportError = enforceTransportSecurity(req, baseHeaders);
+  if (transportError) {
+    const durationMs = Date.now() - startMs;
+    logger.info("Response sent", {
+      method,
+      path: pathname,
+      status: transportError.status,
+      durationMs,
+    });
+    return transportError;
+  }
+
+  if (pathname === "/stripe/webhook" && method === "POST") {
+    const response = await handleStripeWebhook(req, baseHeaders);
+    const durationMs = Date.now() - startMs;
+    if (response.status >= 500) {
+      logger.error("Response sent with 5xx status", {
         method,
         path: pathname,
-        origin,
-        clientIp,
+        status: response.status,
+        durationMs,
       });
+    } else {
+      logger.info("Response sent", {
+        method,
+        path: pathname,
+        status: response.status,
+        durationMs,
+      });
+    }
+    return response;
+  }
 
-      // Liveness probe: must respond before any auth/origin/HTTPS gate.
-      // Returns 200 once the process accepts connections; deeper readiness
-      // (e.g. Gitea reachability) would live on /readyz if it lands.
-      if (pathname === "/healthz" && (method === "GET" || method === "HEAD")) {
-        const durationMs = Date.now() - startMs;
-        logger.info("Response sent", {
-          method,
-          path: pathname,
-          status: 200,
-          durationMs,
-        });
-        return new Response(method === "HEAD" ? null : "ok\n", {
-          status: 200,
-          headers: { "content-type": "text/plain; charset=utf-8" },
-        });
-      }
+  // An email's unsubscribe link, POSTed by a mail client with no Origin —
+  // see `handleOneClickUnsubscribe`. The token is the only credential.
+  if (pathname === "/email/unsubscribe" && method === "POST") {
+    const response = await handleOneClickUnsubscribe(req, baseHeaders);
+    logger.info("Response sent", {
+      method,
+      path: pathname,
+      status: response.status,
+      durationMs: Date.now() - startMs,
+    });
+    return response;
+  }
 
-      const baseHeaders = corsHeaders(req);
-      const transportError = enforceTransportSecurity(req, baseHeaders);
-      if (transportError) {
-        const durationMs = Date.now() - startMs;
-        logger.info("Response sent", {
-          method,
-          path: pathname,
-          status: transportError.status,
-          durationMs,
-        });
-        return transportError;
-      }
+  const originError = enforceStateChangingOrigin(req, baseHeaders);
+  if (originError) {
+    const durationMs = Date.now() - startMs;
+    logger.info("Response sent", {
+      method,
+      path: pathname,
+      status: originError.status,
+      durationMs,
+    });
+    return originError;
+  }
 
-      if (pathname === "/stripe/webhook" && method === "POST") {
-        const response = await handleStripeWebhook(req, baseHeaders);
-        const durationMs = Date.now() - startMs;
-        if (response.status >= 500) {
-          logger.error("Response sent with 5xx status", {
-            method,
-            path: pathname,
-            status: response.status,
-            durationMs,
+  if (method === "OPTIONS") {
+    const durationMs = Date.now() - startMs;
+    logger.info("Response sent", {
+      method,
+      path: pathname,
+      status: 204,
+      durationMs,
+    });
+    return new Response(null, {
+      status: 204,
+      headers: baseHeaders,
+    });
+  }
+
+  let response: Response;
+  const unconfirmed = await emailConfirmationGate(
+    req,
+    pathname,
+    method,
+    baseHeaders,
+  );
+
+  if (unconfirmed) {
+    response = unconfirmed;
+  } else if (pathname === "/auth/signup" && method === "POST") {
+    response = await handleSignup(req, baseHeaders);
+  } else if (pathname === "/auth/login" && method === "POST") {
+    response = await handleLogin(req, baseHeaders);
+  } else if (pathname === "/auth/logout" && method === "POST") {
+    response = await handleLogout(req, baseHeaders);
+  } else if (pathname === "/auth/me" && method === "GET") {
+    response = await handleAuthMe(req, baseHeaders);
+  } else if (pathname === "/auth/email/verify" && method === "POST") {
+    response = await handleVerifyEmail(req, baseHeaders);
+  } else if (pathname === "/auth/email/resend" && method === "POST") {
+    response = await handleResendVerification(req, baseHeaders);
+  } else if (pathname === "/auth/password/forgot" && method === "POST") {
+    response = await handleForgotPassword(req, baseHeaders);
+  } else if (pathname === "/auth/password/reset" && method === "GET") {
+    response = await handleCheckResetLink(req, baseHeaders);
+  } else if (pathname === "/auth/password/reset" && method === "POST") {
+    response = await handleResetPassword(req, baseHeaders);
+  } else if (pathname === "/api/app/account/profile" && method === "PATCH") {
+    response = await handleUpdateProfile(req, baseHeaders);
+  } else if (pathname === "/api/app/account/password" && method === "POST") {
+    response = await handleChangePassword(req, baseHeaders);
+  } else if (
+    pathname === "/api/app/account/email-preferences" &&
+    method === "GET"
+  ) {
+    response = await handleReadEmailPreferences(req, baseHeaders);
+  } else if (
+    pathname === "/api/app/account/email-preferences" &&
+    method === "PUT"
+  ) {
+    response = await handleUpdateEmailPreferences(req, baseHeaders);
+  } else if (pathname === "/api/app/account/blockers" && method === "GET") {
+    response = await handleAccountBlockers(req, baseHeaders);
+  } else if (pathname === "/api/app/account" && method === "DELETE") {
+    response = await handleDeleteAccount(req, baseHeaders);
+  } else if (
+    method === "GET" &&
+    /^\/api\/app\/avatars\/[^/]+$/.test(pathname)
+  ) {
+    response = await handleAvatar(
+      req,
+      baseHeaders,
+      decodeURIComponent(pathname.slice("/api/app/avatars/".length)),
+    );
+  } else if (pathname === "/api/app/onboarding" && method === "GET") {
+    response = await handleOnboarding(req, baseHeaders);
+  } else if (pathname === "/api/app/notifications" && method === "GET") {
+    response = await handleListNotifications(req, baseHeaders);
+  } else if (pathname === "/api/app/notifications/count" && method === "GET") {
+    response = await handleNotificationCount(req, baseHeaders);
+  } else if (pathname === "/api/app/notifications/read" && method === "POST") {
+    response = await handleReadNotifications(req, baseHeaders);
+  } else if (
+    method === "GET" &&
+    /^\/api\/app\/jobs\/[0-9a-f-]+$/.test(pathname)
+  ) {
+    response = await handleReadJob(
+      req,
+      baseHeaders,
+      pathname.slice("/api/app/jobs/".length),
+    );
+  } else if (
+    pathname === "/api/app/admin/diagnostics/reconciler" &&
+    method === "GET"
+  ) {
+    response = await handleReconcilerReport(req, baseHeaders);
+  } else if (
+    pathname === "/api/app/admin/diagnostics/gitea" &&
+    method === "GET"
+  ) {
+    response = await handleGiteaDiagnostics(req, baseHeaders);
+  } else if (pathname === "/api/app/home/changes" && method === "GET") {
+    response = await handleHomeChanges(req, baseHeaders);
+  } else if (pathname === "/api/app/documents" && method === "GET") {
+    response = await handleLibraryDocuments(req, baseHeaders);
+  } else if (pathname === "/api/app/documents/search" && method === "GET") {
+    response = await handleDocumentSearch(req, baseHeaders);
+  } else if (pathname === "/api/app/users/search" && method === "GET") {
+    response = await handleSearchUsersRoute(req, baseHeaders);
+  } else if (
+    pathname === "/api/app/admin/subscriptions/access" &&
+    method === "GET"
+  ) {
+    response = await handleAdminSubscriptionAccessList(req, baseHeaders);
+  } else if (pathname === "/api/app/binders" && method === "GET") {
+    response = await handleListWorkspaces(req, baseHeaders);
+  } else if (pathname === "/api/app/organizations" && method === "GET") {
+    response = await handleListOrganizations(req, baseHeaders);
+  } else if (pathname === "/api/app/legal" && method === "GET") {
+    response = await handleLegalStatus(req, baseHeaders);
+  } else if (pathname === "/api/app/legal/accept" && method === "POST") {
+    response = await handleAcceptLegal(req, baseHeaders);
+  } else if (pathname === "/api/app/organizations" && method === "POST") {
+    response = await handleCreateOrganization(req, baseHeaders);
+  } else if (pathname === "/api/app/billing/status" && method === "GET") {
+    response = await handleBillingStatus(req, baseHeaders);
+  } else if (pathname === "/api/app/billing/checkout" && method === "POST") {
+    response = await handleBillingCheckout(req, baseHeaders);
+  } else if (pathname === "/api/app/billing/portal" && method === "POST") {
+    response = await handleBillingPortal(req, baseHeaders);
+  } else if (pathname === "/api/dev/grant-subscription" && method === "POST") {
+    response = await handleDevGrantSubscription(req, baseHeaders);
+  } else if (pathname === "/api/dev/end-trial" && method === "POST") {
+    response = await handleDevEndTrial(req, baseHeaders);
+  } else {
+    const adminSubscriptionAccessActionMatch = pathname.match(
+      /^\/api\/app\/admin\/subscriptions\/access\/([^/]+)$/,
+    );
+    const adminSubscriptionGrantMatch = pathname.match(
+      /^\/api\/app\/admin\/subscriptions\/([^/]+)\/grant$/,
+    );
+    const adminSubscriptionRevokeMatch = pathname.match(
+      /^\/api\/app\/admin\/subscriptions\/([^/]+)\/revoke$/,
+    );
+    const adminSubscriptionStatusMatch = pathname.match(
+      /^\/api\/app\/admin\/subscriptions\/([^/]+)$/,
+    );
+    const workspaceDocumentsMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/documents$/,
+    );
+    // A new version of a document already in the binder. The document is
+    // named in the body rather than in the path, because a path suffix
+    // would collide with a policy filed in a folder of that name —
+    // `…/documents/nursing/revisions` is a real address a person could
+    // have made.
+    const workspaceDocumentRevisionsMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/document-revisions$/,
+    );
+    // The acts that change where things are filed rather than what they
+    // say. Each names its subject in the body for the same reason a
+    // revision does: a folder called `folders` is a folder somebody could
+    // legitimately make.
+    const workspaceFoldersMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/folders$/,
+    );
+    const workspaceFolderRenamesMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/folder-renames$/,
+    );
+    const workspaceDocumentRenamesMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/document-renames$/,
+    );
+    // Taking a document off the record. Named for what it is rather than
+    // for a verb that is not true: the file leaves `main` and its version
+    // tags still point at every commit that held it.
+    const workspaceDocumentArchivesMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/document-archives$/,
+    );
+    // Bringing one back. Its own act rather than an inverse of the one
+    // above: it writes a file, and what it writes comes out of a tag.
+    const workspaceDocumentRestoresMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/document-restores$/,
+    );
+    // A binder's own name. Not under `settings`, because it is not a
+    // setting — it changes the binder's address, and every other write
+    // under that path leaves the address alone.
+    const workspaceNameMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/name$/,
+    );
+    const workspaceDescriptionMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/description$/,
+    );
+    const workspaceArchiveMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/archive$/,
+    );
+    // The document's path carries slashes — it is a path inside the binder,
+    // not one segment — so this captures the rest of the URL.
+    const workspaceDocumentMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/documents\/(.+)$/,
+    );
+    const workspacePublishMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/publish$/,
+    );
+    const workspaceChangeReviewMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/reviews$/,
+    );
+    const workspaceChangeUpdateMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/update$/,
+    );
+    // A binder is a Gitea repository and a change on it is a Gitea pull
+    // request, so everything below is the document model's own handler
+    // reached at the binder's address. Same behaviour, one namespace per
+    // shape of thing — not a second implementation.
+    const workspaceChangeConflictsMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/conflicts$/,
+    );
+    const workspaceChangeDiscussionsMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/discussions$/,
+    );
+    const workspaceChangeReplyMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/discussions\/([^/]+)\/comments$/,
+    );
+    const workspaceChangeResolveMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/discussions\/([^/]+)\/resolve$/,
+    );
+    const workspaceChangeReactionMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/discussions\/([^/]+)\/comments\/(\d+)\/reactions$/,
+    );
+    const workspaceChangeUpdatesMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/updates$/,
+    );
+    const workspaceChangeAssignmentsMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/assignments$/,
+    );
+    const workspaceCollaboratorsMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/collaborators$/,
+    );
+    const workspaceChangeMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)$/,
+    );
+    // Raw content sits under its own segment rather than as a suffix on
+    // the document, because the document's path is the rest of the URL.
+    const workspaceDocumentRawMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/raw\/(.+)$/,
+    );
+    const workspaceDocumentAuditMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/audit\/(.+)$/,
+    );
+    const workspaceDocumentExportMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/export\/(.+)$/,
+    );
+    const createBinderMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/binders$/,
+    );
+    const organizationInvitationsMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/invitations$/,
+    );
+    const organizationInvitationMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/invitations\/([0-9a-f-]+)$/,
+    );
+    const organizationInvitationResendMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/invitations\/([0-9a-f-]+)\/resend$/,
+    );
+    const invitationMatch = pathname.match(
+      /^\/api\/app\/invitations\/([A-Za-z0-9_-]+)$/,
+    );
+    const invitationAcceptMatch = pathname.match(
+      /^\/api\/app\/invitations\/([A-Za-z0-9_-]+)\/accept$/,
+    );
+    const organizationPeopleMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/people$/,
+    );
+    const organizationPersonRoleMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/people\/([^/]+)\/role$/,
+    );
+    const organizationDeletionMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/deletion$/,
+    );
+    const organizationMatch = pathname.match(/^\/api\/app\/orgs\/([^/]+)$/);
+    const organizationPersonMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/people\/([^/]+)$/,
+    );
+    const organizationGroupsMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/groups$/,
+    );
+    const organizationGroupMembersMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/groups\/([^/]+)\/members$/,
+    );
+    const organizationGroupMemberMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/groups\/([^/]+)\/members\/([^/]+)$/,
+    );
+    const workspacePeopleMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/people$/,
+    );
+    const workspacePersonMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/people\/([^/]+)$/,
+    );
+    const workspaceVisibilityMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/visibility$/,
+    );
+    const workspaceGroupsMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/groups$/,
+    );
+    const workspaceGroupMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/groups\/([^/]+)$/,
+    );
+    const workspaceChangesMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes$/,
+    );
+    // Singular, because a person has one draft in a binder. The branch is
+    // never in the URL: it carries slashes, it is the server's to name, and
+    // the only draft any of these three verbs acts on is the caller's own.
+    const workspaceDraftMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/draft$/,
+    );
+    const workspaceHistoryMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/history$/,
+    );
+    const workspaceSettingsMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/settings$/,
+    );
+    const workspaceSignOffMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/rules\/sign-off$/,
+    );
+    const workspaceRulesMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/rules$/,
+    );
+    // Last of the binder matchers, because every one above it is a longer
+    // path under the same two segments.
+    const workspaceOverviewMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)$/,
+    );
+
+    if (organizationDeletionMatch && method === "GET") {
+      response = await handleOrganizationDeletion(
+        req,
+        baseHeaders,
+        organizationDeletionMatch[1]!,
+      );
+    } else if (organizationMatch && method === "DELETE") {
+      response = await handleDeleteOrganization(
+        req,
+        baseHeaders,
+        organizationMatch[1]!,
+      );
+    } else if (organizationInvitationsMatch && method === "GET") {
+      response = await handleListInvitations(
+        req,
+        baseHeaders,
+        organizationInvitationsMatch[1]!,
+      );
+    } else if (organizationInvitationsMatch && method === "POST") {
+      response = await handleCreateInvitation(
+        req,
+        baseHeaders,
+        organizationInvitationsMatch[1]!,
+      );
+    } else if (organizationInvitationMatch && method === "DELETE") {
+      response = await handleInvitationAction(
+        req,
+        baseHeaders,
+        organizationInvitationMatch[1]!,
+        organizationInvitationMatch[2]!,
+        "revoke",
+      );
+    } else if (organizationInvitationResendMatch && method === "POST") {
+      response = await handleInvitationAction(
+        req,
+        baseHeaders,
+        organizationInvitationResendMatch[1]!,
+        organizationInvitationResendMatch[2]!,
+        "resend",
+      );
+    } else if (invitationMatch && method === "GET") {
+      response = await handleReadInvitation(
+        req,
+        baseHeaders,
+        decodeURIComponent(invitationMatch[1]!),
+      );
+    } else if (invitationAcceptMatch && method === "POST") {
+      response = await handleAcceptInvitation(
+        req,
+        baseHeaders,
+        decodeURIComponent(invitationAcceptMatch[1]!),
+      );
+    } else if (organizationPeopleMatch && method === "GET") {
+      response = await handleOrganizationPeople(
+        req,
+        baseHeaders,
+        organizationPeopleMatch[1]!,
+      );
+    } else if (organizationPeopleMatch && method === "POST") {
+      response = await handleAddOrganizationPerson(
+        req,
+        baseHeaders,
+        organizationPeopleMatch[1]!,
+      );
+    } else if (organizationPersonRoleMatch && method === "POST") {
+      response = await handleOrganizationPersonRole(
+        req,
+        baseHeaders,
+        organizationPersonRoleMatch[1]!,
+        organizationPersonRoleMatch[2]!,
+      );
+    } else if (organizationPersonMatch && method === "DELETE") {
+      response = await handleRemoveOrganizationPerson(
+        req,
+        baseHeaders,
+        organizationPersonMatch[1]!,
+        organizationPersonMatch[2]!,
+      );
+    } else if (organizationGroupsMatch && method === "POST") {
+      response = await handleCreateOrganizationGroup(
+        req,
+        baseHeaders,
+        organizationGroupsMatch[1]!,
+      );
+    } else if (organizationGroupMembersMatch && method === "POST") {
+      response = await handleOrganizationGroupMember(
+        req,
+        baseHeaders,
+        organizationGroupMembersMatch[1]!,
+        organizationGroupMembersMatch[2]!,
+        null,
+      );
+    } else if (organizationGroupMemberMatch && method === "DELETE") {
+      response = await handleOrganizationGroupMember(
+        req,
+        baseHeaders,
+        organizationGroupMemberMatch[1]!,
+        organizationGroupMemberMatch[2]!,
+        organizationGroupMemberMatch[3]!,
+      );
+    } else if (workspaceVisibilityMatch && method === "POST") {
+      response = await handleBinderVisibility(
+        req,
+        baseHeaders,
+        workspaceVisibilityMatch[1]!,
+        workspaceVisibilityMatch[2]!,
+      );
+    } else if (workspacePeopleMatch && method === "GET") {
+      response = await handleBinderPeople(
+        req,
+        baseHeaders,
+        workspacePeopleMatch[1]!,
+        workspacePeopleMatch[2]!,
+      );
+    } else if (workspacePeopleMatch && method === "POST") {
+      response = await handleBinderPerson(
+        req,
+        baseHeaders,
+        workspacePeopleMatch[1]!,
+        workspacePeopleMatch[2]!,
+        null,
+      );
+    } else if (workspacePersonMatch && method === "POST") {
+      response = await handleBinderPerson(
+        req,
+        baseHeaders,
+        workspacePersonMatch[1]!,
+        workspacePersonMatch[2]!,
+        workspacePersonMatch[3]!,
+      );
+    } else if (workspacePersonMatch && method === "DELETE") {
+      response = await handleRemoveBinderPerson(
+        req,
+        baseHeaders,
+        workspacePersonMatch[1]!,
+        workspacePersonMatch[2]!,
+        workspacePersonMatch[3]!,
+      );
+    } else if (workspaceGroupsMatch && method === "POST") {
+      response = await handleBinderGroup(
+        req,
+        baseHeaders,
+        workspaceGroupsMatch[1]!,
+        workspaceGroupsMatch[2]!,
+        null,
+      );
+    } else if (workspaceGroupMatch && method === "DELETE") {
+      response = await handleBinderGroup(
+        req,
+        baseHeaders,
+        workspaceGroupMatch[1]!,
+        workspaceGroupMatch[2]!,
+        workspaceGroupMatch[3]!,
+      );
+    } else if (createBinderMatch && method === "GET") {
+      response = await handleListOrganizationWorkspaces(
+        req,
+        baseHeaders,
+        createBinderMatch[1]!,
+      );
+    } else if (createBinderMatch && method === "POST") {
+      response = await handleCreateWorkspace(
+        req,
+        baseHeaders,
+        createBinderMatch[1]!,
+      );
+    } else if (workspacePublishMatch && method === "POST") {
+      response = await handlePublishWorkspaceChange(
+        req,
+        baseHeaders,
+        workspacePublishMatch[1]!,
+        workspacePublishMatch[2]!,
+        Number.parseInt(workspacePublishMatch[3] ?? "", 10),
+      );
+    } else if (workspaceDocumentsMatch && method === "GET") {
+      response = await handleListWorkspaceDocuments(
+        req,
+        baseHeaders,
+        workspaceDocumentsMatch[1]!,
+        workspaceDocumentsMatch[2]!,
+        url.searchParams.get("draft"),
+        url.searchParams.get("change"),
+        url.searchParams.get("ref"),
+      );
+    } else if (workspaceChangeReviewMatch && method === "POST") {
+      response = await handleWorkspaceChangeReview(
+        req,
+        baseHeaders,
+        workspaceChangeReviewMatch[1]!,
+        workspaceChangeReviewMatch[2]!,
+        Number.parseInt(workspaceChangeReviewMatch[3] ?? "", 10),
+      );
+    } else if (workspaceChangeDiscussionsMatch && method === "GET") {
+      response = await handleListDiscussions(
+        req,
+        baseHeaders,
+        workspaceChangeDiscussionsMatch[1]!,
+        workspaceChangeDiscussionsMatch[2]!,
+        Number.parseInt(workspaceChangeDiscussionsMatch[3] ?? "", 10),
+      );
+    } else if (workspaceChangeDiscussionsMatch && method === "POST") {
+      response = await handleCreateDiscussionThread(
+        req,
+        baseHeaders,
+        workspaceChangeDiscussionsMatch[1]!,
+        workspaceChangeDiscussionsMatch[2]!,
+        Number.parseInt(workspaceChangeDiscussionsMatch[3] ?? "", 10),
+      );
+    } else if (workspaceChangeReactionMatch && method === "PUT") {
+      response = await handleSetCommentReaction(
+        req,
+        baseHeaders,
+        workspaceChangeReactionMatch[1]!,
+        workspaceChangeReactionMatch[2]!,
+        Number.parseInt(workspaceChangeReactionMatch[3] ?? "", 10),
+        decodePathParam(workspaceChangeReactionMatch[4] ?? ""),
+        Number.parseInt(workspaceChangeReactionMatch[5] ?? "", 10),
+      );
+    } else if (workspaceChangeReplyMatch && method === "POST") {
+      response = await handleReplyToDiscussion(
+        req,
+        baseHeaders,
+        workspaceChangeReplyMatch[1]!,
+        workspaceChangeReplyMatch[2]!,
+        Number.parseInt(workspaceChangeReplyMatch[3] ?? "", 10),
+        decodePathParam(workspaceChangeReplyMatch[4] ?? ""),
+      );
+    } else if (workspaceChangeResolveMatch && method === "POST") {
+      response = await handleResolveDiscussion(
+        req,
+        baseHeaders,
+        workspaceChangeResolveMatch[1]!,
+        workspaceChangeResolveMatch[2]!,
+        Number.parseInt(workspaceChangeResolveMatch[3] ?? "", 10),
+        decodePathParam(workspaceChangeResolveMatch[4] ?? ""),
+      );
+    } else if (workspaceChangeUpdatesMatch && method === "GET") {
+      response = await handleChangeUpdates(
+        req,
+        baseHeaders,
+        workspaceChangeUpdatesMatch[1]!,
+        workspaceChangeUpdatesMatch[2]!,
+        Number.parseInt(workspaceChangeUpdatesMatch[3] ?? "", 10),
+      );
+    } else if (workspaceChangeAssignmentsMatch && method === "PUT") {
+      response = await handleUpdateChangeAssignments(
+        req,
+        baseHeaders,
+        workspaceChangeAssignmentsMatch[1]!,
+        workspaceChangeAssignmentsMatch[2]!,
+        Number.parseInt(workspaceChangeAssignmentsMatch[3] ?? "", 10),
+      );
+    } else if (workspaceCollaboratorsMatch && method === "GET") {
+      response = await handleDocumentCollaborators(
+        req,
+        baseHeaders,
+        workspaceCollaboratorsMatch[1]!,
+        workspaceCollaboratorsMatch[2]!,
+      );
+    } else if (workspaceRulesMatch && method === "PATCH") {
+      response = await handleBinderRules(
+        req,
+        baseHeaders,
+        workspaceRulesMatch[1]!,
+        workspaceRulesMatch[2]!,
+      );
+    } else if (workspaceSignOffMatch && method === "POST") {
+      response = await handleBinderSignOffRules(
+        req,
+        baseHeaders,
+        workspaceSignOffMatch[1]!,
+        workspaceSignOffMatch[2]!,
+      );
+    } else if (workspaceSettingsMatch && method === "GET") {
+      response = await handleWorkspaceSettings(
+        req,
+        baseHeaders,
+        workspaceSettingsMatch[1]!,
+        workspaceSettingsMatch[2]!,
+      );
+    } else if (workspaceHistoryMatch && method === "GET") {
+      response = await handleWorkspaceHistory(
+        req,
+        baseHeaders,
+        workspaceHistoryMatch[1]!,
+        workspaceHistoryMatch[2]!,
+      );
+    } else if (workspaceDraftMatch && method === "GET") {
+      response = await handleBinderDraft(
+        req,
+        baseHeaders,
+        workspaceDraftMatch[1]!,
+        workspaceDraftMatch[2]!,
+      );
+    } else if (workspaceDraftMatch && method === "POST") {
+      response = await handleOpenBinderDraft(
+        req,
+        baseHeaders,
+        workspaceDraftMatch[1]!,
+        workspaceDraftMatch[2]!,
+      );
+    } else if (workspaceDraftMatch && method === "PATCH") {
+      response = await handleRenameBinderDraft(
+        req,
+        baseHeaders,
+        workspaceDraftMatch[1]!,
+        workspaceDraftMatch[2]!,
+      );
+    } else if (workspaceDraftMatch && method === "DELETE") {
+      response = await handleDiscardBinderDraft(
+        req,
+        baseHeaders,
+        workspaceDraftMatch[1]!,
+        workspaceDraftMatch[2]!,
+      );
+    } else if (workspaceChangesMatch && method === "POST") {
+      response = await handleProposeBinderDraft(
+        req,
+        baseHeaders,
+        workspaceChangesMatch[1]!,
+        workspaceChangesMatch[2]!,
+      );
+    } else if (workspaceChangesMatch && method === "GET") {
+      response = await handleListWorkspaceChanges(
+        req,
+        baseHeaders,
+        workspaceChangesMatch[1]!,
+        workspaceChangesMatch[2]!,
+      );
+    } else if (workspaceChangeConflictsMatch && method === "GET") {
+      response = await handleWorkspaceChangeConflicts(
+        req,
+        baseHeaders,
+        workspaceChangeConflictsMatch[1]!,
+        workspaceChangeConflictsMatch[2]!,
+        Number.parseInt(workspaceChangeConflictsMatch[3] ?? "", 10),
+      );
+    } else if (workspaceChangeConflictsMatch && method === "POST") {
+      response = await handleResolveWorkspaceChangeConflicts(
+        req,
+        baseHeaders,
+        workspaceChangeConflictsMatch[1]!,
+        workspaceChangeConflictsMatch[2]!,
+        Number.parseInt(workspaceChangeConflictsMatch[3] ?? "", 10),
+      );
+    } else if (workspaceChangeUpdateMatch && method === "POST") {
+      response = await handleWorkspaceChangeUpdate(
+        req,
+        baseHeaders,
+        workspaceChangeUpdateMatch[1]!,
+        workspaceChangeUpdateMatch[2]!,
+        Number.parseInt(workspaceChangeUpdateMatch[3] ?? "", 10),
+      );
+    } else if (workspaceChangeMatch && method === "PATCH") {
+      response = await handleWorkspaceChangeEdit(
+        req,
+        baseHeaders,
+        workspaceChangeMatch[1]!,
+        workspaceChangeMatch[2]!,
+        Number.parseInt(workspaceChangeMatch[3] ?? "", 10),
+      );
+    } else if (workspaceChangeMatch && method === "GET") {
+      response = await handleWorkspaceChangeDetail(
+        req,
+        baseHeaders,
+        workspaceChangeMatch[1]!,
+        workspaceChangeMatch[2]!,
+        Number.parseInt(workspaceChangeMatch[3] ?? "", 10),
+      );
+    } else if (workspaceDocumentAuditMatch && method === "GET") {
+      response = await handleWorkspaceDocumentAudit(
+        req,
+        baseHeaders,
+        workspaceDocumentAuditMatch[1]!,
+        workspaceDocumentAuditMatch[2]!,
+        decodeURIComponent(workspaceDocumentAuditMatch[3]!),
+      );
+    } else if (workspaceDocumentExportMatch && method === "GET") {
+      response = await handleWorkspaceDocumentExport(
+        req,
+        baseHeaders,
+        workspaceDocumentExportMatch[1]!,
+        workspaceDocumentExportMatch[2]!,
+        decodeURIComponent(workspaceDocumentExportMatch[3]!),
+      );
+    } else if (workspaceDocumentRawMatch && method === "GET") {
+      response = await handleWorkspaceDocumentRaw(
+        req,
+        baseHeaders,
+        workspaceDocumentRawMatch[1]!,
+        workspaceDocumentRawMatch[2]!,
+        decodeURIComponent(workspaceDocumentRawMatch[3]!),
+      );
+    } else if (workspaceDocumentMatch && method === "GET") {
+      response = await handleWorkspaceDocumentDetail(
+        req,
+        baseHeaders,
+        workspaceDocumentMatch[1]!,
+        workspaceDocumentMatch[2]!,
+        decodeURIComponent(workspaceDocumentMatch[3]!),
+        url.searchParams.get("draft"),
+        url.searchParams.get("change"),
+        url.searchParams.get("ref"),
+      );
+    } else if (workspaceOverviewMatch && method === "GET") {
+      response = await handleWorkspaceOverview(
+        req,
+        baseHeaders,
+        workspaceOverviewMatch[1]!,
+        workspaceOverviewMatch[2]!,
+      );
+    } else if (workspaceOverviewMatch && method === "DELETE") {
+      response = await handleDeleteBinder(
+        req,
+        baseHeaders,
+        workspaceOverviewMatch[1]!,
+        workspaceOverviewMatch[2]!,
+      );
+    } else if (workspaceFoldersMatch && method === "POST") {
+      return await handleBinderShapeChange(
+        req,
+        baseHeaders,
+        workspaceFoldersMatch[1]!,
+        workspaceFoldersMatch[2]!,
+        ({ body, tree }) =>
+          planNewFolder({
+            folder: typeof body.folder === "string" ? body.folder : "",
+            existingFolders: tree.folders,
+          }),
+      );
+    } else if (workspaceFolderRenamesMatch && method === "POST") {
+      return await handleBinderShapeChange(
+        req,
+        baseHeaders,
+        workspaceFolderRenamesMatch[1]!,
+        workspaceFolderRenamesMatch[2]!,
+        ({ body, tree }) =>
+          planFolderRename({
+            from: typeof body.from === "string" ? body.from : "",
+            to: typeof body.to === "string" ? body.to : "",
+            paths: tree.paths,
+            existingFolders: tree.folders,
+          }),
+      );
+    } else if (workspaceDocumentRenamesMatch && method === "POST") {
+      return await handleBinderShapeChange(
+        req,
+        baseHeaders,
+        workspaceDocumentRenamesMatch[1]!,
+        workspaceDocumentRenamesMatch[2]!,
+        ({ body, tree }) => {
+          const documentPath =
+            typeof body.documentPath === "string" ? body.documentPath : "";
+          const document =
+            tree.documents.find((entry) => entry.path === documentPath) ??
+            tree.documents.find((entry) => entry.slugPath === documentPath);
+
+          if (!document) {
+            return { error: `"${documentPath}" is not in this binder.` };
+          }
+
+          return planDocumentRename({
+            document,
+            ...(typeof body.name === "string" ? { name: body.name } : {}),
+            ...(typeof body.folder === "string" ? { folder: body.folder } : {}),
+            paths: tree.paths,
           });
-        } else {
-          logger.info("Response sent", {
-            method,
-            path: pathname,
-            status: response.status,
-            durationMs,
+        },
+      );
+    } else if (workspaceDocumentArchivesMatch && method === "POST") {
+      return await handleBinderShapeChange(
+        req,
+        baseHeaders,
+        workspaceDocumentArchivesMatch[1]!,
+        workspaceDocumentArchivesMatch[2]!,
+        ({ body, tree }) => {
+          const documentPath =
+            typeof body.documentPath === "string" ? body.documentPath : "";
+          const document =
+            tree.documents.find((entry) => entry.path === documentPath) ??
+            tree.documents.find((entry) => entry.slugPath === documentPath);
+
+          if (!document) {
+            return { error: `"${documentPath}" is not in this binder.` };
+          }
+
+          return planDocumentArchive({ document });
+        },
+      );
+    } else if (workspaceDocumentRestoresMatch && method === "POST") {
+      return await handleBinderShapeChange(
+        req,
+        baseHeaders,
+        workspaceDocumentRestoresMatch[1]!,
+        workspaceDocumentRestoresMatch[2]!,
+        async ({ body, tree, client }) => {
+          const uid = typeof body.uid === "string" ? body.uid : "";
+          if (uid === "") {
+            return { error: "Name the document to restore." };
+          }
+
+          // Straight off the version tag the policy last published at. The
+          // bytes are still there because a tag is a ref and git never
+          // collects a commit reachable from one — which is the whole
+          // reason there is no archive branch to read from.
+          const archived = await readArchivedDocument({
+            client,
+            org: workspaceDocumentRestoresMatch[1]!,
+            workspace: workspaceDocumentRestoresMatch[2]!,
+            uid,
           });
-        }
-        return response;
-      }
+          if (!archived) {
+            return {
+              error: "That document has no published version to restore from.",
+            };
+          }
 
-      const originError = enforceStateChangingOrigin(req, baseHeaders);
-      if (originError) {
-        const durationMs = Date.now() - startMs;
-        logger.info("Response sent", {
-          method,
-          path: pathname,
-          status: originError.status,
-          durationMs,
-        });
-        return originError;
-      }
+          return planDocumentRestore({
+            document: archived.document,
+            base64Content: archived.base64Content,
+            tree,
+          });
+        },
+      );
+    } else if (workspaceNameMatch && method === "POST") {
+      response = await handleRenameBinder(
+        req,
+        baseHeaders,
+        workspaceNameMatch[1]!,
+        workspaceNameMatch[2]!,
+      );
+    } else if (workspaceDescriptionMatch && method === "POST") {
+      response = await handleDescribeBinder(
+        req,
+        baseHeaders,
+        workspaceDescriptionMatch[1]!,
+        workspaceDescriptionMatch[2]!,
+      );
+    } else if (workspaceArchiveMatch && method === "GET") {
+      response = await handleBinderArchive(
+        req,
+        baseHeaders,
+        workspaceArchiveMatch[1]!,
+        workspaceArchiveMatch[2]!,
+        url.searchParams.get("draft"),
+      );
+    } else if (workspaceDocumentRevisionsMatch && method === "POST") {
+      return await handleReviseWorkspaceDocument(
+        req,
+        baseHeaders,
+        workspaceDocumentRevisionsMatch[1]!,
+        workspaceDocumentRevisionsMatch[2]!,
+      );
+    } else if (workspaceDocumentsMatch && method === "POST") {
+      response = await handleCreateWorkspaceDocument(
+        req,
+        baseHeaders,
+        workspaceDocumentsMatch[1]!,
+        workspaceDocumentsMatch[2]!,
+      );
+    } else if (adminSubscriptionGrantMatch && method === "POST") {
+      response = await upsertLegacyAdminSubscriptionOverride(
+        req,
+        baseHeaders,
+        adminSubscriptionGrantMatch[1] ?? "",
+        "grant",
+      );
+    } else if (adminSubscriptionRevokeMatch && method === "POST") {
+      response = await upsertLegacyAdminSubscriptionOverride(
+        req,
+        baseHeaders,
+        adminSubscriptionRevokeMatch[1] ?? "",
+        "revoke",
+      );
+    } else if (adminSubscriptionStatusMatch && method === "GET") {
+      response = await handleAdminSubscriptionStatus(
+        req,
+        baseHeaders,
+        adminSubscriptionStatusMatch[1] ?? "",
+      );
+    } else if (adminSubscriptionStatusMatch && method === "PUT") {
+      response = await handleAdminSubscriptionBooleanUpdate(
+        req,
+        baseHeaders,
+        adminSubscriptionStatusMatch[1] ?? "",
+      );
+    } else if (adminSubscriptionStatusMatch && method === "DELETE") {
+      response = await upsertLegacyAdminSubscriptionOverride(
+        req,
+        baseHeaders,
+        adminSubscriptionStatusMatch[1] ?? "",
+        "revoke",
+      );
+    } else if (adminSubscriptionAccessActionMatch && method === "PUT") {
+      response = await handleAdminSubscriptionAccessUpdate(
+        req,
+        baseHeaders,
+        adminSubscriptionAccessActionMatch[1] ?? "",
+      );
+    } else if (adminSubscriptionAccessActionMatch && method === "DELETE") {
+      response = await handleAdminSubscriptionAccessDelete(
+        req,
+        baseHeaders,
+        adminSubscriptionAccessActionMatch[1] ?? "",
+      );
+    } else {
+      response = json(404, { error: "Not found." }, baseHeaders);
+    }
+  }
 
-      if (method === "OPTIONS") {
-        const durationMs = Date.now() - startMs;
-        logger.info("Response sent", {
-          method,
-          path: pathname,
-          status: 204,
-          durationMs,
-        });
-        return new Response(null, {
-          status: 204,
-          headers: baseHeaders,
-        });
-      }
+  const durationMs = Date.now() - startMs;
+  const status = response.status;
+  const usage = currentGiteaUsage();
+  const giteaFields = usage ? giteaUsageLogFields(usage) : {};
+  if (status >= 500) {
+    logger.error("Response sent with 5xx status", {
+      method,
+      path: pathname,
+      status,
+      durationMs,
+      ...giteaFields,
+    });
+  } else {
+    logger.info("Response sent", {
+      method,
+      path: pathname,
+      status,
+      durationMs,
+      ...giteaFields,
+    });
+  }
 
-      let response: Response;
-
-      if (pathname === "/auth/signup" && method === "POST") {
-        response = await handleSignup(req, baseHeaders);
-      } else if (pathname === "/auth/login" && method === "POST") {
-        response = await handleLogin(req, baseHeaders);
-      } else if (pathname === "/auth/logout" && method === "POST") {
-        response = await handleLogout(req, baseHeaders);
-      } else if (pathname === "/auth/me" && method === "GET") {
-        response = await handleAuthMe(req, baseHeaders);
-      } else if (pathname === "/api/app/home/changes" && method === "GET") {
-        response = await handleHomeChanges(req, baseHeaders);
-      } else if (pathname === "/api/app/documents" && method === "GET") {
-        response = await handleLibraryDocuments(req, baseHeaders);
-      } else if (pathname === "/api/app/documents/search" && method === "GET") {
-        response = await handleDocumentSearch(req, baseHeaders);
-      } else if (pathname === "/api/app/users/search" && method === "GET") {
-        response = await handleSearchUsersRoute(req, baseHeaders);
-      } else if (
-        pathname === "/api/app/admin/subscriptions/access" &&
-        method === "GET"
-      ) {
-        response = await handleAdminSubscriptionAccessList(req, baseHeaders);
-      } else if (pathname === "/api/app/binders" && method === "GET") {
-        response = await handleListWorkspaces(req, baseHeaders);
-      } else if (pathname === "/api/app/organizations" && method === "GET") {
-        response = await handleListOrganizations(req, baseHeaders);
-      } else if (pathname === "/api/app/organizations" && method === "POST") {
-        response = await handleCreateOrganization(req, baseHeaders);
-      } else if (pathname === "/api/app/billing/status" && method === "GET") {
-        response = await handleBillingStatus(req, baseHeaders);
-      } else if (
-        pathname === "/api/app/billing/checkout" &&
-        method === "POST"
-      ) {
-        response = await handleBillingCheckout(req, baseHeaders);
-      } else if (pathname === "/api/app/billing/portal" && method === "POST") {
-        response = await handleBillingPortal(req, baseHeaders);
-      } else if (
-        pathname === "/api/dev/grant-subscription" &&
-        method === "POST"
-      ) {
-        response = await handleDevGrantSubscription(req, baseHeaders);
-      } else if (pathname === "/api/dev/end-trial" && method === "POST") {
-        response = await handleDevEndTrial(req, baseHeaders);
-      } else {
-        const adminSubscriptionAccessActionMatch = pathname.match(
-          /^\/api\/app\/admin\/subscriptions\/access\/([^/]+)$/,
-        );
-        const adminSubscriptionGrantMatch = pathname.match(
-          /^\/api\/app\/admin\/subscriptions\/([^/]+)\/grant$/,
-        );
-        const adminSubscriptionRevokeMatch = pathname.match(
-          /^\/api\/app\/admin\/subscriptions\/([^/]+)\/revoke$/,
-        );
-        const adminSubscriptionStatusMatch = pathname.match(
-          /^\/api\/app\/admin\/subscriptions\/([^/]+)$/,
-        );
-        const workspaceDocumentsMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/documents$/,
-        );
-        // A new version of a document already in the binder. The document is
-        // named in the body rather than in the path, because a path suffix
-        // would collide with a policy filed in a folder of that name —
-        // `…/documents/nursing/revisions` is a real address a person could
-        // have made.
-        const workspaceDocumentRevisionsMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/document-revisions$/,
-        );
-        // The acts that change where things are filed rather than what they
-        // say. Each names its subject in the body for the same reason a
-        // revision does: a folder called `folders` is a folder somebody could
-        // legitimately make.
-        const workspaceFoldersMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/folders$/,
-        );
-        const workspaceFolderRenamesMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/folder-renames$/,
-        );
-        const workspaceDocumentRenamesMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/document-renames$/,
-        );
-        // Taking a document off the record. Named for what it is rather than
-        // for a verb that is not true: the file leaves `main` and its version
-        // tags still point at every commit that held it.
-        const workspaceDocumentArchivesMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/document-archives$/,
-        );
-        // Bringing one back. Its own act rather than an inverse of the one
-        // above: it writes a file, and what it writes comes out of a tag.
-        const workspaceDocumentRestoresMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/document-restores$/,
-        );
-        // A binder's own name. Not under `settings`, because it is not a
-        // setting — it changes the binder's address, and every other write
-        // under that path leaves the address alone.
-        const workspaceNameMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/name$/,
-        );
-        const workspaceDescriptionMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/description$/,
-        );
-        const workspaceArchiveMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/archive$/,
-        );
-        // The document's path carries slashes — it is a path inside the binder,
-        // not one segment — so this captures the rest of the URL.
-        const workspaceDocumentMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/documents\/(.+)$/,
-        );
-        const workspacePublishMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/publish$/,
-        );
-        const workspaceChangeReviewMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/reviews$/,
-        );
-        const workspaceChangeUpdateMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/update$/,
-        );
-        // A binder is a Gitea repository and a change on it is a Gitea pull
-        // request, so everything below is the document model's own handler
-        // reached at the binder's address. Same behaviour, one namespace per
-        // shape of thing — not a second implementation.
-        const workspaceChangeDiscussionsMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/discussions$/,
-        );
-        const workspaceChangeReplyMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/discussions\/([^/]+)\/comments$/,
-        );
-        const workspaceChangeResolveMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/discussions\/([^/]+)\/resolve$/,
-        );
-        const workspaceChangeReactionMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/discussions\/([^/]+)\/comments\/(\d+)\/reactions$/,
-        );
-        const workspaceChangeUpdatesMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/updates$/,
-        );
-        const workspaceChangeAssignmentsMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/assignments$/,
-        );
-        const workspaceCollaboratorsMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/collaborators$/,
-        );
-        const workspaceChangeMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)$/,
-        );
-        // Raw content sits under its own segment rather than as a suffix on
-        // the document, because the document's path is the rest of the URL.
-        const workspaceDocumentRawMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/raw\/(.+)$/,
-        );
-        const createBinderMatch = pathname.match(
-          /^\/api\/app\/orgs\/([^/]+)\/binders$/,
-        );
-        const organizationPeopleMatch = pathname.match(
-          /^\/api\/app\/orgs\/([^/]+)\/people$/,
-        );
-        const organizationPersonRoleMatch = pathname.match(
-          /^\/api\/app\/orgs\/([^/]+)\/people\/([^/]+)\/role$/,
-        );
-        const organizationPersonMatch = pathname.match(
-          /^\/api\/app\/orgs\/([^/]+)\/people\/([^/]+)$/,
-        );
-        const organizationGroupsMatch = pathname.match(
-          /^\/api\/app\/orgs\/([^/]+)\/groups$/,
-        );
-        const organizationGroupMembersMatch = pathname.match(
-          /^\/api\/app\/orgs\/([^/]+)\/groups\/([^/]+)\/members$/,
-        );
-        const organizationGroupMemberMatch = pathname.match(
-          /^\/api\/app\/orgs\/([^/]+)\/groups\/([^/]+)\/members\/([^/]+)$/,
-        );
-        const workspacePeopleMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/people$/,
-        );
-        const workspacePersonMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/people\/([^/]+)$/,
-        );
-        const workspaceVisibilityMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/visibility$/,
-        );
-        const workspaceGroupsMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/groups$/,
-        );
-        const workspaceGroupMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/groups\/([^/]+)$/,
-        );
-        const workspaceChangesMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes$/,
-        );
-        // Singular, because a person has one draft in a binder. The branch is
-        // never in the URL: it carries slashes, it is the server's to name, and
-        // the only draft any of these three verbs acts on is the caller's own.
-        const workspaceDraftMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/draft$/,
-        );
-        const workspaceHistoryMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/history$/,
-        );
-        const workspaceSettingsMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/settings$/,
-        );
-        const workspaceSignOffMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/rules\/sign-off$/,
-        );
-        const workspaceRulesMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/rules$/,
-        );
-        // Last of the binder matchers, because every one above it is a longer
-        // path under the same two segments.
-        const workspaceOverviewMatch = pathname.match(
-          /^\/api\/app\/binders\/([^/]+)\/([^/]+)$/,
-        );
-
-        if (organizationPeopleMatch && method === "GET") {
-          response = await handleOrganizationPeople(
-            req,
-            baseHeaders,
-            organizationPeopleMatch[1]!,
-          );
-        } else if (organizationPeopleMatch && method === "POST") {
-          response = await handleAddOrganizationPerson(
-            req,
-            baseHeaders,
-            organizationPeopleMatch[1]!,
-          );
-        } else if (organizationPersonRoleMatch && method === "POST") {
-          response = await handleOrganizationPersonRole(
-            req,
-            baseHeaders,
-            organizationPersonRoleMatch[1]!,
-            organizationPersonRoleMatch[2]!,
-          );
-        } else if (organizationPersonMatch && method === "DELETE") {
-          response = await handleRemoveOrganizationPerson(
-            req,
-            baseHeaders,
-            organizationPersonMatch[1]!,
-            organizationPersonMatch[2]!,
-          );
-        } else if (organizationGroupsMatch && method === "POST") {
-          response = await handleCreateOrganizationGroup(
-            req,
-            baseHeaders,
-            organizationGroupsMatch[1]!,
-          );
-        } else if (organizationGroupMembersMatch && method === "POST") {
-          response = await handleOrganizationGroupMember(
-            req,
-            baseHeaders,
-            organizationGroupMembersMatch[1]!,
-            organizationGroupMembersMatch[2]!,
-            null,
-          );
-        } else if (organizationGroupMemberMatch && method === "DELETE") {
-          response = await handleOrganizationGroupMember(
-            req,
-            baseHeaders,
-            organizationGroupMemberMatch[1]!,
-            organizationGroupMemberMatch[2]!,
-            organizationGroupMemberMatch[3]!,
-          );
-        } else if (workspaceVisibilityMatch && method === "POST") {
-          response = await handleBinderVisibility(
-            req,
-            baseHeaders,
-            workspaceVisibilityMatch[1]!,
-            workspaceVisibilityMatch[2]!,
-          );
-        } else if (workspacePeopleMatch && method === "GET") {
-          response = await handleBinderPeople(
-            req,
-            baseHeaders,
-            workspacePeopleMatch[1]!,
-            workspacePeopleMatch[2]!,
-          );
-        } else if (workspacePeopleMatch && method === "POST") {
-          response = await handleBinderPerson(
-            req,
-            baseHeaders,
-            workspacePeopleMatch[1]!,
-            workspacePeopleMatch[2]!,
-            null,
-          );
-        } else if (workspacePersonMatch && method === "POST") {
-          response = await handleBinderPerson(
-            req,
-            baseHeaders,
-            workspacePersonMatch[1]!,
-            workspacePersonMatch[2]!,
-            workspacePersonMatch[3]!,
-          );
-        } else if (workspacePersonMatch && method === "DELETE") {
-          response = await handleRemoveBinderPerson(
-            req,
-            baseHeaders,
-            workspacePersonMatch[1]!,
-            workspacePersonMatch[2]!,
-            workspacePersonMatch[3]!,
-          );
-        } else if (workspaceGroupsMatch && method === "POST") {
-          response = await handleBinderGroup(
-            req,
-            baseHeaders,
-            workspaceGroupsMatch[1]!,
-            workspaceGroupsMatch[2]!,
-            null,
-          );
-        } else if (workspaceGroupMatch && method === "DELETE") {
-          response = await handleBinderGroup(
-            req,
-            baseHeaders,
-            workspaceGroupMatch[1]!,
-            workspaceGroupMatch[2]!,
-            workspaceGroupMatch[3]!,
-          );
-        } else if (createBinderMatch && method === "GET") {
-          response = await handleListOrganizationWorkspaces(
-            req,
-            baseHeaders,
-            createBinderMatch[1]!,
-          );
-        } else if (createBinderMatch && method === "POST") {
-          response = await handleCreateWorkspace(
-            req,
-            baseHeaders,
-            createBinderMatch[1]!,
-          );
-        } else if (workspacePublishMatch && method === "POST") {
-          response = await handlePublishWorkspaceChange(
-            req,
-            baseHeaders,
-            workspacePublishMatch[1]!,
-            workspacePublishMatch[2]!,
-            Number.parseInt(workspacePublishMatch[3] ?? "", 10),
-          );
-        } else if (workspaceDocumentsMatch && method === "GET") {
-          response = await handleListWorkspaceDocuments(
-            req,
-            baseHeaders,
-            workspaceDocumentsMatch[1]!,
-            workspaceDocumentsMatch[2]!,
-            url.searchParams.get("draft"),
-            url.searchParams.get("change"),
-            url.searchParams.get("ref"),
-          );
-        } else if (workspaceChangeReviewMatch && method === "POST") {
-          response = await handleWorkspaceChangeReview(
-            req,
-            baseHeaders,
-            workspaceChangeReviewMatch[1]!,
-            workspaceChangeReviewMatch[2]!,
-            Number.parseInt(workspaceChangeReviewMatch[3] ?? "", 10),
-          );
-        } else if (workspaceChangeDiscussionsMatch && method === "GET") {
-          response = await handleListDiscussions(
-            req,
-            baseHeaders,
-            workspaceChangeDiscussionsMatch[1]!,
-            workspaceChangeDiscussionsMatch[2]!,
-            Number.parseInt(workspaceChangeDiscussionsMatch[3] ?? "", 10),
-          );
-        } else if (workspaceChangeDiscussionsMatch && method === "POST") {
-          response = await handleCreateDiscussionThread(
-            req,
-            baseHeaders,
-            workspaceChangeDiscussionsMatch[1]!,
-            workspaceChangeDiscussionsMatch[2]!,
-            Number.parseInt(workspaceChangeDiscussionsMatch[3] ?? "", 10),
-          );
-        } else if (workspaceChangeReactionMatch && method === "PUT") {
-          response = await handleSetCommentReaction(
-            req,
-            baseHeaders,
-            workspaceChangeReactionMatch[1]!,
-            workspaceChangeReactionMatch[2]!,
-            Number.parseInt(workspaceChangeReactionMatch[3] ?? "", 10),
-            decodePathParam(workspaceChangeReactionMatch[4] ?? ""),
-            Number.parseInt(workspaceChangeReactionMatch[5] ?? "", 10),
-          );
-        } else if (workspaceChangeReplyMatch && method === "POST") {
-          response = await handleReplyToDiscussion(
-            req,
-            baseHeaders,
-            workspaceChangeReplyMatch[1]!,
-            workspaceChangeReplyMatch[2]!,
-            Number.parseInt(workspaceChangeReplyMatch[3] ?? "", 10),
-            decodePathParam(workspaceChangeReplyMatch[4] ?? ""),
-          );
-        } else if (workspaceChangeResolveMatch && method === "POST") {
-          response = await handleResolveDiscussion(
-            req,
-            baseHeaders,
-            workspaceChangeResolveMatch[1]!,
-            workspaceChangeResolveMatch[2]!,
-            Number.parseInt(workspaceChangeResolveMatch[3] ?? "", 10),
-            decodePathParam(workspaceChangeResolveMatch[4] ?? ""),
-          );
-        } else if (workspaceChangeUpdatesMatch && method === "GET") {
-          response = await handleChangeUpdates(
-            req,
-            baseHeaders,
-            workspaceChangeUpdatesMatch[1]!,
-            workspaceChangeUpdatesMatch[2]!,
-            Number.parseInt(workspaceChangeUpdatesMatch[3] ?? "", 10),
-          );
-        } else if (workspaceChangeAssignmentsMatch && method === "PUT") {
-          response = await handleUpdateChangeAssignments(
-            req,
-            baseHeaders,
-            workspaceChangeAssignmentsMatch[1]!,
-            workspaceChangeAssignmentsMatch[2]!,
-            Number.parseInt(workspaceChangeAssignmentsMatch[3] ?? "", 10),
-          );
-        } else if (workspaceCollaboratorsMatch && method === "GET") {
-          response = await handleDocumentCollaborators(
-            req,
-            baseHeaders,
-            workspaceCollaboratorsMatch[1]!,
-            workspaceCollaboratorsMatch[2]!,
-          );
-        } else if (workspaceRulesMatch && method === "PATCH") {
-          response = await handleBinderRules(
-            req,
-            baseHeaders,
-            workspaceRulesMatch[1]!,
-            workspaceRulesMatch[2]!,
-          );
-        } else if (workspaceSignOffMatch && method === "POST") {
-          response = await handleBinderSignOffRules(
-            req,
-            baseHeaders,
-            workspaceSignOffMatch[1]!,
-            workspaceSignOffMatch[2]!,
-          );
-        } else if (workspaceSettingsMatch && method === "GET") {
-          response = await handleWorkspaceSettings(
-            req,
-            baseHeaders,
-            workspaceSettingsMatch[1]!,
-            workspaceSettingsMatch[2]!,
-          );
-        } else if (workspaceHistoryMatch && method === "GET") {
-          response = await handleWorkspaceHistory(
-            req,
-            baseHeaders,
-            workspaceHistoryMatch[1]!,
-            workspaceHistoryMatch[2]!,
-          );
-        } else if (workspaceDraftMatch && method === "GET") {
-          response = await handleBinderDraft(
-            req,
-            baseHeaders,
-            workspaceDraftMatch[1]!,
-            workspaceDraftMatch[2]!,
-          );
-        } else if (workspaceDraftMatch && method === "POST") {
-          response = await handleOpenBinderDraft(
-            req,
-            baseHeaders,
-            workspaceDraftMatch[1]!,
-            workspaceDraftMatch[2]!,
-          );
-        } else if (workspaceDraftMatch && method === "PATCH") {
-          response = await handleRenameBinderDraft(
-            req,
-            baseHeaders,
-            workspaceDraftMatch[1]!,
-            workspaceDraftMatch[2]!,
-          );
-        } else if (workspaceDraftMatch && method === "DELETE") {
-          response = await handleDiscardBinderDraft(
-            req,
-            baseHeaders,
-            workspaceDraftMatch[1]!,
-            workspaceDraftMatch[2]!,
-          );
-        } else if (workspaceChangesMatch && method === "POST") {
-          response = await handleProposeBinderDraft(
-            req,
-            baseHeaders,
-            workspaceChangesMatch[1]!,
-            workspaceChangesMatch[2]!,
-          );
-        } else if (workspaceChangesMatch && method === "GET") {
-          response = await handleListWorkspaceChanges(
-            req,
-            baseHeaders,
-            workspaceChangesMatch[1]!,
-            workspaceChangesMatch[2]!,
-          );
-        } else if (workspaceChangeUpdateMatch && method === "POST") {
-          response = await handleWorkspaceChangeUpdate(
-            req,
-            baseHeaders,
-            workspaceChangeUpdateMatch[1]!,
-            workspaceChangeUpdateMatch[2]!,
-            Number.parseInt(workspaceChangeUpdateMatch[3] ?? "", 10),
-          );
-        } else if (workspaceChangeMatch && method === "PATCH") {
-          response = await handleWorkspaceChangeEdit(
-            req,
-            baseHeaders,
-            workspaceChangeMatch[1]!,
-            workspaceChangeMatch[2]!,
-            Number.parseInt(workspaceChangeMatch[3] ?? "", 10),
-          );
-        } else if (workspaceChangeMatch && method === "GET") {
-          response = await handleWorkspaceChangeDetail(
-            req,
-            baseHeaders,
-            workspaceChangeMatch[1]!,
-            workspaceChangeMatch[2]!,
-            Number.parseInt(workspaceChangeMatch[3] ?? "", 10),
-          );
-        } else if (workspaceDocumentRawMatch && method === "GET") {
-          response = await handleWorkspaceDocumentRaw(
-            req,
-            baseHeaders,
-            workspaceDocumentRawMatch[1]!,
-            workspaceDocumentRawMatch[2]!,
-            decodeURIComponent(workspaceDocumentRawMatch[3]!),
-          );
-        } else if (workspaceDocumentMatch && method === "GET") {
-          response = await handleWorkspaceDocumentDetail(
-            req,
-            baseHeaders,
-            workspaceDocumentMatch[1]!,
-            workspaceDocumentMatch[2]!,
-            decodeURIComponent(workspaceDocumentMatch[3]!),
-            url.searchParams.get("draft"),
-            url.searchParams.get("change"),
-            url.searchParams.get("ref"),
-          );
-        } else if (workspaceOverviewMatch && method === "GET") {
-          response = await handleWorkspaceOverview(
-            req,
-            baseHeaders,
-            workspaceOverviewMatch[1]!,
-            workspaceOverviewMatch[2]!,
-          );
-        } else if (workspaceFoldersMatch && method === "POST") {
-          return await handleBinderShapeChange(
-            req,
-            baseHeaders,
-            workspaceFoldersMatch[1]!,
-            workspaceFoldersMatch[2]!,
-            ({ body, tree }) =>
-              planNewFolder({
-                folder: typeof body.folder === "string" ? body.folder : "",
-                existingFolders: tree.folders,
-              }),
-          );
-        } else if (workspaceFolderRenamesMatch && method === "POST") {
-          return await handleBinderShapeChange(
-            req,
-            baseHeaders,
-            workspaceFolderRenamesMatch[1]!,
-            workspaceFolderRenamesMatch[2]!,
-            ({ body, tree }) =>
-              planFolderRename({
-                from: typeof body.from === "string" ? body.from : "",
-                to: typeof body.to === "string" ? body.to : "",
-                paths: tree.paths,
-                existingFolders: tree.folders,
-              }),
-          );
-        } else if (workspaceDocumentRenamesMatch && method === "POST") {
-          return await handleBinderShapeChange(
-            req,
-            baseHeaders,
-            workspaceDocumentRenamesMatch[1]!,
-            workspaceDocumentRenamesMatch[2]!,
-            ({ body, tree }) => {
-              const documentPath =
-                typeof body.documentPath === "string" ? body.documentPath : "";
-              const document =
-                tree.documents.find((entry) => entry.path === documentPath) ??
-                tree.documents.find((entry) => entry.slugPath === documentPath);
-
-              if (!document) {
-                return { error: `"${documentPath}" is not in this binder.` };
-              }
-
-              return planDocumentRename({
-                document,
-                ...(typeof body.name === "string" ? { name: body.name } : {}),
-                ...(typeof body.folder === "string"
-                  ? { folder: body.folder }
-                  : {}),
-                paths: tree.paths,
-              });
-            },
-          );
-        } else if (workspaceDocumentArchivesMatch && method === "POST") {
-          return await handleBinderShapeChange(
-            req,
-            baseHeaders,
-            workspaceDocumentArchivesMatch[1]!,
-            workspaceDocumentArchivesMatch[2]!,
-            ({ body, tree }) => {
-              const documentPath =
-                typeof body.documentPath === "string" ? body.documentPath : "";
-              const document =
-                tree.documents.find((entry) => entry.path === documentPath) ??
-                tree.documents.find((entry) => entry.slugPath === documentPath);
-
-              if (!document) {
-                return { error: `"${documentPath}" is not in this binder.` };
-              }
-
-              return planDocumentArchive({ document });
-            },
-          );
-        } else if (workspaceDocumentRestoresMatch && method === "POST") {
-          return await handleBinderShapeChange(
-            req,
-            baseHeaders,
-            workspaceDocumentRestoresMatch[1]!,
-            workspaceDocumentRestoresMatch[2]!,
-            async ({ body, tree, client }) => {
-              const uid = typeof body.uid === "string" ? body.uid : "";
-              if (uid === "") {
-                return { error: "Name the document to restore." };
-              }
-
-              // Straight off the version tag the policy last published at. The
-              // bytes are still there because a tag is a ref and git never
-              // collects a commit reachable from one — which is the whole
-              // reason there is no archive branch to read from.
-              const archived = await readArchivedDocument({
-                client,
-                org: workspaceDocumentRestoresMatch[1]!,
-                workspace: workspaceDocumentRestoresMatch[2]!,
-                uid,
-              });
-              if (!archived) {
-                return {
-                  error:
-                    "That document has no published version to restore from.",
-                };
-              }
-
-              return planDocumentRestore({
-                document: archived.document,
-                base64Content: archived.base64Content,
-                tree,
-              });
-            },
-          );
-        } else if (workspaceNameMatch && method === "POST") {
-          response = await handleRenameBinder(
-            req,
-            baseHeaders,
-            workspaceNameMatch[1]!,
-            workspaceNameMatch[2]!,
-          );
-        } else if (workspaceDescriptionMatch && method === "POST") {
-          response = await handleDescribeBinder(
-            req,
-            baseHeaders,
-            workspaceDescriptionMatch[1]!,
-            workspaceDescriptionMatch[2]!,
-          );
-        } else if (workspaceArchiveMatch && method === "GET") {
-          response = await handleBinderArchive(
-            req,
-            baseHeaders,
-            workspaceArchiveMatch[1]!,
-            workspaceArchiveMatch[2]!,
-            url.searchParams.get("draft"),
-          );
-        } else if (workspaceDocumentRevisionsMatch && method === "POST") {
-          return await handleReviseWorkspaceDocument(
-            req,
-            baseHeaders,
-            workspaceDocumentRevisionsMatch[1]!,
-            workspaceDocumentRevisionsMatch[2]!,
-          );
-        } else if (workspaceDocumentsMatch && method === "POST") {
-          response = await handleCreateWorkspaceDocument(
-            req,
-            baseHeaders,
-            workspaceDocumentsMatch[1]!,
-            workspaceDocumentsMatch[2]!,
-          );
-        } else if (adminSubscriptionGrantMatch && method === "POST") {
-          response = await upsertLegacyAdminSubscriptionOverride(
-            req,
-            baseHeaders,
-            adminSubscriptionGrantMatch[1] ?? "",
-            "grant",
-          );
-        } else if (adminSubscriptionRevokeMatch && method === "POST") {
-          response = await upsertLegacyAdminSubscriptionOverride(
-            req,
-            baseHeaders,
-            adminSubscriptionRevokeMatch[1] ?? "",
-            "revoke",
-          );
-        } else if (adminSubscriptionStatusMatch && method === "GET") {
-          response = await handleAdminSubscriptionStatus(
-            req,
-            baseHeaders,
-            adminSubscriptionStatusMatch[1] ?? "",
-          );
-        } else if (adminSubscriptionStatusMatch && method === "PUT") {
-          response = await handleAdminSubscriptionBooleanUpdate(
-            req,
-            baseHeaders,
-            adminSubscriptionStatusMatch[1] ?? "",
-          );
-        } else if (adminSubscriptionStatusMatch && method === "DELETE") {
-          response = await upsertLegacyAdminSubscriptionOverride(
-            req,
-            baseHeaders,
-            adminSubscriptionStatusMatch[1] ?? "",
-            "revoke",
-          );
-        } else if (adminSubscriptionAccessActionMatch && method === "PUT") {
-          response = await handleAdminSubscriptionAccessUpdate(
-            req,
-            baseHeaders,
-            adminSubscriptionAccessActionMatch[1] ?? "",
-          );
-        } else if (adminSubscriptionAccessActionMatch && method === "DELETE") {
-          response = await handleAdminSubscriptionAccessDelete(
-            req,
-            baseHeaders,
-            adminSubscriptionAccessActionMatch[1] ?? "",
-          );
-        } else {
-          response = json(404, { error: "Not found." }, baseHeaders);
-        }
-      }
-
-      const durationMs = Date.now() - startMs;
-      const status = response.status;
-      if (status >= 500) {
-        logger.error("Response sent with 5xx status", {
-          method,
-          path: pathname,
-          status,
-          durationMs,
-        });
-      } else {
-        logger.info("Response sent", {
-          method,
-          path: pathname,
-          status,
-          durationMs,
-        });
-      }
-
-      return response;
-    },
-  });
+  return response;
 }
 
 if (import.meta.main) {
   const server = createApiServer();
   startCleanupTimer();
+  // Outside production with no service tokens configured, privileged calls
+  // would ride on basic auth. Mint the read and admin tokens in the
+  // background; calls switch to each as soon as it exists. See
+  // `dev-service-token.ts`.
+  void mintDevServiceTokens();
+  if (config.isProduction && !config.giteaAdminToken) {
+    logger.warn(
+      "No BINDERSNAP_GITEA_ADMIN_TOKEN: signup, password and account deletion use the service token until a deploy mints the admin token",
+    );
+  }
+  // Finish any multi-step write the last process left half-done — a deploy
+  // replaces this container on every push to `main`. See `jobs/runner.ts`.
+  startJobRunner({
+    run: {
+      publish: resumePublishJob,
+      "provision-binder": resumeProvisionJob,
+    },
+  });
+  // Deliver queued email in the background — see `mail/index.ts`.
+  startMail();
+  // Accepted invitations that found no owner signed in finish when one is.
+  setInterval(
+    () =>
+      void completeWaitingInvitations().catch((err) =>
+        logger.error("Invitation sweep failed", {
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      ),
+    60_000,
+  );
+  // Report what no job can speak for: binders made before jobs existed, or
+  // changed outside the API. A minute after startup, then every six hours.
+  const reconcile = () =>
+    void runReconcilerPass().catch((err) =>
+      logger.error("Reconciler pass failed", {
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+  setTimeout(reconcile, 60_000);
+  setInterval(reconcile, 6 * 60 * 60_000);
   logger.info("Bindersnap API listening", {
     url: `http://localhost:${server.port}`,
     port: server.port,

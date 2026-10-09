@@ -1,9 +1,20 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
-import { CreditCard, LogOut, Moon, Shield } from "lucide-react";
+import {
+  CircleHelp,
+  CreditCard,
+  LogOut,
+  Map as MapIcon,
+  Moon,
+  Shield,
+  UserRound,
+} from "lucide-react";
 import type { SessionUser } from "../api";
 import { buildDocumentsUrl, parseDocumentsViewState } from "../documentsView";
 import { followInApp, navigateToHref } from "../appLink";
+import { NotificationBell } from "./NotificationBell";
+import { GettingStarted, GuideBar } from "./GettingStarted";
+import { useOnboarding } from "../useOnboarding";
 import { routeToPath, type AppRoute } from "../routes";
 import { BinderShell } from "./BinderShell";
 import { OrganizationPage } from "./OrganizationPage";
@@ -21,12 +32,16 @@ import { useDefaultOrganization } from "../useOrganizationDisplayName";
 import { HomePage } from "./HomePage";
 import { NavSearch } from "./NavSearch";
 import { CreateMenu } from "./CreateMenu";
+import { AccountSettingsPage } from "./AccountSettingsPage";
+import { AvatarFace } from "./PersonAvatar";
 
 interface AppShellProps {
   user: SessionUser | null;
   route: AppRoute;
   onNavigate: (route: AppRoute, replace?: boolean) => void;
   onSignOut: () => void | Promise<void>;
+  /** Read the session again after the account itself changed. */
+  onAccountChanged?: () => void | Promise<unknown>;
   /**
    * The billing page, built by the app that holds the billing state. Drawn in
    * the shell like any other settings page, rather than in place of it.
@@ -73,12 +88,16 @@ function getInitials(name: string): string {
 
 function renderProfileMenuIcon(icon: string) {
   switch (icon) {
+    case "account":
+      return <AppIcon icon={UserRound} size="md" />;
     case "billing":
       return <AppIcon icon={CreditCard} size="md" />;
     case "appearance":
       return <AppIcon icon={Moon} size="md" />;
     case "admin":
       return <AppIcon icon={Shield} size="md" />;
+    case "guide":
+      return <AppIcon icon={MapIcon} size="md" />;
     case "signout":
       return <AppIcon icon={LogOut} size="md" />;
     default:
@@ -91,6 +110,7 @@ export function AppShell({
   route,
   onNavigate,
   onSignOut,
+  onAccountChanged = () => undefined,
   billing = null,
 }: AppShellProps) {
   const isReadOnly = useIsReadOnly();
@@ -115,6 +135,13 @@ export function AppShell({
   const displayName = user?.fullName ?? user?.username ?? "";
   const username = user?.username ?? displayName;
   const currentUsername = user?.username ?? "";
+  // Where a new customer is in moving in, read from what exists — so it is
+  // right after they leave halfway and come back on another computer.
+  const onboarding = useOnboarding(currentUsername, routeToPath(route));
+  const showGuide =
+    onboarding.state !== null &&
+    !onboarding.state.complete &&
+    !onboarding.hidden;
   const initials = displayName ? getInitials(displayName) : "?";
 
   /**
@@ -210,6 +237,25 @@ export function AppShell({
             onSearchLibrary={navigateToSearch}
           />
 
+          {/* **Help opens beside the app, not inside it.** It is ordinary
+              pages anybody can read, signed in or not (apps/help), and
+              reading about a step in a new tab keeps the place where you
+              were doing it. */}
+          <a
+            className="app-topnav-icon-btn"
+            href="/help"
+            target="_blank"
+            rel="noopener"
+            title="Help and guides (opens in a new tab)"
+            aria-label="Help and guides (opens in a new tab)"
+          >
+            <CircleHelp size={16} strokeWidth={1.5} aria-hidden="true" />
+          </a>
+
+          {/* What happened on the changes you are part of — Gitea's own
+              notifications, with the reason each one is yours. */}
+          <NotificationBell onOpen={navigateToHref} />
+
           {/* Make something that has no page to be added from: a binder, an
               organization. A document is added on its binder's page. */}
           <CreateMenu
@@ -229,7 +275,11 @@ export function AppShell({
               aria-haspopup="menu"
               onClick={() => setProfileOpen((o) => !o)}
             >
-              {initials}
+              <AvatarFace
+                login={currentUsername}
+                initials={initials}
+                drawnSize={32}
+              />
             </button>
 
             {profileOpen && (
@@ -250,10 +300,17 @@ export function AppShell({
                         className="app-profile-menu-avatar"
                         aria-hidden="true"
                       >
-                        {initials}
+                        <AvatarFace
+                          login={currentUsername}
+                          initials={initials}
+                          drawnSize={42}
+                        />
                       </div>
                       <div className="app-profile-menu-copy">
-                        <p className="app-profile-menu-handle">{username}</p>
+                        <p className="app-profile-menu-handle">{displayName}</p>
+                        {displayName !== username ? (
+                          <p className="app-profile-menu-login">@{username}</p>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -268,6 +325,22 @@ export function AppShell({
                         not drawn and the bottom bar carries only the four
                         places people move between, so this menu is the one
                         way to reach Billing there. */}
+                    <button
+                      type="button"
+                      className={`app-profile-menu-item${route.kind === "accountSettings" ? " app-profile-menu-item--active" : ""}`}
+                      role="menuitem"
+                      onClick={() => {
+                        setProfileOpen(false);
+                        onNavigate({ kind: "accountSettings" });
+                      }}
+                    >
+                      <span className="app-profile-menu-icon">
+                        {renderProfileMenuIcon("account")}
+                      </span>
+                      <span className="app-profile-menu-label">
+                        Your account
+                      </span>
+                    </button>
                     <button
                       type="button"
                       className={`app-profile-menu-item${isBilling ? " app-profile-menu-item--active" : ""}`}
@@ -300,6 +373,29 @@ export function AppShell({
                       </span>
                       <span className="app-profile-menu-label">Appearance</span>
                     </button>
+                    {/* The way back to a guide somebody hid, for as long as
+                        there is something left to be guided through. */}
+                    {onboarding.hidden &&
+                    onboarding.state &&
+                    !onboarding.state.complete ? (
+                      <button
+                        type="button"
+                        className="app-profile-menu-item"
+                        role="menuitem"
+                        onClick={() => {
+                          setProfileOpen(false);
+                          onboarding.setHidden(false);
+                          onNavigate({ kind: "workspace" });
+                        }}
+                      >
+                        <span className="app-profile-menu-icon">
+                          {renderProfileMenuIcon("guide")}
+                        </span>
+                        <span className="app-profile-menu-label">
+                          Getting-started guide
+                        </span>
+                      </button>
+                    ) : null}
                     {user?.isAdmin ? (
                       <button
                         type="button"
@@ -381,6 +477,13 @@ export function AppShell({
             <main
               className={`app-main${isWorkspace ? " app-main--workspace" : " app-main--page"}`}
             >
+              {showGuide && onboarding.state && route.kind !== "workspace" ? (
+                <GuideBar
+                  state={onboarding.state}
+                  onGo={navigateToHref}
+                  onHide={() => onboarding.setHidden(true)}
+                />
+              ) : null}
               {route.kind === "changes" ? (
                 <ReviewQueuePage
                   currentUsername={currentUsername}
@@ -446,6 +549,12 @@ export function AppShell({
                     })
                   }
                 />
+              ) : route.kind === "accountSettings" ? (
+                <AccountSettingsPage
+                  user={user}
+                  onUserChanged={onAccountChanged}
+                  onDeleted={onSignOut}
+                />
               ) : route.kind === "billing" ? (
                 billing
               ) : route.kind === "adminSubscriptions" ? (
@@ -454,6 +563,15 @@ export function AppShell({
                 />
               ) : (
                 <HomePage
+                  guide={
+                    showGuide && onboarding.state ? (
+                      <GettingStarted
+                        state={onboarding.state}
+                        onGo={navigateToHref}
+                        onHide={() => onboarding.setHidden(true)}
+                      />
+                    ) : null
+                  }
                   currentUsername={currentUsername}
                   currentUserFullName={user?.fullName ?? ""}
                   // A change is on a binder now: Home's rows carry the owning

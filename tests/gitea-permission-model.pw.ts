@@ -10,7 +10,7 @@
  *    blocks a merge while a code owner's requested review is outstanding —
  *    that is, CODEOWNERS is enforcement, not only auto-assignment.
  *
- * A third block, added when dev moved to a Gitea 28.0.0 nightly, covers
+ * A third block, added when dev moved to Gitea 28.0.0, covers
  * `block_on_codeowner_reviews` — the field that turns a per-folder rule from
  * assignment into enforcement and lets it name a *team*. The two gates resolve
  * officialness differently and a design that conflates them will be quietly
@@ -68,6 +68,16 @@ const ORG_PREFIX = "bs-adr4-";
 function uniqueOrgName(): string {
   return `${ORG_PREFIX}${randomUUID().slice(0, 8)}`;
 }
+
+/**
+ * Who owns the fixture organizations.
+ *
+ * Not the site admin: the app stops anyone at "Accept our updated Terms"
+ * until each organization they own has an agreement on record, and these
+ * organizations are made in Gitea directly, so none ever does. Owned by `alice`
+ * they would lock her out of every spec running beside this one.
+ */
+const FIXTURE_OWNER = "bs-adr4-owner";
 
 /** Every organization provisioned in this run, for `afterAll` to remove. */
 const provisionedOrgs: string[] = [];
@@ -253,6 +263,24 @@ async function sweepLeftoverOrgs(admin: GiteaClient): Promise<void> {
   }
 }
 
+async function ensureFixtureOwner(admin: GiteaClient): Promise<void> {
+  // Look before creating: every test provisions through here, and Gitea's
+  // status for "user already exists" is not one to depend on (28.0.0 does not
+  // answer 422).
+  try {
+    await get(admin, `/users/${FIXTURE_OWNER}`);
+    return;
+  } catch (err) {
+    if (!(err instanceof GiteaApiError) || err.status !== 404) throw err;
+  }
+  await post(admin, "/admin/users", {
+    username: FIXTURE_OWNER,
+    email: `${FIXTURE_OWNER}@example.invalid`,
+    password: randomUUID(),
+    must_change_password: false,
+  });
+}
+
 /**
  * Provision an organization, a workspace repository owned by it, and the three
  * role teams granted onto that repository — the shape ADR 0004 §2 describes.
@@ -288,7 +316,11 @@ async function provisionWorkspace(
   // Recorded before the first call that can fail, so a half-provisioned
   // organization is still cleaned up.
   provisionedOrgs.push(org);
-  await post(admin, "/orgs", { username: org, visibility: "private" });
+  await ensureFixtureOwner(admin);
+  await post(admin, `/admin/users/${FIXTURE_OWNER}/orgs`, {
+    username: org,
+    visibility: "private",
+  });
   await post(admin, `/orgs/${org}/repos`, {
     name: repo,
     private: true,
@@ -770,10 +802,9 @@ test.describe("ADR 0004: the Gitea permission model the workspace rests on", () 
  * Everything the design rests on for per-folder sign-off was read from the
  * merged diff of go-gitea PR #34995, never run. `gitea-28-findings.md` §6
  * lists exactly what to assert before depending on any of it, and this is that
- * list. The dev stack runs a digest-pinned `main-nightly`; production is still
- * 1.27.3, which does not have this field at all — so these cases are also the
- * thing that would fail loudly if somebody pointed dev back at a released tag
- * while the CODEOWNERS generator assumed the gate.
+ * list. Dev and production both run 28.0.0, the first release with this
+ * field, so these cases are also the thing that would fail loudly if somebody
+ * pointed the stack at an older Gitea while provisioning assumed the gate.
  *
  * **Two gates, two rules, and conflating them is the mistake to avoid.**
  * `block_on_official_review_requests` (1.27) blocks on an *official* request,

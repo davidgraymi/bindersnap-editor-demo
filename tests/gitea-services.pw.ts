@@ -28,10 +28,7 @@ import {
   mergePullRequest,
   submitReview,
 } from "../services/api/gitea-client/pullRequests";
-import {
-  getLatestDocTag,
-  listDocTags,
-} from "../services/api/gitea-client/repos";
+import {} from "../services/api/gitea-client/repos";
 import { listOrganizationWorkspaces } from "../services/api/gitea-client/workspaces";
 import {
   buildUploadBranchName,
@@ -51,8 +48,7 @@ import {
   pollUntil,
   REPO,
   resolveAndStoreToken,
-  SEEDED_BRANCH,
-  SEEDED_DOC_PATH,
+  SEEDED,
 } from "./helpers";
 
 /**
@@ -84,7 +80,7 @@ test.beforeAll(async () => {
       client: makeClient(),
       owner: OWNER,
       repo: REPO,
-      branch: SEEDED_BRANCH,
+      branch: SEEDED.branch,
     });
     return pr?.approvalState === "changes_requested";
   }, "seeded pull request to reach changes_requested state");
@@ -149,8 +145,8 @@ test.describe("documents", () => {
       client: makeClient(),
       owner: OWNER,
       repo: REPO,
-      filePath: SEEDED_DOC_PATH,
-      ref: SEEDED_BRANCH,
+      filePath: SEEDED.docPath,
+      ref: SEEDED.branch,
     });
 
     expect(commits.length).toBeGreaterThan(0);
@@ -168,8 +164,8 @@ test.describe("documents", () => {
       client: makeClient(),
       owner: OWNER,
       repo: REPO,
-      filePath: SEEDED_DOC_PATH,
-      ref: SEEDED_BRANCH,
+      filePath: SEEDED.docPath,
+      ref: SEEDED.branch,
     });
     expect(commits.length).toBeGreaterThan(0);
 
@@ -177,7 +173,7 @@ test.describe("documents", () => {
       client: makeClient(),
       owner: OWNER,
       repo: REPO,
-      filePath: SEEDED_DOC_PATH,
+      filePath: SEEDED.docPath,
       sha: commits[0]!.sha,
     });
 
@@ -234,7 +230,7 @@ test.describe("pull request workflow", () => {
       client: makeClient(),
       owner: OWNER,
       repo: REPO,
-      branch: SEEDED_BRANCH,
+      branch: SEEDED.branch,
     });
 
     const state: ApprovalState = pr!.approvalState;
@@ -267,7 +263,7 @@ test.describe("pull request workflow", () => {
     expect(prs.length).toBeGreaterThan(0);
 
     const seeded = prs.find(
-      (pr) => (pr.head as { ref?: string } | undefined)?.ref === SEEDED_BRANCH,
+      (pr) => (pr.head as { ref?: string } | undefined)?.ref === SEEDED.branch,
     );
     expect(seeded).toBeDefined();
     expect(seeded!.approvalState).toBe("changes_requested");
@@ -477,33 +473,6 @@ test.describe("repos", () => {
     expect(seeded, JSON.stringify(binders.map((b) => b.name))).toBeDefined();
     expect(seeded!.fullName).toBe(`${OWNER}/${REPO}`);
     expect(seeded!.owner).toBe(OWNER);
-  });
-
-  test("getLatestDocTag returns null or a valid DocTag", async () => {
-    // The seeded quarterly-report repo may or may not have tags depending on
-    // whether other tests (e.g., document-version-upload.pw.ts) have run.
-    const tag = await getLatestDocTag(makeClient(), OWNER, REPO);
-
-    if (tag !== null) {
-      // If tags exist, validate they have the expected shape
-      expect(typeof tag.name).toBe("string");
-      expect(tag.name).toMatch(/^doc\/v\d{4}$/);
-      expect(typeof tag.version).toBe("number");
-      expect(tag.version).toBeGreaterThan(0);
-    }
-  });
-
-  test("listDocTags returns an array of valid DocTags", async () => {
-    const tags = await listDocTags(makeClient(), OWNER, REPO);
-    expect(Array.isArray(tags)).toBe(true);
-
-    // Validate each tag has the expected shape
-    for (const tag of tags) {
-      expect(typeof tag.name).toBe("string");
-      expect(tag.name).toMatch(/^doc\/v\d{4}$/);
-      expect(typeof tag.version).toBe("number");
-      expect(tag.version).toBeGreaterThan(0);
-    }
   });
 });
 

@@ -37,13 +37,36 @@ const INITIALISMS = new Set([
 ]);
 
 /** "quarterly-report" → "Quarterly Report"; "hipaa-training" → "HIPAA Training". */
+/**
+ * Short words a title leaves lowercase unless they start it — "Code of
+ * Conduct", not "Code Of Conduct", which reads as a machine capitalising.
+ */
+const MINOR_WORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "as",
+  "at",
+  "by",
+  "for",
+  "in",
+  "of",
+  "on",
+  "or",
+  "the",
+  "to",
+  "with",
+]);
+
 export function formatDocumentName(slug: string): string {
   return slug
     .split("-")
-    .map((word) =>
+    .map((word, index) =>
       INITIALISMS.has(word.toLowerCase())
         ? word.toUpperCase()
-        : word.charAt(0).toUpperCase() + word.slice(1),
+        : index > 0 && MINOR_WORDS.has(word.toLowerCase())
+          ? word.toLowerCase()
+          : word.charAt(0).toUpperCase() + word.slice(1),
     )
     .join(" ");
 }

@@ -44,6 +44,12 @@ let giteaLoginsByToken = new Map<string, string>();
 let commentsByPR = new Map<string, MockedComment[]>();
 let reviewConfigFile: string | null = null;
 let mergeCalls = 0;
+/** What each tag write pointed at. A version tag must name the merge commit. */
+let tagTargets: string[] = [];
+/** The binder's tags, as Gitea would list them back. */
+let tagsWritten: Array<{ name: string; commit: { sha: string } }> = [];
+/** Fail the next tag write, the way a process dying mid-publish would. */
+let failNextTagWrite = false;
 let nextCommentId = 1;
 
 function prKey(owner: string, repo: string, index: number): string {
@@ -87,6 +93,9 @@ beforeEach(() => {
   commentsByPR = new Map();
   reviewConfigFile = null;
   mergeCalls = 0;
+  tagTargets = [];
+  tagsWritten = [];
+  failNextTagWrite = false;
   nextCommentId = 1;
 
   globalThis.fetch = (async (input, init) => {
@@ -214,9 +223,12 @@ beforeEach(() => {
       /^\/api\/v1\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)$/,
     );
     if (prMatch && method === "GET") {
+      // Merged once the merge has been called, as Gitea would answer.
       return json({
         number: Number(prMatch[3]),
-        state: "open",
+        state: mergeCalls > 0 ? "closed" : "open",
+        merged: mergeCalls > 0,
+        merge_commit_sha: mergeCalls > 0 ? "merge-sha" : null,
         mergeable: true,
         head: { ref: "upload/v2" },
       });
@@ -224,8 +236,20 @@ beforeEach(() => {
 
     const tagsMatch = path.match(/^\/api\/v1\/repos\/([^/]+)\/([^/]+)\/tags$/);
     if (tagsMatch) {
-      if (method === "GET") return json([]);
+      if (method === "GET") {
+        const page = Number(url.searchParams.get("page") ?? "1");
+        return json(page === 1 ? tagsWritten : []);
+      }
       if (method === "POST") {
+        if (failNextTagWrite) {
+          failNextTagWrite = false;
+          return json({ message: "the process went away" }, 500);
+        }
+        tagTargets.push(parsed?.target ?? "");
+        tagsWritten.push({
+          name: parsed?.tag_name ?? "",
+          commit: { sha: parsed?.target ?? "" },
+        });
         return json({
           name: parsed?.tag_name ?? "doc/v0001",
           commit: { sha: "abc", created: new Date().toISOString() },
@@ -538,6 +562,36 @@ describe("publish gate on unresolved threads", () => {
 
       expect(response.status).toBe(200);
       expect(mergeCalls).toBe(1);
+      // The version tag names the merge, not the branch it merged into.
+      expect(tagTargets).toEqual(["merge-sha"]);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("a publish that stopped after its merge is finished by pressing Publish again", async () => {
+    const server = createApiServer();
+    const session = await seedSession(OWNER);
+    await setPolicy(false);
+    failNextTagWrite = true;
+
+    try {
+      const first = await server.fetch(
+        request(PUBLISH, session, { method: "POST", body: {} }),
+      );
+      // Merged, versions not written: accepted, not failed, and not lost.
+      expect(first.status).toBe(202);
+      expect(mergeCalls).toBe(1);
+      expect(tagTargets).toEqual([]);
+
+      // Before jobs this was refused — the change was already merged — and the
+      // version was never written.
+      const again = await server.fetch(
+        request(PUBLISH, session, { method: "POST", body: {} }),
+      );
+      expect(again.status).toBe(200);
+      expect(mergeCalls).toBe(1);
+      expect(tagTargets).toEqual(["merge-sha"]);
     } finally {
       server.stop(true);
     }

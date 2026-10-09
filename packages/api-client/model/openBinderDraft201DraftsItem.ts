@@ -13,4 +13,6 @@ export type OpenBinderDraft201DraftsItem = {
   actCount: number;
   /** @nullable */
   lastAct: string | null;
+  /** @nullable */
+  changeNumber: number | null;
 };

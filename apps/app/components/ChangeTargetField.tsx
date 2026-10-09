@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 
-import { fetchBinderChanges } from "../api";
+import { binderChangesQuery } from "../data/queries";
 import { parseChangeTitle } from "../documentDisplay";
 
 /**
@@ -42,15 +43,14 @@ export function ChangeTargetField({
   onChange,
   disabled = false,
 }: ChangeTargetFieldProps) {
-  const [changes, setChanges] = useState<OpenChange[] | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchBinderChanges(org, binder, "open")
-      .then((payload) => {
-        if (cancelled) return;
-        setChanges(
-          payload.changes
+  // A binder whose changes cannot be read still files policies — it just
+  // cannot offer to put one in something. Failing the upload over this would
+  // be losing the act to a piece of small print.
+  const list = useQuery(binderChangesQuery(org, binder, "open")).data;
+  const changes: OpenChange[] | null = useMemo(
+    () =>
+      list
+        ? list.changes
             // A sign-off change is about who approves, not about a policy. The
             // server refuses one; not offering it is the kinder half.
             .filter((change) => !change.branchName.startsWith("sign-off/"))
@@ -59,19 +59,10 @@ export function ChangeTargetField({
               // The same name the changes list shows, so the option a person
               // picks here reads identically to the row they will land on.
               title: parseChangeTitle(change.body, change.submittedBy),
-            })),
-        );
-      })
-      // A binder whose changes cannot be read still files policies — it just
-      // cannot offer to put one in something. Failing the upload over this
-      // would be losing the act to a piece of small print.
-      .catch(() => {
-        if (!cancelled) setChanges([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [org, binder]);
+            }))
+        : null,
+    [list],
+  );
 
   if (changes === null || changes.length === 0) return null;
 

@@ -439,6 +439,13 @@ export const WorkspaceChangeDetailPayloadSchema = z.object({
   organization: z.string(),
   workspace: z.string(),
   change: PullRequestWithApprovalStateSchema,
+  /**
+   * What its author called the draft this change was proposed from, or null
+   * when the branch is not a named draft.
+   *
+   * The branch chip under the title reads it in place of "Bob's draft".
+   */
+  branchLabel: z.string().nullable(),
   /** Every document this change would version, in path order. */
   documents: z.array(WorkspaceChangedDocumentSchema),
   /**
@@ -462,6 +469,15 @@ export const WorkspaceChangeDetailPayloadSchema = z.object({
    * base branch's head exactly when the change is up to date.
    */
   isBehind: z.boolean(),
+  /**
+   * Behind, and not mergeable: documents both sides changed since the change
+   * began, which "Bring up to date" cannot merge on its own. The page offers
+   * the conflict resolver instead.
+   *
+   * Gitea's `mergeable`, which it recomputes after every push — so for a few
+   * seconds after the binder moves this can still read false.
+   */
+  hasConflicts: z.boolean(),
   /**
    * Whether publishing is held while a discussion thread is open.
    *
@@ -503,6 +519,22 @@ export const WorkspaceChangeDetailPayloadSchema = z.object({
     users: z.array(z.string()),
     teams: z.array(z.string()),
   }),
+  /**
+   * What the person reading may do with this change, by Gitea's own rules:
+   * publishing takes write access, and an approval counts only from somebody
+   * in the binder's approval teams. The page dims what they cannot use.
+   */
+  viewer: z.object({
+    canApprove: z.boolean(),
+    canPublish: z.boolean(),
+  }),
+  /** How a decided change ended; null while it is open. */
+  outcome: z.enum(["published", "declined", "withdrawn"]).nullable(),
+  /**
+   * Whether an approval stops counting once what the change proposes moves
+   * on: the binder's "A new version clears the approvals already collected".
+   */
+  clearsApprovalsOnEdit: z.boolean(),
 });
 export type WorkspaceChangeDetailPayload = z.infer<
   typeof WorkspaceChangeDetailPayloadSchema
@@ -781,9 +813,11 @@ export type SignOffDocumentView = z.infer<typeof SignOffDocumentSchema>;
  *
  * `enforced` is the field to read first. The rules are a file in the binder;
  * whether Gitea will actually hold a merge for them depends on
- * `block_on_codeowner_reviews`, which exists from 28.0.0 and does not exist on
- * the 1.27.3 production runs. Rules that are listed but not enforced are worse
- * than no rules at all, so the page has to be able to say which it is.
+ * `block_on_codeowner_reviews` being on for the binder's `main`. Provisioning
+ * turns it on, so this reads false only for a binder whose protection is
+ * missing or was changed outside Bindersnap. Rules that are listed but not
+ * enforced are worse than no rules at all, so the page has to be able to say
+ * which it is.
  */
 export const WorkspaceSignOffSchema = z.object({
   enforced: z.boolean(),
@@ -849,13 +883,20 @@ export type WorkspaceSignOff = z.infer<typeof WorkspaceSignOffSchema>;
 /**
  * Changing a binder's rules.
  *
- * Immediate, unlike a sign-off rule: this decides whether the binder waits for
- * every discussion to be resolved, which gates nobody out and changes no
- * permission. The change is still recorded — `settings_events` says who
- * relaxed the requirement and when.
+ * Immediate, unlike a sign-off rule, and any one of them on its own. The
+ * approval count and whether a new version clears approvals are Gitea branch
+ * protection; whether discussions must be resolved is ours. Every change is
+ * recorded — `settings_events` says who changed what, and when.
  */
 export const BinderRulesRequestSchema = z.object({
-  blockOnUnresolvedThreads: z.boolean(),
+  blockOnUnresolvedThreads: z.boolean().optional(),
+  requiredApprovals: z
+    .number()
+    .int()
+    .min(0)
+    .max(Number.MAX_SAFE_INTEGER)
+    .optional(),
+  dismissStaleApprovals: z.boolean().optional(),
 });
 export type BinderRulesRequest = z.infer<typeof BinderRulesRequestSchema>;
 
@@ -863,6 +904,9 @@ export const BinderRulesPayloadSchema = z.object({
   organization: z.string(),
   workspace: z.string(),
   blockOnUnresolvedThreads: z.boolean(),
+  /** Null when the rule could not be read back. */
+  requiredApprovals: z.number().nullable(),
+  dismissStaleApprovals: z.boolean().nullable(),
 });
 export type BinderRulesPayload = z.infer<typeof BinderRulesPayloadSchema>;
 
@@ -874,6 +918,8 @@ export const WorkspaceSettingsPayloadSchema = z.object({
   signOff: WorkspaceSignOffSchema,
   /** Whether this caller may change any of it. */
   canManage: z.boolean(),
+  /** Whether this caller may delete the binder: an owner of the organization. */
+  canDelete: z.boolean(),
 });
 export type WorkspaceSettingsPayload = z.infer<
   typeof WorkspaceSettingsPayloadSchema
@@ -1238,6 +1284,11 @@ export const OwnDraftSchema = z.object({
   /** How many acts are in it. What the picker's "3 changes" counts. */
   actCount: z.number(),
   lastAct: z.string().nullable(),
+  /**
+   * The change request open on it, once proposed. Still yours, still
+   * editable — a save into it is a save that change's reviewers see.
+   */
+  changeNumber: z.number().nullable(),
 });
 export type OwnDraft = z.infer<typeof OwnDraftSchema>;
 
@@ -1258,6 +1309,8 @@ export const BinderDraftPayloadSchema = z.object({
       named: z.boolean(),
       owner: z.string(),
       updatedAt: z.string().nullable(),
+      /** The change request open on it, once proposed. */
+      changeNumber: z.number().nullable(),
       acts: z.array(DraftActSchema),
     })
     .nullable(),
@@ -1282,3 +1335,69 @@ export const ProposedDraftPayloadSchema = z.object({
   changeNumber: z.number(),
 });
 export type ProposedDraftPayload = z.infer<typeof ProposedDraftPayloadSchema>;
+
+/** One side of a conflicting file: where it is, how big, and its bytes. */
+export const ConflictSideSchema = z.object({
+  path: z.string(),
+  size: z.number(),
+  /** Base64. Null past the size a page is sent inline; download it instead. */
+  content: z.string().nullable(),
+});
+
+export const ConflictingFileSchema = z.object({
+  /** The document's identity, or its path when it has none. */
+  key: z.string(),
+  /** Where the resolved file goes. */
+  path: z.string(),
+  /** How the page can show it: rendered, as text, or only as a choice. */
+  kind: z.enum(["editor", "text", "binary"]),
+  /**
+   * The answer when there is one without asking — a document moved on one
+   * side and edited on the other. Null: a person decides.
+   */
+  automatic: z.enum(["ours", "theirs"]).nullable(),
+  /** Where the change began. Null: the file did not exist then. */
+  base: ConflictSideSchema.nullable(),
+  /** The change's version. Null: the change removed it. */
+  ours: ConflictSideSchema.nullable(),
+  /** The version published since. Null: the binder removed it. */
+  theirs: ConflictSideSchema.nullable(),
+});
+export type ConflictingFilePayload = z.infer<typeof ConflictingFileSchema>;
+
+export const ChangeConflictsPayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  changeNumber: z.number(),
+  open: z.boolean(),
+  /** Nothing has been published since the change began. */
+  upToDate: z.boolean(),
+  /** The heads the files were read at; a resolution names them back. */
+  headSha: z.string(),
+  baseSha: z.string(),
+  /** Whether this caller may write to the change's branch. */
+  canResolve: z.boolean(),
+  files: z.array(ConflictingFileSchema),
+});
+export type ChangeConflictsPayload = z.infer<
+  typeof ChangeConflictsPayloadSchema
+>;
+
+export const ConflictResolutionSchema = z.object({
+  key: z.string(),
+  take: z.enum(["ours", "theirs", "none", "content"]),
+  /** With `content`: the resolved file, base64. */
+  base64Content: z.string().optional(),
+});
+
+export const ResolveConflictsBodySchema = z.object({
+  headSha: z.string(),
+  baseSha: z.string(),
+  resolutions: z.array(ConflictResolutionSchema),
+});
+
+/** Deleting a binder, confirmed by its name typed out. */
+export const DeleteBinderBodySchema = z.object({
+  confirm: z.string().min(1),
+});
+export type DeleteBinderBody = z.infer<typeof DeleteBinderBodySchema>;

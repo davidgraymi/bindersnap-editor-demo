@@ -1,7 +1,12 @@
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { BookCheck, Check, ChevronDown, GitBranch } from "lucide-react";
 
-import { fetchBinderChanges, fetchBinderDraft } from "../api";
+import {
+  binderChangeQuery,
+  binderChangesQuery,
+  binderDraftQuery,
+} from "../data/queries";
 import type {
   OwnDraft,
   WorkspaceChangeSummary,
@@ -57,40 +62,49 @@ export function BinderRefPicker({
   const names = usePeopleNames(org);
   const nameOf = (login: string) => nameFor(names, login);
   const [open, setOpen] = useState(false);
-  const [changes, setChanges] = useState<WorkspaceChangeSummary[] | null>(null);
-  const [drafts, setDrafts] = useState<OwnDraft[]>([]);
   const { boxRef, buttonRef, style } = useFloatingMenu(open, () =>
     setOpen(false),
   );
 
-  // Read when opened: most visits never open it, and the tree is what they
-  // came for.
+  // Read when first opened: most visits never open it, and the tree is what
+  // they came for. Kept once read, so closing and reopening asks nothing.
+  const [asked, setAsked] = useState(false);
   useEffect(() => {
-    if (!open || changes !== null) return;
-    let cancelled = false;
+    if (open) setAsked(true);
+  }, [open]);
+  const changes: WorkspaceChangeSummary[] =
+    useQuery({
+      ...binderChangesQuery(org, binder, "open"),
+      // Also on a branch, to name it — see `label`.
+      enabled: asked || current !== null,
+    }).data?.changes ?? [];
+  // No drafts to offer is an ordinary answer; failing to list them is not
+  // worth a message inside a menu about something else.
+  const drafts: OwnDraft[] =
+    useQuery({ ...binderDraftQuery(org, binder), enabled: asked }).data
+      ?.drafts ?? [];
 
-    fetchBinderChanges(org, binder, "open")
-      .then((payload) => {
-        if (!cancelled) setChanges(payload.changes);
-      })
-      .catch(() => {
-        if (!cancelled) setChanges([]);
-      });
-    fetchBinderDraft(org, binder)
-      .then((payload) => {
-        if (!cancelled) setDrafts(payload.drafts);
-      })
-      // No drafts to offer is an ordinary answer; failing to list them is not
-      // worth a message inside a menu about something else.
-      .catch(() => undefined);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [open, changes, org, binder]);
-
-  const label = describeRef(current, nameOf);
-  const branches = (changes ?? []).filter((change) => change.branchName);
+  /**
+   * What the author called the branch, when a change sits on it.
+   *
+   * A proposed draft keeps the name it was given, and the change's own page
+   * says "from Hand hygiene audit" rather than "from Carol's draft" — the
+   * branch's shape is not its name. The picker over the same branch has to say
+   * the same thing, or one branch reads as two. The branch's shape is still a
+   * fair name for it while that is being read, or when it cannot be.
+   */
+  const onCurrent =
+    current === null
+      ? undefined
+      : changes.find((change) => change.branchName === current);
+  const currentChange = useQuery({
+    ...binderChangeQuery(org, binder, onCurrent?.number ?? 0),
+    enabled: onCurrent !== undefined,
+  });
+  const label =
+    (onCurrent && currentChange.data?.branchLabel) ||
+    describeRef(current, nameOf);
+  const branches = changes.filter((change) => change.branchName);
 
   return (
     <div className="bs-draftpicker" ref={boxRef}>

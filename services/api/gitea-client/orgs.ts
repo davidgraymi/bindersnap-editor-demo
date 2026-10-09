@@ -2,6 +2,7 @@ import type { components } from "./spec/gitea";
 
 import {
   GiteaApiError,
+  readAllPages,
   toGiteaApiError,
   unwrap,
   type GiteaClient,
@@ -279,13 +280,13 @@ export async function listOrganizationTeams(
 ): Promise<GiteaTeam[]> {
   const { client, org } = params;
 
-  const teams = await unwrap(
-    client.GET("/orgs/{org}/teams", {
-      params: { path: { org }, query: { limit: 100 } },
-    }),
+  const teams = await readAllPages((query) =>
+    unwrap(
+      client.GET("/orgs/{org}/teams", { params: { path: { org }, query } }),
+    ),
   );
 
-  return (teams ?? []).map(normalizeTeam);
+  return teams.map(normalizeTeam);
 }
 
 export interface FindOrganizationTeamParams extends OrganizationParams {
@@ -601,6 +602,7 @@ export async function listRepoTeams(params: {
 }): Promise<GiteaTeam[]> {
   const { client, owner, repo } = params;
 
+  // Unpaged by design: Gitea returns every team granted onto a repository.
   const teams = await unwrap(
     client.GET("/repos/{owner}/{repo}/teams", {
       params: { path: { owner, repo } },
@@ -620,13 +622,17 @@ export async function listTeamMembers(
 ): Promise<OrgUserSummary[]> {
   const { client, teamId } = params;
 
-  const members = await unwrap(
-    client.GET("/teams/{id}/members", {
-      params: { path: { id: teamId }, query: { limit: 100 } },
-    }),
+  // Every page. `limit: 100` answered with 50, and `listBillableSeats` counts
+  // seats off this — a team of 51 was billed as 50.
+  const members = await readAllPages((query) =>
+    unwrap(
+      client.GET("/teams/{id}/members", {
+        params: { path: { id: teamId }, query },
+      }),
+    ),
   );
 
-  return (members ?? []).map(normalizeOrgUser);
+  return members.map(normalizeOrgUser);
 }
 
 /**
@@ -648,15 +654,15 @@ export async function listTeamRepos(params: {
 }): Promise<string[]> {
   const { client, teamId } = params;
 
-  const repos = await unwrap(
-    client.GET("/teams/{id}/repos", {
-      params: { path: { id: teamId }, query: { limit: 100 } },
-    }),
+  const repos = await readAllPages((query) =>
+    unwrap(
+      client.GET("/teams/{id}/repos", {
+        params: { path: { id: teamId }, query },
+      }),
+    ),
   );
 
-  return (repos ?? [])
-    .map((repo) => repo.name ?? "")
-    .filter((name) => name !== "");
+  return repos.map((repo) => repo.name ?? "").filter((name) => name !== "");
 }
 
 /**
@@ -703,13 +709,13 @@ export async function listOrganizationMembers(
 ): Promise<OrgUserSummary[]> {
   const { client, org } = params;
 
-  const members = await unwrap(
-    client.GET("/orgs/{org}/members", {
-      params: { path: { org }, query: { limit: 100 } },
-    }),
+  const members = await readAllPages((query) =>
+    unwrap(
+      client.GET("/orgs/{org}/members", { params: { path: { org }, query } }),
+    ),
   );
 
-  return (members ?? []).map(normalizeOrgUser);
+  return members.map(normalizeOrgUser);
 }
 
 /**

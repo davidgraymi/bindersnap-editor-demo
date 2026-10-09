@@ -1,13 +1,22 @@
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { FileArchive } from "lucide-react";
 
 import type { WorkspaceDocumentDetailPayload } from "../../../packages/api-schema/schemas/workspaces";
-import { downloadBinderDocument, fetchBinderDocument } from "../api";
+import {
+  downloadBinderDocument,
+  exportAuditPacket,
+  exportBinderDocument,
+} from "../api";
+import { binderDocumentQuery } from "../data/queries";
 import { followInApp } from "../appLink";
+import { AppIcon } from "./AppIcon";
 import {
   buildDocumentCrumbs,
   buildDocumentUrl,
   describeVersionState,
   downloadFileName,
+  isEditorDocumentFile,
   parseRequestedVersion,
   resolveDocumentRef,
 } from "../binderDocument";
@@ -48,6 +57,10 @@ interface BinderDocumentPageProps {
    * where the name it was clicked under exists. Null on the record.
    */
   draft?: string | null;
+  /** What that draft is called, to say so over the page. */
+  draftName?: string | null;
+  /** Your drafts in this binder, for the file panel's "What you are reading". */
+  drafts?: readonly { branch: string; name: string }[];
   /**
    * The change request this document is being read on, from `?change=`.
    *
@@ -83,10 +96,19 @@ interface BinderDocumentPageProps {
    * branch the user is viewing. We should do the same."*
    */
   onRefsChange?: (view: DocumentRefView | null) => void;
+  /**
+   * Open it in the editor, in your draft. Offered only for a document the
+   * editor wrote; absent where the page has nowhere to put an edit.
+   */
+  onEditDocument?: (slugPath: string) => void;
+  /** The draft is being opened for an edit. */
+  editing?: boolean;
   onOpenBinder: () => void;
   /** Open one of this document's open changes, on the binder. */
   onOpenChange: (changeNumber: number) => void;
 }
+
+const NO_DRAFTS: readonly { branch: string; name: string }[] = [];
 
 function triggerBrowserDownload(blob: Blob, fileName: string): void {
   const objectUrl = URL.createObjectURL(blob);
@@ -105,17 +127,29 @@ export function BinderDocumentPage({
   binder,
   documentPath,
   draft = null,
+  draftName = null,
+  drafts = NO_DRAFTS,
   change = null,
   documentRef = null,
   onRefsChange,
+  onEditDocument,
+  editing = false,
   onOpenBinder,
   onOpenChange,
 }: BinderDocumentPageProps) {
-  const [detail, setDetail] = useState<WorkspaceDocumentDetailPayload | null>(
-    null,
+  const read = useQuery(
+    binderDocumentQuery(org, binder, documentPath, {
+      draft,
+      change,
+      ref: documentRef,
+    }),
   );
-  const [error, setError] = useState<string | null>(null);
+  const detail: WorkspaceDocumentDetailPayload | null = read.data ?? null;
+  const error = read.error
+    ? read.error.message || "Unable to open this document."
+    : null;
   const [downloading, setDownloading] = useState(false);
+  const [exportingAudit, setExportingAudit] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [revising, setRevising] = useState(false);
   const [renaming, setRenaming] = useState(false);
@@ -133,36 +167,6 @@ export function BinderDocumentPage({
     window.addEventListener("popstate", handler);
     return () => window.removeEventListener("popstate", handler);
   }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    setDetail(null);
-    setError(null);
-
-    fetchBinderDocument(
-      org,
-      binder,
-      documentPath,
-      draft ?? undefined,
-      change ?? undefined,
-      documentRef ?? undefined,
-    )
-      .then((payload) => {
-        if (!cancelled) setDetail(payload);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(
-          err instanceof Error && err.message.trim() !== ""
-            ? err.message
-            : "Unable to open this document.",
-        );
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [org, binder, documentPath, draft, change, documentRef]);
 
   const viewing = useMemo(
     () =>
@@ -198,10 +202,12 @@ export function BinderDocumentPage({
         openChanges: detail.openChanges,
         ref: documentRef,
         change,
+        draft,
+        drafts,
       }),
       address: detail.document.path,
     });
-  }, [detail, documentRef, change, onRefsChange]);
+  }, [detail, documentRef, change, draft, drafts, onRefsChange]);
 
   const loadFile = useCallback(
     (gitRef: string) =>
@@ -225,6 +231,51 @@ export function BinderDocumentPage({
     try {
       const blob = loaded ?? (await loadFile(viewing.ref));
       triggerBrowserDownload(blob, downloadFileName(detail.document));
+    } catch (err) {
+      setDownloadError(
+        err instanceof Error && err.message.trim() !== ""
+          ? err.message
+          : "Unable to download this document.",
+      );
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handleAuditPacket = async () => {
+    setExportingAudit(true);
+    setDownloadError(null);
+    try {
+      const { blob, fileName } = await exportAuditPacket(
+        org,
+        binder,
+        fileAddress,
+      );
+      triggerBrowserDownload(blob, fileName);
+    } catch (err) {
+      setDownloadError(
+        err instanceof Error && err.message.trim() !== ""
+          ? err.message
+          : "Unable to export the audit packet.",
+      );
+    } finally {
+      setExportingAudit(false);
+    }
+  };
+
+  const handleExport = async (format: "pdf" | "docx") => {
+    if (!detail) return;
+    setDownloading(true);
+    setDownloadError(null);
+    try {
+      const { blob, fileName } = await exportBinderDocument(
+        org,
+        binder,
+        fileAddress,
+        format,
+        viewing.ref,
+      );
+      triggerBrowserDownload(blob, fileName);
     } catch (err) {
       setDownloadError(
         err instanceof Error && err.message.trim() !== ""
@@ -274,6 +325,16 @@ export function BinderDocumentPage({
   // the one in the change. Showing the "nothing published" panel over it would
   // hide the very thing somebody came to look at.
   const nothingToShow = latestVersion === null && state === "published";
+  // Written in the editor, read as it now stands — on the record or in your
+  // draft — and not on somebody's change request, which is theirs to edit.
+  const canRevise = !isReadOnly && isViewingRecord && state !== "proposed";
+  const canWrite =
+    onEditDocument !== undefined &&
+    isEditorDocumentFile(document.path) &&
+    isViewingRecord &&
+    state !== "proposed" &&
+    documentRef === null &&
+    change === null;
 
   return (
     <div className="binder-pane">
@@ -281,19 +342,31 @@ export function BinderDocumentPage({
         <div className="bs-pagehead-body">
           <h1 className="bs-title">{formatDocumentName(document.name)}</h1>
           <div className="bs-facts">
-            <span
-              className={`doc-version-pill ${
-                latestVersion === null
-                  ? "doc-version-pill--none"
-                  : isViewingRecord
-                    ? "doc-version-pill--current"
-                    : "doc-version-pill--past"
-              }`}
-            >
-              {isViewingRecord
-                ? describeVersionState(latestVersion, state)
-                : `Version ${viewing.version?.version} — an earlier version`}
-            </span>
+            {/* **In a draft, the page says so.** It said "Version 1 on
+                record" over the words the editor had just saved into a draft,
+                so a saved edit read as a lost one. */}
+            {draft !== null && change === null && documentRef === null ? (
+              <span
+                className="doc-version-pill doc-version-pill--draft"
+                title="Your words as saved in this draft. Nothing on record changes until it is proposed and approved."
+              >
+                In {draftName ?? "your draft"}
+              </span>
+            ) : (
+              <span
+                className={`doc-version-pill ${
+                  latestVersion === null
+                    ? "doc-version-pill--none"
+                    : isViewingRecord
+                      ? "doc-version-pill--current"
+                      : "doc-version-pill--past"
+                }`}
+              >
+                {isViewingRecord
+                  ? describeVersionState(latestVersion, state)
+                  : `Version ${viewing.version?.version} — an earlier version`}
+              </span>
+            )}
 
             {!isViewingRecord ? (
               <button
@@ -309,7 +382,14 @@ export function BinderDocumentPage({
                   the real filename is how a rename does not lose the version
                   history (ADR 0005); it is 26 characters of machinery and has
                   no business on a page somebody reads. */}
-            <span className="bs-filename">{downloadFileName(document)}</span>
+            {/* A policy written here has no file anybody chose a name for —
+                its stored JSON is the editor's business — so the header says
+                where it came from instead. */}
+            {isEditorDocumentFile(document.path) ? (
+              <span className="doc-header-source">Written in Bindersnap</span>
+            ) : (
+              <span className="bs-filename">{downloadFileName(document)}</span>
+            )}
           </div>
         </div>
 
@@ -318,24 +398,48 @@ export function BinderDocumentPage({
               right, or ending up with two policies instead of two versions.
               Only offered on the record: revising an earlier version would
               silently discard everything published since. */}
-        {!isReadOnly && isViewingRecord && state !== "proposed" ? (
+        {canRevise || canWrite ? (
           <div className="bs-pagehead-actions">
-            <button
-              type="button"
-              className="bs-btn bs-btn-secondary"
-              onClick={() => setRenaming(true)}
-            >
-              Rename or move
-            </button>
-            <button
-              type="button"
-              className="bs-btn bs-btn-primary"
-              onClick={() => setRevising(true)}
-            >
-              {/* **What it asks of you.** "New version" read as though it
-                  made one; what it does is take a file and propose it. */}
-              Upload new version
-            </button>
+            {canRevise ? (
+              <>
+                <button
+                  type="button"
+                  className="bs-btn bs-btn-secondary"
+                  onClick={() => setRenaming(true)}
+                >
+                  Rename or move
+                </button>
+                {/* Not for a policy written here: its next version is written
+                    in the editor, and there is no file to upload over it. */}
+                {canWrite ? null : (
+                  <button
+                    type="button"
+                    className="bs-btn bs-btn-primary"
+                    onClick={() => setRevising(true)}
+                  >
+                    {/* **What it asks of you.** "New version" read as though
+                        it made one; what it does is take a file and propose it. */}
+                    Upload new version
+                  </button>
+                )}
+              </>
+            ) : null}
+            {/* **A policy written here is edited here.** Uploading a new
+                version of one meant exporting nothing, because there was
+                nothing to export it to — the editor was the only program
+                that had ever opened it. Edit is the page's one filled button
+                when there is something to type into, and it is drawn while
+                the organization is read-only so the paywall can say why. */}
+            {canWrite ? (
+              <button
+                type="button"
+                className="bs-btn bs-btn-primary"
+                disabled={editing}
+                onClick={() => onEditDocument?.(document.slugPath)}
+              >
+                {editing ? "Opening your draft…" : "Edit"}
+              </button>
+            ) : null}
           </div>
         ) : null}
       </header>
@@ -404,7 +508,7 @@ export function BinderDocumentPage({
               </h2>
               <p className="doc-nothing-published-note">
                 {openChanges.length > 0
-                  ? "A version is waiting on a decision. Once it is approved and published it appears here as the official record."
+                  ? "A version is waiting to be published. Once it is, it appears here as the official record."
                   : "This document is filed here but nothing has been approved yet."}
               </p>
             </div>
@@ -415,6 +519,7 @@ export function BinderDocumentPage({
               fileName={downloadFileName(document)}
               downloading={downloading}
               onDownload={(loaded) => void handleDownload(loaded)}
+              onExport={(format) => void handleExport(format)}
             />
           )}
         </div>
@@ -542,6 +647,24 @@ export function BinderDocumentPage({
                 })}
               </ul>
             )}
+            {/* The answer to a surveyor, one click from the versions it
+                describes: every version, who approved it and when, and the
+                fingerprints that let them check it. */}
+            {versions.length > 0 ? (
+              <div className="bs-panel-foot">
+                <button
+                  type="button"
+                  className="bs-btn bs-btn--sm bs-btn-secondary"
+                  disabled={exportingAudit}
+                  onClick={() => void handleAuditPacket()}
+                >
+                  <AppIcon icon={FileArchive} size="sm" aria-hidden="true" />
+                  {exportingAudit
+                    ? "Preparing the audit packet…"
+                    : "Audit packet"}
+                </button>
+              </div>
+            ) : null}
           </section>
         </aside>
       </div>

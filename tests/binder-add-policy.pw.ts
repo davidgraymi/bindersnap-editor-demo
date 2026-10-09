@@ -19,6 +19,9 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { expect, test, type Page } from "@playwright/test";
 
@@ -28,6 +31,8 @@ import {
   openBinderSection,
   openTreeFolder,
 } from "./helpers";
+import { signUpAndConfirm } from "./mailpit";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 // Signup, an organization, two binders and several page loads on a stack that
 // may be cold. The suite default is nowhere near enough.
@@ -65,10 +70,15 @@ function authHeaders(sessionCookie: string): Record<string, string> {
 }
 
 async function signUp(credentials: Credentials): Promise<string> {
-  const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+  const response = await signUpAndConfirm(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
-    body: JSON.stringify(credentials),
+    body: JSON.stringify({
+      firstName: "Test",
+      // Unique, so a person is told apart by name the way the app shows them.
+      lastName: credentials.username,
+      ...credentials,
+    }),
   });
   expect(
     response.status,
@@ -84,7 +94,7 @@ async function createOrganization(
   const response = await fetch(`${API_BASE_URL}/api/app/organizations`, {
     method: "POST",
     headers: authHeaders(sessionCookie),
-    body: JSON.stringify({ name: displayName }),
+    body: JSON.stringify({ acceptedTerms: LEGAL_VERSION, name: displayName }),
   });
   const body = await response.text();
   expect(response.status, `create organization failed: ${body}`).toBe(201);
@@ -183,6 +193,95 @@ test("a member files a policy from the binder's own page", async ({ page }) => {
   });
 });
 
+test("a new change is sent to the binder's people as it is opened", async ({
+  page,
+}) => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(
+    sessionCookie,
+    `Riverbend ${randomUUID().slice(0, 6)}`,
+  );
+  const binder = await createBinder(sessionCookie, org, "Clinical Policies");
+
+  // A colleague in the organization, which the binder is open to.
+  const colleague = buildCredentials();
+  await signUp(colleague);
+  const added = await fetch(`${API_BASE_URL}/api/app/orgs/${org}/people`, {
+    method: "POST",
+    headers: authHeaders(sessionCookie),
+    body: JSON.stringify({ username: colleague.username, owner: false }),
+  });
+  expect(added.status, await added.text()).toBeLessThan(300);
+
+  await signInBrowser(page, sessionCookie);
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Add a document" }).click();
+
+  // In a binder this small everyone else is asked, and never the author.
+  const chooser = page.getByRole("group", { name: "Who should review it" });
+  await expect(
+    chooser.getByRole("checkbox", { name: colleague.username }),
+  ).toBeChecked({ timeout: 30_000 });
+  await expect(
+    chooser.getByRole("checkbox", { name: credentials.username }),
+  ).toHaveCount(0);
+
+  await fileAPolicy(page, "Fire Safety Plan", "");
+  await expect(page).toHaveURL(/\/-\/changes\/\d+/, { timeout: 30_000 });
+
+  // The change is on their desk, not waiting on nobody.
+  await expect(
+    page.locator(".rev-reviewer-list").getByText(colleague.username).first(),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(
+    page.getByText("Nobody has been asked to review this yet."),
+  ).toHaveCount(0);
+});
+
+test("a whole folder goes in as one change request, keeping its shape", async ({
+  page,
+}) => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(
+    sessionCookie,
+    `Riverbend ${randomUUID().slice(0, 6)}`,
+  );
+  const binder = await createBinder(sessionCookie, org, "Clinical Policies");
+
+  const root = mkdtempSync(join(tmpdir(), "bindersnap-bulk-"));
+  const manual = join(root, "Manual");
+  mkdirSync(join(manual, "Nursing"), { recursive: true });
+  const pdf = "%PDF-1.4\n%%EOF\n";
+  writeFileSync(join(manual, "Fire_safety_plan.pdf"), pdf);
+  writeFileSync(join(manual, "Nursing", "Hand hygiene.pdf"), pdf);
+  writeFileSync(join(manual, ".DS_Store"), "x");
+  writeFileSync(join(manual, "rota.xlsx"), "x");
+
+  await signInBrowser(page, sessionCookie);
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Add a document" }).click();
+  await page.locator("#add-policy-folder-input").setInputFiles(manual);
+
+  // What will go in, and what will not, before anything is sent.
+  await expect(
+    page.getByRole("heading", { name: "Add documents" }),
+  ).toBeVisible();
+  await expect(page.getByText("2 files left out")).toBeVisible();
+  await page.getByRole("button", { name: "Add 2 documents" }).click();
+
+  await expect(page).toHaveURL(/\/-\/changes\/\d+/, { timeout: 60_000 });
+  await expect(
+    page.getByRole("heading", { name: "Add 2 documents" }),
+  ).toBeVisible({ timeout: 30_000 });
+  const does = page.locator(".change-does");
+  await expect(does.getByText("manual/fire-safety-plan")).toBeVisible();
+  await expect(does.getByText("manual/nursing/hand-hygiene")).toBeVisible();
+  // Opened once, whole — not opened and then updated file by file.
+  await expect(page.getByText("updated the proposed version")).toHaveCount(0);
+});
+
 /**
  * Approve and publish the one open change in a binder, as somebody else.
  *
@@ -276,7 +375,7 @@ test("the library lists a policy across every binder it can reach", async ({
     await publishTheOpenChange(sessionCookie, org, binder);
   }
 
-  await page.goto(`${APP_BASE_URL}/documents`);
+  await page.goto(`${APP_BASE_URL}/-/documents`);
 
   // **Exact**, because this is the page's own title. Substring matching also
   // catches the rail heading of every binder whose name ends in "policies",
@@ -345,7 +444,7 @@ test("the binder's tabs still work once a document is open", async ({
   await openTreeFolder(page, "Nursing");
   // A link, the way a file in a code host's tree is: it opens in a tab.
   await page
-    .getByRole("link", { name: "Hand Hygiene Policy" })
+    .getByRole("link", { name: "Hand Hygiene Policy", exact: true })
     .click({ timeout: 30_000 });
 
   await expect(page.locator("h1.bs-title").last()).toHaveText(
