@@ -31,8 +31,6 @@ export interface SiteCollection {
   minWords: number;
   /** Shown above every page's body: what a reader must know before using it. */
   notice?: string;
-  /** Listed in the footer only, not the top navigation. */
-  footerOnly?: boolean;
 }
 
 /**
@@ -42,7 +40,7 @@ export interface SiteCollection {
 export const GUIDANCE_NOTICE =
   "General information about the federal rules, not legal advice. Your state, your accreditor and your own services may require more, so check the cited rules, and ask your own advisers, before you rely on it.";
 
-/** In the order the navigation and the footer list them. */
+/** In the order llms.txt and the sitemap list them. */
 export const SITE_COLLECTIONS: readonly SiteCollection[] = [
   {
     key: "pages",
@@ -94,7 +92,6 @@ export const SITE_COLLECTIONS: readonly SiteCollection[] = [
     label: "Compare",
     intro:
       "How Bindersnap compares with other ways to manage healthcare policies, from enterprise policy software to a shared drive, including where the others do more.",
-    footerOnly: true,
     minWords: 500,
   },
   {
@@ -103,7 +100,6 @@ export const SITE_COLLECTIONS: readonly SiteCollection[] = [
     label: "Glossary",
     intro:
       "Plain definitions of the survey, accreditation and policy management terms small healthcare providers meet, with the rule each comes from.",
-    footerOnly: true,
     minWords: 200,
     notice: GUIDANCE_NOTICE,
   },
