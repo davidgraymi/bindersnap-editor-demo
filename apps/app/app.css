@@ -4647,12 +4647,6 @@ a.bs-knot {
   .app-trail-step {
     display: none;
   }
-
-  /* The profile menu carries "Send feedback" on a phone; the bar has no room
-     for a fourth icon beside search. */
-  .app-topnav .app-topnav-feedback {
-    display: none;
-  }
 }
 
 /* ── PAGE PATH ───────────────────────────────────────────────
@@ -5494,41 +5488,58 @@ a.bs-knot {
   flex: 1;
 }
 
-.app-sidebar-user {
-  padding: var(--brand-space-3) var(--brand-space-4);
+.app-sidebar-foot {
+  padding: var(--brand-space-2) var(--brand-space-2);
   border-top: 1px solid var(--bs-rule);
   display: flex;
   align-items: center;
-  gap: var(--brand-space-3);
+  gap: var(--brand-space-2);
   font-size: var(--brand-text-ui-md);
 }
 
-.app-sidebar-user-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--bs-coral-dim);
+/* Send feedback: a quiet row in the foot, the height of a sidebar entry, and
+   never coral — it is an aside, not the page's action. */
+.app-sidebar-feedback {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: var(--brand-text-ui-xs);
-  font-weight: var(--brand-weight-semibold);
-  color: var(--brand-coral);
+  gap: var(--brand-space-2);
+  min-height: 32px;
+  padding: 0 var(--brand-space-2);
+  border: none;
+  border-radius: var(--brand-radius-md);
+  background: transparent;
+  color: var(--bs-text-secondary);
+  font: inherit;
+  font-weight: var(--brand-weight-medium);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    color var(--brand-transition-base),
+    background var(--brand-transition-base);
+}
+
+.app-sidebar-feedback:hover,
+.app-sidebar-feedback:focus-visible {
+  color: var(--bs-text-primary);
+  background: var(--bs-surface-2);
+}
+
+.app-sidebar-feedback:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 1px;
+}
+
+.app-sidebar-feedback-icon {
+  display: inline-flex;
   flex-shrink: 0;
 }
 
-.app-sidebar-user-name {
-  font-weight: var(--brand-weight-medium);
-  color: var(--bs-text-primary);
-  line-height: 1.2;
+.app-sidebar-feedback-label {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.app-sidebar-user-role {
-  font-size: var(--brand-text-ui-xs);
-  color: var(--bs-text-faint);
 }
 
 /* ── NEW MAIN AREA ───────────────────────────────────────────── */
@@ -9443,7 +9454,7 @@ a.bs-row:focus-visible {
 .app-sidebar--collapsed .app-sidebar-item-count,
 .app-sidebar--collapsed .app-sidebar-label,
 .app-sidebar--collapsed .app-sidebar-binder-name,
-.app-sidebar--collapsed .app-sidebar-user-label {
+.app-sidebar--collapsed .app-sidebar-feedback-label {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -9473,10 +9484,17 @@ a.bs-row:focus-visible {
   margin: 0;
 }
 
-.app-sidebar--collapsed .app-sidebar-user {
+.app-sidebar--collapsed .app-sidebar-foot {
   flex-direction: column;
-  gap: var(--brand-space-2);
-  padding: var(--brand-space-3) var(--brand-space-1);
+  gap: var(--brand-space-1);
+  padding: var(--brand-space-2) var(--brand-space-1);
+}
+
+.app-sidebar--collapsed .app-sidebar-feedback {
+  flex: 0 0 auto;
+  justify-content: center;
+  width: 32px;
+  padding: 0;
 }
 
 /* Acts on the panel rather than going anywhere, so it sits in the foot at the
@@ -11671,8 +11689,7 @@ html.bs-writing .app-main {
    initials show until it arrives, and if it never does. */
 .rev-avatar,
 .app-topnav-avatar,
-.app-profile-menu-avatar,
-.app-sidebar-user-avatar {
+.app-profile-menu-avatar {
   position: relative;
   overflow: hidden;
 }

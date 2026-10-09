@@ -263,24 +263,6 @@ export function AppShell({
             <CircleHelp size={16} strokeWidth={1.5} aria-hidden="true" />
           </a>
 
-          {/* Something broke, or could be better: say so from where it
-              happened, and the report carries where that was. */}
-          {canSendFeedback ? (
-            <button
-              type="button"
-              className="app-topnav-icon-btn app-topnav-feedback"
-              title="Send feedback"
-              aria-label="Send feedback"
-              onClick={() => setFeedbackOpen(true)}
-            >
-              <MessageSquarePlus
-                size={16}
-                strokeWidth={1.5}
-                aria-hidden="true"
-              />
-            </button>
-          ) : null}
-
           {/* What happened on the changes you are part of — Gitea's own
               notifications, with the reason each one is yours. */}
           <NotificationBell onOpen={navigateToHref} />
@@ -450,8 +432,8 @@ export function AppShell({
                     role="group"
                     aria-label="Session"
                   >
-                    {/* The top bar's feedback button is hidden on a phone;
-                        this is the way to it there. */}
+                    {/* On a phone the sidebar, and its Send feedback, is not
+                        drawn; this is the way to it there. */}
                     {canSendFeedback ? (
                       <button
                         type="button"
@@ -500,8 +482,7 @@ export function AppShell({
           route={route}
           org={sidebarOrg}
           binder={sidebarBinder}
-          currentUsername={currentUsername}
-          currentUserFullName={user?.fullName ?? ""}
+          onSendFeedback={canSendFeedback ? () => setFeedbackOpen(true) : null}
           onNavigate={onNavigate}
         />
 

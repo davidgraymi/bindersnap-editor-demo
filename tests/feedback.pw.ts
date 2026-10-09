@@ -55,7 +55,11 @@ test("a report carries who, where, and the API's request IDs", async ({
   const reports = await standInForCloudflare(page);
   await signInAsAlice(page);
 
-  await page.getByRole("button", { name: "Send feedback" }).click();
+  // In the sidebar's foot, beside the collapse toggle.
+  await page
+    .locator(".app-sidebar-foot")
+    .getByRole("button", { name: "Send feedback" })
+    .click();
   // Named by its heading, which becomes the thanks once it is sent.
   const dialog = page.getByRole("dialog");
   await expect(dialog).toHaveAccessibleName("Send feedback");
