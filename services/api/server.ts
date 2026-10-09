@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "crypto";
 
 import { config, type SessionCookieSameSite } from "./config";
-import { logger } from "./logger";
+import { logger, withLogContext } from "./logger";
 import { jobStore, withGroupLock, type JobRecord } from "./jobs/store";
 import { startJobRunner } from "./jobs/runner";
 import { queueEmail, startMail } from "./mail";
@@ -567,6 +567,9 @@ export function corsHeaders(req: Request): Headers {
     headers.set("Access-Control-Allow-Origin", origin);
     headers.set("Access-Control-Allow-Credentials", "true");
     headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    // Without this a cross-origin script cannot read the header, and the
+    // SPA's feedback trace would record every call without its ID.
+    headers.set("Access-Control-Expose-Headers", "X-Request-Id");
     // PATCH is here because a binder's rules are the first route to use it.
     // The browser sends a preflight for any method not on this list and the
     // request never leaves — which surfaces as "Failed to fetch" with nothing
@@ -14652,19 +14655,50 @@ export function createApiServer() {
   return Bun.serve({
     port: config.apiPort,
     idleTimeout: 30,
-    // Each request gets its own Gitea usage record, which every Gitea call
-    // made while serving it adds to. See `gitea-client/usage.ts`.
-    fetch: (req) =>
-      withGiteaUsage(createGiteaUsage(), () => handleRequest(req), {
-        // A read the browser has abandoned stops queueing Gitea calls nobody
-        // will see. A write is never cut off by a disconnect: stopping a
-        // publish between its merge and its tags is worse than finishing it.
-        signal:
-          req.method === "GET" || req.method === "HEAD"
-            ? req.signal
-            : undefined,
-      }),
+    fetch: (req) => {
+      // Every line logged while serving this request carries its ID, and the
+      // response says it too — see `withLogContext`.
+      const requestId = randomUUID();
+      return withLogContext({ requestId }, async () => {
+        // Each request gets its own Gitea usage record, which every Gitea
+        // call made while serving it adds to. See `gitea-client/usage.ts`.
+        const response = await withGiteaUsage(
+          createGiteaUsage(),
+          () => handleRequest(req),
+          {
+            // A read the browser has abandoned stops queueing Gitea calls
+            // nobody will see. A write is never cut off by a disconnect:
+            // stopping a publish between its merge and its tags is worse than
+            // finishing it.
+            signal:
+              req.method === "GET" || req.method === "HEAD"
+                ? req.signal
+                : undefined,
+          },
+        );
+        return withRequestId(response, requestId);
+      });
+    },
   });
+}
+
+/**
+ * Stamp `X-Request-Id` on a response. A response built from another `fetch`
+ * (a proxied download) has immutable headers, so that one is copied.
+ */
+function withRequestId(response: Response, requestId: string): Response {
+  try {
+    response.headers.set("X-Request-Id", requestId);
+    return response;
+  } catch {
+    const headers = new Headers(response.headers);
+    headers.set("X-Request-Id", requestId);
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  }
 }
 
 async function handleRequest(req: Request): Promise<Response> {
@@ -14680,6 +14714,8 @@ async function handleRequest(req: Request): Promise<Response> {
     path: pathname,
     origin,
     clientIp,
+    // Cloudflare's ID for the same request, so its logs and ours line up.
+    cfRay: req.headers.get("cf-ray") ?? undefined,
   });
 
   // Liveness probe: must respond before any auth/origin/HTTPS gate.
