@@ -14,10 +14,12 @@ name: Terraform drift check
 #   secret   STRIPE_API_KEY              a READ-only restricted live key: the
 #                                        billing module's permissions, each at
 #                                        Read (infra/billing/README.md)
+#   secret   STRIPE_TEST_API_KEY         the same, in test mode, for
+#                                        billing-test
 #   secret   TFVARS_<MODULE>             each module's terraform.tfvars, verbatim
 #                                        (ACCOUNT_BASELINE, COMPUTE, SECRETS, BACKUPS,
 #                                        EMAIL, MONITORING, CI, EDGE; billing
-#                                        has no tfvars)
+#                                        and billing-test have no tfvars)
 
 on:
   schedule:
@@ -44,7 +46,8 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.9.8"
+          # 1.11+: infra/billing's catalog sets a write-only argument.
+          terraform_version: "1.11.4"
           terraform_wrapper: false
 
       - name: Configure AWS credentials (read-only)
@@ -88,4 +91,5 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
+          STRIPE_TEST_API_KEY: ${{ secrets.STRIPE_TEST_API_KEY }}
         run: infra/apply-all.sh drift

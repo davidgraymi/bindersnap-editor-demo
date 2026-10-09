@@ -167,12 +167,14 @@ is `tests/stripe-webhook-caddy.pw.ts`.
 ### Stripe billing in CI
 
 The Playwright integration job in `.github/workflows/pr-verify.yml` enables
-Stripe billing coverage only when these GitHub Actions secrets are set:
+Stripe billing coverage only when the `STRIPE_TEST_SECRET_KEY` GitHub Actions
+secret is set and Stripe has a test price for it to buy. That price is
+Terraform's (`infra/billing-test`, the same catalog as production), and the
+job finds it by its lookup key, `bindersnap_writer_seat_monthly`, so no price
+ID is copied into a secret. Until `infra/billing-test` is applied, it falls
+back to the `STRIPE_TEST_PRICE_ID` secret.
 
-- `STRIPE_TEST_SECRET_KEY`
-- `STRIPE_TEST_PRICE_ID`
-
-When both are present, the workflow installs the Stripe CLI, `globalSetup`
+When both are found, the workflow installs the Stripe CLI, `globalSetup`
 starts `stripe listen`, and the runtime webhook signing secret is generated on
 the fly. Do not store `STRIPE_WEBHOOK_SECRET` in CI — the test runtime creates
 it for each run before `docker compose up`.

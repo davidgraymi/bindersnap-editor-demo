@@ -35,9 +35,9 @@ Browser                 API (services/api/)          Stripe
 
 ## Pre-requisites
 
-In the **live** account, Terraform owns the product, the $39/month per-unit writer-seat price, the webhook endpoint (with its pinned API version) and the customer portal: see [`infra/billing`](../infra/billing/README.md). `infra/apply-all.sh` stores the price's ID as `STRIPE_PRICE_ID`. Nothing below is done by hand in live mode.
+Terraform owns the product, the $39/month per-unit writer-seat price and the customer portal in both modes, and the webhook endpoint (with its pinned API version) in live mode: see [`infra/billing`](../infra/billing/README.md). `infra/apply-all.sh` stores the live price's ID as `STRIPE_PRICE_ID`; CI finds the test price by its lookup key, `bindersnap_writer_seat_monthly`. Nothing below is done by hand in either mode of the Bindersnap account.
 
-For local development and the test-mode sandbox, in the Stripe Dashboard / CLI:
+For local development against your own Stripe sandbox, in the Stripe Dashboard / CLI:
 
 1. Create a product + a recurring **per-unit** price of $39/month (one unit = one writer seat) → copy **Price ID** (`price_...`)
 2. Enable **Customer Portal**: Dashboard → Settings → Billing → Customer Portal

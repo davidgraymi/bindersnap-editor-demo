@@ -4,27 +4,28 @@ import { join } from "node:path";
 
 import { STRIPE_API_VERSION } from "./api-version";
 
-// infra/billing/main.tf describes the Stripe side of what this code expects.
-// Nothing at runtime checks that the two agree, so these tests do.
+// infra/billing describes the Stripe side of what this code expects, in live
+// mode (main.tf) and, through the same catalog, in the test mode CI buys from
+// (infra/billing-test). Nothing at runtime checks that they agree, so these
+// tests do.
 const repoRoot = join(import.meta.dir, "..", "..", "..");
-const billingTf = readFileSync(
-  join(repoRoot, "infra", "billing", "main.tf"),
-  "utf8",
-);
-const serverTs = readFileSync(
-  join(repoRoot, "services", "api", "server.ts"),
-  "utf8",
-);
+const read = (...path: string[]) =>
+  readFileSync(join(repoRoot, ...path), "utf8");
 
-function tfLocalString(name: string): string {
-  const match = billingTf.match(new RegExp(`\\b${name}\\s*=\\s*"([^"]*)"`));
-  if (!match) throw new Error(`local ${name} not found in main.tf`);
+const billingTf = read("infra", "billing", "main.tf");
+const catalogTf = read("infra", "billing", "catalog", "main.tf");
+const billingTestTf = read("infra", "billing-test", "main.tf");
+const serverTs = read("services", "api", "server.ts");
+
+function tfString(tf: string, name: string): string {
+  const match = tf.match(new RegExp(`\\b${name}\\s*=\\s*"([^"]*)"`));
+  if (!match) throw new Error(`${name} not found`);
   return match[1]!;
 }
 
-function tfLocalNumber(name: string): number {
-  const match = billingTf.match(new RegExp(`\\b${name}\\s*=\\s*(\\d+)`));
-  if (!match) throw new Error(`local ${name} not found in main.tf`);
+function tfNumber(tf: string, name: string): number {
+  const match = tf.match(new RegExp(`\\b${name}\\s*=\\s*(\\d+)`));
+  if (!match) throw new Error(`${name} not found`);
   return Number(match[1]);
 }
 
@@ -46,7 +47,7 @@ function handledWebhookEvents(): string[] {
 
 describe("infra/billing", () => {
   it("pins the webhook endpoint to the API version the code reads", () => {
-    expect(tfLocalString("stripe_api_version")).toBe(STRIPE_API_VERSION);
+    expect(tfString(billingTf, "stripe_api_version")).toBe(STRIPE_API_VERSION);
   });
 
   it("subscribes the webhook to exactly the events the API handles", () => {
@@ -56,15 +57,26 @@ describe("infra/billing", () => {
   });
 
   it("charges per writer seat what the pricing page says, in dollars", () => {
-    const pricing = readFileSync(
-      join(repoRoot, "apps", "site", "content", "pages", "pricing.md"),
-      "utf8",
-    );
+    const pricing = read("apps", "site", "content", "pages", "pricing.md");
     const price = pricing.match(/^price:\s*(\d+)\s*$/m);
     expect(price).not.toBeNull();
     expect(Number(price![1]) * 100).toBe(
-      tfLocalNumber("seat_unit_amount_cents"),
+      tfNumber(catalogTf, "seat_unit_amount_cents"),
     );
-    expect(tfLocalString("seat_currency")).toBe("usd");
+    expect(tfString(catalogTf, "seat_currency")).toBe("usd");
+  });
+
+  it("sells the same catalog in live and test mode", () => {
+    const catalogSource = /module "catalog" \{\s*source\s*=\s*"([^"]+)"/;
+    expect(billingTf.match(catalogSource)?.[1]).toBe("./catalog");
+    expect(billingTestTf.match(catalogSource)?.[1]).toBe("../billing/catalog");
+    expect(billingTf).toMatch(/livemode\s*=\s*true/);
+    expect(billingTestTf).toMatch(/livemode\s*=\s*false/);
+  });
+
+  it("is where CI looks for the test price", () => {
+    const workflow = read(".github", "workflows", "pr-verify.yml");
+    const lookupKey = tfString(catalogTf, "seat_lookup_key");
+    expect(workflow).toContain(`lookup_keys[]=${lookupKey}`);
   });
 });
