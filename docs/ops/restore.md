@@ -58,12 +58,25 @@ restore fails part-way, move it back.
 
 1. Pick the newest good snapshot:
    `aws ec2 describe-snapshots --owner-ids self --filters Name=tag:Project,Values=bindersnap --query 'sort_by(Snapshots,&StartTime)[-5:]'`
-   (in us-west-2 too, if us-east-1 is the problem).
-2. Create a volume from it in the instance's availability zone, and swap it in
-   for the data volume in `infra/compute` (`terraform state rm
-aws_ebs_volume.data`, then `terraform import aws_ebs_volume.data <new id>`).
-   Attach it **before** the first deploy.
-3. Deploy. Do not restore Litestream's `gitea.db` on top (the rule above).
+   If us-east-1 is the problem, copy one back from us-west-2 first
+   (`aws ec2 copy-snapshot --source-region us-west-2 ...`).
+2. If the host is still running, stop the stack, so nothing writes to the old
+   volume while it is detached.
+3. In `infra/compute`, set `data_volume_snapshot_id = "snap-..."` in
+   `terraform.tfvars`, forget the old volume, and apply:
+
+   ```bash
+   terraform state rm aws_ebs_volume.data
+   terraform apply -var-file=terraform.tfvars
+   ```
+
+   Terraform builds a new volume from the snapshot and attaches it in place
+   of the old one. The old volume is left alone, detached; delete it by hand
+   once the restore is checked.
+
+4. Deploy. Do not restore Litestream's `gitea.db` on top (the rule above).
+5. Set `data_volume_snapshot_id` back to null. Nothing changes: the volume
+   ignores it after creation.
 
 ## Restore 3: AWS is unavailable or compromised (restic)
 

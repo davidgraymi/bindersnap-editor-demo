@@ -309,6 +309,13 @@ if _data_device:
         ensure_newline=True,
     )
 
+    # Growing the EBS volume in Terraform leaves the filesystem its old size.
+    # xfs_growfs fills the device and is a no-op when it already does.
+    server.shell(
+        name="Grow the data filesystem to the volume's size",
+        commands=[f"xfs_growfs {DATA_MOUNT} >/dev/null"],
+    )
+
     files.directory(
         name="Ensure Docker data dir on EBS",
         path=f"{DATA_MOUNT}/docker",

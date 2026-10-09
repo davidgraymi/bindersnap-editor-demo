@@ -51,9 +51,9 @@ variable "environment" {
 }
 
 variable "instance_type" {
-  description = "EC2 instance type (ARM recommended: t4g.small for MVP, t4g.medium for growth). Root volume is 30 GB (AL2023 ARM64 snapshot minimum)."
+  description = "EC2 instance type. t4g.medium (4 GiB): t4g.small's 2 GiB left too little headroom for Gitea, the API, Caddy, Litestream and cloudflared together. Root volume is 30 GB (AL2023 ARM64 snapshot minimum)."
   type        = string
-  default     = "t4g.small"
+  default     = "t4g.medium"
 }
 
 variable "ami_id" {
@@ -75,9 +75,19 @@ variable "subnet_id" {
 }
 
 variable "data_volume_size_gb" {
-  description = "EBS gp3 volume size in GB for Gitea data + API sessions"
+  description = "EBS gp3 volume size in GB for Gitea data + API sessions. Growing it is in place; the deploy grows the filesystem to match."
   type        = number
-  default     = 20
+  default     = 50
+}
+
+variable "data_volume_snapshot_id" {
+  description = <<-EOT
+    Snapshot to build the data volume from, for a restore (docs/ops/restore.md).
+    Only read when the volume is created: set it, `terraform state rm
+    aws_ebs_volume.data`, then apply. Leave null otherwise.
+  EOT
+  type        = string
+  default     = null
 }
 
 variable "data_volume_device_name" {
@@ -218,6 +228,7 @@ resource "aws_ebs_volume" "data" {
   size              = var.data_volume_size_gb
   type              = "gp3"
   encrypted         = true
+  snapshot_id       = var.data_volume_snapshot_id
 
   tags = merge(local.common_tags, {
     Name   = "${var.project}-data"
@@ -226,6 +237,9 @@ resource "aws_ebs_volume" "data" {
 
   lifecycle {
     prevent_destroy = true
+    # A restored volume keeps the snapshot it came from; clearing the variable
+    # afterwards must not try to replace it.
+    ignore_changes = [snapshot_id]
   }
 }
 
