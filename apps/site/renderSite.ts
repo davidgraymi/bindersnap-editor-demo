@@ -18,7 +18,10 @@ import {
  * the organization, a breadcrumb trail, the article, and its questions and
  * answers when it has a "Frequently asked questions" section.
  *
- * The Google tag never goes here or anywhere the app runs; see issue #718.
+ * The Google tag goes on these pages only — never on the landing page, help,
+ * legal, or anywhere the app runs, where signed-in customers read — and only
+ * when the build names a measurement ID. Issue #718 moves the app to its own
+ * subdomain, after which the landing page can carry it too.
  */
 
 export const SITE = "https://bindersnap.com";
@@ -56,6 +59,40 @@ export const ORGANIZATION_LD = {
   logo: `${SITE}/icon-512.png`,
 };
 
+/** A GA4 measurement ID, as Google issues them. Anything else is ignored. */
+const MEASUREMENT_ID = /^G-[A-Z0-9]{4,20}$/;
+
+/**
+ * The Google tag, configured the way the Privacy Policy promises: no Google
+ * signals and no ad personalization, and not loaded at all when the browser
+ * sends Global Privacy Control. `id` comes from `BINDERSNAP_GA_MEASUREMENT_ID`
+ * at build time; without one there is no tag.
+ *
+ * Three settings in the Google Analytics admin keep the rest of the policy
+ * true, and nothing here can check them:
+ * - Data retention set to 14 months (the policy says so; GA4's default is 2).
+ * - Every data-sharing setting off ("Google products & services" first), and
+ *   Google's data processing terms accepted, so Google acts as our service
+ *   provider and the policy's "we do not share" holds under California law.
+ * - Google signals and ad personalization off for the property, as the tag
+ *   asks.
+ */
+export function analyticsTag(id: string | undefined): string {
+  if (!id || !MEASUREMENT_ID.test(id)) return "";
+  return `<script>
+(function(){
+  if (navigator.globalPrivacyControl) return;
+  var s=document.createElement("script");s.async=true;
+  s.src="https://www.googletagmanager.com/gtag/js?id=${id}";
+  document.head.appendChild(s);
+  window.dataLayer=window.dataLayer||[];
+  window.gtag=function(){dataLayer.push(arguments);};
+  gtag("js",new Date());
+  gtag("config","${id}",{allow_google_signals:false,allow_ad_personalization_signals:false});
+})();
+</script>`;
+}
+
 export function pageTitle(title: string): string {
   return /bindersnap/i.test(title) ? title : `${title} | Bindersnap`;
 }
@@ -89,6 +126,7 @@ function shell(params: {
   structuredData: object[];
   pages: readonly SitePage[];
   body: string;
+  measurementId?: string;
 }): string {
   const sections = navCollections(params.pages);
   const pricing = rootPage(params.pages, "pricing");
@@ -214,6 +252,7 @@ ${
 <link rel="stylesheet" href="${SITE_CSS_PATH}">
 <script>${THEME_SCRIPT}</script>
 ${jsonLd({ "@context": "https://schema.org", "@graph": graph })}
+${analyticsTag(params.measurementId ?? process.env.BINDERSNAP_GA_MEASUREMENT_ID)}
 </head>
 <body>
 <a class="help-skip" href="#content">Skip to the page</a>
