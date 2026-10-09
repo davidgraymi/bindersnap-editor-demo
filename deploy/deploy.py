@@ -121,6 +121,15 @@ CONFIG_FILES = [
 HELPER_SCRIPTS = [
     "bindersnap-bootstrap-gitea",
     "bindersnap-stack-up",
+    "bindersnap-backup",
+    "bindersnap-health-metrics",
+]
+
+# systemd timers that run helper scripts on a schedule: the hourly restic
+# backup to R2 and the five-minute Litestream health metric.
+SYSTEMD_TIMERS = [
+    "bindersnap-backup",
+    "bindersnap-health-metrics",
 ]
 
 
@@ -377,6 +386,14 @@ files.put(
     mode="0755",
 )
 
+# The Litestream restore runs on the host (docs/ops/restore.md).
+files.put(
+    name="Upload Litestream restore script",
+    src=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts", "restore.sh"),
+    dest=f"{APP_DIR}/scripts/restore.sh",
+    mode="0755",
+)
+
 # ---------- 6. Render .env.prod from SSM (control plane) ----------
 
 # Read the SSM tree here on the control plane and upload the rendered env file.
@@ -493,7 +510,34 @@ server.shell(
     commands=[f"{BIN_DIR}/bindersnap-stack-up"],
 )
 
-# ---------- 11. CloudWatch agent (disk + memory metrics) ----------
+# ---------- 11. Scheduled jobs (backup + health metrics) ----------
+
+_units_changed = []
+for _timer in SYSTEMD_TIMERS:
+    for _suffix in ("service", "timer"):
+        _units_changed.append(
+            files.put(
+                name=f"Upload {_timer}.{_suffix}",
+                src=os.path.join(_FILES, "systemd", f"{_timer}.{_suffix}"),
+                dest=f"/etc/systemd/system/{_timer}.{_suffix}",
+                mode="0644",
+            )
+        )
+
+systemd.daemon_reload(
+    name="Reload systemd after timer changes",
+    _if=lambda: any(op.did_change() for op in _units_changed),
+)
+
+for _timer in SYSTEMD_TIMERS:
+    systemd.service(
+        name=f"Enable + start {_timer}.timer",
+        service=f"{_timer}.timer",
+        running=True,
+        enabled=True,
+    )
+
+# ---------- 12. CloudWatch agent (disk + memory metrics) ----------
 
 # The monitoring module's disk/memory alarms read the Bindersnap namespace this
 # agent publishes. Host configuration is owned here, not by Terraform user-data.

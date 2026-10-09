@@ -6,6 +6,11 @@
 # Litestream expands ${VAR} references at runtime, so docker-compose.prod.yml
 # must pass LITESTREAM_S3_BUCKET and AWS_REGION into this container.
 
+# retention: keep 7 days of point-in-time restore (Litestream's default is
+# 24 h). Older generations otherwise survive only as S3 noncurrent versions.
+# snapshot-interval: a fresh snapshot daily, so a restore replays at most a
+# day of WAL rather than a week.
+
 dbs:
   - path: /data/gitea/gitea.db
     replicas:
@@ -13,6 +18,8 @@ dbs:
         bucket: ${LITESTREAM_S3_BUCKET}
         path: gitea
         region: ${AWS_REGION}
+        retention: 168h
+        snapshot-interval: 24h
 
   - path: /data/api/sessions.db
     replicas:
@@ -20,3 +27,5 @@ dbs:
         bucket: ${LITESTREAM_S3_BUCKET}
         path: api
         region: ${AWS_REGION}
+        retention: 168h
+        snapshot-interval: 24h

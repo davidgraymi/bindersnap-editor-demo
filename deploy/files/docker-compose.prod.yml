@@ -201,7 +201,9 @@ services:
       start_period: 20s
 
   litestream:
-    image: litestream/litestream:0.3
+    # Pinned: a floating tag let a backup-agent upgrade ride along with any
+    # deploy. scripts/restore.sh restores with the same image; bump both.
+    image: litestream/litestream:0.3.14@sha256:c5a1e1b01916b3a110f6600820ef176d048d9b9c2411ef0a680de0caa68934a5
     container_name: bindersnap-litestream-prod
     restart: unless-stopped
     depends_on:

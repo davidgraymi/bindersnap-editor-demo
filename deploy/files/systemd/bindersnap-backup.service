@@ -1,0 +1,13 @@
+[Unit]
+Description=Bindersnap restic backup to Cloudflare R2
+# The volumes live under /data; without it there is nothing to back up, and
+# docker volume inspect would point at an empty root-disk directory.
+RequiresMountsFor=/data
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/bindersnap-backup
+Nice=10
+IOSchedulingClass=idle
