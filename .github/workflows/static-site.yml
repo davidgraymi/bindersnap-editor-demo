@@ -55,7 +55,10 @@ jobs:
           # The Google tag on the public site's pages only (apps/site), never
           # the app. Unset, there is no tag. See issue #718.
           BINDERSNAP_GA_MEASUREMENT_ID: ${{ vars.GA_MEASUREMENT_ID }}
+          # Which build a feedback report came from (apps/app/feedbackTrace.ts).
+          BUN_PUBLIC_APP_COMMIT: ${{ github.sha }}
         run: |
+          export BUN_PUBLIC_APP_VERSION="$(jq -r .version package.json)"
           rm -rf dist
           bun build ./apps/app/index.html \
             --outdir=dist \

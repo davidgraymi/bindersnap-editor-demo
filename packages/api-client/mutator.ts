@@ -18,15 +18,59 @@ export class ApiRequestError extends Error {
   }
 }
 
+/** One finished call to the API, as the feedback trace records it. */
+export interface ApiCallRecord {
+  method: string;
+  path: string;
+  /** 0 when there was no answer: offline, blocked, aborted. */
+  status: number;
+  durationMs: number;
+  /** The API's `X-Request-Id`, which every log line for the call carries. */
+  requestId: string | null;
+}
+
+let observeApiCall: ((call: ApiCallRecord) => void) | null = null;
+
+/**
+ * Hear about every call made through here. The app's feedback trace is the
+ * only listener (`apps/app/feedbackTrace.ts`); a script has none.
+ */
+export function setApiCallObserver(
+  observer: ((call: ApiCallRecord) => void) | null,
+): void {
+  observeApiCall = observer;
+}
+
 export const customFetch = async <T>(
   url: string,
   options: RequestInit,
 ): Promise<T> => {
   const fullUrl = `${apiBaseUrl()}${url}`;
+  const method = (options.method ?? "GET").toUpperCase();
+  const startedAt = performance.now();
 
-  const response = await fetch(fullUrl, {
-    ...options,
-    credentials: "include",
+  let response: Response;
+  try {
+    response = await fetch(fullUrl, {
+      ...options,
+      credentials: "include",
+    });
+  } catch (error) {
+    observeApiCall?.({
+      method,
+      path: url,
+      status: 0,
+      durationMs: performance.now() - startedAt,
+      requestId: null,
+    });
+    throw error;
+  }
+  observeApiCall?.({
+    method,
+    path: url,
+    status: response.status,
+    durationMs: performance.now() - startedAt,
+    requestId: response.headers.get("X-Request-Id"),
   });
 
   if (
