@@ -11,10 +11,11 @@ import type {
   InvitationRow,
 } from "../../../packages/api-schema/schemas/invitations";
 
+// Each says what it costs, since a writer's seat is billed once they accept.
 const LEVELS: ReadonlyArray<{ value: BinderLevel; label: string }> = [
-  { value: "reviewer", label: "Reviewer" },
-  { value: "editor", label: "Editor" },
-  { value: "admin", label: "Admin" },
+  { value: "reviewer", label: "Reviewer (free)" },
+  { value: "editor", label: "Editor (uses a seat)" },
+  { value: "admin", label: "Admin (uses a seat)" },
 ];
 
 function sentAgo(createdAt: number, now = Date.now()): string {

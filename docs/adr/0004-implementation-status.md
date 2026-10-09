@@ -1338,3 +1338,8 @@ reader of the series has open.
 3. **Do org owners cost a billable seat — yes.** As `listBillableSeats`
    already counts them. A pricing decision rather than a naming accident, so
    the counting stays as it is.
+4. **The price — $39 a month per writer, flat** (2026-10-08). No base fee and
+   no tiers, rather than the base-plus-overage shape suggested above. Stripe
+   now bills it: the subscription's quantity is the seat count, set at
+   checkout and kept in step by `services/api/stripe/seats.ts` (see
+   `docs/payments-plan.md`, "Seat billing").

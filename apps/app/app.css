@@ -8578,6 +8578,17 @@ a.bs-row:focus-visible {
   white-space: nowrap;
 }
 
+.plan-offer-pricing {
+  text-align: right;
+}
+
+.plan-offer-total {
+  margin: 2px 0 0;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+  font-variant-numeric: tabular-nums;
+}
+
 .plan-offer-list {
   display: grid;
   gap: var(--brand-space-1-5);

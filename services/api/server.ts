@@ -167,6 +167,7 @@ import {
 import {
   accessCostsSeat,
   addTeamMember,
+  countBillableSeats,
   createOrganizationGroup,
   createWorkspaceRoleTeam,
   ensureStaffTeam,
@@ -203,6 +204,12 @@ import {
   isStripeEventForThisRun,
   stripeRunTagMetadata,
 } from "./stripe/run-tag";
+import {
+  createSeatSyncScheduler,
+  seatAffectingOrganization,
+  seatQuantity,
+  syncSubscriptionSeats,
+} from "./stripe/seats";
 import {
   createGiteaBasicAuthClient,
   createGiteaClient,
@@ -5529,6 +5536,9 @@ async function handleStripeWebhook(
           giteaOrgId,
           status: sub.status,
         });
+        // Seats may have changed between starting checkout and paying.
+        const activated = await organizationStore.get(giteaOrgId);
+        if (activated) seatSync.schedule(activated.name);
 
         // Stamp the org id onto the Stripe Customer so later subscription
         // webhooks, which carry only a customer, can reconcile from it.
@@ -9164,6 +9174,7 @@ async function completeInvitation(invitation: Invitation): Promise<boolean> {
           });
         }
         invitationStore().markJoined(invitation.id);
+        seatSync.schedule(invitation.orgName);
         logger.info("Invited person joined the organization", {
           organization: invitation.orgName,
           subject: username,
@@ -13965,13 +13976,21 @@ async function handleBillingStatus(
   );
   if (organization instanceof Response) return organization;
 
-  const [priceInfo, accessState, canManageBilling, subscription] =
+  const [priceInfo, accessState, canManageBilling, subscription, seats] =
     await Promise.all([
       fetchStripePriceInfo(),
       resolveSubscriptionAccessState(username, organization),
       canManageOrganizationBilling(auth, organization),
       organization
         ? subscriptionStore.getByOrganization(organization.id)
+        : Promise.resolve(null),
+      // What the organization pays for: its writers, counted once. Null
+      // when Gitea will not say, so the page shows the unit price alone.
+      organization
+        ? countBillableSeats({
+            client: createSessionGiteaClient(auth.session),
+            org: organization.name,
+          }).catch(() => null)
         : Promise.resolve(null),
     ]);
   return json(
@@ -13988,6 +14007,7 @@ async function handleBillingStatus(
       accessSource: accessState.source,
       override: serializeSubscriptionOverride(accessState.override),
       plan: priceInfo,
+      seats,
       canManageBilling,
       // A Stripe customer exists, so the portal has something to open — true
       // for a lapsed or cancelled subscription too, which is exactly when a
@@ -13996,6 +14016,74 @@ async function handleBillingStatus(
     },
     baseHeaders,
   );
+}
+
+/**
+ * Make the organization's Stripe subscription bill for the seats it has now.
+ * A no-op without billing configured or a live subscription, and cheap when
+ * the count has not moved: one Stripe read, no write. See `stripe/seats.ts`.
+ */
+async function syncOrganizationSeats(orgName: string): Promise<void> {
+  if (!config.stripeSecretKey || !config.stripePriceId) return;
+  const client = createPrivilegedGiteaClient();
+  if (!client) return;
+  // Gitea, not the stored name, says which organization this is: the stored
+  // name is display-only and goes stale on a rename.
+  const organization = await findOrganization({ client, org: orgName });
+  if (!organization) return;
+  const subscription = await subscriptionStore.getByOrganization(
+    organization.id,
+  );
+  if (!subscription?.stripeSubscriptionId) return;
+  if (subscription.status === "canceled") return;
+
+  const seats = await countBillableSeats({ client, org: orgName });
+  const result = await syncSubscriptionSeats(getStripeClient(), {
+    subscriptionId: subscription.stripeSubscriptionId,
+    priceId: config.stripePriceId,
+    seats,
+  });
+  if (result.changed) {
+    logger.info("Subscription seats updated", {
+      organization: orgName,
+      from: result.from,
+      to: result.to,
+    });
+  } else if (result.reason === "no_item") {
+    // Most often a subscription still on the old flat price, which waits to
+    // be moved to the seat price by hand after 30 days' notice.
+    logger.warn("Subscription has no seat line to update", {
+      organization: orgName,
+      subscriptionId: subscription.stripeSubscriptionId,
+    });
+  }
+}
+
+/**
+ * Seat syncs, coalesced per organization: a request that changes who can
+ * write schedules one, and it runs once the burst has settled.
+ */
+const seatSync = createSeatSyncScheduler({
+  delayMs: 3_000,
+  run: syncOrganizationSeats,
+  onError: (organization, error) =>
+    logger.error("Seat sync failed", {
+      organization,
+      error: error instanceof Error ? error.message : String(error),
+    }),
+});
+
+/** Sync every organization's seats — the backstop for changes no route saw. */
+async function syncAllOrganizationSeats(): Promise<void> {
+  if (!config.stripeSecretKey || !config.stripePriceId) return;
+  for (const organization of await organizationStore.list()) {
+    await syncOrganizationSeats(organization.name).catch((error) =>
+      logger.error("Seat sync failed", {
+        organization: organization.name,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
+  }
 }
 
 async function handleBillingCheckout(
@@ -14052,10 +14140,24 @@ async function handleBillingCheckout(
     organization.id,
   );
   const userEmail = await fetchSessionUserEmail(auth.session);
+  // One line, one unit per seat. If Gitea will not say, check out for one:
+  // the sync after checkout completes corrects it before the first renewal.
+  const seats = await countBillableSeats({
+    client: createSessionGiteaClient(auth.session),
+    org: organization.name,
+  }).catch((err) => {
+    logger.warn("Could not count seats for checkout", {
+      organization: organization.name,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return 1;
+  });
 
   const params: Stripe.Checkout.SessionCreateParams = {
     mode: "subscription",
-    line_items: [{ price: config.stripePriceId, quantity: 1 }],
+    line_items: [
+      { price: config.stripePriceId, quantity: seatQuantity(seats) },
+    ],
     client_reference_id: String(organization.id),
     // The org id is the key; the username records who set it up, which support
     // wants and billing must never depend on.
@@ -15593,6 +15695,12 @@ async function handleRequest(req: Request): Promise<Response> {
     }
   }
 
+  // A change to who can write in an organization changes what it pays for.
+  if (response.status < 400) {
+    const seatOrganization = seatAffectingOrganization(method, pathname);
+    if (seatOrganization) seatSync.schedule(seatOrganization);
+  }
+
   const durationMs = Date.now() - startMs;
   const status = response.status;
   const usage = currentGiteaUsage();
@@ -15661,6 +15769,16 @@ if (import.meta.main) {
     );
   setTimeout(reconcile, 60_000);
   setInterval(reconcile, 6 * 60 * 60_000);
+  // Bill every subscription for the seats its organization has now, for the
+  // changes no route saw. Offset from the reconciler so the two don't stack.
+  const syncSeats = () =>
+    void syncAllOrganizationSeats().catch((err) =>
+      logger.error("Seat sweep failed", {
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+  setTimeout(syncSeats, 2 * 60_000);
+  setInterval(syncSeats, 6 * 60 * 60_000);
   logger.info("Bindersnap API listening", {
     url: `http://localhost:${server.port}`,
     port: server.port,
