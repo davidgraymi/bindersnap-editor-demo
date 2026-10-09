@@ -94,6 +94,11 @@ jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-24.04
+    # The deploy role trusts only jobs in this environment (infra/ci/oidc.tf),
+    # and the environment admits only `main`.
+    environment:
+      name: production
+      url: https://api.bindersnap.com
     needs:
       - test
       - build

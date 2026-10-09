@@ -76,9 +76,19 @@ Optional variables:
 - `BINDERSNAP_DEPLOY_TARGET_TAG_KEY`: defaults to `Project`
 - `BINDERSNAP_DEPLOY_TARGET_TAG_VALUE`: defaults to `bindersnap`
 
-The IAM trust policy allows two OIDC subject patterns: `refs/heads/main` (for pushes and manual dispatches from main) and `refs/tags/*` (for tag-triggered deploys). Both are managed by `infra/ci/oidc.tf`.
+The deploy role trusts exactly one OIDC subject:
+`repo:davidgraymi/bindersnap-editor-demo:environment:production`
+(`infra/ci/oidc.tf`). Both deploy jobs (`deploy-pyinfra.yml`, `static-site.yml`)
+run in the **`production`** GitHub environment, whose deployment-branch policy
+admits `main` only. A pushed tag or any other branch cannot assume the role.
 
-Do not add a GitHub Environment to the API deploy job unless you also change the IAM trust policy. GitHub switches the OIDC `sub` claim from a branch form to an environment form when an environment is attached.
+The `production` environment holds:
+
+- secret `CLOUDFLARE_API_TOKEN` and variable `CLOUDFLARE_ACCOUNT_ID` for
+  `static-site.yml` (see the token's permissions there)
+
+Changing the environment's branch policy changes who can deploy. Keep it at
+`main`, and optionally add yourself as a required reviewer.
 
 ## EC2 Prerequisites
 

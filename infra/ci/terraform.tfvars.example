@@ -3,4 +3,4 @@
 github_owner = "your-github-org"
 # aws_region = "us-east-1"
 # github_repository = "bindersnap-editor-demo"
-# github_branch = "main"
+# github_environment = "production"  # only jobs in this GitHub environment may deploy

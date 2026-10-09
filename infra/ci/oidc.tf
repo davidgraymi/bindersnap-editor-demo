@@ -39,10 +39,10 @@ variable "github_repository" {
   default     = "bindersnap-editor-demo"
 }
 
-variable "github_branch" {
-  description = "Git branch allowed to assume the deploy role"
+variable "github_environment" {
+  description = "GitHub environment whose jobs may assume the deploy role. Its deployment-branch policy must allow only main."
   type        = string
-  default     = "main"
+  default     = "production"
 }
 
 variable "deploy_role_name" {
@@ -111,9 +111,14 @@ locals {
   ssm_parameter_arn_base   = "arn:${data.aws_partition.current.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${local.ssm_parameter_path}"
   ssm_parameter_arn_prefix = "${local.ssm_parameter_arn_base}/*"
 
+  # Only a job running in the `production` GitHub environment may deploy.
+  # A job that names an environment gets this subject instead of its ref, and
+  # the environment's deployment-branch policy admits `main` alone, so a pushed
+  # tag or another branch can no longer deploy an arbitrary commit around
+  # main's branch protection (#620 H7). The policy is set on GitHub, not here:
+  # Settings → Environments → production (docs/ops/deploy.md).
   github_subs = [
-    "repo:${var.github_owner}/${var.github_repository}:ref:refs/heads/${var.github_branch}",
-    "repo:${var.github_owner}/${var.github_repository}:ref:refs/tags/*",
+    "repo:${var.github_owner}/${var.github_repository}:environment:${var.github_environment}",
   ]
 
   common_tags = {
@@ -155,7 +160,7 @@ data "aws_iam_policy_document" "deploy_trust" {
     }
 
     condition {
-      test     = "StringLike"
+      test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
       values   = local.github_subs
     }
