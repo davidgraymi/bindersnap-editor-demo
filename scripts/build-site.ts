@@ -1,7 +1,8 @@
 /**
  * Write the public site into `dist` as ordinary files, for GitHub Pages:
  * pricing, the templates and the rest of `apps/site/content`, plus
- * `sitemap.xml`, `robots.txt`, `llms.txt` and `llms-full.txt`.
+ * `sitemap.xml`, `robots.txt`, `llms.txt` and `llms-full.txt`, and each
+ * template as a Word file.
  *
  * A page at `/templates/{slug}` is written as `templates/{slug}.html`, which
  * Pages serves at the address without the extension, and a collection's index
@@ -10,7 +11,10 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-import { publicSiteFiles } from "../apps/site/publicSite";
+import {
+  publicSiteBinaryFiles,
+  publicSiteFiles,
+} from "../apps/site/publicSite";
 
 const outDir = process.argv[2] ?? "dist";
 const files = publicSiteFiles();
@@ -30,4 +34,14 @@ for (const [path, body] of files) {
   writeFileSync(target, body);
 }
 
-console.log(`Wrote ${files.size} public site files to ${outDir}`);
+// Each template as a Word file, beside its page: /templates/{slug}.docx.
+const binaries = await publicSiteBinaryFiles();
+for (const [path, bytes] of binaries) {
+  const target = join(outDir, path.slice(1));
+  mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, bytes);
+}
+
+console.log(
+  `Wrote ${files.size} public site files and ${binaries.size} downloads to ${outDir}`,
+);

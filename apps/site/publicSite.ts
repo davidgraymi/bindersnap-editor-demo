@@ -4,7 +4,21 @@ import { readLegalDocuments } from "../legal/legalDocuments";
 import { legalHref } from "../legal/renderLegal";
 import { siteFiles, type ListedPage } from "./renderSite";
 import { TOOLS } from "./requiredPolicies";
+import { templateFiles } from "./templateDocument";
 import { readSitePages, type SitePage } from "./siteContent";
+
+/** Every page, read fresh, with each free tool's data-built part attached. */
+export function publicSitePages(): SitePage[] {
+  return readSitePages().map((page) => {
+    const tool = page.collection.key === "tools" ? TOOLS[page.slug] : undefined;
+    return tool ? { ...page, tool: tool() } : page;
+  });
+}
+
+/** The files that are not text: each template as a Word document. */
+export function publicSiteBinaryFiles(): Promise<Map<string, Uint8Array>> {
+  return templateFiles(publicSitePages());
+}
 
 /**
  * The whole public site, read fresh: the pages in `content/`, plus the help
@@ -36,11 +50,7 @@ export function publicSiteFiles(): Map<string, string> {
       ? document.version
       : undefined,
   }));
-  const pages: SitePage[] = readSitePages().map((page) => {
-    const tool = page.collection.key === "tools" ? TOOLS[page.slug] : undefined;
-    return tool ? { ...page, tool: tool() } : page;
-  });
-  return siteFiles(pages, {
+  return siteFiles(publicSitePages(), {
     help,
     legal,
     helpMarkdown: HELP_GUIDES.map(renderGuideMarkdown),

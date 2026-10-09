@@ -7,7 +7,7 @@ import { HELP_GUIDES } from "./apps/app/helpGuides";
 import { helpContentType, helpFiles } from "./apps/help/renderHelp";
 import { readLegalDocuments } from "./apps/legal/legalDocuments";
 import { legalFiles } from "./apps/legal/renderLegal";
-import { publicSiteFiles } from "./apps/site/publicSite";
+import { publicSiteBinaryFiles, publicSiteFiles } from "./apps/site/publicSite";
 import { siteContentType } from "./apps/site/renderSite";
 import { SITE_COLLECTIONS } from "./apps/site/siteContent";
 
@@ -45,6 +45,17 @@ function serveLegal(req: Request): Response {
  */
 async function serveSite(req: Request): Promise<Response> {
   const path = new URL(req.url).pathname.replace(/\/+$/, "") || "/";
+  if (path.endsWith(".docx")) {
+    const bytes = (await publicSiteBinaryFiles()).get(path);
+    return bytes === undefined
+      ? new Response("No such page.", { status: 404 })
+      : new Response(Buffer.from(bytes), {
+          headers: {
+            "Content-Type":
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          },
+        });
+  }
   const body = publicSiteFiles().get(path);
   return body === undefined
     ? new Response("No such page.", { status: 404 })
