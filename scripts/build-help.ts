@@ -1,5 +1,5 @@
 /**
- * Write the help guides into `dist/help` as ordinary files, for GitHub Pages.
+ * Write the help guides into `dist/help` as ordinary files, for the static host.
  *
  * `/help/{slug}` is written as `help/{slug}.html`, which Pages serves at the
  * address without the extension, and `/help` as `help/index.html`. Run after

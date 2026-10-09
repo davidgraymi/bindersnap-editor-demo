@@ -2,7 +2,7 @@
 
 Production now has two deploy surfaces:
 
-1. [`../../.github/workflows/pages.yml`](../../.github/workflows/pages.yml) publishes the unified SPA to GitHub Pages at `https://bindersnap.com`.
+1. [`../../.github/workflows/static-site.yml`](../../.github/workflows/static-site.yml) publishes the public site and the unified SPA to Cloudflare at `https://bindersnap.com`.
 2. [`../../.github/workflows/deploy-pyinfra.yml`](../../.github/workflows/deploy-pyinfra.yml) drives the full production host with pyinfra over an SSH-through-SSM tunnel on every push to `main`. See [`../../deploy/README.md`](../../deploy/README.md).
 
 The production host workflow assumes the AWS role provisioned by [`../../infra/ci/oidc.tf`](../../infra/ci/oidc.tf).
@@ -11,22 +11,25 @@ The production host workflow assumes the AWS role provisioned by [`../../infra/c
 > [`break-glass.md`](break-glass.md) — recover the host directly over SSM without
 > the CI pipeline.
 
-## GitHub Pages SPA
+## The static site (Cloudflare)
 
-Pushes to `main` build `apps/app/index.html` directly into `dist/`, then the workflow:
+Pushes to `main` build `apps/app/index.html` and the public site into `dist/`,
+then `static-site.yml` runs `wrangler deploy`. `wrangler.jsonc` makes `dist/`
+the static assets of the `bindersnap-site` Worker, which serves `bindersnap.com`.
+The Worker runs no code of ours.
 
-1. injects `BUN_PUBLIC_API_BASE_URL=https://api.bindersnap.com`
-2. copies `dist/index.html` to `dist/404.html` for the GitHub Pages SPA fallback
-3. writes `dist/CNAME` with `bindersnap.com`
-4. uploads `dist/` as the Pages artifact
+- Any path with no file (`/{org}/...`, `/-/login`) gets `index.html`
+  (`not_found_handling: single-page-application`), with status 200.
+- `apps/app/public/_headers` sets the response headers: `X-Frame-Options`,
+  `frame-ancestors`, HSTS, `nosniff`, `Referrer-Policy`, `Permissions-Policy`.
+- `/pricing/` redirects to `/pricing`.
 
-The published app is the single SPA:
+The workflow needs the `CLOUDFLARE_API_TOKEN` secret and the
+`CLOUDFLARE_ACCOUNT_ID` variable in the `production` environment. To check a
+build locally: `bun run build && bunx wrangler@4.149.0 dev`.
 
-- `/` shows the landing experience for signed-out users
-- `/`, `/docs/*`, and `/activity` all hydrate from the same bundle
-- deep links rely on the `404.html` fallback, not S3 or CloudFront rewrites
-
-Repository settings must point GitHub Pages at `GitHub Actions`, and the custom domain must be `bindersnap.com`.
+A rollback is `bunx wrangler@4.149.0 rollback` (or Workers → bindersnap-site →
+Deployments in the dashboard). It is instant and needs no rebuild.
 
 ## pyinfra Deploy Workflow
 
@@ -238,8 +241,8 @@ the new stack has been checked.
 
 ## Validation Checklist
 
-- A push to `main` publishes the SPA to GitHub Pages from `dist/`.
-- `dist/404.html` matches `dist/index.html` so deep links load the SPA shell.
+- A push to `main` deploys `dist/` to the `bindersnap-site` Worker.
+- A deep link such as `/-/login` loads the SPA shell, and `curl -I https://bindersnap.com` shows `x-frame-options: DENY`.
 - A push to `main` triggers `deploy-pyinfra.yml`, which validates the compose + Caddy config on the host before bringing the stack up.
 - A forced test failure prevents the pyinfra deploy job from running.
 - `deploy-pyinfra.yml` with `dry_run=true` reports pyinfra changes without applying them.

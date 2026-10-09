@@ -13,7 +13,7 @@ import { SITE_COLLECTIONS } from "./apps/site/siteContent";
 
 /**
  * Help is plain pages, not the app: the same files `scripts/build-help.ts`
- * writes into `dist/help` for GitHub Pages, rendered on each request here so an
+ * writes into `dist/help` for the static host, rendered on each request here so an
  * edit to a guide shows on reload.
  */
 function serveHelp(req: Request): Response {
@@ -77,7 +77,7 @@ const siteRoutes = Object.fromEntries([
 
 /**
  * The icons, the link-preview image and the fonts, at the site root where the
- * build copies them for GitHub Pages: `/favicon.ico`, `/fonts/fonts.css` and
+ * build copies them for the static host: `/favicon.ico`, `/fonts/fonts.css` and
  * the rest.
  */
 const PUBLIC_DIR = join(import.meta.dir, "apps/app/public");

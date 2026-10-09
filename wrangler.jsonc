@@ -1,0 +1,25 @@
+// bindersnap.com: the public site and the SPA, served as static files by a
+// Cloudflare Worker with no code of its own (an "assets-only" Worker). It
+// replaces GitHub Pages. `.github/workflows/static-site.yml` builds `dist/`
+// and deploys it on every push to `main`; nothing else deploys it.
+//
+// See docs/ops/production-architecture.md §2.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bindersnap-site",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./dist",
+    // Pages served `404.html` (a copy of `index.html`) for any path with no
+    // file, which is how `/{org}/...` and `/-/...` boot the SPA. Workers says
+    // so explicitly, and answers 200 instead of 404.
+    "not_found_handling": "single-page-application",
+    // `/pricing` → `/pricing/`, the redirect GitHub Pages also made.
+    "html_handling": "auto-trailing-slash",
+  },
+  // Wrangler creates the proxied DNS record for a custom domain itself, so
+  // infra/edge must not also manage the apex record.
+  "routes": [{ "pattern": "bindersnap.com", "custom_domain": true }],
+  "workers_dev": false,
+  "preview_urls": false,
+}
