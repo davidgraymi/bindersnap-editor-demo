@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { HelpGuide } from "../app/helpGuides";
+import { chromeCss, siteFooter, siteHeader } from "../site/chrome";
 
 /**
  * The help guides as ordinary web pages: `/help`, `/help/{slug}`.
@@ -35,8 +36,6 @@ const escape = (text: string) =>
 export function helpHref(slug?: string): string {
   return slug ? `/help/${slug}` : "/help";
 }
-
-const LOGO_MARK = `<svg viewBox="0 0 18 18" fill="none" aria-hidden="true" width="18" height="18"><rect x="2" y="1" width="9" height="13" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="6" y="4" width="9" height="13" rx="1.5" stroke="currentColor" stroke-width="1.5"/></svg>`;
 
 /**
  * Link previews need absolute URLs. The icons and the share card are the
@@ -103,10 +102,7 @@ ${
 </head>
 <body>
 <a class="help-skip" href="#content">Skip to the guide</a>
-<header class="help-bar">
-  <a class="help-brand" href="/help">${LOGO_MARK}<span>Bindersnap <span class="help-brand-sub">Help</span></span></a>
-  <a class="help-open" href="/">Open Bindersnap</a>
-</header>
+${siteHeader(params.path)}
 <div class="help-layout">
   <nav class="help-nav" aria-label="Guides">
     <a class="help-nav-home" href="/help"${
@@ -118,6 +114,7 @@ ${
 ${params.body}
   </main>
 </div>
+${siteFooter()}
 </body>
 </html>
 `;
@@ -221,7 +218,7 @@ export function renderLlmsTxt(guides: readonly HelpGuide[]): string {
 }
 
 export function renderHelpCss(): string {
-  return `${readFileSync(TOKENS_CSS, "utf8")}\n${HELP_CSS}`;
+  return `${readFileSync(TOKENS_CSS, "utf8")}\n${chromeCss()}\n${HELP_CSS}`;
 }
 
 /** Every file under `/help`, by the path it is served at. */
@@ -269,38 +266,6 @@ a { color: inherit; }
   border-radius: 8px;
   z-index: 10;
 }
-.help-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 24px;
-  border-bottom: 1px solid var(--bs-rule);
-  background: var(--bs-page-bg);
-}
-.help-brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  text-decoration: none;
-  color: var(--bs-text-primary);
-  font-family: var(--brand-font-serif, "Lora", Georgia, serif);
-  font-weight: 600;
-  font-size: 17px;
-}
-.help-brand svg { color: var(--brand-coral); }
-.help-brand-sub { color: var(--bs-text-muted); font-weight: 500; }
-.help-open {
-  font-size: 14px;
-  font-weight: 500;
-  text-decoration: none;
-  color: var(--bs-text-primary);
-  padding: 7px 14px;
-  border: 1px solid var(--bs-rule);
-  border-radius: 8px;
-  background: var(--bs-surface-1);
-}
-.help-open:hover { background: var(--bs-surface-2); }
 .help-layout {
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
@@ -391,7 +356,6 @@ a:focus-visible {
   outline-offset: 2px;
 }
 @media (max-width: 760px) {
-  .help-bar { padding: 12px 16px; }
   .help-layout { grid-template-columns: 1fr; gap: 24px; padding: 24px 16px 64px; }
   .help-nav { order: 2; border-top: 1px solid var(--bs-rule); padding-top: 16px; }
   .help-main h1 { font-size: 26px; }

@@ -1,5 +1,6 @@
 import { markdownToHtml } from "../app/markdown";
 import { renderHelpCss } from "../help/renderHelp";
+import { siteFooter, siteHeader } from "../site/chrome";
 import type { LegalDocument } from "./legalDocuments";
 
 /**
@@ -28,8 +29,6 @@ const escape = (text: string) =>
 export function legalHref(slug?: string): string {
   return slug ? `/legal/${slug}` : "/legal";
 }
-
-const LOGO_MARK = `<svg viewBox="0 0 18 18" fill="none" aria-hidden="true" width="18" height="18"><rect x="2" y="1" width="9" height="13" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="6" y="4" width="9" height="13" rx="1.5" stroke="currentColor" stroke-width="1.5"/></svg>`;
 
 const SITE = "https://bindersnap.com";
 
@@ -83,10 +82,7 @@ ${
 </head>
 <body>
 <a class="help-skip" href="#content">Skip to the text</a>
-<header class="help-bar">
-  <a class="help-brand" href="/legal">${LOGO_MARK}<span>Bindersnap <span class="help-brand-sub">Legal</span></span></a>
-  <a class="help-open" href="/">Open Bindersnap</a>
-</header>
+${siteHeader(params.path)}
 <div class="help-layout">
   <nav class="help-nav" aria-label="Legal documents">
     <a class="help-nav-home" href="/legal"${
@@ -99,6 +95,7 @@ ${
 ${params.body}
   </main>
 </div>
+${siteFooter()}
 </body>
 </html>
 `;

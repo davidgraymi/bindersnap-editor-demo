@@ -1,5 +1,6 @@
 import { renderHelpCss } from "../help/renderHelp";
 import { renderLegalBody } from "../legal/renderLegal";
+import { siteFooter, siteHeader } from "./chrome";
 import {
   SITE_COLLECTIONS,
   siteHref,
@@ -44,8 +45,6 @@ const jsonLd = (value: unknown) =>
     /</g,
     "\\u003c",
   )}</script>`;
-
-const LOGO_MARK = `<svg viewBox="0 0 18 18" fill="none" aria-hidden="true" width="18" height="18"><rect x="2" y="1" width="9" height="13" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="6" y="4" width="9" height="13" rx="1.5" stroke="currentColor" stroke-width="1.5"/></svg>`;
 
 const THEME_SCRIPT = `(function(){try{var s=localStorage.getItem("bs-theme");var d=window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.setAttribute("data-theme",s||(d?"dark":"light"));}catch(e){}})();`;
 
@@ -97,18 +96,12 @@ export function pageTitle(title: string): string {
   return /bindersnap/i.test(title) ? title : `${title} | Bindersnap`;
 }
 
-/** The sections a page's navigation offers: every collection with an index. */
+/** Every collection with an index page. */
 function navCollections(pages: readonly SitePage[]): SiteCollection[] {
   return SITE_COLLECTIONS.filter(
     (collection) =>
       collection.prefix !== "" &&
       pages.some((page) => page.collection.key === collection.key),
-  );
-}
-
-function rootPage(pages: readonly SitePage[], slug: string) {
-  return pages.find(
-    (page) => page.collection.prefix === "" && page.slug === slug,
   );
 }
 
@@ -128,29 +121,6 @@ function shell(params: {
   body: string;
   measurementId?: string;
 }): string {
-  const sections = navCollections(params.pages);
-  const pricing = rootPage(params.pages, "pricing");
-  const navLinks = [
-    ...sections
-      .filter((collection) => !collection.footerOnly)
-      .map((collection) => ({
-        href: siteHref(collection),
-        label: collection.label,
-      })),
-    ...(pricing ? [{ href: pricing.path, label: "Pricing" }] : []),
-    { href: "/help", label: "Help" },
-  ];
-  const nav = navLinks
-    .map(
-      (link) =>
-        `<a href="${link.href}"${
-          params.path === link.href || params.path.startsWith(`${link.href}/`)
-            ? ' aria-current="page"'
-            : ""
-        }>${escape(link.label)}</a>`,
-    )
-    .join("");
-
   const crumbs =
     params.crumbs.length > 1
       ? `<nav class="site-crumbs" aria-label="Breadcrumb"><ol>${params.crumbs
@@ -179,49 +149,6 @@ function shell(params: {
       : []),
     ...params.structuredData,
   ];
-
-  const footerColumns = [
-    {
-      heading: "Product",
-      links: [
-        { href: "/", label: "Bindersnap" },
-        ...(pricing ? [{ href: pricing.path, label: "Pricing" }] : []),
-        { href: "/help", label: "Help and guides" },
-        { href: "/-/signup", label: "Create an account" },
-      ],
-    },
-    ...(sections.length
-      ? [
-          {
-            heading: "Resources",
-            links: sections.map((collection) => ({
-              href: siteHref(collection),
-              label: collection.label,
-            })),
-          },
-        ]
-      : []),
-    {
-      heading: "Legal",
-      links: [
-        { href: "/legal/terms", label: "Terms" },
-        { href: "/legal/privacy", label: "Privacy" },
-        { href: "/legal/security", label: "Security" },
-        { href: "/legal/subprocessors", label: "Subprocessors" },
-      ],
-    },
-  ];
-  const footer = footerColumns
-    .map(
-      (column) =>
-        `<div><h2>${escape(column.heading)}</h2><ul>${column.links
-          .map(
-            (link) =>
-              `<li><a href="${link.href}">${escape(link.label)}</a></li>`,
-          )
-          .join("")}</ul></div>`,
-    )
-    .join("");
 
   return `<!doctype html>
 <html lang="en" data-theme="light">
@@ -258,22 +185,12 @@ ${analyticsTag(params.measurementId ?? process.env.BINDERSNAP_GA_MEASUREMENT_ID)
 </head>
 <body>
 <a class="help-skip" href="#content">Skip to the page</a>
-<header class="help-bar site-bar">
-  <a class="help-brand" href="/">${LOGO_MARK}<span>Bindersnap</span></a>
-  <nav class="site-nav" aria-label="Site">${nav}</nav>
-  <div class="site-bar-actions">
-    <a class="site-signin" href="/-/login">Sign in</a>
-    <a class="help-open site-start" href="/-/signup">Start free trial</a>
-  </div>
-</header>
+${siteHeader(params.path)}
 <main id="content" class="site-main">
 ${crumbs}
 ${params.body}
 </main>
-<footer class="site-footer">
-  <div class="site-footer-inner">${footer}</div>
-  <p class="site-footer-note">© 2026 Solid Gray LLC · Bindersnap is for policies and procedures, never patient records.</p>
-</footer>
+${siteFooter()}
 </body>
 </html>
 `;
@@ -771,23 +688,6 @@ export function siteContentType(path: string): string {
 }
 
 const SITE_CSS = `
-.site-bar { flex-wrap: wrap; }
-.site-nav { display: flex; gap: 4px; flex-wrap: wrap; flex: 1; justify-content: center; }
-.site-nav a {
-  font-size: 14px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  text-decoration: none;
-  color: var(--bs-text-secondary);
-}
-.site-nav a:hover, .site-nav a[aria-current="page"] {
-  background: var(--bs-surface-2);
-  color: var(--bs-text-primary);
-}
-.site-bar-actions { display: flex; align-items: center; gap: 12px; }
-.site-signin { font-size: 14px; text-decoration: none; color: var(--bs-text-secondary); }
-.site-start { background: var(--brand-coral); border-color: var(--brand-coral); color: #fff; }
-.site-start:hover { background: var(--brand-coral); filter: brightness(0.95); }
 .site-main { max-width: 760px; margin: 0 auto; padding: 32px 24px 64px; }
 .site-main h1 {
   font-family: var(--brand-font-serif, "Lora", Georgia, serif);
@@ -934,23 +834,7 @@ const SITE_CSS = `
   font-weight: 600;
   text-decoration: none;
 }
-.site-footer { border-top: 1px solid var(--bs-rule); padding: 40px 24px; }
-.site-footer-inner {
-  max-width: 1080px;
-  margin: 0 auto;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 24px;
-}
-.site-footer h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--bs-text-muted); margin: 0 0 8px; }
-.site-footer ul { list-style: none; padding: 0; margin: 0; font-size: 14px; }
-.site-footer li { margin: 4px 0; }
-.site-footer a { text-decoration: none; color: var(--bs-text-secondary); }
-.site-footer a:hover { color: var(--bs-text-primary); }
-.site-footer-note { max-width: 1080px; margin: 24px auto 0; font-size: 13px; color: var(--bs-text-muted); }
 @media (max-width: 760px) {
-  .site-nav { order: 3; flex-basis: 100%; justify-content: flex-start; }
-  .site-signin { display: none; }
   .site-main { padding: 24px 16px 56px; }
   .site-main h1 { font-size: 28px; }
   .site-template { padding: 18px 16px; }
