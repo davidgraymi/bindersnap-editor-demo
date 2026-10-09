@@ -80,7 +80,7 @@ function runStackUp(
 describe("bindersnap-stack-up change detection", () => {
   test("reconciles without recreate when no change markers are present", () => {
     const workspace = makeWorkspace();
-    // Neither the config-changed nor env-changed marker exists this run.
+    // No changed-<file> marker exists this run.
     try {
       const result = runStackUp(workspace);
       expect(result.exitCode).toBe(0);
@@ -97,7 +97,7 @@ describe("bindersnap-stack-up change detection", () => {
 
   test("refuses to start anything when the data volume is not mounted", () => {
     const workspace = makeWorkspace();
-    writeFileSync(join(workspace.stateDir, "config-changed"), "");
+    writeFileSync(join(workspace.stateDir, "changed-Caddyfile.prod"), "");
 
     try {
       const result = runStackUp(workspace, { MOUNTPOINT_EXIT: "1" });
@@ -110,33 +110,66 @@ describe("bindersnap-stack-up change detection", () => {
     }
   });
 
-  test("force-recreates when a config file changed this run", () => {
+  test("recreates only Caddy when its config changed this run", () => {
     const workspace = makeWorkspace();
-    // pyinfra drops this marker when an uploaded config file changed.
-    writeFileSync(join(workspace.stateDir, "config-changed"), "");
+    // pyinfra drops one marker per changed config file.
+    writeFileSync(join(workspace.stateDir, "changed-Caddyfile.prod"), "");
 
     try {
       const result = runStackUp(workspace);
       expect(result.exitCode).toBe(0);
 
       const log = readFileSync(workspace.logPath, "utf8");
-      expect(log).toContain("up -d --build --force-recreate");
+      expect(log).toContain("up -d --force-recreate --no-deps caddy\n");
+      expect(log).not.toContain("litestream");
+      expect(log).not.toContain("--build");
     } finally {
       rmSync(workspace.root, { force: true, recursive: true });
     }
   });
 
-  test("force-recreates when the SSM-rendered env file changed this run", () => {
+  test("recreates only Litestream when litestream.yml changed this run", () => {
     const workspace = makeWorkspace();
-    // pyinfra drops this marker when `files.put` of .env.prod reported a change.
-    writeFileSync(join(workspace.stateDir, "env-changed"), "");
+    writeFileSync(join(workspace.stateDir, "changed-litestream.yml"), "");
 
     try {
       const result = runStackUp(workspace);
       expect(result.exitCode).toBe(0);
 
       const log = readFileSync(workspace.logPath, "utf8");
-      expect(log).toContain("up -d --build --force-recreate");
+      expect(log).toContain("up -d --force-recreate --no-deps litestream\n");
+      expect(log).not.toContain("caddy");
+    } finally {
+      rmSync(workspace.root, { force: true, recursive: true });
+    }
+  });
+
+  test("rebuilds the Caddy image only when its Dockerfile changed", () => {
+    const workspace = makeWorkspace();
+    writeFileSync(join(workspace.stateDir, "changed-Dockerfile.caddy"), "");
+
+    try {
+      const result = runStackUp(workspace);
+      expect(result.exitCode).toBe(0);
+
+      const log = readFileSync(workspace.logPath, "utf8");
+      expect(log).toContain("up -d --build\n");
+      expect(log).not.toContain("--force-recreate");
+    } finally {
+      rmSync(workspace.root, { force: true, recursive: true });
+    }
+  });
+
+  test("leaves an env change to Compose, which recreates only the services it touches", () => {
+    const workspace = makeWorkspace();
+
+    try {
+      const result = runStackUp(workspace);
+      expect(result.exitCode).toBe(0);
+
+      const log = readFileSync(workspace.logPath, "utf8");
+      expect(log).toContain("pull --ignore-buildable");
+      expect(log).not.toContain("--force-recreate");
     } finally {
       rmSync(workspace.root, { force: true, recursive: true });
     }

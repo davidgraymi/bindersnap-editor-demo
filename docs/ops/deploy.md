@@ -115,6 +115,24 @@ or the production API deploy path.
 6. If the delivery fails with `400 Invalid signature.`, re-check that the
    staging webhook secret matches the endpoint configured in Stripe.
 
+## Patching
+
+The host's packages follow one pinned AL2023 release, in
+`deploy/files/al2023-release`. AWS publishes a new one every week or two
+([release notes](https://docs.aws.amazon.com/linux/al2023/release-notes/relnotes.html)).
+
+**Monthly, or the day a security advisory matters:**
+
+1. Set `deploy/files/al2023-release` to the newest release and merge. The
+   deploy that ships it runs `dnf upgrade` to that release once, with Docker,
+   containerd and runc excluded, so no container restarts.
+2. If the upgrade brought a new kernel, reboot in a quiet window:
+   `sudo systemctl reboot` over SSM. The site is down for about two minutes;
+   the stack starts on boot once `/data` is mounted.
+3. Docker itself, when its advisory matters: over SSM, in a quiet window,
+   `sudo dnf upgrade -y docker containerd runc`. Every container restarts.
+   Then check `https://api.bindersnap.com/healthz`.
+
 ## Rollback
 
 The pyinfra deploy always applies the stack as defined at the deployed commit,
@@ -154,8 +172,8 @@ docker compose --env-file /opt/bindersnap/.env.prod -f docker-compose.prod.yml u
 
 Config rollback is the same git revert: `deploy/files/` is the single source of
 truth for runtime config, so reverting the offending commit and letting
-`deploy-pyinfra.yml` run re-applies the prior config (and force-recreates the
-stack because the files changed).
+`deploy-pyinfra.yml` run re-applies the prior config (and recreates the
+services whose files changed).
 
 ### Gitea version changes are not covered by a git revert
 

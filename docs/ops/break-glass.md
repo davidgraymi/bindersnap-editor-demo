@@ -151,9 +151,10 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml down
 
 - **Secrets/env are owned by SSM.** Any manual `.env.prod` edit is overwritten on
   the next deploy — use step 4 (SSM) for anything that must persist.
-- **`compose up` recreates only on change.** `deploy.py`'s stack-up force-recreates
-  only when config or env changed this run; a manual `up -d api` after an
-  `API_TAG` change (step 3) recreates the API because the env changed.
+- **`compose up` recreates only on change.** Compose recreates a service whose
+  definition or env changed; stack-up also recreates `caddy` or `litestream`
+  when this run changed the config file it mounts. A manual `up -d api` after an
+  `API_TAG` change (step 3) recreates the API because its env changed.
 - **Data safety.** Gitea, SQLite sessions, and litestream data live on the EBS
   data volume mounted at `/data`; `compose down` (without `-v`) and image
   rollbacks do not touch it. Never pass `-v` to `compose down` in break-glass.

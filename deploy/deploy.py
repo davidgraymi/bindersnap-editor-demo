@@ -18,8 +18,8 @@ Pipeline (top to bottom — pyinfra runs operations in definition order):
   7. validate the compose config + custom Caddy build before any `up` (gate)
   8. log in to GHCR (when a token is present on the control plane) and bootstrap
      the Gitea service token on first run
-  9. `docker compose up -d`, force-recreating only when this run changed env or
-     config
+  9. `docker compose up -d`, recreating only the services whose definition,
+     env or bind-mounted config changed this run
  10. install + configure the CloudWatch agent (disk/memory metrics for the
      monitoring module's alarms — moved here from the Terraform user-data in
      phase 4, issue #306)
@@ -104,8 +104,8 @@ _FILES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "files")
 _BIN = os.path.join(_FILES, "bin")
 _SCRIPTS = os.path.join(_FILES, "scripts")
 
-# Runtime config files uploaded to APP_DIR. Changing any of these flags the
-# stack for a force-recreate (mirrors the file set the old refresh timer hashed).
+# Runtime config files uploaded to APP_DIR. A change to one drops a
+# `changed-<file>` marker, and stack-up recreates the service that reads it.
 CONFIG_FILES = [
     "docker-compose.prod.yml",
     "Caddyfile.prod",
@@ -206,10 +206,33 @@ class ComposePluginVersion(FactBase[str]):
 
 # ---------- 1. System packages ----------
 
+# No `update=True`: upgrading the docker package restarts dockerd and every
+# container, and a deploy can land at any hour.
 dnf.packages(
     name="Install Docker, AWS CLI and XFS tooling",
     packages=["docker", "awscli", "xfsprogs"],
-    update=True,
+)
+
+# Patching. AL2023 pins its repositories to one release, and AWS recommends
+# moving that pin deliberately rather than tracking `latest`. The pin lives in
+# deploy/files/al2023-release: bumping it is a reviewed commit, and the deploy
+# that ships it upgrades every package to that release, once. Docker and its
+# runtime are excluded, since their upgrade restarts every container; upgrade
+# them in a maintenance window (docs/ops/deploy.md, "Patching"). A kernel
+# update waits for the next reboot.
+releasever_put = files.put(
+    name="Pin the AL2023 release",
+    src=os.path.join(_FILES, "al2023-release"),
+    dest="/etc/dnf/vars/releasever",
+    mode="0644",
+)
+
+server.shell(
+    name="Upgrade the host to the pinned AL2023 release (Docker excluded)",
+    commands=[
+        "dnf upgrade -y --refresh --exclude=docker --exclude=containerd --exclude=runc",
+    ],
+    _if=releasever_put.did_change,
 )
 
 # ---------- 2. Docker Compose plugin (arch-matched) ----------
@@ -408,35 +431,25 @@ env_put = files.put(
     add_deploy_dir=False,
 )
 
-# ---------- 7. Change detection: reset markers + flag config/env changes ----------
+# ---------- 7. Change detection: one marker per changed config file ----------
 
-# stack-up recreates the stack when either a config file or the env file changed
-# this run. pyinfra signals both through marker files dropped via `_if`, which is
-# delayed to execute time (unlike a prepare-time `if op.changed:`).
+# Compose recreates a service whose definition or interpolated env changed on
+# its own; it cannot see the contents of a bind-mounted file. pyinfra drops a
+# `changed-<file>` marker for each config file this run changed, and stack-up
+# recreates only the service that reads it. The markers are delayed to execute
+# time through `_if`, unlike a prepare-time `if op.changed:`.
 files.directory(name="Ensure state dir", path=STATE_DIR, mode="0755")
-files.file(
-    name="Reset config-changed marker",
-    path=f"{STATE_DIR}/config-changed",
-    present=False,
-)
-files.file(
-    name="Reset env-changed marker",
-    path=f"{STATE_DIR}/env-changed",
-    present=False,
+server.shell(
+    name="Reset change markers",
+    commands=[f"rm -f {STATE_DIR}/changed-* {STATE_DIR}/config-changed {STATE_DIR}/env-changed"],
 )
 
-for _upload in config_uploads.values():
+for _name, _upload in config_uploads.items():
     server.shell(
-        name="Flag config change for recreate",
-        commands=[f"touch {STATE_DIR}/config-changed"],
+        name=f"Flag {_name} change",
+        commands=[f"touch {STATE_DIR}/changed-{_name}"],
         _if=_upload.did_change,
     )
-
-server.shell(
-    name="Flag env change for recreate",
-    commands=[f"touch {STATE_DIR}/env-changed"],
-    _if=env_put.did_change,
-)
 
 # ---------- 8. Validate config before any compose up ----------
 
@@ -506,7 +519,7 @@ server.shell(
 # ---------- 10. Bring the stack up (recreate only on change) ----------
 
 server.shell(
-    name="Compose up (force-recreate only when changed)",
+    name="Compose up (recreate only what changed)",
     commands=[f"{BIN_DIR}/bindersnap-stack-up"],
 )
 

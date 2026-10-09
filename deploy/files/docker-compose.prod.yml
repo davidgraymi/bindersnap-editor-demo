@@ -10,7 +10,7 @@
 
 services:
   gitea-init:
-    image: alpine:latest
+    image: alpine:3.22.6@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
     container_name: bindersnap-gitea-init-prod
     user: "0:0"
     command: ["sh", "-c", "chown -R 1000:1000 /data"]
