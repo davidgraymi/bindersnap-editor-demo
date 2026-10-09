@@ -222,12 +222,13 @@ function LoginPage({
   return (
     <section className="app-login-shell">
       <div className="app-login-wrap">
-        <div className="app-login-logo">
-          <div className="app-login-logo-mark" aria-hidden="true">
-            <BindersnapLogoMark width={24} height={24} />
-          </div>
+        {/* The way back to the site this page was reached from. */}
+        <a className="app-login-logo" href="/">
+          <span className="app-login-logo-mark" aria-hidden="true">
+            <BindersnapLogoMark width={22} height={22} />
+          </span>
           <span className="app-login-logo-text">Bindersnap</span>
-        </div>
+        </a>
         <div className="app-login-panel bs-card">
           <h1>
             {mode === "signin"
