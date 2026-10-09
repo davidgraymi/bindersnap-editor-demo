@@ -1,11 +1,12 @@
 ---
-title: Bindersnap pricing — pay for writers, not readers
-description: Bindersnap charges for the people who write and publish policies. Reviewers and staff who only read are free, and every organization starts with a 14-day trial.
+title: Bindersnap pricing — $39 per writer, readers free
+description: Bindersnap costs $39 a month for each person who writes and publishes policies. Reviewers and staff who only read are free. 14-day trial.
 updated: 2026-10-08
 crumb: Pricing
+price: 39
 ---
 
-**You pay for the people who write your policies. Everyone who only reviews or reads them is free.** Every new organization starts with a 14-day free trial, with no card required.
+**$39 a month for each person who writes your policies. Everyone who only reviews or reads them is free.** Every new organization starts with a 14-day free trial, with no card required.
 
 Most policy management software is built for hospital systems and sold the way they buy: a demo, a quote for every user, a contract measured in years. A surgery center with forty staff or a home health agency with one administrator doesn't need any of that. Its policies are written by a handful of people, approved by a few more, and read by everyone. Bindersnap is priced that way.
 
@@ -13,13 +14,17 @@ Most policy management software is built for hospital systems and sold the way t
 
 | Role                    | What they can do                                                   | Price     |
 | ----------------------- | ------------------------------------------------------------------ | --------- |
-| **Owner**               | Manages people, binders and billing; writes and publishes policies | Paid seat |
-| **Admin**               | Runs a binder: its rules, its people, its folders                  | Paid seat |
-| **Editor**              | Writes policies and publishes approved versions                    | Paid seat |
+| **Owner**               | Manages people, binders and billing; writes and publishes policies | $39/month |
+| **Admin**               | Runs a binder: its rules, its people, its folders                  | $39/month |
+| **Editor**              | Writes policies and publishes approved versions                    | $39/month |
 | **Reviewer**            | Reads, comments, approves or asks for changes                      | **Free**  |
 | **Staff who only read** | Read the current approved version of every policy                  | **Free**  |
 
-A person counts once, however many binders they write in. The People page shows how many paid seats and free members your organization has before you change anyone's role.
+A person counts once, however many binders they write in.
+
+So a clinic where one administrator writes the policies and forty staff read them pays **$39 a month**. A surgery center with three writers, a medical director who approves and sixty staff pays **$117 a month**. There is one price, with no tiers, setup fees or long contract.
+
+When you add or remove a writer, your next invoice changes to match, prorated to the day. Changing a reviewer or a reader never changes what you pay.
 
 ## What every organization gets
 
@@ -31,7 +36,7 @@ A person counts once, however many binders they write in. The People page shows 
 
 ## What happens when the trial ends
 
-Subscribe from the Billing page and nothing changes: your binders, versions and approval records stay where they are. You see the price for your paid seats before you pay, and checkout is handled by Stripe. If you don't subscribe, **reading and exporting stay free** for as long as your organization keeps its account. Everyone can still open every document and download it with its history. Nobody can propose, approve or publish new changes until someone subscribes. Your record isn't held hostage to a subscription.
+Subscribe from the Billing page and nothing changes: your binders, versions and approval records stay where they are. You see the total for your paid seats before you pay, and checkout is handled by Stripe. If you don't subscribe, **reading and exporting stay free** for as long as your organization keeps its account. Everyone can still open every document and download it with its history. Nobody can propose, approve or publish new changes until someone subscribes. Your record isn't held hostage to a subscription.
 
 ## Who it's for
 
@@ -43,7 +48,7 @@ Bindersnap holds your policies and procedures. It is not for patient records or 
 
 ### How is Bindersnap priced?
 
-By the number of people who write and publish policies: owners, admins and editors. Reviewers who approve changes and staff who only read policies are free, in any number.
+$39 a month for each person who writes and publishes policies: owners, admins and editors. Reviewers who approve changes and staff who only read policies are free, in any number.
 
 ### Are reviewers really free?
 

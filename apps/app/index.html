@@ -82,8 +82,8 @@
     <!--
       What search engines and AI assistants read about Bindersnap. The same
       organization node is on every public-site page (apps/site/renderSite.ts).
-      No offer is listed until a per-seat price is set; a test keeps it
-      matching /pricing.
+      The offer is $39 per writer per month; a test keeps it matching the
+      price in /pricing's front matter.
     -->
     <script type="application/ld+json">
       {
@@ -111,7 +111,21 @@
             "operatingSystem": "Web",
             "url": "https://bindersnap.com/",
             "description": "Policy and procedure management for small healthcare providers: every policy with its current approved version and the record of who signed off on it.",
-            "publisher": { "@id": "https://bindersnap.com/#organization" }
+            "publisher": { "@id": "https://bindersnap.com/#organization" },
+            "offers": {
+              "@type": "Offer",
+              "name": "Bindersnap Pro",
+              "price": "39",
+              "priceCurrency": "USD",
+              "url": "https://bindersnap.com/pricing",
+              "priceSpecification": {
+                "@type": "UnitPriceSpecification",
+                "price": "39",
+                "priceCurrency": "USD",
+                "unitText": "per writer per month",
+                "unitCode": "MON"
+              }
+            }
           }
         ]
       }

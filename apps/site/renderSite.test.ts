@@ -254,9 +254,13 @@ describe("the files crawlers and agents read", () => {
     for (const page of pages) expect(full).toContain(`# ${page.title}`);
   });
 
-  test("the pricing page says who pays, and claims no price until one is set", () => {
+  test("the pricing page says who pays and what, and its JSON-LD offers that price", () => {
     const pricing = pages.find((page) => page.path === "/pricing")!;
-    expect(pricing.body).toContain("Paid seat");
+    expect(pricing.body).toMatch(
+      new RegExp(
+        `\\|\\s*\\*\\*Editor\\*\\*\\s*\\|[^\\n]*\\$${pricing.meta.price}/month`,
+      ),
+    );
     expect(pricing.body).toMatch(
       /\|\s*\*\*Reviewer\*\*\s*\|[^\n]*\*\*Free\*\*/,
     );
@@ -268,13 +272,23 @@ describe("the files crawlers and agents read", () => {
     )["@graph"] as Record<string, unknown>[];
     expect(graph.some((node) => node["@type"] === "FAQPage")).toBe(true);
     const app = graph.find((node) => node["@type"] === "SoftwareApplication");
-    if (pricing.meta.price) {
-      expect((app!.offers as { price: string }).price).toBe(pricing.meta.price);
-    } else {
-      expect(app).toBeUndefined();
-      expect(pricing.body).not.toMatch(/\$\d/);
+    const stated = pricing.meta.price!;
+    expect(stated).toMatch(/^\d+$/);
+    expect((app!.offers as { price: string }).price).toBe(stated);
+    // Every dollar figure on the site is the one price, or a multiple of it
+    // in a worked example. A stale price anywhere fails here.
+    const price = Number(stated);
+    for (const page of pages) {
+      for (const [, amount] of page.body.matchAll(/\$(\d+)/g)) {
+        expect({ page: page.path, multiple: Number(amount) % price }).toEqual({
+          page: page.path,
+          multiple: 0,
+        });
+      }
     }
-    expect(files.get("/llms.txt")).toContain(
+    const llms = files.get("/llms.txt")!;
+    expect(llms).toContain(`$${stated} a month per paid seat`);
+    expect(llms).toContain(
       "Reviewers who approve and staff who only read are free",
     );
   });
