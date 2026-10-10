@@ -212,6 +212,46 @@ resource "aws_cloudwatch_metric_alarm" "dlm_cross_region_copy_failed" {
   tags = local.common_tags
 }
 
+# The restic backup to R2 (deploy/files/bin/bindersnap-backup) publishes
+# ResticBackupSucceeded = 1 after every good hourly run. Two hours with none
+# means it is failing or not running at all, so missing data breaches.
+resource "aws_cloudwatch_metric_alarm" "restic_no_recent_backup" {
+  alarm_name          = "${var.project}-backup-no-recent-restic"
+  alarm_description   = "No successful restic backup to R2 in the last 2 hours"
+  namespace           = "Bindersnap"
+  metric_name         = "ResticBackupSucceeded"
+  dimensions          = { InstanceId = var.instance_id }
+  statistic           = "Sum"
+  period              = 3600
+  evaluation_periods  = 2
+  threshold           = 1
+  comparison_operator = "LessThanThreshold"
+  treat_missing_data  = "breaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+
+  tags = local.common_tags
+}
+
+# bindersnap-health-metrics publishes LitestreamHealthy every five minutes: 0
+# when the sidecar is down or logging errors. Fifteen minutes of 0, or of
+# silence, pages: the databases are no longer being replicated.
+resource "aws_cloudwatch_metric_alarm" "litestream_unhealthy" {
+  alarm_name          = "${var.project}-backup-litestream-unhealthy"
+  alarm_description   = "Litestream has not replicated cleanly for 15 minutes"
+  namespace           = "Bindersnap"
+  metric_name         = "LitestreamHealthy"
+  dimensions          = { InstanceId = var.instance_id }
+  statistic           = "Minimum"
+  period              = 300
+  evaluation_periods  = 3
+  threshold           = 1
+  comparison_operator = "LessThanThreshold"
+  treat_missing_data  = "breaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+
+  tags = local.common_tags
+}
+
 # Memory usage alarm — bonus, since CW agent is already installed.
 resource "aws_cloudwatch_metric_alarm" "mem_high" {
   alarm_name          = "${var.project}-instance-mem-high"

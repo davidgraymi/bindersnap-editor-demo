@@ -7,6 +7,8 @@
 #   - a www → apex redirect and a rate limit on the sign-in endpoints
 #   - inbound mail: Email Routing forwards privacy@, security@, team@,
 #     notifications@ and anything else @bindersnap.com to one inbox
+#   - the R2 bucket that holds the restic backups, and the lock that keeps any
+#     credential from deleting a snapshot younger than 35 days
 #   - the SES sending records (DKIM, MAIL FROM, DMARC), read from infra/email's
 #     state so nobody copies them by hand
 #
@@ -304,6 +306,44 @@ resource "cloudflare_dns_record" "ses" {
   comment  = "Managed by infra/edge from infra/email: Amazon SES"
 }
 
+# ---------- Backups (R2) ----------
+
+# The third backup copy (docs/ops/production-architecture.md §3): restic
+# snapshots from deploy/files/bin/bindersnap-backup, encrypted on the host
+# before they leave it, so R2 only ever holds ciphertext.
+resource "cloudflare_r2_bucket" "backup" {
+  account_id = var.cloudflare_account_id
+  name       = "bindersnap-backup"
+  # Eastern North America, next to us-east-1. A hint, not a guarantee.
+  location = "enam"
+}
+
+locals {
+  backup_lock_seconds = 35 * 24 * 60 * 60
+}
+
+# Locked prefixes are the ones restic never rewrites: data packs, snapshots,
+# keys and the repository config. Nobody, holding any credential, can delete or
+# overwrite them for 35 days. `index/` and `locks/` stay unlocked: restic
+# deletes its own lock files after every run and replaces index files when it
+# prunes, and a lost index is rebuilt from the packs (`restic repair index`).
+resource "cloudflare_r2_bucket_lock" "backup" {
+  account_id  = var.cloudflare_account_id
+  bucket_name = cloudflare_r2_bucket.backup.name
+
+  rules = [
+    for prefix in ["data/", "snapshots/", "keys/", "config"] : {
+      id      = "retain-35d-${trimsuffix(prefix, "/")}"
+      enabled = true
+      prefix  = prefix
+      condition = {
+        type            = "Age"
+        max_age_seconds = local.backup_lock_seconds
+      }
+    }
+  ]
+}
+
 # ---------- Outputs ----------
 
 output "tunnel_id" {
@@ -314,4 +354,9 @@ output "tunnel_id" {
 output "cloudflare_account_id" {
   description = "Cloudflare account ID (put-tunnel-token.sh reads it)"
   value       = var.cloudflare_account_id
+}
+
+output "backup_repository" {
+  description = "RESTIC_REPOSITORY for the SSM leaf restic_repository"
+  value       = "s3:https://${var.cloudflare_account_id}.r2.cloudflarestorage.com/${cloudflare_r2_bucket.backup.name}"
 }

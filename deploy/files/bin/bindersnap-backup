@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+# The third backup copy: an encrypted restic snapshot of everything Gitea and
+# the API keep, written to Cloudflare R2 every hour (bindersnap-backup.timer).
+#
+# It does not depend on EBS or on AWS: it restores to any Gitea, anywhere, and
+# the R2 bucket's lock (infra/edge) means no credential can delete a snapshot
+# younger than 35 days. See docs/ops/production-architecture.md §3.
+#
+#   1. Copy gitea.db and sessions.db with SQLite's online backup API. A copy of
+#      a database file mid-write is not a database; .backup is, and it does not
+#      stop writers.
+#   2. restic backup of those copies plus the gitea-data volume (repositories,
+#      attachments, LFS), minus the live database files.
+#   3. On Sundays, forget snapshots older than 36 days and drop packs nothing
+#      references any more. Never repack: a repack deletes young packs, which
+#      the bucket lock forbids.
+#   4. Tell CloudWatch it worked. The monitoring module alarms when that
+#      metric goes missing for two hours.
+#
+# The databases are copied before the repositories, so a restore never has a
+# row that points at a commit it lacks. A repository a few seconds newer than
+# its database only carries an unreferenced commit.
+#
+# Settings come from the SSM-rendered /opt/bindersnap/.env.prod:
+#   RESTIC_REPOSITORY             s3:https://<account>.r2.cloudflarestorage.com/bindersnap-backup
+#   RESTIC_PASSWORD               encrypts the repository; also kept off AWS (password manager)
+#   RESTIC_R2_ACCESS_KEY_ID       an R2 API token scoped to that one bucket
+#   RESTIC_R2_SECRET_ACCESS_KEY
+set -euo pipefail
+
+APP_DIR="${APP_DIR:-/opt/bindersnap}"
+ENV_FILE="${ENV_FILE:-${APP_DIR}/.env.prod}"
+COMPOSE_PROJECT="${COMPOSE_PROJECT:-bindersnap}"
+STAGING="${STAGING:-/data/backup/staging}"
+RESTIC_IMAGE="${RESTIC_IMAGE:-restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510}"
+AWS_REGION="${AWS_REGION:-us-east-1}"
+
+env_value() {
+  # Read one KEY=value line from the env file without sourcing it.
+  grep -E "^$1=" "${ENV_FILE}" | head -n1 | cut -d= -f2-
+}
+
+RESTIC_REPOSITORY="$(env_value RESTIC_REPOSITORY)"
+if [ -z "${RESTIC_REPOSITORY}" ]; then
+  echo "RESTIC_REPOSITORY is not in ${ENV_FILE}; restic backups are not configured yet." >&2
+  exit 1
+fi
+
+gitea_volume="$(docker volume inspect -f '{{.Mountpoint}}' "${COMPOSE_PROJECT}_gitea-data")"
+api_volume="$(docker volume inspect -f '{{.Mountpoint}}' "${COMPOSE_PROJECT}_api-data")"
+
+# ---------- 1. Consistent database copies ----------
+
+rm -rf "${STAGING}"
+mkdir -p "${STAGING}"
+chmod 0700 "${STAGING}"
+
+python3 - "${gitea_volume}/gitea.db" "${STAGING}/gitea.db" \
+  "${api_volume}/sessions.db" "${STAGING}/sessions.db" <<'PY'
+import os
+import sqlite3
+import sys
+
+pairs = list(zip(sys.argv[1::2], sys.argv[2::2]))
+for source, target in pairs:
+    # The copy is written as root into the 0700 staging dir, with its journal
+    # in memory so nothing else lands there.
+    dst = sqlite3.connect(target)
+    dst.execute("PRAGMA journal_mode=MEMORY")
+    # The live database is read as its own owner. A root connection could
+    # leave root-owned -wal/-shm files behind that Gitea or the API (not root)
+    # could then not open.
+    owner = os.stat(source)
+    os.setegid(owner.st_gid)
+    os.seteuid(owner.st_uid)
+    try:
+        src = sqlite3.connect(source, timeout=30)
+        src.backup(dst)
+        src.close()
+    finally:
+        os.seteuid(0)
+        os.setegid(0)
+    # The copy must open and pass its own check, or it is not a backup.
+    if dst.execute("PRAGMA quick_check").fetchone()[0] != "ok":
+        sys.exit(f"{target}: quick_check failed")
+    dst.close()
+PY
+# ---------- 2. restic ----------
+
+# The credentials go to the container through a 0600 file, not `-e`, which
+# would show them to anyone who can list processes.
+restic_env="$(mktemp)"
+trap 'rm -f "${restic_env}"; rm -rf "${STAGING}"' EXIT
+chmod 0600 "${restic_env}"
+{
+  echo "RESTIC_REPOSITORY=${RESTIC_REPOSITORY}"
+  echo "RESTIC_PASSWORD=$(env_value RESTIC_PASSWORD)"
+  echo "AWS_ACCESS_KEY_ID=$(env_value RESTIC_R2_ACCESS_KEY_ID)"
+  echo "AWS_SECRET_ACCESS_KEY=$(env_value RESTIC_R2_SECRET_ACCESS_KEY)"
+  echo "AWS_DEFAULT_REGION=auto"
+} >"${restic_env}"
+
+restic() {
+  docker run --rm \
+    --env-file "${restic_env}" \
+    -v "${STAGING}:/backup/databases:ro" \
+    -v "${gitea_volume}:/backup/gitea-data:ro" \
+    --hostname bindersnap-prod \
+    "${RESTIC_IMAGE}" "$@"
+}
+
+# First run only: create the repository. `cat config` fails on an empty bucket.
+if ! restic cat config >/dev/null 2>&1; then
+  echo "Initialising the restic repository at ${RESTIC_REPOSITORY}"
+  restic init
+fi
+
+restic backup \
+  --tag hourly \
+  --exclude /backup/gitea-data/gitea.db \
+  --exclude /backup/gitea-data/gitea.db-wal \
+  --exclude /backup/gitea-data/gitea.db-shm \
+  --exclude /backup/gitea-data/log \
+  /backup/databases /backup/gitea-data
+
+if [ "$(date -u +%u)" = "7" ] && [ "$(date -u +%H)" = "04" ]; then
+  restic forget --keep-within 36d --prune --max-unused unlimited
+fi
+
+# ---------- 3. Report ----------
+
+instance_id="$(
+  token="$(curl -fsS -X PUT http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 60')"
+  curl -fsS -H "X-aws-ec2-metadata-token: ${token}" http://169.254.169.254/latest/meta-data/instance-id
+)"
+aws cloudwatch put-metric-data \
+  --region "${AWS_REGION}" \
+  --namespace Bindersnap \
+  --metric-name ResticBackupSucceeded \
+  --dimensions "InstanceId=${instance_id}" \
+  --value 1
+
+echo "restic backup complete"
