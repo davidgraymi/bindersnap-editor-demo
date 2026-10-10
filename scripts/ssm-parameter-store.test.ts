@@ -16,7 +16,7 @@ describe("SSM Parameter Store production wiring", () => {
   test("stores the production env contract in a dedicated secrets module", () => {
     expect(secretsTerraform).toContain('variable "ssm_parameter_path"');
     expect(secretsTerraform).toContain('default     = "/bindersnap/prod"');
-    expect(secretsTerraform).toContain('resource "aws_ssm_parameter" "prod"');
+    expect(secretsTerraform).toContain('resource "aws_ssm_parameter" "config"');
     expect(secretsTerraform).toContain('type   = "SecureString"');
     expect(secretsTerraform).toContain("gitea_secret_key");
     expect(secretsTerraform).toContain("gitea_internal_token");
@@ -25,6 +25,26 @@ describe("SSM Parameter Store production wiring", () => {
     expect(secretsTerraform).toContain("gitea_admin_pass");
     expect(secretsTerraform).toContain("bindersnap_user_email_domain");
     expect(secretsTerraform).toContain("litestream_s3_bucket");
+  });
+
+  test("keeps every secret out of Terraform, and so out of its state", () => {
+    // aws_ssm_parameter reads a decrypted value back into state on refresh,
+    // so a secret Terraform manages is a secret in the state file.
+    for (const secret of [
+      "gitea_secret_key",
+      "gitea_internal_token",
+      "gitea_admin_pass",
+      "stripe_secret_key",
+      "stripe_webhook_secret",
+    ]) {
+      expect(secretsTerraform).not.toContain(`variable "${secret}"`);
+      expect(secretsTerraform).not.toContain(`var.${secret}`);
+    }
+    expect(secretsTerraform).not.toContain("sensitive   = true");
+    // The old parameters leave state without being deleted from SSM.
+    expect(secretsTerraform).toMatch(
+      /removed \{\s*from = aws_ssm_parameter\.prod\s*lifecycle \{\s*destroy = false/,
+    );
   });
 
   test("limits the instance role to the production SSM path and KMS key", () => {

@@ -180,6 +180,27 @@ def test_rejects_api_tag_with_newline():
         raise AssertionError("expected SystemExit for an api_tag containing a newline")
 
 
+def test_refuses_a_placeholder_value():
+    for placeholder in (
+        "CHANGE_ME_USE_openssl_rand_base64_32",
+        "bindersnap-litestream-REPLACE_WITH_ACCOUNT_ID",
+        "SET_WITH_put-secrets.sh",
+    ):
+        try:
+            build_env_content([_param("gitea_secret_key", placeholder)], PATH)
+        except SystemExit as exc:
+            assert "put-secrets.sh" in str(exc), exc
+        else:
+            raise AssertionError(f"expected SystemExit for {placeholder!r}")
+
+
+def test_the_bootstrap_token_placeholder_is_still_allowed():
+    content = build_env_content(
+        [_param("gitea_service_token", BOOTSTRAP_TOKEN_PLACEHOLDER)], PATH
+    )
+    assert f"GITEA_SERVICE_TOKEN={BOOTSTRAP_TOKEN_PLACEHOLDER}" in content, content
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for test in tests:

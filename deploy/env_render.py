@@ -10,6 +10,12 @@ here for the live render; the unit tests import it in isolation.
 # then the admin bootstrap creds must stay in `.env.prod` so the mint can run.
 BOOTSTRAP_TOKEN_PLACEHOLDER = "BOOTSTRAP_WITH_scripts/bootstrap-gitea-service-account.ts"
 
+# Values that mean "nobody set this yet". Terraform's old defaults and the
+# example tfvars used them; a Gitea SECRET_KEY of CHANGE_ME... once could have
+# reached production. The render refuses them, so the deploy fails before
+# anything starts.
+UNSET_VALUE_MARKERS = ("CHANGE_ME", "REPLACE_WITH", "SET_WITH_put-secrets")
+
 
 def build_env_content(
     parameters: list[dict], parameter_path: str, api_tag: str | None = None
@@ -57,6 +63,11 @@ def build_env_content(
         if not name.startswith(prefix + "/"):
             continue
         value = item["Value"]
+        if any(marker in value for marker in UNSET_VALUE_MARKERS):
+            raise SystemExit(
+                f"{name} still holds a placeholder. Set it with "
+                "infra/secrets/put-secrets.sh before deploying."
+            )
         if "\n" in value:
             raise SystemExit(
                 f"{name} contains a newline and cannot be written to a Docker env file"

@@ -88,7 +88,7 @@ lays down all config on a fresh host. The remaining prerequisites are:
 
 - It is managed by AWS Systems Manager (the SSM agent ships with AL2023).
 - It matches the deploy target tag used by the workflow.
-- `infra/secrets/terraform.tfvars` provided `gitea_admin_user` and `gitea_admin_pass` so the first deploy can mint `/bindersnap/prod/gitea_service_token` automatically before the API starts.
+- `infra/secrets/put-secrets.sh` has set every secret in SSM (it generates `gitea_admin_pass` and the Gitea keys, and prompts for the Stripe ones), so the first deploy can mint `/bindersnap/prod/gitea_service_token` before the API starts. Secrets never go in a tfvars file or Terraform state; the deploy refuses any value still holding a `CHANGE_ME`-style placeholder.
 - The host can pull `ghcr.io/davidgraymi/bindersnap-api` (if the package is private, set the `GHCR_TOKEN` GitHub Actions secret so the deploy performs the registry login).
 
 ## Stripe Webhook Verification
