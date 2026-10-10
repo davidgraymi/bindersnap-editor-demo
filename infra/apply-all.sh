@@ -13,8 +13,9 @@
 #   1. infra/state/ already applied (bun run tf:bootstrap)
 #   2. infra/state/backend.hcl exists with real values
 #   3. Each module has a terraform.tfvars with non-derivable values filled in
-#   4. CLOUDFLARE_API_TOKEN (infra/edge) and STRIPE_API_KEY (infra/billing)
-#      are exported
+#   4. CLOUDFLARE_API_TOKEN (infra/edge), STRIPE_API_KEY (infra/billing, a
+#      live key) and STRIPE_TEST_API_KEY (infra/billing-test, a test key) are
+#      exported
 
 set -euo pipefail
 
@@ -224,17 +225,32 @@ if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
   echo "ERROR: CLOUDFLARE_API_TOKEN is not set (needed by infra/edge; see infra/edge/README.md)."
   exit 1
 fi
-# Likewise infra/billing, which talks to Stripe.
-if [[ -z "${STRIPE_API_KEY:-}" ]]; then
-  echo "ERROR: STRIPE_API_KEY is not set (needed by infra/billing; see infra/billing/README.md)."
+# Likewise infra/billing and infra/billing-test, which talk to Stripe: one key
+# per mode, and each in its own mode.
+if [[ ! "${STRIPE_API_KEY:-}" =~ ^(sk|rk)_live_ ]]; then
+  echo "ERROR: STRIPE_API_KEY must be a live key (needed by infra/billing; see infra/billing/README.md)."
   exit 1
 fi
+if [[ ! "${STRIPE_TEST_API_KEY:-}" =~ ^(sk|rk)_test_ ]]; then
+  echo "ERROR: STRIPE_TEST_API_KEY must be a test key (needed by infra/billing-test; see infra/billing/README.md)."
+  exit 1
+fi
+
+# infra/billing-test reads STRIPE_API_KEY like infra/billing; hand it the test
+# key for that one run.
+tf_run_billing_test() {
+  local live_key="${STRIPE_API_KEY}"
+  export STRIPE_API_KEY="${STRIPE_TEST_API_KEY}"
+  tf_run "billing-test"
+  export STRIPE_API_KEY="${live_key}"
+}
 
 # --- Plan mode: each module plans independently using its own tfvars ---
 if [[ "$ACTION" == "plan" ]]; then
   tf_run "account-baseline"
   tf_run "compute"
   tf_run "billing"
+  tf_run_billing_test
   tf_run "secrets"
   tf_run "backups"
   tf_run "email"
@@ -283,6 +299,10 @@ if [[ -z "$SEAT_PRICE_ID" ]]; then
   exit 1
 fi
 echo "  Billing outputs: seat_price=${SEAT_PRICE_ID}"
+
+# The same catalog in test mode, which CI checks out against. Nothing depends
+# on its outputs: CI finds the price by its lookup key.
+tf_run_billing_test
 
 # 3. Secrets (needs instance role for policy attachment, and the price ID)
 tf_run "secrets" \
