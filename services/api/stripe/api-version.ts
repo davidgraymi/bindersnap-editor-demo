@@ -6,8 +6,10 @@
  * lives on `subscription.items.data[0]`. The `extractCurrentPeriodEnd` helper
  * still reads both old and new shapes defensively for safety.
  *
- * WARNING: The webhook endpoint API version in the Stripe Dashboard must
- * match this constant in both test and live mode — see docs/payments-plan.md.
+ * WARNING: The webhook endpoint's API version must match this constant in
+ * both test and live mode. Live is `stripe_api_version` in
+ * infra/billing/main.tf (terraform.test.ts holds them equal); test mode is
+ * set in the Dashboard — see docs/payments-plan.md.
  */
 export const STRIPE_API_VERSION = "2025-06-30.basil";
 

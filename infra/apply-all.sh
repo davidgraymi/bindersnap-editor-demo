@@ -13,6 +13,8 @@
 #   1. infra/state/ already applied (bun run tf:bootstrap)
 #   2. infra/state/backend.hcl exists with real values
 #   3. Each module has a terraform.tfvars with non-derivable values filled in
+#   4. CLOUDFLARE_API_TOKEN (infra/edge) and STRIPE_API_KEY (infra/billing)
+#      are exported
 
 set -euo pipefail
 
@@ -222,11 +224,17 @@ if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
   echo "ERROR: CLOUDFLARE_API_TOKEN is not set (needed by infra/edge; see infra/edge/README.md)."
   exit 1
 fi
+# Likewise infra/billing, which talks to Stripe.
+if [[ -z "${STRIPE_API_KEY:-}" ]]; then
+  echo "ERROR: STRIPE_API_KEY is not set (needed by infra/billing; see infra/billing/README.md)."
+  exit 1
+fi
 
 # --- Plan mode: each module plans independently using its own tfvars ---
 if [[ "$ACTION" == "plan" ]]; then
   tf_run "account-baseline"
   tf_run "compute"
+  tf_run "billing"
   tf_run "secrets"
   tf_run "backups"
   tf_run "email"
@@ -264,8 +272,22 @@ fi
 
 echo "  Compute outputs: instance=${INSTANCE_ID} role=${INSTANCE_ROLE} volume=${DATA_VOLUME_ID}"
 
-# 2. Secrets (needs instance role for policy attachment)
-tf_run "secrets" "ec2_instance_role_name=${INSTANCE_ROLE}"
+# 2. Billing (Stripe: the product, the writer-seat price, the webhook endpoint
+#    and the portal). No AWS inputs; before secrets, which stores its price ID.
+tf_run "billing"
+
+SEAT_PRICE_ID="$(tf_output billing seat_price_id)"
+if [[ -z "$SEAT_PRICE_ID" ]]; then
+  echo "ERROR: billing module applied but seat_price_id is missing."
+  echo "  Refusing to apply secrets: STRIPE_PRICE_ID would fall back to a hand-copied value."
+  exit 1
+fi
+echo "  Billing outputs: seat_price=${SEAT_PRICE_ID}"
+
+# 3. Secrets (needs instance role for policy attachment, and the price ID)
+tf_run "secrets" \
+  "ec2_instance_role_name=${INSTANCE_ROLE}" \
+  "stripe_price_id=${SEAT_PRICE_ID}"
 
 SSM_PATH="$(tf_output secrets ssm_parameter_path)"
 SSM_PATH="${SSM_PATH:-/bindersnap/prod}"
@@ -284,7 +306,7 @@ else
   echo "  Gitea service token already bootstrapped — skipping remote bootstrap."
 fi
 
-# 3. Backups (needs instance role + volume ID)
+# 4. Backups (needs instance role + volume ID)
 tf_run "backups" \
   "ec2_instance_role_name=${INSTANCE_ROLE}" \
   "gitea_data_volume_id=${DATA_VOLUME_ID}"
@@ -293,12 +315,12 @@ LITESTREAM_BUCKET="$(tf_output backups litestream_bucket_name)"
 DLM_POLICY_ID="$(tf_output backups dlm_policy_id)"
 echo "  Backups outputs: litestream_bucket=${LITESTREAM_BUCKET} dlm_policy=${DLM_POLICY_ID:-<none>}"
 
-# 4. Email (needs instance role — the API sends through SES as the instance)
+# 5. Email (needs instance role — the API sends through SES as the instance)
 tf_run "email" "ec2_instance_role_name=${INSTANCE_ROLE}"
 echo "  Email: add these records to the sending domain's DNS, then request SES production access:"
 terraform -chdir="${SCRIPT_DIR}/email" output -json dns_records 2>/dev/null || true
 
-# 5. Monitoring (needs instance ID; backup alarms need the DLM policy ID)
+# 6. Monitoring (needs instance ID; backup alarms need the DLM policy ID)
 # The backup alarms exist only while dlm_policy_id is set, so applying without
 # it would destroy them. The backups module always creates the policy — an
 # empty output means something is wrong, so stop rather than drop the alarms.
@@ -309,10 +331,10 @@ if [[ -z "$DLM_POLICY_ID" ]]; then
 fi
 tf_run "monitoring" "instance_id=${INSTANCE_ID}" "dlm_policy_id=${DLM_POLICY_ID}"
 
-# 6. CI (SPA bucket + CloudFront dist come from tfvars — no upstream module yet)
+# 7. CI (SPA bucket + CloudFront dist come from tfvars — no upstream module yet)
 tf_run "ci"
 
-# 7. Edge (Cloudflare: tunnel, DNS, redirects, rate limits). No AWS inputs.
+# 8. Edge (Cloudflare: tunnel, DNS, redirects, rate limits). No AWS inputs.
 tf_run "edge"
 if [[ -z "$(aws ssm get-parameter --name "${SSM_PATH}/cloudflare_tunnel_token" --query Parameter.Name --output text 2>/dev/null || true)" ]]; then
   echo "  Edge: no tunnel token in SSM yet. Run infra/edge/put-tunnel-token.sh before the next deploy."

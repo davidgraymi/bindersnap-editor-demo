@@ -65,7 +65,7 @@ variable "litestream_s3_bucket" {
 }
 
 variable "stripe_price_id" {
-  description = "Stripe subscription price ID (price_...) used when creating Checkout Sessions. Not a secret."
+  description = "Stripe writer-seat price ID (price_...) used when creating Checkout Sessions. Not a secret. apply-all.sh passes infra/billing's seat_price_id; set it in tfvars only to plan this module alone."
   type        = string
 }
 

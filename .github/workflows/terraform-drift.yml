@@ -1,19 +1,23 @@
 name: Terraform drift check
 
 # Every day, plan every Terraform module with the same output wiring as
-# `infra/apply-all.sh` and fail if the AWS account or the Cloudflare zone no
-# longer matches the code: a console edit, or a merged change nobody applied
-# (#620 M3). Changes nothing. A failed scheduled run emails the repository
-# owner.
+# `infra/apply-all.sh` and fail if the AWS account, the Cloudflare zone or the
+# Stripe account no longer matches the code: a console or Dashboard edit, or a
+# merged change nobody applied (#620 M3). Changes nothing. A failed scheduled
+# run emails the repository owner.
 #
 # Runs in the `drift-check` environment (main only), which holds:
 #   variable BINDERSNAP_DRIFT_ROLE_ARN   output drift_role_arn of infra/ci
 #   variable TF_STATE_BUCKET, TF_LOCK_TABLE  the values in infra/state/backend.hcl
 #   secret   CLOUDFLARE_API_TOKEN        a READ-only token: the edge module's
 #                                        permissions, each at Read
+#   secret   STRIPE_API_KEY              a READ-only restricted live key: the
+#                                        billing module's permissions, each at
+#                                        Read (infra/billing/README.md)
 #   secret   TFVARS_<MODULE>             each module's terraform.tfvars, verbatim
 #                                        (ACCOUNT_BASELINE, COMPUTE, SECRETS, BACKUPS,
-#                                        EMAIL, MONITORING, CI, EDGE)
+#                                        EMAIL, MONITORING, CI, EDGE; billing
+#                                        has no tfvars)
 
 on:
   schedule:
@@ -83,4 +87,5 @@ jobs:
       - name: Plan every module
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
         run: infra/apply-all.sh drift

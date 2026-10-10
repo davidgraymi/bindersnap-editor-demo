@@ -33,19 +33,21 @@ Browser                 API (services/api/)          Stripe
   | navigateTo('/')          |                          |
 ```
 
-## Pre-requisites (manual, before coding)
+## Pre-requisites
 
-Do in Stripe Dashboard / CLI:
+In the **live** account, Terraform owns the product, the $39/month per-unit writer-seat price, the webhook endpoint (with its pinned API version) and the customer portal: see [`infra/billing`](../infra/billing/README.md). `infra/apply-all.sh` stores the price's ID as `STRIPE_PRICE_ID`. Nothing below is done by hand in live mode.
 
-1. Create product "Bindersnap Pro" + a recurring **per-unit** price of $39/month (one unit = one writer seat) → copy **Price ID** (`price_...`)
+For local development and the test-mode sandbox, in the Stripe Dashboard / CLI:
+
+1. Create a product + a recurring **per-unit** price of $39/month (one unit = one writer seat) → copy **Price ID** (`price_...`)
 2. Enable **Customer Portal**: Dashboard → Settings → Billing → Customer Portal
 3. `stripe listen --forward-to localhost:8787/stripe/webhook --print-secret` → copy **webhook secret** (`whsec_...`)
 4. Note **Secret Key** (`sk_test_...`) and **Publishable Key** (`pk_test_...`)
 5. **Pin the webhook endpoint API version to `2025-06-30.basil` in BOTH test and live mode.**
    - Dashboard → Developers → Webhooks → (your endpoint) → ⋯ → **Update API version** → select `2025-06-30.basil`.
-   - Repeat for the live-mode endpoint when going to production.
+   - The live endpoint's version is `stripe_api_version` in `infra/billing/main.tf`; `services/api/stripe/terraform.test.ts` fails if it differs from the code's.
    - Why: We are pinned to the `2025-06-30.basil` shape, where `current_period_end` lives on `subscription.items.data[0]`. The webhook payload shape is determined by the **endpoint's** configured version, not by request headers. The server's `extractCurrentPeriodEnd` helper reads both old and new shapes defensively for safety, but pinning the endpoint to this version keeps the contract explicit and matches the codebase's expectations.
-   - The pinned version is centralized as `STRIPE_API_VERSION` in `services/api/stripe/api-version.ts`. If you change it, update the dashboard endpoints in the same change.
+   - The pinned version is centralized as `STRIPE_API_VERSION` in `services/api/stripe/api-version.ts`. If you change it, follow "Changing the API version" in `infra/billing/README.md`, and update the test-mode endpoints in the same change.
 
 ---
 
