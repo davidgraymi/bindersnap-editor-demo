@@ -386,10 +386,12 @@ See `tests/README.md` for full usage.
 
 ### Deployment
 
-Everything except the SPA runs as Docker Compose services on **one EC2 host**,
-deployed by **pushing with pyinfra** from GitHub Actions. There is no serverless
-stack: Lambda, Aurora, API Gateway and the Gitea-as-NAT plumbing were removed
-(epic #302). See `docs/adr/0003-single-ec2-host-pyinfra-push-deploys.md`.
+Everything except the SPA and the feedback Worker runs as Docker Compose
+services on **one EC2 host**, deployed by **pushing with pyinfra** from GitHub
+Actions. There is no serverless backend: Lambda, Aurora, API Gateway and the
+Gitea-as-NAT plumbing were removed (epic #302). See
+`docs/adr/0003-single-ec2-host-pyinfra-push-deploys.md`, and
+`docs/adr/0006-cloudflare-workers-at-the-edge.md` for the Workers.
 
 | Component  | Host           | How deployed                                                          |
 | ---------- | -------------- | --------------------------------------------------------------------- |
@@ -629,11 +631,19 @@ upload/review/publish contract. **That ADR is law for the file vault workflow.**
 
 ### Production is one EC2 host, deployed by pushing with pyinfra.
 
-No serverless. The backend is a Docker Compose stack on a single EC2 instance,
-and `deploy/` is the only thing that configures it. Do not add a Lambda, an
-Aurora cluster, an API Gateway, a config bucket, or a bootstrap script to
-Terraform user-data. Do not add a pull agent to the host. Deployment logic goes
-in `deploy/deploy.py`, in Python, in version control.
+No serverless backend. The backend is a Docker Compose stack on a single EC2
+instance, and `deploy/` is the only thing that configures it. Do not add a
+Lambda, an Aurora cluster, an API Gateway, a config bucket, or a bootstrap
+script to Terraform user-data. Do not add a pull agent to the host. Deployment
+logic goes in `deploy/deploy.py`, in Python, in version control.
+
+**Cloudflare Workers are the one exception, and a narrow one.** A Worker may
+run our code only if it is stateless, keeps no customer content, sits off the
+critical path, and never touches Gitea or the API's databases. Today that is
+`bindersnap-feedback` (in-app feedback → a private GitHub repository) and
+nothing else; `bindersnap-site` serves static files and runs no code. Auth,
+sessions, jobs, webhooks and anything that reads evidence or configuration stay
+in the BFF. See `docs/adr/0006-cloudflare-workers-at-the-edge.md`.
 
 See `docs/adr/0003-single-ec2-host-pyinfra-push-deploys.md`. Note that
 `docs/adr/0002-mvp-backend-aws-s3-dynamodb-cognito.md` describes an

@@ -128,4 +128,4 @@ Settled. Do not reopen. If a task requires violating one, open a `human-needed` 
 
 5. **Editor UI changes need a flag.** If you change `packages/editor/` visuals, note it in your PR. The landing page no longer embeds the editor, so no demo re-sync is needed.
 
-6. **`deploy/` configures the host; Terraform does not.** No serverless (no Lambda, Aurora, or API Gateway), no config bucket, no bootstrap logic in `user-data.sh`. Host config changes are commits to `deploy/`.
+6. **`deploy/` configures the host; Terraform does not.** No serverless backend (no Lambda, Aurora, or API Gateway), no config bucket, no bootstrap logic in `user-data.sh`. Host config changes are commits to `deploy/`. A Cloudflare Worker may run our code only if it is stateless, keeps no customer content, is off the critical path, and never touches Gitea or the API's databases — see `docs/adr/0006-cloudflare-workers-at-the-edge.md`.
