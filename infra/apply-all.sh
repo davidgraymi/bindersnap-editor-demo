@@ -256,8 +256,16 @@ tf_run "email" "ec2_instance_role_name=${INSTANCE_ROLE}"
 echo "  Email: add these records to the sending domain's DNS, then request SES production access:"
 terraform -chdir="${SCRIPT_DIR}/email" output -json dns_records 2>/dev/null || true
 
-# 5. Monitoring (needs instance ID)
-tf_run "monitoring" "instance_id=${INSTANCE_ID}"
+# 5. Monitoring (needs instance ID; backup alarms need the DLM policy ID)
+# The backup alarms exist only while dlm_policy_id is set, so applying without
+# it would destroy them. The backups module always creates the policy — an
+# empty output means something is wrong, so stop rather than drop the alarms.
+if [[ -z "$DLM_POLICY_ID" ]]; then
+  echo "ERROR: backups module applied but dlm_policy_id is missing."
+  echo "  Refusing to apply monitoring: it would remove the backup alarms."
+  exit 1
+fi
+tf_run "monitoring" "instance_id=${INSTANCE_ID}" "dlm_policy_id=${DLM_POLICY_ID}"
 
 # 6. CI (SPA bucket + CloudFront dist come from tfvars — no upstream module yet)
 tf_run "ci"
