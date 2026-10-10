@@ -25,7 +25,7 @@ bun run build         # Build SPA to dist/
 # Tests
 bun run test          # All unit tests (test:app + test:ops + test:seed)
 bun run test:app      # apps/app, apps/help, apps/legal, apps/site, packages/editor, packages/utils, packages/ui-tokens
-bun run test:ops      # services/api, scripts, infra/backups
+bun run test:ops      # services/api, services/feedback, scripts, infra/backups
 bun run test:integration  # Playwright — starts and stops its own stack
                           # SKIP_STACK=1 reuses a running `bun run up` stack
                           # Both find this worktree's ports on their own

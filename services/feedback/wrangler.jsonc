@@ -1,0 +1,36 @@
+// feedback.bindersnap.com: the app's "Send feedback" dialog posts here, and an
+// issue opens in the private feedback repository. ADR 0006 is why this is a
+// Worker and what it may never do. `.github/workflows/feedback-worker.yml`
+// deploys it on every push to `main` that touches it; nothing else does.
+//
+// Secrets, set once by hand and never in this file (see README.md):
+//   GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY, TURNSTILE_SECRET_KEY
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "bindersnap-feedback",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "vars": {
+    // Where the SPA is served from: bindersnap.com today, app.bindersnap.com
+    // once the split in docs/ops/production-architecture.md §2 lands.
+    "ALLOWED_ORIGINS": "https://bindersnap.com,https://app.bindersnap.com",
+    "FEEDBACK_REPOSITORY": "davidgraymi/bindersnap-feedback",
+  },
+  // Five reports a minute from one address. The free plan's one WAF
+  // rate-limit rule already guards sign-in, so this one lives in the Worker.
+  // namespace_id is any number unique within the account.
+  "ratelimits": [
+    {
+      "name": "FEEDBACK_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 5, "period": 60 },
+    },
+  ],
+  // Its log lines say what happened, never what anybody wrote.
+  "observability": { "enabled": true },
+  // Wrangler creates the proxied DNS record for a custom domain itself, so
+  // infra/edge must not also manage this one.
+  "routes": [{ "pattern": "feedback.bindersnap.com", "custom_domain": true }],
+  "workers_dev": false,
+  "preview_urls": false,
+}

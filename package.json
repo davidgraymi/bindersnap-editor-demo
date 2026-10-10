@@ -35,7 +35,7 @@
     "test": "bun run test:all",
     "test:all": "bun run test:app && bun run test:ops && bun run test:seed",
     "test:app": "bun test apps/app apps/help apps/legal apps/site packages/editor packages/utils packages/ui-tokens",
-    "test:ops": "bun test services/api scripts infra/backups",
+    "test:ops": "bun test services/api services/feedback scripts infra/backups",
     "test:integration": "bunx playwright test --config=playwright.config.ts",
     "test:seed": "bun test tests/seed-scenario.test.ts tests/seed-documents.test.ts tests/seed-check.test.ts",
     "test:unit": "bun test",
@@ -84,6 +84,7 @@
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "stripe": "^23.0.0",
+    "universal-github-app-jwt": "^2.2.2",
     "uuid": "^14.0.2",
     "zod": "^4.6.5"
   },
