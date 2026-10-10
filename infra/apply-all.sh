@@ -195,6 +195,13 @@ tf_run() {
 
 echo "=== Bindersnap infrastructure: ${ACTION} ==="
 
+# The edge module talks to Cloudflare, not AWS. Fail before anything applies
+# rather than half-way through.
+if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+  echo "ERROR: CLOUDFLARE_API_TOKEN is not set (needed by infra/edge; see infra/edge/README.md)."
+  exit 1
+fi
+
 # --- Plan mode: each module plans independently using its own tfvars ---
 if [[ "$ACTION" == "plan" ]]; then
   tf_run "compute"
@@ -203,6 +210,7 @@ if [[ "$ACTION" == "plan" ]]; then
   tf_run "email"
   tf_run "monitoring"
   tf_run "ci"
+  tf_run "edge"
 
   echo ""
   echo "=== Done. All modules planned. ==="
@@ -269,6 +277,12 @@ tf_run "monitoring" "instance_id=${INSTANCE_ID}" "dlm_policy_id=${DLM_POLICY_ID}
 
 # 6. CI (SPA bucket + CloudFront dist come from tfvars — no upstream module yet)
 tf_run "ci"
+
+# 7. Edge (Cloudflare: tunnel, DNS, redirects, rate limits). No AWS inputs.
+tf_run "edge"
+if [[ -z "$(aws ssm get-parameter --name "${SSM_PATH}/cloudflare_tunnel_token" --query Parameter.Name --output text 2>/dev/null || true)" ]]; then
+  echo "  Edge: no tunnel token in SSM yet. Run infra/edge/put-tunnel-token.sh before the next deploy."
+fi
 
 echo ""
 echo "=== Done. All modules applied successfully. ==="

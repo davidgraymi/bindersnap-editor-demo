@@ -1,0 +1,7 @@
+# Copy to terraform.tfvars and fill in real values.
+# terraform.tfvars is gitignored — never commit it.
+
+cloudflare_account_id = "0123456789abcdef0123456789abcdef"
+zone_id               = "0123456789abcdef0123456789abcdef"
+# zone_name           = "bindersnap.com"
+# api_hostname        = "api.bindersnap.com"

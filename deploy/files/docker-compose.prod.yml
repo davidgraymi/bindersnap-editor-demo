@@ -171,14 +171,34 @@ services:
         condition: service_healthy
       api:
         condition: service_started
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
+    # No published ports: requests reach Caddy only from cloudflared, over
+    # the Docker network (see Caddyfile.prod).
     volumes:
       - ./Caddyfile.prod:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
+
+  # The only way in. cloudflared dials out to Cloudflare and carries
+  # api.bindersnap.com's requests back to Caddy; the tunnel's routes live in
+  # Cloudflare (infra/edge). The token is the SSM leaf `cloudflare_tunnel_token`,
+  # written by infra/edge/put-tunnel-token.sh, never by Terraform.
+  cloudflared:
+    image: cloudflare/cloudflared:2026.9.3@sha256:072c067d25ccbe61d46e18f0d0723255f2bb5304f7317caa95b27031520ff92c
+    container_name: bindersnap-cloudflared-prod
+    restart: unless-stopped
+    depends_on:
+      caddy:
+        condition: service_started
+    command: ["tunnel", "--no-autoupdate", "--metrics", "0.0.0.0:2000", "run"]
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:?set in the generated env file}
+    healthcheck:
+      test:
+        ["CMD", "cloudflared", "tunnel", "--metrics", "localhost:2000", "ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 20s
 
   litestream:
     image: litestream/litestream:0.3
