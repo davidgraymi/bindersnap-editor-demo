@@ -2066,6 +2066,8 @@ describe("CORS headers and caches", () => {
       "http://localhost:5173",
     );
     expect(headers.get("Vary")).toBe("Origin");
+    // The feedback trace reads it; a cross-origin script can't unless told.
+    expect(headers.get("Access-Control-Expose-Headers")).toBe("X-Request-Id");
   });
 
   // A file response is cacheable for hours. Stored without Vary, the copy made
@@ -2075,6 +2077,25 @@ describe("CORS headers and caches", () => {
     const headers = corsHeaders(new Request("http://api.test/api/app/x"));
     expect(headers.get("Access-Control-Allow-Origin")).toBeNull();
     expect(headers.get("Vary")).toBe("Origin");
+  });
+});
+
+describe("request IDs", () => {
+  test("every response carries its own X-Request-Id", async () => {
+    const server = createApiServer();
+    try {
+      const first = await server.fetch(new Request("http://localhost/healthz"));
+      const second = await server.fetch(
+        new Request("http://localhost/api/app/nothing-here"),
+      );
+      const ids = [first, second].map((r) => r.headers.get("X-Request-Id"));
+      for (const id of ids) {
+        expect(id).toMatch(/^[0-9a-f-]{36}$/);
+      }
+      expect(ids[0]).not.toBe(ids[1]);
+    } finally {
+      server.stop(true);
+    }
   });
 });
 

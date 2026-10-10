@@ -54,6 +54,15 @@ The browser only receives a Bindersnap session cookie. Gitea access tokens stay 
 - `AWS_REGION`: The SES region. Default `us-east-1`.
 - `LOG_LEVEL`: Logger verbosity. One of `debug`, `info`, `warn`, `error`. Defaults to `info` in production and `debug` otherwise.
 
+## Request IDs
+
+Every response carries `X-Request-Id`, a fresh UUID, and every log line
+written while serving that request has the same value as `requestId`. The
+`Incoming request` line also records Cloudflare's `cfRay` when the request came
+through the edge. In-app feedback reports include the IDs of recent API calls,
+so a CloudWatch filter `{ $.requestId = "…" }` finds everything the API logged
+for the call that went wrong.
+
 ## Local usage
 
 ```bash
