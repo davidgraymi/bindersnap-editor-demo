@@ -10,7 +10,5 @@ export type AuthSignup200 = {
   /** @nullable */
   user: AuthSignup200User;
   /** @nullable */
-  token: string | null;
-  /** @nullable */
   suggestedOrganizationName?: string | null;
 };
