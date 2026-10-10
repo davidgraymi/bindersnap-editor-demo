@@ -244,10 +244,11 @@ Our measures are described in full at [/legal/security](/legal/security). In sum
 
 The current list is at [/legal/subprocessors](/legal/subprocessors). As of the date above:
 
-| Subprocessor              | Purpose                                                                                                                            | Location                                                         |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Amazon Web Services, Inc. | Hosting, storage, and backups (EC2, EBS, S3); logs (CloudWatch); email delivery (SES)                                              | USA (us-east-1; backups also us-west-2)                          |
-| Cloudflare, Inc.          | Network edge (DNS, TLS, attack protection); hosting of the website and app files; encrypted backups (R2); inbound email forwarding | Requests: nearest Cloudflare data center. Backups: North America |
-| Stripe, Inc.              | Subscription billing and payments                                                                                                  | USA                                                              |
+| Subprocessor              | Purpose                                                                                                                                                                                 | Location                                                         |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Amazon Web Services, Inc. | Hosting, storage, and backups (EC2, EBS, S3); logs (CloudWatch); email delivery (SES)                                                                                                   | USA (us-east-1; backups also us-west-2)                          |
+| Cloudflare, Inc.          | Network edge (DNS, TLS, attack protection); hosting of the website and app files; encrypted backups (R2); inbound email forwarding; the feedback service and its spam check (Turnstile) | Requests: nearest Cloudflare data center. Backups: North America |
+| GitHub, Inc.              | Storing feedback and bug reports sent from the app, in a private repository                                                                                                             | USA                                                              |
+| Stripe, Inc.              | Subscription billing and payments                                                                                                                                                       | USA                                                              |
 
 Changes to this list follow Section 6.

@@ -52,7 +52,7 @@ Deleted information remains in backups until it ages out: up to 2 days in hourly
 - **Passwords and tokens are stored hashed.** The document server hashes passwords. We store password-reset and email-confirmation tokens only as SHA-256 hashes.
 - **Rate limits.** We limit repeated sign-in and account requests to slow down password guessing.
 - **Email confirmation.** An account can't be used until its owner confirms their email address, either with the link we send or by accepting an invitation sent to that address.
-- **No third-party scripts.** The app loads no analytics, advertising or other third-party code. Its fonts and profile pictures come from Bindersnap itself, not from Google, Gravatar or any other outside service.
+- **No third-party scripts.** The app loads no analytics, advertising or other third-party code. Its fonts and profile pictures come from Bindersnap itself, not from Google, Gravatar or any other outside service. The one exception is Cloudflare Turnstile, a spam check that loads only when you open Send feedback.
 
 ## Monitoring
 
