@@ -5,6 +5,9 @@
 #   cd infra/
 #   ./apply-all.sh          # apply all modules (wires outputs between them)
 #   ./apply-all.sh plan     # plan only — each module uses its own tfvars
+#   ./apply-all.sh drift    # plan every module with the same output wiring as
+#                           # apply, change nothing, exit 2 if any has drifted
+#                           # (.github/workflows/terraform-drift.yml runs this)
 #
 # Prerequisites:
 #   1. infra/state/ already applied (bun run tf:bootstrap)
@@ -15,6 +18,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ACTION="${1:-apply}"
+case "${ACTION}" in
+  apply | plan | drift) ;;
+  *) echo "Usage: $0 [apply|plan|drift]"; exit 1 ;;
+esac
 BACKEND_CONFIG="${SCRIPT_DIR}/state/backend.hcl"
 
 if [[ ! -f "$BACKEND_CONFIG" ]]; then
@@ -187,6 +194,18 @@ tf_run() {
   if [[ "$ACTION" == "plan" ]]; then
     echo "--- Planning ${dir} ---"
     terraform -chdir="${SCRIPT_DIR}/${dir}" plan "${tf_args[@]}"
+  elif [[ "$ACTION" == "drift" ]]; then
+    # Read-only: no lock (the drift role cannot write the lock table), and
+    # -detailed-exitcode says 2 when the real world differs from the code.
+    echo "--- Checking ${dir} for drift ---"
+    local status=0
+    terraform -chdir="${SCRIPT_DIR}/${dir}" plan "${tf_args[@]}" \
+      -lock=false -detailed-exitcode -compact-warnings || status=$?
+    case "${status}" in
+      0) ;;
+      2) DRIFTED+=("${dir}") ;;
+      *) echo "ERROR: plan failed for ${dir}"; exit 1 ;;
+    esac
   else
     echo "--- Applying ${dir} ---"
     terraform -chdir="${SCRIPT_DIR}/${dir}" apply "${tf_args[@]}" -auto-approve
@@ -194,6 +213,8 @@ tf_run() {
 }
 
 echo "=== Bindersnap infrastructure: ${ACTION} ==="
+
+DRIFTED=()
 
 # The edge module talks to Cloudflare, not AWS. Fail before anything applies
 # rather than half-way through.
@@ -251,9 +272,13 @@ SSM_PATH="${SSM_PATH:-/bindersnap/prod}"
 
 # Secrets are not Terraform's: put-secrets.sh writes the missing ones straight
 # to SSM (generated, or prompted for). It changes nothing that is already set.
-"${SCRIPT_DIR}/secrets/put-secrets.sh"
+if [[ "$ACTION" == "apply" ]]; then
+  "${SCRIPT_DIR}/secrets/put-secrets.sh"
+fi
 
-if needs_service_token_bootstrap "${SSM_PATH}"; then
+if [[ "$ACTION" == "drift" ]]; then
+  : # read-only: never bootstrap
+elif needs_service_token_bootstrap "${SSM_PATH}"; then
   bootstrap_service_token_via_ssm "${INSTANCE_ID}"
 else
   echo "  Gitea service token already bootstrapped — skipping remote bootstrap."
@@ -291,6 +316,17 @@ tf_run "ci"
 tf_run "edge"
 if [[ -z "$(aws ssm get-parameter --name "${SSM_PATH}/cloudflare_tunnel_token" --query Parameter.Name --output text 2>/dev/null || true)" ]]; then
   echo "  Edge: no tunnel token in SSM yet. Run infra/edge/put-tunnel-token.sh before the next deploy."
+fi
+
+if [[ "$ACTION" == "drift" ]]; then
+  echo ""
+  if [[ ${#DRIFTED[@]} -gt 0 ]]; then
+    echo "=== Drift in: ${DRIFTED[*]} ==="
+    echo "Someone changed these outside Terraform, or a merged change was never applied."
+    exit 2
+  fi
+  echo "=== No drift. ==="
+  exit 0
 fi
 
 echo ""
