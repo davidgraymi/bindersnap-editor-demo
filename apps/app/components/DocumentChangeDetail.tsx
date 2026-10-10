@@ -1,34 +1,38 @@
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Download, FileText, GitCompare } from "lucide-react";
+import { useIsReadOnly } from "../readOnlyContext";
+import { Columns2, FileText, Pencil } from "lucide-react";
 
 import type { ChangeUpdate, RepoBranchProtection } from "../api";
+import { publishDocument, submitDocumentReview } from "../api";
 import {
-  listChangeUpdates,
-  publishDocument,
-  submitDocumentReview,
-} from "../api";
-import {
-  buildProposedVersionFacts,
   describeChangeBody,
   describeChangeOpening,
   resolveReviewDecision,
 } from "../changeReview";
-import type { ComparisonBase } from "../documentComparison";
+import type { ChangeScope } from "../changeScope";
+import { changeUpdatesQuery } from "../data/queries";
 import type { ChangeRecord } from "../documentDisplay";
 import {
   describeChangeOutcome,
   getChangeStateBadgeClass,
   getChangeStateLabel,
+  isReadyToPublish,
 } from "../documentDisplay";
 import type { DocumentChangeView } from "../routes";
 import { ChangeReviewers } from "./ChangeReviewers";
-import { DocumentComparison } from "./DocumentComparison";
-import { DocumentPreview } from "./DocumentPreview";
+import { nameFor, usePeopleNames } from "../usePeopleNames";
 import { ReviewTimeline } from "./ReviewTimeline";
 
 interface DocumentChangeDetailProps {
-  owner: string;
-  repo: string;
+  /**
+   * Which repository this change lives in.
+   *
+   * A change request is a Gitea pull request whether the thing it revises is a
+   * repository of its own or a file inside a binder, so this screen serves
+   * both and the scope is the only thing that differs.
+   */
+  scope: ChangeScope;
   currentUser: string;
   isAnonymous: boolean;
   change: ChangeRecord;
@@ -41,21 +45,74 @@ interface DocumentChangeDetailProps {
   blockOnUnresolvedThreads: boolean;
   /** Whether this reader may set the reviewer list. */
   canManageAssignments: boolean;
-  nextVersion: number;
-  documentName: string;
-  /** Canonical file name, so the proposed version can be previewed and saved. */
-  fileName: string | null;
   /**
-   * The published version this change is read against, or null when there is
-   * none — the first version of a document replaces nothing.
+   * What this reader may do with the change, by Gitea's own rules — from the
+   * server, which can see the binder's approval teams and this reader's write
+   * access. Null where the page has no such answer, and the protection
+   * whitelists decide as they always did.
    */
-  comparisonBase: ComparisonBase | null;
-  /** Set while this change's file is being fetched for download. */
-  downloading: boolean;
-  onDownload: (gitRef: string, loaded?: Blob | null) => void;
+  decisionRights?: { canApprove: boolean; canPublish: boolean } | null;
+  nextVersion: number;
+  /**
+   * How many documents this change touches, for the approve prompt — the
+   * versions themselves are on the rows of "What this change does".
+   */
+  documentCount?: number;
+  /**
+   * What this change is about, when it is **not** a document.
+   *
+   * A binder's sign-off rules are changed through the same review as a policy
+   * — deliberately, because a product whose claim is that nothing changes
+   * without approval should not exempt the rules that decide who approves. But
+   * such a change versions nothing, so every word this page says about
+   * versions is false for it: "becomes v1 when published" on a change that
+   * publishes no version is exactly the kind of lie a compliance customer
+   * notices.
+   *
+   * Set it, and the version wording and the document chrome are replaced by a
+   * sentence saying what is actually being decided.
+   */
+  subject?: { title: string; description: string } | null;
+  documentName: string;
   onChanged: () => void | Promise<void>;
   onViewChange: (view: DocumentChangeView) => void;
   onBackToList: () => void;
+  /** Who, what and from where: the line under the title, shared with Changes. */
+  byline?: React.ReactNode;
+  /**
+   * The reviewers this change is actually held for.
+   *
+   * **Real state, not a label we invent.** A sign-off rule puts its owners on
+   * a change automatically; whether their request blocks is branch
+   * protection's answer, and the server reads it. Only "Required" is marked —
+   * a reviewer with no marker is one nothing is waiting on, which is what
+   * "optional" means, and printing the word on every other row is labelling
+   * the absence of a constraint.
+   */
+  requiredReviewers?: readonly string[];
+  /** Rewrite the title and description. The author's, while it is open. */
+  onEditSubject?:
+    ((subject: { title: string; body: string }) => Promise<void>) | null;
+  /** Where the required reviewers come from, for the reader who asks. */
+  onOpenSignOffRules?: (() => void) | null;
+  /**
+   * Something about the change the reader has to know before deciding — that
+   * the binder has moved on under it, in practice.
+   *
+   * Drawn under the change's own name rather than above the way back to the
+   * list: the first sentence on a page should not be about a state nobody has
+   * told you you are in.
+   */
+  banner?: React.ReactNode;
+  /** Which of several documents the file screens are about. */
+  documentPicker?: React.ReactNode;
+  /**
+   * Whether it is still open, or how it ended — the badge before the line
+   * under the title.
+   */
+  status?: React.ReactNode;
+  /** Overview and Changes: the change's two screens, as tabs under its header. */
+  tabs?: React.ReactNode;
 }
 
 interface PRActionState {
@@ -181,9 +238,10 @@ function ApprovalBars({ change }: { change: ChangeRecord }) {
  * the decision floats bottom right so it is reachable without scrolling back
  * to find it.
  */
+const NO_UPDATES: ChangeUpdate[] = [];
+
 export function DocumentChangeDetail({
-  owner,
-  repo,
+  scope,
   currentUser,
   isAnonymous,
   change,
@@ -191,19 +249,30 @@ export function DocumentChangeDetail({
   branchProtection,
   blockOnUnresolvedThreads,
   canManageAssignments,
+  decisionRights = null,
   nextVersion,
+  documentCount = 1,
+  byline,
+  subject = null,
   documentName,
-  fileName,
-  comparisonBase,
-  downloading,
-  onDownload,
   onChanged,
   onViewChange,
   onBackToList,
+  requiredReviewers = [],
+  onEditSubject = null,
+  onOpenSignOffRules = null,
+  banner = null,
+  documentPicker = null,
+  status = null,
+  tabs = null,
 }: DocumentChangeDetailProps) {
+  // Above every early return, like the other hooks here — the notes on
+  // `DocumentPreview` record what hook order costs when it slips.
+  const isReadOnly = useIsReadOnly();
   const [actionState, setActionState] = useState<PRActionState>(
     DEFAULT_PR_ACTION_STATE,
   );
+  const names = usePeopleNames(scope.org);
   const [unresolvedCount, setUnresolvedCount] = useState(0);
   // Who is still holding a thread open. The reviewer list needs it to tell a
   // reviewer who is done from one who raised a concern and never closed it,
@@ -211,8 +280,12 @@ export function DocumentChangeDetail({
   const [openThreadAuthors, setOpenThreadAuthors] = useState<
     ReadonlySet<string>
   >(() => new Set<string>());
-  const [updates, setUpdates] = useState<ChangeUpdate[]>([]);
-  const [resetsApprovals, setResetsApprovals] = useState(false);
+  /** The title and description being rewritten, or null while they are not. */
+  const [editing, setEditing] = useState<{
+    title: string;
+    body: string;
+  } | null>(null);
+  const [savingSubject, setSavingSubject] = useState(false);
 
   const prNum = change.number;
   const isSubmitting = actionState.status === "submitting";
@@ -220,26 +293,11 @@ export function DocumentChangeDetail({
   // The updates are their own call: the Changes tab lists changes, and a list
   // has no use for the history inside each one. A failure costs the update
   // count and the update events, not the review.
-  useEffect(() => {
-    let cancelled = false;
-
-    void (async () => {
-      try {
-        const payload = await listChangeUpdates(owner, repo, prNum);
-        if (cancelled) return;
-        setUpdates(payload.updates);
-        setResetsApprovals(payload.resetsApprovals);
-      } catch {
-        if (cancelled) return;
-        setUpdates([]);
-        setResetsApprovals(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [owner, repo, prNum]);
+  const updatesRead = useQuery(
+    changeUpdatesQuery(scope.org, scope.binder, prNum),
+  );
+  const updates: ChangeUpdate[] = updatesRead.data?.updates ?? NO_UPDATES;
+  const resetsApprovals = updatesRead.data?.resetsApprovals ?? false;
 
   function updateActionState(update: Partial<PRActionState>) {
     setActionState((prev) => ({ ...prev, ...update }));
@@ -251,7 +309,7 @@ export function DocumentChangeDetail({
       // No body: an approval with nothing to say should record nothing. The
       // page quotes review bodies on the timeline, and "APPROVED" quoted back
       // reads as something the approver actually typed.
-      await submitDocumentReview(owner, repo, prNum, "APPROVE");
+      await submitDocumentReview(scope, prNum, "APPROVE");
       updateActionState({ status: "idle" });
       await onChanged();
     } catch (err) {
@@ -272,13 +330,7 @@ export function DocumentChangeDetail({
     }
     updateActionState({ status: "submitting", error: null });
     try {
-      await submitDocumentReview(
-        owner,
-        repo,
-        prNum,
-        "REQUEST_CHANGES",
-        comment,
-      );
+      await submitDocumentReview(scope, prNum, "REQUEST_CHANGES", comment);
       updateActionState({
         status: "idle",
         showChangesForm: false,
@@ -296,7 +348,7 @@ export function DocumentChangeDetail({
   async function handlePublish() {
     updateActionState({ status: "submitting", error: null });
     try {
-      await publishDocument(owner, repo, prNum, nextVersion);
+      await publishDocument(scope, prNum, nextVersion);
       updateActionState({ status: "idle" });
       await onChanged();
       // Publishing ends the review, so the page it happened on is finished
@@ -310,26 +362,41 @@ export function DocumentChangeDetail({
     }
   }
 
-  const reviewPerms = canUserReview(
-    currentUser,
-    change.submittedBy,
-    branchProtection,
-  );
-  const mergePerms = canUserMerge(currentUser, branchProtection);
-  const mergeReady = change.open && change.approvalState === "approved";
+  const reviewPerms =
+    decisionRights && !decisionRights.canApprove
+      ? {
+          allowed: false,
+          reason:
+            "Your approval would not count in this binder. A binder admin can add you to a group that reviews it.",
+        }
+      : canUserReview(currentUser, change.submittedBy, branchProtection);
+  const mergePerms =
+    decisionRights && !decisionRights.canPublish
+      ? {
+          allowed: false,
+          reason:
+            "Only an editor or admin of this binder can publish. Ask one of them to publish it.",
+        }
+      : canUserMerge(currentUser, branchProtection);
+  // The server's answer, which knows this binder's protection; the rule
+  // itself only for a change that arrived without one.
+  const mergeReady =
+    change.open && (change.isApproved ?? isReadyToPublish(change));
   // The server enforces this too; the disabled button just avoids a pointless
   // round trip that ends in a 409.
   const threadsBlockPublish = blockOnUnresolvedThreads && unresolvedCount > 0;
   const ownSubmission = currentUser === change.submittedBy;
-  const opening = describeChangeOpening(change, nextVersion);
+  // **No version under the title**, on any change. It is printed under the
+  // change's own name, so on a change to several documents it was a fact
+  // about one of them; the rows of "What this change does" carry each
+  // document's own, the same way whatever the count.
+  const opening = describeChangeOpening(change, null, (login) =>
+    nameFor(names, login),
+  );
   const description = describeChangeBody(change.summary, change.description);
-  const outcome = describeChangeOutcome(change);
-  const proposed = buildProposedVersionFacts({
-    fileName,
-    branchName: change.branchName,
-    submittedAt: change.submittedAt,
-    updates,
-  });
+  const outcome = describeChangeOutcome(change, (login) =>
+    nameFor(names, login),
+  );
   const decision = resolveReviewDecision({
     open: change.open,
     isAnonymous,
@@ -337,378 +404,456 @@ export function DocumentChangeDetail({
     mergeReady,
     canReview: reviewPerms.allowed,
     canMerge: mergePerms.allowed,
+    hasApproved: change.reviewers.some(
+      (reviewer) =>
+        reviewer.login === currentUser &&
+        reviewer.status === "approved" &&
+        !reviewer.stale,
+    ),
   });
+  // A delinquent organization records no decisions. Folded into `decision`
+  // rather than checked at each button because "none" is already the shape
+  // this component draws when there is nothing to offer — and approving or
+  // publishing here would be refused by the API anyway, after the customer
+  // had typed a comment they are about to lose.
+  const reviewDecision = isReadOnly ? "none" : decision;
 
-  if (view === "compare") {
-    return (
-      <article className="change-detail">
-        <button className="rev-back" type="button" onClick={onBackToList}>
-          ← All changes
-        </button>
-        <h2 className="rev-title">{change.summary}</h2>
-        <section className="rev-file-view">
-          {proposed.ref === null ? (
-            <p className="vault-pr-notice">
-              This change has no branch on record, so there is nothing to
-              compare.
-            </p>
-          ) : comparisonBase === null ? (
-            <p className="vault-pr-notice">
-              Nothing has been published for this document yet, so this change
-              has no earlier version to be read against. Open it instead.
-            </p>
-          ) : (
-            <>
-              <p className="rev-file-note">
-                What this change does to {comparisonBase.label} — added,
-                removed, and rewritten.
-              </p>
-              <DocumentComparison
-                owner={owner}
-                repo={repo}
-                base={comparisonBase}
-                headRef={proposed.ref}
-                headLabel={proposed.updateLabel ?? "This change"}
-                fileName={fileName}
-                onDownload={(gitRef) => onDownload(gitRef, null)}
-              />
-            </>
-          )}
-          <div className="rev-file-actions">
-            <button
-              className="rev-btn rev-btn--ghost"
-              type="button"
-              onClick={() => onViewChange("preview")}
-            >
-              Read the proposed version
-            </button>
-            <button
-              className="rev-btn rev-btn--ghost"
-              type="button"
-              onClick={() => onViewChange("discussion")}
-            >
-              Back to the review
-            </button>
-          </div>
-        </section>
-      </article>
-    );
-  }
+  // **There is no in-page preview any anymore.** Reading what a change
+  // proposes happens at the document's own address on the change's branch —
+  // `/{org}/{binder}/{path}?change=N` — where it has its own title and the
+  // whole width of the page. `?view=preview` still parses, and the change page
+  // sends it there rather than 404ing a link somebody saved.
 
-  if (view === "preview") {
-    return (
-      <article className="change-detail">
-        <button className="rev-back" type="button" onClick={onBackToList}>
-          ← All changes
-        </button>
-        <h2 className="rev-title">{change.summary}</h2>
-        <section className="rev-file-view">
-          {proposed.ref ? (
-            <>
-              <p className="rev-file-note">
-                The file exactly as submitted
-                {proposed.updateLabel ? `, ${proposed.updateLabel}` : ""}.
-              </p>
-              <DocumentPreview
-                owner={owner}
-                repo={repo}
-                gitRef={proposed.ref}
-                fileName={fileName}
-                downloading={downloading}
-                onDownload={(loaded) => onDownload(proposed.ref!, loaded)}
-              />
-            </>
-          ) : (
-            <p className="vault-pr-notice">
-              This change has no branch on record, so the submitted file cannot
-              be shown.
-            </p>
-          )}
-          <div className="rev-file-actions">
-            <button
-              className="rev-btn rev-btn--ghost"
-              type="button"
-              disabled={!proposed.ref || comparisonBase === null}
-              onClick={() => onViewChange("compare")}
-            >
-              Compare with {comparisonBase?.label ?? "the last version"}
-            </button>
-            <button
-              className="rev-btn rev-btn--ghost"
-              type="button"
-              onClick={() => onViewChange("discussion")}
-            >
-              Back to the review
-            </button>
-          </div>
-        </section>
-      </article>
-    );
-  }
+  // **The author's, and while it is open.** The server refuses anybody else,
+  // and a button that fails is worse than one that is not there.
+  const canEditSubject =
+    onEditSubject !== null && change.open && ownSubmission && !isReadOnly;
+
+  const saveSubject = async () => {
+    if (!editing || !onEditSubject || editing.title.trim() === "") return;
+    setSavingSubject(true);
+    try {
+      await onEditSubject({
+        title: editing.title.trim(),
+        body: editing.body,
+      });
+      setEditing(null);
+    } catch (err) {
+      updateActionState({
+        status: "error",
+        error: readActionError(err, "Unable to edit this change."),
+      });
+    } finally {
+      setSavingSubject(false);
+    }
+  };
+
+  /**
+   * What is in the way, in the rail, in the same order on every change.
+   *
+   * A reviewer deciding needs to know what is holding the publish before they
+   * are offered the buttons — not after pressing one.
+   */
+  const blockers: string[] = [
+    threadsBlockPublish
+      ? unresolvedCount === 1
+        ? "One discussion is still open, and this binder holds the publish until every one is resolved."
+        : `${unresolvedCount} discussions are still open, and this binder holds the publish until every one is resolved.`
+      : null,
+    change.open && ownSubmission && !mergeReady
+      ? "You submitted this change — it is waiting on its reviewers."
+      : null,
+    // The reasons a dimmed button gives are said under the button itself.
+  ].filter((line): line is string => Boolean(line));
 
   return (
-    <article className="change-detail">
-      <button className="rev-back" type="button" onClick={onBackToList}>
-        ← All changes
-      </button>
-
-      <header className="rev-header">
-        <div className="rev-header-main">
-          <h2 className="rev-title">{change.summary}</h2>
-          <p className="rev-meta">
-            {opening.who} opened this on {opening.when}
-            {opening.becomes !== null ? (
-              <>
-                {" · becomes "}
-                <strong>v{opening.becomes}</strong> when published
-              </>
-            ) : null}
-          </p>
-          {description ? (
-            <p className="rev-description">{description}</p>
-          ) : null}
-        </div>
-        <ApprovalBars change={change} />
-      </header>
-
-      {outcome ? (
-        <p className="rev-outcome" role="status">
-          {outcome}
-        </p>
-      ) : null}
-
-      {/* Fixed chrome, same place on every change: the thing being approved,
-          which update of it, and one button to go and read it. */}
-      <div className="rev-proposed">
-        <span className="rev-proposed-icon" aria-hidden="true">
-          <FileText size={16} strokeWidth={1.5} />
-        </span>
-        <div className="rev-proposed-main">
-          <p className="rev-proposed-title">Proposed version</p>
-          <p className="rev-proposed-meta">
-            {[proposed.fileName, proposed.updateLabel, proposed.date]
-              .filter(Boolean)
-              .join(" · ")}
-          </p>
-        </div>
-        {proposed.ref ? (
-          <button
-            className="rev-link"
-            type="button"
-            disabled={downloading || !fileName}
-            onClick={() => onDownload(proposed.ref!, null)}
-          >
-            <Download size={13} strokeWidth={1.75} aria-hidden="true" />
-            {downloading ? "Downloading…" : "Download"}
-          </button>
-        ) : null}
-        <button
-          className="rev-btn rev-btn--ghost"
-          type="button"
-          disabled={!proposed.ref}
-          onClick={() => onViewChange("preview")}
-        >
-          Open
-        </button>
-        {/* The question a reviewer actually opens a change with is "what is
-            different?", not "what does it say?". One click, no downloads. */}
-        <button
-          className="rev-btn rev-btn--ghost"
-          type="button"
-          disabled={!proposed.ref || comparisonBase === null}
-          title={
-            comparisonBase === null
-              ? "This document has no published version yet, so there is nothing to compare against."
-              : undefined
-          }
-          onClick={() => onViewChange("compare")}
-        >
-          <GitCompare size={13} strokeWidth={1.75} aria-hidden="true" />
-          Compare
-        </button>
-      </div>
-
-      <ChangeReviewers
-        owner={owner}
-        repo={repo}
-        pullNumber={prNum}
-        submittedBy={change.submittedBy}
-        reviewers={change.reviewers}
-        currentUser={currentUser}
-        openThreadAuthors={openThreadAuthors}
-        canManage={canManageAssignments && change.open}
-        onChanged={onChanged}
-      />
-
-      <ReviewTimeline
-        owner={owner}
-        repo={repo}
-        change={change}
-        updates={updates}
-        resetsApprovals={resetsApprovals}
-        canParticipate={!isAnonymous}
-        currentUsername={currentUser}
-        blockOnUnresolvedThreads={blockOnUnresolvedThreads}
-        onOpenUpdate={
-          proposed.ref === null ? null : () => onViewChange("preview")
-        }
-        onSummaryChange={(next) => {
-          setUnresolvedCount((prev) =>
-            prev === next.unresolvedCount ? prev : next.unresolvedCount,
-          );
-          setOpenThreadAuthors((prev) => {
-            const authors = new Set(
-              next.threads
-                .filter((thread) => !thread.resolved)
-                .map((thread) => thread.comments[0]?.author.login ?? "")
-                .filter(Boolean),
-            );
-            // Identity churn here would re-render the reviewer list on every
-            // poll, so a set that says the same thing stays the same set.
-            if (
-              authors.size === prev.size &&
-              [...authors].every((login) => prev.has(login))
-            ) {
-              return prev;
-            }
-            return authors;
-          });
-        }}
-      />
-
-      {change.open && ownSubmission && decision !== "publish" ? (
-        <p className="rev-note">
-          You submitted this version — it is waiting on its reviewers.
-        </p>
-      ) : null}
-
-      {change.open && !isAnonymous && !ownSubmission && reviewPerms.reason ? (
-        <p className="rev-note">{reviewPerms.reason}</p>
-      ) : null}
-
-      {mergeReady && !mergePerms.allowed ? (
-        <p className="rev-note">{mergePerms.reason}</p>
-      ) : null}
-
-      {actionState.error ? (
-        <p className="vault-pr-error" role="alert">
-          {actionState.error}
-        </p>
-      ) : null}
-
-      {/* The decision, always reachable. A reviewer who has read enough should
-          never have to scroll back through the argument to record it. */}
-      {decision === "none" ? null : (
-        <div className="rev-decision" role="group" aria-label="Your decision">
-          {actionState.showApproveConfirm ? (
-            <div className="rev-decision-confirm">
-              <p className="rev-decision-confirm-line">
-                Approve version {nextVersion} of {documentName}? Your name and
-                the time go on the record.
-              </p>
-              <div className="rev-decision-row">
-                <button
-                  className="rev-btn rev-btn--ghost"
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() =>
-                    updateActionState({ showApproveConfirm: false })
-                  }
-                >
-                  Cancel
-                </button>
-                <button
-                  className="rev-btn rev-btn--green"
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() => {
-                    updateActionState({ showApproveConfirm: false });
-                    void handleApprove();
-                  }}
-                >
-                  {isSubmitting ? "Submitting…" : "Confirm Approval"}
-                </button>
-              </div>
-            </div>
-          ) : actionState.showChangesForm ? (
-            <div className="rev-decision-confirm">
-              <textarea
-                className="rev-composer-input"
-                placeholder="Describe what needs to change…"
-                value={actionState.changesComment}
-                rows={3}
+    <article className="change-detail bs-with-rail">
+      {/* **The head, the decision, then the discussion — in that order in the
+          document**, so a narrow screen that stacks them puts Approve under
+          the title rather than under every comment ever made on the change.
+          A wide one lays the rail beside both; see `.change-detail`. */}
+      <div className="change-head">
+        {/* The way back to the list is the trail in the top bar — `Clinical
+            / Change requests / Change 4` — the same line every page has, so
+            it is not drawn a second time here. */}
+        {editing ? (
+          /* A change request is open for days, and the first thing a
+             reviewer's question produces is a better title. Once it is
+             published the title is on the merge commit and in the version
+             tag, which are the record — so this is offered while it is open
+             and never after. */
+          <div className="bs-fields change-subject-edit">
+            <div className="bs-field">
+              <label className="bs-field-label" htmlFor="change-title">
+                What you are asking for
+              </label>
+              <input
+                id="change-title"
+                className="bs-input"
+                type="text"
+                value={editing.title}
+                disabled={savingSubject}
                 autoFocus
-                disabled={isSubmitting}
                 onChange={(event) =>
-                  updateActionState({
-                    changesComment: event.target.value,
-                    error: null,
-                  })
+                  setEditing({ ...editing, title: event.target.value })
                 }
               />
-              <div className="rev-decision-row">
+            </div>
+            <div className="bs-field">
+              <label className="bs-field-label" htmlFor="change-body">
+                Why
+                <span className="bs-field-optional">optional</span>
+              </label>
+              <textarea
+                id="change-body"
+                className="bs-input"
+                rows={5}
+                value={editing.body}
+                disabled={savingSubject}
+                onChange={(event) =>
+                  setEditing({ ...editing, body: event.target.value })
+                }
+              />
+            </div>
+            <div className="bs-field-row">
+              <button
+                type="button"
+                className="bs-btn bs-btn--sm bs-btn-primary"
+                disabled={savingSubject || editing.title.trim() === ""}
+                onClick={() => void saveSubject()}
+              >
+                {savingSubject ? "Saving…" : "Save"}
+              </button>
+              <button
+                type="button"
+                className="bs-btn bs-btn--sm bs-btn--quiet"
+                disabled={savingSubject}
+                onClick={() => setEditing(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <header className="bs-pagehead">
+            <div className="bs-pagehead-body">
+              <h1 className="bs-title rev-title">{change.summary}</h1>
+              {/* The line the Changes tab has too, so moving between the
+                  two does not change the sentence under the title. */}
+              {byline ?? (
+                <p className="bs-facts">
+                  {status}
+                  {/* One flex item, not four: loose text beside the badge
+                      wrapped at every fragment, and put "when published" on a
+                      line of its own. */}
+                  <span>
+                    {opening.who} opened this on{" "}
+                    <span className="bs-nowrap">{opening.when}</span>
+                    {opening.becomes !== null ? (
+                      <span className="bs-nowrap">
+                        {" · becomes "}
+                        <strong>v{opening.becomes}</strong> when published
+                      </span>
+                    ) : null}
+                  </span>
+                </p>
+              )}
+              {description ? (
+                <p className="rev-description">{description}</p>
+              ) : null}
+            </div>
+            {canEditSubject ? (
+              <div className="bs-pagehead-actions">
                 <button
-                  className="rev-btn rev-btn--ghost"
                   type="button"
-                  disabled={isSubmitting}
+                  className="bs-actionbtn"
+                  aria-label="Rewrite the title and description"
+                  title="Edit"
                   onClick={() =>
-                    updateActionState({
-                      showChangesForm: false,
-                      changesComment: "",
-                      error: null,
+                    setEditing({
+                      title: change.summary,
+                      body: change.description ?? "",
                     })
                   }
                 >
-                  Cancel
-                </button>
-                <button
-                  className="rev-btn rev-btn--ghost"
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() => void handleRequestChanges()}
-                >
-                  {isSubmitting ? "Submitting…" : "Send Feedback"}
+                  <Pencil size={15} strokeWidth={1.6} aria-hidden="true" />
                 </button>
               </div>
+            ) : null}
+          </header>
+        )}
+
+        {tabs}
+      </div>
+
+      {/* **Everything needed to decide, in one sticky rail, in the same order
+          on every change**: what is proposed, who it is waiting on, what is in
+          the way, and the two buttons. It was scattered down a single column
+          between comments, with the approval meter floating top-right and
+          colliding with the title whenever it wrapped — which it does at any
+          realistic length. */}
+      <aside className="bs-rail" aria-label="The decision">
+        {/* **Only when there is no document to list.** A change to the
+            sign-off rules versions nothing, so this says what is being
+            decided instead. A change to documents lists them in the page,
+            one row each, whether it touches one or six — a panel here for
+            one and not the other made two pages out of one. */}
+        {subject ? (
+          <div className="bs-panel">
+            <div className="bs-panel-bar">
+              <h2 className="bs-panel-bar-title">{subject.title}</h2>
             </div>
-          ) : decision === "publish" ? (
-            <button
-              className="rev-btn rev-btn--green"
-              type="button"
-              disabled={isSubmitting || threadsBlockPublish}
-              title={
-                threadsBlockPublish
-                  ? "Resolve every discussion thread before publishing."
-                  : undefined
-              }
-              onClick={() => void handlePublish()}
-            >
-              {isSubmitting ? "Publishing…" : "Publish"}
-            </button>
-          ) : (
-            <>
-              <button
-                className="rev-btn rev-btn--ghost"
-                type="button"
-                disabled={isSubmitting}
-                onClick={() =>
-                  updateActionState({ showChangesForm: true, error: null })
-                }
-              >
-                Request changes
-              </button>
-              <button
-                className="rev-btn rev-btn--green"
-                type="button"
-                disabled={isSubmitting}
-                onClick={() => updateActionState({ showApproveConfirm: true })}
-              >
-                Approve
-              </button>
-            </>
-          )}
+            <div className="bs-panel-body bs-rail-note">
+              {subject.description}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="bs-panel">
+          <div className="bs-panel-bar">
+            <h2 className="bs-panel-bar-title">Approvals</h2>
+            <span className="bs-panel-bar-spacer" />
+            <ApprovalBars change={change} />
+          </div>
+          <ChangeReviewers
+            scope={scope}
+            pullNumber={prNum}
+            submittedBy={change.submittedBy}
+            reviewers={change.reviewers}
+            currentUser={currentUser}
+            openThreadAuthors={openThreadAuthors}
+            requiredReviewers={requiredReviewers}
+            /* The button and the caveat share one foot, the way the mockup
+               draws them — so the list owns both rather than having a second
+               foot stacked under its own. */
+            onOpenSignOffRules={onOpenSignOffRules}
+            canManage={canManageAssignments && change.open}
+            decided={!change.open}
+            onChanged={onChanged}
+          />
         </div>
-      )}
+
+        {blockers.length > 0 ? (
+          <div className="bs-note bs-note--warn">
+            {blockers.map((line) => (
+              <p key={line}>{line}</p>
+            ))}
+          </div>
+        ) : null}
+
+        {actionState.error ? (
+          <p className="bs-note bs-note--danger" role="alert">
+            {actionState.error}
+          </p>
+        ) : null}
+
+        {/* The decision, reachable at every scroll depth — which is the
+            property the floating pill had and the reason it existed. It stops
+            covering the comment somebody is reading in order to decide. */}
+        {reviewDecision === "none" ? null : (
+          <div className="rev-decision" role="group" aria-label="Your decision">
+            {actionState.showApproveConfirm ? (
+              <div className="rev-decision-confirm">
+                <p className="rev-decision-confirm-line">
+                  {`Approve this change to ${
+                    subject || documentCount === 1
+                      ? documentName
+                      : `${documentCount} documents`
+                  }? Your name and the time go on the record.`}
+                </p>
+                <div className="rev-decision-row">
+                  <button
+                    className="bs-btn bs-btn--sm bs-btn--quiet"
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() =>
+                      updateActionState({ showApproveConfirm: false })
+                    }
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="bs-btn bs-btn--sm bs-btn--approve"
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => {
+                      updateActionState({ showApproveConfirm: false });
+                      void handleApprove();
+                    }}
+                  >
+                    {isSubmitting ? "Submitting…" : "Confirm approval"}
+                  </button>
+                </div>
+              </div>
+            ) : actionState.showChangesForm ? (
+              <div className="rev-decision-confirm">
+                <textarea
+                  className="bs-input"
+                  placeholder="Describe what needs to change…"
+                  value={actionState.changesComment}
+                  rows={3}
+                  autoFocus
+                  disabled={isSubmitting}
+                  onChange={(event) =>
+                    updateActionState({
+                      changesComment: event.target.value,
+                      error: null,
+                    })
+                  }
+                />
+                <div className="rev-decision-row">
+                  <button
+                    className="bs-btn bs-btn--sm bs-btn--quiet"
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() =>
+                      updateActionState({
+                        showChangesForm: false,
+                        changesComment: "",
+                        error: null,
+                      })
+                    }
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="bs-btn bs-btn--sm bs-btn-secondary"
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => void handleRequestChanges()}
+                  >
+                    {isSubmitting ? "Submitting…" : "Send"}
+                  </button>
+                </div>
+              </div>
+            ) : reviewDecision === "publish-locked" ? (
+              <>
+                <button
+                  className="bs-btn bs-btn--approve bs-btn--block"
+                  type="button"
+                  disabled
+                  aria-describedby="rev-decision-locked"
+                >
+                  Publish
+                </button>
+                <p className="rev-decision-locked" id="rev-decision-locked">
+                  {mergePerms.reason}
+                </p>
+              </>
+            ) : reviewDecision === "review-locked" ? (
+              <>
+                <button
+                  className="bs-btn bs-btn--approve bs-btn--block"
+                  type="button"
+                  disabled
+                  aria-describedby="rev-decision-locked"
+                >
+                  Approve
+                </button>
+                <button
+                  className="bs-btn bs-btn-secondary bs-btn--block"
+                  type="button"
+                  disabled
+                  aria-describedby="rev-decision-locked"
+                >
+                  Ask for changes
+                </button>
+                <p className="rev-decision-locked" id="rev-decision-locked">
+                  {reviewPerms.reason ?? "You cannot approve this change."}
+                </p>
+              </>
+            ) : reviewDecision === "publish" ? (
+              <button
+                className="bs-btn bs-btn--approve bs-btn--block"
+                type="button"
+                disabled={isSubmitting || threadsBlockPublish}
+                title={
+                  threadsBlockPublish
+                    ? "Resolve every discussion thread before publishing."
+                    : undefined
+                }
+                onClick={() => void handlePublish()}
+              >
+                {isSubmitting ? "Publishing…" : "Publish"}
+              </button>
+            ) : (
+              <>
+                {/* Putting your name on a policy permanently is the most
+                    consequential act in the product, so it is the filled
+                    button — and green, because green means approval here and
+                    nothing else. The page's coral belongs to the next step,
+                    not to the irreversible one. */}
+                <button
+                  className="bs-btn bs-btn--approve bs-btn--block"
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() =>
+                    updateActionState({ showApproveConfirm: true })
+                  }
+                >
+                  Approve
+                </button>
+                <button
+                  className="bs-btn bs-btn-secondary bs-btn--block"
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() =>
+                    updateActionState({ showChangesForm: true, error: null })
+                  }
+                >
+                  Ask for changes
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </aside>
+
+      <div className="change-main">
+        {outcome ? (
+          <p className="rev-outcome" role="status">
+            {outcome}
+          </p>
+        ) : null}
+
+        {banner}
+        {documentPicker}
+
+        <ReviewTimeline
+          scope={scope}
+          change={change}
+          updates={updates}
+          resetsApprovals={resetsApprovals}
+          canParticipate={!isAnonymous}
+          currentUsername={currentUser}
+          blockOnUnresolvedThreads={blockOnUnresolvedThreads}
+          /* What an update did is what the Changes tab shows. */
+          onOpenUpdate={subject ? null : () => onViewChange("compare")}
+          onSummaryChange={(next) => {
+            setUnresolvedCount((prev) =>
+              prev === next.unresolvedCount ? prev : next.unresolvedCount,
+            );
+            setOpenThreadAuthors((prev) => {
+              const authors = new Set(
+                next.threads
+                  .filter((thread) => !thread.resolved)
+                  .map((thread) => thread.comments[0]?.author.login ?? "")
+                  .filter(Boolean),
+              );
+              // Identity churn here would re-render the reviewer list on
+              // every poll, so a set that says the same thing stays the same
+              // set.
+              if (
+                authors.size === prev.size &&
+                [...authors].every((login) => prev.has(login))
+              ) {
+                return prev;
+              }
+              return authors;
+            });
+          }}
+        />
+      </div>
     </article>
   );
 }

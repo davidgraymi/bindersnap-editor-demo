@@ -16,7 +16,7 @@ serves which purpose is essential before making any changes.
 bindersnap-editor-demo/
 │
 ├── apps/
-│   └── app/                        ← UNIFIED SPA (deployed to GitHub Pages)
+│   └── app/                        ← UNIFIED SPA (static files on Cloudflare)
 │       ├── index.html              ← Pre-rendered landing shell + React mount root
 │       ├── App.tsx                 ← Auth gate + routing
 │       ├── api.ts                  ← All browser-to-API calls (BFF client)
@@ -49,9 +49,11 @@ bindersnap-editor-demo/
 │   │   ├── server.ts               ← HTTP server entry point
 │   │   ├── sessions.ts             ← SQLite session store
 │   │   └── README.md               ← API env vars and routes
-│   └── hocuspocus/                 ← Yjs WebSocket collaboration server
-│       ├── server.ts               ← Hocuspocus server entry
-│       └── Dockerfile
+│   ├── hocuspocus/                 ← Yjs WebSocket collaboration server
+│   │   ├── server.ts               ← Hocuspocus server entry
+│   │   └── Dockerfile
+│   └── feedback/                   ← Cloudflare Worker: in-app feedback → GitHub issue (ADR 0006)
+│       └── README.md               ← Read before editing
 │
 ├── tests/                          ← Integration tests (Playwright)
 │   └── data/                       ← Seed files for local stack
@@ -61,7 +63,7 @@ bindersnap-editor-demo/
 │
 ├── server.ts                       ← Bun dev/prod server (serves the SPA)
 ├── docs/                           ← Brand assets and ADRs
-├── .github/workflows/              ← CI/CD pipelines (pages.yml, deploy-pyinfra.yml)
+├── .github/workflows/              ← CI/CD pipelines (static-site.yml, deploy-pyinfra.yml)
 ├── .claude/                        ← Claude agent definitions
 ├── AGENTS.md                       ← This file
 ├── docker-compose.yml              ← Local dev stack (Gitea + Hocuspocus + app)
@@ -77,32 +79,191 @@ present. There is no separate `apps/landing/` directory.
 Routes:
 
 - `/` — landing page (unauthenticated) or workspace home (authenticated)
-- `/login`, `/signup` — credential forms
-- `/documents` — document list
-- `/docs/:owner/:repo` — document detail and review
-- `/docs/:owner/:repo/changes` — open and closed change requests
-- `/docs/:owner/:repo/changes/:number` — one change: its discussion and decision
-- `/docs/:owner/:repo/changes/:number/preview` — the file that change proposes
-- `/docs/:owner/:repo/changes/:number/compare` — that file against the version
-  it replaces, rendered with the additions and deletions marked
-- `/docs/:owner/:repo/collaborators` — collaborator management
-- `/activity` — audit log (`/inbox` was folded into `/`, which now lists the
-  change requests the reader is part of)
+- **The app's own pages are behind `/-/`**, the way GitLab keeps
+  `/-/user_settings/profile` apart from `/{group}`. No organization can be
+  called `-`, so none of them can shadow one, and an organization may be named
+  almost anything. Add new app-wide pages here, never as a bare first segment.
+  - `/-/login`, `/-/signup` — credential forms
+  - `/-/documents` — the library; `/-/changes` — every change in flight
+  - `/-/organizations/new` — create (or ask to join) an organization
+  - `/-/user_settings/profile` — the signed-in person's own account
+  - `/-/billing` — the session's organization's billing, rewritten to
+    `/{org}/-/billing`; `/-/admin/subscriptions` — site admins only
+- `/{org}` — an organization; `/{org}/-/people`, `/{org}/-/billing`,
+  `/{org}/-/settings`, `/{org}/-/binders/new`
+- `/{org}/{binder}` — a binder; its screens and documents are behind its own
+  `/-/` (`/-/changes/3`, `/-/blob/main/{path}`, `/-/settings`)
+- Reserved first segments (`RESERVED_ORGANIZATION_NAMES` in
+  `packages/utils/organizationName.ts`) are only what cannot move off the
+  root: `help` and `legal` (separate static sites, built from
+  `apps/help` and `apps/legal`), the public site's sections (`pricing`,
+  `templates`, `requirements`, `for`, `compare`, `glossary`, built from
+  `apps/site`; see "The public site" below), `auth` (`/auth/callback`, where
+  Gitea's sign-in returns), and the files browsers ask for at the root.
 
-### The shared editor
+### The public site
 
-`packages/editor/` is imported by the SPA.
+`apps/site/` is the marketing site: pricing, policy templates, regulatory
+requirements, pages per kind of provider, comparisons and a glossary. Each page
+is Markdown with front matter in `apps/site/content/{collection}/{slug}.md`, so
+whoever checks a regulatory claim reviews it as a text diff. It is rendered the
+way `/help` and `/legal` are: plain HTML with nothing to run, a Markdown copy
+at `{path}.md`, JSON-LD, and listed in `/sitemap.xml`, `/llms.txt` and
+`/llms-full.txt` (`scripts/build-site.ts`, served live by `server.ts`).
+`apps/site/renderSite.test.ts` is the quality gate: length of titles and
+descriptions, minimum words, no broken internal links, no claims we cannot
+make (never "HIPAA compliant": Bindersnap holds no patient data), and every
+address reserved from organizations. Marketing copy may say "policy";
+the app says "document". Issue #718 moves the app to app.bindersnap.com so the
+public site stops taking organization names.
+
+### The document editor
+
+`packages/editor/` is a word processor for policies, imported by the SPA and
+laid out the way Word is: a ribbon (Home, Insert, View, and a Table tab while
+the cursor is in one) over a sheet of Letter on a desk, the headings and find
+and replace in a navigation pane, page and word counts and zoom in a status
+bar. `apps/app/components/DocumentEditorPage.tsx` is the page around it, at
+`/{org}/{binder}/-/blob/main/{path}?edit=write&draft=…`: **Save commits the document to
+the author's draft** through the ordinary revise endpoint, so the version on
+record does not move until the draft is proposed and published. Edit on a
+document's page opens (or resumes) that draft first. Only a file the editor
+writes — `*.json` — is offered it; a Word file or a PDF is edited in the
+program that made it and uploaded as a new version. It opens **full page**:
+while it is mounted it sets `bs-writing` on `<html>`, and the shell drops the
+sidebar and the binder's file panel so Letter fits at 100% on a laptop. The
+editor has **its own file panel** (`components/DraftFiles.tsx`), read at the
+draft: a policy opens beside the last one, and New starts one, without leaving
+the editor. **Several policies are open at once**: moving to another keeps
+the words typed in each (`OpenPolicy` buffers in `DocumentEditorPage.tsx`,
+keyed by `uid`, so a rename or move keeps the same open file and its
+editor); the panel marks every policy with unsaved words, the status bar
+counts the others, and Save all commits them, one act each. Only leaving
+the editor — Close, Propose, another draft — asks, and offers Save all. **The editor owns the draft**: "Saving to" is the `BinderDraftPicker`
+(switch or start a draft on the same policy) and Propose opens the propose
+step for that draft, returning to the policy on Back. Close lands on the
+document at `?edit=1&draft=`, with the draft bar (Propose, Discard) at the foot
+as on the binder's own page. It says "In <draft>" and lists your drafts
+in the file panel's "What you are reading". The binder's own page offers the
+same picker while reading, with "On the record" as a place. **Edit on a
+binder opens the editor** (`pickPolicyToWrite`: the policy last written in the
+draft, else the first) — only a binder with nothing the editor writes opens
+the tree. **The editor's file panel organizes the draft in place**: each row
+renames (pencil, double-click on the open one, or F2), moves (drag onto a
+folder, or Move), and a policy archives; New folder is in its head. A
+right-click, the menu key or Shift+F10 on a row opens the same acts as a
+menu, and a folder's adds "New document here" and "New folder here". Every act
+goes into the same draft. When one moves the open policy — renaming it,
+refiling it, or renaming a folder above it — its unsaved words are saved first
+and the editor follows it by identity (`uid`) to its new address; archived, it
+goes on to the next policy to write (`actInEditor` in `BinderShell.tsx`).
+The title in the editor's header is the open policy's name and renames it
+the same way.
+Archiving from the panel offers Undo, and the panel's foot lists the archive
+with Restore, both into the same draft. Organize on the binder's header is the
+same tree on the binder's own page. **An open change request is edited in
+place by its author**: Edit on its Proposed version card opens the editor at
+`?edit=write&change=N`, which reads the change's branch and saves with
+`changeNumber` (the server's `resolveChangeToJoin`) — no draft, no Propose,
+and Close returns to the change.
+**A proposed draft is still its owner's draft**, like a branch with a pull
+request open on it: `listBinderDrafts({ proposed: true })` keeps it, with its
+`changeNumber`, in the owner's picker and in `?draft=` reads; a save into it
+lands in the change; it keeps its name, which the change's branch chip shows
+(`branchLabel`) and links back to. It cannot be proposed again or discarded —
+the bar and the editor offer "Change N" instead. Publishing deletes a draft
+branch. Other people's proposed drafts are change requests, not "others".
+
+**Pictures are embedded, not linked** (`packages/editor/imageFiles.ts`): chosen,
+pasted or dropped, a picture is scaled to at most 1600px and written into the
+document as a `data:image/…;base64` source, so it is versioned with the words
+in the same commit and cannot change under an approved version. Raster types
+only; the sanitizer (`isSafeImageSrc`) refuses SVG and every other `data:`
+address. Limit 1.5 MB per picture after scaling. A picture's size is its
+`width` attribute alone, in pixels at 100% zoom (`extensions/PictureSize.ts`,
+the corner handles, and the Picture tab's presets); a height is never stored,
+so it cannot be saved squashed.
+
+**AutoRecover** (`apps/app/editorRecovery.ts`): unsaved words are kept in this
+browser's `localStorage`, per org/binder/draft/policy, 800ms after the last
+change, and offered back (Restore / Discard) the next time that policy opens
+in that draft. Dropped on save and on any deliberate "without saving". It is a
+device-local safety net only — nothing reaches Gitea until Save.
+
+`documentSchema.ts` is the one list of Tiptap extensions both the editor and
+the reader (`apps/app/editorDocumentHtml.ts`) load. Add a node or an attribute
+there, never to one side: ProseMirror drops what its schema does not declare,
+so formatting added only to the editor vanishes for every reviewer. The
+sanitizer keeps a filtered set of inline styles (`safeStyle` in
+`packages/utils/sanitizer.ts`) for the same reason.
 
 If you change anything in `packages/editor/` that affects visual appearance, note it
 in your PR description. The landing page no longer embeds the editor, so there is
-nothing to re-sync — but the editor is still the authoring surface inside the app.
+nothing to re-sync.
 
 ### The change comparison
 
-`apps/app/components/DocumentComparison.tsx` renders a change against the
-version it replaces for every file type the app previews. What it compares and
-what it says about it lives in `apps/app/documentComparison.ts`, so both are
-testable without a browser.
+`apps/app/components/ChangeComparisonPage.tsx` is the screen: **everything one
+change does to a binder, on one page.** A change is the unit of approval and
+may touch several documents, so the question a reviewer opens it with is what
+the _change_ does — not what it does to whichever document a selector happens
+to be pointing at. It is reached from the change at
+`/{org}/{binder}/-/changes/3/diffs`, and each document's section carries an
+anchor (`#cmp-nursing-hand-hygiene`) so "look at the hand hygiene diff" is a
+link somebody can send.
+
+Three shapes, because a change does three things to a document and only one of
+them is a diff: a revision is read against the version it replaces, a new
+document has nothing to be read against so it is read whole, and a removal has
+no file on the branch at all — it offers the last version on record instead.
+What is in the list and what each row says lives in
+`apps/app/changedDocuments.ts`, testable without a browser.
+
+**It is laid out the way a code review is.** Under the title, one line says
+who wants to publish how many documents from which branch, and the branch is
+a link to the binder's root read at that branch (`/{org}/{binder}/-/tree/{ref}?change=N`
+— the whole tree as the change would leave it, not its first file). Below it, a tree of only what changed —
+grouped by folder — sits on the **left**, and one panel per document on the
+right, in the same order. **Every fact and control about a document is in
+that panel's single bar**: its path, its word counts (`+12 −3`), its version
+step, a badge for New, Archiving/Archived or Restoring/Restored (a revision
+gets none — it is what nearly every row is), and Viewed, View and Download.
+A restore diffs exactly like a revision, so the badge is the only thing that
+tells them apart: the server sets `restored` on a changed document from the
+tags (the last thing that happened to that identity was an archiving). View is a real link to the exact file
+on the change's branch. Nothing about a document sits below it.
+
+A move or rename is drawn in the path itself — the old path struck out in the
+removed colour, the new one in the added — never as a sentence under the bar.
+Two versions whose words did not move draw nothing at all: the bar already
+says what happened, and the page never announces "nothing changed".
+
+It is still the binder's grammar: one document is a `.bs-panel`, the tree is
+a `.bs-panel` of `.bs-row`s in a `.bs-rail`. The first draft invented its own
+rail, row, card and head, and read as a different product the moment you
+arrived from the change request.
+
+The tree is the map: every document, its word counts as each comparison
+finishes, and which one is being read. Comparisons mount a screen ahead of
+the viewport rather than all at once — comparing one Word file or PDF means
+fetching two files and loading a parser, and a change touching eight
+documents would otherwise spend a reviewer's first ten seconds on documents
+they have not looked at. Ticking a document as viewed is a bookmark in
+`sessionStorage`, never a review: the record of who approved what is in
+Gitea, and the tick is drawn so it cannot be mistaken for part of it.
+
+**Every file read on this screen goes by identity, never by address.** A change
+that renames a policy has two different addresses for one document and the base
+ref has never heard of the new one, so a read by `slugPath` 404s at one of the
+two refs — on exactly the change the screen exists to explain. The scope is
+built from `row.path`, which carries the identity (ADR 0005). The rename itself
+is drawn in the file's bar from `previousSlugPath`, because the diff cannot
+say it: both refs read identically.
+
+One document's comparison is `apps/app/components/DocumentComparison.tsx`,
+which renders a change against the version it replaces for every file type the
+app previews. What it compares and what it says about it lives in
+`apps/app/documentComparison.ts`, so both are testable without a browser.
 
 The comparison is built on libraries, not hand-rolled: `diff` for word-level
 text, `node-htmldiff` for diffing two rendered documents as markup,
@@ -136,6 +297,29 @@ actually keeps a policy manual in.
 Added text is green and removed text is coral, and both carry an underline or
 a strike as well as a colour, so the comparison still reads without one.
 
+### Resolving a change's conflicts
+
+A change that is behind `main` and would not merge — a document changed both
+in the change and in the binder since it began — offers **Resolve conflicts**
+where it would offer Bring up to date. The resolver is
+`apps/app/components/ChangeConflictsPage.tsx` at
+`/{org}/{binder}/-/changes/N/conflicts`.
+
+The server (`services/api/gitea-client/conflicts.ts`) reads the three trees —
+the merge base, the change, and `main` — and lists every file changed on both
+sides, **paired by identity** (ADR 0005) so a policy renamed on one side and
+edited on the other settles itself instead of reading as a deletion. The page
+merges a document the editor wrote a block at a time and a text file a line at
+a time (`apps/app/threeWayMerge.ts`, git's diff3), asks only about the places
+both sides changed, and offers a Word file or a PDF as a whole choice.
+
+Gitea cannot write a merge commit with chosen contents, so a resolution is
+three steps on the change's branch: commit the published version of each
+conflicting file, run the ordinary update merge (which now has nothing to
+disagree about), then commit what the person chose. A failed merge is undone
+with a commit restoring the change's own versions. The request names the heads
+the page read, and is refused if either has moved.
+
 ### The BFF (`services/api`)
 
 All browser-to-data calls go through the BFF. The browser never contacts Gitea
@@ -152,6 +336,11 @@ directly.
 - `POST /api/app/documents` — create repo + upload initial file
 - `GET /api/app/documents/:owner/:repo` — document detail
 - `GET /api/app/documents/:owner/:repo/changes/closed` — closed changes with how each ended
+- A binder change's detail carries `documents` (what publishing would version)
+  **and** `removedDocuments` (what it takes off the record) — separate lists,
+  because a tag on a file that is no longer in the merged tree is the bug the
+  publish guard exists to prevent. A rename is in neither: Gitea reports one as
+  a delete plus an add, and the server subtracts the UIDs that came back
 - `POST /api/app/documents/:owner/:repo/versions` — upload new version
 - `POST /api/app/documents/:owner/:repo/pull-requests/:n/reviews` — submit review
 - `PUT /api/app/documents/:owner/:repo/pull-requests/:n/assignments` — set the assignee and reviewers
@@ -160,6 +349,8 @@ directly.
 - `POST /api/app/documents/:owner/:repo/pull-requests/:n/discussions/:threadId/resolve` — resolve/unresolve
 - `PUT /api/app/documents/:owner/:repo/pull-requests/:n/discussions/:threadId/comments/:commentId/reactions` — leave or take back a reaction
 - `POST /api/app/documents/:owner/:repo/pull-requests/:n/publish` — merge + tag
+- `GET/POST /api/app/binders/:org/:binder/changes/:n/conflicts` — what clashes
+  with the binder, read three ways; and resolving it
 - `GET /api/app/documents/:owner/:repo/download` — proxy file download
 - `GET/PUT/DELETE /api/app/documents/:owner/:repo/collaborators/:user` — manage access
 - `GET /api/app/users/search` — user search
@@ -178,10 +369,13 @@ with `bun run down`; those two scripts are the only supported lifecycle, and
 they are safe to run concurrently from several worktrees — each claims its own
 project name and port block, so neither can touch another's containers. Ask
 `bun run stack status` which ports are yours; never assume the defaults). It
-seeds demo users and documents automatically from `tests/seed-data/dev.yaml` — which
-carries the same clinic policy as a Word file, a PDF, and a Markdown file, so
-the preview and comparison screens can be checked against every file type the
-app meets. Use this to:
+seeds eleven accounts and seven binders automatically from
+`tests/seed-data/dev.yaml`. That file is deliberately full of edge cases — a
+binder with nothing in it and one covered in sign-off rules, a change six people
+have been asked to review and one nobody has looked at in three versions, empty
+folders, every file type the comparison screen can meet — so that looking at a
+state does not mean building it first. Its header indexes what is in there and
+`tests/README.md` says the same in prose. Use this to:
 
 - Verify Gitea service implementations against a real API
 - Run integration tests (`bun run test:integration`)
@@ -194,18 +388,21 @@ See `tests/README.md` for full usage.
 
 ### Deployment
 
-Everything except the SPA runs as Docker Compose services on **one EC2 host**,
-deployed by **pushing with pyinfra** from GitHub Actions. There is no serverless
-stack: Lambda, Aurora, API Gateway and the Gitea-as-NAT plumbing were removed
-(epic #302). See `docs/adr/0003-single-ec2-host-pyinfra-push-deploys.md`.
+Everything except the SPA and the feedback Worker runs as Docker Compose
+services on **one EC2 host**, deployed by **pushing with pyinfra** from GitHub
+Actions. There is no serverless backend: Lambda, Aurora, API Gateway and the
+Gitea-as-NAT plumbing were removed (epic #302). See
+`docs/adr/0003-single-ec2-host-pyinfra-push-deploys.md`, and
+`docs/adr/0006-cloudflare-workers-at-the-edge.md` for the Workers.
 
 | Component  | Host           | How deployed                                                          |
 | ---------- | -------------- | --------------------------------------------------------------------- |
-| SPA        | GitHub Pages   | `pages.yml` on push to `main`                                         |
+| SPA        | Cloudflare     | `static-site.yml` (`wrangler deploy`) on push to `main`               |
 | API        | EC2 via Docker | `deploy-pyinfra.yml` (pyinfra over SSH-through-SSM) on push to `main` |
 | Gitea      | Same EC2 host  | `docker-compose.prod.yml`, same pyinfra run                           |
 | Hocuspocus | Same EC2 host  | `docker-compose.prod.yml`, same pyinfra run                           |
 | Caddy      | Same EC2 host  | `docker-compose.prod.yml`, same pyinfra run                           |
+| Feedback   | Cloudflare     | `feedback-worker.yml` (`wrangler deploy`) on push to `main`           |
 
 The SPA is built with `BUN_PUBLIC_API_BASE_URL=https://api.bindersnap.com`
 baked in at compile time. Locally, this is `http://localhost:8787`.
@@ -374,6 +571,15 @@ state is a cache, and caches are still banned.
 pull-request time and lives on the same timeline as the content it governs, so
 `?ref=<tag>` answers "who owned this policy when this version was approved."
 
+A document's **identity** is a ULID carried as a segment of its filename —
+`nursing/hand-hygiene.01J8XZ4K7M….md` — and its version tags are keyed on that
+ULID rather than on its path, so renaming a policy cannot restart its numbering.
+Design only, not built:
+`docs/adr/0005-document-identity-and-version-tags.md`. Its title stays the
+filename, which is already point-in-time evidence: the tree at each version's tag
+records what the document was called when that version was approved. The derived
+index above stays deferred.
+
 Migrating in: `.bindersnap/config.json` on the `bindersnap-config` branch
 (`reviewSettings.ts`) predates this rule and is moving to a per-workspace settings
 row. Do not copy the pattern.
@@ -428,11 +634,19 @@ upload/review/publish contract. **That ADR is law for the file vault workflow.**
 
 ### Production is one EC2 host, deployed by pushing with pyinfra.
 
-No serverless. The backend is a Docker Compose stack on a single EC2 instance,
-and `deploy/` is the only thing that configures it. Do not add a Lambda, an
-Aurora cluster, an API Gateway, a config bucket, or a bootstrap script to
-Terraform user-data. Do not add a pull agent to the host. Deployment logic goes
-in `deploy/deploy.py`, in Python, in version control.
+No serverless backend. The backend is a Docker Compose stack on a single EC2
+instance, and `deploy/` is the only thing that configures it. Do not add a
+Lambda, an Aurora cluster, an API Gateway, a config bucket, or a bootstrap
+script to Terraform user-data. Do not add a pull agent to the host. Deployment
+logic goes in `deploy/deploy.py`, in Python, in version control.
+
+**Cloudflare Workers are the one exception, and a narrow one.** A Worker may
+run our code only if it is stateless, keeps no customer content, sits off the
+critical path, and never touches Gitea or the API's databases. Today that is
+`bindersnap-feedback` (in-app feedback → a private GitHub repository) and
+nothing else; `bindersnap-site` serves static files and runs no code. Auth,
+sessions, jobs, webhooks and anything that reads evidence or configuration stay
+in the BFF. See `docs/adr/0006-cloudflare-workers-at-the-edge.md`.
 
 See `docs/adr/0003-single-ec2-host-pyinfra-push-deploys.md`. Note that
 `docs/adr/0002-mvp-backend-aws-s3-dynamodb-cognito.md` describes an
@@ -869,7 +1083,7 @@ These apply to any changes touching `deploy/`, `deploy/files/docker-compose.prod
 2. **Registration is disabled in prod.** `GITEA__service__DISABLE_REGISTRATION=true` is non-negotiable for production. Dev compose may differ.
 3. **`INSTALL_LOCK=true` in prod.** Prevents Gitea setup wizard from re-running after first boot.
 4. **Rotate credentials on first deploy.** Generate with `openssl rand -base64 20` for passwords and `openssl rand -base64 32` for secret keys.
-5. **Service account token is required in prod.** `BINDERSNAP_GITEA_SERVICE_TOKEN` must be set; the API exits at startup if it is missing in production.
+5. **Service account tokens are split by power.** `BINDERSNAP_GITEA_SERVICE_TOKEN` (read scopes only) must be set; the API exits at startup if it is missing in production. `BINDERSNAP_GITEA_ADMIN_TOKEN` (`write:admin` only) is used solely for signup, password changes, account deletion and token revocation. Never give the read token a write scope, and never use the admin token for a read: the read token runs on nearly every request. Anything a person can do in Gitea themselves — renaming their own draft, say — is done with their own session token, not either of these.
 
 ---
 

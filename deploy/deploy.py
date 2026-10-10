@@ -18,8 +18,8 @@ Pipeline (top to bottom — pyinfra runs operations in definition order):
   7. validate the compose config + custom Caddy build before any `up` (gate)
   8. log in to GHCR (when a token is present on the control plane) and bootstrap
      the Gitea service token on first run
-  9. `docker compose up -d`, force-recreating only when this run changed env or
-     config
+  9. `docker compose up -d`, recreating only the services whose definition,
+     env or bind-mounted config changed this run
  10. install + configure the CloudWatch agent (disk/memory metrics for the
      monitoring module's alarms — moved here from the Terraform user-data in
      phase 4, issue #306)
@@ -104,8 +104,8 @@ _FILES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "files")
 _BIN = os.path.join(_FILES, "bin")
 _SCRIPTS = os.path.join(_FILES, "scripts")
 
-# Runtime config files uploaded to APP_DIR. Changing any of these flags the
-# stack for a force-recreate (mirrors the file set the old refresh timer hashed).
+# Runtime config files uploaded to APP_DIR. A change to one drops a
+# `changed-<file>` marker, and stack-up recreates the service that reads it.
 CONFIG_FILES = [
     "docker-compose.prod.yml",
     "Caddyfile.prod",
@@ -121,6 +121,15 @@ CONFIG_FILES = [
 HELPER_SCRIPTS = [
     "bindersnap-bootstrap-gitea",
     "bindersnap-stack-up",
+    "bindersnap-backup",
+    "bindersnap-health-metrics",
+]
+
+# systemd timers that run helper scripts on a schedule: the hourly restic
+# backup to R2 and the five-minute Litestream health metric.
+SYSTEMD_TIMERS = [
+    "bindersnap-backup",
+    "bindersnap-health-metrics",
 ]
 
 
@@ -197,10 +206,33 @@ class ComposePluginVersion(FactBase[str]):
 
 # ---------- 1. System packages ----------
 
+# No `update=True`: upgrading the docker package restarts dockerd and every
+# container, and a deploy can land at any hour.
 dnf.packages(
     name="Install Docker, AWS CLI and XFS tooling",
     packages=["docker", "awscli", "xfsprogs"],
-    update=True,
+)
+
+# Patching. AL2023 pins its repositories to one release, and AWS recommends
+# moving that pin deliberately rather than tracking `latest`. The pin lives in
+# deploy/files/al2023-release: bumping it is a reviewed commit, and the deploy
+# that ships it upgrades every package to that release, once. Docker and its
+# runtime are excluded, since their upgrade restarts every container; upgrade
+# them in a maintenance window (docs/ops/deploy.md, "Patching"). A kernel
+# update waits for the next reboot.
+releasever_put = files.put(
+    name="Pin the AL2023 release",
+    src=os.path.join(_FILES, "al2023-release"),
+    dest="/etc/dnf/vars/releasever",
+    mode="0644",
+)
+
+server.shell(
+    name="Upgrade the host to the pinned AL2023 release (Docker excluded)",
+    commands=[
+        "dnf upgrade -y --refresh --exclude=docker --exclude=containerd --exclude=runc",
+    ],
+    _if=releasever_put.did_change,
 )
 
 # ---------- 2. Docker Compose plugin (arch-matched) ----------
@@ -277,6 +309,13 @@ if _data_device:
         ensure_newline=True,
     )
 
+    # Growing the EBS volume in Terraform leaves the filesystem its old size.
+    # xfs_growfs fills the device and is a no-op when it already does.
+    server.shell(
+        name="Grow the data filesystem to the volume's size",
+        commands=[f"xfs_growfs {DATA_MOUNT} >/dev/null"],
+    )
+
     files.directory(
         name="Ensure Docker data dir on EBS",
         path=f"{DATA_MOUNT}/docker",
@@ -292,6 +331,25 @@ if _data_device:
         mode="0644",
     )
 
+    # Docker's data-root is /data/docker, and `nofail` lets boot continue without
+    # the mount. Without this ordering Docker can start first and create a fresh,
+    # empty data-root on the root disk. Refusing to start is the safe failure.
+    files.directory(
+        name="Ensure Docker systemd drop-in dir",
+        path="/etc/systemd/system/docker.service.d",
+        mode="0755",
+    )
+    docker_dropin_put = files.put(
+        name="Require the data volume before Docker starts",
+        src=os.path.join(_FILES, "docker-requires-data.conf"),
+        dest="/etc/systemd/system/docker.service.d/10-bindersnap-data.conf",
+        mode="0644",
+    )
+    systemd.daemon_reload(
+        name="Reload systemd after Docker drop-in change",
+        _if=docker_dropin_put.did_change,
+    )
+
     # Restart Docker only when the daemon config actually changed, replacing the
     # hand-rolled hash compare in the old storage-setup shell script.
     systemd.service(
@@ -301,11 +359,16 @@ if _data_device:
         _if=daemon_put.did_change,
     )
 else:
+    # Never fall back to the root volume. Gitea would start on an empty database
+    # there, Litestream would replicate that empty database as the newest
+    # generation (the one `litestream restore` picks), and the root volume is
+    # neither snapshotted nor kept when the instance is replaced.
     server.shell(
-        name="Warn: EBS data volume not found — Docker will use root volume",
+        name="Abort: EBS data volume not found",
         commands=[
-            "echo 'WARNING: EBS data volume not found"
-            " — Docker will use the root volume' >&2"
+            "echo 'ERROR: EBS data volume not found — refusing to run the stack"
+            " on the root volume. Attach the data volume and redeploy.' >&2",
+            "exit 1",
         ],
     )
 
@@ -353,6 +416,14 @@ files.put(
     mode="0755",
 )
 
+# The Litestream restore runs on the host (docs/ops/restore.md).
+files.put(
+    name="Upload Litestream restore script",
+    src=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts", "restore.sh"),
+    dest=f"{APP_DIR}/scripts/restore.sh",
+    mode="0755",
+)
+
 # ---------- 6. Render .env.prod from SSM (control plane) ----------
 
 # Read the SSM tree here on the control plane and upload the rendered env file.
@@ -367,35 +438,25 @@ env_put = files.put(
     add_deploy_dir=False,
 )
 
-# ---------- 7. Change detection: reset markers + flag config/env changes ----------
+# ---------- 7. Change detection: one marker per changed config file ----------
 
-# stack-up recreates the stack when either a config file or the env file changed
-# this run. pyinfra signals both through marker files dropped via `_if`, which is
-# delayed to execute time (unlike a prepare-time `if op.changed:`).
+# Compose recreates a service whose definition or interpolated env changed on
+# its own; it cannot see the contents of a bind-mounted file. pyinfra drops a
+# `changed-<file>` marker for each config file this run changed, and stack-up
+# recreates only the service that reads it. The markers are delayed to execute
+# time through `_if`, unlike a prepare-time `if op.changed:`.
 files.directory(name="Ensure state dir", path=STATE_DIR, mode="0755")
-files.file(
-    name="Reset config-changed marker",
-    path=f"{STATE_DIR}/config-changed",
-    present=False,
-)
-files.file(
-    name="Reset env-changed marker",
-    path=f"{STATE_DIR}/env-changed",
-    present=False,
+server.shell(
+    name="Reset change markers",
+    commands=[f"rm -f {STATE_DIR}/changed-* {STATE_DIR}/config-changed {STATE_DIR}/env-changed"],
 )
 
-for _upload in config_uploads.values():
+for _name, _upload in config_uploads.items():
     server.shell(
-        name="Flag config change for recreate",
-        commands=[f"touch {STATE_DIR}/config-changed"],
+        name=f"Flag {_name} change",
+        commands=[f"touch {STATE_DIR}/changed-{_name}"],
         _if=_upload.did_change,
     )
-
-server.shell(
-    name="Flag env change for recreate",
-    commands=[f"touch {STATE_DIR}/env-changed"],
-    _if=env_put.did_change,
-)
 
 # ---------- 8. Validate config before any compose up ----------
 
@@ -465,11 +526,38 @@ server.shell(
 # ---------- 10. Bring the stack up (recreate only on change) ----------
 
 server.shell(
-    name="Compose up (force-recreate only when changed)",
+    name="Compose up (recreate only what changed)",
     commands=[f"{BIN_DIR}/bindersnap-stack-up"],
 )
 
-# ---------- 11. CloudWatch agent (disk + memory metrics) ----------
+# ---------- 11. Scheduled jobs (backup + health metrics) ----------
+
+_units_changed = []
+for _timer in SYSTEMD_TIMERS:
+    for _suffix in ("service", "timer"):
+        _units_changed.append(
+            files.put(
+                name=f"Upload {_timer}.{_suffix}",
+                src=os.path.join(_FILES, "systemd", f"{_timer}.{_suffix}"),
+                dest=f"/etc/systemd/system/{_timer}.{_suffix}",
+                mode="0644",
+            )
+        )
+
+systemd.daemon_reload(
+    name="Reload systemd after timer changes",
+    _if=lambda: any(op.did_change() for op in _units_changed),
+)
+
+for _timer in SYSTEMD_TIMERS:
+    systemd.service(
+        name=f"Enable + start {_timer}.timer",
+        service=f"{_timer}.timer",
+        running=True,
+        enabled=True,
+    )
+
+# ---------- 12. CloudWatch agent (disk + memory metrics) ----------
 
 # The monitoring module's disk/memory alarms read the Bindersnap namespace this
 # agent publishes. Host configuration is owned here, not by Terraform user-data.

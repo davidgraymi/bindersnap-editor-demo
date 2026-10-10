@@ -4,15 +4,35 @@ import { randomUUID } from "node:crypto";
 
 export const DEFAULT_SERVICE_ACCOUNT_USERNAME = "bindersnap-service";
 export const DEFAULT_SERVICE_TOKEN_NAME = "bindersnap-api-service";
+export const DEFAULT_ADMIN_TOKEN_NAME = "bindersnap-api-admin";
 export const DEFAULT_SSM_PARAMETER_PATH = "/bindersnap/prod";
 export const DEFAULT_SERVICE_ACCOUNT_EMAIL_DOMAIN = "users.bindersnap.local";
+/**
+ * The service account holds two tokens. The service token reads — branch
+ * protection, teams, avatars, the email lookup at sign-in (`read:admin`) — on
+ * nearly every API request, so it can write nothing. The admin token holds
+ * `write:admin` alone, for the rare account acts: signup, a new password,
+ * deleting an account, revoking a session's token.
+ *
+ * `services/api/dev-service-token.ts` mints the same two in dev, and a test
+ * holds its scopes to these.
+ */
 export const DEFAULT_SERVICE_TOKEN_SCOPES = [
-  "write:admin",
+  "read:admin",
   "read:issue",
   "read:organization",
   "read:repository",
   "read:user",
 ] as const;
+export const DEFAULT_ADMIN_TOKEN_SCOPES = ["write:admin"] as const;
+
+/**
+ * Which token to mint. `combined` is the one token a host had before the
+ * split — both scope sets — minted only while SSM has no `gitea_admin_token`
+ * parameter yet, so a deploy that lands before its Terraform cannot leave the
+ * API without `write:admin`.
+ */
+export type TokenKind = "service" | "admin" | "combined";
 export const BOOTSTRAP_SERVICE_TOKEN_PLACEHOLDER =
   "BOOTSTRAP_WITH_scripts/bootstrap-gitea-service-account.ts";
 
@@ -26,6 +46,9 @@ type BootstrapConfig = {
   serviceTokenName: string;
   serviceTokenScopes: string[];
   ssmParameterName: string;
+  adminTokenName: string;
+  adminTokenScopes: string[];
+  adminSsmParameterName: string;
   awsRegion?: string;
 };
 
@@ -51,21 +74,33 @@ function requireEnv(env: NodeJS.ProcessEnv, name: string): string {
   return value;
 }
 
-export function resolveServiceTokenScopes(scopesRaw?: string): string[] {
+function resolveTokenScopes(
+  scopesRaw: string | undefined,
+  defaults: readonly string[],
+): string[] {
   const configuredScopes = (scopesRaw ?? "")
     .split(",")
     .map((scope) => scope.trim())
     .filter((scope) => scope !== "");
 
-  return Array.from(
-    new Set<string>([...configuredScopes, ...DEFAULT_SERVICE_TOKEN_SCOPES]),
-  );
+  return Array.from(new Set<string>([...configuredScopes, ...defaults]));
 }
 
-export function resolveSsmParameterName(parameterPathRaw?: string): string {
+export function resolveServiceTokenScopes(scopesRaw?: string): string[] {
+  return resolveTokenScopes(scopesRaw, DEFAULT_SERVICE_TOKEN_SCOPES);
+}
+
+export function resolveAdminTokenScopes(scopesRaw?: string): string[] {
+  return resolveTokenScopes(scopesRaw, DEFAULT_ADMIN_TOKEN_SCOPES);
+}
+
+export function resolveSsmParameterName(
+  parameterPathRaw?: string,
+  leaf = "gitea_service_token",
+): string {
   const trimmedPath =
     parameterPathRaw?.trim().replace(/\/+$/, "") || DEFAULT_SSM_PARAMETER_PATH;
-  return `${trimmedPath}/gitea_service_token`;
+  return `${trimmedPath}/${leaf}`;
 }
 
 function resolveParameterPath(parameterPathRaw?: string): string {
@@ -92,10 +127,19 @@ export function renderDockerEnvFromSsmPayload(
     throw new Error(`No SSM parameters found under ${parameterPath}`);
   }
 
-  const tokenParameterName = `${parameterPath}/gitea_service_token`;
-  const tokenValue = parameters.find(
-    (parameter) => parameter.Name === tokenParameterName,
-  )?.Value;
+  const valueOf = (leaf: string) =>
+    parameters.find(
+      (parameter) => parameter.Name === `${parameterPath}/${leaf}`,
+    )?.Value;
+  const tokenValue = valueOf("gitea_service_token");
+  // Absent means this host predates the split: nothing to mint for it.
+  const adminTokenValue = valueOf("gitea_admin_token");
+  // The first-boot admin credentials are what mint the tokens, so they stay
+  // until neither token is waiting to be minted.
+  const tokensMinted =
+    tokenValue !== undefined &&
+    tokenValue !== bootstrapPlaceholder &&
+    adminTokenValue !== bootstrapPlaceholder;
 
   const lines: string[] = [];
   for (const parameter of parameters) {
@@ -111,8 +155,7 @@ export function renderDockerEnvFromSsmPayload(
 
     const envName = parameterNameToEnvName(parameter.Name);
     if (
-      tokenValue &&
-      tokenValue !== bootstrapPlaceholder &&
+      tokensMinted &&
       (envName === "GITEA_ADMIN_USER" || envName === "GITEA_ADMIN_PASS")
     ) {
       continue;
@@ -177,15 +220,17 @@ export function buildRemoteBootstrapCommands(
     'cleanup() { rm -f "$TMP_ENV" "$TMP_JSON"; }',
     "trap cleanup EXIT",
     'aws ssm get-parameters-by-path --path "$PARAMETER_PATH" --recursive --with-decryption --output json > "$TMP_JSON"',
-    'docker run --rm -i -v "$APP_DIR:/workspace" -w /workspace oven/bun:1 bun scripts/bootstrap-gitea-service-account.ts render-env --parameter-path "$PARAMETER_PATH" < "$TMP_JSON" > "$TMP_ENV"',
+    'docker run --rm -i -v "$APP_DIR:/workspace" -w /workspace oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 bun scripts/bootstrap-gitea-service-account.ts render-env --parameter-path "$PARAMETER_PATH" < "$TMP_JSON" > "$TMP_ENV"',
     'install -m 0600 "$TMP_ENV" "$ENV_FILE"',
     "SERVICE_TOKEN=$(grep '^GITEA_SERVICE_TOKEN=' \"$ENV_FILE\" | cut -d= -f2- || true)",
     'if [ -z "$SERVICE_TOKEN" ]; then echo "GITEA_SERVICE_TOKEN is missing from $ENV_FILE"; exit 1; fi',
-    'if [ "$SERVICE_TOKEN" != "$BOOTSTRAP_TOKEN_PLACEHOLDER" ]; then echo "Gitea service token already bootstrapped"; exit 0; fi',
+    // Absent until the secrets Terraform that adds it is applied.
+    "ADMIN_TOKEN=$(grep '^GITEA_ADMIN_TOKEN=' \"$ENV_FILE\" | cut -d= -f2- || true)",
+    'if [ "$SERVICE_TOKEN" != "$BOOTSTRAP_TOKEN_PLACEHOLDER" ] && [ "$ADMIN_TOKEN" != "$BOOTSTRAP_TOKEN_PLACEHOLDER" ]; then echo "Gitea service tokens already bootstrapped"; exit 0; fi',
     "set -a",
     '. "$ENV_FILE"',
     "set +a",
-    'if [ -z "${GITEA_ADMIN_USER:-}" ] || [ -z "${GITEA_ADMIN_PASS:-}" ]; then echo "GITEA_ADMIN_USER and GITEA_ADMIN_PASS are required while the service token is still a bootstrap placeholder"; exit 1; fi',
+    'if [ -z "${GITEA_ADMIN_USER:-}" ] || [ -z "${GITEA_ADMIN_PASS:-}" ]; then echo "GITEA_ADMIN_USER and GITEA_ADMIN_PASS are required while a service token is still a bootstrap placeholder"; exit 1; fi',
     'cd "$APP_DIR"',
     'docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d gitea',
     `for _ in $(seq 1 60); do STATUS=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' bindersnap-gitea-prod 2>/dev/null || true); if [ "$STATUS" = "healthy" ]; then break; fi; sleep 5; done`,
@@ -193,11 +238,16 @@ export function buildRemoteBootstrapCommands(
     'if [ "$STATUS" != "healthy" ]; then echo "Gitea did not become ready in time"; exit 1; fi',
     'GITEA_ADMIN_EMAIL="${GITEA_ADMIN_EMAIL:-${GITEA_ADMIN_USER}@${BINDERSNAP_USER_EMAIL_DOMAIN:-users.bindersnap.com}}"',
     'if ! docker exec --user "${GITEA_EXEC_USER:-1000:1000}" bindersnap-gitea-prod gitea --config /data/gitea/conf/app.ini admin user create --username "$GITEA_ADMIN_USER" --password "$GITEA_ADMIN_PASS" --email "$GITEA_ADMIN_EMAIL" --admin --must-change-password=false; then docker exec --user "${GITEA_EXEC_USER:-1000:1000}" bindersnap-gitea-prod gitea --config /data/gitea/conf/app.ini admin user change-password --username "$GITEA_ADMIN_USER" --password "$GITEA_ADMIN_PASS" --must-change-password=false; fi',
-    'SERVICE_TOKEN=$(docker run --rm --network bindersnap-prod -e GITEA_ADMIN_USER -e GITEA_ADMIN_PASS -e GITEA_INTERNAL_URL=http://gitea:3000 -e BINDERSNAP_USER_EMAIL_DOMAIN="${BINDERSNAP_USER_EMAIL_DOMAIN:-users.bindersnap.com}" -v "$APP_DIR:/workspace" -w /workspace oven/bun:1 bun scripts/bootstrap-gitea-service-account.ts mint-token)',
-    'if [ -z "$SERVICE_TOKEN" ]; then echo "mint-token returned an empty token"; exit 1; fi',
+    'mint() { docker run --rm --network bindersnap-prod -e GITEA_ADMIN_USER -e GITEA_ADMIN_PASS -e GITEA_INTERNAL_URL=http://gitea:3000 -e BINDERSNAP_USER_EMAIL_DOMAIN="${BINDERSNAP_USER_EMAIL_DOMAIN:-users.bindersnap.com}" -v "$APP_DIR:/workspace" -w /workspace oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 bun scripts/bootstrap-gitea-service-account.ts mint-token --kind "$1"; }',
+    // Both are minted whenever either is due: the service token is re-minted
+    // read-only, which takes `write:admin` off a host's pre-split token.
+    'if [ -z "$ADMIN_TOKEN" ]; then SERVICE_KIND=combined; else SERVICE_KIND=service; fi',
+    'SERVICE_TOKEN=$(mint "$SERVICE_KIND")',
+    'if [ -z "$SERVICE_TOKEN" ]; then echo "mint-token returned an empty service token"; exit 1; fi',
     'aws ssm put-parameter --name "$PARAMETER_PATH/gitea_service_token" --type SecureString --value "$SERVICE_TOKEN" --overwrite --region "${AWS_REGION:-us-east-1}"',
+    'if [ -n "$ADMIN_TOKEN" ]; then ADMIN_TOKEN=$(mint admin); if [ -z "$ADMIN_TOKEN" ]; then echo "mint-token returned an empty admin token"; exit 1; fi; aws ssm put-parameter --name "$PARAMETER_PATH/gitea_admin_token" --type SecureString --value "$ADMIN_TOKEN" --overwrite --region "${AWS_REGION:-us-east-1}"; fi',
     'aws ssm get-parameters-by-path --path "$PARAMETER_PATH" --recursive --with-decryption --output json > "$TMP_JSON"',
-    'docker run --rm -i -v "$APP_DIR:/workspace" -w /workspace oven/bun:1 bun scripts/bootstrap-gitea-service-account.ts render-env --parameter-path "$PARAMETER_PATH" < "$TMP_JSON" > "$TMP_ENV"',
+    'docker run --rm -i -v "$APP_DIR:/workspace" -w /workspace oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 bun scripts/bootstrap-gitea-service-account.ts render-env --parameter-path "$PARAMETER_PATH" < "$TMP_JSON" > "$TMP_ENV"',
     'install -m 0600 "$TMP_ENV" "$ENV_FILE"',
     'docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d api caddy',
   ];
@@ -233,6 +283,13 @@ export function resolveBootstrapConfig(env = process.env): BootstrapConfig {
       env.GITEA_SERVICE_TOKEN_SCOPES,
     ),
     ssmParameterName: resolveSsmParameterName(env.SSM_PARAMETER_PATH),
+    adminTokenName:
+      env.GITEA_ADMIN_TOKEN_NAME?.trim() || DEFAULT_ADMIN_TOKEN_NAME,
+    adminTokenScopes: resolveAdminTokenScopes(env.GITEA_ADMIN_TOKEN_SCOPES),
+    adminSsmParameterName: resolveSsmParameterName(
+      env.SSM_PARAMETER_PATH,
+      "gitea_admin_token",
+    ),
     awsRegion: env.AWS_REGION?.trim() || undefined,
   };
 }
@@ -330,10 +387,33 @@ async function ensureServiceUser(config: BootstrapConfig): Promise<void> {
   }
 }
 
-async function rotateServiceToken(config: BootstrapConfig): Promise<string> {
+/** The name and scopes a kind of token is minted with. */
+export function tokenSpec(
+  config: BootstrapConfig,
+  kind: TokenKind,
+): { name: string; scopes: string[] } {
+  if (kind === "admin") {
+    return { name: config.adminTokenName, scopes: config.adminTokenScopes };
+  }
+  if (kind === "combined") {
+    return {
+      name: config.serviceTokenName,
+      scopes: Array.from(
+        new Set([...config.serviceTokenScopes, ...config.adminTokenScopes]),
+      ),
+    };
+  }
+  return { name: config.serviceTokenName, scopes: config.serviceTokenScopes };
+}
+
+async function rotateToken(
+  config: BootstrapConfig,
+  kind: TokenKind,
+): Promise<string> {
+  const { name, scopes } = tokenSpec(config, kind);
   const deleteResponse = await giteaRequest(
     config,
-    `/api/v1/users/${encodeURIComponent(config.serviceUsername)}/tokens/${encodeURIComponent(config.serviceTokenName)}`,
+    `/api/v1/users/${encodeURIComponent(config.serviceUsername)}/tokens/${encodeURIComponent(name)}`,
     {
       method: "DELETE",
     },
@@ -353,10 +433,7 @@ async function rotateServiceToken(config: BootstrapConfig): Promise<string> {
     `/api/v1/users/${encodeURIComponent(config.serviceUsername)}/tokens`,
     {
       method: "POST",
-      body: JSON.stringify({
-        name: config.serviceTokenName,
-        scopes: config.serviceTokenScopes,
-      }),
+      body: JSON.stringify({ name, scopes }),
     },
   );
 
@@ -379,9 +456,11 @@ async function rotateServiceToken(config: BootstrapConfig): Promise<string> {
 
 async function ensureServiceUserAndRotateToken(
   config: BootstrapConfig,
-  options?: { log?: boolean },
+  options?: { log?: boolean; kind?: TokenKind },
 ): Promise<string> {
   const log = options?.log ?? true;
+  const kind = options?.kind ?? "service";
+  const { name, scopes } = tokenSpec(config, kind);
 
   if (log) {
     console.log(
@@ -391,20 +470,18 @@ async function ensureServiceUserAndRotateToken(
   await ensureServiceUser(config);
 
   if (log) {
-    console.log(
-      `Rotating PAT ${config.serviceTokenName} with scopes: ${config.serviceTokenScopes.join(", ")}`,
-    );
+    console.log(`Rotating PAT ${name} with scopes: ${scopes.join(", ")}`);
   }
-  return rotateServiceToken(config);
+  return rotateToken(config, kind);
 }
 
-function writeTokenToSsm(config: BootstrapConfig, serviceToken: string): void {
+function writeTokenToSsm(
+  config: BootstrapConfig,
+  parameterName: string,
+  token: string,
+): void {
   const result = Bun.spawnSync(
-    buildPutParameterArgs(
-      config.ssmParameterName,
-      serviceToken,
-      config.awsRegion,
-    ),
+    buildPutParameterArgs(parameterName, token, config.awsRegion),
     {
       stderr: "pipe",
       stdout: "pipe",
@@ -414,7 +491,7 @@ function writeTokenToSsm(config: BootstrapConfig, serviceToken: string): void {
 
   if (result.exitCode !== 0) {
     throw new Error(
-      `Failed to write ${config.ssmParameterName} to SSM: ${result.stderr.toString().trim() || result.stdout.toString().trim() || "aws ssm put-parameter failed"}`,
+      `Failed to write ${parameterName} to SSM: ${result.stderr.toString().trim() || result.stdout.toString().trim() || "aws ssm put-parameter failed"}`,
     );
   }
 }
@@ -424,10 +501,17 @@ export async function bootstrapGiteaServiceAccount(
 ): Promise<void> {
   const serviceToken = await ensureServiceUserAndRotateToken(config, {
     log: true,
+    kind: "service",
+  });
+  const adminToken = await ensureServiceUserAndRotateToken(config, {
+    log: true,
+    kind: "admin",
   });
 
   console.log(`Writing ${config.ssmParameterName} to SSM Parameter Store`);
-  writeTokenToSsm(config, serviceToken);
+  writeTokenToSsm(config, config.ssmParameterName, serviceToken);
+  console.log(`Writing ${config.adminSsmParameterName} to SSM Parameter Store`);
+  writeTokenToSsm(config, config.adminSsmParameterName, adminToken);
 
   console.log("Done.");
   console.log(
@@ -479,11 +563,16 @@ async function main(): Promise<void> {
   }
 
   if (command === "mint-token") {
+    const kindIndex = args.indexOf("--kind");
+    const kind = (
+      kindIndex >= 0 ? args[kindIndex + 1] : "service"
+    ) as TokenKind;
+    if (!["service", "admin", "combined"].includes(kind)) {
+      throw new Error(`Unknown token kind: ${kind}`);
+    }
     const token = await ensureServiceUserAndRotateToken(
       resolveBootstrapConfig(),
-      {
-        log: false,
-      },
+      { log: false, kind },
     );
     process.stdout.write(`${token}\n`);
     return;

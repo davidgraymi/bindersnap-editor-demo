@@ -39,6 +39,22 @@ cd /opt/bindersnap
 Console fallback: **Systems Manager → Session Manager → Start session →** pick the
 `bindersnap` instance.
 
+### Reaching Gitea
+
+Gitea has no public hostname. It listens on the host's loopback only
+(`127.0.0.1:3000`), so reach its UI through an SSM port-forwarding session:
+
+```bash
+aws ssm start-session --target "$INSTANCE_ID" \
+  --document-name AWS-StartPortForwardingSession \
+  --parameters 'portNumber=3000,localPortNumber=3000'
+# then open http://localhost:3000 and sign in as the Gitea admin
+```
+
+The admin password is the `gitea_admin_pass` leaf in SSM, while it is still
+there. From a shell on the host, `docker exec bindersnap-gitea-prod curl -s
+http://localhost:3000/api/v1/version` answers without a browser.
+
 ## 2. Assess
 
 ```bash
@@ -135,9 +151,10 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml down
 
 - **Secrets/env are owned by SSM.** Any manual `.env.prod` edit is overwritten on
   the next deploy — use step 4 (SSM) for anything that must persist.
-- **`compose up` recreates only on change.** `deploy.py`'s stack-up force-recreates
-  only when config or env changed this run; a manual `up -d api` after an
-  `API_TAG` change (step 3) recreates the API because the env changed.
+- **`compose up` recreates only on change.** Compose recreates a service whose
+  definition or env changed; stack-up also recreates `caddy` or `litestream`
+  when this run changed the config file it mounts. A manual `up -d api` after an
+  `API_TAG` change (step 3) recreates the API because its env changed.
 - **Data safety.** Gitea, SQLite sessions, and litestream data live on the EBS
   data volume mounted at `/data`; `compose down` (without `-v`) and image
   rollbacks do not touch it. Never pass `-v` to `compose down` in break-glass.

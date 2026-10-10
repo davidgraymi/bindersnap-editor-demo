@@ -15,14 +15,14 @@ function runApiCheck(script: string) {
   };
 }
 
-test("getWorkspaceDocuments redirects to billing after a 402 response", () => {
+test("fetchLibrary reports the paywall after a typed 402 response", () => {
   const result = runApiCheck(`
     import { JSDOM } from "jsdom";
-    import { getWorkspaceDocuments } from "./apps/app/api.ts";
+    import { fetchLibrary } from "./apps/app/api.ts";
     import { registerPaymentRequiredHandler } from "./apps/app/paymentRequired.ts";
 
     const dom = new JSDOM("<!doctype html><html><body></body></html>", {
-      url: "https://bindersnap.com/documents",
+      url: "https://bindersnap.com/-/documents",
     });
 
     Object.assign(globalThis, {
@@ -32,23 +32,30 @@ test("getWorkspaceDocuments redirects to billing after a 402 response", () => {
       history: dom.window.history,
       PopStateEvent: dom.window.PopStateEvent,
       fetch: async () =>
-        new Response(JSON.stringify({ error: "Billing required." }), {
-          status: 402,
-          headers: {
-            "Content-Type": "application/json",
+        new Response(
+          JSON.stringify({
+            error: "Billing required.",
+            code: "subscription_required",
+            organization: "riverside-health",
+          }),
+          {
+            status: 402,
+            headers: {
+              "Content-Type": "application/json",
+            },
           },
-        }),
+        ),
     });
 
     let handlerCalls = 0;
-    const unregister = registerPaymentRequiredHandler(() => {
+    let seenOrganization = null;
+    const unregister = registerPaymentRequiredHandler((event) => {
       handlerCalls += 1;
-      window.history.replaceState({}, "", "/billing");
-      window.dispatchEvent(new PopStateEvent("popstate"));
+      seenOrganization = event.organizationName;
     });
 
     try {
-      await getWorkspaceDocuments();
+      await fetchLibrary();
       console.error("expected getWorkspaceDocuments to reject");
       process.exit(1);
     } catch (error) {
@@ -65,8 +72,15 @@ test("getWorkspaceDocuments redirects to billing after a 402 response", () => {
       process.exit(1);
     }
 
-    if (window.location.pathname !== "/billing") {
-      console.error("expected redirect to /billing but got", window.location.pathname);
+    // The refused write no longer moves anybody. Read-only mode happens where
+    // they are standing; navigating away would take the record with it.
+    if (window.location.pathname !== "/-/documents") {
+      console.error("expected to stay put but got", window.location.pathname);
+      process.exit(1);
+    }
+
+    if (seenOrganization !== "riverside-health") {
+      console.error("expected the org to be named but got", seenOrganization);
       process.exit(1);
     }
   `);
@@ -82,7 +96,7 @@ test("fetchBillingStatus ignores 402 interception for billing endpoints", () => 
     import { registerPaymentRequiredHandler } from "./apps/app/paymentRequired.ts";
 
     const dom = new JSDOM("<!doctype html><html><body></body></html>", {
-      url: "https://bindersnap.com/documents",
+      url: "https://bindersnap.com/-/documents",
     });
 
     Object.assign(globalThis, {
@@ -113,7 +127,7 @@ test("fetchBillingStatus ignores 402 interception for billing endpoints", () => 
       process.exit(1);
     }
 
-    if (window.location.pathname !== "/documents") {
+    if (window.location.pathname !== "/-/documents") {
       console.error("unexpected redirect to", window.location.pathname);
       process.exit(1);
     }

@@ -15,6 +15,7 @@ import {
   APP_BASE_URL,
   GITEA_ADMIN_USER,
   GITEA_ADMIN_PASS,
+  GITEA_BOB_PASS,
   GITEA_URL,
   installMemorySessionStorage,
   makeClient,
@@ -22,7 +23,7 @@ import {
   pollUntil,
   REPO,
   resolveAndStoreToken,
-  SEEDED_BRANCH,
+  SEEDED,
   signInAsAlice,
 } from "./helpers";
 
@@ -33,6 +34,9 @@ import { seedDevStack } from "./seed";
 // ---------------------------------------------------------------------------
 
 let authHeaders: Record<string, string> = {};
+// Bob's own credentials: team-derived access is only visible to the person who
+// has it, so asking as the admin would answer a different question.
+let bobAuthHeaders: Record<string, string> = {};
 
 test.beforeAll(async () => {
   // This hook seeds the stack and then waits on Gitea's review indexing, which
@@ -45,6 +49,9 @@ test.beforeAll(async () => {
 
   const token = await resolveAndStoreToken("bindersnap-smoke");
   authHeaders = { Authorization: `token ${token}` };
+  bobAuthHeaders = {
+    Authorization: `Basic ${Buffer.from(`bob:${GITEA_BOB_PASS}`).toString("base64")}`,
+  };
 
   // Block until the seeded PR carries the expected "changes_requested" state
   // so that fixture-dependent assertions do not race against Gitea indexing.
@@ -53,7 +60,7 @@ test.beforeAll(async () => {
       client: makeClient(),
       owner: OWNER,
       repo: REPO,
-      branch: SEEDED_BRANCH,
+      branch: SEEDED.branch,
     });
     return pr?.approvalState === "changes_requested";
   }, "seeded pull request to reach changes_requested state");
@@ -80,23 +87,35 @@ test.describe("Gitea dev stack health", () => {
     expect(user.login).toBe("alice");
   });
 
-  test("bob has write collaborator access on the seeded repository", async ({
+  test("bob can write in the binder, through its team rather than a collaborator row", async ({
     request,
   }) => {
+    // Access is uniform within a workspace (ADR 0004 §6): bob is in the
+    // binder's authors team, not a per-repository collaborator, which is the
+    // whole point — a compliance officer joins 200 policies in one call.
+    //
+    // So this asks whether he can write, not whether he appears in the
+    // collaborator table. The collaborator endpoint reports only direct rows
+    // and answers "none" for team-derived access, and Gitea reports a team's
+    // own `permission` as "none" whenever its access is per-unit.
     const res = await request.get(
-      `${GITEA_URL}/api/v1/repos/alice/quarterly-report/collaborators/bob/permission`,
-      { headers: authHeaders },
+      `${GITEA_URL}/api/v1/repos/${OWNER}/${REPO}`,
+      { headers: bobAuthHeaders },
     );
     expect(res.status()).toBe(200);
-    const payload = (await res.json()) as { permission?: string };
-    expect(payload.permission).toBe("write");
+
+    const payload = (await res.json()) as {
+      permissions?: { push?: boolean; pull?: boolean };
+    };
+    expect(payload.permissions?.push).toBe(true);
+    expect(payload.permissions?.pull).toBe(true);
   });
 
   test("seeded repository keeps main empty before review", async ({
     request,
   }) => {
     const res = await request.get(
-      `${GITEA_URL}/api/v1/repos/alice/quarterly-report/contents/document.json`,
+      `${GITEA_URL}/api/v1/repos/${OWNER}/${REPO}/contents/${SEEDED.docPath}`,
       { headers: authHeaders },
     );
     expect(res.status()).toBe(404);
@@ -106,12 +125,14 @@ test.describe("Gitea dev stack health", () => {
     request,
   }) => {
     const res = await request.get(
-      `${GITEA_URL}/api/v1/repos/alice/quarterly-report/contents/document.json?ref=${encodeURIComponent(SEEDED_BRANCH)}`,
+      `${GITEA_URL}/api/v1/repos/${OWNER}/${REPO}/contents/${SEEDED.docPath}?ref=${encodeURIComponent(SEEDED.branch)}`,
       { headers: authHeaders },
     );
     expect(res.status()).toBe(200);
     const file = (await res.json()) as { name?: string; type?: string };
-    expect(file.name).toBe("document.json");
+    // The document's name is its own now, not a canonical filename shared by
+    // every repository — that was the one-document-per-repo model.
+    expect(file.name).toBe(SEEDED.docPath);
     expect(file.type).toBe("file");
   });
 
@@ -119,7 +140,7 @@ test.describe("Gitea dev stack health", () => {
     request,
   }) => {
     const res = await request.get(
-      `${GITEA_URL}/api/v1/repos/alice/quarterly-report/branch_protections`,
+      `${GITEA_URL}/api/v1/repos/${OWNER}/${REPO}/branch_protections`,
       { headers: authHeaders },
     );
     expect(res.status()).toBe(200);
@@ -138,7 +159,7 @@ test.describe("Gitea dev stack health", () => {
     request,
   }) => {
     const pullsRes = await request.get(
-      `${GITEA_URL}/api/v1/repos/alice/quarterly-report/pulls?state=open`,
+      `${GITEA_URL}/api/v1/repos/${OWNER}/${REPO}/pulls?state=open`,
       { headers: authHeaders },
     );
     expect(pullsRes.status()).toBe(200);
@@ -150,13 +171,13 @@ test.describe("Gitea dev stack health", () => {
       base?: { ref?: string };
     }>;
 
-    const pr = pulls.find((p) => p.head?.ref === SEEDED_BRANCH);
+    const pr = pulls.find((p) => p.head?.ref === SEEDED.branch);
     expect(pr).toBeTruthy();
     expect(pr!.title).toBe("Q2 amendments — GDPR section update");
     expect(pr!.base?.ref).toBe("main");
 
     const reviewsRes = await request.get(
-      `${GITEA_URL}/api/v1/repos/alice/quarterly-report/pulls/${pr!.number}/reviews`,
+      `${GITEA_URL}/api/v1/repos/${OWNER}/${REPO}/pulls/${pr!.number}/reviews`,
       { headers: authHeaders },
     );
     expect(reviewsRes.status()).toBe(200);
@@ -178,6 +199,14 @@ test.describe("Gitea dev stack health", () => {
   });
 
   test("seedDevStack is idempotent — re-running does not throw or duplicate data", async () => {
+    // The third test in this suite to run the whole of `seedDevStack` on the
+    // 10 s default, and the third to start failing when dev moved to the
+    // slower Gitea 28.0.0 nightly. Same shape as the two harness defects the
+    // implementation notes record: an inner wait bigger than the budget
+    // containing it. Raised per test rather than for the describe, so the
+    // assertions around it keep a tight budget.
+    test.setTimeout(120_000);
+
     await expect(
       seedDevStack({
         baseUrl: GITEA_URL,
@@ -222,19 +251,24 @@ test.describe("app shell routes", () => {
         `.app-topnav-avatar[aria-label="User: ${GITEA_ADMIN_USER}"]`,
       ),
     ).toBeVisible();
+    // The shell's navigation. At this viewport that is the sidebar — the top
+    // bar's own links are for widths where the sidebar is not rendered.
     await expect(
-      page.locator(".app-topnav-link", { hasText: "Documents" }),
+      page.locator(".app-sidebar").getByRole("link", { name: "Documents" }),
     ).toBeVisible();
   });
 
   test("deep links still resolve inside the SPA shell", async ({ page }) => {
+    // A binder's own address, which is the deep link there is now — the
+    // `/docs/:owner/:repo` this used to load belonged to the one-repo-per-
+    // document model and is retired with it.
     await signInAsAlice(page);
-    await page.goto(`/docs/${OWNER}/${REPO}`);
+    await page.goto(`/${OWNER}/${REPO}`);
 
-    await expect(page).toHaveURL(new RegExp(`/docs/${OWNER}/${REPO}$`));
+    await expect(page).toHaveURL(new RegExp(`/${OWNER}/${REPO}$`));
     await expect(page.locator(".docw-page")).toBeVisible();
     await expect(
-      page.locator(".app-topnav-link", { hasText: "Documents" }),
+      page.locator(".app-sidebar").getByRole("link", { name: "Documents" }),
     ).toBeVisible();
   });
 });

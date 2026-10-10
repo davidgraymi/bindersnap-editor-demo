@@ -1,0 +1,142 @@
+/**
+ * A binder's rules, said the way a customer would say them.
+ *
+ * Branch protection is Gitea's vocabulary — `required_approvals`,
+ * `dismiss_stale_approvals`, `enable_push` — and it is the right vocabulary for
+ * the merge and the wrong one for the person who has to check the rule is what
+ * they asked for. This turns it into the product's words, and is kept out of
+ * the component so the wording is decided in one place and tested without
+ * rendering anything.
+ */
+
+/**
+ * What a group's access means, in the ADR's own terms.
+ *
+ * Worded without naming where it is shown, because it is shown in two places:
+ * on a binder, beside a team granted onto it, and on the organization, beside
+ * a group that may be granted onto any binder. "Administers this binder" was
+ * true on the first and a lie on the second.
+ *
+ * `read` is deliberately named as free: ADR 0004 promises reviewers cost
+ * nothing, and this is the screen where somebody would check that.
+ *
+ * **`owner` is a level, and the highest one.** Gitea reports the organization's
+ * built-in Owners team as `repo.code: "owner"` on every repository the org
+ * holds, and a switch that only knew admin/write/read called that "No access"
+ * — beside the person who owns the organization. ADR 0004 warns about exactly
+ * this: "Counting by name suffix would miss the Owners team, whose members have
+ * write access to every repository in the org." They are billable seats, and
+ * the page has to say so.
+ */
+export function describeTeamAccess(access: string): string {
+  switch (access) {
+    case "owner":
+      return "Owns the organization · paid seat";
+    case "admin":
+      return "Can administer · paid seat";
+    case "write":
+      return "Can publish · paid seat";
+    case "read":
+      return "Can review · free";
+    default:
+      return "No access";
+  }
+}
+
+/**
+ * The levels a group can be created at, in the product's words.
+ *
+ * **Admin, not "Manager".** "Admin" is already the word in Gitea, in the API
+ * and in the code, and inventing a second word for the same thing means every
+ * conversation between a customer, a support reply and a log line has to be
+ * translated. A word that is merely imperfect beats a word that is unique to
+ * us — invent vocabulary only where the underlying word is actively
+ * misleading, which exactly one of these three is.
+ *
+ * **Editor, not "Author" — the one invented word, and why it earns it.** An
+ * author is the person who *wrote* something: a claim about history. This role
+ * is about who may write *next*, and a compliance manager reading
+ * "Author: Priya" on a policy Priya never touched would reasonably conclude she
+ * drafted it. On a product whose output is evidence, a role label that reads as
+ * a false attribution is the one place inventing a word costs less than keeping
+ * ours.
+ */
+export const GROUP_LEVELS = [
+  {
+    value: "reviewer",
+    label: "Reviewer",
+    // Said on the form, because the free tier depends on it being understood
+    // without a footnote.
+    note: "Reads, comments, approves or asks for changes. Free.",
+  },
+  {
+    value: "editor",
+    label: "Editor",
+    note: "Writes documents and publishes approved versions. Uses a seat.",
+  },
+  {
+    value: "admin",
+    label: "Admin",
+    note: "Runs the binders it is added to: their rules, people and folders. Uses a seat.",
+  },
+] as const;
+
+/** What level a group holds, read back from the access Gitea reports. */
+export function groupLevelLabel(access: string): string {
+  switch (access) {
+    // `owner` is what Gitea reports for the built-in Owners team on every
+    // repository the organization holds. It is a level above admin, and a
+    // switch that did not know it called the org's owner "No access".
+    case "owner":
+    case "admin":
+      return "Admin";
+    case "write":
+      return "Editor";
+    case "read":
+      return "Reviewer";
+    default:
+      return "No access";
+  }
+}
+
+/**
+ * How many different people can approve a change in this binder: everyone in
+ * a group with any access, since reviewers approve too. Someone in two groups
+ * is one person.
+ */
+export function countApprovers(
+  teams: readonly { access: string; members: readonly { login: string }[] }[],
+): number {
+  const people = new Set<string>();
+  for (const team of teams) {
+    if (groupLevelLabel(team.access) === "No access") continue;
+    for (const member of team.members) people.add(member.login);
+  }
+  return people.size;
+}
+
+/**
+ * What to say when a binder asks for more approvals than it can collect.
+ *
+ * Nobody approves their own change, so the author never counts: with four
+ * people who can approve, the most any one change can collect is three.
+ * Allowed anyway — the administrator may be about to invite people — but said
+ * plainly, because otherwise the first sign is a change that never publishes.
+ */
+export function unreachableApprovalsNote(
+  required: number,
+  approvers: number,
+): string | null {
+  const most = Math.max(approvers - 1, 0);
+  if (required <= most) return null;
+  const people = approvers === 1 ? "1 person" : `${approvers} people`;
+  return `Only ${people} can approve in this binder, and nobody approves their own change, so nothing can be published until more people join.`;
+}
+
+/** A typed approval count, or null when it is not a whole number, 0 or more. */
+export function parseApprovalCount(text: string): number | null {
+  const trimmed = text.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const count = Number(trimmed);
+  return Number.isSafeInteger(count) ? count : null;
+}

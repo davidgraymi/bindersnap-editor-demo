@@ -250,7 +250,6 @@ export function AdminSubscriptionManagementPage({
     <div className="admin-pro-page app-page-shell">
       <div className="admin-pro-header">
         <div className="admin-pro-header-copy">
-          <span className="bs-eyebrow">Admin Controls</span>
           <h1>Bindersnap Pro access</h1>
           <p>
             Check a teammate&apos;s current subscription access, then grant or
@@ -275,7 +274,7 @@ export function AdminSubscriptionManagementPage({
 
           <form className="admin-pro-lookup-form" onSubmit={handleLookupSubmit}>
             <label className="app-field" htmlFor="admin-pro-username">
-              <span className="bs-label">Username</span>
+              <span className="bs-field-label">Username</span>
               <div className="admin-pro-input-wrap">
                 <Search
                   className="admin-pro-input-icon"

@@ -4,10 +4,21 @@ Lightweight Bun auth/BFF service for the unified GitHub Pages SPA.
 
 ## What it does
 
-- `POST /auth/signup`
+- `POST /auth/signup` signs the new account in and emails a link to confirm its address; until it is opened, every `/api/app/` route answers `403` with `code: "email_unverified"`. Signing up from an invitation sent to the same address (`invitation`) confirms it without the email. It requires `acceptedTerms` equal to `LEGAL_VERSION` (`packages/utils/legal.ts`), answers `400` with `code: "terms_not_accepted"` otherwise, and records the agreement in `legal_agreements`.
+- `POST /api/app/organizations` requires the same `acceptedTerms`: the person creating an organization accepts the Terms for it, recorded as an `organization` row with its Gitea id.
+- `GET /api/app/legal` says what the session still has to accept, for itself (`person`) and for organizations it owns, after a material change (`LEGAL_ACCEPT_AGAIN_VERSION`) or with nothing on record; `POST /api/app/legal/accept` records it. The app shows nothing else until both are clear.
 - `POST /auth/login` accepts `identifier`/`password` plus optional `rememberMe`
 - `POST /auth/logout`
-- `GET /auth/me`
+- `GET /auth/me` — includes `emailVerified`, and `pendingEmail` while it is false
+- `POST /auth/email/verify` confirms an address from the emailed link; no session needed
+- `POST /auth/email/resend` sends the signed-in account a new link, at most once a minute
+- `POST /auth/password/forgot` emails a reset link if the address is an account's; the answer is the same either way
+- `GET /auth/password/reset?token=` says whether a reset link still works
+- `POST /auth/password/reset` sets the new password, ends every session, signs in, and confirms the address the link went to
+- `GET`/`PUT /api/app/account/email-preferences` — which change emails the signed-in person gets
+- `GET`/`POST /api/app/orgs/{org}/invitations`, `DELETE …/invitations/{id}`, `POST …/invitations/{id}/resend` — an owner's invitations by email
+- `GET /api/app/invitations/{token}` says what an invitation is for; `POST …/accept` accepts it as the signed-in account whose address was invited
+- `POST /email/unsubscribe?token=` turns every change email off; no session, and the one-click target of `List-Unsubscribe-Post`
 - `GET /api/app/documents`
 - & more
 
@@ -22,12 +33,12 @@ The browser only receives a Bindersnap session cookie. Gitea access tokens stay 
 - `BINDERSNAP_ALLOWED_ORIGINS`: Optional comma-separated override for multiple allowed origins.
 - `STRIPE_SECRET_KEY`: Stripe secret key used to create Checkout and Customer Portal sessions.
 - `STRIPE_WEBHOOK_SECRET`: Stripe webhook signing secret used to verify `/stripe/webhook`.
-- `STRIPE_PRICE_ID`: Stripe price ID used when the API creates Checkout subscription sessions.
+- `STRIPE_PRICE_ID`: the per-unit seat price (one unit per writer) the API checks out, and whose quantity it keeps equal to the organization's paid seats. See `docs/payments-plan.md`, "Seat billing".
 - `BINDERSNAP_USER_EMAIL_DOMAIN`: Placeholder signup email domain. Default `users.bindersnap.local`.
 - `BINDERSNAP_SESSION_COOKIE_NAME`: Session cookie name. Default `bindersnap_session`.
 - `BINDERSNAP_SESSION_TTL_MS`: Server-side expiry for non-remembered sessions. Default `604800000` (7 days).
 - `BINDERSNAP_REMEMBER_ME_SESSION_TTL_MS`: Server-side expiry and persistent cookie lifetime for remembered sessions. Default `2592000000` (30 days).
-- `BINDERSNAP_SESSION_COOKIE_DOMAIN`: Optional cookie `Domain` attribute. Set `.bindersnap.com` when the SPA runs at `bindersnap.com` and the API runs at `api.bindersnap.com`.
+- `BINDERSNAP_SESSION_COOKIE_DOMAIN`: Optional cookie `Domain` attribute. Leave it empty: a host-only cookie on `api.bindersnap.com` already reaches the API from the SPA at `bindersnap.com`, because the two are the same site. Production also names the cookie `__Host-bindersnap_session`, which a `Domain` would break.
 - `BINDERSNAP_SESSION_COOKIE_SAME_SITE`: Cookie `SameSite` attribute. Default `Lax`; set `None` only when you explicitly need cross-site cookie delivery.
 - `BINDERSNAP_GITEA_TOKEN_SCOPES`: Optional comma-separated extra Gitea token scopes. The API always adds `write:user`, `write:repository`, and `write:issue` so session-minted tokens can create repos, open PRs, and manage collaborators.
 - `BINDERSNAP_REQUIRE_HTTPS`: Enforce HTTPS for non-local requests. Default `true` in production, `false` otherwise.
@@ -36,7 +47,21 @@ The browser only receives a Bindersnap session cookie. Gitea access tokens stay 
 - `BINDERSNAP_AUTH_RATE_LIMIT_MAX`: Max auth attempts per IP per action per window. Default `20`.
 - `BINDERSNAP_PAYWALL_BYPASS_USERS`: Optional comma-separated usernames that bypass subscription enforcement. A warning listing every entry is logged at startup when this list is non-empty. `BINDERSNAP_FREE_USERS` is a deprecated alias kept for one release.
 - `BINDERSNAP_SESSIONS_DB_PATH`: SQLite path shared by the session and subscription stores. Default `/var/lib/bindersnap/sessions.db`.
+- `BINDERSNAP_MAIL_TRANSPORT`: How queued email is delivered: `ses` (Amazon SES, with the EC2 instance role), `mailpit` (the local stack), or `off` (queued, never sent). Default `off`. Production sets it from the SSM leaf `mail_transport`.
+- `BINDERSNAP_MAIL_FROM`: The sender. Default `Bindersnap <notifications@bindersnap.com>`; SES only lets the API send as the `from_address` in `infra/email`.
+- `BINDERSNAP_MAILPIT_URL`: Mailpit's HTTP API, for `mailpit`. Default `http://mailpit:8025`.
+- `BINDERSNAP_API_ORIGIN`: The API's public origin, for links that must reach the API rather than the app (an email's one-click unsubscribe). Default `http://localhost:$API_PORT`.
+- `AWS_REGION`: The SES region. Default `us-east-1`.
 - `LOG_LEVEL`: Logger verbosity. One of `debug`, `info`, `warn`, `error`. Defaults to `info` in production and `debug` otherwise.
+
+## Request IDs
+
+Every response carries `X-Request-Id`, a fresh UUID, and every log line
+written while serving that request has the same value as `requestId`. The
+`Incoming request` line also records Cloudflare's `cfRay` when the request came
+through the edge. In-app feedback reports include the IDs of recent API calls,
+so a CloudWatch filter `{ $.requestId = "…" }` finds everything the API logged
+for the call that went wrong.
 
 ## Local usage
 

@@ -2,7 +2,7 @@
 
 Production now has two deploy surfaces:
 
-1. [`../../.github/workflows/pages.yml`](../../.github/workflows/pages.yml) publishes the unified SPA to GitHub Pages at `https://bindersnap.com`.
+1. [`../../.github/workflows/static-site.yml`](../../.github/workflows/static-site.yml) publishes the public site and the unified SPA to Cloudflare at `https://bindersnap.com`.
 2. [`../../.github/workflows/deploy-pyinfra.yml`](../../.github/workflows/deploy-pyinfra.yml) drives the full production host with pyinfra over an SSH-through-SSM tunnel on every push to `main`. See [`../../deploy/README.md`](../../deploy/README.md).
 
 The production host workflow assumes the AWS role provisioned by [`../../infra/ci/oidc.tf`](../../infra/ci/oidc.tf).
@@ -11,22 +11,25 @@ The production host workflow assumes the AWS role provisioned by [`../../infra/c
 > [`break-glass.md`](break-glass.md) — recover the host directly over SSM without
 > the CI pipeline.
 
-## GitHub Pages SPA
+## The static site (Cloudflare)
 
-Pushes to `main` build `apps/app/index.html` directly into `dist/`, then the workflow:
+Pushes to `main` build `apps/app/index.html` and the public site into `dist/`,
+then `static-site.yml` runs `wrangler deploy`. `wrangler.jsonc` makes `dist/`
+the static assets of the `bindersnap-site` Worker, which serves `bindersnap.com`.
+The Worker runs no code of ours.
 
-1. injects `BUN_PUBLIC_API_BASE_URL=https://api.bindersnap.com`
-2. copies `dist/index.html` to `dist/404.html` for the GitHub Pages SPA fallback
-3. writes `dist/CNAME` with `bindersnap.com`
-4. uploads `dist/` as the Pages artifact
+- Any path with no file (`/{org}/...`, `/-/login`) gets `index.html`
+  (`not_found_handling: single-page-application`), with status 200.
+- `apps/app/public/_headers` sets the response headers: `X-Frame-Options`,
+  `frame-ancestors`, HSTS, `nosniff`, `Referrer-Policy`, `Permissions-Policy`.
+- `/pricing/` redirects to `/pricing`.
 
-The published app is the single SPA:
+The workflow needs the `CLOUDFLARE_API_TOKEN` secret and the
+`CLOUDFLARE_ACCOUNT_ID` variable in the `production` environment. To check a
+build locally: `bun run build && bunx wrangler@4.149.0 dev`.
 
-- `/` shows the landing experience for signed-out users
-- `/`, `/docs/*`, and `/activity` all hydrate from the same bundle
-- deep links rely on the `404.html` fallback, not S3 or CloudFront rewrites
-
-Repository settings must point GitHub Pages at `GitHub Actions`, and the custom domain must be `bindersnap.com`.
+A rollback is `bunx wrangler@4.149.0 rollback` (or Workers → bindersnap-site →
+Deployments in the dashboard). It is instant and needs no rebuild.
 
 ## pyinfra Deploy Workflow
 
@@ -73,9 +76,19 @@ Optional variables:
 - `BINDERSNAP_DEPLOY_TARGET_TAG_KEY`: defaults to `Project`
 - `BINDERSNAP_DEPLOY_TARGET_TAG_VALUE`: defaults to `bindersnap`
 
-The IAM trust policy allows two OIDC subject patterns: `refs/heads/main` (for pushes and manual dispatches from main) and `refs/tags/*` (for tag-triggered deploys). Both are managed by `infra/ci/oidc.tf`.
+The deploy role trusts exactly one OIDC subject:
+`repo:davidgraymi/bindersnap-editor-demo:environment:production`
+(`infra/ci/oidc.tf`). Both deploy jobs (`deploy-pyinfra.yml`, `static-site.yml`)
+run in the **`production`** GitHub environment, whose deployment-branch policy
+admits `main` only. A pushed tag or any other branch cannot assume the role.
 
-Do not add a GitHub Environment to the API deploy job unless you also change the IAM trust policy. GitHub switches the OIDC `sub` claim from a branch form to an environment form when an environment is attached.
+The `production` environment holds:
+
+- secret `CLOUDFLARE_API_TOKEN` and variable `CLOUDFLARE_ACCOUNT_ID` for
+  `static-site.yml` (see the token's permissions there)
+
+Changing the environment's branch policy changes who can deploy. Keep it at
+`main`, and optionally add yourself as a required reviewer.
 
 ## EC2 Prerequisites
 
@@ -85,7 +98,7 @@ lays down all config on a fresh host. The remaining prerequisites are:
 
 - It is managed by AWS Systems Manager (the SSM agent ships with AL2023).
 - It matches the deploy target tag used by the workflow.
-- `infra/secrets/terraform.tfvars` provided `gitea_admin_user` and `gitea_admin_pass` so the first deploy can mint `/bindersnap/prod/gitea_service_token` automatically before the API starts.
+- `infra/secrets/put-secrets.sh` has set every secret in SSM (it generates `gitea_admin_pass` and the Gitea keys, and prompts for the Stripe ones), so the first deploy can mint `/bindersnap/prod/gitea_service_token` before the API starts. Secrets never go in a tfvars file or Terraform state; the deploy refuses any value still holding a `CHANGE_ME`-style placeholder.
 - The host can pull `ghcr.io/davidgraymi/bindersnap-api` (if the package is private, set the `GHCR_TOKEN` GitHub Actions secret so the deploy performs the registry login).
 
 ## Stripe Webhook Verification
@@ -111,6 +124,24 @@ or the production API deploy path.
    signature or payload handling.
 6. If the delivery fails with `400 Invalid signature.`, re-check that the
    staging webhook secret matches the endpoint configured in Stripe.
+
+## Patching
+
+The host's packages follow one pinned AL2023 release, in
+`deploy/files/al2023-release`. AWS publishes a new one every week or two
+([release notes](https://docs.aws.amazon.com/linux/al2023/release-notes/relnotes.html)).
+
+**Monthly, or the day a security advisory matters:**
+
+1. Set `deploy/files/al2023-release` to the newest release and merge. The
+   deploy that ships it runs `dnf upgrade` to that release once, with Docker,
+   containerd and runc excluded, so no container restarts.
+2. If the upgrade brought a new kernel, reboot in a quiet window:
+   `sudo systemctl reboot` over SSM. The site is down for about two minutes;
+   the stack starts on boot once `/data` is mounted.
+3. Docker itself, when its advisory matters: over SSM, in a quiet window,
+   `sudo dnf upgrade -y docker containerd runc`. Every container restarts.
+   Then check `https://api.bindersnap.com/healthz`.
 
 ## Rollback
 
@@ -151,8 +182,8 @@ docker compose --env-file /opt/bindersnap/.env.prod -f docker-compose.prod.yml u
 
 Config rollback is the same git revert: `deploy/files/` is the single source of
 truth for runtime config, so reverting the offending commit and letting
-`deploy-pyinfra.yml` run re-applies the prior config (and force-recreates the
-stack because the files changed).
+`deploy-pyinfra.yml` run re-applies the prior config (and recreates the
+services whose files changed).
 
 ### Gitea version changes are not covered by a git revert
 
@@ -162,6 +193,11 @@ against a database stamped by a newer version. So bumping `gitea/gitea:<tag>` in
 `deploy/files/docker-compose.prod.yml` is the one config change a `git revert`
 alone cannot undo: reverting the tag brings back the old binary on top of an
 already-migrated database and the container will fail to start.
+
+**Dev and production run the same Gitea**, pinned by tag and digest in
+`docker-compose.yml` and `deploy/files/docker-compose.prod.yml`. Change both in
+one commit. Version 28.0.0 is the minimum: its `block_on_codeowner_reviews` is
+what makes per-folder sign-off enforce anything.
 
 Rolling a Gitea upgrade back means restoring the database too:
 
@@ -176,10 +212,67 @@ Because of this, treat a Gitea bump as its own deploy: merge it on its own,
 confirm the Litestream replica is current beforehand, and watch the container
 come up rather than batching it with application changes.
 
+### Starting production from nothing
+
+This is how production moved from Gitea 1.27.3 to 28.0.0. Nobody migrated
+anything; we erased the data and started again. Use it again only when every
+organization, binder, account and session in production can be thrown away.
+It is not a rollback.
+
+The API's SQLite (`api-data`) goes with Gitea's (`gitea-data`). Its rows name
+organizations and binders that will no longer exist.
+
+1. Merge the change that needs the clean start. Then stop the stack on the host.
+   The volume names are prefixed with the compose project, so list them first
+   and remove the two that end in `gitea-data` and `api-data`:
+
+   ```bash
+   cd /opt/bindersnap
+   docker compose --env-file .env.prod -f docker-compose.prod.yml down
+   docker volume ls --format '{{.Name}}' | grep -E '(gitea|api)-data$'
+   docker volume rm <the two names listed above>
+   ```
+
+2. Put both service-account tokens back to the bootstrap placeholder:
+
+   ```bash
+   for name in gitea_service_token gitea_admin_token; do
+     aws ssm put-parameter --overwrite --type SecureString \
+       --name "/bindersnap/prod/${name}" \
+       --value "BOOTSTRAP_WITH_scripts/bootstrap-gitea-service-account.ts"
+   done
+   ```
+
+   `gitea_admin_user` and `gitea_admin_pass` must still be in SSM. The
+   bootstrap creates the admin from them.
+
+3. Re-run the deploy (`deploy-pyinfra.yml` → _Run workflow_, or
+   `deploy/bin/ssm-connect.sh`). It renders the placeholder into `.env.prod`,
+   and `bindersnap-bootstrap-gitea` boots an empty Gitea. That creates the
+   admin and the `bindersnap-service` account, then mints the read and admin
+   tokens into SSM and the env file. `bindersnap-stack-up` then starts the rest.
+
+4. Check it came up: on the host (over SSM),
+   `docker exec bindersnap-gitea-prod curl -s http://localhost:3000/api/v1/version`
+   reports the new version, and a fresh signup creates an organization.
+   Gitea has no public hostname.
+
+Some old data survives the wipe:
+
+- Litestream starts a new generation for each new database. It does not
+  restore on start, so the stack cannot bring the old data back. The old
+  generations stay in the S3 bucket until its lifecycle rule expires them.
+- The DLM snapshots of the data volume still hold the old data.
+- Stripe customers and subscriptions are not touched. A subscription that named
+  an old organization belongs to nobody now. Cancel it in Stripe.
+
+To truly erase the old data, delete those as well. Delete them only after
+the new stack has been checked.
+
 ## Validation Checklist
 
-- A push to `main` publishes the SPA to GitHub Pages from `dist/`.
-- `dist/404.html` matches `dist/index.html` so deep links load the SPA shell.
+- A push to `main` deploys `dist/` to the `bindersnap-site` Worker.
+- A deep link such as `/-/login` loads the SPA shell, and `curl -I https://bindersnap.com` shows `x-frame-options: DENY`.
 - A push to `main` triggers `deploy-pyinfra.yml`, which validates the compose + Caddy config on the host before bringing the stack up.
 - A forced test failure prevents the pyinfra deploy job from running.
 - `deploy-pyinfra.yml` with `dry_run=true` reports pyinfra changes without applying them.

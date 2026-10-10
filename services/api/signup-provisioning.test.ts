@@ -202,7 +202,7 @@ test("nameAttempt suffixes only after the first try", () => {
   expect(nameAttempt("mercy-health", 3)).toBe("mercy-health-3");
 });
 
-test("provisionSignup creates the organization and nothing else", async () => {
+test("provisionSignup creates the organization and its staff team", async () => {
   const { client, created } = createProvisioningClient();
   const store = createMemoryStore();
 
@@ -215,11 +215,14 @@ test("provisionSignup creates the organization and nothing else", async () => {
   });
 
   expect(created.orgs).toEqual(["mercy-health"]);
-  // No binder, and so no teams granted onto one. Naming the container a
-  // customer's records live in is the owner's call, and the "policies" repo
-  // this used to create was a guess that no document was ever written into.
+  // No binder. Naming the container a customer's records live in is the
+  // owner's call, and the "policies" repo this used to create was a guess that
+  // no document was ever written into.
   expect(created.repos).toEqual([]);
-  expect(created.teams).toEqual([]);
+  // One team, and only one: `staff`, which every member of the organization
+  // belongs to. It exists from the organization's first moment rather than
+  // being conjured by whichever binder happens to be created first.
+  expect(created.teams).toEqual(["staff"]);
 
   expect(result.organization.giteaOrgId).toBe(77);
   expect(result.organization.createdBy).toBe("alice");
@@ -316,4 +319,94 @@ test("an invisible collision does not swallow a real creation failure", async ()
   expect(
     gitea.mockPost.mock.calls.filter((call) => call[0] === "/orgs"),
   ).toHaveLength(1);
+});
+
+test("an organization never takes an address the app cannot move", () => {
+  // `/help` is a separate site. An organization called that would be
+  // shadowed by it, binders and all.
+  expect(deriveOrganizationName("maria", "Help")).toBe("help-org");
+  // The app's own pages are behind `/-/`, so these names are free to take.
+  expect(deriveOrganizationName("maria", "Billing")).toBe("billing");
+  expect(deriveOrganizationName("maria", "Settings")).toBe("settings");
+  expect(deriveOrganizationName("maria", "Sunrise Clinic")).toBe(
+    "sunrise-clinic",
+  );
+});
+
+test("provisionSignup finishes the founder's own half-made organization instead of making name-2", async () => {
+  // The last attempt created `mercy-health` in Gitea and stopped before its
+  // record was written: alice owns it, nothing here knows about it.
+  const created: string[] = [];
+  const { client } = createMockClient({
+    GET: {
+      "/orgs/{org}": (init: { params: { path: { org: string } } }) =>
+        init.params.path.org === "mercy-health"
+          ? { id: 41, username: "mercy-health", name: "mercy-health" }
+          : NOT_FOUND,
+      "/orgs/{org}/teams": () => [
+        { id: 9, name: "Owners", permission: "owner" },
+        { id: 10, name: "staff", permission: "read" },
+      ],
+      "/teams/{id}/members": () => [{ id: 1, login: "alice" }],
+    },
+    POST: {
+      "/orgs": (init: { body: { username: string } }) => {
+        created.push(init.body.username);
+        return { id: 77, username: init.body.username };
+      },
+    },
+    PUT: { "/teams/{id}/members/{username}": () => ({}) },
+  });
+  const store = createMemoryStore();
+
+  const result = await provisionSignup({
+    client,
+    username: "alice",
+    organizationName: "Mercy Health",
+    store,
+  });
+
+  expect(created).toEqual([]);
+  expect(result.organization.giteaOrgId).toBe(41);
+  expect(result.organization.name).toBe("mercy-health");
+  expect(store.rows.get(41)?.createdBy).toBe("alice");
+});
+
+test("provisionSignup still steps past an organization the person owns that is already recorded", async () => {
+  const created: string[] = [];
+  const { client } = createMockClient({
+    GET: {
+      "/orgs/{org}": (init: { params: { path: { org: string } } }) =>
+        init.params.path.org === "mercy-health"
+          ? { id: 41, username: "mercy-health", name: "mercy-health" }
+          : NOT_FOUND,
+      "/orgs/{org}/teams": () => [
+        { id: 9, name: "Owners", permission: "owner" },
+      ],
+      "/teams/{id}/members": () => [{ id: 1, login: "alice" }],
+    },
+    POST: {
+      "/orgs": (init: { body: { username: string } }) => {
+        created.push(init.body.username);
+        return { id: 77, username: init.body.username };
+      },
+    },
+  });
+  const store = createMemoryStore();
+  await store.upsert({
+    giteaOrgId: 41,
+    name: "mercy-health",
+    createdBy: "alice",
+    createdAt: 1,
+    trialEndsAt: null,
+  });
+
+  // A second organization of the same name is a real request, not a retry.
+  await provisionSignup({
+    client,
+    username: "alice",
+    organizationName: "Mercy Health",
+    store,
+  });
+  expect(created).toEqual(["mercy-health-2"]);
 });

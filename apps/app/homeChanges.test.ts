@@ -5,7 +5,7 @@ import type {
   ClosedChange,
   PullRequestWithApprovalState,
   VersionReview,
-  WorkspaceDocumentSummary,
+  HomeOpenDocument,
 } from "./api";
 import {
   buildDecidedChangeRows,
@@ -52,9 +52,9 @@ function review(
   };
 }
 
-function change(
-  overrides: Partial<PullRequestWithApprovalState> = {},
-): PullRequestWithApprovalState {
+type HomeChange = HomeOpenDocument["pendingPRs"][number];
+
+function change(overrides: Partial<HomeChange> = {}): HomeChange {
   return {
     id: 1,
     number: 4,
@@ -73,25 +73,25 @@ function change(
     body: "Updated liability clause",
     approvalState: "in_review",
     user: { login: "maya" },
+    // A version is per document, so it rides on the change. It used to be a
+    // repository-wide `latestTag`, which answered a question about none of a
+    // binder's documents.
+    documentSlugPath: "nursing/vendor-agreement",
+    nextVersion: 2,
     ...overrides,
   };
 }
 
 function document(
-  overrides: Partial<WorkspaceDocumentSummary> = {},
-  repoOverrides: Partial<WorkspaceDocumentSummary["repo"]> = {},
-): WorkspaceDocumentSummary {
+  overrides: Partial<HomeOpenDocument> = {},
+  repoOverrides: Partial<HomeOpenDocument["repo"]> = {},
+): HomeOpenDocument {
   return {
     repo: {
-      id: 1,
-      name: "vendor-agreement",
-      full_name: "david/vendor-agreement",
-      description: "",
-      updated_at: "2026-08-22T10:00:00Z",
-      owner: { login: "david" },
+      name: "clinical",
+      owner: { login: "riverside-health" },
       ...repoOverrides,
     },
-    latestTag: { name: "v1", version: 1, sha: "abc", created: "" },
     pendingPRs: [],
     error: null,
     ...overrides,
@@ -104,6 +104,7 @@ function closed(overrides: Partial<ClosedChange> = {}): ClosedChange {
     title: "New onboarding checklist",
     body: "New onboarding checklist",
     branchName: "version/6",
+    documentSlugPath: null,
     submittedBy: "maya",
     submittedAt: "2026-08-18T10:00:00Z",
     closedAt: "2026-08-19T10:00:00Z",
@@ -133,10 +134,13 @@ describe("buildOpenChangeRows", () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]?.kind).toBe("needs_review");
-    expect(rows[0]?.pillLabel).toBe("Needs your review");
-    expect(rows[0]?.action).toBe("Review");
+    // **Which section it is in says it needs the reader's review.** The row
+    // says what state the change is in, which is a different question — and
+    // the two were being answered on the same line.
+    expect(rows[0]?.standing).toBe("Awaiting approval");
     expect(rows[0]?.documentName).toBe("Vendor Agreement");
-    expect(rows[0]?.meta).toBe("Maya submitted 2h ago · 2 of 3 approvals");
+    expect(rows[0]?.meta).toContain("Maya");
+    expect(rows[0]?.meta).not.toContain("approvals");
   });
 
   test("a reader whose approval went stale is asked again", () => {
@@ -163,7 +167,6 @@ describe("buildOpenChangeRows", () => {
     const rows = buildOpenChangeRows(
       [
         document({
-          latestTag: { name: "v1", version: 1, sha: "abc", created: "" },
           pendingPRs: [
             change({
               user: { login: "david" },
@@ -178,11 +181,38 @@ describe("buildOpenChangeRows", () => {
     );
 
     expect(rows[0]?.kind).toBe("ready_to_publish");
-    expect(rows[0]?.pillLabel).toBe("Ready to publish");
-    expect(rows[0]?.action).toBe("Publish");
-    expect(rows[0]?.meta).toBe(
-      "all approvals in · becomes v2 when you publish",
+    // *"why does a CR say 'Waiting on you' when it's approved to be
+    // published? It should say 'Approved'."*
+    expect(rows[0]?.standing).toBe("Approved");
+    // Which version it becomes is a fact about a document, and a change can
+    // touch three. It belongs on the change's own page.
+    expect(rows[0]?.meta).not.toContain("becomes v");
+    expect(rows[0]?.meta).not.toContain("approvals");
+  });
+
+  test("a request nobody has answered is waiting even where no approval is needed", () => {
+    // A binder that needs no approvals is ready to publish the moment the
+    // change opens. Somebody asked to review it still owes an answer, and
+    // their Home is where they find that out.
+    const rows = buildOpenChangeRows(
+      [
+        document({
+          pendingPRs: [
+            change({
+              approvalCount: 0,
+              requiredApprovals: 0,
+              isApproved: true,
+              reviewers: [reviewer("david")],
+            }),
+          ],
+        }),
+      ],
+      "david",
+      NOW,
     );
+
+    expect(rows[0]?.kind).toBe("needs_review");
+    expect(selectWaitingOnYou(rows)).toHaveLength(1);
   });
 
   test("the reader's own open change names who it is waiting on", () => {
@@ -205,11 +235,8 @@ describe("buildOpenChangeRows", () => {
     );
 
     expect(rows[0]?.kind).toBe("submission");
-    expect(rows[0]?.meta).toBe(
-      "waiting on Priya and Tom · submitted yesterday",
-    );
-    expect(rows[0]?.pillLabel).toBe("1 of 3 approvals");
-    expect(rows[0]?.action).toBeNull();
+    expect(rows[0]?.standing).toBe("Awaiting approval");
+    expect(rows[0]?.meta).not.toContain("approvals");
   });
 
   test("a change the reader has nothing to do with is left off", () => {
@@ -249,7 +276,7 @@ describe("buildOpenChangeRows", () => {
               }),
             ],
           },
-          { id: 2, name: "data-retention-policy" },
+          { name: "corporate" },
         ),
       ],
       "david",
@@ -299,7 +326,26 @@ describe("buildDecidedChangeRows", () => {
     expect(rows[0]?.outcome).toBe("published");
     expect(rows[0]?.documentName).toBe("Employee Handbook");
     expect(rows[0]?.meta).toBe("you and 2 others approved");
-    expect(rows[0]?.pillLabel).toBe("Published as v6 · Aug 19");
+    // One word. The date it closed is already on the row's meta line, and
+    // repeating it inside the standing was the same fact twice.
+    expect(rows[0]?.standing).toBe("Published");
+    expect(rows[0]?.tone).toBe("published");
+  });
+
+  test("a decided change names its document, not the binder it is in", () => {
+    const rows = buildDecidedChangeRows(
+      [
+        {
+          owner: "david",
+          repo: "clinical",
+          changes: [closed({ documentSlugPath: "nursing/hand-hygiene" })],
+        },
+      ],
+      "david",
+      new Set(["david/clinical"]),
+    );
+
+    expect(rows[0]?.documentName).toBe("Hand Hygiene");
   });
 
   test("a withdrawn change says who withdrew it", () => {
@@ -324,7 +370,42 @@ describe("buildDecidedChangeRows", () => {
 
     expect(rows[0]?.outcome).toBe("closed");
     expect(rows[0]?.meta).toBe("withdrawn by Tom");
-    expect(rows[0]?.pillLabel).toBe("Closed · Aug 12");
+    expect(rows[0]?.standing).toBe("Closed");
+  });
+
+  test("a decision says who made it by name, and you by 'you'", () => {
+    const declined = (decidedBy: string) =>
+      buildDecidedChangeRows(
+        [
+          {
+            owner: "david",
+            repo: "mutual-nda",
+            changes: [
+              closed({
+                outcome: "declined",
+                publishedVersion: null,
+                decidedBy,
+                closedAt: "2026-08-12T10:00:00Z",
+                reviewers: [reviewer("david")],
+                reviews: [
+                  review("tom", {
+                    author: {
+                      login: "tom",
+                      fullName: "Tom Okafor",
+                      avatarUrl: "",
+                    },
+                    state: "changes_requested",
+                  }),
+                ],
+              }),
+            ],
+          },
+        ],
+        "david",
+      )[0]?.meta;
+
+    expect(declined("tom")).toBe("declined by Tom Okafor");
+    expect(declined("david")).toBe("declined by you");
   });
 
   test("a decision the reader had no part in is left off", () => {
@@ -405,5 +486,110 @@ describe("copy helpers", () => {
   test("the greeting uses a first name, not a login", () => {
     expect(getGreetingName("david-gray")).toBe("David");
     expect(getGreetingName("dgray", "David Gray")).toBe("David");
+  });
+});
+
+describe("naming what a row is about", () => {
+  test("a row names the document, not the binder it is in", () => {
+    // `document.repo` is the binder now, so naming it put "Clinical" on a row
+    // about the infection control policy. The change carries which document it
+    // is about.
+    const rows = buildOpenChangeRows(
+      [
+        document({
+          pendingPRs: [
+            change({
+              documentSlugPath: "nursing/infection-control-policy",
+              reviewers: [reviewer("david")],
+            }),
+          ],
+        }),
+      ],
+      "david",
+      NOW,
+    );
+
+    expect(rows[0]?.documentName).toBe("Infection Control Policy");
+  });
+
+  test("a change about no document falls back to the binder", () => {
+    // A sign-off rules change touches no document. Naming the binder is the
+    // honest answer; inventing a document is not.
+    const rows = buildOpenChangeRows(
+      [
+        document({
+          pendingPRs: [
+            change({
+              documentSlugPath: null,
+              nextVersion: null,
+              reviewers: [reviewer("david")],
+            }),
+          ],
+        }),
+      ],
+      "david",
+      NOW,
+    );
+
+    expect(rows[0]?.documentName).toBe("Clinical");
+  });
+
+  /**
+   * **A row no longer promises a version, and that is the fix.**
+   *
+   * "becomes v4 when you publish" is a fact about one document, and a change
+   * can touch three that do not advance in lockstep — so the sentence was
+   * either about one of them or about none. It belongs on the change's own
+   * page, which names each document and what happens to it.
+   */
+  test("a change ready to publish does not promise a version", () => {
+    const rows = buildOpenChangeRows(
+      [
+        document({
+          pendingPRs: [
+            change({
+              nextVersion: 4,
+              approvalCount: 3,
+              requiredApprovals: 3,
+              approvalState: "approved",
+              isApproved: true,
+            }),
+          ],
+        }),
+      ],
+      "maya",
+      NOW,
+    );
+
+    expect(rows[0]?.standing).toBe("Approved");
+    expect(rows[0]?.meta).not.toContain("becomes v");
+  });
+
+  test("a change with no document reads the same as any other", () => {
+    // The row used to have a second wording for this case, because it could
+    // not name a version. With no version on the row at all there is nothing
+    // to special-case — which is the good kind of simplification: a branch
+    // that existed only to avoid inventing "v1" has nothing left to avoid.
+    const rows = buildOpenChangeRows(
+      [
+        document({
+          pendingPRs: [
+            change({
+              documentSlugPath: null,
+              nextVersion: null,
+              approvalCount: 3,
+              requiredApprovals: 3,
+              approvalState: "approved",
+              isApproved: true,
+            }),
+          ],
+        }),
+      ],
+      "maya",
+      NOW,
+    );
+
+    expect(rows[0]?.standing).toBe("Approved");
+    expect(rows[0]?.meta).not.toContain("v1");
   });
 });

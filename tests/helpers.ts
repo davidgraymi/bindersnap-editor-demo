@@ -49,11 +49,48 @@ export const API_BASE_URL =
 // These must stay in sync with the values hard-coded inside seed.ts.
 // ---------------------------------------------------------------------------
 
-export const OWNER = "alice";
-export const REPO = "quarterly-report";
-export const SEEDED_BRANCH =
-  "upload/quarterly-report/20260210/091500Z-alice-4b1c9de2";
-export const SEEDED_DOC_PATH = "document.json";
+// The seeded fixture, at its address in ADR 0004's model: the organization
+// owns the binder, and the document is a file inside it. It used to be
+// `alice/quarterly-report` with the document at `document.json`, back when a
+// document was a repository of its own.
+export const OWNER = "riverside-health";
+export const REPO = "corporate";
+/** The seeded change every fixture-dependent test reads: an open one, sent back by bob. */
+export const SEEDED_CHANGE_TITLE = "Q2 amendments — GDPR section update";
+
+/**
+ * Where that change lives, read off the stack rather than written down here.
+ *
+ * The seed goes through the API, and the API names a draft's branch and mints
+ * a document's identity itself — so neither is known until the seed has run.
+ * {@link resolveAndStoreToken} fills these in; read them after it.
+ */
+export const SEEDED = { branch: "", docPath: "" };
+
+async function resolveSeededChange(token: string): Promise<void> {
+  const headers = { Authorization: `token ${token}` };
+  const repo = `${GITEA_URL}/api/v1/repos/${OWNER}/${REPO}`;
+  const pulls = (await (
+    await fetch(`${repo}/pulls?state=open&limit=50`, { headers })
+  ).json()) as Array<{ number: number; title: string; head: { ref: string } }>;
+  const pull = pulls.find((candidate) =>
+    candidate.title.startsWith(SEEDED_CHANGE_TITLE),
+  );
+  if (!pull) {
+    throw new Error(`The seeded change "${SEEDED_CHANGE_TITLE}" is not open.`);
+  }
+  const files = (await (
+    await fetch(`${repo}/pulls/${pull.number}/files`, { headers })
+  ).json()) as Array<{ filename: string }>;
+  const document = files.find((file) =>
+    file.filename.startsWith("quarterly-report."),
+  );
+  if (!document) {
+    throw new Error("The seeded change carries no quarterly-report file.");
+  }
+  SEEDED.branch = pull.head.ref;
+  SEEDED.docPath = document.filename;
+}
 
 // ---------------------------------------------------------------------------
 // In-memory Storage
@@ -152,6 +189,7 @@ export async function resolveAndStoreToken(
   }
 
   storeToken(resolved);
+  await resolveSeededChange(resolved);
   return resolved;
 }
 
@@ -330,7 +368,7 @@ export async function signInAsAlice(page: Page): Promise<void> {
     await clearBrowserAuthState(page);
   }
 
-  await page.goto("/login");
+  await page.goto("/-/login");
   await page.waitForURL(/\/login$/, { timeout: 5_000 });
   await expect(page.getByLabel("Username or Email")).toBeVisible({
     timeout: 10_000,
@@ -372,7 +410,7 @@ export async function signInAsBob(page: Page): Promise<void> {
     await clearBrowserAuthState(page);
   }
 
-  await page.goto("/login");
+  await page.goto("/-/login");
   await page.waitForURL(/\/login$/, { timeout: 5_000 });
   await expect(page.getByLabel("Username or Email")).toBeVisible({
     timeout: 10_000,
@@ -419,7 +457,7 @@ export async function navigateToDocument(
   docName: string,
 ): Promise<void> {
   // Navigate to Documents page with a search query for the specific document
-  await page.goto(`/documents?q=${encodeURIComponent(docName)}`);
+  await page.goto(`/-/documents?q=${encodeURIComponent(docName)}`);
   await page.waitForLoadState("domcontentloaded");
 
   // DocumentsPage uses .docs-list-item
@@ -505,20 +543,66 @@ export async function expectPublishedVersion(
   );
 }
 
-/** Assert how many changes are waiting on a decision, per the Changes tab. */
+/**
+ * Assert how many changes are waiting on a decision.
+ *
+ * The count is on the binder's Change requests entry: a binder's screens are a
+ * section of the map now rather than a tab strip on every page it holds.
+ */
 export async function expectOpenChangeCount(
   page: Page,
   count: number,
   timeout = 30_000,
 ): Promise<void> {
-  const tab = page.getByRole("tab", { name: /^Changes/ });
+  // `.last()`: Your work has a Change requests entry of its own, above the
+  // binder's.
+  const entry = page
+    .locator(".app-sidebar")
+    .getByRole("link", { name: /^Change requests/ })
+    .last();
   if (count === 0) {
-    await expect(tab.locator(".doc-tab-count")).toHaveCount(0, { timeout });
+    await expect(entry.locator(".app-sidebar-item-count")).toHaveCount(0, {
+      timeout,
+    });
     return;
   }
-  await expect(tab.locator(".doc-tab-count")).toHaveText(String(count), {
-    timeout,
-  });
+  await expect(entry.locator(".app-sidebar-item-count")).toHaveText(
+    String(count),
+    { timeout },
+  );
+}
+
+/** Open one of the binder's screens from the sidebar's own section of it. */
+export async function openBinderSection(
+  page: Page,
+  section: "Change requests" | "History" | "Settings",
+): Promise<void> {
+  const entry = page
+    .locator(".app-sidebar")
+    .getByRole("link", { name: new RegExp(`^${section}`) })
+    .last();
+  await expect(entry).toBeVisible({ timeout: 15_000 });
+  await entry.click();
+}
+
+/**
+ * Open a folder in the binder's own tree, if it is not already open.
+ *
+ * Folders start shut — a filing cabinet with the drawers closed — so a test
+ * that wants a policy filed inside one has to open the drawer first, the same
+ * way a person does. Idempotent, because the folders holding the document on
+ * screen open themselves.
+ */
+export async function openTreeFolder(page: Page, name: string): Promise<void> {
+  const folder = page
+    .locator(".binder-tree")
+    .getByRole("button", { name: new RegExp(`^${name}`) })
+    .first();
+  await expect(folder).toBeVisible({ timeout: 30_000 });
+  if ((await folder.getAttribute("aria-expanded")) === "false") {
+    await folder.click();
+  }
+  await expect(folder).toHaveAttribute("aria-expanded", "true");
 }
 
 export async function waitForNoPendingReviews(
@@ -655,11 +739,27 @@ export async function openNewDocumentModal(page: Page): Promise<void> {
   ).toBeVisible();
 }
 
-export async function openTopnavNewDocumentModal(page: Page): Promise<void> {
-  const button = page.locator("#topnav-new-doc-btn");
-  await expect(button).toBeVisible();
-  await button.click();
-  await expect(
-    page.getByRole("heading", { name: "Create workspace document" }),
-  ).toBeVisible();
+/**
+ * Open the nav's "New policy" modal and get past the binder question.
+ *
+ * The nav is the one place no binder is in scope, so it asks which one before
+ * it can ask anything about the file. A seeded account is in more than one, so
+ * the question is always shown here — with exactly one binder it is skipped,
+ * because choosing from a list of one teaches nothing.
+ */
+
+/**
+ * Tick the signup form's agreement to the Terms, which it will not submit
+ * without.
+ */
+export async function agreeToTerms(page: Page): Promise<void> {
+  await page.getByRole("checkbox", { name: /I agree to the Terms/ }).check();
+}
+
+/**
+ * Tick the create-organization form's acceptance of the Terms for the
+ * organization, which it will not submit without.
+ */
+export async function acceptTermsForOrganization(page: Page): Promise<void> {
+  await page.getByRole("checkbox", { name: /I accept the Terms/ }).check();
 }

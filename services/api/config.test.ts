@@ -22,7 +22,23 @@ describe("API config", () => {
       "write:repository",
       "write:issue",
       "write:organization",
+      "write:notification",
     ]);
+  });
+
+  test("mail is off by default, and must be named to be on", () => {
+    const config = initializeConfig({});
+    expect(config.mailTransport).toBe("off");
+    expect(config.mailFrom).toBe("Bindersnap <notifications@bindersnap.com>");
+    expect(config.awsRegion).toBe("us-east-1");
+
+    expect(
+      initializeConfig({ BINDERSNAP_MAIL_TRANSPORT: " Mailpit " })
+        .mailTransport,
+    ).toBe("mailpit");
+    expect(() =>
+      initializeConfig({ BINDERSNAP_MAIL_TRANSPORT: "smtp" }),
+    ).toThrow("BINDERSNAP_MAIL_TRANSPORT must be one of ses, mailpit, or off.");
   });
 
   test("normalizes session cookie and browser origin config", () => {

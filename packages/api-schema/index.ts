@@ -4,3 +4,4 @@ export * from "./schemas/admin";
 export * from "./schemas/common";
 export * from "./schemas/documents";
 export * from "./schemas/users";
+export * from "./schemas/legal";

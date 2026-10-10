@@ -24,8 +24,8 @@ bun run build         # Build SPA to dist/
 
 # Tests
 bun run test          # All unit tests (test:app + test:ops + test:seed)
-bun run test:app      # apps/app, packages/editor, packages/utils, packages/ui-tokens
-bun run test:ops      # services/api, scripts, infra/backups
+bun run test:app      # apps/app, apps/help, apps/legal, apps/site, packages/editor, packages/utils, packages/ui-tokens
+bun run test:ops      # services/api, services/feedback, scripts, infra/backups
 bun run test:integration  # Playwright — starts and stops its own stack
                           # SKIP_STACK=1 reuses a running `bun run up` stack
                           # Both find this worktree's ports on their own
@@ -128,4 +128,4 @@ Settled. Do not reopen. If a task requires violating one, open a `human-needed` 
 
 5. **Editor UI changes need a flag.** If you change `packages/editor/` visuals, note it in your PR. The landing page no longer embeds the editor, so no demo re-sync is needed.
 
-6. **`deploy/` configures the host; Terraform does not.** No serverless (no Lambda, Aurora, or API Gateway), no config bucket, no bootstrap logic in `user-data.sh`. Host config changes are commits to `deploy/`.
+6. **`deploy/` configures the host; Terraform does not.** No serverless backend (no Lambda, Aurora, or API Gateway), no config bucket, no bootstrap logic in `user-data.sh`. Host config changes are commits to `deploy/`. A Cloudflare Worker may run our code only if it is stateless, keeps no customer content, is off the critical path, and never touches Gitea or the API's databases — see `docs/adr/0006-cloudflare-workers-at-the-edge.md`.

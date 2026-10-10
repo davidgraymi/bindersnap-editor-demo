@@ -10,7 +10,7 @@
 
 services:
   gitea-init:
-    image: alpine:latest
+    image: alpine:3.22.6@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
     container_name: bindersnap-gitea-init-prod
     user: "0:0"
     command: ["sh", "-c", "chown -R 1000:1000 /data"]
@@ -19,7 +19,11 @@ services:
     restart: "no"
 
   gitea:
-    image: gitea/gitea:1.27.3
+    # The same pinned 28.0.0 as the repository's own `docker-compose.yml`;
+    # change both in one commit. A Gitea upgrade migrates `gitea.db` on start
+    # and cannot be reverted by reverting this line — see docs/ops/deploy.md,
+    # "Gitea version changes are not covered by a git revert".
+    image: gitea/gitea:28.0.0@sha256:a9dc25679ebdd33356242d2e0667cc220043745e8339922879f187c20329a42e
     container_name: bindersnap-gitea-prod
     restart: unless-stopped
     depends_on:
@@ -29,6 +33,9 @@ services:
       - USER_UID=1000
       - USER_GID=1000
       # --- Server ---
+      # A name only: nothing serves gitea.bindersnap.com (see Caddyfile.prod).
+      # Gitea builds the absolute URLs in its API answers from it, and the API
+      # never hands those to the browser.
       - GITEA__server__ROOT_URL=https://gitea.bindersnap.com
       - GITEA__server__HTTP_PORT=3000
       - GITEA__server__DISABLE_SSH=true
@@ -42,6 +49,12 @@ services:
       # --- Database ---
       - GITEA__database__DB_TYPE=sqlite3
       - GITEA__database__PATH=/data/gitea.db
+      # WAL, stated here rather than inherited. Litestream switches gitea.db to
+      # WAL when it starts (it needs it to replicate), which is the only reason
+      # prod ran in WAL before this line — so removing or delaying the sidecar
+      # silently dropped Gitea back to the rollback journal, where concurrent
+      # API calls convoy on the write lock. Dev sets the same.
+      - GITEA__database__SQLITE_JOURNAL_MODE=WAL
       # --- Service (registration disabled) ---
       - GITEA__service__DISABLE_REGISTRATION=true
       - GITEA__service__REQUIRE_SIGNIN_VIEW=true
@@ -55,11 +68,13 @@ services:
       - GITEA__service__DEFAULT_ALLOW_CREATE_ORGANIZATION=true
       - GITEA__admin__DISABLE_REGULAR_ORG_CREATION=false
       # --- CORS ---
-      - GITEA__cors__ENABLED=true
-      - GITEA__cors__ALLOW_DOMAIN=https://bindersnap.com
-      - GITEA__cors__METHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
-      - GITEA__cors__ALLOW_CREDENTIALS=true
+      # Off: no browser calls Gitea, so no origin needs to.
+      - GITEA__cors__ENABLED=false
       # --- Logging ---
+      # No Gravatar or other outside avatar service: Gitea draws its own, so no
+      # hash of anybody's email leaves the host (the Privacy Policy says so).
+      - GITEA__picture__DISABLE_GRAVATAR=true
+      - GITEA__picture__ENABLE_FEDERATED_AVATAR=false
       - GITEA__log__LEVEL=warn
       - GITEA__log__MODE=console
       # --- Security ---
@@ -76,6 +91,11 @@ services:
       - GITEA_ADMIN_PASS=${GITEA_ADMIN_PASS:-}
     volumes:
       - gitea-data:/data
+    # Loopback only, never the public interface: this is how an operator
+    # reaches the admin UI, through an SSM port-forwarding session to the host
+    # (docs/ops/break-glass.md, "Reaching Gitea").
+    ports:
+      - "127.0.0.1:3000:3000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/"]
       interval: 10s
@@ -106,18 +126,37 @@ services:
       - NODE_ENV=production
       - GITEA_INTERNAL_URL=http://gitea:3000
       - BINDERSNAP_GITEA_SERVICE_TOKEN=${GITEA_SERVICE_TOKEN:?set in the generated env file}
+      # Empty until the deploy mints it; the API then uses the service token.
+      - BINDERSNAP_GITEA_ADMIN_TOKEN=${GITEA_ADMIN_TOKEN:-}
       - BINDERSNAP_APP_ORIGIN=https://bindersnap.com
+      - BINDERSNAP_API_ORIGIN=https://api.bindersnap.com
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:?set in the generated env file}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:?set in the generated env file}
       - STRIPE_PRICE_ID=${STRIPE_PRICE_ID:?set in the generated env file}
       - BINDERSNAP_REMEMBER_ME_SESSION_TTL_MS=${BINDERSNAP_REMEMBER_ME_SESSION_TTL_MS:-2592000000}
-      - BINDERSNAP_SESSION_COOKIE_DOMAIN=${BINDERSNAP_SESSION_COOKIE_DOMAIN:-.bindersnap.com}
+      # Host-only: the session cookie goes to api.bindersnap.com and nowhere
+      # else. The SPA calls the API with `credentials: "include"`, and
+      # bindersnap.com and api.bindersnap.com are the same site, so SameSite=Lax
+      # still sends it. With `Domain=.bindersnap.com` it also went to the static
+      # host and every other subdomain, and any of them could set a cookie that
+      # shadowed it. The `__Host-` prefix makes the browser enforce all of that:
+      # it refuses the cookie unless it is Secure, Path=/ and has no Domain.
+      - BINDERSNAP_SESSION_COOKIE_NAME=__Host-bindersnap_session
+      - BINDERSNAP_SESSION_COOKIE_DOMAIN=
       - BINDERSNAP_SESSION_COOKIE_SAME_SITE=${BINDERSNAP_SESSION_COOKIE_SAME_SITE:-Lax}
       - BINDERSNAP_USER_EMAIL_DOMAIN=${BINDERSNAP_USER_EMAIL_DOMAIN:-users.bindersnap.com}
       - BINDERSNAP_GITEA_TOKEN_SCOPES=${BINDERSNAP_GITEA_TOKEN_SCOPES:-write:user,write:repository,write:issue,write:organization}
       - BINDERSNAP_REQUIRE_HTTPS=true
       - BINDERSNAP_AUTH_RATE_LIMIT_ENABLED=true
       - BINDERSNAP_SESSIONS_DB_PATH=/var/lib/bindersnap/sessions.db
+      # --- Email (issue #665) ---
+      # The API sends through Amazon SES with the instance role (infra/email);
+      # there is no mail secret. Off until the domain verifies: set the SSM
+      # leaf `mail_transport` to `ses` and redeploy. While off, emails queue
+      # in the outbox and wait.
+      - BINDERSNAP_MAIL_TRANSPORT=${MAIL_TRANSPORT:-off}
+      - BINDERSNAP_MAIL_FROM=${MAIL_FROM:-Bindersnap <notifications@bindersnap.com>}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
     volumes:
       - api-data:/var/lib/bindersnap
 
@@ -132,17 +171,39 @@ services:
         condition: service_healthy
       api:
         condition: service_started
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
+    # No published ports: requests reach Caddy only from cloudflared, over
+    # the Docker network (see Caddyfile.prod).
     volumes:
       - ./Caddyfile.prod:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
 
+  # The only way in. cloudflared dials out to Cloudflare and carries
+  # api.bindersnap.com's requests back to Caddy; the tunnel's routes live in
+  # Cloudflare (infra/edge). The token is the SSM leaf `cloudflare_tunnel_token`,
+  # written by infra/edge/put-tunnel-token.sh, never by Terraform.
+  cloudflared:
+    image: cloudflare/cloudflared:2026.9.3@sha256:072c067d25ccbe61d46e18f0d0723255f2bb5304f7317caa95b27031520ff92c
+    container_name: bindersnap-cloudflared-prod
+    restart: unless-stopped
+    depends_on:
+      caddy:
+        condition: service_started
+    command: ["tunnel", "--no-autoupdate", "--metrics", "0.0.0.0:2000", "run"]
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:?set in the generated env file}
+    healthcheck:
+      test:
+        ["CMD", "cloudflared", "tunnel", "--metrics", "localhost:2000", "ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 20s
+
   litestream:
-    image: litestream/litestream:0.3
+    # Pinned: a floating tag let a backup-agent upgrade ride along with any
+    # deploy. scripts/restore.sh restores with the same image; bump both.
+    image: litestream/litestream:0.3.14@sha256:c5a1e1b01916b3a110f6600820ef176d048d9b9c2411ef0a680de0caa68934a5
     container_name: bindersnap-litestream-prod
     restart: unless-stopped
     depends_on:

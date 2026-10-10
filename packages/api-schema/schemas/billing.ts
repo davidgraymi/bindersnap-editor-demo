@@ -51,14 +51,54 @@ export const BillingStatusPayloadSchema = z.object({
   accessSource: AdminSubscriptionAccessSourceSchema.nullable(),
   override: AdminSubscriptionAccessOverrideSchema.nullable(),
   plan: BillingPlanSchema.nullable(),
+  /**
+   * Paid seats: the people who can write in the organization (Owners, Admins
+   * and Editors), counted once. Reviewers and readers are free and are not in
+   * it. Null when it could not be counted.
+   */
+  seats: z.number().int().nullable().optional(),
+  /** Whether this session may subscribe, cancel or change the card. */
+  canManageBilling: z.boolean().optional(),
+  /** Whether a Stripe customer exists, so its billing portal has a page. */
+  hasBillingAccount: z.boolean().optional(),
 });
 export type BillingStatusPayload = z.infer<typeof BillingStatusPayloadSchema>;
 
 export const BillingActionBodySchema = z.object({
   idempotencyKey: z.string(),
+  /**
+   * Which of this person's organizations, by its Gitea name. Omitted means
+   * their oldest — the answer from before billing was chosen per organization.
+   */
+  organization: z.string().optional(),
+  /** Portal only: open straight on Stripe's cancel screen. */
+  intent: z.enum(["cancel"]).optional(),
 });
 export type BillingActionBody = z.infer<typeof BillingActionBodySchema>;
 
 export const BillingUrlResultSchema = z.object({
   url: z.string(),
 });
+
+/**
+ * The body of a 402 from the paywall.
+ *
+ * Typed because a 402 is not always the paywall talking — `GET
+ * /api/app/billing` answers 402 with a whole billing status when an
+ * organization is delinquent, and the SPA has to be able to tell the two
+ * apart. It used to tell them apart by matching the request path, which meant
+ * every new billing route had to remember to be listed. `code` is the
+ * distinction stated rather than inferred.
+ *
+ * `organization` is the org that owes us, named so the banner can say whose
+ * bill it is — a person in two organizations gets no help from "your
+ * subscription".
+ */
+export const PaymentRequiredPayloadSchema = z.object({
+  error: z.string(),
+  code: z.literal("subscription_required"),
+  organization: z.string().nullable(),
+});
+export type PaymentRequiredPayload = z.infer<
+  typeof PaymentRequiredPayloadSchema
+>;

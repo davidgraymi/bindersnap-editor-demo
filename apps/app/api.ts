@@ -1,4 +1,5 @@
 // Re-export document search utilities
+
 export type { DocumentSearchParams } from "./documentSearch";
 export { parseDocumentSearchQuery } from "./documentSearch";
 
@@ -9,9 +10,50 @@ import * as UsersClient from "../../packages/api-client/users/users";
 import * as BillingClient from "../../packages/api-client/billing/billing";
 import * as AdminClient from "../../packages/api-client/admin/admin";
 import * as OrganizationsClient from "../../packages/api-client/organizations/organizations";
+import * as BindersClient from "../../packages/api-client/workspaces/workspaces";
+import * as NotificationsClient from "../../packages/api-client/notifications/notifications";
+import * as OnboardingClient from "../../packages/api-client/onboarding/onboarding";
+import * as AccountClient from "../../packages/api-client/account/account";
+import * as LegalClient from "../../packages/api-client/legal/legal";
+import type { OnboardingPayload } from "../../packages/api-schema/schemas/onboarding";
+import type {
+  AppNotification,
+  NotificationCountPayload,
+} from "../../packages/api-schema/schemas/notifications";
+import type {
+  BinderArchivePayload,
+  BinderDraftPayload,
+  ChangeConflictsPayload,
+  BinderShapeChangePayload,
+  CreatedWorkspaceDocumentPayload,
+  BinderGroupsPayload,
+  BinderPeoplePayload,
+  BinderRulesPayload,
+  CreatedOrganizationGroupPayload,
+  LibraryPayload,
+  LibrarySearchPayload,
+  OrganizationPeoplePayload,
+  PublishedWorkspaceChangePayload,
+  WorkspaceChangeDetailPayload,
+  WorkspaceChangeListPayload,
+  WorkspaceHistoryEntry,
+  WorkspaceHistoryPayload,
+  WorkspaceOverviewPayload,
+  WorkspaceSettingsPayload,
+  WorkspaceDocumentDetailPayload,
+  WorkspaceDocumentListPayload,
+  WorkspaceSummary,
+  ProposedDraftPayload,
+  SignOffRuleView,
+} from "../../packages/api-schema/schemas/workspaces";
 
 // Import generated types
-import type { SessionAuthState } from "../../packages/api-schema/schemas/auth";
+import type { OrganizationDeletion } from "../../packages/api-schema/schemas/organizations";
+import type { AccountBlockers } from "../../packages/api-schema/schemas/account";
+import type {
+  SessionAuthState,
+  SessionUser as SessionAuthUser,
+} from "../../packages/api-schema/schemas/auth";
 import type {
   ChangeAssignments,
   ChangeUpdatesPayload,
@@ -31,6 +73,10 @@ import type {
   WorkspaceDocumentSummary,
 } from "../../packages/api-schema/schemas/documents";
 import type { SearchUsersPayload } from "../../packages/api-schema/schemas/users";
+import type {
+  AcceptLegalBody,
+  LegalStatusPayload,
+} from "../../packages/api-schema/schemas/legal";
 import type {
   CreatedOrganizationPayload,
   OrganizationSummary,
@@ -102,6 +148,13 @@ export type {
   ApprovalState,
   RepoBranchProtection,
 } from "../../packages/api-schema/schemas/documents";
+export type {
+  WorkspaceHistoryEntry,
+  LibraryDocument,
+  LibraryPayload,
+  LibrarySearchPayload,
+  WorkspaceSummary,
+} from "../../packages/api-schema/schemas/workspaces";
 
 export interface UploadValidationResult {
   valid: boolean;
@@ -133,19 +186,42 @@ export function validateUploadFile(file: File): UploadValidationResult {
 export { validateUploadFile as validateUploadFileWithClient };
 
 import { ApiRequestError } from "../../packages/api-client/mutator";
-import {
-  notifyPaymentRequired,
-  shouldInterceptPaymentRequired,
-} from "./paymentRequired";
+import type {
+  BinderLevel,
+  InvitationRow,
+  InvitationSummary,
+} from "../../packages/api-schema/schemas/invitations";
+import { isPaywallResponse, notifyPaymentRequired } from "./paymentRequired";
 import type { DocumentSearchParams } from "./documentSearch";
+import type { ChangeScope } from "./changeScope";
+import { scopeChangeBase, scopeRepo } from "./changeScope";
+import { LEGAL_VERSION } from "../../packages/utils/legal";
 
+/**
+ * What a read can be told by whoever asked for it: to stop. TanStack Query
+ * hands one to every read and aborts it when nobody is waiting any more.
+ */
+export interface ReadRequest {
+  signal?: AbortSignal;
+}
+
+/**
+ * Turn a refused write into read-only mode.
+ *
+ * `path` is kept for the call sites that read as documentation of which
+ * endpoint they front, but it no longer decides anything: whether a 402 is
+ * the paywall is the body's answer now, not the URL's.
+ */
 function handlePaymentRequired(path: string, error: unknown): never {
+  void path;
   if (
     error instanceof ApiRequestError &&
     error.status === 402 &&
-    shouldInterceptPaymentRequired(path)
+    isPaywallResponse(error.data)
   ) {
-    notifyPaymentRequired();
+    notifyPaymentRequired({
+      organizationName: error.data.organization ?? null,
+    });
   }
   throw error;
 }
@@ -169,15 +245,64 @@ export async function login(
 }
 
 export async function signup(
+  name: { first: string; last: string },
   username: string,
   email: string,
   password: string,
+  invitation?: string | null,
 ): Promise<SessionAuthState> {
   const response = await AuthClient.authSignup({
+    firstName: name.first.trim(),
+    lastName: name.last.trim(),
     username: username.trim(),
     email: email.trim(),
     password,
+    // The form will not submit until its box is ticked.
+    acceptedTerms: LEGAL_VERSION,
+    ...(invitation ? { invitation } : {}),
   });
+  return response.data;
+}
+
+/** Open an emailed confirmation link. Throws with the API's reason if not. */
+export async function verifyEmail(token: string): Promise<void> {
+  await AuthClient.authVerifyEmail({ token });
+}
+
+/**
+ * Send the signed-in person a new confirmation link. Resolves `true` when
+ * there was nothing to send because the address is already confirmed.
+ */
+export async function resendVerificationEmail(): Promise<boolean> {
+  const response = await AuthClient.authResendVerification();
+  return response.status === 200;
+}
+
+/**
+ * Ask for a password reset link. Resolves the same way whether or not the
+ * address has an account — the API will not say, and neither should the page.
+ */
+export async function requestPasswordReset(email: string): Promise<void> {
+  await AuthClient.authForgotPassword({ email: email.trim() });
+}
+
+/** Whether a reset link still works, and whose password it would set. */
+export async function checkResetLink(
+  token: string,
+): Promise<{ valid: boolean; username?: string }> {
+  const response = await AuthClient.authCheckResetLink({ token });
+  return response.data;
+}
+
+/** Set a new password from a reset link. Signs the person in. */
+export async function resetPassword(
+  token: string,
+  password: string,
+): Promise<SessionAuthState> {
+  const response = await AuthClient.authResetPassword({ token, password });
+  if (response.status !== 200) {
+    throw new Error("Your password could not be changed.");
+  }
   return response.data;
 }
 
@@ -196,50 +321,135 @@ export async function fetchSessionUser(): Promise<SessionAuthState | null> {
   }
 }
 
+// Account functions: the signed-in person's own account.
+
+export async function updateProfile(name: {
+  first: string;
+  last: string;
+}): Promise<SessionAuthUser> {
+  const response = await AccountClient.updateProfile({
+    firstName: name.first.trim(),
+    lastName: name.last.trim(),
+  });
+  if (response.status !== 200) {
+    throw new Error("Your name could not be saved.");
+  }
+  return response.data.user;
+}
+
+/**
+ * A refusal that names what is in the way — the organizations this person is
+ * the only owner of — so the page can list them rather than leave the person
+ * guessing.
+ */
+export class AccountChangeRefused extends Error {
+  constructor(
+    message: string,
+    readonly blockers: string[],
+  ) {
+    super(message);
+    this.name = "AccountChangeRefused";
+  }
+}
+
+function explainAccountRefusal(err: unknown): never {
+  if (err instanceof ApiRequestError && err.status === 409) {
+    const data = (err.data ?? {}) as { organizations?: unknown };
+    const blockers = (
+      Array.isArray(data.organizations) ? data.organizations : []
+    ).filter((item): item is string => typeof item === "string");
+    throw new AccountChangeRefused(err.message, blockers);
+  }
+  throw err;
+}
+
+/** What would refuse a deletion, before it is tried. */
+export async function fetchAccountBlockers(): Promise<AccountBlockers> {
+  const response = await AccountClient.getAccountBlockers();
+  return response.data;
+}
+
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  await AccountClient.changePassword({ currentPassword, newPassword });
+}
+
+export type EmailPreferences = {
+  reviewRequested: boolean;
+  changesRequested: boolean;
+  readyToPublish: boolean;
+  published: boolean;
+};
+
+/** Which change emails the signed-in person gets. */
+export async function fetchEmailPreferences(): Promise<EmailPreferences> {
+  const response = await AccountClient.getEmailPreferences();
+  return response.data.preferences;
+}
+
+export async function saveEmailPreferences(
+  changes: Partial<EmailPreferences>,
+): Promise<EmailPreferences> {
+  const response = await AccountClient.updateEmailPreferences(changes);
+  return response.data.preferences;
+}
+
+/** Turn every change email off, with the token from an email's link. */
+export async function unsubscribeWithToken(token: string): Promise<void> {
+  await AccountClient.unsubscribeFromEmail({ token });
+}
+
+export async function deleteAccount(
+  password: string,
+  confirm: string,
+): Promise<void> {
+  await AccountClient.deleteAccount({ password, confirm }).catch(
+    explainAccountRefusal,
+  );
+}
+
 export async function logoutSession(): Promise<void> {
   await AuthClient.authLogout().catch(() => undefined);
 }
 
 // Document functions
 
-/** One page of the library. Each row costs Gitea reads, so it is asked for in pages. */
-export interface WorkspaceDocumentsPage {
-  documents: WorkspaceDocumentSummary[];
-  page: number;
-  hasMore: boolean;
-}
-
-export async function getWorkspaceDocuments(
-  params?: DocumentSearchParams & { page?: number; limit?: number },
-): Promise<WorkspaceDocumentsPage> {
+/**
+ * The library: every policy in every binder this person can reach.
+ *
+ * **Rebuilt on binders.** It used to search Gitea for *repositories*, because a
+ * document was one — so the page's saved views ("mine", "everyone's") and its
+ * owner filters were questions about who owned a repo. Nobody owns a document
+ * now: the organization owns the binder and the binder holds the policy, so
+ * those questions no longer exist and are gone rather than reinterpreted into
+ * something that would quietly mean something else.
+ *
+ * Unpaged, deliberately. The server reads each binder once — three calls per
+ * binder, whatever it holds — so there is no cheaper page to fetch: paging it
+ * would mean doing the same work again for every page.
+ */
+export async function fetchLibrary(
+  query?: string,
+  request?: ReadRequest,
+): Promise<LibraryPayload> {
   try {
-    const response = await DocumentsClient.listDocuments({
-      owner: params?.ownerUsername,
-      member: params?.memberUsername,
-      q: params?.freeText,
-      page: params?.page,
-      limit: params?.limit,
-    });
-    return {
-      documents: response.data.documents ?? [],
-      page: response.data.page ?? params?.page ?? 1,
-      hasMore: response.data.hasMore ?? false,
-    };
+    const response = await DocumentsClient.listDocuments(
+      query ? { q: query } : {},
+      request,
+    );
+    return response.data;
   } catch (error) {
     handlePaymentRequired("/api/app/documents", error);
   }
 }
 
-/**
- * Every change the reader is part of, open and recently decided.
- *
- * One request. Home used to ask for the whole workspace and then ask each
- * document for its closed changes, which cost a round trip per document to
- * render a handful of rows.
- */
-export async function getHomeChanges(): Promise<HomeChangesPayload> {
+export async function getHomeChanges(
+  request?: ReadRequest,
+): Promise<HomeChangesPayload> {
   try {
-    const response = await DocumentsClient.getHomeChanges();
+    const response = await DocumentsClient.getHomeChanges(request);
     return response.data;
   } catch (error) {
     handlePaymentRequired("/api/app/home/changes", error);
@@ -247,166 +457,62 @@ export async function getHomeChanges(): Promise<HomeChangesPayload> {
 }
 
 /**
- * One page of quick-find matches: repo rows only, no per-document fan-out.
+ * Quick-find matches, capped.
  *
- * The panel calls this on every settled keystroke and again for each page the
- * reader scrolls into, so it stays deliberately cheap. The library listing is
- * still the call that knows about versions and open changes.
+ * The same question the library asks, asked shorter, and answered by the same
+ * server-side read — so the two cannot disagree about which binders count.
+ * There is no page to ask for: the read walks every binder once, so a second
+ * page would repeat the whole thing. It returns the best few and says whether
+ * there were more.
  */
 export async function searchDocuments(
   query: string,
-  page = 1,
   limit = 8,
-): Promise<DocumentSearchResultsPayload> {
+  request?: ReadRequest,
+): Promise<LibrarySearchPayload> {
   try {
-    const response = await DocumentsClient.searchDocuments({
-      q: query,
-      page: String(page),
-      limit: String(limit),
-    });
+    const response = await DocumentsClient.searchDocuments(
+      { q: query, limit: String(limit) },
+      request,
+    );
     return response.data;
   } catch (error) {
     handlePaymentRequired("/api/app/documents/search", error);
   }
 }
 
-export async function createInitialDocumentUpload(
-  repoName: string,
-  file: File,
-  nextVersion: number,
-  requiredApprovals = 1,
-  description?: string,
-): Promise<InitialDocumentUploadResult> {
-  try {
-    const response = await DocumentsClient.createDocument({
-      file,
-      repoName,
-      nextVersion: String(nextVersion),
-      requiredApprovals: String(requiredApprovals),
-      description,
-    });
-    return response.data;
-  } catch (error) {
-    handlePaymentRequired("/api/app/documents", error);
-  }
-}
-
-export async function getDocumentDetail(
-  owner: string,
-  repo: string,
-): Promise<DocumentDetailPayload> {
-  try {
-    const response = await DocumentsClient.getDocumentDetail(owner, repo);
-    return response.data;
-  } catch (error) {
-    handlePaymentRequired(`/api/app/documents/${owner}/${repo}`, error);
-  }
-}
-
-export async function getDocumentHistory(
-  owner: string,
-  repo: string,
-): Promise<DocumentHistoryPayload> {
-  try {
-    const response = await DocumentsClient.getDocumentHistory(owner, repo);
-    return response.data;
-  } catch (error) {
-    handlePaymentRequired(`/api/app/documents/${owner}/${repo}/history`, error);
-  }
-}
-
-/**
- * Changes that are no longer open. Fetched only when the reader asks for them
- * — the document page itself has no use for a closed change.
- */
-export async function getClosedChanges(
-  owner: string,
-  repo: string,
-): Promise<ClosedChangesPayload> {
-  try {
-    const response = await DocumentsClient.getClosedChanges(owner, repo);
-    return response.data;
-  } catch (error) {
-    handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/changes/closed`,
-      error,
-    );
-  }
-}
-
-export async function uploadDocumentVersion(params: {
-  owner: string;
-  repo: string;
-  docSlug: string;
-  uploaderSlug: string;
-  nextVersion: number;
-  canonicalFileName?: string | null;
-  file: File;
-}): Promise<UploadResult> {
-  const {
-    owner,
-    repo,
-    docSlug,
-    uploaderSlug,
-    nextVersion,
-    canonicalFileName,
-    file,
-  } = params;
-
-  try {
-    const response = await DocumentsClient.uploadDocumentVersion(owner, repo, {
-      file,
-      docSlug,
-      uploaderSlug,
-      nextVersion: String(nextVersion),
-      canonicalFileName: canonicalFileName ?? undefined,
-    });
-    return response.data;
-  } catch (error) {
-    handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/versions`,
-      error,
-    );
-  }
-}
-
+/** The bytes of the document this change is about, at a ref. */
 export async function downloadDocument(
-  owner: string,
-  repo: string,
+  scope: ChangeScope,
   ref: string,
 ): Promise<Blob> {
-  try {
-    const response = await DocumentsClient.downloadDocument(owner, repo, {
-      ref,
-    });
-    return response.data;
-  } catch (error) {
-    handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/download`,
-      error,
-    );
-  }
+  return downloadBinderDocument(
+    scope.org,
+    scope.binder,
+    scope.documentPath,
+    ref,
+  );
 }
 
 export async function listDocumentCollaborators(
-  owner: string,
-  repo: string,
+  scope: ChangeScope,
   page = 1,
   limit = 12,
+  request?: ReadRequest,
 ): Promise<CollaboratorListPayload> {
+  const query = { page: String(page), limit: String(limit) };
   try {
-    const response = await DocumentsClient.listDocumentCollaborators(
-      owner,
-      repo,
-      {
-        page: String(page),
-        limit: String(limit),
-      },
+    const response = await BindersClient.listBinderCollaborators(
+      scope.org,
+      scope.binder,
+      query,
+      request,
     );
     return response.data;
   } catch (error) {
+    const { owner, repo } = scopeRepo(scope);
     handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/collaborators`,
+      `/api/app/binders/${owner}/${repo}/collaborators`,
       error,
     );
   }
@@ -416,117 +522,35 @@ export async function searchWorkspaceUsers(
   query: string,
   page = 1,
   limit = 8,
+  request?: ReadRequest,
 ): Promise<SearchUsersPayload> {
   try {
-    const response = await UsersClient.searchUsers({
-      q: query,
-      page: String(page),
-      limit: String(limit),
-    });
+    const response = await UsersClient.searchUsers(
+      { q: query, page: String(page), limit: String(limit) },
+      request,
+    );
     return response.data;
   } catch (error) {
     handlePaymentRequired("/api/app/users/search", error);
   }
 }
 
-export async function addDocumentCollaborator(
-  owner: string,
-  repo: string,
-  collaborator: string,
-  permission: "read" | "write" | "admin",
-): Promise<RepoCollaboratorPermissionSummary | null> {
-  try {
-    const response = await DocumentsClient.addDocumentCollaborator(
-      owner,
-      repo,
-      collaborator,
-      { permission },
-    );
-    return response.data.collaborator ?? null;
-  } catch (error) {
-    handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/collaborators/${collaborator}`,
-      error,
-    );
-  }
-}
-
-export async function removeDocumentCollaborator(
-  owner: string,
-  repo: string,
-  collaborator: string,
-): Promise<void> {
-  try {
-    await DocumentsClient.removeDocumentCollaborator(owner, repo, collaborator);
-  } catch (error) {
-    handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/collaborators/${collaborator}`,
-      error,
-    );
-  }
-}
-
-export async function getDocumentPermissions(
-  owner: string,
-  repo: string,
-): Promise<DocumentPermissionsPayload> {
-  try {
-    const response = await DocumentsClient.getDocumentPermissions(owner, repo);
-    return response.data;
-  } catch (error) {
-    handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/permissions`,
-      error,
-    );
-  }
-}
-
-export async function updateDocumentPermissions(
-  owner: string,
-  repo: string,
-  updates: {
-    requiredApprovals?: number;
-    enableApprovalsWhitelist?: boolean;
-    approvalsWhitelistUsernames?: string[];
-    enableMergeWhitelist?: boolean;
-    mergeWhitelistUsernames?: string[];
-    dismissStaleApprovals?: boolean;
-    blockOnUnresolvedThreads?: boolean;
-    isPrivate?: boolean;
-  },
-): Promise<DocumentPermissionsPayload> {
-  try {
-    const response = await DocumentsClient.updateDocumentPermissions(
-      owner,
-      repo,
-      updates,
-    );
-    return response.data;
-  } catch (error) {
-    handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/permissions`,
-      error,
-    );
-  }
-}
-
 export async function submitDocumentReview(
-  owner: string,
-  repo: string,
+  scope: ChangeScope,
   pullNumber: number,
   event: "APPROVE" | "REQUEST_CHANGES" | "COMMENT",
   body?: string,
 ): Promise<void> {
   try {
-    await DocumentsClient.submitDocumentReview(
-      owner,
-      repo,
+    await BindersClient.reviewBinderChange(
+      scope.org,
+      scope.binder,
       String(pullNumber),
-      { event, body },
+      { event, ...(body ? { body } : {}) },
     );
   } catch (error) {
     handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/reviews`,
+      `${scopeChangeBase(scope, pullNumber)}/reviews`,
       error,
     );
   }
@@ -539,22 +563,21 @@ export async function submitDocumentReview(
  * assignee, and pass `assignee: null` to clear the assignment.
  */
 export async function updateChangeAssignments(
-  owner: string,
-  repo: string,
+  scope: ChangeScope,
   pullNumber: number,
   updates: { assignee?: string | null; reviewers?: string[] },
 ): Promise<ChangeAssignments> {
   try {
-    const response = await DocumentsClient.updateChangeAssignments(
-      owner,
-      repo,
+    const response = await BindersClient.updateBinderChangeAssignments(
+      scope.org,
+      scope.binder,
       String(pullNumber),
       updates,
     );
     return response.data;
   } catch (error) {
     handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/assignments`,
+      `${scopeChangeBase(scope, pullNumber)}/assignments`,
       error,
     );
   }
@@ -567,78 +590,78 @@ export async function updateChangeAssignments(
  * a list of changes does not need the history inside each one.
  */
 export async function listChangeUpdates(
-  owner: string,
-  repo: string,
+  scope: ChangeScope,
   pullNumber: number,
+  request?: ReadRequest,
 ): Promise<ChangeUpdatesPayload> {
   try {
-    const response = await DocumentsClient.listChangeUpdates(
-      owner,
-      repo,
+    const response = await BindersClient.listBinderChangeUpdates(
+      scope.org,
+      scope.binder,
       String(pullNumber),
+      request,
     );
     return response.data;
   } catch (error) {
     handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/updates`,
+      `${scopeChangeBase(scope, pullNumber)}/updates`,
       error,
     );
   }
 }
 
-export async function listDocumentDiscussions(
-  owner: string,
-  repo: string,
+export async function listChangeDiscussions(
+  scope: ChangeScope,
   pullNumber: number,
+  request?: ReadRequest,
 ): Promise<DiscussionSummary> {
   try {
-    const response = await DocumentsClient.listDocumentDiscussions(
-      owner,
-      repo,
+    const response = await BindersClient.listBinderChangeDiscussions(
+      scope.org,
+      scope.binder,
       String(pullNumber),
+      request,
     );
     return response.data;
   } catch (error) {
     handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/discussions`,
+      `${scopeChangeBase(scope, pullNumber)}/discussions`,
       error,
     );
   }
 }
 
-export async function createDocumentDiscussion(
-  owner: string,
-  repo: string,
+export async function createChangeDiscussion(
+  scope: ChangeScope,
   pullNumber: number,
   body: string,
 ): Promise<DiscussionSummary> {
   try {
-    const response = await DocumentsClient.createDocumentDiscussion(
-      owner,
-      repo,
+    const response = await BindersClient.createBinderChangeDiscussion(
+      scope.org,
+      scope.binder,
       String(pullNumber),
       { body },
     );
     return response.data;
   } catch (error) {
     handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/discussions`,
+      `${scopeChangeBase(scope, pullNumber)}/discussions`,
       error,
     );
   }
 }
 
-export async function replyToDocumentDiscussion(
-  owner: string,
-  repo: string,
+export async function replyToChangeDiscussion(
+  scope: ChangeScope,
   pullNumber: number,
   threadId: string,
   body: string,
 ): Promise<DiscussionSummary> {
   try {
-    const response = await DocumentsClient.replyToDocumentDiscussion(
-      owner,
-      repo,
+    const response = await BindersClient.replyToBinderChangeDiscussion(
+      scope.org,
+      scope.binder,
       String(pullNumber),
       threadId,
       { body },
@@ -646,23 +669,22 @@ export async function replyToDocumentDiscussion(
     return response.data;
   } catch (error) {
     handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/discussions/${threadId}/comments`,
+      `${scopeChangeBase(scope, pullNumber)}/discussions/${threadId}/comments`,
       error,
     );
   }
 }
 
-export async function resolveDocumentDiscussion(
-  owner: string,
-  repo: string,
+export async function resolveChangeDiscussion(
+  scope: ChangeScope,
   pullNumber: number,
   threadId: string,
   resolved: boolean,
 ): Promise<DiscussionSummary> {
   try {
-    const response = await DocumentsClient.resolveDocumentDiscussion(
-      owner,
-      repo,
+    const response = await BindersClient.resolveBinderChangeDiscussion(
+      scope.org,
+      scope.binder,
       String(pullNumber),
       threadId,
       { resolved },
@@ -670,7 +692,7 @@ export async function resolveDocumentDiscussion(
     return response.data;
   } catch (error) {
     handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/discussions/${threadId}/resolve`,
+      `${scopeChangeBase(scope, pullNumber)}/discussions/${threadId}/resolve`,
       error,
     );
   }
@@ -684,8 +706,7 @@ export async function resolveDocumentDiscussion(
  * together on the client.
  */
 export async function setDiscussionCommentReaction(
-  owner: string,
-  repo: string,
+  scope: ChangeScope,
   pullNumber: number,
   threadId: string,
   commentId: number,
@@ -693,9 +714,9 @@ export async function setDiscussionCommentReaction(
   on: boolean,
 ): Promise<DiscussionSummary> {
   try {
-    const response = await DocumentsClient.setDiscussionCommentReaction(
-      owner,
-      repo,
+    const response = await BindersClient.setBinderDiscussionCommentReaction(
+      scope.org,
+      scope.binder,
       String(pullNumber),
       threadId,
       String(commentId),
@@ -704,32 +725,33 @@ export async function setDiscussionCommentReaction(
     return response.data;
   } catch (error) {
     handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/discussions/${threadId}/comments/${commentId}/reactions`,
+      `${scopeChangeBase(scope, pullNumber)}/discussions/${threadId}/comments/${commentId}/reactions`,
       error,
     );
   }
 }
 
+/**
+ * Publish a change: merge it, and write the version it becomes.
+ *
+ * `nextVersion` is only the document model's to state. A binder works out one
+ * version per document the change touched — three documents, three tags on one
+ * commit — so it is told nothing and answers with what it wrote.
+ */
 export async function publishDocument(
-  owner: string,
-  repo: string,
+  scope: ChangeScope,
   pullNumber: number,
   nextVersion: number,
-): Promise<{
-  ok: boolean;
-  tag: DocTag;
-}> {
+): Promise<void> {
   try {
-    const response = await DocumentsClient.publishDocument(
-      owner,
-      repo,
+    await BindersClient.publishBinderChange(
+      scope.org,
+      scope.binder,
       String(pullNumber),
-      { nextVersion },
     );
-    return response.data;
   } catch (error) {
     handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/publish`,
+      `${scopeChangeBase(scope, pullNumber)}/publish`,
       error,
     );
   }
@@ -743,23 +765,1339 @@ export async function publishDocument(
  * An empty list is an ordinary answer, not an error: an account that predates
  * ADR 0004, or one whose owner has not created an organization yet, has none.
  */
-export async function fetchOrganizations(): Promise<OrganizationSummary[]> {
-  const response = await OrganizationsClient.listOrganizations();
+export async function fetchOrganizations(
+  request?: ReadRequest,
+): Promise<OrganizationSummary[]> {
+  const response = await OrganizationsClient.listOrganizations(request);
   return response.data.organizations;
+}
+
+/** Whether this person may delete the organization, and what is in the way. */
+export async function fetchOrganizationDeletion(
+  org: string,
+): Promise<OrganizationDeletion> {
+  const response = await OrganizationsClient.getOrganizationDeletion(org);
+  return response.data;
+}
+
+/** Delete an organization, confirmed by its name typed out. */
+export async function deleteOrganization(
+  org: string,
+  confirm: string,
+): Promise<void> {
+  await OrganizationsClient.deleteOrganization(org, { confirm });
 }
 
 export async function createOrganization(
   name: string,
 ): Promise<CreatedOrganizationPayload["organization"]> {
-  const response = await OrganizationsClient.createOrganization({ name });
+  const response = await OrganizationsClient.createOrganization({
+    name,
+    // The form will not submit until its owner ticks the box for it.
+    acceptedTerms: LEGAL_VERSION,
+  });
   return response.data.organization;
+}
+
+/** What this session still has to accept: for itself, and for its orgs. */
+export async function fetchLegalStatus(): Promise<LegalStatusPayload> {
+  const response = await LegalClient.getLegalStatus();
+  return response.data;
+}
+
+/** Accept the Terms as they stand. Resolves what is left to accept. */
+export async function acceptLegal(
+  body: AcceptLegalBody,
+): Promise<LegalStatusPayload> {
+  const response = await LegalClient.acceptLegal(body);
+  return response.data;
+}
+
+// Binder functions
+
+/**
+ * Every binder this session can act in, across every organization it belongs
+ * to — each one naming its owner, because that is what its address needs.
+ */
+export async function fetchBinders(): Promise<WorkspaceSummary[]> {
+  const response = await BindersClient.listBinders();
+  return response.data.workspaces;
+}
+
+/**
+ * The binders one organization owns.
+ *
+ * Distinct from `fetchBinders`, which answers a question about a person —
+ * everything I can act in, wherever it lives. This answers a question about an
+ * organization, which is what you are asking when you are looking at the
+ * organization rather than at your day.
+ */
+export async function fetchOrganizationBinders(
+  org: string,
+  request?: ReadRequest,
+): Promise<WorkspaceSummary[]> {
+  const response = await BindersClient.listOrganizationBinders(org, request);
+  return response.data.workspaces;
+}
+
+export async function createBinder(
+  org: string,
+  name: string,
+  description?: string,
+  /** Whether the whole organization can read it. Asked on the form. */
+  openToOrganization = true,
+): Promise<WorkspaceSummary> {
+  const response = await BindersClient.createBinder(org, {
+    name,
+    description,
+    openToOrganization,
+  });
+  return response.data.workspace;
+}
+
+/** The binder itself: what it is called, what it is for, how much is in it. */
+export async function fetchBinder(
+  org: string,
+  binder: string,
+  request?: ReadRequest,
+): Promise<WorkspaceOverviewPayload> {
+  const response = await BindersClient.getBinder(org, binder, request);
+  return response.data;
+}
+
+/** The binder's change requests, open or closed. */
+export async function fetchBinderChanges(
+  org: string,
+  binder: string,
+  state: "open" | "closed" = "open",
+  request?: ReadRequest,
+): Promise<WorkspaceChangeListPayload> {
+  const response = await BindersClient.listBinderChanges(
+    org,
+    binder,
+    { state },
+    request,
+  );
+  return response.data;
+}
+
+/**
+ * Change a binder's rules. **Immediate**, unlike a sign-off rule.
+ *
+ * Any one of them on its own: the approval count and whether a new version
+ * clears the approvals are Gitea's to enforce, and whether every discussion
+ * must be resolved is ours. A binder's administrator can change all three, and
+ * each change is recorded with who made it.
+ */
+export async function setBinderRules(
+  org: string,
+  binder: string,
+  rules: {
+    blockOnUnresolvedThreads?: boolean;
+    requiredApprovals?: number;
+    dismissStaleApprovals?: boolean;
+  },
+): Promise<BinderRulesPayload> {
+  const response = await BindersClient.setBinderRules(org, binder, rules);
+  return response.data;
+}
+
+/**
+ * Propose new per-folder sign-off rules.
+ *
+ * **Returns a change, not a success.** `main` is protected, so the rules that
+ * decide who approves are themselves approved — and a caller holding a change
+ * number cannot report otherwise. The whole set is sent rather than a patch:
+ * the file is regenerated from what arrives, so omitting a rule would delete
+ * it, and sending everything makes that impossible to do by accident.
+ */
+export async function proposeBinderSignOff(
+  org: string,
+  binder: string,
+  rules: Array<{
+    scope: SignOffRuleView["scope"];
+    target: string;
+    teams: string[];
+    users: string[];
+  }>,
+): Promise<{ changeNumber: number; branch: string }> {
+  const response = await BindersClient.proposeBinderSignOffRules(org, binder, {
+    rules,
+  });
+  return response.data;
+}
+
+/** Who is in this organization, and the groups it has. */
+export async function fetchOrganizationPeople(
+  org: string,
+  request?: ReadRequest,
+): Promise<OrganizationPeoplePayload> {
+  const response = await OrganizationsClient.getOrganizationPeople(
+    org,
+    request,
+  );
+  return response.data;
+}
+
+/**
+ * Name a group and level it, which is one act.
+ *
+ * A Gitea team carries one unit map, so the level belongs to the group rather
+ * than to the grant — a group cannot be an editor in one binder and a reviewer
+ * in another. Asking for the two together is how that constraint is shown
+ * rather than discovered.
+ */
+export async function createOrganizationGroup(
+  org: string,
+  name: string,
+  level: string,
+): Promise<CreatedOrganizationGroupPayload> {
+  const response = await OrganizationsClient.createOrganizationGroup(org, {
+    name,
+    level,
+  });
+  return response.data;
+}
+
+/**
+ * Put somebody in the organization.
+ *
+ * They must already have an account: there is no invitation and no email
+ * behind this — see the invitations issue, 426 — so the one refusal worth
+ * expecting is
+ * "no such account yet", which the API says in as many words.
+ */
+export async function addOrganizationPerson(
+  org: string,
+  username: string,
+  owner: boolean,
+): Promise<OrganizationPeoplePayload> {
+  const response = await OrganizationsClient.addOrganizationPerson(org, {
+    username,
+    owner,
+  });
+  return response.data;
+}
+
+// Invitations by email (issue 426).
+
+export async function fetchInvitations(org: string): Promise<InvitationRow[]> {
+  const response = await OrganizationsClient.listOrganizationInvitations(org);
+  return response.data.invitations;
+}
+
+/** Invite by email. Grants nothing until accepted. */
+export async function inviteToOrganization(
+  org: string,
+  invite: {
+    email: string;
+    owner: boolean;
+    binder?: string;
+    level?: BinderLevel;
+  },
+): Promise<InvitationRow> {
+  const response = await OrganizationsClient.createOrganizationInvitation(org, {
+    email: invite.email.trim(),
+    owner: invite.owner,
+    ...(invite.binder ? { binder: invite.binder, level: invite.level } : {}),
+  });
+  return response.data.invitation;
+}
+
+export async function revokeInvitation(org: string, id: string): Promise<void> {
+  await OrganizationsClient.revokeOrganizationInvitation(org, id);
+}
+
+export async function resendInvitation(
+  org: string,
+  id: string,
+): Promise<InvitationRow> {
+  const response = await OrganizationsClient.resendOrganizationInvitation(
+    org,
+    id,
+  );
+  return response.data.invitation;
+}
+
+/** What an invitation link is for. No session needed. */
+export async function fetchInvitation(
+  token: string,
+): Promise<InvitationSummary> {
+  const response = await OrganizationsClient.getInvitation(token);
+  return response.data;
+}
+
+/** Accept as the signed-in account. `joined`, or `accepted` while it waits. */
+export async function acceptInvitation(
+  token: string,
+): Promise<InvitationSummary["status"]> {
+  const response = await OrganizationsClient.acceptInvitation(token);
+  return response.data.status;
+}
+
+/**
+ * Promote somebody to owner, or demote them back to member.
+ *
+ * Refused with a sentence when it would leave the organization with no owner —
+ * the same sentence removal is refused with, because they are two routes to one
+ * consequence.
+ */
+export async function setOrganizationPersonRole(
+  org: string,
+  username: string,
+  owner: boolean,
+): Promise<OrganizationPeoplePayload> {
+  const response = await OrganizationsClient.setOrganizationPersonRole(
+    org,
+    username,
+    { owner },
+  );
+  return response.data;
+}
+
+/**
+ * Take somebody out of the organization.
+ *
+ * They lose access immediately, everywhere — and everything they wrote,
+ * approved or commented on stays exactly where it is, because those are git
+ * objects and the record belongs to the organization.
+ */
+export async function removeOrganizationPerson(
+  org: string,
+  username: string,
+): Promise<OrganizationPeoplePayload> {
+  const response = await OrganizationsClient.removeOrganizationPerson(
+    org,
+    username,
+  );
+  return response.data;
+}
+
+/** Put somebody in a group. Immediate: no commit, no approval. */
+export async function addOrganizationGroupMember(
+  org: string,
+  group: string,
+  username: string,
+): Promise<OrganizationPeoplePayload> {
+  const response = await OrganizationsClient.addOrganizationGroupMember(
+    org,
+    group,
+    { username },
+  );
+  return response.data;
+}
+
+export async function removeOrganizationGroupMember(
+  org: string,
+  group: string,
+  username: string,
+): Promise<OrganizationPeoplePayload> {
+  const response = await OrganizationsClient.removeOrganizationGroupMember(
+    org,
+    group,
+    username,
+  );
+  return response.data;
+}
+
+/**
+ * Compose a group onto this binder, and rewrite the approvals whitelist.
+ *
+ * Both halves are one call because the second fails silently on its own: a
+ * granted team missing from the whitelist has its members' approvals recorded,
+ * displayed, and satisfying nothing.
+ */
+export async function grantBinderGroup(
+  org: string,
+  binder: string,
+  group: string,
+): Promise<BinderGroupsPayload> {
+  const response = await BindersClient.grantBinderGroup(org, binder, { group });
+  return response.data;
+}
+
+export async function revokeBinderGroup(
+  org: string,
+  binder: string,
+  group: string,
+): Promise<BinderGroupsPayload> {
+  const response = await BindersClient.revokeBinderGroup(org, binder, group);
+  return response.data;
+}
+
+/** Who can act in this binder, one row per person. */
+export async function fetchBinderPeople(
+  org: string,
+  binder: string,
+  request?: ReadRequest,
+): Promise<BinderPeoplePayload> {
+  const response = await BindersClient.getBinderPeople(org, binder, request);
+  return response.data;
+}
+
+/**
+ * Add somebody to this binder at a level.
+ *
+ * Also the escape hatch for one person in a group who needs more here: an
+ * individual grant sits alongside the group rather than changing it, so it
+ * touches this binder and no other.
+ */
+export async function addBinderPerson(
+  org: string,
+  binder: string,
+  username: string,
+  level: string,
+): Promise<BinderPeoplePayload> {
+  const response = await BindersClient.addBinderPerson(org, binder, {
+    username,
+    level,
+  });
+  return response.data;
+}
+
+/**
+ * Move somebody between this binder's levels.
+ *
+ * Refused with a sentence when their access comes from a shared group — that
+ * group is one object across every binder it reaches, so the change is not this
+ * binder's to make.
+ */
+export async function setBinderPersonLevel(
+  org: string,
+  binder: string,
+  username: string,
+  level: string,
+): Promise<BinderPeoplePayload> {
+  const response = await BindersClient.setBinderPersonLevel(
+    org,
+    binder,
+    username,
+    { username, level },
+  );
+  return response.data;
+}
+
+export async function removeBinderPerson(
+  org: string,
+  binder: string,
+  username: string,
+): Promise<BinderPeoplePayload> {
+  const response = await BindersClient.removeBinderPerson(
+    org,
+    binder,
+    username,
+  );
+  return response.data;
+}
+
+/**
+ * Open this binder to the whole organization, or close it again.
+ *
+ * One switch over one primitive — `staff` granted onto the repository, or not —
+ * and its own call rather than a group grant with a friendlier name, because
+ * "everyone at Riverside Health can read this" is a decision about the binder
+ * and not housekeeping about a team.
+ */
+export async function setBinderVisibility(
+  org: string,
+  binder: string,
+  openToOrganization: boolean,
+): Promise<BinderPeoplePayload> {
+  const response = await BindersClient.setBinderVisibility(org, binder, {
+    openToOrganization,
+  });
+  return response.data;
+}
+
+/** Every version this binder has published, newest first. */
+export async function fetchBinderHistory(
+  org: string,
+  binder: string,
+  request?: ReadRequest,
+): Promise<WorkspaceHistoryPayload> {
+  const response = await BindersClient.getBinderHistory(org, binder, request);
+  return response.data;
+}
+
+/** Who can act in this binder, and the rules it is governed by. */
+export async function fetchBinderSettings(
+  org: string,
+  binder: string,
+  request?: ReadRequest,
+): Promise<WorkspaceSettingsPayload> {
+  const response = await BindersClient.getBinderSettings(org, binder, request);
+  return response.data;
+}
+
+/**
+ * The binder's contents — on the record, or as they stand in your own draft.
+ *
+ * Edit mode passes its draft branch because it has to see what it has just
+ * done: a folder made a second ago exists on that branch and nowhere else,
+ * and a list read from `main` would snap every rename back.
+ */
+export async function fetchBinderDocuments(
+  org: string,
+  binder: string,
+  draft?: string,
+  /**
+   * Read the binder as a change request would leave it.
+   *
+   * A document read on a change's branch puts the binder's contents in the
+   * navigation beside it, and a tree pinned to `main` there would list a
+   * policy under the name the change renamed it away from.
+   */
+  change?: number,
+  /**
+   * Read the binder at a branch, named: `/-/tree/{ref}`. Somebody else's
+   * unproposed draft is refused by the server.
+   */
+  ref?: string,
+  request?: ReadRequest,
+): Promise<WorkspaceDocumentListPayload> {
+  const response = await BindersClient.listBinderDocuments(
+    org,
+    binder,
+    {
+      ...(draft ? { draft } : {}),
+      ...(change ? { change: String(change) } : {}),
+      ...(ref ? { ref } : {}),
+    },
+    request,
+  );
+  return response.data;
+}
+
+/**
+ * Where an act's work goes.
+ *
+ * Three answers, and the default is the one every caller had before drafts
+ * existed: `undefined` opens a change request of its own. A `changeNumber`
+ * joins one already open — the change is the unit of approval, so policies
+ * that belong together are decided together (ADR 0004 §4). A `draft` puts it
+ * in work nobody has been asked to look at yet.
+ *
+ * One object rather than a fourth and fifth positional argument: they are
+ * alternatives, not a list, and `(org, binder, path, next, undefined, branch)`
+ * is not a call anybody can read.
+ */
+export interface ActTarget {
+  changeNumber?: number;
+  /** A draft branch, or `true` for the one you are working in. */
+  draft?: string | true;
+}
+
+export async function fetchBinderDocument(
+  org: string,
+  binder: string,
+  documentPath: string,
+  /**
+   * Read it in your own draft rather than on `main`.
+   *
+   * A policy renamed while editing is only at that name on the draft branch,
+   * so a page opened from the tree in edit mode has to ask where the name it
+   * was clicked under exists.
+   */
+  draft?: string,
+  /**
+   * Read it on a change request's branch.
+   *
+   * A change request is a branch, and a document on it has an address — so
+   * reading the proposed version is the binder at another ref rather than a
+   * panel inside the change's page.
+   */
+  change?: number,
+  /**
+   * Read it on a branch, named.
+   *
+   * A file lives on a branch, which is why every code host addresses one by
+   * ref. Somebody else's draft is refused by the server.
+   */
+  ref?: string,
+  request?: ReadRequest,
+): Promise<WorkspaceDocumentDetailPayload> {
+  const response = await BindersClient.getBinderDocument(
+    org,
+    binder,
+    documentPath,
+    {
+      ...(draft ? { draft } : {}),
+      ...(change ? { change: String(change) } : {}),
+      ...(ref ? { ref } : {}),
+    },
+    request,
+  );
+  return response.data;
+}
+
+/**
+ * One change in a binder — what it proposes, and where it stands.
+ *
+ * A question about the change rather than about a document, because the change
+ * is the unit of approval: publishing one that touched three policies versions
+ * all three.
+ */
+export async function fetchBinderChange(
+  org: string,
+  binder: string,
+  changeNumber: number,
+  request?: ReadRequest,
+): Promise<WorkspaceChangeDetailPayload> {
+  const response = await BindersClient.getBinderChange(
+    org,
+    binder,
+    String(changeNumber),
+    request,
+  );
+  return response.data;
+}
+
+/** Approve a change, ask for work on it, or say something about it. */
+export async function reviewBinderChange(
+  org: string,
+  binder: string,
+  changeNumber: number,
+  event: "APPROVE" | "REQUEST_CHANGES" | "COMMENT",
+  body?: string,
+): Promise<void> {
+  try {
+    await BindersClient.reviewBinderChange(org, binder, String(changeNumber), {
+      event,
+      ...(body ? { body } : {}),
+    });
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/changes/${changeNumber}/reviews`,
+      error,
+    );
+  }
+}
+
+/**
+ * Bring a change's branch up to date with the binder's `main`.
+ *
+ * It moves the branch, so a binder that dismisses stale approvals will drop
+ * the ones already collected — which is why this is its own act rather than
+ * something publish does quietly.
+ */
+export async function updateBinderChange(
+  org: string,
+  binder: string,
+  changeNumber: number,
+): Promise<void> {
+  try {
+    await BindersClient.updateBinderChange(org, binder, String(changeNumber));
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/changes/${changeNumber}/update`,
+      error,
+    );
+  }
+}
+
+/**
+ * What conflicts between a change and the binder: every document both
+ * changed since the change began, read at all three points.
+ */
+export async function fetchBinderChangeConflicts(
+  org: string,
+  binder: string,
+  changeNumber: number,
+  request?: ReadRequest,
+): Promise<ChangeConflictsPayload> {
+  const response = await BindersClient.getBinderChangeConflicts(
+    org,
+    binder,
+    String(changeNumber),
+    request,
+  );
+  return response.data as ChangeConflictsPayload;
+}
+
+export interface ConflictResolution {
+  key: string;
+  take: "ours" | "theirs" | "none" | "content";
+  base64Content?: string;
+}
+
+/**
+ * Resolve a change's conflicts as decided, and bring it up to date.
+ *
+ * Names the heads the page read the files at, so a resolution is never
+ * applied to versions nobody looked at.
+ */
+export async function resolveBinderChangeConflicts(
+  org: string,
+  binder: string,
+  changeNumber: number,
+  body: {
+    headSha: string;
+    baseSha: string;
+    resolutions: ConflictResolution[];
+  },
+): Promise<void> {
+  try {
+    await BindersClient.resolveBinderChangeConflicts(
+      org,
+      binder,
+      String(changeNumber),
+      body,
+    );
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/changes/${changeNumber}/conflicts`,
+      error,
+    );
+  }
+}
+
+/** Merge the change and tag a version for every document it touched. */
+export async function publishBinderChange(
+  org: string,
+  binder: string,
+  changeNumber: number,
+): Promise<PublishedWorkspaceChangePayload> {
+  try {
+    const response = await BindersClient.publishBinderChange(
+      org,
+      binder,
+      String(changeNumber),
+    );
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/changes/${changeNumber}/publish`,
+      error,
+    );
+  }
+}
+
+/**
+ * Add a document to a binder — the ADR 0004 upload path.
+ *
+ * A mutation, so it is behind the paywall; the 402 is intercepted here so a
+ * delinquent organization gets the banner rather than a raw error under the
+ * file picker.
+ */
+export async function createBinderDocument(
+  org: string,
+  binder: string,
+  file: File,
+  name: string,
+  folder?: string,
+  /** An open change or a draft to put it in, instead of opening one. */
+  target?: ActTarget,
+): Promise<CreatedWorkspaceDocumentPayload> {
+  try {
+    const response = await BindersClient.createBinderDocument(org, binder, {
+      file,
+      name,
+      ...(folder ? { folder } : {}),
+      ...multipartTarget(target),
+    });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(`/api/app/binders/${org}/${binder}/documents`, error);
+  }
+}
+
+/**
+ * Propose a new version of a document already in the binder.
+ *
+ * Named by its address rather than by its filename: a person revising the hand
+ * hygiene policy is revising *that policy*, whatever file it happens to be
+ * today. The server keeps its identity, so replacing a Word file with a PDF is
+ * still the same document on its next version.
+ */
+export async function reviseBinderDocument(
+  org: string,
+  binder: string,
+  file: File,
+  documentPath: string,
+  /** An open change or a draft to put it in, instead of opening one. */
+  target?: ActTarget,
+  /** Written in the editor, so recorded as an edit rather than an upload. */
+  source?: "editor",
+): Promise<CreatedWorkspaceDocumentPayload> {
+  try {
+    const response = await BindersClient.reviseBinderDocument(org, binder, {
+      file,
+      documentPath,
+      ...multipartTarget(target),
+      ...(source ? { source } : {}),
+    });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/document-revisions`,
+      error,
+    );
+  }
+}
+
+/**
+ * Make a folder in a binder.
+ *
+ * Git has no empty directories, so this is a real file committed into a change
+ * request like everything else — a binder's shape is part of its record, and
+ * `main` is protected against anything that has not been approved.
+ */
+export async function createBinderFolder(
+  org: string,
+  binder: string,
+  folder: string,
+  target?: ActTarget,
+): Promise<BinderShapeChangePayload> {
+  try {
+    const response = await BindersClient.createBinderFolder(org, binder, {
+      folder,
+      ...jsonTarget(target),
+    });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(`/api/app/binders/${org}/${binder}/folders`, error);
+  }
+}
+
+/** Rename a folder, or move it under another one. Everything inside moves. */
+export async function renameBinderFolder(
+  org: string,
+  binder: string,
+  from: string,
+  to: string,
+  target?: ActTarget,
+): Promise<BinderShapeChangePayload> {
+  try {
+    const response = await BindersClient.renameBinderFolder(org, binder, {
+      from,
+      to,
+      ...jsonTarget(target),
+    });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/folder-renames`,
+      error,
+    );
+  }
+}
+
+/**
+ * Rename a policy, file it somewhere else, or both.
+ *
+ * Its version history follows it: the identity that the version tags are named
+ * after is a segment of the filename and moves with the file (ADR 0005).
+ */
+export async function renameBinderDocument(
+  org: string,
+  binder: string,
+  documentPath: string,
+  next: { name?: string; folder?: string },
+  target?: ActTarget,
+): Promise<BinderShapeChangePayload> {
+  try {
+    const response = await BindersClient.renameBinderDocument(org, binder, {
+      documentPath,
+      ...(next.name !== undefined ? { name: next.name } : {}),
+      ...(next.folder !== undefined ? { folder: next.folder } : {}),
+      ...jsonTarget(target),
+    });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/document-renames`,
+      error,
+    );
+  }
+}
+
+/**
+ * An {@link ActTarget} as a JSON body's two optional fields.
+ *
+ * Absent stays absent rather than becoming `null`: the server reads a missing
+ * `draft` as "open a change request", and an explicit null would have to mean
+ * the same thing in a second way.
+ */
+function jsonTarget(target?: ActTarget): {
+  changeNumber?: number;
+  draft?: string | boolean;
+} {
+  if (!target) return {};
+  return {
+    ...(target.changeNumber ? { changeNumber: target.changeNumber } : {}),
+    ...(target.draft ? { draft: target.draft } : {}),
+  };
+}
+
+/**
+ * The same, for the two acts that upload a file.
+ *
+ * **Every multipart field is a string**, which is why `true` goes over as
+ * `"true"` — there are no booleans and no nulls in a form, and a field nobody
+ * filled in arrives as the empty string. The server reads it back with that in
+ * mind; this is the other half of the same convention.
+ */
+function multipartTarget(target?: ActTarget): {
+  changeNumber?: string;
+  draft?: string;
+} {
+  if (!target) return {};
+  return {
+    ...(target.changeNumber
+      ? { changeNumber: String(target.changeNumber) }
+      : {}),
+    ...(target.draft ? { draft: String(target.draft) } : {}),
+  };
+}
+
+/**
+ * Your drafts in this binder, what is in the one you are in, and who else is
+ * editing.
+ *
+ * A read, so it never starts one: `draft` comes back null when you are not
+ * editing, which is the ordinary state rather than a missing thing.
+ *
+ * `branch` says which of yours you are in. Unsaid means the newest, which is
+ * what this meant when a person could only have one.
+ */
+export async function fetchBinderDraft(
+  org: string,
+  binder: string,
+  branch?: string,
+  request?: ReadRequest,
+): Promise<BinderDraftPayload> {
+  const response = await BindersClient.getBinderDraft(
+    org,
+    binder,
+    branch ? { draft: branch } : undefined,
+    request,
+  );
+  return response.data;
+}
+
+/**
+ * Start editing this binder, or carry on where you were.
+ *
+ * Idempotent by design — pressing Edit twice resumes rather than forks, so
+ * this is safe to call without first asking whether a draft exists.
+ *
+ * **`name` makes it a different act**: start *another* draft, called that. A
+ * deliberate fork, from the picker, with a sentence attached — which is how
+ * several drafts stay a thing somebody chose rather than something that
+ * happens to them.
+ */
+export async function openBinderDraft(
+  org: string,
+  binder: string,
+  name?: string,
+): Promise<BinderDraftPayload> {
+  try {
+    const response = await BindersClient.openBinderDraft(
+      org,
+      binder,
+      name ? { name } : {},
+    );
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(`/api/app/binders/${org}/${binder}/draft`, error);
+  }
+}
+
+/** Call one of your drafts something else. */
+export async function renameBinderDraft(
+  org: string,
+  binder: string,
+  branch: string,
+  name: string,
+): Promise<BinderDraftPayload> {
+  try {
+    const response = await BindersClient.renameBinderDraft(org, binder, {
+      draft: branch,
+      name,
+    });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(`/api/app/binders/${org}/${binder}/draft`, error);
+  }
+}
+
+/**
+ * Throw a draft away.
+ *
+ * Only ever your own, and only while it is still a draft: once a change
+ * request sits on the branch it is not a draft any more and the server refuses
+ * — deleting it would take somebody's review with it.
+ *
+ * `branch` says which, because a person may have several and discarding the
+ * wrong one is not recoverable.
+ */
+export async function discardBinderDraft(
+  org: string,
+  binder: string,
+  branch?: string,
+): Promise<void> {
+  try {
+    await BindersClient.discardBinderDraft(
+      org,
+      binder,
+      branch ? { draft: branch } : undefined,
+    );
+  } catch (error) {
+    handlePaymentRequired(`/api/app/binders/${org}/${binder}/draft`, error);
+  }
+}
+
+/**
+ * Propose your draft: open the change request, in your own words.
+ *
+ * The title is the author's. A change request is a request — it is addressed
+ * to colleagues, and the server writing "Add nursing/hand-hygiene" on somebody
+ * else's behalf is not the sentence they would have written.
+ */
+export async function proposeBinderDraft(
+  org: string,
+  binder: string,
+  title: string,
+  description: string,
+  /** Which draft. The newest when unsaid. */
+  branch?: string,
+): Promise<ProposedDraftPayload> {
+  try {
+    const response = await BindersClient.proposeBinderDraft(org, binder, {
+      title,
+      ...(description.trim() === "" ? {} : { description }),
+      ...(branch ? { draft: branch } : {}),
+    });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(`/api/app/binders/${org}/${binder}/changes`, error);
+  }
+}
+
+/**
+ * Take a policy off the record.
+ *
+ * **Archive, not delete, and the word is accurate rather than only kinder.**
+ * The file leaves `main` and nothing else happens to it: every version tag
+ * still points at the commit that held it, so the bytes stay readable at every
+ * version the policy reached. Like any other act on a binder it is proposed
+ * rather than done — into your draft while you are editing, or into a change
+ * request of its own.
+ */
+export async function archiveBinderDocument(
+  org: string,
+  binder: string,
+  documentPath: string,
+  target?: ActTarget,
+): Promise<BinderShapeChangePayload> {
+  try {
+    const response = await BindersClient.archiveBinderDocument(org, binder, {
+      documentPath,
+      ...jsonTarget(target),
+    });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/document-archives`,
+      error,
+    );
+  }
+}
+
+/**
+ * Bring an archived policy back.
+ *
+ * **Not an undo.** It is a change like any other, and it waits on the same
+ * decision — a policy reappearing on the record without one would be the
+ * single act in this product that skipped review. Named by identity rather
+ * than by path, because an archived document has no path on `main` and the one
+ * it had may since have been taken.
+ *
+ * It returns as the next version rather than as a new document at v1: the
+ * identity is a segment of the filename and this restores that filename, so
+ * its history is unbroken across the gap.
+ */
+export async function restoreBinderDocument(
+  org: string,
+  binder: string,
+  uid: string,
+  target?: ActTarget,
+): Promise<BinderShapeChangePayload> {
+  try {
+    const response = await BindersClient.restoreBinderDocument(org, binder, {
+      uid,
+      ...jsonTarget(target),
+    });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/document-restores`,
+      error,
+    );
+  }
+}
+
+/**
+ * Give a binder a new name.
+ *
+ * Answers with its new address, which the caller has to navigate to: the page
+ * it is on is addressed by the old one. Old links keep working — Gitea
+ * redirects — but the address bar should say what the binder is called now.
+ */
+/** Delete a binder for good, confirmed by its name typed out. */
+export async function deleteBinder(
+  org: string,
+  binder: string,
+  confirm: string,
+): Promise<void> {
+  await BindersClient.deleteBinder(org, binder, { confirm });
+}
+
+export async function renameBinder(
+  org: string,
+  binder: string,
+  name: string,
+): Promise<{ organization: string; workspace: string; previous: string }> {
+  try {
+    const response = await BindersClient.renameBinder(org, binder, { name });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(`/api/app/binders/${org}/${binder}/name`, error);
+  }
+}
+
+/**
+ * Rewrite what a change is asking for.
+ *
+ * The author's, and only while it is open: once it is published the title is
+ * on the merge commit and in the version tag, which are the record.
+ */
+export async function editBinderChange(
+  org: string,
+  binder: string,
+  changeNumber: number,
+  subject: { title: string; body: string },
+): Promise<{ title: string; body: string }> {
+  try {
+    const response = await BindersClient.editBinderChange(
+      org,
+      binder,
+      String(changeNumber),
+      subject,
+    );
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/changes/${changeNumber}`,
+      error,
+    );
+  }
+}
+
+/**
+ * Say what a binder is for.
+ *
+ * Unlike a rename this moves nothing — it is the repository's own description,
+ * which is where every screen already reads it from.
+ */
+export async function describeBinder(
+  org: string,
+  binder: string,
+  description: string,
+): Promise<{ description: string }> {
+  try {
+    const response = await BindersClient.describeBinder(org, binder, {
+      description,
+    });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/description`,
+      error,
+    );
+  }
+}
+
+/**
+ * Everything this binder has taken off the record.
+ *
+ * Not a table: the server works it out at read time as every identity with a
+ * version tag, minus every identity on the tree. Which is why it is a page of
+ * its own rather than a flag on the documents list — the question is about the
+ * tags, not about the tree.
+ *
+ * `draft` takes the difference against your own draft instead of `main`, so a
+ * policy archived a moment ago is in the answer. Without it the binder counted
+ * the archive from the draft and listed it from `main`, and the two disagreed
+ * by exactly the policy somebody had just archived.
+ */
+export async function fetchBinderArchive(
+  org: string,
+  binder: string,
+  draft?: string,
+  request?: ReadRequest,
+): Promise<BinderArchivePayload> {
+  const response = await BindersClient.getBinderArchive(
+    org,
+    binder,
+    draft ? { draft } : undefined,
+    request,
+  );
+  return response.data;
+}
+
+/**
+ * The bytes of one document in a binder, at a ref.
+ *
+ * `ref` is a version tag for a published version, or a change's branch for one
+ * still under review. Unstated means `main` — the version on record.
+ */
+export async function downloadBinderDocument(
+  org: string,
+  binder: string,
+  documentPath: string,
+  ref?: string,
+): Promise<Blob> {
+  const response = await BindersClient.downloadBinderDocument(
+    org,
+    binder,
+    documentPath,
+    ref ? { ref } : undefined,
+    // A branch moves with every save; a copy the browser kept from before one
+    // showed the words the save replaced. See `downloadHeaders` in the API.
+    { cache: "no-store" },
+  );
+  return response.data;
+}
+
+/**
+ * A document as a PDF or a Word document, and what to call the file.
+ *
+ * A policy written in Bindersnap is laid out on the server; an uploaded file
+ * that is already a PDF or a Word document comes back as itself. The server
+ * names the file — `hand-hygiene-v3.pdf` — because it is the one that knows
+ * which version it is.
+ */
+export async function exportBinderDocument(
+  org: string,
+  binder: string,
+  documentPath: string,
+  format: "pdf" | "docx",
+  ref?: string,
+): Promise<{ blob: Blob; fileName: string }> {
+  const response = await BindersClient.exportBinderDocument(
+    org,
+    binder,
+    documentPath,
+    { format, ...(ref ? { ref } : {}) },
+    { cache: "no-store" },
+  );
+  const disposition =
+    (response as { headers?: Headers }).headers?.get("content-disposition") ??
+    "";
+  const named = disposition.match(/filename="([^"]+)"/)?.[1];
+  const leaf =
+    documentPath
+      .split("/")
+      .pop()
+      ?.replace(/\.[^.]+$/, "") || "document";
+  return { blob: response.data, fileName: named ?? `${leaf}.${format}` };
+}
+
+/**
+ * A document's audit packet: who approved every version and when, what was
+ * discussed, and the fingerprints that let anybody check it — one zip for a
+ * surveyor, made on the server from Gitea's record.
+ */
+export async function exportAuditPacket(
+  org: string,
+  binder: string,
+  documentPath: string,
+): Promise<{ blob: Blob; fileName: string }> {
+  const response = await BindersClient.exportBinderDocumentAudit(
+    org,
+    binder,
+    documentPath,
+    { cache: "no-store" },
+  );
+  const disposition =
+    (response as { headers?: Headers }).headers?.get("content-disposition") ??
+    "";
+  const named = disposition.match(/filename="([^"]+)"/)?.[1];
+  return { blob: response.data, fileName: named ?? "audit-packet.zip" };
+}
+
+// Getting started
+
+export type { OnboardingPayload };
+
+/** How far you have got with moving in: five steps, each read from what exists. */
+export async function fetchOnboarding(
+  request?: ReadRequest,
+): Promise<OnboardingPayload> {
+  const response = await OnboardingClient.getOnboarding({
+    ...request,
+    cache: "no-store",
+  });
+  return response.data;
+}
+
+// Notifications
+
+export type { AppNotification };
+
+/** Your newest notifications, unread only unless `all`. */
+export async function fetchNotifications(
+  all = false,
+  request?: ReadRequest,
+): Promise<AppNotification[]> {
+  const response = await NotificationsClient.listNotifications(
+    all ? { all: "1" } : undefined,
+    { ...request, cache: "no-store" },
+  );
+  return response.data.notifications;
+}
+
+/** How many are unread: the number on the bell. */
+export async function fetchNotificationCount(
+  request?: ReadRequest,
+): Promise<number> {
+  const response = await NotificationsClient.countNotifications({
+    ...request,
+    cache: "no-store",
+  });
+  return response.data.unread;
+}
+
+/**
+ * Mark read: one notification, every one about a change, or all of them.
+ * Answers how many are still unread, so the bell does not ask again.
+ */
+export async function markNotificationsRead(
+  which:
+    | { id: number }
+    | { change: { org: string; binder: string; number: number } }
+    | "all",
+): Promise<NotificationCountPayload> {
+  const response = await NotificationsClient.readNotifications(
+    which === "all" ? {} : which,
+  );
+  return response.data;
 }
 
 // Billing functions
 
-export async function fetchBillingStatus(): Promise<BillingStatusPayload> {
+/**
+ * One organization's billing. Billing is per organization, so every call
+ * names the one it is about; omitting it asks for the session's oldest.
+ */
+export async function fetchBillingStatus(
+  organization?: string | null,
+): Promise<BillingStatusPayload> {
   try {
-    const response = await BillingClient.getBillingStatus();
+    const response = await BillingClient.getBillingStatus(
+      organization ? { organization } : undefined,
+    );
     return response.data;
   } catch (error) {
     // 402 from the billing endpoint contains billing data (e.g. past_due status),
@@ -775,16 +2113,24 @@ export async function fetchBillingStatus(): Promise<BillingStatusPayload> {
   }
 }
 
-export async function createCheckoutSession(): Promise<{ url: string }> {
+export async function createCheckoutSession(
+  organization?: string | null,
+): Promise<{ url: string }> {
   const response = await BillingClient.createBillingCheckout({
     idempotencyKey: crypto.randomUUID(),
+    ...(organization ? { organization } : {}),
   });
   return response.data;
 }
 
-export async function createPortalSession(): Promise<{ url: string }> {
+export async function createPortalSession(
+  organization?: string | null,
+  intent?: "cancel",
+): Promise<{ url: string }> {
   const response = await BillingClient.createBillingPortal({
     idempotencyKey: crypto.randomUUID(),
+    ...(organization ? { organization } : {}),
+    ...(intent ? { intent } : {}),
   });
   return response.data;
 }

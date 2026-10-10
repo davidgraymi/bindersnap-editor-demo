@@ -1,16 +1,24 @@
 import type { components } from "./spec/gitea";
 
-import { GiteaApiError, unwrap, type GiteaClient } from "./client";
 import {
+  GiteaApiError,
+  readAllPages,
+  unwrap,
+  type GiteaClient,
+} from "./client";
+import { bootstrapEmptyMainBranch } from "./repos";
+import {
+  addTeamMember,
   createOrganization,
-  createWorkspaceTeams,
+  ensureStaffTeam,
   findOrganization,
   grantTeamOnRepo,
+  listRepoTeams,
+  OWNERS_TEAM_NAME,
   workspaceTeamName,
   WORKSPACE_ROLES,
   type GiteaOrganization,
   type GiteaTeam,
-  type WorkspaceRole,
 } from "./orgs";
 
 type Repository = components["schemas"]["Repository"];
@@ -28,8 +36,16 @@ type CreateBranchProtectionOption =
  * hand-cleaning the org.
  */
 
-/** How many approvals a change needs before it can publish, by default. */
-export const DEFAULT_REQUIRED_APPROVALS = 1;
+/**
+ * How many approvals a change needs before it can publish, by default: none.
+ *
+ * A new customer is usually one person moving their documents in, and nobody
+ * can approve their own change — so a binder that started at one could not
+ * publish anything until a second person joined, and the first thing the
+ * product did was stop them. The binder's admin raises it in Settings the day
+ * somebody else is there to sign off.
+ */
+export const DEFAULT_REQUIRED_APPROVALS = 0;
 
 export interface WorkspaceSummary {
   id: number;
@@ -37,11 +53,23 @@ export interface WorkspaceSummary {
   fullName: string;
   owner: string;
   description: string;
+  /** Open pull requests, as Gitea counts them — the binder's Changes tab. */
+  openChangeCount: number;
+  /** When anything last moved in it, as Gitea records it. */
+  updatedAt: string;
+  /**
+   * What the caller whose token read this may do here — Gitea answers it on
+   * the same read. See {@link readWorkspaceAccess} for why this is the honest
+   * source; a handler that has the binder already has this, and need not ask
+   * for the repository a second time.
+   */
+  access: { push: boolean; admin: boolean };
 }
 
 export interface ProvisionedWorkspace {
   workspace: WorkspaceSummary;
-  teams: Record<WorkspaceRole, GiteaTeam>;
+  /** The org-wide read team, granted onto it because a new binder is open. */
+  staff: GiteaTeam;
 }
 
 export interface ProvisionedOrganization {
@@ -55,6 +83,12 @@ function normalizeWorkspace(repo: Repository): WorkspaceSummary {
     fullName: repo.full_name ?? "",
     owner: repo.owner?.login ?? "",
     description: repo.description ?? "",
+    openChangeCount: repo.open_pr_counter ?? 0,
+    updatedAt: repo.updated_at ?? "",
+    access: {
+      push: repo.permissions?.push === true,
+      admin: repo.permissions?.admin === true,
+    },
   };
 }
 
@@ -95,6 +129,72 @@ export async function createWorkspaceRepo(
   return normalizeWorkspace(repo);
 }
 
+export interface ListOrganizationWorkspacesParams {
+  client: GiteaClient;
+  org: string;
+}
+
+/**
+ * The organization's binders.
+ *
+ * Gitea answers with the repositories this token can see, which is the right
+ * answer rather than a convenient one: a member who cannot see a workspace has
+ * no business being told it exists.
+ */
+export async function listOrganizationWorkspaces(
+  params: ListOrganizationWorkspacesParams,
+): Promise<WorkspaceSummary[]> {
+  const { client, org } = params;
+
+  // Every page: an unpaged read stops at Gitea's 30, and binders past that
+  // vanished from the list, the library and quick-find.
+  const repos = await readAllPages((query) =>
+    unwrap(
+      client.GET("/orgs/{org}/repos", { params: { path: { org }, query } }),
+    ),
+  );
+
+  return repos.map(normalizeWorkspace);
+}
+
+export interface WorkspacePathExistsParams {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  path: string;
+  ref?: string;
+}
+
+/**
+ * Whether something already sits at this path in the binder.
+ *
+ * A binder holds many documents now, so "is this name taken?" is a question
+ * about a path rather than about a repository. Committing over an existing
+ * document would rewrite somebody else's policy while looking like a new one.
+ */
+export async function workspacePathExists(
+  params: WorkspacePathExistsParams,
+): Promise<boolean> {
+  const { client, org, workspace, path, ref = "main" } = params;
+
+  try {
+    await unwrap(
+      client.GET("/repos/{owner}/{repo}/contents/{filepath}", {
+        params: {
+          path: { owner: org, repo: workspace, filepath: path },
+          query: { ref },
+        },
+      }),
+    );
+    return true;
+  } catch (err) {
+    if (err instanceof GiteaApiError && err.status === 404) {
+      return false;
+    }
+    throw err;
+  }
+}
+
 export interface FindWorkspaceRepoParams {
   client: GiteaClient;
   org: string;
@@ -118,6 +218,43 @@ export async function findWorkspaceRepo(
       return null;
     }
     throw err;
+  }
+}
+
+/**
+ * What this caller may do in a binder, asked of Gitea as them.
+ *
+ * Not the collaborator endpoint: a binder's people get their access through
+ * org teams, and Gitea answers `"none"` for team-derived access on both the
+ * team's own `permission` and the repository's collaborator list. The only
+ * honest answer is to ask for the repository as that member and read what
+ * comes back on it.
+ *
+ * It decides which buttons are drawn, never whether an act is allowed —
+ * Gitea's own check is still the one that refuses.
+ */
+export async function readWorkspaceAccess(params: {
+  client: GiteaClient;
+  org: string;
+  name: string;
+}): Promise<{ push: boolean; admin: boolean }> {
+  const { client, org, name } = params;
+
+  try {
+    const repo = (await unwrap(
+      client.GET("/repos/{owner}/{repo}", {
+        params: { path: { owner: org, repo: name } },
+      }),
+    )) as { permissions?: { push?: boolean; admin?: boolean } };
+
+    return {
+      push: repo.permissions?.push === true,
+      admin: repo.permissions?.admin === true,
+    };
+  } catch {
+    // A binder this caller cannot see has already answered 404 elsewhere; a
+    // failure here should cost them a button, not the page.
+    return { push: false, admin: false };
   }
 }
 
@@ -168,7 +305,16 @@ export async function protectWorkspaceMain(
     approvals_whitelist_teams: approvalsWhitelistTeams,
     enable_merge_whitelist: false,
     block_on_rejected_reviews: true,
-    block_on_official_review_requests: true,
+    // **Off, and on purpose.** This is the 1.27 gate. It was only ever on to
+    // make CODEOWNERS block, which it never did for a team code owner. Left on
+    // beside the gate below, it blocks on *manually* requested reviews, so any
+    // member could stall a publish by requesting one.
+    block_on_official_review_requests: false,
+    // The per-folder gate (Gitea 28.0.0, go-gitea PR #34995): for every
+    // CODEOWNERS rule matching a changed file, one of that rule's owners must
+    // approve. 28.0.0 is the floor for both environments, so this is written,
+    // not probed for.
+    block_on_codeowner_reviews: true,
     block_on_outdated_branch: true,
     dismiss_stale_approvals: true,
     enable_force_push: false,
@@ -189,15 +335,14 @@ export async function protectWorkspaceMain(
         body,
       }),
     );
-    return;
+  } else {
+    await unwrap(
+      client.POST("/repos/{owner}/{repo}/branch_protections", {
+        params: { path: { owner: org, repo: workspace } },
+        body,
+      }),
+    );
   }
-
-  await unwrap(
-    client.POST("/repos/{owner}/{repo}/branch_protections", {
-      params: { path: { owner: org, repo: workspace } },
-      body,
-    }),
-  );
 }
 
 interface FindMainBranchProtectionParams {
@@ -232,13 +377,74 @@ export interface ProvisionWorkspaceParams {
   name: string;
   description?: string;
   requiredApprovals?: number;
+  /**
+   * Whether the whole organization can read it. Open is the decided default:
+   * the common case is a policy manual everybody must be able to read in order
+   * to attest to it, and making the common case a configuration step teaches
+   * customers that access is fiddly. Asked at creation, because the moment
+   * somebody is naming a binder is the moment they know whether it is the staff
+   * handbook or HR investigations.
+   */
+  openToOrganization?: boolean;
 }
 
 /** The repository, its three role teams, and a protected `main`. */
+/**
+ * Rewrite a binder's approvals whitelist from the teams granted onto it.
+ *
+ * `enable_approvals_whitelist` is what makes a free reviewer's approval count
+ * (ADR 0004, "Verified Against Gitea"): with it on, officialness resolves as
+ * membership of a whitelisted team rather than as write access. The cost is
+ * that the whitelist has to name every team whose members may approve, or their
+ * approvals are recorded, displayed, and satisfy nothing — which is a failure
+ * with no error message anywhere.
+ *
+ * So it is derived, never guessed: read the teams Gitea says are granted here,
+ * and use those names.
+ *
+ * **Plus `Owners`, unconditionally.** Gitea gives the Owners team admin over
+ * the whole organization implicitly — it is never granted onto a repository,
+ * so a whitelist derived from the granted teams alone omits it and an
+ * **owner's** approval silently stops counting. Whether that endpoint happens
+ * to report `Owners` is not the point and must not be relied on; append it and
+ * let a duplicate be harmless.
+ */
+export async function recomputeApprovalsWhitelist(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+}): Promise<string[]> {
+  const { client, org, workspace } = params;
+
+  const granted = await listRepoTeams({ client, owner: org, repo: workspace });
+  const names = [
+    ...new Set([...granted.map((team) => team.name), OWNERS_TEAM_NAME]),
+  ];
+
+  await unwrap(
+    client.PATCH("/repos/{owner}/{repo}/branch_protections/{name}", {
+      params: { path: { owner: org, repo: workspace, name: "main" } },
+      body: {
+        enable_approvals_whitelist: true,
+        approvals_whitelist_teams: names,
+      },
+    }),
+  );
+
+  return names;
+}
+
 export async function provisionWorkspace(
   params: ProvisionWorkspaceParams,
 ): Promise<ProvisionedWorkspace> {
-  const { client, org, name, description, requiredApprovals } = params;
+  const {
+    client,
+    org,
+    name,
+    description,
+    requiredApprovals,
+    openToOrganization = true,
+  } = params;
 
   const workspace = await createWorkspaceRepo({
     client,
@@ -247,26 +453,48 @@ export async function provisionWorkspace(
     description,
   });
 
-  const teams = await createWorkspaceTeams({ client, org, workspace: name });
+  // Gitea's `auto_init` writes a README, which is the only way to get a `main`
+  // to protect — but a binder holds policies, and a generated README is not
+  // one. Left in place it lists as a document called "README", which is a file
+  // nobody wrote showing up in front of a surveyor. Removing it leaves `main`
+  // with a commit and no files, which is what an empty binder is.
+  //
+  // Before protection, necessarily: afterwards nothing may push to `main`.
+  await bootstrapEmptyMainBranch({ client, owner: org, repo: name });
 
-  for (const role of WORKSPACE_ROLES) {
-    await grantTeamOnRepo({
-      client,
-      teamId: teams[role].id,
-      org,
-      repo: name,
-    });
+  // No role teams. In Gitea a team is an *organization* object that a
+  // repository adopts, so creating three per binder inverts the model: it
+  // manufactures objects nobody asked for — two of which stay empty forever —
+  // and it makes a recurring group un-reusable, because a Quality Committee
+  // that reviews three binders becomes three membership lists a human keeps in
+  // step by hand. A binder's access is now exactly what has been granted onto
+  // it, and a per-binder team is created lazily, on the first individual grant.
+  //
+  // Open is the decided default and the creator was asked, so a restricted
+  // binder is a choice somebody made rather than a state it can drift into.
+  // `staff` is still ensured either way: it is the organization's membership
+  // list, and a restricted binder is a binder it is not granted onto — not a
+  // reason for it to be missing.
+  const staff = await ensureStaffTeam({ client, org });
+  if (openToOrganization) {
+    await grantTeamOnRepo({ client, teamId: staff.id, org, repo: name });
   }
 
-  // Protection last: the teams have to exist before they can be whitelisted.
+  // Protection last, and its whitelist stated rather than recomputed: at this
+  // moment the granted set is exactly what was just granted, and `Owners` is
+  // never granted but must always be on the list. `recomputeApprovalsWhitelist`
+  // is for afterwards, when a grant actually changes the set.
   await protectWorkspaceMain({
     client,
     org,
     workspace: name,
     requiredApprovals,
+    approvalsWhitelistTeams: openToOrganization
+      ? [staff.name, OWNERS_TEAM_NAME]
+      : [OWNERS_TEAM_NAME],
   });
 
-  return { workspace, teams };
+  return { workspace, staff };
 }
 
 export interface ProvisionOrganizationParams {
@@ -274,6 +502,8 @@ export interface ProvisionOrganizationParams {
   /** The org's Gitea username. */
   orgName: string;
   orgFullName?: string;
+  /** Who is creating it. Gitea makes them an owner; this puts them in `staff`. */
+  owner: string;
 }
 
 /**
@@ -293,7 +523,7 @@ export interface ProvisionOrganizationParams {
 export async function provisionOrganization(
   params: ProvisionOrganizationParams,
 ): Promise<ProvisionedOrganization> {
-  const { client, orgName, orgFullName } = params;
+  const { client, orgName, orgFullName, owner } = params;
 
   const organization =
     (await findOrganization({ client, org: orgName })) ??
@@ -303,5 +533,80 @@ export async function provisionOrganization(
       fullName: orgFullName,
     }));
 
+  // Every member of the organization belongs to `staff`, so it exists from the
+  // organization's first moment rather than being conjured by whichever binder
+  // happens to be created first — **and the founder is put in it**, because a
+  // team that exists and holds nobody makes "everyone at Riverside Health can
+  // read this binder" a claim about an empty set. Gitea puts them in `Owners`,
+  // which reaches every binder by a different route, so nothing visibly broke
+  // while this was missing.
+  //
+  // Best-effort: an organization without `staff` is still an organization, and
+  // `provisionWorkspace` makes it if it has to.
+  await ensureStaffTeam({ client, org: organization.name })
+    .then((staff) =>
+      addTeamMember({ client, teamId: staff.id, username: owner }),
+    )
+    .catch(() => null);
+
   return { organization };
+}
+
+/**
+ * Give a binder a new name.
+ *
+ * **A binder is a Gitea repository (ADR 0004), so its name is the repository's
+ * name and renaming one is `PATCH /repos/{owner}/{repo}`.** There is no second
+ * display name to change instead: a binder carries only its slug, and every
+ * screen derives what it is called from that.
+ *
+ * **Old links keep working, and that is Gitea's doing rather than ours.**
+ * Verified against the Gitea this product runs on (1.28.0+dev, 2026-09-14) by
+ * renaming a repository and asking for the old name: both the API and the web
+ * UI answer `301` pointing at the new one. `fetch` follows a redirect by
+ * default, so every read this product makes against an old binder name
+ * resolves too — a colleague's bookmark does not break the day somebody
+ * corrects a spelling.
+ *
+ * The redirect holds until something else claims the old name, which is the
+ * usual caveat and the reason a rename is still worth being deliberate about.
+ */
+export async function renameWorkspaceRepo(params: {
+  client: GiteaClient;
+  org: string;
+  /** The name it has now. */
+  name: string;
+  /** The name it should have. Already slugged by the caller. */
+  to: string;
+}): Promise<void> {
+  const { client, org, name, to } = params;
+
+  await unwrap(
+    client.PATCH("/repos/{owner}/{repo}", {
+      params: { path: { owner: org, repo: name } },
+      body: { name: to },
+    }),
+  );
+}
+
+/**
+ * Say what a binder is for.
+ *
+ * The repository's own description, which is where every screen already reads
+ * it from — so there is no second copy to keep in step.
+ */
+export async function describeWorkspaceRepo(params: {
+  client: GiteaClient;
+  org: string;
+  name: string;
+  description: string;
+}): Promise<void> {
+  const { client, org, name, description } = params;
+
+  await unwrap(
+    client.PATCH("/repos/{owner}/{repo}", {
+      params: { path: { owner: org, repo: name } },
+      body: { description },
+    }),
+  );
 }

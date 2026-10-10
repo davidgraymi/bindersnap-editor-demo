@@ -1,53 +1,62 @@
 # Bindersnap production reverse proxy
-# Caddy handles TLS automatically via Let's Encrypt.
-# Run alongside docker-compose.prod.yml on the same network.
+#
+# Traffic arrives only through the Cloudflare Tunnel: Cloudflare terminates
+# TLS at its edge, and the `cloudflared` container dials out to it and forwards
+# each request here over the Docker network. Caddy publishes no port on the
+# host, and the security group allows nothing in (infra/compute). So Caddy
+# speaks plain HTTP, gets no certificates, and can trust the headers
+# Cloudflare adds: no request reaches it any other way.
 #
 # Requires caddy-ratelimit module. The caddy service in docker-compose.prod.yml
 # builds from Dockerfile.caddy (xcaddy + github.com/mholt/caddy-ratelimit).
+{
+	auto_https off
+	admin off
+}
 
 (security_headers) {
 	header {
 		X-Frame-Options "DENY"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "same-origin"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		-Server
 	}
 }
 
-gitea.bindersnap.com {
-	import security_headers
+# Gitea has no public hostname. The browser never talks to it: the API (BFF)
+# reaches it at http://gitea:3000 on the Docker network, and avatars come from
+# the API (/api/app/avatars/). Serving gitea.bindersnap.com exposed Gitea's
+# whole UI and API, /admin included, to the internet. For admin work, see
+# "Reaching Gitea" in docs/ops/break-glass.md.
 
-	# Optional: restrict Gitea admin UI to your IP.
-	# Uncomment and replace YOUR.IP.HERE with your static IP.
-	# @admin_routes path /admin/* /-/admin/*
-	# handle @admin_routes {
-	#     @blocked not remote_ip YOUR.IP.HERE
-	#     respond @blocked 403
-	# }
-
-	reverse_proxy gitea:3000
-}
-
-api.bindersnap.com {
+http://api.bindersnap.com {
 	import security_headers
 
 	# Defend /stripe/webhook against signature-flood DoS.
 	# Excess requests return 429 before reaching HMAC-SHA256 verification in the API.
+	# Keyed on the visitor's address: behind the tunnel {remote_host} is
+	# cloudflared's, the same for everyone.
 	rate_limit {
 		zone webhook_per_ip {
 			match {
-				path   /stripe/webhook
+				path /stripe/webhook
 				method POST
 			}
-			key    {remote_host}
+			key {http.request.header.CF-Connecting-IP}
 			events 60
 			window 1s
 		}
 	}
 
 	reverse_proxy api:8787 {
-		# The API enforces HTTPS based on forwarded proto after Caddy terminates TLS.
-		header_up X-Forwarded-Proto {scheme}
-		header_up X-Forwarded-For {remote}
+		# The visitor's address, as Cloudflare saw it. The API's auth rate
+		# limits key on the first X-Forwarded-For entry; passing {remote} here
+		# would put every user in one bucket, so one attacker could lock
+		# everyone out of sign-in.
+		header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
+		# The scheme the visitor used at Cloudflare's edge. The API refuses
+		# plain HTTP, and the hop from cloudflared to Caddy is always HTTP.
+		header_up X-Forwarded-Proto {http.request.header.X-Forwarded-Proto}
 	}
 }

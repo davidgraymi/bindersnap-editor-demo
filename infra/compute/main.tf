@@ -51,19 +51,13 @@ variable "environment" {
 }
 
 variable "instance_type" {
-  description = "EC2 instance type (ARM recommended: t4g.small for MVP, t4g.medium for growth). Root volume is 30 GB (AL2023 ARM64 snapshot minimum)."
+  description = "EC2 instance type. t4g.medium (4 GiB): t4g.small's 2 GiB left too little headroom for Gitea, the API, Caddy, Litestream and cloudflared together. Root volume is 30 GB (AL2023 ARM64 snapshot minimum)."
   type        = string
-  default     = "t4g.small"
+  default     = "t4g.medium"
 }
 
 variable "ami_id" {
   description = "AMI ID — use latest Amazon Linux 2023 ARM64. Set to null to auto-discover."
-  type        = string
-  default     = null
-}
-
-variable "key_pair_name" {
-  description = "EC2 key pair name for SSH access (break-glass only; prefer SSM Session Manager)"
   type        = string
   default     = null
 }
@@ -81,21 +75,25 @@ variable "subnet_id" {
 }
 
 variable "data_volume_size_gb" {
-  description = "EBS gp3 volume size in GB for Gitea data + API sessions"
+  description = "EBS gp3 volume size in GB for Gitea data + API sessions. Growing it is in place; the deploy grows the filesystem to match."
   type        = number
-  default     = 20
+  default     = 50
+}
+
+variable "data_volume_snapshot_id" {
+  description = <<-EOT
+    Snapshot to build the data volume from, for a restore (docs/ops/restore.md).
+    Only read when the volume is created: set it, `terraform state rm
+    aws_ebs_volume.data`, then apply. Leave null otherwise.
+  EOT
+  type        = string
+  default     = null
 }
 
 variable "data_volume_device_name" {
   description = "Device name for the data EBS volume"
   type        = string
   default     = "/dev/xvdf"
-}
-
-variable "allowed_ssh_cidrs" {
-  description = "CIDRs allowed to SSH (empty list disables SSH ingress entirely)"
-  type        = list(string)
-  default     = []
 }
 
 # ---------- Data sources ----------
@@ -158,7 +156,7 @@ locals {
 
 resource "aws_security_group" "app" {
   name_prefix = "${var.project}-app-"
-  description = "Bindersnap prod: HTTP/S inbound, all outbound"
+  description = "Bindersnap prod: nothing inbound, all outbound"
   vpc_id      = data.aws_vpc.selected.id
 
   tags = merge(local.common_tags, { Name = "${var.project}-app" })
@@ -168,34 +166,10 @@ resource "aws_security_group" "app" {
   }
 }
 
-resource "aws_vpc_security_group_ingress_rule" "https" {
-  security_group_id = aws_security_group.app.id
-  description       = "HTTPS from anywhere (Caddy terminates TLS)"
-  cidr_ipv4         = "0.0.0.0/0"
-  from_port         = 443
-  to_port           = 443
-  ip_protocol       = "tcp"
-}
-
-resource "aws_vpc_security_group_ingress_rule" "http" {
-  security_group_id = aws_security_group.app.id
-  description       = "HTTP from anywhere (Caddy redirects to HTTPS)"
-  cidr_ipv4         = "0.0.0.0/0"
-  from_port         = 80
-  to_port           = 80
-  ip_protocol       = "tcp"
-}
-
-resource "aws_vpc_security_group_ingress_rule" "ssh" {
-  count = length(var.allowed_ssh_cidrs)
-
-  security_group_id = aws_security_group.app.id
-  description       = "SSH from allowed CIDR"
-  cidr_ipv4         = var.allowed_ssh_cidrs[count.index]
-  from_port         = 22
-  to_port           = 22
-  ip_protocol       = "tcp"
-}
+# No ingress rules, on purpose. Web traffic arrives through the Cloudflare
+# Tunnel, which cloudflared opens outbound from the host (infra/edge), and
+# operators come in through SSM Session Manager, which is outbound too.
+# Port 80, 443 and 22 are closed to the whole internet.
 
 resource "aws_vpc_security_group_egress_rule" "all" {
   security_group_id = aws_security_group.app.id
@@ -241,12 +215,10 @@ resource "aws_iam_instance_profile" "instance" {
   tags = local.common_tags
 }
 
-# ---------- Elastic IP ----------
-
-resource "aws_eip" "app" {
-  domain = "vpc"
-  tags   = merge(local.common_tags, { Name = "${var.project}-app" })
-}
+# ---------- Public IPv4 ----------
+# No Elastic IP: nothing connects to the host by address any more (DNS points
+# at the tunnel). The instance keeps the public IPv4 the default subnet assigns
+# at launch, because SSM, the image pulls, SES and S3 all go out through it.
 
 # ---------- EBS Data Volume ----------
 # Retained on destroy to protect Gitea data.
@@ -256,6 +228,7 @@ resource "aws_ebs_volume" "data" {
   size              = var.data_volume_size_gb
   type              = "gp3"
   encrypted         = true
+  snapshot_id       = var.data_volume_snapshot_id
 
   tags = merge(local.common_tags, {
     Name   = "${var.project}-data"
@@ -264,6 +237,9 @@ resource "aws_ebs_volume" "data" {
 
   lifecycle {
     prevent_destroy = true
+    # A restored volume keeps the snapshot it came from; clearing the variable
+    # afterwards must not try to replace it.
+    ignore_changes = [snapshot_id]
   }
 }
 
@@ -275,7 +251,6 @@ resource "aws_instance" "app" {
   subnet_id              = local.subnet_id
   vpc_security_group_ids = [aws_security_group.app.id]
   iam_instance_profile   = aws_iam_instance_profile.instance.name
-  key_name               = var.key_pair_name
 
   # Host configuration is owned by deploy/ (pyinfra). User-data only confirms
   # the SSM agent is running so a fresh host is reachable over SSH-through-SSM.
@@ -306,11 +281,6 @@ resource "aws_volume_attachment" "data" {
   instance_id = aws_instance.app.id
 }
 
-resource "aws_eip_association" "app" {
-  instance_id   = aws_instance.app.id
-  allocation_id = aws_eip.app.id
-}
-
 # ---------- Outputs ----------
 
 output "instance_id" {
@@ -319,8 +289,8 @@ output "instance_id" {
 }
 
 output "instance_public_ip" {
-  description = "Elastic IP address"
-  value       = aws_eip.app.public_ip
+  description = "Public IPv4 the instance uses for outbound traffic (accepts nothing inbound)"
+  value       = aws_instance.app.public_ip
 }
 
 output "instance_role_name" {
@@ -341,9 +311,4 @@ output "security_group_id" {
 output "data_volume_id" {
   description = "EBS data volume ID (consumed by backups module for DLM tagging)"
   value       = aws_ebs_volume.data.id
-}
-
-output "eip_allocation_id" {
-  description = "Elastic IP allocation ID (for Route53 A records)"
-  value       = aws_eip.app.id
 }

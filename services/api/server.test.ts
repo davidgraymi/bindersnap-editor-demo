@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 
 import { config } from "./config";
 import { OrganizationStore, organizationStore } from "./organizations";
-import { createApiServer } from "./server";
+import { corsHeaders, createApiServer, downloadHeaders } from "./server";
 import { SessionStore, sessionStore } from "./sessions";
 import { resetStripeClientForTests } from "./stripe/client";
 import {
@@ -12,6 +12,9 @@ import {
   WebhookEventStore,
   webhookEventStore,
 } from "./subscriptions";
+import { emailVerificationStore } from "./email-verification";
+import { legalAgreementStore } from "./legal-agreements";
+import { LEGAL_VERSION } from "../../packages/utils/legal";
 
 type MockedFetchCall = {
   path: string;
@@ -47,6 +50,15 @@ let giteaLoginsByToken = new Map<string, string>();
 let giteaOrgsByUsername = new Map<string, { id: number; username: string }>();
 // org name -> its Owners team members, for the admin browse listing.
 let giteaOrgOwners = new Map<string, MockedGiteaUser[]>();
+// Logins that are members but not owners of their organization. Everyone
+// else owns the one they were seeded with, as a signup does.
+let giteaNonOwners = new Set<string>();
+// Organizations a login joined after its first, newest last — a person may
+// be in several, and billing has to follow the one they are acting in.
+let giteaExtraOrgsByUsername = new Map<
+  string,
+  { id: number; username: string }[]
+>();
 let nextGiteaOrgId = 4000;
 let stripeSubscriptionsById = new Map<string, MockedStripeResource>();
 let stripeCustomersById = new Map<string, MockedStripeResource>();
@@ -74,6 +86,8 @@ beforeEach(() => {
   giteaLoginsByToken = new Map();
   giteaOrgsByUsername = new Map();
   giteaOrgOwners = new Map();
+  giteaNonOwners = new Set();
+  giteaExtraOrgsByUsername = new Map();
   nextGiteaOrgId = 4000;
   stripeSubscriptionsById = new Map();
   stripeCustomersById = new Map();
@@ -116,6 +130,8 @@ beforeEach(() => {
               id: ownersTeamIdFor(orgName),
               name: "Owners",
               permission: "owner",
+              // As Gitea reports it: Owners reach every binder in the org.
+              includes_all_repositories: true,
             },
           ]
         : [];
@@ -147,6 +163,17 @@ beforeEach(() => {
       );
     }
 
+    const permissionsMatch = url.pathname.match(
+      /^\/api\/v1\/users\/([^/]+)\/orgs\/([^/]+)\/permissions$/,
+    );
+    if (permissionsMatch) {
+      const login = decodeURIComponent(permissionsMatch[1] ?? "");
+      return new Response(
+        JSON.stringify({ is_owner: !giteaNonOwners.has(login) }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
     const userOrgsMatch = url.pathname.match(
       /^\/api\/v1\/users\/([^/]+)\/orgs$/,
     );
@@ -167,10 +194,14 @@ beforeEach(() => {
         : "";
       const login = giteaLoginsByToken.get(token);
       const organization = login ? giteaOrgsByUsername.get(login) : null;
-      return new Response(JSON.stringify(organization ? [organization] : []), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+      const extra = login ? (giteaExtraOrgsByUsername.get(login) ?? []) : [];
+      return new Response(
+        JSON.stringify([...(organization ? [organization] : []), ...extra]),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
 
     if (url.pathname === "/api/v1/user") {
@@ -332,8 +363,11 @@ async function seedSession(
     isAdmin?: boolean;
     /** Pass false for an account that predates ADR 0004 and has no org. */
     withOrganization?: boolean;
+    /** Pass false for a member who does not own their organization. */
+    owner?: boolean;
   },
 ): Promise<string> {
+  if (options?.owner === false) giteaNonOwners.add(username);
   const sessionId = `sess_${randomUUID()}`;
   const giteaToken = `gitea_token_${randomUUID()}`;
   const email =
@@ -382,6 +416,20 @@ function seedOrganizationFor(username: string): number {
     username: `${username}-org`,
   });
   return nextGiteaOrgId;
+}
+
+/** Put a user in a second organization, newer than their first. */
+function seedSecondOrganizationFor(username: string): {
+  id: number;
+  username: string;
+} {
+  nextGiteaOrgId += 1;
+  const organization = { id: nextGiteaOrgId, username: `${username}-second` };
+  giteaExtraOrgsByUsername.set(username, [
+    ...(giteaExtraOrgsByUsername.get(username) ?? []),
+    organization,
+  ]);
+  return organization;
 }
 
 /** The Gitea org id seeded for a user. Billing hangs off this, not the name. */
@@ -508,6 +556,199 @@ async function makeStripeWebhookRequest(
     body: rawBody,
   });
 }
+
+describe("billing belongs to the organization's owners", () => {
+  test("a member who is not an owner cannot start a checkout", async () => {
+    const server = createApiServer();
+    const username = `member-${randomUUID()}`;
+    const sessionId = await seedSession(username, { owner: false });
+
+    const response = await server.fetch(
+      makeBillingRequest("/api/app/billing/checkout", sessionId),
+    );
+
+    expect(response.status).toBe(403);
+    expect(getFetchCallsByPath("/v1/checkout/sessions")).toHaveLength(0);
+  });
+
+  test("the status says who may manage billing", async () => {
+    const server = createApiServer();
+    const owner = await seedSession(`owner-${randomUUID()}`);
+    const member = await seedSession(`member-${randomUUID()}`, {
+      owner: false,
+    });
+
+    const read = async (sessionId: string) =>
+      (await (
+        await server.fetch(
+          makeSessionRequest("/api/app/billing/status", sessionId),
+        )
+      ).json()) as { canManageBilling: boolean; hasBillingAccount: boolean };
+
+    expect((await read(owner)).canManageBilling).toBe(true);
+    expect((await read(member)).canManageBilling).toBe(false);
+    expect((await read(owner)).hasBillingAccount).toBe(false);
+  });
+});
+
+describe("billing is per organization", () => {
+  async function activate(giteaOrgId: number) {
+    await subscriptionStore.upsert({
+      giteaOrgId,
+      stripeCustomerId: `cus_${giteaOrgId}`,
+      stripeSubscriptionId: `sub_${giteaOrgId}`,
+      status: "active",
+      currentPeriodEnd: Math.floor(Date.now() / 1000) + 86_400,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
+      updatedAt: Date.now(),
+    });
+  }
+
+  test("the status answers for the organization it names", async () => {
+    const server = createApiServer();
+    const username = `two-orgs-${randomUUID()}`;
+    const sessionId = await seedSession(username);
+    const second = seedSecondOrganizationFor(username);
+    await activate(orgIdFor(username));
+
+    const read = async (query: string) =>
+      (await (
+        await server.fetch(
+          makeSessionRequest(`/api/app/billing/status${query}`, sessionId),
+        )
+      ).json()) as { organization: { id: number }; hasAccess: boolean };
+
+    // Named: the second organization, which nobody has paid for.
+    const named = await read(`?organization=${second.username}`);
+    expect(named.organization.id).toBe(second.id);
+    expect(named.hasAccess).toBe(false);
+    // Unnamed: the oldest, as before.
+    const unnamed = await read("");
+    expect(unnamed.organization.id).toBe(orgIdFor(username));
+    expect(unnamed.hasAccess).toBe(true);
+  });
+
+  test("naming an organization you are not in is refused, not replaced", async () => {
+    const server = createApiServer();
+    const sessionId = await seedSession(`outsider-${randomUUID()}`);
+    const other = `someone-${randomUUID()}`;
+    await seedSession(other);
+
+    const status = await server.fetch(
+      makeSessionRequest(
+        `/api/app/billing/status?organization=${other}-org`,
+        sessionId,
+      ),
+    );
+    expect(status.status).toBe(404);
+
+    const checkout = await server.fetch(
+      makeBillingRequest("/api/app/billing/checkout", sessionId, {
+        organization: `${other}-org`,
+      }),
+    );
+    expect(checkout.status).toBe(404);
+    expect(getFetchCallsByPath("/v1/checkout/sessions")).toHaveLength(0);
+  });
+
+  test("checkout bills the organization it names, and returns to its page", async () => {
+    const server = createApiServer();
+    const username = `two-orgs-${randomUUID()}`;
+    const sessionId = await seedSession(username);
+    const second = seedSecondOrganizationFor(username);
+
+    const response = await server.fetch(
+      makeBillingRequest("/api/app/billing/checkout", sessionId, {
+        organization: second.username,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const form = getPostedFormBody(
+      getFetchCallsByPath("/v1/checkout/sessions")[0]!,
+    );
+    expect(form.get("metadata[bindersnap_gitea_org_id]")).toBe(
+      String(second.id),
+    );
+    expect(form.get("success_url")).toBe(
+      `${config.appOrigin}/${second.username}/-/billing?checkout=success`,
+    );
+  });
+
+  test("checkout bills one unit for each person who can write", async () => {
+    const server = createApiServer();
+    const username = `seats-${randomUUID()}`;
+    const sessionId = await seedSession(username);
+    giteaOrgOwners.set(`${username}-org`, [
+      { login: username, email: `${username}@${config.emailDomain}` },
+      { login: `${username}-b`, email: `b@${config.emailDomain}` },
+      // One person in the team twice is still one seat.
+      { login: `${username}-B`, email: `b@${config.emailDomain}` },
+      { login: `${username}-c`, email: `c@${config.emailDomain}` },
+    ]);
+
+    const response = await server.fetch(
+      makeBillingRequest("/api/app/billing/checkout", sessionId),
+    );
+
+    expect(response.status).toBe(200);
+    const form = getPostedFormBody(
+      getFetchCallsByPath("/v1/checkout/sessions")[0]!,
+    );
+    expect(form.get("line_items[0][price]")).toBe(config.stripePriceId);
+    expect(form.get("line_items[0][quantity]")).toBe("3");
+
+    // And the Billing page is told the same count before anyone pays.
+    const status = await server.fetch(
+      makeSessionRequest("/api/app/billing/status", sessionId),
+    );
+    expect(((await status.json()) as { seats: number }).seats).toBe(3);
+  });
+
+  test("checkout never bills for fewer than one seat", async () => {
+    const server = createApiServer();
+    const sessionId = await seedSession(`no-seats-${randomUUID()}`);
+
+    await server.fetch(
+      makeBillingRequest("/api/app/billing/checkout", sessionId),
+    );
+
+    const form = getPostedFormBody(
+      getFetchCallsByPath("/v1/checkout/sessions")[0]!,
+    );
+    expect(form.get("line_items[0][quantity]")).toBe("1");
+  });
+
+  test("a write is gated by the organization it writes into", async () => {
+    const server = createApiServer();
+    const username = `two-orgs-${randomUUID()}`;
+    const sessionId = await seedSession(username);
+    const second = seedSecondOrganizationFor(username);
+    const first = `${username}-org`;
+    // The oldest is paid for; the second is not.
+    await activate(orgIdFor(username));
+
+    const rename = (org: string) =>
+      server.fetch(
+        makeSessionRequest(`/api/app/binders/${org}/handbook/name`, sessionId, {
+          method: "POST",
+          body: { name: "Handbook" },
+        }),
+      );
+
+    const intoSecond = await rename(second.username);
+    expect(intoSecond.status).toBe(402);
+    expect(await intoSecond.json()).toMatchObject({
+      organization: second.username,
+    });
+    expect((await rename(first)).status).not.toBe(402);
+
+    // And the other way round: paying for the second opens it.
+    await activate(second.id);
+    expect((await rename(second.username)).status).not.toBe(402);
+  });
+});
 
 describe("billing Stripe idempotency", () => {
   test("checkout sends a unique Stripe Idempotency-Key per attempt when no client key provided", async () => {
@@ -1130,8 +1371,229 @@ describe("admin subscription access overrides", () => {
           username: expect.stringMatching(/^admin-/),
           fullName: "Admin User",
           isAdmin: true,
+          emailVerified: true,
         },
       });
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("an account waiting on its confirmation link is refused the app's routes", async () => {
+    const server = createApiServer();
+    const username = `pending-${randomUUID()}`;
+    const sessionId = await seedSession(username);
+    emailVerificationStore().start(username, `${username}@example.com`);
+
+    try {
+      const me = await server.fetch(makeSessionRequest("/auth/me", sessionId));
+      expect((await me.json()).user).toMatchObject({
+        emailVerified: false,
+        pendingEmail: `${username}@example.com`,
+      });
+
+      const refused = await server.fetch(
+        makeSessionRequest("/api/app/organizations", sessionId),
+      );
+      expect(refused.status).toBe(403);
+      expect(await refused.json()).toMatchObject({ code: "email_unverified" });
+
+      // Deleting the account it never confirmed is still allowed to start.
+      const blockers = await server.fetch(
+        makeSessionRequest("/api/app/account/blockers", sessionId),
+      );
+      expect(blockers.status).not.toBe(403);
+    } finally {
+      emailVerificationStore().forget(username);
+      server.stop(true);
+    }
+  });
+
+  test("signup is refused without agreement to the current Terms", async () => {
+    const server = createApiServer();
+    const signup = (acceptedTerms?: string) =>
+      server.fetch(
+        new Request("http://localhost/auth/signup", {
+          method: "POST",
+          headers: {
+            Origin: config.appOrigin,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            firstName: "Jordan",
+            lastName: "Kim",
+            username: `terms-${randomUUID().slice(0, 8)}`,
+            email: "jordan@example.com",
+            password: "correct horse battery",
+            ...(acceptedTerms === undefined ? {} : { acceptedTerms }),
+          }),
+        }),
+      );
+
+    try {
+      const unticked = await signup();
+      expect(unticked.status).toBe(400);
+      expect(await unticked.json()).toMatchObject({
+        code: "terms_not_accepted",
+        error: expect.stringContaining("Agree to the Terms"),
+      });
+
+      // A page loaded before the Terms changed: told to reload, not to tick.
+      const stale = await signup("2000-01-01");
+      expect(stale.status).toBe(400);
+      expect(await stale.json()).toMatchObject({
+        code: "terms_not_accepted",
+        error: expect.stringContaining("Reload"),
+      });
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("creating an organization needs the Terms accepted for it", async () => {
+    const server = createApiServer();
+    const sessionId = await seedSession(`founder-${randomUUID()}`, {
+      withOrganization: false,
+    });
+    const create = (acceptedTerms?: string) =>
+      server.fetch(
+        makeSessionRequest("/api/app/organizations", sessionId, {
+          method: "POST",
+          body: {
+            name: "Riverside Care",
+            ...(acceptedTerms === undefined ? {} : { acceptedTerms }),
+          },
+        }),
+      );
+
+    try {
+      const unticked = await create();
+      expect(unticked.status).toBe(400);
+      expect(await unticked.json()).toMatchObject({
+        code: "terms_not_accepted",
+      });
+
+      const stale = await create("2000-01-01");
+      expect(stale.status).toBe(400);
+      expect(await stale.json()).toMatchObject({
+        error: expect.stringContaining("Reload"),
+      });
+      expect(
+        fetchCalls.some(
+          (call) => call.method === "POST" && call.path === "/api/v1/orgs",
+        ),
+      ).toBe(false);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("an owner with nothing on record is asked, and accepting answers it", async () => {
+    const server = createApiServer();
+    const username = `owner-${randomUUID()}`;
+    const sessionId = await seedSession(username);
+    const org = `${username}-org`;
+
+    try {
+      const before = await server.fetch(
+        makeSessionRequest("/api/app/legal", sessionId),
+      );
+      expect(await before.json()).toEqual({
+        version: LEGAL_VERSION,
+        person: true,
+        organizations: [{ name: org, displayName: org }],
+      });
+
+      const stale = await server.fetch(
+        makeSessionRequest("/api/app/legal/accept", sessionId, {
+          method: "POST",
+          body: { acceptedTerms: "2000-01-01", person: true },
+        }),
+      );
+      expect(stale.status).toBe(400);
+
+      const accepted = await server.fetch(
+        makeSessionRequest("/api/app/legal/accept", sessionId, {
+          method: "POST",
+          body: {
+            acceptedTerms: LEGAL_VERSION,
+            person: true,
+            organizations: [org],
+          },
+        }),
+      );
+      expect(accepted.status).toBe(200);
+      expect(await accepted.json()).toEqual({
+        version: LEGAL_VERSION,
+        person: false,
+        organizations: [],
+      });
+      expect(
+        legalAgreementStore()
+          .history(username)
+          .map((row) => [row.scope, row.organizationName]),
+      ).toEqual(
+        expect.arrayContaining([
+          ["person", null],
+          ["organization", org],
+        ]),
+      );
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("only an owner is asked, or may accept, for an organization", async () => {
+    const server = createApiServer();
+    const username = `member-${randomUUID()}`;
+    const sessionId = await seedSession(username, { owner: false });
+
+    try {
+      const status = await server.fetch(
+        makeSessionRequest("/api/app/legal", sessionId),
+      );
+      expect((await status.json()).organizations).toEqual([]);
+
+      const refused = await server.fetch(
+        makeSessionRequest("/api/app/legal/accept", sessionId, {
+          method: "POST",
+          body: {
+            acceptedTerms: LEGAL_VERSION,
+            person: true,
+            organizations: [`${username}-org`],
+          },
+        }),
+      );
+      expect(refused.status).toBe(403);
+      // All or nothing: the person's own agreement was not written either.
+      expect(legalAgreementStore().history(username)).toEqual([]);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("the Gitea gate's diagnostics are for admins only", async () => {
+    const server = createApiServer();
+    const admin = await seedSession(`admin-${randomUUID()}`, { isAdmin: true });
+    const member = await seedSession(`member-${randomUUID()}`);
+
+    try {
+      const allowed = await server.fetch(
+        makeSessionRequest("/api/app/admin/diagnostics/gitea", admin),
+      );
+      expect(allowed.status).toBe(200);
+      expect(await allowed.json()).toEqual({
+        gate: {
+          limit: expect.any(Number),
+          inFlight: expect.any(Number),
+          queued: expect.any(Number),
+        },
+      });
+
+      const refused = await server.fetch(
+        makeSessionRequest("/api/app/admin/diagnostics/gitea", member),
+      );
+      expect(refused.status).toBe(403);
     } finally {
       server.stop(true);
     }
@@ -1327,6 +1789,18 @@ describe("admin subscription access overrides", () => {
         ),
       );
       expect(gatedWhileRevoked.status).toBe(402);
+
+      // The paywall's 402 says so in the body. The SPA used to tell a refusal
+      // from `GET /api/app/billing`'s own 402 by matching the request path,
+      // which every new billing route had to remember to be added to; the
+      // code is that distinction stated. The organization is named because
+      // the read-only banner has to say whose bill it is.
+      const gatedBody = (await gatedWhileRevoked.json()) as {
+        code?: string;
+        organization?: string | null;
+      };
+      expect(gatedBody.code).toBe("subscription_required");
+      expect(gatedBody.organization).toBe(`${memberUsername}-org`);
 
       const clear = await server.fetch(
         makeSessionRequest(
@@ -1578,5 +2052,80 @@ describe("admin subscription access overrides", () => {
     } finally {
       server.stop(true);
     }
+  });
+});
+
+describe("CORS headers and caches", () => {
+  test("a request from an allowed origin is told it may read the response", () => {
+    const headers = corsHeaders(
+      new Request("http://api.test/api/app/x", {
+        headers: { Origin: "http://localhost:5173" },
+      }),
+    );
+    expect(headers.get("Access-Control-Allow-Origin")).toBe(
+      "http://localhost:5173",
+    );
+    expect(headers.get("Vary")).toBe("Origin");
+    // The feedback trace reads it; a cross-origin script can't unless told.
+    expect(headers.get("Access-Control-Expose-Headers")).toBe("X-Request-Id");
+  });
+
+  // A file response is cacheable for hours. Stored without Vary, the copy made
+  // for a request with no Origin was later reused for one with an Origin, and
+  // the browser blocked it for lacking Allow-Origin.
+  test("a request with no origin still says the answer varies by origin", () => {
+    const headers = corsHeaders(new Request("http://api.test/api/app/x"));
+    expect(headers.get("Access-Control-Allow-Origin")).toBeNull();
+    expect(headers.get("Vary")).toBe("Origin");
+  });
+});
+
+describe("request IDs", () => {
+  test("every response carries its own X-Request-Id", async () => {
+    const server = createApiServer();
+    try {
+      const first = await server.fetch(new Request("http://localhost/healthz"));
+      const second = await server.fetch(
+        new Request("http://localhost/api/app/nothing-here"),
+      );
+      const ids = [first, second].map((r) => r.headers.get("X-Request-Id"));
+      for (const id of ids) {
+        expect(id).toMatch(/^[0-9a-f-]{36}$/);
+      }
+      expect(ids[0]).not.toBe(ids[1]);
+    } finally {
+      server.stop(true);
+    }
+  });
+});
+
+describe("a document's bytes and the browser's cache", () => {
+  const gitea = () =>
+    new Response("{}", {
+      headers: {
+        "content-type": "application/json",
+        "cache-control": "private, max-age=21600",
+        etag: '"0be6a65b"',
+        "last-modified": "Sun, 27 Sep 2026 17:14:43 GMT",
+      },
+    });
+
+  test("a file on a branch is never kept: the next save moves it", () => {
+    for (const ref of ["draft/alice/20260927", "main", "v3"]) {
+      const headers = downloadHeaders(new Headers(), gitea(), ref);
+      expect(headers.get("cache-control")).toBe("no-store");
+      expect(headers.get("etag")).toBeNull();
+      expect(headers.get("content-type")).toBe("application/json");
+    }
+  });
+
+  test("a file at a commit keeps Gitea's caching, since it cannot change", () => {
+    const headers = downloadHeaders(
+      new Headers(),
+      gitea(),
+      "0be6a65b18248f5c31eb93afe1f700c9550f4e7f",
+    );
+    expect(headers.get("cache-control")).toBe("private, max-age=21600");
+    expect(headers.get("etag")).toBe('"0be6a65b"');
   });
 });

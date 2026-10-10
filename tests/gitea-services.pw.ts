@@ -28,11 +28,8 @@ import {
   mergePullRequest,
   submitReview,
 } from "../services/api/gitea-client/pullRequests";
-import {
-  getLatestDocTag,
-  listDocTags,
-  listWorkspaceRepos,
-} from "../services/api/gitea-client/repos";
+import {} from "../services/api/gitea-client/repos";
+import { listOrganizationWorkspaces } from "../services/api/gitea-client/workspaces";
 import {
   buildUploadBranchName,
   buildUploadCommitMessage,
@@ -42,6 +39,7 @@ import {
 } from "../services/api/gitea-client/uploads";
 
 import {
+  GITEA_ADMIN_USER,
   GITEA_URL,
   installMemorySessionStorage,
   makeClient,
@@ -50,9 +48,15 @@ import {
   pollUntil,
   REPO,
   resolveAndStoreToken,
-  SEEDED_BRANCH,
-  SEEDED_DOC_PATH,
+  SEEDED,
 } from "./helpers";
+
+/**
+ * The lifecycle block builds its own throwaway repository with
+ * `POST /user/repos`, so it is owned by the token's user. `OWNER` names the
+ * organization that owns the seeded binders, which is a different thing.
+ */
+const LIFECYCLE_OWNER = GITEA_ADMIN_USER;
 
 // ---------------------------------------------------------------------------
 // Suite setup
@@ -76,7 +80,7 @@ test.beforeAll(async () => {
       client: makeClient(),
       owner: OWNER,
       repo: REPO,
-      branch: SEEDED_BRANCH,
+      branch: SEEDED.branch,
     });
     return pr?.approvalState === "changes_requested";
   }, "seeded pull request to reach changes_requested state");
@@ -141,8 +145,8 @@ test.describe("documents", () => {
       client: makeClient(),
       owner: OWNER,
       repo: REPO,
-      filePath: SEEDED_DOC_PATH,
-      ref: SEEDED_BRANCH,
+      filePath: SEEDED.docPath,
+      ref: SEEDED.branch,
     });
 
     expect(commits.length).toBeGreaterThan(0);
@@ -160,8 +164,8 @@ test.describe("documents", () => {
       client: makeClient(),
       owner: OWNER,
       repo: REPO,
-      filePath: SEEDED_DOC_PATH,
-      ref: SEEDED_BRANCH,
+      filePath: SEEDED.docPath,
+      ref: SEEDED.branch,
     });
     expect(commits.length).toBeGreaterThan(0);
 
@@ -169,7 +173,7 @@ test.describe("documents", () => {
       client: makeClient(),
       owner: OWNER,
       repo: REPO,
-      filePath: SEEDED_DOC_PATH,
+      filePath: SEEDED.docPath,
       sha: commits[0]!.sha,
     });
 
@@ -226,7 +230,7 @@ test.describe("pull request workflow", () => {
       client: makeClient(),
       owner: OWNER,
       repo: REPO,
-      branch: SEEDED_BRANCH,
+      branch: SEEDED.branch,
     });
 
     const state: ApprovalState = pr!.approvalState;
@@ -259,7 +263,7 @@ test.describe("pull request workflow", () => {
     expect(prs.length).toBeGreaterThan(0);
 
     const seeded = prs.find(
-      (pr) => (pr.head as { ref?: string } | undefined)?.ref === SEEDED_BRANCH,
+      (pr) => (pr.head as { ref?: string } | undefined)?.ref === SEEDED.branch,
     );
     expect(seeded).toBeDefined();
     expect(seeded!.approvalState).toBe("changes_requested");
@@ -295,13 +299,15 @@ test.describe("pull request workflow", () => {
 
       // Add bob as a collaborator with write access
       await client.PUT("/repos/{owner}/{repo}/collaborators/{collaborator}", {
-        params: { path: { owner: OWNER, repo: repoName, collaborator: "bob" } },
+        params: {
+          path: { owner: LIFECYCLE_OWNER, repo: repoName, collaborator: "bob" },
+        },
         body: { permission: "write" },
       });
 
       // Set up branch protection requiring 1 approval
       await client.POST("/repos/{owner}/{repo}/branch_protections", {
-        params: { path: { owner: OWNER, repo: repoName } },
+        params: { path: { owner: LIFECYCLE_OWNER, repo: repoName } },
         body: {
           rule_name: "main",
           required_approvals: 1,
@@ -314,7 +320,7 @@ test.describe("pull request workflow", () => {
 
       await createUploadBranch({
         client,
-        owner: OWNER,
+        owner: LIFECYCLE_OWNER,
         repo: lifecycleRepo,
         branchName: testBranch,
         from: "main",
@@ -322,7 +328,7 @@ test.describe("pull request workflow", () => {
 
       await commitDocument({
         client,
-        owner: OWNER,
+        owner: LIFECYCLE_OWNER,
         repo: lifecycleRepo,
         filePath: testFilePath,
         branch: testBranch,
@@ -340,7 +346,7 @@ test.describe("pull request workflow", () => {
 
       await createPullRequest({
         client,
-        owner: OWNER,
+        owner: LIFECYCLE_OWNER,
         repo: lifecycleRepo,
         title: "Test: PR workflow",
         head: testBranch,
@@ -354,7 +360,7 @@ test.describe("pull request workflow", () => {
 
       const found = await getPullRequestForBranch({
         client,
-        owner: OWNER,
+        owner: LIFECYCLE_OWNER,
         repo: lifecycleRepo,
         branch: testBranch,
       });
@@ -369,7 +375,7 @@ test.describe("pull request workflow", () => {
 
       const before = await getPullRequestForBranch({
         client,
-        owner: OWNER,
+        owner: LIFECYCLE_OWNER,
         repo: lifecycleRepo,
         branch: testBranch,
       });
@@ -378,7 +384,7 @@ test.describe("pull request workflow", () => {
 
       await submitReview({
         client: bobClient,
-        owner: OWNER,
+        owner: LIFECYCLE_OWNER,
         repo: lifecycleRepo,
         pullNumber,
         event: "APPROVE",
@@ -388,7 +394,7 @@ test.describe("pull request workflow", () => {
       await pollUntil(async () => {
         const pr = await getPullRequestForBranch({
           client,
-          owner: OWNER,
+          owner: LIFECYCLE_OWNER,
           repo: lifecycleRepo,
           branch: testBranch,
         });
@@ -397,7 +403,7 @@ test.describe("pull request workflow", () => {
 
       const after = await getPullRequestForBranch({
         client,
-        owner: OWNER,
+        owner: LIFECYCLE_OWNER,
         repo: lifecycleRepo,
         branch: testBranch,
       });
@@ -409,7 +415,7 @@ test.describe("pull request workflow", () => {
 
       const before = await getPullRequestForBranch({
         client,
-        owner: OWNER,
+        owner: LIFECYCLE_OWNER,
         repo: lifecycleRepo,
         branch: testBranch,
       });
@@ -418,7 +424,7 @@ test.describe("pull request workflow", () => {
 
       await mergePullRequest({
         client,
-        owner: OWNER,
+        owner: LIFECYCLE_OWNER,
         repo: lifecycleRepo,
         pullNumber,
         mergeStyle: "merge",
@@ -428,7 +434,7 @@ test.describe("pull request workflow", () => {
       await pollUntil(async () => {
         const pr = await getPullRequestForBranch({
           client,
-          owner: OWNER,
+          owner: LIFECYCLE_OWNER,
           repo: lifecycleRepo,
           branch: testBranch,
         });
@@ -437,7 +443,7 @@ test.describe("pull request workflow", () => {
 
       const after = await getPullRequestForBranch({
         client,
-        owner: OWNER,
+        owner: LIFECYCLE_OWNER,
         repo: lifecycleRepo,
         branch: testBranch,
       });
@@ -451,41 +457,22 @@ test.describe("pull request workflow", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("repos", () => {
-  test("listWorkspaceRepos includes the seeded repository", async () => {
-    const repos = await listWorkspaceRepos(makeClient());
+  test("the organization's binders include the seeded one", async () => {
+    // This used to call `listWorkspaceRepos`, a wrapper on Gitea's
+    // `/repos/search` that existed because a document was a repository and the
+    // library searched for them. With the old model deleted, binders are asked
+    // for by organization — which is also what made the old version flaky on a
+    // dev stack full of test debris, since the seeded repo could fall outside
+    // the first hundred search results.
+    const binders = await listOrganizationWorkspaces({
+      client: makeClient(),
+      org: OWNER,
+    });
 
-    const seeded = repos.find(
-      (r) => r.name === REPO && r.owner.login === OWNER,
-    );
-    expect(seeded).toBeDefined();
-    expect(seeded!.full_name).toBe(`${OWNER}/${REPO}`);
-  });
-
-  test("getLatestDocTag returns null or a valid DocTag", async () => {
-    // The seeded quarterly-report repo may or may not have tags depending on
-    // whether other tests (e.g., document-version-upload.pw.ts) have run.
-    const tag = await getLatestDocTag(makeClient(), OWNER, REPO);
-
-    if (tag !== null) {
-      // If tags exist, validate they have the expected shape
-      expect(typeof tag.name).toBe("string");
-      expect(tag.name).toMatch(/^doc\/v\d{4}$/);
-      expect(typeof tag.version).toBe("number");
-      expect(tag.version).toBeGreaterThan(0);
-    }
-  });
-
-  test("listDocTags returns an array of valid DocTags", async () => {
-    const tags = await listDocTags(makeClient(), OWNER, REPO);
-    expect(Array.isArray(tags)).toBe(true);
-
-    // Validate each tag has the expected shape
-    for (const tag of tags) {
-      expect(typeof tag.name).toBe("string");
-      expect(tag.name).toMatch(/^doc\/v\d{4}$/);
-      expect(typeof tag.version).toBe("number");
-      expect(tag.version).toBeGreaterThan(0);
-    }
+    const seeded = binders.find((binder) => binder.name === REPO);
+    expect(seeded, JSON.stringify(binders.map((b) => b.name))).toBeDefined();
+    expect(seeded!.fullName).toBe(`${OWNER}/${REPO}`);
+    expect(seeded!.owner).toBe(OWNER);
   });
 });
 
@@ -561,7 +548,9 @@ test.describe("uploads", () => {
     const { data } = await client.GET(
       "/repos/{owner}/{repo}/branches/{branch}",
       {
-        params: { path: { owner: OWNER, repo: REPO, branch: branchName } },
+        params: {
+          path: { owner: OWNER, repo: REPO, branch: branchName },
+        },
       },
     );
     expect(data?.name).toBe(branchName);

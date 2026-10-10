@@ -1,16 +1,18 @@
 import {
   MAX_ORGANIZATION_NAME_LENGTH as MAX_NAME_LENGTH,
+  RESERVED_ORGANIZATION_NAMES,
   slugifyOrganizationName,
 } from "../../packages/utils/organizationName";
 
 import { GiteaApiError, type GiteaClient } from "./gitea-client/client";
-import { findOrganization } from "./gitea-client/orgs";
+import { findOrganization, isOrganizationOwner } from "./gitea-client/orgs";
 import {
   provisionOrganization,
   type ProvisionedOrganization,
 } from "./gitea-client/workspaces";
 import { logger } from "./logger";
 import {
+  organizationStore,
   recordProvisionedOrganization,
   type OrganizationBackend,
   type OrganizationRecord,
@@ -55,8 +57,20 @@ export function deriveOrganizationName(
   const fromRequest = requested ? slugifyOrganizationName(requested) : "";
   const fromUsername = slugifyOrganizationName(username);
 
-  if (fromRequest && fromRequest !== fromUsername) {
+  if (
+    fromRequest &&
+    fromRequest !== fromUsername &&
+    !RESERVED_ORGANIZATION_NAMES.has(fromRequest)
+  ) {
     return fromRequest;
+  }
+
+  // A name the app cannot move off the root — the help site, the sign-in
+  // callback, the files browsers ask for — would put the organization behind
+  // it. "Help" becomes `help-org`, the same shape a name taken from the
+  // username gets.
+  if (fromRequest && RESERVED_ORGANIZATION_NAMES.has(fromRequest)) {
+    return `${fromRequest}-org`;
   }
 
   const base = fromUsername || "org";
@@ -101,6 +115,8 @@ export async function provisionSignup(
     client,
     base: deriveOrganizationName(username, params.organizationName),
     orgFullName: params.organizationName?.trim() || undefined,
+    owner: username,
+    store: params.store ?? organizationStore,
   });
 
   const organization = await recordProvisionedOrganization({
@@ -118,6 +134,8 @@ interface ProvisionUnderAvailableNameParams {
   client: GiteaClient;
   base: string;
   orgFullName?: string;
+  owner: string;
+  store: OrganizationBackend;
 }
 
 /**
@@ -141,7 +159,7 @@ interface ProvisionUnderAvailableNameParams {
 async function provisionOrganizationUnderAvailableName(
   params: ProvisionUnderAvailableNameParams,
 ): Promise<ProvisionedOrganization> {
-  const { client, base, ...rest } = params;
+  const { client, base, store, ...rest } = params;
   let lastConflict: GiteaApiError | null = null;
 
   for (let attempt = 1; attempt <= MAX_NAME_ATTEMPTS; attempt += 1) {
@@ -150,8 +168,23 @@ async function provisionOrganizationUnderAvailableName(
     // A name we can see is taken is not worth a create call. This also keeps
     // provisioning out of an organization that exists and is visible but is
     // somebody else's.
-    if (await findOrganization({ client, org: orgName })) {
-      continue;
+    //
+    // **Unless it is this person's own, left half-made.** Creating an
+    // organization is a Gitea write and then a row here; a run that stopped
+    // between them left an organization its founder owns with no record — no
+    // trial, no billing — and asking again walked past it to `name-2`, a
+    // second organization nobody wanted. One they own and nothing here knows
+    // about is that orphan, and finishing it is what the retry was for.
+    const visible = await findOrganization({ client, org: orgName });
+    if (visible) {
+      const orphan =
+        (await store.get(visible.id)) === null &&
+        (await isOrganizationOwner({
+          client,
+          org: orgName,
+          username: rest.owner,
+        }).catch(() => false));
+      if (!orphan) continue;
     }
 
     try {

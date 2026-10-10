@@ -8,9 +8,10 @@ import {
   describeApprovalProgress,
   formatDocumentName,
   getReviewerDisplayName,
-  hasEnoughApprovals,
   parseChangeTitle,
 } from "./documentDisplay";
+import type { ChangeStandingTone } from "./changeRow";
+import { describeChangeMeta, describeChangeStandingWord } from "./changeRow";
 
 /**
  * Home is a list of change requests, not a list of documents.
@@ -35,9 +36,17 @@ export interface HomeChangeRow {
   kind: HomeChangeKind;
   /** The one meta sentence under the title, after the document name. */
   meta: string;
-  pillLabel: string;
-  /** The button on the right of a "Waiting on you" row, when there is one. */
-  action: "Review" | "Publish" | null;
+  /**
+   * Where it stands, in one word.
+   *
+   * **Not a pill, and not a sentence.** It read "all approvals in · becomes v2
+   * when you publish" beside a pill saying "Ready to publish" — the same fact
+   * three times, and the customer counted: *"That is WAYYY too much text."*
+   */
+  standing: string;
+  tone: ChangeStandingTone;
+  /** How many comments are on it. */
+  commentCount: number;
 }
 
 export type HomeDecidedOutcome = "published" | "closed";
@@ -51,7 +60,8 @@ export interface HomeDecidedRow {
   title: string;
   outcome: HomeDecidedOutcome;
   meta: string;
-  pillLabel: string;
+  standing: string;
+  tone: ChangeStandingTone;
 }
 
 /** A workspace document paired with the closed changes fetched for it. */
@@ -144,12 +154,26 @@ function awaitingReviewerNames(change: PullRequestWithApprovalState): string[] {
     .map(getReviewerDisplayName);
 }
 
-function nextVersionOf(document: HomeOpenDocument): number {
-  return (document.latestTag?.version ?? 0) + 1;
+/**
+ * The version this change would publish.
+ *
+ * **Read from the change, not from the binder.** It used to be
+ * `binder.latestTag.version + 1`, which was a repository-wide answer to a
+ * per-document question — and worse, `latestTag` matched the retired
+ * `doc/vNNNN` tag format, so it was always null and every row said "becomes
+ * v1" however many versions the document already had.
+ */
+function nextVersionOf(change: { nextVersion: number | null }): number | null {
+  return change.nextVersion;
 }
 
-function submitterName(change: { user?: { login: string } | null }): string {
-  return capitalizeFirst(change.user?.login ?? "someone");
+function submitterName(change: {
+  user?: { login: string; full_name?: string } | null;
+}): string {
+  return (
+    change.user?.full_name?.trim() ||
+    capitalizeFirst(change.user?.login ?? "someone")
+  );
 }
 
 function classify(
@@ -160,14 +184,20 @@ function classify(
   const isMine = change.user?.login === username;
   const ownsDocument = document.repo.owner.login === username;
 
-  // Every approval is in. Whoever can publish it is the one being waited on —
-  // the person who submitted it, or the person who owns the document.
-  if (hasEnoughApprovals(change) && !change.isRejected) {
+  // **Asked and not yet answered comes first.** A binder that needs no
+  // approvals is ready to publish the moment it opens, but somebody who was
+  // asked to review it still owes an answer — and dropping the change from
+  // their list because Gitea would merge it anyway left the request in their
+  // bell and nowhere else.
+  if (!isMine && isAwaitingReviewFrom(change, username)) return "needs_review";
+
+  // Gitea would merge it now. Whoever can publish it is the one being waited
+  // on — the person who submitted it, or the person who owns the document.
+  // The server decides this, by the same rule the change page does.
+  if (change.isApproved) {
     if (isMine || ownsDocument) return "ready_to_publish";
     return null;
   }
-
-  if (!isMine && isAwaitingReviewFrom(change, username)) return "needs_review";
   if (isMine) return "submission";
 
   // A change on a document the reader owns, or was asked to review and already
@@ -178,45 +208,23 @@ function classify(
   return null;
 }
 
-function describeOpenChange(
-  document: HomeOpenDocument,
-  change: PullRequestWithApprovalState,
-  kind: HomeChangeKind,
-  username: string,
-  now: number,
+/**
+ * What a row is about: the document, or the binder when there is no document.
+ *
+ * A change to a binder's sign-off rules touches no document, so it has no
+ * `documentSlugPath` — and the honest answer there is the binder's own name
+ * rather than a document that does not exist.
+ */
+function describeChangeSubject(
+  binder: string,
+  slugPath: string | null | undefined,
 ): string {
-  const submittedAt = change.created_at ?? change.created;
-  const progress = describeApprovalProgress(change);
-
-  if (kind === "ready_to_publish") {
-    return `all approvals in · becomes v${nextVersionOf(document)} when you publish`;
+  if (slugPath === null || slugPath === undefined || slugPath === "") {
+    return formatDocumentName(binder);
   }
 
-  if (kind === "needs_review") {
-    const submitted = `${submitterName(change)} submitted ${formatWhen(submittedAt, now)}`;
-    return progress ? `${submitted} · ${progress}` : submitted;
-  }
-
-  const waiting = awaitingReviewerNames(change).filter(
-    (name) => name.toLowerCase() !== username.toLowerCase(),
-  );
-  const isMine = change.user?.login === username;
-  const submitted = isMine
-    ? `submitted ${formatWhen(submittedAt, now)}`
-    : `${submitterName(change)} submitted ${formatWhen(submittedAt, now)}`;
-
-  return waiting.length > 0
-    ? `waiting on ${formatNameList(waiting)} · ${submitted}`
-    : submitted;
-}
-
-function pillFor(
-  change: PullRequestWithApprovalState,
-  kind: HomeChangeKind,
-): string {
-  if (kind === "needs_review") return "Needs your review";
-  if (kind === "ready_to_publish") return "Ready to publish";
-  return describeApprovalProgress(change) ?? "In review";
+  const leaf = slugPath.split("/").pop() ?? slugPath;
+  return formatDocumentName(leaf);
 }
 
 /**
@@ -243,18 +251,43 @@ export function buildOpenChangeRows(
         key: `${document.repo.owner.login}/${document.repo.name}#${change.number}`,
         owner: document.repo.owner.login,
         repo: document.repo.name,
-        documentName: formatDocumentName(document.repo.name),
+        // **The document, not the binder.** `document.repo` is the binder now,
+        // so naming it here put "Clinical" on a row about the infection
+        // control policy. The change carries which document it is about; the
+        // binder's name is the fallback for a change that is about none —
+        // a sign-off rules change, for instance.
+        documentName: describeChangeSubject(
+          document.repo.name,
+          change.documentSlugPath,
+        ),
         number: change.number,
         title: parseChangeTitle(change.body, change.user?.login ?? ""),
         kind,
-        meta: describeOpenChange(document, change, kind, username, now),
-        pillLabel: pillFor(change, kind),
-        action:
-          kind === "needs_review"
-            ? "Review"
-            : kind === "ready_to_publish"
-              ? "Publish"
-              : null,
+        meta: describeChangeMeta(
+          {
+            number: change.number,
+            submittedBy: change.user?.login ?? "",
+            // Your own change says "You", as "you approved" does: your name
+            // on every row of your own work is noise.
+            submittedByName:
+              change.user?.login === username ? "You" : change.user?.full_name,
+            submittedAt: change.created_at ?? change.created ?? "",
+            updatedAt: change.updated_at ?? undefined,
+            approvalCount: 0,
+            requiredApprovals: null,
+          },
+          now,
+        ),
+        ...describeChangeStandingWord({
+          number: change.number,
+          submittedBy: change.user?.login ?? "",
+          submittedAt: change.created_at ?? change.created ?? "",
+          approvalCount: change.approvalCount ?? 0,
+          requiredApprovals: change.requiredApprovals ?? null,
+          isRejected: change.isRejected ?? false,
+          isApproved: change.isApproved,
+        }),
+        commentCount: (change as { comments?: number }).comments ?? 0,
         movedAt: toTime(
           change.updated_at ?? change.created_at ?? change.created,
         ),
@@ -280,10 +313,14 @@ export function selectSubmissions(rows: HomeChangeRow[]): HomeChangeRow[] {
 }
 
 function describeApprovers(change: ClosedChange, username: string): string {
-  const approvers = new Set(
+  // Login to name: a review carries both, and a sentence wants the name.
+  const approvers = new Map(
     change.reviews
       .filter((review) => review.state === "approved" && !review.dismissed)
-      .map((review) => review.author.login),
+      .map((review) => [
+        review.author.login,
+        review.author.fullName.trim() || capitalizeFirst(review.author.login),
+      ]),
   );
 
   if (approvers.size === 0) return "";
@@ -295,7 +332,7 @@ function describeApprovers(change: ClosedChange, username: string): string {
     return `you and ${others} others approved`;
   }
 
-  const names = [...approvers].map(capitalizeFirst);
+  const names = [...approvers.values()];
   return `${formatNameList(names)} approved`;
 }
 
@@ -304,7 +341,15 @@ function describeDecision(change: ClosedChange, username: string): string {
     return describeApprovers(change, username) || "no approvals were recorded";
   }
 
-  const decidedBy = capitalizeFirst(change.decidedBy ?? change.submittedBy);
+  const login = change.decidedBy ?? change.submittedBy;
+  // A review carries the name the login stands for; the reader is "you", as
+  // on the approvals line above.
+  const decidedBy =
+    login === username
+      ? "you"
+      : change.reviews
+          .find((review) => review.author.login === login)
+          ?.author.fullName.trim() || capitalizeFirst(login);
   return change.outcome === "declined"
     ? `declined by ${decidedBy}`
     : `withdrawn by ${decidedBy}`;
@@ -347,15 +392,20 @@ export function buildDecidedChangeRows(
         key: `${document.owner}/${document.repo}#${change.number}`,
         owner: document.owner,
         repo: document.repo,
-        documentName: formatDocumentName(document.repo),
+        // The document, as on an open row — the binder only when the change
+        // was about none of its documents.
+        documentName: describeChangeSubject(
+          document.repo,
+          change.documentSlugPath,
+        ),
         number: change.number,
         title: parseChangeTitle(change.body, change.submittedBy),
         outcome: change.outcome === "published" ? "published" : "closed",
         meta: describeDecision(change, username),
-        pillLabel:
-          change.outcome === "published" && change.publishedVersion !== null
-            ? `Published as v${change.publishedVersion} · ${closedOn}`
-            : `Closed · ${closedOn}`,
+        // One word. The date it closed is already in `meta`, and repeating it
+        // inside the standing was the same fact twice on one row.
+        standing: change.outcome === "published" ? "Published" : "Closed",
+        tone: change.outcome === "published" ? "published" : "closed",
         decidedAt: toTime(change.closedAt ?? change.submittedAt),
       });
     }

@@ -406,465 +406,50 @@ function makeSessionRequest(
   });
 }
 
-describe("GET /api/app/documents with search query", () => {
-  test("no query param uses listWorkspaceRepos (no filters on search)", async () => {
-    const server = await createApiServer();
-    const sessionId = await seedSession("alice");
-    const aliceUser = giteaUsersByLogin.get("alice")!;
-
-    seedGiteaRepo({
-      name: "doc-alpha",
-      owner: { id: aliceUser.id, login: "alice" },
-      private: true,
-    });
-    seedGiteaRepo({
-      name: "doc-beta",
-      owner: { id: aliceUser.id, login: "alice" },
-      private: true,
-    });
-
-    const response = await server.fetch(
-      makeSessionRequest("/api/app/documents", sessionId),
-    );
-
-    expect(response.status).toBe(200);
-    // listWorkspaceRepos uses /repos/search with no filters
-    const searchCalls = fetchCalls.filter(
-      (call) => call.path === "/api/v1/repos/search",
-    );
-    expect(searchCalls.length).toBe(1);
-    expect(searchCalls[0]!.queryParams.get("q")).toBeNull();
-    expect(searchCalls[0]!.queryParams.get("uid")).toBeNull();
-    expect(searchCalls[0]!.queryParams.get("exclusive")).toBeNull();
-  });
-
-  test("no query params resolves to no filters", async () => {
-    const server = await createApiServer();
-    const sessionId = await seedSession("alice");
-    const aliceUser = giteaUsersByLogin.get("alice")!;
-
-    seedGiteaRepo({
-      name: "doc-alpha",
-      owner: { id: aliceUser.id, login: "alice" },
-      private: true,
-    });
-
-    const response = await server.fetch(
-      makeSessionRequest("/api/app/documents", sessionId),
-    );
-
-    expect(response.status).toBe(200);
-    // no query params — uses listWorkspaceRepos (/repos/search with no filters)
-    const searchCalls = fetchCalls.filter(
-      (call) => call.path === "/api/v1/repos/search",
-    );
-    expect(searchCalls.length).toBe(1);
-    expect(searchCalls[0]!.queryParams.get("q")).toBeNull();
-    expect(searchCalls[0]!.queryParams.get("uid")).toBeNull();
-    expect(searchCalls[0]!.queryParams.get("exclusive")).toBeNull();
-  });
-
-  test("owner:@me resolves to session username and exclusive=true", async () => {
-    const server = await createApiServer();
-    const sessionId = await seedSession("alice");
-    const aliceUser = giteaUsersByLogin.get("alice")!;
-
-    seedGiteaRepo({
-      name: "doc-alpha",
-      owner: { id: aliceUser.id, login: "alice" },
-      private: true,
-    });
-
-    // Frontend resolves @me → "alice" before sending
-    const response = await server.fetch(
-      makeSessionRequest("/api/app/documents", sessionId, {
-        queryParams: { owner: "alice" },
-      }),
-    );
-
-    expect(response.status).toBe(200);
-    const searchCalls = fetchCalls.filter(
-      (call) => call.path === "/api/v1/repos/search",
-    );
-    expect(searchCalls.length).toBe(1);
-    expect(searchCalls[0]!.queryParams.get("uid")).toBe(
-      aliceUser.id.toString(),
-    );
-    expect(searchCalls[0]!.queryParams.get("exclusive")).toBe("true");
-    expect(searchCalls[0]!.queryParams.get("q")).toBeNull();
-  });
-
-  test("owner:@username resolves to specified username and exclusive=true", async () => {
-    const server = await createApiServer();
-    const sessionId = await seedSession("alice");
-    const bobUser = seedGiteaUser({ login: "bob", email: "bob@example.com" });
-
-    seedGiteaRepo({
-      name: "doc-bob-1",
-      owner: { id: bobUser.id, login: "bob" },
-      private: true,
-    });
-
-    // Frontend resolves @bob → "bob" before sending
-    const response = await server.fetch(
-      makeSessionRequest("/api/app/documents", sessionId, {
-        queryParams: { owner: "bob" },
-      }),
-    );
-
-    expect(response.status).toBe(200);
-    const searchCalls = fetchCalls.filter(
-      (call) => call.path === "/api/v1/repos/search",
-    );
-    expect(searchCalls.length).toBe(1);
-    expect(searchCalls[0]!.queryParams.get("uid")).toBe(bobUser.id.toString());
-    expect(searchCalls[0]!.queryParams.get("exclusive")).toBe("true");
-  });
-
-  test("contributed-by:@me resolves to session username without exclusive", async () => {
-    const server = await createApiServer();
-    const sessionId = await seedSession("alice");
-    const aliceUser = giteaUsersByLogin.get("alice")!;
-
-    seedGiteaRepo({
-      name: "doc-alpha",
-      owner: { id: aliceUser.id, login: "alice" },
-      private: true,
-    });
-
-    // Frontend resolves @me → "alice" before sending
-    const response = await server.fetch(
-      makeSessionRequest("/api/app/documents", sessionId, {
-        queryParams: { member: "alice" },
-      }),
-    );
-
-    expect(response.status).toBe(200);
-    const searchCalls = fetchCalls.filter(
-      (call) => call.path === "/api/v1/repos/search",
-    );
-    expect(searchCalls.length).toBe(1);
-    expect(searchCalls[0]!.queryParams.get("uid")).toBe(
-      aliceUser.id.toString(),
-    );
-    expect(searchCalls[0]!.queryParams.get("exclusive")).toBeNull();
-  });
-
-  test("contributed-by:@username resolves to specified username without exclusive", async () => {
-    const server = await createApiServer();
-    const sessionId = await seedSession("alice");
-    const bobUser = seedGiteaUser({ login: "bob", email: "bob@example.com" });
-
-    seedGiteaRepo({
-      name: "doc-bob-1",
-      owner: { id: bobUser.id, login: "bob" },
-      private: true,
-    });
-
-    // Frontend resolves @bob → "bob" before sending
-    const response = await server.fetch(
-      makeSessionRequest("/api/app/documents", sessionId, {
-        queryParams: { member: "bob" },
-      }),
-    );
-
-    expect(response.status).toBe(200);
-    const searchCalls = fetchCalls.filter(
-      (call) => call.path === "/api/v1/repos/search",
-    );
-    expect(searchCalls.length).toBe(1);
-    expect(searchCalls[0]!.queryParams.get("uid")).toBe(bobUser.id.toString());
-    expect(searchCalls[0]!.queryParams.get("exclusive")).toBeNull();
-  });
-
-  test("owner:@me with free text passes freeText to q param", async () => {
-    const server = await createApiServer();
-    const sessionId = await seedSession("alice");
-    const aliceUser = giteaUsersByLogin.get("alice")!;
-
-    seedGiteaRepo({
-      name: "doc-alpha",
-      owner: { id: aliceUser.id, login: "alice" },
-      description: "hello world",
-      private: true,
-    });
-
-    // Frontend resolves "owner:@me hello world" → { ownerUsername: "alice", freeText: "hello world" }
-    const response = await server.fetch(
-      makeSessionRequest("/api/app/documents", sessionId, {
-        queryParams: { owner: "alice", q: "hello world" },
-      }),
-    );
-
-    expect(response.status).toBe(200);
-    const searchCalls = fetchCalls.filter(
-      (call) => call.path === "/api/v1/repos/search",
-    );
-    expect(searchCalls.length).toBe(1);
-    expect(searchCalls[0]!.queryParams.get("uid")).toBe(
-      aliceUser.id.toString(),
-    );
-    expect(searchCalls[0]!.queryParams.get("exclusive")).toBe("true");
-    expect(searchCalls[0]!.queryParams.get("q")).toBe("hello world");
-  });
-
-  test("contributed-by:@me with free text passes freeText to q param", async () => {
-    const server = await createApiServer();
-    const sessionId = await seedSession("alice");
-    const aliceUser = giteaUsersByLogin.get("alice")!;
-
-    seedGiteaRepo({
-      name: "doc-alpha",
-      owner: { id: aliceUser.id, login: "alice" },
-      description: "some query",
-      private: true,
-    });
-
-    // Frontend resolves "contributed-by:@me some query" → { memberUsername: "alice", freeText: "some query" }
-    const response = await server.fetch(
-      makeSessionRequest("/api/app/documents", sessionId, {
-        queryParams: { member: "alice", q: "some query" },
-      }),
-    );
-
-    expect(response.status).toBe(200);
-    const searchCalls = fetchCalls.filter(
-      (call) => call.path === "/api/v1/repos/search",
-    );
-    expect(searchCalls.length).toBe(1);
-    expect(searchCalls[0]!.queryParams.get("uid")).toBe(
-      aliceUser.id.toString(),
-    );
-    expect(searchCalls[0]!.queryParams.get("exclusive")).toBeNull();
-    expect(searchCalls[0]!.queryParams.get("q")).toBe("some query");
-  });
-
-  test("both owner and contributed-by: owner takes precedence (exclusive=true)", async () => {
-    const server = await createApiServer();
-    const sessionId = await seedSession("alice");
-    const aliceUser = giteaUsersByLogin.get("alice")!;
-    const bobUser = seedGiteaUser({ login: "bob", email: "bob@example.com" });
-
-    seedGiteaRepo({
-      name: "doc-alpha",
-      owner: { id: aliceUser.id, login: "alice" },
-      private: true,
-    });
-
-    // Frontend sends both; searchWorkspaceRepos uses ownerUsername ?? memberUsername
-    const response = await server.fetch(
-      makeSessionRequest("/api/app/documents", sessionId, {
-        queryParams: { owner: "alice", member: "bob" },
-      }),
-    );
-
-    expect(response.status).toBe(200);
-    const searchCalls = fetchCalls.filter(
-      (call) => call.path === "/api/v1/repos/search",
-    );
-    expect(searchCalls.length).toBe(1);
-    // ownerUsername takes precedence over memberUsername
-    expect(searchCalls[0]!.queryParams.get("uid")).toBe(
-      aliceUser.id.toString(),
-    );
-    expect(searchCalls[0]!.queryParams.get("exclusive")).toBe("true");
-  });
-
-  test("free text without owner or contributed-by searches all repos", async () => {
-    const server = await createApiServer();
-    const sessionId = await seedSession("alice");
-    const aliceUser = giteaUsersByLogin.get("alice")!;
-
-    seedGiteaRepo({
-      name: "doc-alpha",
-      owner: { id: aliceUser.id, login: "alice" },
-      description: "foobar",
-      private: true,
-    });
-
-    const response = await server.fetch(
-      makeSessionRequest("/api/app/documents", sessionId, {
-        queryParams: { q: "foobar" },
-      }),
-    );
-
-    expect(response.status).toBe(200);
-    const searchCalls = fetchCalls.filter(
-      (call) => call.path === "/api/v1/repos/search",
-    );
-    expect(searchCalls.length).toBe(1);
-    expect(searchCalls[0]!.queryParams.get("q")).toBe("foobar");
-    expect(searchCalls[0]!.queryParams.get("uid")).toBeNull();
-    expect(searchCalls[0]!.queryParams.get("exclusive")).toBeNull();
-  });
-
-  test("@me is resolved in owner query", async () => {
-    const server = await createApiServer();
-    const sessionId = await seedSession("alice");
-    const aliceUser = giteaUsersByLogin.get("alice")!;
-
-    seedGiteaRepo({
-      name: "doc-alpha",
-      owner: { id: aliceUser.id, login: "alice" },
-      private: true,
-    });
-
-    // Frontend resolves @me → "alice"; backend receives the plain username
-    const response = await server.fetch(
-      makeSessionRequest("/api/app/documents", sessionId, {
-        queryParams: { owner: "alice" },
-      }),
-    );
-
-    expect(response.status).toBe(200);
-    const searchCalls = fetchCalls.filter(
-      (call) => call.path === "/api/v1/repos/search",
-    );
-    expect(searchCalls.length).toBe(1);
-    expect(searchCalls[0]!.queryParams.get("uid")).toBe(
-      aliceUser.id.toString(),
-    );
-  });
-
-  test("@ prefix is stripped from usernames", async () => {
-    const server = await createApiServer();
-    const sessionId = await seedSession("alice");
-    const bobUser = seedGiteaUser({ login: "bob", email: "bob@example.com" });
-
-    seedGiteaRepo({
-      name: "doc-bob-1",
-      owner: { id: bobUser.id, login: "bob" },
-      private: true,
-    });
-
-    // Frontend strips @ from "@bob" → "bob" before sending
-    const response = await server.fetch(
-      makeSessionRequest("/api/app/documents", sessionId, {
-        queryParams: { owner: "bob" },
-      }),
-    );
-
-    expect(response.status).toBe(200);
-    const userLookupCalls = fetchCalls.filter(
-      (call) => call.path === "/api/v1/users/bob",
-    );
-    expect(userLookupCalls.length).toBe(1);
-  });
-});
-
 /**
- * Quick find's endpoint. It answers with repo rows and nothing else: no tags,
- * no open changes, no approval policy — that is what makes it cheap enough to
- * call on a keystroke, and the assertion below is what keeps it that way.
+ * What this file used to cover, and why most of it is gone.
+ *
+ * The library and the nav's quick find were both searches over Gitea
+ * *repositories*, because a document was one — so a test could mock
+ * `/repos/search` and assert which `uid`, `exclusive` and `q` came back out.
+ * Under ADR 0004 a document is a file inside a binder, and the same two screens
+ * are answered by walking each binder the reader can reach: its tree, its open
+ * changes and its tags.
+ *
+ * Mocking that faithfully would be reimplementing Gitea, and a mock detailed
+ * enough to be worth trusting is a mock that can be wrong in its own way. So
+ * the behaviour is proved against a real stack in
+ * `tests/workspace-provisioning.pw.ts`, and what stays here is what genuinely
+ * has no Gitea in it — the two answers given before anything is fetched.
  */
 describe("GET /api/app/documents/search", () => {
-  test("returns one page of matches with the paging flag set", async () => {
-    const server = await createApiServer();
-    const sessionId = await seedSession("alice");
-    const aliceUser = giteaUsersByLogin.get("alice")!;
-
-    for (const name of ["doc-alpha", "doc-beta", "doc-gamma"]) {
-      seedGiteaRepo({
-        name,
-        owner: { id: aliceUser.id, login: "alice" },
-        private: true,
-      });
-    }
-
-    const response = await server.fetch(
-      makeSessionRequest("/api/app/documents/search", sessionId, {
-        queryParams: { q: "doc", limit: "2" },
-      }),
-    );
-
-    expect(response.status).toBe(200);
-    const payload = (await response.json()) as {
-      documents: { name: string; owner: { login: string } }[];
-      page: number;
-      limit: number;
-      hasMore: boolean;
-    };
-
-    expect(payload.documents.map((doc) => doc.name)).toEqual([
-      "doc-alpha",
-      "doc-beta",
-    ]);
-    expect(payload.documents[0]!.owner.login).toBe("alice");
-    expect(payload).toMatchObject({ page: 1, limit: 2, hasMore: true });
-  });
-
-  test("a later page continues where the previous one stopped", async () => {
-    const server = await createApiServer();
-    const sessionId = await seedSession("alice");
-    const aliceUser = giteaUsersByLogin.get("alice")!;
-
-    for (const name of ["doc-alpha", "doc-beta", "doc-gamma"]) {
-      seedGiteaRepo({
-        name,
-        owner: { id: aliceUser.id, login: "alice" },
-        private: true,
-      });
-    }
-
-    const response = await server.fetch(
-      makeSessionRequest("/api/app/documents/search", sessionId, {
-        queryParams: { q: "doc", limit: "2", page: "2" },
-      }),
-    );
-
-    const payload = (await response.json()) as {
-      documents: { name: string }[];
-      page: number;
-      hasMore: boolean;
-    };
-
-    expect(payload.documents.map((doc) => doc.name)).toEqual(["doc-gamma"]);
-    expect(payload).toMatchObject({ page: 2, hasMore: false });
-  });
-
-  test("does not fan out per document the way the library listing does", async () => {
-    const server = await createApiServer();
-    const sessionId = await seedSession("alice");
-    const aliceUser = giteaUsersByLogin.get("alice")!;
-
-    seedGiteaRepo({
-      name: "doc-alpha",
-      owner: { id: aliceUser.id, login: "alice" },
-      private: true,
-    });
-
-    await server.fetch(
-      makeSessionRequest("/api/app/documents/search", sessionId, {
-        queryParams: { q: "doc" },
-      }),
-    );
-
-    expect(
-      fetchCalls.filter((call) => call.path.endsWith("/tags")),
-    ).toHaveLength(0);
-    expect(
-      fetchCalls.filter((call) => call.path.endsWith("/pulls")),
-    ).toHaveLength(0);
-  });
-
   test("a search for nothing is a bad request, not an empty library", async () => {
-    const server = await createApiServer();
-    const sessionId = await seedSession("alice");
+    const user = seedGiteaUser({ login: "alice", email: "alice@example.com" });
+    const sessionId = await seedSession(user.login);
+    const server = createApiServer();
 
     const response = await server.fetch(
       makeSessionRequest("/api/app/documents/search", sessionId, {
-        queryParams: { q: "  " },
+        queryParams: { q: "   " },
       }),
     );
 
     expect(response.status).toBe(400);
+    // Asserted because it is the guarantee the route depends on: the check runs
+    // before a single binder is read, so an empty box costs nothing.
+    expect(
+      fetchCalls.some((call) => call.path.includes("/repos/")),
+      "an empty query reached Gitea",
+    ).toBe(false);
   });
 
   test("an unauthenticated reader gets nothing", async () => {
-    const server = await createApiServer();
+    const server = createApiServer();
 
     const response = await server.fetch(
-      new Request("http://localhost/api/app/documents/search?q=doc"),
+      new Request("http://localhost/api/app/documents/search?q=policy", {
+        headers: { Origin: config.appOrigin },
+      }),
     );
 
     expect(response.status).toBe(401);

@@ -15,6 +15,14 @@ export const RepoBranchProtectionSchema = z.object({
   mergeWhitelistTeams: z.array(z.string()),
   blockOnRejectedReviews: z.boolean(),
   dismissStaleApprovals: z.boolean(),
+  /**
+   * Whether anybody may push straight to the protected branch.
+   *
+   * False is the product's core claim — nothing but a merged, approved change
+   * reaches the record — so it is worth being able to show a customer rather
+   * than only asserting it.
+   */
+  enablePush: z.boolean(),
 });
 export type RepoBranchProtection = z.infer<typeof RepoBranchProtectionSchema>;
 
@@ -210,7 +218,14 @@ export const PullRequestWithApprovalStateSchema = z.object({
   assignee: ChangeUserSchema.nullable(),
   body: z.string().optional(),
   approvalState: ApprovalStateSchema,
-  user: z.object({ login: z.string() }).nullable().optional(),
+  user: z
+    .object({
+      login: z.string(),
+      /** What they are called, straight from Gitea; "" when never set. */
+      full_name: z.string().optional(),
+    })
+    .nullable()
+    .optional(),
   /**
    * The reviews on this change, oldest first. Only the document detail
    * populates it — a workspace list has no room for a review trail.
@@ -384,6 +399,12 @@ export const ClosedChangeSchema = z.object({
   body: z.string(),
   /** The branch the submitted file lived on. Empty once Gitea prunes it. */
   branchName: z.string(),
+  /**
+   * Which document this change was about, read from its upload branch as an
+   * open change's is. Null for a change about no document — a sign-off rules
+   * change — so a row names the binder there rather than a file.
+   */
+  documentSlugPath: z.string().nullable(),
   submittedBy: z.string(),
   submittedAt: z.string(),
   closedAt: z.string().nullable(),
@@ -421,8 +442,22 @@ export const HomeOpenDocumentSchema = z.object({
     name: z.string(),
     owner: z.object({ login: z.string() }),
   }),
-  latestTag: DocTagSchema.nullable(),
-  pendingPRs: z.array(PullRequestWithApprovalStateSchema),
+  /**
+   * The binder's open changes.
+   *
+   * There is no repository-wide `latestTag` any more, and its absence is the
+   * fix rather than an omission: a binder holds many documents, each with its
+   * own version, so one number for the binder is a claim about none of them.
+   * The version a change would publish is on the change.
+   */
+  pendingPRs: z.array(
+    PullRequestWithApprovalStateSchema.extend({
+      /** Which document this change is about, from its upload branch. */
+      documentSlugPath: z.string().nullable(),
+      /** The version it would publish, or null when the document is unknown. */
+      nextVersion: z.number().nullable(),
+    }),
+  ),
   /** Set when this document could not be read; its rows are simply absent. */
   error: z.string().nullable(),
 });

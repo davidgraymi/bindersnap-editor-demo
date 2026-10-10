@@ -3,6 +3,10 @@ import { randomUUID } from "crypto";
 
 import { config } from "./config";
 import { createApiServer } from "./server";
+import {
+  WorkspaceSettingsStore,
+  workspaceSettingsStore,
+} from "./workspace-settings";
 import { SessionStore, sessionStore } from "./sessions";
 import { resetStripeClientForTests } from "./stripe/client";
 import {
@@ -40,6 +44,12 @@ let giteaLoginsByToken = new Map<string, string>();
 let commentsByPR = new Map<string, MockedComment[]>();
 let reviewConfigFile: string | null = null;
 let mergeCalls = 0;
+/** What each tag write pointed at. A version tag must name the merge commit. */
+let tagTargets: string[] = [];
+/** The binder's tags, as Gitea would list them back. */
+let tagsWritten: Array<{ name: string; commit: { sha: string } }> = [];
+/** Fail the next tag write, the way a process dying mid-publish would. */
+let failNextTagWrite = false;
 let nextCommentId = 1;
 
 function prKey(owner: string, repo: string, index: number): string {
@@ -63,6 +73,14 @@ beforeEach(() => {
 
   (sessionStore as unknown as { _store: SessionStore | null })._store =
     new SessionStore(config.sessionsDbPath);
+  // The settings store is a lazy singleton that keeps whichever database it
+  // first opened, so without this a policy set by one test is still in force
+  // for the next — which reads as the publish gate ignoring its own setting.
+  (
+    workspaceSettingsStore as unknown as {
+      _store: WorkspaceSettingsStore | null;
+    }
+  )._store = new WorkspaceSettingsStore(config.sessionsDbPath);
   (
     subscriptionStore as unknown as { _store: SubscriptionStore | null }
   )._store = new SubscriptionStore(config.sessionsDbPath);
@@ -75,6 +93,9 @@ beforeEach(() => {
   commentsByPR = new Map();
   reviewConfigFile = null;
   mergeCalls = 0;
+  tagTargets = [];
+  tagsWritten = [];
+  failNextTagWrite = false;
   nextCommentId = 1;
 
   globalThis.fetch = (async (input, init) => {
@@ -181,13 +202,33 @@ beforeEach(() => {
       return new Response(null, { status: 200 });
     }
 
+    // Which documents the change touches. A binder's publish asks Gitea this
+    // before it merges, because afterwards the branch is gone and with it the
+    // question's cheapest answer.
+    const filesMatch = path.match(
+      /^\/api\/v1\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)\/files$/,
+    );
+    if (filesMatch && method === "GET") {
+      // Carrying an identity segment, because publish refuses a content file
+      // without one — a file with no identity has no version series to add to.
+      return json([
+        {
+          filename: "nursing/policy.01J8XZ4K7MQ9V3B0RN7YHS2E1D.md",
+          status: "added",
+        },
+      ]);
+    }
+
     const prMatch = path.match(
       /^\/api\/v1\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)$/,
     );
     if (prMatch && method === "GET") {
+      // Merged once the merge has been called, as Gitea would answer.
       return json({
         number: Number(prMatch[3]),
-        state: "open",
+        state: mergeCalls > 0 ? "closed" : "open",
+        merged: mergeCalls > 0,
+        merge_commit_sha: mergeCalls > 0 ? "merge-sha" : null,
         mergeable: true,
         head: { ref: "upload/v2" },
       });
@@ -195,8 +236,20 @@ beforeEach(() => {
 
     const tagsMatch = path.match(/^\/api\/v1\/repos\/([^/]+)\/([^/]+)\/tags$/);
     if (tagsMatch) {
-      if (method === "GET") return json([]);
+      if (method === "GET") {
+        const page = Number(url.searchParams.get("page") ?? "1");
+        return json(page === 1 ? tagsWritten : []);
+      }
       if (method === "POST") {
+        if (failNextTagWrite) {
+          failNextTagWrite = false;
+          return json({ message: "the process went away" }, 500);
+        }
+        tagTargets.push(parsed?.target ?? "");
+        tagsWritten.push({
+          name: parsed?.tag_name ?? "",
+          commit: { sha: parsed?.target ?? "" },
+        });
         return json({
           name: parsed?.tag_name ?? "doc/v0001",
           commit: { sha: "abc", created: new Date().toISOString() },
@@ -270,18 +323,30 @@ function request(
   });
 }
 
-function setPolicy(blockOnUnresolvedThreads: boolean): void {
-  reviewConfigFile = JSON.stringify({
-    version: 1,
-    review: { blockOnUnresolvedThreads },
+/**
+ * Turn the thread-resolution rule on or off for the binder under test.
+ *
+ * It used to write a JSON file onto a `bindersnap-config` branch, which the
+ * publish gate then fetched from Gitea. ADR 0004's migration step 5 retires
+ * that: the rule is configuration, so it lives in a typed table, and the gate
+ * reads it from there. The mocked repository answers with `id: 1`, which is
+ * what the settings are keyed on.
+ */
+async function setPolicy(blockOnUnresolvedThreads: boolean): Promise<void> {
+  await workspaceSettingsStore.set({
+    giteaRepoId: 1,
+    organization: OWNER,
+    workspace: REPO,
+    settings: { blockOnUnresolvedThreads },
+    changedBy: OWNER,
   });
 }
 
 const OWNER = "alice";
 const REPO = "contract";
 const PR = 3;
-const DISCUSSIONS = `/api/app/documents/${OWNER}/${REPO}/pull-requests/${PR}/discussions`;
-const PUBLISH = `/api/app/documents/${OWNER}/${REPO}/pull-requests/${PR}/publish`;
+const DISCUSSIONS = `/api/app/binders/${OWNER}/${REPO}/changes/${PR}/discussions`;
+const PUBLISH = `/api/app/binders/${OWNER}/${REPO}/changes/${PR}/publish`;
 
 describe("review discussion routes", () => {
   test("starts a thread and reads it back", async () => {
@@ -440,7 +505,7 @@ describe("publish gate on unresolved threads", () => {
   test("blocks publishing when the policy is on and a thread is open", async () => {
     const server = createApiServer();
     const session = await seedSession(OWNER);
-    setPolicy(true);
+    await setPolicy(true);
 
     try {
       await server.fetch(
@@ -470,7 +535,7 @@ describe("publish gate on unresolved threads", () => {
   test("allows publishing once the thread is resolved", async () => {
     const server = createApiServer();
     const session = await seedSession(OWNER);
-    setPolicy(true);
+    await setPolicy(true);
 
     try {
       const created = await server.fetch(
@@ -497,6 +562,36 @@ describe("publish gate on unresolved threads", () => {
 
       expect(response.status).toBe(200);
       expect(mergeCalls).toBe(1);
+      // The version tag names the merge, not the branch it merged into.
+      expect(tagTargets).toEqual(["merge-sha"]);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("a publish that stopped after its merge is finished by pressing Publish again", async () => {
+    const server = createApiServer();
+    const session = await seedSession(OWNER);
+    await setPolicy(false);
+    failNextTagWrite = true;
+
+    try {
+      const first = await server.fetch(
+        request(PUBLISH, session, { method: "POST", body: {} }),
+      );
+      // Merged, versions not written: accepted, not failed, and not lost.
+      expect(first.status).toBe(202);
+      expect(mergeCalls).toBe(1);
+      expect(tagTargets).toEqual([]);
+
+      // Before jobs this was refused — the change was already merged — and the
+      // version was never written.
+      const again = await server.fetch(
+        request(PUBLISH, session, { method: "POST", body: {} }),
+      );
+      expect(again.status).toBe(200);
+      expect(mergeCalls).toBe(1);
+      expect(tagTargets).toEqual(["merge-sha"]);
     } finally {
       server.stop(true);
     }
@@ -505,7 +600,7 @@ describe("publish gate on unresolved threads", () => {
   test("does not block when the policy is off", async () => {
     const server = createApiServer();
     const session = await seedSession(OWNER);
-    setPolicy(false);
+    await setPolicy(false);
 
     try {
       await server.fetch(
@@ -558,7 +653,7 @@ describe("publish gate on unresolved threads", () => {
   test("a Gitea-native comment does not wedge the document shut", async () => {
     const server = createApiServer();
     const session = await seedSession(OWNER);
-    setPolicy(true);
+    await setPolicy(true);
 
     // A review body written outside Bindersnap carries no thread marker and
     // can never be resolved through this API — it must not gate publishing.

@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Litestream can stop replicating without anything noticing: a crash loop, a
+# detached IAM policy or a wrong bucket only show up in its own log. Every five
+# minutes this publishes LitestreamHealthy = 1 when the sidecar is running and
+# logged no ERROR in the last ten minutes, else 0. The monitoring module alarms
+# on 0, and on the metric going missing (this timer or the host stopped).
+set -euo pipefail
+
+CONTAINER="${LITESTREAM_CONTAINER:-bindersnap-litestream-prod}"
+AWS_REGION="${AWS_REGION:-us-east-1}"
+
+healthy=1
+if [ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null || echo false)" != "true" ]; then
+  echo "${CONTAINER} is not running" >&2
+  healthy=0
+elif docker logs --since 10m "${CONTAINER}" 2>&1 | grep -q ' ERROR '; then
+  echo "${CONTAINER} logged an ERROR in the last 10 minutes" >&2
+  healthy=0
+fi
+
+token="$(curl -fsS -X PUT http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 60')"
+instance_id="$(curl -fsS -H "X-aws-ec2-metadata-token: ${token}" http://169.254.169.254/latest/meta-data/instance-id)"
+
+aws cloudwatch put-metric-data \
+  --region "${AWS_REGION}" \
+  --namespace Bindersnap \
+  --metric-name LitestreamHealthy \
+  --dimensions "InstanceId=${instance_id}" \
+  --value "${healthy}"

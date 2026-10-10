@@ -1,40 +1,87 @@
 /**
- * Applies the declarative seed scenario to a running Gitea.
+ * Applies the declarative seed scenario to a running stack — through the API.
  *
  * There is no seed data in this file. What gets created lives in
- * `tests/seed-data/dev.yaml`; this module is the engine that turns that
- * description into Gitea repos, branches, pull requests, reviews, review
- * threads, merges, and version tags — in that order, idempotently, so
- * re-running it against a warm stack changes nothing.
+ * `tests/seed-data/dev.yaml`; this module replays it as the people in it,
+ * signed in, calling the same API routes the app calls: an organization is
+ * created by its owner, a document is uploaded into a draft and proposed, a
+ * review is given by the reviewer, a change is published by somebody allowed
+ * to publish it.
  *
- * Adding a document or a reviewer is a YAML edit. Only a change to *how*
- * Bindersnap models something in Gitea should ever bring you here.
+ * **Why through the API.** The seed used to write to Gitea directly, which
+ * meant a second copy of how Bindersnap models everything — team roles,
+ * version tags and their stamps, discussion markers, CODEOWNERS — kept in step
+ * with the real one by hand. When the two drifted, the stack showed states the
+ * product could never produce, and nothing the API keeps for itself (an
+ * organization's record, a publish job) existed at all. Replaying through the
+ * API means a seeded stack is one the product made.
+ *
+ * **Idempotent by title.** A change is found again by its title in its binder,
+ * a document by where it is filed, a discussion by its opening words. Re-running
+ * against a warm stack reads and writes nothing new.
+ *
+ * Accounts are the one thing made beside the API rather than through it — see
+ * `seed-accounts.ts` — and {@link THE_PRODUCT_CANNOT} lists the rest.
  */
 
 import { pathToFileURL } from "node:url";
 
+import * as Legal from "../packages/api-client/legal/legal";
+import * as Orgs from "../packages/api-client/organizations/organizations";
+import * as Binders from "../packages/api-client/workspaces/workspaces";
+import type { ListBinderChanges200ChangesItem } from "../packages/api-client/model/listBinderChanges200ChangesItem";
+import type { ListBinderDocuments200DocumentsItem } from "../packages/api-client/model/listBinderDocuments200DocumentsItem";
+import type { ProposeBinderSignOffRulesBodyRulesItem } from "../packages/api-client/model/proposeBinderSignOffRulesBodyRulesItem";
+import { ReviewBinderChangeBodyEvent } from "../packages/api-client/model/reviewBinderChangeBodyEvent";
+import { ApiRequestError } from "../packages/api-client/mutator";
+import { Sessions } from "./bff-session";
+import {
+  giteaRequest,
+  repoPath,
+  seedAccounts,
+  sleep,
+  type BasicAuth,
+} from "./seed-accounts";
 import { renderSeedDocumentFile } from "./seed-documents";
 import {
+  binderDocumentSlugPath,
+  canonicalFileNameFor,
   loadSeedScenario,
+  type SeedAct,
+  type SeedAssignment,
+  type SeedBinder,
+  type SeedBinderChange,
+  type SeedBinderDocument,
+  type SeedBinderRole,
   type SeedChange,
-  type SeedDocumentRepo,
+  type SeedDocument,
+  type SeedDocumentFormat,
+  type SeedReview,
   type SeedScenario,
+  type SeedSignOffRule,
   type SeedThread,
 } from "./seed-scenario";
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
-const DEFAULT_GITEA_URL = `http://localhost:${process.env.GITEA_PORT ?? "3000"}`;
 const SCENARIO_URL = new URL("seed-data/dev.yaml", import.meta.url);
 
-/** Kept for callers that still ask for the two historically-seeded PRs. */
-const PRIMARY_CHANGE = "alice/quarterly-report#feature/q2-amendments";
-const SECONDARY_CHANGE = "alice/vendor-contracts#feature/acme-renewal";
+/**
+ * What the scenario asks for that no screen in the product can do, and so is
+ * the one thing still written to Gitea directly.
+ *
+ * Kept as a list on purpose: every line here is a state a developer can look
+ * at that no customer could reach the same way, and the list should only get
+ * shorter.
+ */
+export const THE_PRODUCT_CANNOT = [
+  "close a change without publishing it — the app has no 'close' button, so a declined or withdrawn change is closed in Gitea as its author",
+] as const;
 
-type BasicAuth = {
-  username: string;
-  password: string;
-};
+/** The title of the change that puts a binder's starting sign-off rules in force. */
+export const STARTING_SIGN_OFF_TITLE = "Who signs off on this binder";
 
 type SeedOptions = {
+  /** Gitea, for the accounts and for {@link THE_PRODUCT_CANNOT}. */
   baseUrl?: string;
   adminUser?: string;
   /**
@@ -52,1134 +99,1192 @@ type SeedOptions = {
 type SeedResult = {
   token?: string;
   tokenName?: string;
-  /** Pull request numbers keyed by `owner/repo#branch`. */
+  /** Change numbers keyed by `org/binder#<branch as the scenario names it>`. */
   pullRequests: Record<string, number>;
-  /** The `alice/quarterly-report` review PR. */
-  prNumber: number;
-  /** The `alice/vendor-contracts` review PR. */
-  secondPrNumber: number;
   oauthClientId?: string;
 };
 
-type GiteaContentFile = {
-  sha: string;
-  content?: string;
-};
+type Change = ListBinderChanges200ChangesItem;
+type BinderDocument = ListBinderDocuments200DocumentsItem;
 
-type GiteaPull = {
-  number: number;
-  title: string;
-  state?: string;
-  merged?: boolean;
-  head?: { ref?: string };
-};
-
-type GiteaReview = {
-  state?: string;
-  body?: string;
-  user?: { login?: string };
-  stale?: boolean;
-  dismissed?: boolean;
-};
-
-type GiteaComment = {
-  id: number;
-  body?: string;
-  user?: { login?: string };
-};
-
-type GiteaToken = {
-  sha1?: string;
-};
-
-type GiteaOAuthApp = {
-  id: number;
-  name: string;
-  client_id: string;
-};
-
-type GiteaBranchProtection = {
-  rule_name?: string;
-};
-
-type RequestOptions = {
-  method?: string;
-  auth?: BasicAuth;
-  headers?: HeadersInit;
-  body?: string;
-  expectedStatuses?: number[];
-};
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/** Everything a step in one binder needs. */
+interface BinderRun {
+  org: string;
+  binder: SeedBinder;
+  sessions: Sessions;
+  /** The organization's owner: reads everything, and publishes by default. */
+  owner: string;
+  roles: Map<string, SeedBinderRole>;
+  /** The binder's changes as they stood when the run started, by title. */
+  changes: Map<string, Change>;
+  gitea: { baseUrl: string; password: string };
+  log: (message: string) => void;
 }
 
-function encodeAuth(auth: BasicAuth): string {
-  return Buffer.from(`${auth.username}:${auth.password}`).toString("base64");
+const LEVEL_FOR_ROLE = {
+  admins: "admin",
+  authors: "editor",
+  reviewers: "reviewer",
+} as const satisfies Record<SeedBinderRole, string>;
+
+const REVIEW_EVENT = {
+  approved: ReviewBinderChangeBodyEvent.APPROVE,
+  changes_requested: ReviewBinderChangeBodyEvent.REQUEST_CHANGES,
+  commented: ReviewBinderChangeBodyEvent.COMMENT,
+} as const satisfies Record<SeedReview["state"], string>;
+
+const MIME_FOR_FORMAT = {
+  prosemirror: "application/json",
+  markdown: "text/markdown",
+  pdf: "application/pdf",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+} as const satisfies Record<SeedDocumentFormat, string>;
+
+function isStatus(error: unknown, ...statuses: number[]): boolean {
+  return error instanceof ApiRequestError && statuses.includes(error.status);
 }
 
-function repoPath(owner: string, repo: string): string {
-  return `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
-}
-
-async function giteaRequest(
-  baseUrl: string,
-  path: string,
-  options: RequestOptions = {},
-): Promise<Response> {
-  const {
-    method = "GET",
-    auth,
-    headers,
-    body,
-    expectedStatuses = [200],
-  } = options;
-
-  const nextHeaders = new Headers(headers);
-  if (auth) {
-    nextHeaders.set("Authorization", `Basic ${encodeAuth(auth)}`);
-  }
-  if (body && !nextHeaders.has("Content-Type")) {
-    nextHeaders.set("Content-Type", "application/json");
-  }
-
-  const response = await fetch(new URL(path, baseUrl), {
-    method,
-    headers: nextHeaders,
-    body,
-  });
-
-  if (!expectedStatuses.includes(response.status)) {
-    const responseBody = await response.text();
-    throw new Error(
-      `Request failed ${method} ${path}: ${response.status} ${responseBody}`,
-    );
-  }
-
-  return response;
-}
-
-async function giteaJson<T>(
-  baseUrl: string,
-  path: string,
-  options: RequestOptions = {},
-): Promise<T> {
-  const response = await giteaRequest(baseUrl, path, options);
-  if (response.status === 204) {
-    return undefined as T;
-  }
-  return (await response.json()) as T;
-}
-
-async function waitForUrl(
-  baseUrl: string,
-  path: string,
-  attempts: number,
-  delayMs: number,
-): Promise<void> {
-  for (let index = 0; index < attempts; index += 1) {
-    try {
-      const response = await fetch(new URL(path, baseUrl));
-      if (response.ok) {
-        return;
-      }
-    } catch {
-      // Ignore transient connection errors while service boots.
-    }
-    await sleep(delayMs);
-  }
-  throw new Error(`Timed out waiting for ${new URL(path, baseUrl).toString()}`);
-}
-
-/** The port Gitea serves HTTP on, read off the base URL the seeder was given. */
-function resolveGiteaHttpPort(baseUrl: string): string {
-  try {
-    const port = new URL(baseUrl).port;
-    if (port) return port;
-  } catch {
-    // Fall through to the default below.
-  }
-  return "3000";
-}
-
-async function maybeBootstrapInstall(
-  baseUrl: string,
-  adminUser: string,
-  adminPass: string,
-  adminEmail: string,
-  log: (message: string) => void,
-): Promise<void> {
-  const adminLookup = await giteaRequest(
-    baseUrl,
-    `/api/v1/users/${encodeURIComponent(adminUser)}`,
-    {
-      expectedStatuses: [200, 404],
-    },
-  );
-  if (adminLookup.status === 200) {
-    return;
-  }
-
-  log("Bootstrapping Gitea install and admin user...");
-  // The install form has to advertise the port Gitea actually listens on,
-  // which is whatever GITEA_URL points at — not a hardcoded 3000.
-  const giteaHttpPort = resolveGiteaHttpPort(baseUrl);
-  const form = new URLSearchParams({
-    db_type: "sqlite3",
-    db_path: "/data/gitea.db",
-    app_name: "Gitea",
-    repo_root_path: "/data/git/repositories",
-    run_user: "git",
-    domain: "localhost",
-    ssh_port: "22",
-    http_port: giteaHttpPort,
-    app_url: `http://localhost:${giteaHttpPort}/`,
-    log_root_path: "/data/gitea/log",
-    admin_name: adminUser,
-    admin_passwd: adminPass,
-    admin_confirm_passwd: adminPass,
-    admin_email: adminEmail,
-  });
-
-  await giteaRequest(baseUrl, "/", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: form.toString(),
-    expectedStatuses: [200, 302, 303, 405],
-  });
-}
+// ---------------------------------------------------------------------------
+// The organization
+// ---------------------------------------------------------------------------
 
 /**
- * Create the account, or bring an existing one back in line with the scenario.
- *
- * The password reset matters: changing `password:` in the YAML has to work
- * against a stack whose Gitea volume already holds the old accounts, otherwise
- * every password change would mean `bun run down -v` first.
+ * Created by its owner from the app's own "new organization" route, so it has
+ * everything one made by a customer has — its record, its trial, its staff
+ * team — and not only the Gitea half.
  */
-async function ensureUser(
-  baseUrl: string,
-  adminAuth: BasicAuth,
-  username: string,
-  password: string,
-  email: string,
-  fullName: string,
+async function ensureOrganization(
+  scenario: SeedScenario,
+  sessions: Sessions,
   log: (message: string) => void,
-): Promise<void> {
-  const created = await giteaRequest(baseUrl, "/api/v1/admin/users", {
-    method: "POST",
-    auth: adminAuth,
-    body: JSON.stringify({
-      login_name: username,
-      username,
-      email,
-      password,
-      full_name: fullName,
-      must_change_password: false,
-      send_notify: false,
-    }),
-    expectedStatuses: [201, 422],
-  });
+): Promise<string> {
+  const { name, displayName, owner } = scenario.organization;
+  const as = await sessions.options(owner);
 
-  if (created.status === 201) {
-    log(`Created user: ${username}`);
-    return;
-  }
-
-  await giteaRequest(
-    baseUrl,
-    `/api/v1/admin/users/${encodeURIComponent(username)}`,
-    {
-      method: "PATCH",
-      auth: adminAuth,
-      body: JSON.stringify({
-        login_name: username,
-        email,
-        password,
-        full_name: fullName,
-        must_change_password: false,
-      }),
-      expectedStatuses: [200, 403, 422],
-    },
-  );
-  log(`User already exists, refreshed: ${username}`);
-}
-
-async function ensureRepo(
-  baseUrl: string,
-  adminAuth: BasicAuth,
-  owner: string,
-  repo: string,
-  description: string,
-  log: (message: string) => void,
-): Promise<void> {
-  const response = await giteaRequest(
-    baseUrl,
-    `/api/v1/admin/users/${encodeURIComponent(owner)}/repos`,
-    {
-      method: "POST",
-      auth: adminAuth,
-      body: JSON.stringify({
-        name: repo,
-        description,
-        private: true,
-        auto_init: true,
-        default_branch: "main",
-      }),
-      expectedStatuses: [201, 409, 422],
-    },
-  );
-
-  log(
-    response.status === 201
-      ? `Created repo: ${owner}/${repo}`
-      : `Repo already exists: ${owner}/${repo}`,
-  );
-}
-
-/**
- * Strip `main` back to an empty history.
- *
- * A Bindersnap document only reaches `main` by being published, so a freshly
- * created repository must not carry Gitea's auto-init README or a stray
- * document file — otherwise every new document would look already-published.
- */
-async function bootstrapEmptyMainBranch(
-  baseUrl: string,
-  adminAuth: BasicAuth,
-  owner: string,
-  repo: string,
-  log: (message: string) => void,
-): Promise<void> {
-  const currentFile = await giteaRequest(
-    baseUrl,
-    `${repoPath(owner, repo)}/contents/README.md?ref=main`,
-    {
-      auth: adminAuth,
-      expectedStatuses: [200, 404],
-    },
-  );
-
-  if (currentFile.status === 404) {
-    log(`Main branch already bootstrapped: ${owner}/${repo}`);
-    return;
-  }
-
-  const filePayload = (await currentFile.json()) as GiteaContentFile;
-  await giteaRequest(baseUrl, `${repoPath(owner, repo)}/contents/README.md`, {
-    method: "DELETE",
-    auth: adminAuth,
-    body: JSON.stringify({
-      branch: "main",
-      message: "seed: remove README.md from main",
-      sha: filePayload.sha,
-    }),
-    expectedStatuses: [200],
-  });
-  log(`Bootstrapped empty main branch: ${owner}/${repo}`);
-}
-
-async function ensureMainBranchProtection(
-  baseUrl: string,
-  adminAuth: BasicAuth,
-  owner: string,
-  repo: string,
-  log: (message: string) => void,
-): Promise<void> {
-  const protections = await giteaJson<GiteaBranchProtection[]>(
-    baseUrl,
-    `${repoPath(owner, repo)}/branch_protections`,
-    { auth: adminAuth },
-  );
-
-  if (protections.some((protection) => protection.rule_name === "main")) {
-    log(`Main branch protection already exists: ${owner}/${repo}`);
-    return;
-  }
-
-  await giteaRequest(baseUrl, `${repoPath(owner, repo)}/branch_protections`, {
-    method: "POST",
-    auth: adminAuth,
-    body: JSON.stringify({
-      rule_name: "main",
-      required_approvals: 1,
-      enable_approvals_whitelist: false,
-      enable_merge_whitelist: false,
-      block_on_rejected_reviews: true,
-      block_on_outdated_branch: true,
-      dismiss_stale_approvals: true,
-      enable_force_push: false,
-      enable_push: false,
-    }),
-    expectedStatuses: [201],
-  });
-
-  log(`Ensured main branch protection: ${owner}/${repo}`);
-}
-
-/**
- * Commit a file, or leave it alone when it already says the same thing.
- *
- * The content arrives base64-encoded rather than as text because a seeded
- * document is not always text — the policy manual carries a Word file and a
- * PDF as well — and base64 is what the contents API takes either way.
- */
-async function ensureFile(
-  baseUrl: string,
-  auth: BasicAuth,
-  owner: string,
-  repo: string,
-  path: string,
-  contentBase64: string,
-  commitMessage: string,
-  branch: string,
-  log?: (message: string) => void,
-): Promise<void> {
-  const getPath = `${repoPath(owner, repo)}/contents/${path}?ref=${encodeURIComponent(branch)}`;
-  const currentFile = await giteaRequest(baseUrl, getPath, {
-    auth,
-    expectedStatuses: [200, 404],
-  });
-
-  if (currentFile.status === 404) {
-    await giteaRequest(baseUrl, `${repoPath(owner, repo)}/contents/${path}`, {
-      method: "POST",
-      auth,
-      body: JSON.stringify({
-        message: commitMessage,
-        content: contentBase64,
-        branch,
-      }),
-      expectedStatuses: [201],
-    });
-    log?.(`Committed: ${owner}/${repo}@${branch} ${path}`);
-    return;
-  }
-
-  const filePayload = (await currentFile.json()) as GiteaContentFile;
-  // Gitea wraps its base64 at column 60; the seed's is one long line.
-  if ((filePayload.content ?? "").replace(/\s+/g, "") === contentBase64) {
-    log?.(`Already up to date: ${owner}/${repo}@${branch} ${path}`);
-    return;
-  }
-
-  await giteaRequest(baseUrl, `${repoPath(owner, repo)}/contents/${path}`, {
-    method: "PUT",
-    auth,
-    body: JSON.stringify({
-      message: commitMessage,
-      content: contentBase64,
-      sha: filePayload.sha,
-      branch,
-    }),
-    expectedStatuses: [200],
-  });
-  log?.(`Updated: ${owner}/${repo}@${branch} ${path}`);
-}
-
-async function ensureCollaborator(
-  baseUrl: string,
-  adminAuth: BasicAuth,
-  owner: string,
-  repo: string,
-  collaborator: string,
-  permission: string,
-  log: (message: string) => void,
-): Promise<void> {
-  await giteaRequest(
-    baseUrl,
-    `${repoPath(owner, repo)}/collaborators/${encodeURIComponent(collaborator)}`,
-    {
-      method: "PUT",
-      auth: adminAuth,
-      body: JSON.stringify({ permission }),
-      expectedStatuses: [204],
-    },
-  );
-  log(`Ensured collaborator: ${collaborator} (${permission}) on ${repo}`);
-}
-
-async function ensureBranch(
-  baseUrl: string,
-  auth: BasicAuth,
-  owner: string,
-  repo: string,
-  branchName: string,
-  sourceRef: string,
-  log: (message: string) => void,
-): Promise<void> {
-  const getResponse = await giteaRequest(
-    baseUrl,
-    `${repoPath(owner, repo)}/branches/${encodeURIComponent(branchName)}`,
-    {
-      auth,
-      expectedStatuses: [200, 404],
-    },
-  );
-
-  if (getResponse.status === 200) {
-    log(`Branch already exists: ${branchName}`);
-    return;
-  }
-
-  const createResponse = await giteaRequest(
-    baseUrl,
-    `${repoPath(owner, repo)}/branches`,
-    {
-      method: "POST",
-      auth,
-      body: JSON.stringify({
-        new_branch_name: branchName,
-        old_ref_name: sourceRef,
-      }),
-      expectedStatuses: [201, 409, 422],
-    },
-  );
-
-  log(
-    createResponse.status === 201
-      ? `Created branch: ${branchName}`
-      : `Branch already exists: ${branchName}`,
-  );
-}
-
-async function findPullRequest(
-  baseUrl: string,
-  auth: BasicAuth,
-  owner: string,
-  repo: string,
-  branchName: string,
-): Promise<GiteaPull | undefined> {
-  const pulls = await giteaJson<GiteaPull[]>(
-    baseUrl,
-    `${repoPath(owner, repo)}/pulls?state=all&limit=100`,
-    { auth },
-  );
-  return pulls.find((pull) => pull.head?.ref === branchName);
-}
-
-async function ensurePullRequest(
-  baseUrl: string,
-  auth: BasicAuth,
-  owner: string,
-  repo: string,
-  branchName: string,
-  title: string,
-  body: string,
-  log: (message: string) => void,
-): Promise<GiteaPull> {
-  const existing = await findPullRequest(
-    baseUrl,
-    auth,
-    owner,
-    repo,
-    branchName,
+  const existing = (await Orgs.listOrganizations(as)).data.organizations.find(
+    (organization) => organization.name === name,
   );
   if (existing) {
-    if (existing.title !== title) {
-      await giteaRequest(
-        baseUrl,
-        `${repoPath(owner, repo)}/issues/${existing.number}`,
-        {
-          method: "PATCH",
-          auth,
-          body: JSON.stringify({ title }),
-          expectedStatuses: [200],
-        },
-      );
-      log(`Updated pull request title: ${title}`);
-    } else {
-      log(`Pull request already exists: #${existing.number}`);
-    }
-    return { ...existing, title };
+    log(`Organization already exists: ${name}`);
+    return name;
   }
 
-  const created = await giteaJson<GiteaPull>(
-    baseUrl,
-    `${repoPath(owner, repo)}/pulls`,
-    {
-      method: "POST",
-      auth,
-      body: JSON.stringify({ base: "main", head: branchName, title, body }),
-      expectedStatuses: [201],
-    },
-  );
-
-  log(`Created pull request: #${created.number} ${title}`);
-  return created;
+  const created = (
+    await Orgs.createOrganization(
+      { acceptedTerms: LEGAL_VERSION, name: displayName },
+      as,
+    )
+  ).data.organization.name;
+  if (created !== name) {
+    throw new Error(
+      `The scenario names its organization "${name}", but creating "${displayName}" made "${created}". Make the two agree.`,
+    );
+  }
+  log(`Created organization: ${name}`);
+  return name;
 }
 
-const REVIEW_EVENTS: Record<string, string> = {
-  approved: "APPROVED",
-  changes_requested: "REQUEST_CHANGES",
-  commented: "COMMENT",
-};
-
-const REVIEW_STATES: Record<string, string[]> = {
-  approved: ["APPROVED"],
-  changes_requested: ["REQUEST_CHANGES", "CHANGES_REQUESTED"],
-  commented: ["COMMENT", "COMMENTED"],
-};
-
 /**
- * Bring the pull request's reviews in line with the scenario.
+ * Everyone in the organization, its other owners, and its groups.
  *
- * Retries, because Gitea dismisses approvals asynchronously when it catches up
- * with the push that created the branch — a push that lands moments before the
- * pull request exists. Without the retry a seeded approval silently arrives
- * dismissed, and the document shows up in the wrong state.
+ * Reconciled rather than only added to: moving a person out of a group in the
+ * YAML has to take them out on the next run, or a warm stack only ever gains.
  */
-async function ensureReviews(
-  baseUrl: string,
-  adminAuth: BasicAuth,
-  authFor: (username: string) => BasicAuth,
-  owner: string,
-  repo: string,
-  pullNumber: number,
-  wanted: SeedChange["reviews"],
+async function ensurePeopleAndGroups(
+  org: string,
+  scenario: SeedScenario,
+  sessions: Sessions,
   log: (message: string) => void,
 ): Promise<void> {
-  if (wanted.length === 0) {
-    return;
-  }
+  const as = await sessions.options(scenario.organization.owner);
+  let people = (await Orgs.getOrganizationPeople(org, as)).data;
 
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const reviews = await giteaJson<GiteaReview[]>(
-      baseUrl,
-      `${repoPath(owner, repo)}/pulls/${pullNumber}/reviews`,
-      { auth: adminAuth },
+  for (const user of scenario.users) {
+    if (!user.organizationMember) continue;
+    const wantsOwner =
+      user.username === scenario.organization.owner ||
+      scenario.organization.owners.includes(user.username);
+    const current = people.people.find(
+      (person) => person.login === user.username,
     );
 
+    if (!current) {
+      people = (
+        await Orgs.addOrganizationPerson(
+          org,
+          { username: user.username, owner: wantsOwner },
+          as,
+        )
+      ).data;
+      log(
+        `Added ${user.username} to ${org}${wantsOwner ? " as an owner" : ""}`,
+      );
+    } else if (current.isOwner !== wantsOwner) {
+      people = (
+        await Orgs.setOrganizationPersonRole(
+          org,
+          user.username,
+          { owner: wantsOwner },
+          as,
+        )
+      ).data;
+      log(`Made ${user.username} ${wantsOwner ? "an owner" : "a member"}`);
+    }
+  }
+
+  for (const group of scenario.organization.groups) {
+    const current = people.groups.find(
+      (candidate) => candidate.name === group.name,
+    );
+    if (!current) {
+      await Orgs.createOrganizationGroup(
+        org,
+        { name: group.name, level: group.level },
+        as,
+      );
+      log(`Created group: ${group.name} (${group.level})`);
+    }
+
+    const have = new Set(current?.members.map((member) => member.login));
+    for (const member of group.members) {
+      if (have.has(member)) continue;
+      await Orgs.addOrganizationGroupMember(
+        org,
+        group.name,
+        { username: member },
+        as,
+      );
+    }
+    for (const member of have) {
+      if (group.members.includes(member)) continue;
+      await Orgs.removeOrganizationGroupMember(org, group.name, member, as);
+      log(`Removed ${member} from ${group.name}`);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// A binder, and who is in it
+// ---------------------------------------------------------------------------
+
+async function ensureBinderShell(run: BinderRun): Promise<void> {
+  const { org, binder, log } = run;
+  const as = await run.sessions.options(run.owner);
+
+  const binders = (await Binders.listOrganizationBinders(org, as)).data;
+  if (!binders.workspaces.some((candidate) => candidate.name === binder.name)) {
+    await Binders.createBinder(
+      org,
+      {
+        name: binder.name,
+        description: binder.description,
+        openToOrganization: binder.openToOrganization,
+      },
+      as,
+    );
+    log(`Created binder: ${org}/${binder.name}`);
+  }
+
+  let people = (await Binders.getBinderPeople(org, binder.name, as)).data;
+
+  for (const member of binder.members) {
+    const level = LEVEL_FOR_ROLE[member.role];
+    const current = people.people.find(
+      (person) => person.login === member.user && person.individual,
+    );
+    if (!current) {
+      people = (
+        await Binders.addBinderPerson(
+          org,
+          binder.name,
+          { username: member.user, level },
+          as,
+        )
+      ).data;
+    } else if (!current.through.endsWith(`-${member.role}`)) {
+      people = (
+        await Binders.setBinderPersonLevel(
+          org,
+          binder.name,
+          member.user,
+          { username: member.user, level },
+          as,
+        )
+      ).data;
+      log(`Moved ${member.user} to ${member.role}`);
+    }
+  }
+  for (const person of people.people) {
+    if (!person.individual) continue;
+    if (binder.members.some((member) => member.user === person.login)) continue;
+    await Binders.removeBinderPerson(org, binder.name, person.login, as);
+    log(`Removed ${person.login} from ${binder.name}`);
+  }
+
+  const granted = new Set(people.groups.map((group) => group.name));
+  for (const group of binder.groups) {
+    if (granted.has(group)) continue;
+    await Binders.grantBinderGroup(org, binder.name, { group }, as);
+    log(`Granted group ${group} on ${binder.name}`);
+  }
+
+  if (people.openToOrganization !== binder.openToOrganization) {
+    await Binders.setBinderVisibility(
+      org,
+      binder.name,
+      { openToOrganization: binder.openToOrganization },
+      as,
+    );
+    log(
+      binder.openToOrganization
+        ? `Opened ${binder.name} to the whole organization`
+        : `Closed ${binder.name} to all but its members`,
+    );
+  }
+
+  const settings = (await Binders.getBinderSettings(org, binder.name, as)).data;
+  if ((settings.rules.requiredApprovals ?? 1) !== binder.requiredApprovals) {
+    await Binders.setBinderRules(
+      org,
+      binder.name,
+      { requiredApprovals: binder.requiredApprovals },
+      as,
+    );
+    log(`${binder.name} now needs ${binder.requiredApprovals} approvals`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Changes
+// ---------------------------------------------------------------------------
+
+async function listChanges(
+  org: string,
+  binder: string,
+  as: RequestInit,
+): Promise<Map<string, Change>> {
+  const byTitle = new Map<string, Change>();
+  for (const state of ["open", "closed"] as const) {
+    const { changes } = (
+      await Binders.listBinderChanges(org, binder, { state }, as)
+    ).data;
+    for (const change of changes) byTitle.set(change.title, change);
+  }
+  return byTitle;
+}
+
+async function documentsIn(
+  run: BinderRun,
+  as: RequestInit,
+  draft?: string,
+): Promise<BinderDocument[]> {
+  return (
+    await Binders.listBinderDocuments(
+      run.org,
+      run.binder.name,
+      draft ? { draft } : undefined,
+      as,
+    )
+  ).data.documents;
+}
+
+/** A document's file, as somebody would pick it from their disk. */
+async function seedFile(
+  contents: SeedDocument,
+  format: SeedDocumentFormat,
+  name: string,
+): Promise<File> {
+  // The renderer names its own path for the old direct-to-Gitea commit; only
+  // the bytes are wanted here. The API mints the identity.
+  const rendered = await renderSeedDocumentFile(contents, format, name, "seed");
+  const extension = canonicalFileNameFor(format).replace(/^document/, "");
+  return new File(
+    [Buffer.from(rendered.content, "base64")],
+    `${name}${extension}`,
+    { type: MIME_FOR_FORMAT[format] },
+  );
+}
+
+/**
+ * Open a draft, do what `fill` does in it, and propose it in the author's words.
+ *
+ * A draft left over from a run that stopped halfway is discarded first rather
+ * than resumed: what is in it is whatever got done before the stop, and doing
+ * the whole change again from a fresh draft is simpler than working out which.
+ */
+async function proposeChange(
+  run: BinderRun,
+  author: string,
+  title: string,
+  summary: string,
+  fill: (draft: string, as: RequestInit) => Promise<void>,
+): Promise<number> {
+  const { org, binder } = run;
+  const as = await run.sessions.options(author);
+
+  const { drafts } = (await Binders.getBinderDraft(org, binder.name, {}, as))
+    .data;
+  for (const stale of drafts.filter(
+    (draft) => draft.name === title && draft.changeNumber === null,
+  )) {
+    await Binders.discardBinderDraft(
+      org,
+      binder.name,
+      { draft: stale.branch },
+      as,
+    );
+  }
+
+  const opened = (
+    await Binders.openBinderDraft(org, binder.name, { name: title }, as)
+  ).data;
+  const branch = opened.draft?.branch;
+  if (!branch) {
+    throw new Error(`Opening a draft for "${title}" returned no branch.`);
+  }
+
+  await fill(branch, as);
+
+  const proposed = (
+    await Binders.proposeBinderDraft(
+      org,
+      binder.name,
+      { title, description: summary, draft: branch },
+      as,
+    )
+  ).data;
+  run.log(`Proposed #${proposed.changeNumber}: ${title}`);
+  return proposed.changeNumber;
+}
+
+/** A document's own change: its first version, or its next one. */
+async function proposeDocumentChange(
+  run: BinderRun,
+  document: SeedBinderDocument,
+  change: SeedChange,
+): Promise<number> {
+  const slugPath = binderDocumentSlugPath(document);
+  const author = change.author ?? run.owner;
+
+  return proposeChange(
+    run,
+    author,
+    change.title,
+    change.summary,
+    async (draft, as) => {
+      const file = await seedFile(
+        change.document,
+        document.format,
+        document.name,
+      );
+      const filed = (await documentsIn(run, as)).find(
+        (candidate) => candidate.slugPath === slugPath,
+      );
+
+      if (filed) {
+        await Binders.reviseBinderDocument(
+          run.org,
+          run.binder.name,
+          { file, documentPath: filed.path, draft },
+          as,
+        );
+      } else {
+        await Binders.createBinderDocument(
+          run.org,
+          run.binder.name,
+          {
+            file,
+            name: document.name,
+            ...(document.folder ? { folder: document.folder } : {}),
+            draft,
+          },
+          as,
+        );
+      }
+    },
+  );
+}
+
+/** Where a document is filed in the draft, by the address the YAML uses. */
+async function pathOf(
+  run: BinderRun,
+  as: RequestInit,
+  draft: string,
+  address: string,
+): Promise<string> {
+  const found = (await documentsIn(run, as, draft)).find(
+    (candidate) => candidate.slugPath === address,
+  );
+  if (!found) {
+    throw new Error(
+      `${run.binder.name}: no document is filed at ${address} in this draft.`,
+    );
+  }
+  return found.path;
+}
+
+async function applyAct(
+  run: BinderRun,
+  act: SeedAct,
+  draft: string,
+  as: RequestInit,
+): Promise<void> {
+  const { org } = run;
+  const binder = run.binder.name;
+
+  switch (act.kind) {
+    case "newFolder":
+      await Binders.createBinderFolder(
+        org,
+        binder,
+        { folder: act.folder, draft },
+        as,
+      );
+      return;
+    case "renameFolder":
+      await Binders.renameBinderFolder(
+        org,
+        binder,
+        { from: act.from, to: act.to, draft },
+        as,
+      );
+      return;
+    case "move": {
+      const slash = act.to.lastIndexOf("/");
+      await Binders.renameBinderDocument(
+        org,
+        binder,
+        {
+          documentPath: await pathOf(run, as, draft, act.from),
+          name: act.to.slice(slash + 1),
+          folder: slash === -1 ? "" : act.to.slice(0, slash),
+          draft,
+        },
+        as,
+      );
+      return;
+    }
+    case "revise": {
+      const documentPath = await pathOf(run, as, draft, act.document);
+      await Binders.reviseBinderDocument(
+        org,
+        binder,
+        {
+          file: await seedFile(
+            act.contents,
+            formatOf(documentPath),
+            act.document.split("/").pop()!,
+          ),
+          documentPath,
+          draft,
+        },
+        as,
+      );
+      return;
+    }
+    case "archive":
+      await Binders.archiveBinderDocument(
+        org,
+        binder,
+        { documentPath: await pathOf(run, as, draft, act.document), draft },
+        as,
+      );
+      return;
+    case "signOff":
+      throw new Error(
+        `${binder}: a sign-off change is proposed on its own — the product has no way to put one in a draft with other acts.`,
+      );
+  }
+}
+
+/** Revised in the format it is already stored as. */
+function formatOf(path: string): SeedDocumentFormat {
+  if (path.endsWith(".md")) return "markdown";
+  if (path.endsWith(".pdf")) return "pdf";
+  if (path.endsWith(".docx")) return "docx";
+  return "prosemirror";
+}
+
+/** A rule as the app takes it: a document named by identity, not by address. */
+async function resolveRules(
+  run: BinderRun,
+  rules: readonly SeedSignOffRule[],
+): Promise<ProposeBinderSignOffRulesBodyRulesItem[]> {
+  const documents = await documentsIn(
+    run,
+    await run.sessions.options(run.owner),
+  );
+  return rules.map((rule) => {
+    let target = "";
+    if (rule.scope === "folder") target = rule.target!;
+    if (rule.scope === "document") {
+      const uid = documents.find(
+        (document) => document.slugPath === rule.target,
+      )?.uid;
+      if (!uid) {
+        throw new Error(
+          `${run.binder.name}: a sign-off rule names ${rule.target}, which is not published.`,
+        );
+      }
+      target = uid;
+    }
+    return { scope: rule.scope, target, teams: rule.teams, users: rule.users };
+  });
+}
+
+/**
+ * A sign-off change. The app proposes these from the settings screen with a
+ * title of its own; the scenario's words are put on it afterwards, the way an
+ * author edits a change's title.
+ */
+async function proposeSignOffChange(
+  run: BinderRun,
+  author: string,
+  title: string,
+  summary: string,
+  rules: readonly SeedSignOffRule[],
+): Promise<number> {
+  const as = await run.sessions.options(author);
+  const proposed = (
+    await Binders.proposeBinderSignOffRules(
+      run.org,
+      run.binder.name,
+      { rules: await resolveRules(run, rules) },
+      as,
+    )
+  ).data;
+  await Binders.editBinderChange(
+    run.org,
+    run.binder.name,
+    String(proposed.changeNumber),
+    { title, body: summary },
+    as,
+  );
+  run.log(`Proposed #${proposed.changeNumber}: ${title}`);
+  return proposed.changeNumber;
+}
+
+/**
+ * An open change as the binder's change list shows it — the one read that
+ * carries every review with its words, alongside who is asked and assigned.
+ */
+async function readOpenChange(run: BinderRun, number: number): Promise<Change> {
+  const { changes } = (
+    await Binders.listBinderChanges(
+      run.org,
+      run.binder.name,
+      { state: "open" },
+      await run.sessions.options(run.owner),
+    )
+  ).data;
+  const found = changes.find((change) => change.number === number);
+  if (!found) {
+    throw new Error(`${run.binder.name}: #${number} is not open.`);
+  }
+  return found;
+}
+
+/**
+ * Each review the scenario lists, given by the person it names.
+ *
+ * Read back and given again until it holds, because Gitea dismisses approvals
+ * asynchronously when it catches up with the push that made the branch — and
+ * a seeded approval that silently arrives dismissed puts the document in the
+ * wrong state.
+ */
+async function ensureReviews(
+  run: BinderRun,
+  number: number,
+  wanted: readonly SeedReview[],
+): Promise<void> {
+  if (wanted.length === 0) return;
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const { reviews } = await readOpenChange(run, number);
     const missing = wanted.filter(
       (review) =>
         !reviews.some(
           (existing) =>
-            existing.user?.login === review.by &&
-            existing.body === review.body &&
-            (REVIEW_STATES[review.state] ?? []).includes(
-              existing.state ?? "",
-            ) &&
-            existing.dismissed !== true &&
-            existing.stale !== true,
+            existing.author.login === review.by &&
+            sameWords(existing.body, review.body) &&
+            existing.state === review.state &&
+            !existing.dismissed &&
+            !existing.stale,
         ),
     );
-
-    if (missing.length === 0) {
-      if (attempt === 0) {
-        log(`Reviews already in place on #${pullNumber}`);
-      }
-      return;
-    }
+    if (missing.length === 0) return;
 
     for (const review of missing) {
-      await giteaRequest(
-        baseUrl,
-        `${repoPath(owner, repo)}/pulls/${pullNumber}/reviews`,
-        {
-          method: "POST",
-          auth: authFor(review.by),
-          body: JSON.stringify({
-            body: review.body,
-            event: REVIEW_EVENTS[review.state],
-          }),
-          expectedStatuses: [200, 201],
-        },
+      await Binders.reviewBinderChange(
+        run.org,
+        run.binder.name,
+        String(number),
+        { event: REVIEW_EVENT[review.state], body: review.body },
+        await run.sessions.options(review.by),
       );
-      log(`Submitted ${review.state} review by ${review.by} on #${pullNumber}`);
+      run.log(`${review.by} ${review.state.replace("_", " ")} #${number}`);
     }
-
-    // Give Gitea's async review-dismissal pass a chance to undo what we just
-    // wrote, so the next loop can see it and put it back.
     await sleep(1500);
   }
 
   throw new Error(
-    `Reviews on #${pullNumber} in ${owner}/${repo} kept being dismissed after 5 attempts.`,
+    `${run.binder.name}: reviews on #${number} kept being dismissed after 5 attempts.`,
   );
 }
 
-// ---------------------------------------------------------------------------
-// Review threads
-//
-// Gitea has no thread primitive, so Bindersnap models a thread as pull-request
-// issue comments carrying a trailing marker. Resolution is append-only: a
-// resolve is a new comment, never an edit. The seed writes exactly the same
-// shape the app does — see services/api/gitea-client/discussions.ts.
-// ---------------------------------------------------------------------------
-
-function threadMarker(
-  kind: "thread" | "reply" | "resolve",
-  threadId: string,
-  extra?: Record<string, string>,
-): string {
-  const attrs = [`kind=${kind}`, `thread=${threadId}`];
-  for (const [key, value] of Object.entries(extra ?? {})) {
-    attrs.push(`${key}=${value}`);
-  }
-  return `<!-- bindersnap:v1 ${attrs.join(" ")} -->`;
-}
-
-function threadComment(
-  body: string,
-  kind: "thread" | "reply" | "resolve",
-  threadId: string,
-  extra?: Record<string, string>,
-): string {
-  const marker = threadMarker(kind, threadId, extra);
-  return body ? `${body}\n\n${marker}` : marker;
-}
-
-async function ensureThread(
-  baseUrl: string,
-  adminAuth: BasicAuth,
-  authFor: (username: string) => BasicAuth,
-  owner: string,
-  repo: string,
-  pullNumber: number,
-  thread: SeedThread,
-  log: (message: string) => void,
+/**
+ * Who the change is waiting on. Somebody who has already reviewed is not asked
+ * again, and the author cannot be asked at all.
+ */
+async function ensureAssignments(
+  run: BinderRun,
+  number: number,
+  assignment: SeedAssignment,
+  author: string,
 ): Promise<void> {
-  const comments = await giteaJson<GiteaComment[]>(
-    baseUrl,
-    `${repoPath(owner, repo)}/issues/${pullNumber}/comments`,
-    { auth: adminAuth },
+  const change = await readOpenChange(run, number);
+  const spoken = new Set(change.reviews.map((review) => review.author.login));
+  const requested = new Set(
+    change.reviewers
+      .filter((reviewer) => reviewer.requested)
+      .map((reviewer) => reviewer.login),
+  );
+  const reviewers = assignment.reviewers.filter(
+    (name) => name !== author && !spoken.has(name),
   );
 
-  const has = (marker: string): boolean =>
-    comments.some((comment) => (comment.body ?? "").includes(marker));
+  const assigneeMatches =
+    (assignment.assignee ?? null) === (change.assignee?.login ?? null);
+  const reviewersMatch = reviewers.every((name) => requested.has(name));
+  if (assigneeMatches && reviewersMatch) return;
 
-  const post = async (author: string, body: string): Promise<void> => {
-    await giteaRequest(
-      baseUrl,
-      `${repoPath(owner, repo)}/issues/${pullNumber}/comments`,
-      {
-        method: "POST",
-        auth: authFor(author),
-        body: JSON.stringify({ body }),
-        expectedStatuses: [201],
-      },
+  await Binders.updateBinderChangeAssignments(
+    run.org,
+    run.binder.name,
+    String(number),
+    {
+      ...(assignment.assignee !== undefined
+        ? { assignee: assignment.assignee }
+        : {}),
+      reviewers: [...new Set([...requested, ...reviewers])],
+    },
+    await run.sessions.options(author),
+  );
+  run.log(`Asked ${reviewers.join(", ") || "nobody new"} on #${number}`);
+}
+
+/** Whitespace aside — the API trims what it stores, and YAML folds lines. */
+function sameWords(a: string, b: string): boolean {
+  const words = (text: string) => text.trim().replace(/\s+/g, " ");
+  return words(a) === words(b);
+}
+
+/** A discussion, found again by its opening words. */
+async function ensureThread(
+  run: BinderRun,
+  number: number,
+  thread: SeedThread,
+): Promise<void> {
+  const { org } = run;
+  const binder = run.binder.name;
+  const changeNumber = String(number);
+  const read = async () =>
+    (
+      await Binders.listBinderChangeDiscussions(
+        org,
+        binder,
+        changeNumber,
+        await run.sessions.options(run.owner),
+      )
+    ).data.threads.find(
+      (candidate) =>
+        sameWords(candidate.comments[0]?.body ?? "", thread.body) &&
+        candidate.comments[0]?.author.login === thread.by,
     );
+
+  let found = await read();
+  if (!found) {
+    await Binders.createBinderChangeDiscussion(
+      org,
+      binder,
+      changeNumber,
+      { body: thread.body },
+      await run.sessions.options(thread.by),
+    );
+    found = await read();
+    if (!found) {
+      throw new Error(`${binder}: a discussion on #${number} did not stick.`);
+    }
+    run.log(`${thread.by} opened a discussion on #${number}`);
+  }
+
+  for (const reply of thread.replies.slice(found.comments.length - 1)) {
+    await Binders.replyToBinderChangeDiscussion(
+      org,
+      binder,
+      changeNumber,
+      found.id,
+      { body: reply.body },
+      await run.sessions.options(reply.by),
+    );
+  }
+
+  if (thread.resolved && !found.resolved) {
+    await Binders.resolveBinderChangeDiscussion(
+      org,
+      binder,
+      changeNumber,
+      found.id,
+      { resolved: true },
+      await run.sessions.options(thread.resolvedBy ?? thread.by),
+    );
+    run.log(`Resolved a discussion on #${number}`);
+  }
+}
+
+/** See {@link THE_PRODUCT_CANNOT}. */
+async function closeInGitea(
+  run: BinderRun,
+  number: number,
+  author: string,
+): Promise<void> {
+  const auth: BasicAuth = { username: author, password: run.gitea.password };
+  await giteaRequest(
+    run.gitea.baseUrl,
+    `${repoPath(run.org, run.binder.name)}/issues/${number}`,
+    {
+      method: "PATCH",
+      auth,
+      body: JSON.stringify({ state: "closed" }),
+      expectedStatuses: [200, 201],
+    },
+  );
+  run.log(`Closed #${number} without publishing it`);
+}
+
+/**
+ * Whoever publishes. The author, when they are allowed to; a reviewer is not,
+ * so the organization's owner presses the button for them.
+ */
+function publisherFor(run: BinderRun, author: string): string {
+  const role = run.roles.get(author);
+  return role === "admins" || role === "authors" ? author : run.owner;
+}
+
+/**
+ * Publish, and wait it out if the API says it will finish later — a publish is
+ * a job now, and a 202 means a step is being retried.
+ */
+async function publish(
+  run: BinderRun,
+  number: number,
+  author: string,
+  reviews: readonly SeedReview[],
+): Promise<void> {
+  const as = await run.sessions.options(publisherFor(run, author));
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const response = await Binders.publishBinderChange(
+      run.org,
+      run.binder.name,
+      String(number),
+      as,
+    ).catch((error: unknown) => {
+      // Gitea works out whether a branch can merge in the background, and
+      // says no until it has.
+      if (isStatus(error, 405, 409, 422) && attempt < 9) return null;
+      throw error;
+    });
+    // Gitea can dismiss an approval after it was read back as holding, when
+    // it catches up with the push late. Give the reviews again and retry.
+    if (!response) await ensureReviews(run, number, reviews);
+    if (response && response.status === 200) {
+      run.log(`Published #${number}`);
+      return;
+    }
+    await sleep(1000);
+  }
+  throw new Error(`${run.binder.name}: #${number} would not publish.`);
+}
+
+type AnyChange = SeedChange | SeedBinderChange;
+
+/**
+ * Everything after the change exists: reviews, who is asked, discussions, and
+ * how it ends.
+ */
+async function settleChange(
+  run: BinderRun,
+  number: number,
+  change: AnyChange,
+  author: string,
+): Promise<void> {
+  await ensureReviews(run, number, change.reviews);
+  await ensureAssignments(run, number, change, author);
+  for (const thread of change.threads) {
+    await ensureThread(run, number, thread);
+  }
+  if (change.closed) await closeInGitea(run, number, author);
+  if (change.publish) await publish(run, number, author, change.reviews);
+}
+
+/** A change that has already ended is left exactly as it is. */
+async function applyChange(
+  run: BinderRun,
+  change: AnyChange,
+  propose: (author: string) => Promise<number>,
+): Promise<number> {
+  const author = change.author ?? run.owner;
+  const existing = run.changes.get(change.title);
+
+  if (existing && existing.outcome !== "open") {
+    return existing.number;
+  }
+
+  const number = existing?.number ?? (await propose(author));
+  await settleChange(run, number, change, author);
+  return number;
+}
+
+/**
+ * The binder's starting sign-off rules, put in force the way a binder admin
+ * would: proposed from settings, approved, published.
+ *
+ * After the documents rather than before them, because a rule naming a
+ * document names it by an identity the API mints when the document is first
+ * uploaded. Approved by as many members as the binder asks for, in the order
+ * the scenario lists them.
+ */
+async function ensureStartingSignOff(run: BinderRun): Promise<number | null> {
+  const { binder } = run;
+  if (binder.signOff.length === 0) return null;
+
+  const author =
+    binder.members.find((member) => member.role === "admins")?.user ??
+    run.owner;
+  const approvers = binder.members
+    .map((member) => member.user)
+    .filter((user) => user !== author)
+    .slice(0, binder.requiredApprovals);
+  const summary = "The sign-off rules this binder starts with.";
+
+  return applyChange(
+    run,
+    {
+      branch: "",
+      title: STARTING_SIGN_OFF_TITLE,
+      summary,
+      author,
+      acts: [],
+      reviews: approvers.map((by) => ({
+        by,
+        state: "approved",
+        body: "Approved.",
+      })),
+      threads: [],
+      reviewers: [],
+      publish: true,
+      closed: false,
+    },
+    (proposer) =>
+      proposeSignOffChange(
+        run,
+        proposer,
+        STARTING_SIGN_OFF_TITLE,
+        summary,
+        binder.signOff,
+      ),
+  );
+}
+
+async function applyBinder(
+  org: string,
+  binder: SeedBinder,
+  scenario: SeedScenario,
+  sessions: Sessions,
+  gitea: { baseUrl: string; password: string },
+  log: (message: string) => void,
+): Promise<Record<string, number>> {
+  const owner = scenario.organization.owner;
+  const run: BinderRun = {
+    org,
+    binder,
+    sessions,
+    owner,
+    roles: new Map(binder.members.map((member) => [member.user, member.role])),
+    changes: new Map(),
+    gitea,
+    log,
   };
 
-  if (!has(threadMarker("thread", thread.id))) {
-    await post(thread.by, threadComment(thread.body, "thread", thread.id));
-    log(`Opened review thread "${thread.id}" on #${pullNumber}`);
+  await ensureBinderShell(run);
+  run.changes = await listChanges(
+    org,
+    binder.name,
+    await sessions.options(owner),
+  );
+
+  const pullRequests: Record<string, number> = {};
+  const key = (change: AnyChange) => `${org}/${binder.name}#${change.branch}`;
+
+  for (const document of binder.documents) {
+    for (const change of document.changes) {
+      pullRequests[key(change)] = await applyChange(run, change, () =>
+        proposeDocumentChange(run, document, change),
+      );
+    }
   }
 
-  // Replies share one marker, so count them rather than matching on text.
-  const replyMarker = threadMarker("reply", thread.id);
-  const existingReplies = comments.filter((comment) =>
-    (comment.body ?? "").includes(replyMarker),
-  ).length;
+  await ensureStartingSignOff(run);
 
-  for (const reply of thread.replies.slice(existingReplies)) {
-    await post(reply.by, threadComment(reply.body, "reply", thread.id));
-    log(`Replied in thread "${thread.id}" on #${pullNumber}`);
-  }
-
-  if (
-    thread.resolved &&
-    !has(threadMarker("resolve", thread.id, { state: "resolved" }))
-  ) {
-    await post(
-      thread.resolvedBy ?? thread.by,
-      threadComment("", "resolve", thread.id, { state: "resolved" }),
+  for (const change of binder.changes) {
+    const signOff = change.acts.find(
+      (act): act is Extract<SeedAct, { kind: "signOff" }> =>
+        act.kind === "signOff",
     );
-    log(`Resolved thread "${thread.id}" on #${pullNumber}`);
+    pullRequests[key(change)] = await applyChange(run, change, (author) =>
+      signOff
+        ? proposeSignOffChange(
+            run,
+            author,
+            change.title,
+            change.summary,
+            signOff.rules,
+          )
+        : proposeChange(
+            run,
+            author,
+            change.title,
+            change.summary,
+            async (draft, as) => {
+              for (const act of change.acts) {
+                await applyAct(run, act, draft, as);
+              }
+            },
+          ),
+    );
   }
+
+  await checkBinder(run);
+  return pullRequests;
 }
 
 // ---------------------------------------------------------------------------
-// Publishing
+// Reading it back
 // ---------------------------------------------------------------------------
 
 /**
- * Merge the change and tag the result — the same two steps the publish button
- * performs, so a seeded published version is indistinguishable from a real one.
+ * The outcome the product should show for a change the scenario describes.
  *
- * `version` comes from the change's position in the scenario rather than from
- * counting existing tags, so a second seed run re-derives the same tag name and
- * does nothing instead of inventing a version nobody published.
+ * Declined and withdrawn are not written in the YAML, and are not stored by
+ * the product either: a closed change with a request for work still standing
+ * is declined, one without is withdrawn. Worked out here the same way, so the
+ * check is against the rule rather than against a second declaration of it.
  */
-async function publishChange(
-  baseUrl: string,
-  auth: BasicAuth,
-  owner: string,
-  repo: string,
-  pull: GiteaPull,
-  title: string,
-  version: number,
-  refreshReviews: () => Promise<void>,
-  log: (message: string) => void,
-): Promise<void> {
-  if (!pull.merged && pull.state !== "closed") {
-    // Gitea computes mergeability asynchronously and answers 405 until it has.
-    for (let attempt = 0; attempt < 10; attempt += 1) {
-      const response = await giteaRequest(
-        baseUrl,
-        `${repoPath(owner, repo)}/pulls/${pull.number}/merge`,
-        {
-          method: "POST",
-          auth,
-          body: JSON.stringify({
-            Do: "merge",
-            MergeTitleField: title,
-            MergeMessageField: "",
-          }),
-          expectedStatuses: [200, 405],
-        },
+export function expectedOutcome(change: AnyChange): Change["outcome"] {
+  if (change.publish) return "published";
+  if (!change.closed) return "open";
+  return standingRequestForWork(change) ? "declined" : "withdrawn";
+}
+
+/** Whether anybody's last word on the change asked for more work. */
+export function standingRequestForWork(change: AnyChange): boolean {
+  const last = new Map<string, SeedReview["state"]>();
+  for (const review of change.reviews) {
+    // A comment is not a verdict, and does not take one back.
+    if (review.state !== "commented") last.set(review.by, review.state);
+  }
+  return [...last.values()].includes("changes_requested");
+}
+
+/**
+ * What a document's address should hold on `main` once every change has run.
+ *
+ * Addresses a binder-level act moves or archives are left out: following a
+ * document through a rename is the product's job, and the comparison is about
+ * whether each change landed, which the change check already says.
+ */
+export function expectedOnMain(binder: SeedBinder): Map<string, boolean> {
+  const moved = new Set<string>();
+  const movedFolders: string[] = [];
+  for (const change of binder.changes) {
+    for (const act of change.acts) {
+      if (act.kind === "move") moved.add(act.from);
+      if (act.kind === "archive") moved.add(act.document);
+      if (act.kind === "renameFolder") movedFolders.push(`${act.from}/`);
+    }
+  }
+
+  const expected = new Map<string, boolean>();
+  for (const document of binder.documents) {
+    const address = binderDocumentSlugPath(document);
+    if (moved.has(address)) continue;
+    if (movedFolders.some((prefix) => address.startsWith(prefix))) continue;
+    expected.set(
+      address,
+      document.changes.some((change) => change.publish),
+    );
+  }
+  return expected;
+}
+
+/**
+ * Read the binder back through the product's own screens' reads, and say
+ * where it disagrees with the scenario.
+ *
+ * **This is what makes the seed trustworthy.** Every state in `dev.yaml` was
+ * reached through the API, and this asks the API whether it is there: each
+ * change ended the way the scenario says, each review stands, and each
+ * document is or is not published. A state the product cannot reach fails the
+ * seed here, by name, instead of quietly looking slightly wrong in a browser.
+ */
+async function checkBinder(run: BinderRun): Promise<void> {
+  const { org, binder } = run;
+  const as = await run.sessions.options(run.owner);
+  const changes = await listChanges(org, binder.name, as);
+  const problems: string[] = [];
+
+  const scenarioChanges: AnyChange[] = [
+    ...binder.documents.flatMap((document) => document.changes),
+    ...binder.changes,
+  ];
+
+  for (const change of scenarioChanges) {
+    const found = changes.get(change.title);
+    if (!found) {
+      problems.push(`"${change.title}" is not there`);
+      continue;
+    }
+
+    const outcome = expectedOutcome(change);
+    if (found.outcome !== outcome) {
+      problems.push(
+        `"${change.title}" reads as ${found.outcome}, not ${outcome}`,
       );
+    }
+    if (outcome !== "open") continue;
 
-      if (response.status === 200) {
-        log(`Merged pull request #${pull.number}`);
-        break;
-      }
-
-      const reason = await response.text();
-      if (attempt === 9) {
-        throw new Error(
-          `Could not merge #${pull.number} in ${owner}/${repo} after 10 attempts: ${reason}`,
+    for (const review of change.reviews) {
+      const stands = found.reviews.some(
+        (existing) =>
+          existing.author.login === review.by &&
+          existing.state === review.state &&
+          !existing.dismissed,
+      );
+      if (!stands) {
+        problems.push(
+          `"${change.title}" is missing ${review.by}'s ${review.state} review`,
         );
       }
-      if (reason.includes("approvals")) {
-        await refreshReviews();
-      }
-      await sleep(1000);
     }
-  } else {
-    log(`Pull request already merged: #${pull.number}`);
-  }
 
-  const tagName = `doc/v${version.toString().padStart(4, "0")}`;
-  const response = await giteaRequest(
-    baseUrl,
-    `${repoPath(owner, repo)}/tags`,
-    {
-      method: "POST",
-      auth,
-      body: JSON.stringify({
-        tag_name: tagName,
-        target: "main",
-        message: `Published version ${tagName}`,
-      }),
-      expectedStatuses: [201, 409, 422],
-    },
-  );
-
-  log(
-    response.status === 201
-      ? `Tagged published version: ${owner}/${repo} ${tagName}`
-      : `Published version already tagged: ${owner}/${repo}`,
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Tokens and OAuth
-// ---------------------------------------------------------------------------
-
-async function createAccessToken(
-  baseUrl: string,
-  adminAuth: BasicAuth,
-  tokenNamePrefix: string,
-  log: (message: string) => void,
-): Promise<{ token: string; tokenName: string }> {
-  const tokenName = `${tokenNamePrefix}-${Date.now()}`;
-  const token = await giteaJson<GiteaToken>(
-    baseUrl,
-    `/api/v1/users/${encodeURIComponent(adminAuth.username)}/tokens`,
-    {
-      method: "POST",
-      auth: adminAuth,
-      body: JSON.stringify({ name: tokenName, scopes: ["all"] }),
-      expectedStatuses: [201],
-    },
-  );
-
-  if (!token.sha1) {
-    throw new Error(
-      "Token creation succeeded but no token value was returned.",
-    );
-  }
-
-  log(`Created token: ${tokenName}`);
-  return { token: token.sha1, tokenName };
-}
-
-export async function isTokenValid(
-  baseUrl: string,
-  token: string,
-): Promise<boolean> {
-  const trimmed = token.trim();
-  if (!trimmed) {
-    return false;
-  }
-
-  const response = await fetch(new URL("/api/v1/user", baseUrl), {
-    headers: { Authorization: `token ${trimmed}` },
-  });
-  return response.status === 200;
-}
-
-async function ensureOAuthApp(
-  baseUrl: string,
-  auth: BasicAuth,
-  appName: string,
-  redirectUri: string,
-  log: (msg: string) => void,
-): Promise<string> {
-  const existing = await giteaJson<GiteaOAuthApp[]>(
-    baseUrl,
-    "/api/v1/user/applications/oauth2",
-    { auth },
-  );
-  const found = existing.find((app) => app.name === appName);
-  if (found) {
-    log(
-      `OAuth2 app "${appName}" already exists (client_id: ${found.client_id}).`,
-    );
-    return found.client_id;
-  }
-
-  const created = await giteaJson<GiteaOAuthApp>(
-    baseUrl,
-    "/api/v1/user/applications/oauth2",
-    {
-      method: "POST",
-      auth,
-      body: JSON.stringify({
-        name: appName,
-        redirect_uris: [redirectUri],
-        confidential_client: false,
-      }),
-      expectedStatuses: [201],
-    },
-  );
-  log(`OAuth2 app "${appName}" created (client_id: ${created.client_id}).`);
-  return created.client_id;
-}
-
-// ---------------------------------------------------------------------------
-// The scenario walk
-// ---------------------------------------------------------------------------
-
-async function applyChange(
-  baseUrl: string,
-  adminAuth: BasicAuth,
-  authFor: (username: string) => BasicAuth,
-  document: SeedDocumentRepo,
-  change: SeedChange,
-  version: number,
-  log: (message: string) => void,
-): Promise<number> {
-  const { owner, repo } = document;
-  const authorAuth = authFor(change.author ?? owner);
-  const file = await renderSeedDocumentFile(change.document, document.format);
-
-  await ensureBranch(
-    baseUrl,
-    authorAuth,
-    owner,
-    repo,
-    change.branch,
-    "main",
-    log,
-  );
-  await ensureFile(
-    baseUrl,
-    authorAuth,
-    owner,
-    repo,
-    file.path,
-    file.content,
-    `seed: ${change.title}`,
-    change.branch,
-    log,
-  );
-
-  const pull = await ensurePullRequest(
-    baseUrl,
-    authorAuth,
-    owner,
-    repo,
-    change.branch,
-    change.title,
-    change.summary,
-    log,
-  );
-
-  const refreshReviews = (): Promise<void> =>
-    ensureReviews(
-      baseUrl,
-      adminAuth,
-      authFor,
-      owner,
-      repo,
-      pull.number,
-      change.reviews,
-      log,
-    );
-
-  await refreshReviews();
-
-  for (const thread of change.threads) {
-    await ensureThread(
-      baseUrl,
-      adminAuth,
-      authFor,
-      owner,
-      repo,
-      pull.number,
-      thread,
-      log,
-    );
-  }
-
-  if (change.publish) {
-    await publishChange(
-      baseUrl,
-      adminAuth,
-      owner,
-      repo,
-      pull,
-      change.title,
-      version,
-      refreshReviews,
-      log,
-    );
-  }
-
-  return pull.number;
-}
-
-async function applyDocument(
-  baseUrl: string,
-  adminAuth: BasicAuth,
-  authFor: (username: string) => BasicAuth,
-  document: SeedDocumentRepo,
-  log: (message: string) => void,
-): Promise<Record<string, number>> {
-  const { owner, repo } = document;
-
-  await ensureRepo(baseUrl, adminAuth, owner, repo, document.description, log);
-  await bootstrapEmptyMainBranch(baseUrl, adminAuth, owner, repo, log);
-  await ensureMainBranchProtection(baseUrl, adminAuth, owner, repo, log);
-
-  for (const collaborator of document.collaborators) {
-    await ensureCollaborator(
-      baseUrl,
-      adminAuth,
-      owner,
-      repo,
-      collaborator.user,
-      collaborator.permission,
-      log,
-    );
-  }
-
-  const pullRequests: Record<string, number> = {};
-  let publishedVersions = 0;
-  for (const change of document.changes) {
-    if (change.publish) {
-      publishedVersions += 1;
+    const asksForWork = standingRequestForWork(change);
+    if (found.isRejected !== asksForWork) {
+      problems.push(
+        `"${change.title}" ${found.isRejected ? "reads as" : "does not read as"} sent back for changes`,
+      );
     }
-    const number = await applyChange(
-      baseUrl,
-      adminAuth,
-      authFor,
+  }
+
+  const onMain = new Map(
+    (await documentsIn(run, as)).map((document) => [
+      document.slugPath,
       document,
-      change,
-      publishedVersions,
-      log,
-    );
-    pullRequests[`${owner}/${repo}#${change.branch}`] = number;
+    ]),
+  );
+  for (const [address, published] of expectedOnMain(binder)) {
+    const there = onMain.get(address);
+    if (published && !there) {
+      problems.push(`${address} should be published and is not on main`);
+    }
+    if (!published && there) {
+      problems.push(`${address} has never been published but is on main`);
+    }
   }
-  return pullRequests;
+
+  if (problems.length > 0) {
+    throw new Error(
+      `${binder.name} does not read back as the scenario describes:\n  - ${problems.join("\n  - ")}`,
+    );
+  }
+  run.log(`Read back: ${scenarioChanges.length} changes as described`);
 }
+
+/**
+ * Everyone's agreement to the Terms, and the organization's.
+ *
+ * The seed makes its accounts in Gitea directly, never through signup, so
+ * nobody would have one on record, and the app would stop every seeded login
+ * at "Accept our updated Terms" before anything else. Each person accepts
+ * whatever the API says is still missing, the way the app's own screen does,
+ * so a warm stack that is already up to date writes nothing.
+ */
+async function ensureAgreements(
+  scenario: SeedScenario,
+  sessions: Sessions,
+  log: (message: string) => void,
+): Promise<void> {
+  for (const user of scenario.users) {
+    const as = await sessions.options(user.username);
+    const status = (await Legal.getLegalStatus(as)).data;
+    if (!status.person && status.organizations.length === 0) continue;
+    await Legal.acceptLegal(
+      {
+        acceptedTerms: status.version,
+        person: status.person,
+        organizations: status.organizations.map(
+          (organization) => organization.name,
+        ),
+      },
+      as,
+    );
+    log(`Accepted the Terms (${status.version}) as ${user.username}`);
+  }
+}
+
+export { isTokenValid } from "./seed-accounts";
 
 export async function seedDevStack(
   options: SeedOptions = {},
 ): Promise<SeedResult> {
-  const scenario = options.scenario ?? loadSeedScenario(SCENARIO_URL);
-  const baseUrl = options.baseUrl ?? process.env.GITEA_URL ?? DEFAULT_GITEA_URL;
-  const password =
-    options.adminPass ?? process.env.GITEA_ADMIN_PASS ?? scenario.password;
-  const createToken = options.createToken ?? true;
-  const tokenNamePrefix = options.tokenNamePrefix ?? "bindersnap-dev";
   const log = options.log ?? ((message: string) => console.log(message));
-
-  const adminUser =
-    options.adminUser ??
-    process.env.GITEA_ADMIN_USER ??
-    scenario.users[0]?.username;
-  if (!adminUser) {
-    throw new Error("The seed scenario declares no users.");
-  }
-
-  const adminAuth: BasicAuth = { username: adminUser, password };
-  const authFor = (username: string): BasicAuth => ({ username, password });
-
-  log("Waiting for Gitea...");
-  await waitForUrl(baseUrl, "/", 30, 2000);
-  await maybeBootstrapInstall(
-    baseUrl,
-    adminUser,
-    password,
-    scenario.users.find((user) => user.username === adminUser)?.email ??
-      `${adminUser}@example.com`,
+  const accounts = await seedAccounts({
+    ...options,
+    createToken: options.createToken ?? true,
     log,
-  );
-  await waitForUrl(baseUrl, "/api/v1/settings/api", 30, 2000);
-  log("Gitea is ready.");
+  });
+  const { scenario, password } = accounts;
+  const sessions = new Sessions(password);
 
-  for (const user of scenario.users) {
-    if (user.username === adminUser) {
-      continue;
-    }
-    await ensureUser(
-      baseUrl,
-      adminAuth,
-      user.username,
-      password,
-      user.email,
-      user.fullName,
-      log,
+  try {
+    const org = await ensureOrganization(scenario, sessions, log);
+    await ensurePeopleAndGroups(org, scenario, sessions, log);
+    await ensureAgreements(scenario, sessions, log);
+
+    // **Binders at once, not one after another.** Each is its own repository
+    // with its own changes, so nothing one writes is read by another — and
+    // applied in turn they were most of the stack's boot time.
+    const applied = await Promise.all(
+      scenario.binders.map((binder) =>
+        applyBinder(
+          org,
+          binder,
+          scenario,
+          sessions,
+          { baseUrl: accounts.baseUrl, password },
+          (message) => log(`[${binder.name}] ${message}`),
+        ),
+      ),
     );
+
+    return {
+      pullRequests: Object.assign({}, ...applied),
+      oauthClientId: accounts.oauthClientId,
+      token: accounts.token,
+      tokenName: accounts.tokenName,
+    };
+  } finally {
+    await sessions.closeAll();
   }
-
-  const pullRequests: Record<string, number> = {};
-  for (const document of scenario.documents) {
-    Object.assign(
-      pullRequests,
-      await applyDocument(baseUrl, adminAuth, authFor, document, log),
-    );
-  }
-
-  const redirectUri = `http://localhost:${process.env.APP_PORT ?? "5173"}/auth/callback`;
-  const oauthClientId = await ensureOAuthApp(
-    baseUrl,
-    adminAuth,
-    "bindersnap-dev",
-    redirectUri,
-    log,
-  );
-
-  const result: SeedResult = {
-    pullRequests,
-    prNumber: pullRequests[PRIMARY_CHANGE] ?? 0,
-    secondPrNumber: pullRequests[SECONDARY_CHANGE] ?? 0,
-    oauthClientId,
-  };
-
-  if (!createToken) {
-    return result;
-  }
-
-  const tokenInfo = await createAccessToken(
-    baseUrl,
-    adminAuth,
-    tokenNamePrefix,
-    log,
-  );
-  return { ...result, token: tokenInfo.token, tokenName: tokenInfo.tokenName };
 }
 
 async function runCli(): Promise<void> {
@@ -1197,7 +1302,13 @@ async function runCli(): Promise<void> {
     console.log(`  ${user.username} / ${password}${role}`);
   }
   console.log("");
-  console.log(`Seeded ${scenario.documents.length} documents.`);
+  const documentCount = scenario.binders.reduce(
+    (total, binder) => total + binder.documents.length,
+    0,
+  );
+  console.log(
+    `Seeded ${documentCount} documents across ${scenario.binders.length} binders in ${scenario.organization.name}.`,
+  );
   if (result.oauthClientId) {
     console.log(`OAUTH_CLIENT_ID=${result.oauthClientId}`);
     console.log("Add to .env:");
@@ -1216,15 +1327,14 @@ async function runCli(): Promise<void> {
 
 const invokedDirectly = (() => {
   const entryPath = process.argv[1];
-  if (!entryPath) {
-    return false;
-  }
+  if (!entryPath) return false;
   return pathToFileURL(entryPath).href === import.meta.url;
 })();
 
 if (invokedDirectly) {
   runCli().catch((error) => {
     console.error(error instanceof Error ? error.message : String(error));
+    if (error instanceof ApiRequestError) console.error(error.data);
     process.exit(1);
   });
 }

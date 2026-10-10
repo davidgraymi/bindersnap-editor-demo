@@ -51,7 +51,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
@@ -59,7 +59,7 @@ jobs:
           bun-version-file: ".bun-version"
 
       - name: Restore Bun cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('.bun-version') }}-${{ hashFiles('bun.lock') }}
@@ -94,6 +94,11 @@ jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-24.04
+    # The deploy role trusts only jobs in this environment (infra/ci/oidc.tf),
+    # and the environment admits only `main`.
+    environment:
+      name: production
+      url: https://api.bindersnap.com
     needs:
       - test
       - build
@@ -106,7 +111,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Validate deploy configuration
         run: |
@@ -126,7 +131,7 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -146,7 +151,7 @@ jobs:
           session-manager-plugin --version
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v5
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ env.DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -182,3 +187,25 @@ jobs:
           fi
 
           deploy/bin/ssm-connect.sh "${args[@]}"
+
+      # A deploy is not done when compose says "Started": an image that crashes
+      # on boot, a Caddy that cannot route, or a tunnel that will not connect
+      # all leave the stack "up". Ask the API through the same path a browser
+      # takes (Cloudflare → tunnel → Caddy → API) and fail the run if it never
+      # answers. The rollback is one workflow_dispatch with api_tag.
+      - name: Check the API answers through Cloudflare
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          set -euo pipefail
+          url="https://api.bindersnap.com/healthz"
+          for attempt in $(seq 1 24); do
+            status="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "${url}" || true)"
+            if [ "${status}" = "200" ]; then
+              echo "${url} answered 200 (attempt ${attempt})"
+              exit 0
+            fi
+            echo "attempt ${attempt}: ${url} answered ${status:-nothing}; retrying in 5s"
+            sleep 5
+          done
+          echo "::error title=API not healthy after deploy::${url} did not answer 200 within 2 minutes"
+          exit 1

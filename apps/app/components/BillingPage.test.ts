@@ -1,5 +1,5 @@
 import { expect, test, mock } from "bun:test";
-import { hasManageableSubscription } from "./billingAccess";
+import { describeBilling, hasManageableSubscription } from "./billingAccess";
 import {
   VISIBLE_POLLING_DELAYS_MS,
   BACKGROUND_POLL_INTERVAL_MS,
@@ -77,4 +77,75 @@ test("only Stripe-backed access is a subscription", () => {
   expect(hasManageableSubscription("active", null)).toBe(false);
   expect(hasManageableSubscription("none", "stripe")).toBe(false);
   expect(hasManageableSubscription("loading", "stripe")).toBe(false);
+});
+
+// ---------------------------------------------------------------------------
+// What the page says
+// ---------------------------------------------------------------------------
+
+const base = {
+  subscriptionStatus: "active" as const,
+  accessSource: "stripe",
+  currentPeriodEnd: null,
+  cancelAtPeriodEnd: false,
+  cancelAt: null,
+  trialEndsAt: null,
+};
+
+test("a paying organization is told when it renews, and can manage it", () => {
+  const summary = describeBilling({
+    ...base,
+    currentPeriodEnd: Date.UTC(2026, 9, 9, 12) / 1000,
+  });
+  expect(summary.standing).toBe("Active");
+  expect(summary.detail).toBe("Renews on Oct 9, 2026.");
+  expect(summary.actions).toEqual(["manage", "cancel"]);
+});
+
+test("a trial says when it ends and offers to subscribe", () => {
+  const summary = describeBilling({
+    ...base,
+    accessSource: "trial",
+    trialEndsAt: Date.UTC(2026, 9, 9, 12) / 1000,
+  });
+  expect(summary.standing).toBe("Trial");
+  expect(summary.detail).toContain("Free trial until Oct 9, 2026.");
+  expect(summary.actions).toEqual(["subscribe"]);
+});
+
+test("complimentary access is not asked to subscribe", () => {
+  // It used to be: every state that was not a Stripe subscription got
+  // "Start your subscription", including a grant with nothing to pay.
+  for (const accessSource of ["admin_grant", "config_bypass"]) {
+    const summary = describeBilling({ ...base, accessSource });
+    expect(summary.standing).toBe("Complimentary");
+    expect(summary.actions).toEqual([]);
+  }
+});
+
+test("a lapsed organization is read-only and can subscribe", () => {
+  const summary = describeBilling({
+    ...base,
+    subscriptionStatus: "none",
+    accessSource: "none",
+  });
+  expect(summary.standing).toBe("Inactive");
+  expect(summary.actions).toEqual(["subscribe"]);
+});
+
+test("a lapsed subscription can fix its card in Stripe", () => {
+  const summary = describeBilling({
+    ...base,
+    subscriptionStatus: "none",
+    accessSource: "none",
+    hasBillingAccount: true,
+  });
+  expect(summary.actions).toEqual(["subscribe", "manage"]);
+});
+
+test("a member sees where things stand, and that an owner acts on it", () => {
+  const summary = describeBilling({ ...base, canManage: false });
+  expect(summary.standing).toBe("Active");
+  expect(summary.actions).toEqual([]);
+  expect(summary.ownersOnly).toBe(true);
 });

@@ -7,6 +7,7 @@ import { JSDOM } from "jsdom";
 
 import { resolveSignupPrefill } from "./authIntent";
 import { resolveGiteaTokenScopes } from "./giteaTokenScopes";
+import { withQueryClient } from "./data/testing";
 
 const mockClearToken = mock(() => {});
 const mockCreateCheckoutSession = mock(async () => ({
@@ -184,7 +185,7 @@ function mountApp(App: () => JSX.Element) {
   const root = createRoot(container);
 
   flushSync(() => {
-    root.render(createElement(App));
+    root.render(withQueryClient(createElement(App)));
   });
 
   const unmount = () => {
@@ -339,7 +340,7 @@ test("resolveSubscriptionStatus treats missing or inactive billing records as un
   expect(resolveSubscriptionStatus("canceled")).toBe("none");
 });
 
-test("App redirects signed-in users to billing when the billing status fetch rejects", async () => {
+test("App keeps a signed-in user working when the billing status fetch rejects", async () => {
   mockFetchSessionUser.mockImplementation(async () => ({
     user: { username: "alice", fullName: "Alice Example" },
     token: "session-token",
@@ -352,22 +353,26 @@ test("App redirects signed-in users to billing when the billing status fetch rej
   const { container, unmount } = mountApp(App);
 
   try {
+    // Failing to reach billing is not evidence that anybody is delinquent, so
+    // it neither blanks the app nor draws the banner. The API is the gate: a
+    // write that should be refused still is, and its typed 402 is what turns
+    // read-only on for real.
     await waitFor(() => {
-      const billingPage = container.querySelector<HTMLElement>(
-        '[data-testid="billing-page"]',
-      );
-
-      expect(window.location.pathname).toBe("/billing");
-      expect(billingPage?.dataset.subscriptionStatus).toBe("none");
-      expect(billingPage?.dataset.hasBillingStatusError).toBe("true");
-      expect(container.querySelector('[data-testid="app-shell"]')).toBeNull();
+      expect(
+        container.querySelector('[data-testid="app-shell"]'),
+      ).not.toBeNull();
     });
+
+    expect(
+      container.querySelector('[data-testid="read-only-banner"]'),
+    ).toBeNull();
+    expect(window.location.pathname).not.toBe("/-/billing");
   } finally {
     unmount();
   }
 });
 
-test("App redirects signed-in users to billing when the payment required handler fires", async () => {
+test("App drops into read-only mode when the payment required handler fires", async () => {
   mockFetchSessionUser.mockImplementation(async () => ({
     user: { username: "alice", fullName: "Alice Example" },
     token: "session-token",
@@ -394,25 +399,29 @@ test("App redirects signed-in users to billing when the payment required handler
       ).not.toBeNull();
     });
 
-    notifyPaymentRequired();
+    notifyPaymentRequired({ organizationName: "riverside-health" });
 
+    // The refused write leaves them exactly where they were, reading what
+    // they were reading. ADR 0004 gates authoring and never gates reading, so
+    // the app stays up and the banner explains itself.
     await waitFor(() => {
-      const billingPage = container.querySelector<HTMLElement>(
-        '[data-testid="billing-page"]',
+      const banner = container.querySelector<HTMLElement>(
+        '[data-testid="read-only-banner"]',
       );
 
-      expect(window.location.pathname).toBe("/billing");
-      expect(billingPage?.dataset.subscriptionStatus).toBe("none");
-      expect(billingPage?.dataset.hasBillingStatusError).toBe("false");
-      expect(container.querySelector('[data-testid="app-shell"]')).toBeNull();
+      expect(banner).not.toBeNull();
+      expect(banner?.textContent).toContain("riverside-health");
     });
+
+    expect(container.querySelector('[data-testid="app-shell"]')).not.toBeNull();
+    expect(window.location.pathname).not.toBe("/-/billing");
   } finally {
     unmount();
   }
 });
 
 test("App keeps Gitea admins on the Pro access route even when billing status is unavailable", async () => {
-  installDom("/admin/subscriptions");
+  installDom("/-/admin/subscriptions");
 
   mockFetchSessionUser.mockImplementation(async () => ({
     user: {
@@ -435,7 +444,7 @@ test("App keeps Gitea admins on the Pro access route even when billing status is
         '[data-testid="app-shell"]',
       );
 
-      expect(window.location.pathname).toBe("/admin/subscriptions");
+      expect(window.location.pathname).toBe("/-/admin/subscriptions");
       expect(appShell?.dataset.routeKind).toBe("adminSubscriptions");
       expect(appShell?.dataset.userIsAdmin).toBe("true");
       expect(
@@ -448,7 +457,7 @@ test("App keeps Gitea admins on the Pro access route even when billing status is
 });
 
 test("App redirects non-admin users away from the Pro access route", async () => {
-  installDom("/admin/subscriptions");
+  installDom("/-/admin/subscriptions");
 
   mockFetchSessionUser.mockImplementation(async () => ({
     user: {
@@ -577,7 +586,7 @@ function signedInWithNoOrganization() {
 }
 
 test("App shows the setup screen at /organizations/new, not the billing page", async () => {
-  installDom("/organizations/new");
+  installDom("/-/organizations/new");
   signedInWithNoOrganization();
 
   const { App } = await import("./App");
@@ -588,7 +597,7 @@ test("App shows the setup screen at /organizations/new, not the billing page", a
       expect(organizationSetupHeading(container)).toBe(
         "Create your organization",
       );
-      expect(window.location.pathname).toBe("/organizations/new");
+      expect(window.location.pathname).toBe("/-/organizations/new");
       expect(
         container.querySelector('[data-testid="billing-page"]'),
       ).toBeNull();
@@ -599,7 +608,11 @@ test("App shows the setup screen at /organizations/new, not the billing page", a
 });
 
 test("App lets an account with no organization read, instead of gating every route", async () => {
-  installDom("/docs/mercy-health/binder");
+  // A binder address, not the retired `/docs/:owner/:repo` one: the point of
+  // the test is that a person without an organization is not bounced to the
+  // setup screen from a route they can read, and the reading route is a
+  // binder's now.
+  installDom("/mercy-health/binder");
   signedInWithNoOrganization();
 
   const { App } = await import("./App");
@@ -611,8 +624,8 @@ test("App lets an account with no organization read, instead of gating every rou
         '[data-testid="app-shell"]',
       );
 
-      expect(appShell?.dataset.routeKind).toBe("document");
-      expect(window.location.pathname).toBe("/docs/mercy-health/binder");
+      expect(appShell?.dataset.routeKind).toBe("binder");
+      expect(window.location.pathname).toBe("/mercy-health/binder");
       expect(
         container.querySelector('[data-testid="billing-page"]'),
       ).toBeNull();
@@ -624,7 +637,7 @@ test("App lets an account with no organization read, instead of gating every rou
 });
 
 test("App lets Skip for now leave the setup screen and stay gone", async () => {
-  installDom("/organizations/new");
+  installDom("/-/organizations/new");
   signedInWithNoOrganization();
 
   const { App } = await import("./App");
@@ -667,10 +680,10 @@ test("App asks a no-organization session to name one when a write is refused", a
       ).not.toBeNull();
     });
 
-    notifyPaymentRequired();
+    notifyPaymentRequired({ organizationName: null });
 
     await waitFor(() => {
-      expect(window.location.pathname).toBe("/organizations/new");
+      expect(window.location.pathname).toBe("/-/organizations/new");
       // The wording is the whole point: they were stopped mid-write, not sent
       // here by their own navigation.
       expect(organizationSetupHeading(container)).toBe(

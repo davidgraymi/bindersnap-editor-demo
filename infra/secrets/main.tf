@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.0"
+  required_version = ">= 1.7" # `removed` blocks
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -46,39 +46,10 @@ variable "ec2_instance_role_name" {
   default     = null
 }
 
-variable "gitea_secret_key" {
-  description = "Gitea SECRET_KEY value"
-  type        = string
-  sensitive   = true
-  default     = "CHANGE_ME_USE_openssl_rand_base64_32"
-}
-
-variable "gitea_internal_token" {
-  description = "Gitea INTERNAL_TOKEN value"
-  type        = string
-  sensitive   = true
-  default     = "CHANGE_ME_USE_openssl_rand_base64_32"
-}
-
-variable "gitea_service_token" {
-  description = "Dedicated sysadmin service-account token used by the API for signup and token lifecycle operations"
-  type        = string
-  sensitive   = true
-  default     = "BOOTSTRAP_WITH_scripts/bootstrap-gitea-service-account.ts"
-}
-
 variable "gitea_admin_user" {
   description = "First-boot Gitea admin username used to bootstrap the bindersnap-service account"
   type        = string
-  sensitive   = true
   default     = "gitea-admin"
-}
-
-variable "gitea_admin_pass" {
-  description = "First-boot Gitea admin password used to bootstrap the bindersnap-service account"
-  type        = string
-  sensitive   = true
-  default     = "CHANGE_ME_USE_openssl_rand_base64_20"
 }
 
 variable "bindersnap_user_email_domain" {
@@ -93,22 +64,9 @@ variable "litestream_s3_bucket" {
   default     = "bindersnap-litestream-REPLACE_WITH_ACCOUNT_ID"
 }
 
-variable "stripe_secret_key" {
-  description = "Stripe live secret key (sk_live_...) used by the API for Checkout Sessions and billing portal"
-  type        = string
-  sensitive   = true
-}
-
-variable "stripe_webhook_secret" {
-  description = "Stripe webhook signing secret (whsec_...) used to verify inbound webhook signatures"
-  type        = string
-  sensitive   = true
-}
-
 variable "stripe_price_id" {
-  description = "Stripe subscription price ID (price_...) used when creating Checkout Sessions"
+  description = "Stripe writer-seat price ID (price_...) used when creating Checkout Sessions. Not a secret. apply-all.sh passes infra/billing's seat_price_id; set it in tfvars only to plan this module alone."
   type        = string
-  sensitive   = true
 }
 
 data "aws_caller_identity" "current" {}
@@ -116,22 +74,38 @@ data "aws_caller_identity" "current" {}
 locals {
   parameter_path = trimsuffix(var.ssm_parameter_path, "/")
 
-  parameters = {
-    gitea_secret_key             = var.gitea_secret_key
-    gitea_internal_token         = var.gitea_internal_token
-    gitea_service_token          = var.gitea_service_token
+  # Settings, not secrets: Terraform owns their values.
+  config_parameters = {
     gitea_admin_user             = var.gitea_admin_user
-    gitea_admin_pass             = var.gitea_admin_pass
     bindersnap_user_email_domain = var.bindersnap_user_email_domain
     litestream_s3_bucket         = var.litestream_s3_bucket
-    stripe_secret_key            = var.stripe_secret_key
-    stripe_webhook_secret        = var.stripe_webhook_secret
     stripe_price_id              = var.stripe_price_id
   }
+
+  # Secrets. Terraform never sees their values: aws_ssm_parameter reads a
+  # parameter's decrypted value back into state on every refresh, so managing
+  # them here put the live Stripe key in secrets/terraform.tfstate.
+  # put-secrets.sh writes them straight to SSM. Listed here so this module's
+  # output names every leaf the deploy needs.
+  secret_parameters = [
+    "gitea_secret_key",
+    "gitea_internal_token",
+    "gitea_admin_pass",
+    "gitea_service_token", # minted by the deploy bootstrap
+    "gitea_admin_token",   # minted by the deploy bootstrap
+    "stripe_secret_key",
+    "stripe_webhook_secret",
+    "cloudflare_tunnel_token", # infra/edge/put-tunnel-token.sh
+    "restic_repository",       # docs/ops/restore.md
+    "restic_password",
+    "restic_r2_access_key_id",
+    "restic_r2_secret_access_key",
+  ]
 
   parameter_arn_base          = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${local.parameter_path}"
   parameter_arn_prefix        = "${local.parameter_arn_base}/*"
   service_token_parameter_arn = "${local.parameter_arn_base}/gitea_service_token"
+  admin_token_parameter_arn   = "${local.parameter_arn_base}/gitea_admin_token"
 }
 
 resource "aws_kms_key" "ssm" {
@@ -150,8 +124,8 @@ resource "aws_kms_alias" "ssm" {
   target_key_id = aws_kms_key.ssm.key_id
 }
 
-resource "aws_ssm_parameter" "prod" {
-  for_each = local.parameters
+resource "aws_ssm_parameter" "config" {
+  for_each = local.config_parameters
 
   name   = "${local.parameter_path}/${each.key}"
   type   = "SecureString"
@@ -161,6 +135,38 @@ resource "aws_ssm_parameter" "prod" {
   tags = {
     Project     = var.project
     Environment = var.environment
+  }
+}
+
+# The settings keep their parameters; only their address changes.
+moved {
+  from = aws_ssm_parameter.prod["gitea_admin_user"]
+  to   = aws_ssm_parameter.config["gitea_admin_user"]
+}
+
+moved {
+  from = aws_ssm_parameter.prod["bindersnap_user_email_domain"]
+  to   = aws_ssm_parameter.config["bindersnap_user_email_domain"]
+}
+
+moved {
+  from = aws_ssm_parameter.prod["litestream_s3_bucket"]
+  to   = aws_ssm_parameter.config["litestream_s3_bucket"]
+}
+
+moved {
+  from = aws_ssm_parameter.prod["stripe_price_id"]
+  to   = aws_ssm_parameter.config["stripe_price_id"]
+}
+
+# The secrets leave Terraform's state but stay in SSM: forget them, never
+# delete them. Older versions of the state file still hold their values, so
+# put-secrets.sh --rotate replaces them at cutover.
+removed {
+  from = aws_ssm_parameter.prod
+
+  lifecycle {
+    destroy = false
   }
 }
 
@@ -189,6 +195,7 @@ data "aws_iam_policy_document" "instance_ssm_access" {
 
     resources = [
       local.service_token_parameter_arn,
+      local.admin_token_parameter_arn,
     ]
   }
 
@@ -242,7 +249,7 @@ data "aws_iam_policy_document" "instance_ssm_access" {
     condition {
       test     = "StringEquals"
       variable = "kms:EncryptionContext:PARAMETER_ARN"
-      values   = [local.service_token_parameter_arn]
+      values   = [local.service_token_parameter_arn, local.admin_token_parameter_arn]
     }
   }
 }
@@ -277,4 +284,9 @@ output "instance_ssm_access_policy_arn" {
 output "ssm_kms_key_arn" {
   description = "KMS key ARN used to encrypt the production SSM parameters"
   value       = aws_kms_key.ssm.arn
+}
+
+output "secret_parameter_names" {
+  description = "SSM leaves that hold secrets. put-secrets.sh and the scripts it names set them; Terraform never does."
+  value       = [for name in local.secret_parameters : "${local.parameter_path}/${name}"]
 }

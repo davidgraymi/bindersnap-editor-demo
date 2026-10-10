@@ -1,0 +1,1119 @@
+import {
+  buildDocumentArchivedTag,
+  buildDocumentVersionTag,
+  documentUidFromArchivedTag,
+  documentUidFromVersionTag,
+  parseDocumentFilename,
+  versionFromTag,
+} from "../../../packages/utils/documentPath";
+
+import { readStampedChange, readVersionStamp } from "../version-stamp";
+import {
+  GiteaApiError,
+  readAllPages,
+  unwrap,
+  type GiteaClient,
+} from "./client";
+
+/**
+ * Reading the documents out of a binder.
+ *
+ * ADR 0004's step 2 changes what a document list is. It used to be a repository
+ * search — one repository per document, three Gitea calls each. It is now one
+ * walk of one repository's tree, which the ADR points out is the direction the
+ * binder model makes cheaper: "the documents list drops from roughly three
+ * Gitea calls per document to a handful per workspace".
+ */
+
+/** A document as the binder holds it: a file at a path. */
+export interface WorkspaceDocumentEntry {
+  /** `clinical/infection-control.01J8XZ4K7M….pdf` — where the file is. */
+  path: string;
+  /**
+   * `clinical/infection-control` — the document's **address**: where it is
+   * filed and what it is called, with neither the identity nor the extension.
+   *
+   * This is what a URL carries and what a person reads. Under ADR 0004 it was
+   * also the identity; ADR 0005 separates them, so this may change over a
+   * document's life and {@link uid} may not.
+   */
+  slugPath: string;
+  /** The last segment, for a heading: `infection-control`. */
+  name: string;
+  /**
+   * The document's identity, or null for a file this product did not write.
+   *
+   * Null is a real state in a tree — somebody committed a `NOTES.md` outside
+   * Bindersnap — and it is described rather than hidden, so the publish guard
+   * can refuse it by name instead of the version series quietly going wrong.
+   */
+  uid: string | null;
+  /** `clinical`, or "" at the binder's root. */
+  folder: string;
+  /** Bytes, as git reports them. */
+  size: number;
+  /** The blob SHA. Changes whenever the content does. */
+  sha: string;
+}
+
+interface GitTreeEntry {
+  path?: string;
+  type?: string;
+  size?: number;
+  sha?: string;
+}
+
+/**
+ * Everything git tracks that we do not treat as a document.
+ *
+ * A binder is a repository, so it carries repository furniture — the
+ * CODEOWNERS file that drives per-folder reviewers, and anything else under
+ * `.gitea/`. Listing those as policies would put configuration in front of a
+ * surveyor.
+ */
+function isDocumentPath(path: string): boolean {
+  if (path.startsWith(".")) return false;
+  if (path.split("/").some((segment) => segment.startsWith("."))) return false;
+  return true;
+}
+
+export function toDocumentEntry(
+  entry: GitTreeEntry,
+): WorkspaceDocumentEntry | null {
+  const path = entry.path ?? "";
+  if (entry.type !== "blob" || path === "" || !isDocumentPath(path)) {
+    return null;
+  }
+
+  const lastSlash = path.lastIndexOf("/");
+  const folder = lastSlash === -1 ? "" : path.slice(0, lastSlash);
+  const filename = lastSlash === -1 ? path : path.slice(lastSlash + 1);
+
+  // Three things out of one filename: what it is called, which document it is,
+  // and how to render it. The address drops the last two — `hand-hygiene`, not
+  // `hand-hygiene.01J8XZ4K7M….md` — because that is what a link carries and
+  // what a heading says.
+  const { name, uid } = parseDocumentFilename(filename);
+
+  return {
+    path,
+    slugPath: folder === "" ? name : `${folder}/${name}`,
+    name,
+    uid,
+    folder,
+    size: entry.size ?? 0,
+    sha: entry.sha ?? "",
+  };
+}
+
+export interface ListWorkspaceDocumentsParams {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  ref?: string;
+}
+
+/** Everything one read of a binder's tree answers. */
+export interface WorkspaceTree {
+  documents: WorkspaceDocumentEntry[];
+  /**
+   * Every folder in the binder, whether or not it holds a document.
+   *
+   * Read from the tree's own directory entries rather than derived from the
+   * document paths, and the difference is the whole point: git has no empty
+   * directories, so a folder somebody made and has not filed anything in yet
+   * exists because a `.gitkeep` is sitting in it — and that file is furniture,
+   * filtered out of the documents. Deriving folders from documents would make
+   * a folder appear only once it stopped being empty, which is not a filing
+   * system anybody would recognise.
+   */
+  folders: string[];
+  /**
+   * Every blob in the binder, furniture included.
+   *
+   * `documents` drops the repository's own files — `.gitea/CODEOWNERS`, the
+   * placeholders that hold empty folders open — because they are not policies.
+   * A rename has to move them all the same, and a collision check has to know
+   * they are there, so the raw list is kept rather than reconstructed from the
+   * two above. Reconstructing it was a bug: it named a placeholder in every
+   * folder, including the folders that have documents in them and no
+   * placeholder at all, and Gitea refused to move a file that was never there.
+   */
+  paths: string[];
+}
+
+/** Dot-directories are repository furniture — `.gitea` is not a folder. */
+function isDocumentFolder(path: string): boolean {
+  return !path.split("/").some((segment) => segment.startsWith("."));
+}
+
+/**
+ * One read of the binder's tree, as both the things it holds.
+ *
+ * The documents list and the folder list come from the same call because they
+ * come from the same tree, and asking twice would be two reads of one answer.
+ */
+export async function readWorkspaceTree(
+  params: ListWorkspaceDocumentsParams,
+): Promise<WorkspaceTree> {
+  const entries = await readTreeEntries(params);
+
+  return {
+    documents: entries
+      .map(toDocumentEntry)
+      .filter((entry): entry is WorkspaceDocumentEntry => entry !== null)
+      .sort((a, b) => a.path.localeCompare(b.path)),
+    folders: entries
+      .filter(
+        (entry) =>
+          entry.type === "tree" &&
+          typeof entry.path === "string" &&
+          entry.path !== "" &&
+          isDocumentFolder(entry.path),
+      )
+      .map((entry) => entry.path!)
+      .sort((a, b) => a.localeCompare(b)),
+    paths: entries
+      .filter(
+        (entry) =>
+          entry.type === "blob" &&
+          typeof entry.path === "string" &&
+          entry.path !== "" &&
+          // `.gitea/` is the repository's own configuration, not the binder's
+          // shape. Renaming a folder must never sweep it along.
+          !entry.path.startsWith(".gitea/"),
+      )
+      .map((entry) => entry.path!)
+      .sort((a, b) => a.localeCompare(b)),
+  };
+}
+
+/**
+ * The binder's documents, from one recursive tree read.
+ *
+ * An empty binder answers with an empty list rather than an error: a workspace
+ * somebody just made has no documents yet, and that is the ordinary first
+ * state, not a failure.
+ */
+export async function listWorkspaceDocuments(
+  params: ListWorkspaceDocumentsParams,
+): Promise<WorkspaceDocumentEntry[]> {
+  return (await readWorkspaceTree(params)).documents;
+}
+
+/**
+ * How to name `ref` to Gitea's tree endpoint.
+ *
+ * **A name as long as a commit hash is read as one.** Gitea's
+ * `git/trees/{sha}` takes any 40- or 64-character string for a SHA and never
+ * looks it up as a branch, so it answered "sha not found" for a real branch —
+ * and a draft is `draft/<username>/<17-digit stamp>`, which is exactly 40
+ * characters for every 16-character username. Every press of Edit by such a
+ * person opened an editor that said their draft did not exist. Spelled out in
+ * full, the name is too long to be a hash and Gitea resolves it.
+ */
+export function treeRefCandidates(ref: string): string[] {
+  const hashLength = ref.length === 40 || ref.length === 64;
+  if (!hashLength || /^[0-9a-f]+$/i.test(ref)) return [ref];
+  return [`refs/heads/${ref}`, `refs/tags/${ref}`];
+}
+
+async function readTreeEntries(
+  params: ListWorkspaceDocumentsParams,
+): Promise<GitTreeEntry[]> {
+  const { client, org, workspace, ref = "main" } = params;
+  const candidates = treeRefCandidates(ref);
+
+  for (const [index, candidate] of candidates.entries()) {
+    try {
+      const tree = (await unwrap(
+        client.GET("/repos/{owner}/{repo}/git/trees/{sha}", {
+          params: {
+            path: { owner: org, repo: workspace, sha: candidate },
+            query: { recursive: true },
+          },
+        }),
+      )) as { tree?: GitTreeEntry[] };
+      return tree.tree ?? [];
+    } catch (err) {
+      // A branch by that name is not there: it may be a tag.
+      if (index < candidates.length - 1) continue;
+      // A binder whose `main` has no commits yet answers 404 for its tree.
+      // That is an empty binder, which is a state, not a problem.
+      if (err instanceof GiteaApiError && err.status === 404) {
+        return [];
+      }
+      throw err;
+    }
+  }
+  return [];
+}
+
+export interface FindWorkspaceDocumentParams {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  /** Either the file path or the slug path — a person's URL carries either. */
+  documentPath: string;
+  ref?: string;
+}
+
+/**
+ * One document, addressed by file path, by address, or by identity.
+ *
+ * A URL carries `clinical/infection-control`; a link out of a commit or a
+ * change carries the full `clinical/infection-control.01J8XZ4K7M….pdf`. Both
+ * resolve, because neither the identity segment nor the extension is how a
+ * person refers to a policy.
+ *
+ * **And the identity resolves at any ref, which the other two do not.** A
+ * name and a folder may change; ADR 0005's identity segment may not — that is
+ * the whole reason it exists. So a caller holding a path read at one ref and
+ * asking at another — which is exactly what comparing a change against the
+ * version it replaces is — finds the file under whatever it was called there.
+ * Renaming a policy inside a change used to make Compare answer "No such
+ * document", because the base ref has never heard of the new name.
+ */
+export async function findWorkspaceDocument(
+  params: FindWorkspaceDocumentParams,
+): Promise<WorkspaceDocumentEntry | null> {
+  const { documentPath } = params;
+  const documents = await listWorkspaceDocuments(params);
+
+  // An exact file path wins over an address match, so that a link carrying the
+  // whole filename always resolves to that exact file. Uploads refuse to create
+  // two documents at one address, but a binder edited outside Bindersnap could
+  // still hold two — and resolving that deterministically beats resolving it
+  // alphabetically.
+  //
+  // Identity last, because the first two are what was actually asked for. It
+  // only ever answers when the exact address is not at this ref, which is the
+  // case a rename creates.
+  const asked = parseDocumentFilename(documentPath.split("/").pop() ?? "");
+
+  return (
+    documents.find((entry) => entry.path === documentPath) ??
+    documents.find((entry) => entry.slugPath === documentPath) ??
+    (asked.uid === null
+      ? null
+      : (documents.find((entry) => entry.uid === asked.uid) ?? null))
+  );
+}
+
+export interface DocumentVersion {
+  tag: string;
+  version: number;
+  commitSha: string;
+  /**
+   * When the commit this tag points at was made — which is when the change
+   * that published it was merged.
+   *
+   * On the tag Gitea already returns, so a binder's whole history is one call.
+   * Empty when Gitea did not say, which a reader is told rather than shown a
+   * date we invented.
+   */
+  publishedAt: string;
+}
+
+export interface GitTag {
+  name?: string;
+  commit?: { sha?: string; created?: string };
+  /**
+   * The annotated tag's message — the version stamp, or the archive stamp.
+   *
+   * Read by the archive and by nothing else. An archived document is not on
+   * `main`, so the tree cannot say what it was called or where it was filed;
+   * its tags are the whole of what is left. `readVersionStamp` recovers the
+   * two labelled lines that were written for this.
+   */
+  message?: string;
+}
+
+/**
+ * The published versions of one document.
+ *
+ * Tags are repository-global and a binder holds many documents, so the tags are
+ * filtered by the document's own namespace — `01J8XZ4K7M…` owns
+ * `01J8XZ4K7M…/v1`, `…/v2`, and nothing else. Tags this app did not write are
+ * ignored rather than counted as versions.
+ *
+ * **Every page of tags, not Gitea's first.** Gitea answers an unpaged tag
+ * read with 30, newest first, so a document whose versions had scrolled past
+ * the thirtieth tag in its binder listed none — and publish, numbering off
+ * that, chose `v1` for a document that already had one, merged, and then had
+ * its tag write refused as a duplicate. The merge landed with no version.
+ *
+ * For the pages that are about one document. {@link listVersionsByDocument}
+ * answers the same question for a whole binder, and is what every list uses.
+ */
+export async function listDocumentVersions(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  /**
+   * The document's identity. A path would restart at v1 on a rename.
+   *
+   * Null for a file with no identity segment, which has published nothing and
+   * answers with nothing — a caller listing a binder should not have to branch
+   * on it, and the refusal belongs at publish, where it can be a sentence.
+   */
+  uid: string | null;
+}): Promise<DocumentVersion[]> {
+  const { client, org, workspace, uid } = params;
+  if (uid === null) return [];
+
+  const tags = await listAllTags({ client, owner: org, repo: workspace });
+  return documentVersionsFrom(tags, uid);
+}
+
+/**
+ * One document's versions, out of tags the caller already holds.
+ *
+ * The joining rule {@link listDocumentVersions} applies, on its own, so a
+ * handler that has read every tag for another reason — publish reads them for
+ * the archive stamps — can number versions off the same read instead of making
+ * a second one.
+ */
+export function documentVersionsFrom(
+  tags: readonly GitTag[],
+  uid: string | null,
+): DocumentVersion[] {
+  if (uid === null) return [];
+
+  return tags
+    .flatMap((tag) => {
+      const name = tag.name ?? "";
+      if (documentUidFromVersionTag(name) !== uid) return [];
+
+      const version = versionFromTag(name);
+      if (version === null) return [];
+
+      return [
+        {
+          tag: name,
+          version,
+          commitSha: tag.commit?.sha ?? "",
+          publishedAt: tag.commit?.created ?? "",
+        },
+      ];
+    })
+    .sort((a, b) => b.version - a.version);
+}
+
+/** The next version number for a document, starting at 1. */
+export function nextVersionFrom(versions: DocumentVersion[]): number {
+  return versions.reduce((highest, v) => Math.max(highest, v.version), 0) + 1;
+}
+
+/** The tag that would publish this document's next version. */
+export function nextVersionTag(
+  uid: string,
+  versions: DocumentVersion[],
+): string {
+  return buildDocumentVersionTag(uid, nextVersionFrom(versions));
+}
+
+interface ChangedFile {
+  filename?: string;
+  /** `added`, `modified`, `deleted`, `renamed` — Gitea's own vocabulary. */
+  status?: string;
+}
+
+/**
+ * The statuses that mean "this file is not in the merged tree".
+ *
+ * **`deleted`, not `removed`** — verified against a running Gitea 1.28.0-dev on
+ * 2026-09-10 by renaming a document through a change request, which the API
+ * reported as `deleted` plus `added`. Gitea's own spec says only "added,
+ * modified, deleted, etc.", so `removed` is carried as well: it is the spelling
+ * GitHub uses, it is what half the ecosystem assumes, and guessing wrong here
+ * writes a version tag for a file that is not there.
+ */
+const ABSENT_STATUSES = new Set(["deleted", "removed"]);
+
+/**
+ * The documents a change touches.
+ *
+ * ADR 0004 §4: the unit of approval is the change, not the document. A pull
+ * request that revises three cross-referencing policies together is a feature
+ * — they should be revised and approved as one act — so publishing has to know
+ * every document it covers, not just one.
+ *
+ * Repository furniture is filtered out the same way it is in the list: a change
+ * that edits CODEOWNERS alongside two policies publishes two versions, not
+ * three.
+ *
+ * **Two subtleties, both of which a rename creates.** Gitea reports a rename as
+ * two entries — the old path removed and the new path added — and both carry
+ * the same identity.
+ *
+ * 1. A **deleted** file is not a document this change publishes. Tagging it
+ *    would name a version after a path that is no longer in the tree.
+ * 2. Documents are deduplicated by **identity**, not by address, so a rename is
+ *    one document at its new address rather than two. Deduplicating by address
+ *    would compute the same next version twice and try to write one tag twice;
+ *    git would refuse the second, and the publish would half-succeed.
+ *
+ * Neither is reachable through the product today — nothing renames or deletes —
+ * which is exactly why it is worth being right about now, while it costs a
+ * filter and a key.
+ */
+export async function listChangedDocuments(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  pullNumber: number;
+}): Promise<WorkspaceDocumentEntry[]> {
+  const { client, org, workspace, pullNumber } = params;
+
+  const files = (await unwrap(
+    client.GET("/repos/{owner}/{repo}/pulls/{index}/files", {
+      params: { path: { owner: org, repo: workspace, index: pullNumber } },
+    }),
+  )) as ChangedFile[];
+
+  const seen = new Set<string>();
+  const documents: WorkspaceDocumentEntry[] = [];
+
+  for (const file of files ?? []) {
+    if (ABSENT_STATUSES.has((file.status ?? "").toLowerCase())) continue;
+
+    const entry = toDocumentEntry({ path: file.filename ?? "", type: "blob" });
+    if (!entry) continue;
+
+    // Identity where there is one, address where there is not — a file with no
+    // identity is still one file, and two of them at one address are still one
+    // thing the publish guard will refuse by name.
+    const key = entry.uid ?? entry.slugPath;
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    documents.push(entry);
+  }
+
+  return documents.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+/**
+ * The documents a change **takes off** the record, which is the other half.
+ *
+ * {@link listChangedDocuments} skips exactly these statuses, because a file
+ * that is not in the merged tree must not be given a version tag — publishing
+ * a v5 of something that is no longer there is the bug that filter exists to
+ * prevent. Archiving needs the same read from the other side: the removals are
+ * what get an `<uid>/archived-<n>` tag.
+ *
+ * **A rename is a removal plus an addition** — Gitea reports it as `deleted`
+ * and `added`, which is the spelling `ABSENT_STATUSES` was pinned to against a
+ * running server. So this alone would call every rename an archiving. The
+ * caller subtracts: a UID that is also in the added half moved, and only a UID
+ * that is absent from the merged tree entirely was archived. That subtraction
+ * is the whole reason this answers entries rather than a boolean.
+ */
+export async function listRemovedDocuments(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  pullNumber: number;
+}): Promise<WorkspaceDocumentEntry[]> {
+  const { client, org, workspace, pullNumber } = params;
+
+  const files = (await unwrap(
+    client.GET("/repos/{owner}/{repo}/pulls/{index}/files", {
+      params: { path: { owner: org, repo: workspace, index: pullNumber } },
+    }),
+  )) as ChangedFile[];
+
+  const seen = new Set<string>();
+  const documents: WorkspaceDocumentEntry[] = [];
+
+  for (const file of files ?? []) {
+    if (!ABSENT_STATUSES.has((file.status ?? "").toLowerCase())) continue;
+
+    const entry = toDocumentEntry({ path: file.filename ?? "", type: "blob" });
+    if (!entry) continue;
+
+    const key = entry.uid ?? entry.slugPath;
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    documents.push(entry);
+  }
+
+  return documents.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+/**
+ * A document as it was at its last published version, bytes and all.
+ *
+ * **This is what makes restoring possible without an archive branch.** An
+ * archived document is not on `main`, but every version it published has a tag,
+ * a tag is a ref, and git never collects a commit reachable from one — so the
+ * file is still there, at the commit that held it, exactly as it was. Reading
+ * it back is two calls: the tree at the tag, then the blob.
+ *
+ * The tree at the tag, rather than the path out of the tag message, because a
+ * tree read is the same rule every other page resolves a document by. Parsing a
+ * path out of prose to then go and fetch it is a second way of answering a
+ * question that already has one.
+ *
+ * Null when the document has no version tag, which means it never published —
+ * and something that never published was never on the record and cannot be
+ * restored to it.
+ */
+export async function readArchivedDocument(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  /** The identity. Its version tags are named after it, and it survives both. */
+  uid: string;
+}): Promise<{
+  document: WorkspaceDocumentEntry;
+  base64Content: string;
+  version: number;
+  tag: string;
+} | null> {
+  const { client, org, workspace, uid } = params;
+
+  const versions = await listDocumentVersions({ client, org, workspace, uid });
+  const latest = versions[0];
+  if (!latest) return null;
+
+  const tree = await readWorkspaceTree({
+    client,
+    org,
+    workspace,
+    ref: latest.tag,
+  });
+  const document = tree.documents.find((entry) => entry.uid === uid);
+  if (!document) return null;
+
+  const file = (await unwrap(
+    client.GET("/repos/{owner}/{repo}/contents/{filepath}", {
+      params: {
+        path: { owner: org, repo: workspace, filepath: document.path },
+        query: { ref: latest.tag },
+      },
+    }),
+  )) as { content?: string };
+
+  // Gitea answers base64 already, which is also what the contents API wants on
+  // the way back in — so the bytes are never decoded here at all. Nothing can
+  // mangle an encoding it never touches.
+  if (typeof file.content !== "string" || file.content === "") return null;
+
+  return {
+    document,
+    base64Content: file.content,
+    version: latest.version,
+    tag: latest.tag,
+  };
+}
+
+/**
+ * Record a document being archived: a tag naming the act, on the merge commit.
+ *
+ * Deliberately the same primitive and the same publish as a version tag, so
+ * the two cannot half-apply — `refs/tags/<uid>/v3` and
+ * `refs/tags/<uid>/archived-1` are both files under one ref directory, and
+ * writing them in one pass is what makes the audit atomic with the merge by
+ * construction rather than by a webhook holding two writes together.
+ */
+export async function createDocumentArchivedTag(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  uid: string;
+  /** 1 the first time, 2 after a restore — each archiving is its own fact. */
+  sequence: number;
+  target: string;
+  message: string;
+}): Promise<{ tag: string; commitSha: string }> {
+  const { client, org, workspace, uid, sequence, target, message } = params;
+  const tagName = buildDocumentArchivedTag(uid, sequence);
+
+  const tag = (await unwrap(
+    client.POST("/repos/{owner}/{repo}/tags", {
+      params: { path: { owner: org, repo: workspace } },
+      body: { tag_name: tagName, target, message },
+    }),
+  )) as GitTag;
+
+  return { tag: tagName, commitSha: tag?.commit?.sha ?? "" };
+}
+
+/**
+ * Publish one document: a tag naming it, pointing at the merge commit.
+ *
+ * Several tags on one commit is ordinary git, and it is what lets one approved
+ * change publish v4 of one policy, v2 of another and v7 of a third together
+ * while keeping each document's version its own.
+ *
+ * **Two changes publishing one document at once both compute the same version
+ * and both try to create this ref. Git refuses the second**, atomically, and
+ * the caller gets a conflict instead of two v4s. That guarantee is the reason
+ * the tag is the counter rather than a column somewhere.
+ */
+export async function createDocumentVersionTag(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  /** The document's identity, which is what the tag is named after. */
+  uid: string;
+  /** Where it was filed at the publish. For the fallback message only. */
+  slugPath: string;
+  version: number;
+  target: string;
+  /**
+   * The approval policy in force, written into the annotated tag.
+   *
+   * ADR 0004: when configuration shapes what happened, do not version the
+   * configuration — stamp it onto the event. The tag is immutable, attached to
+   * the exact publish, and readable from a bare clone with no application
+   * running, which is what makes it better evidence than a settings row a
+   * surveyor would have to be told to trust.
+   *
+   * Optional so a caller with nothing to say still writes a usable tag rather
+   * than a misleading one.
+   */
+  message?: string;
+}): Promise<DocumentVersion> {
+  const { client, org, workspace, uid, slugPath, version, target } = params;
+  const tagName = buildDocumentVersionTag(uid, version);
+
+  const tag = (await unwrap(
+    client.POST("/repos/{owner}/{repo}/tags", {
+      params: { path: { owner: org, repo: workspace } },
+      body: {
+        tag_name: tagName,
+        target,
+        message: params.message ?? `Published ${slugPath} v${version}`,
+      },
+    }),
+  )) as GitTag;
+
+  return {
+    tag: tagName,
+    version,
+    commitSha: tag?.commit?.sha ?? "",
+    publishedAt: tag?.commit?.created ?? "",
+  };
+}
+
+/**
+ * A document proposed at this address but not yet published, if there is one.
+ *
+ * `main` holds only published documents, so checking the tree alone lets two
+ * uploads race for one address: both are accepted, and they collide later as
+ * two files answering to a single URL. The upload branch carries the identity
+ * (`upload/<slugPath>/…`), which is what makes pending work visible here.
+ *
+ * **Proposed means a change request is open on it**, not merely that a branch
+ * with the prefix exists. An upload is three writes — branch, commit, change
+ * request — and a run that stopped after the first two left a branch nobody
+ * had proposed. Counting it blocked the address for good: every later upload
+ * was told the document was "already waiting in a change request" that did not
+ * exist. Such a branch is left where it is; it no longer holds the address.
+ *
+ * Answers with the branch name so the caller can say which change already
+ * claims the address, rather than only that something does.
+ */
+export async function findPendingDocumentBranch(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  slugPath: string;
+}): Promise<string | null> {
+  const { client, org, workspace, slugPath } = params;
+
+  try {
+    const open = (await readAllPages((query) =>
+      unwrap(
+        client.GET("/repos/{owner}/{repo}/pulls", {
+          params: {
+            path: { owner: org, repo: workspace },
+            query: { state: "open", ...query },
+          },
+        }),
+      ),
+    )) as Array<{ head?: { ref?: string } }>;
+
+    const prefix = `upload/${slugPath}/`;
+    return (
+      open
+        .map((pull) => pull.head?.ref ?? "")
+        .find((ref) => ref.startsWith(prefix)) ?? null
+    );
+  } catch (err) {
+    // A binder with nothing proposed yet is not a conflict.
+    if (err instanceof GiteaApiError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+/**
+ * Every tag in a repository, following Gitea's pagination to the end.
+ *
+ * **Gitea's tag list is paged and the defaults are small**, which this code
+ * used to ignore in two different ways — verified against a running Gitea on
+ * 2026-09-08 by making a repository with sixty tags:
+ *
+ * | Request      | Tags returned |
+ * | ------------ | ------------- |
+ * | no params    | 30            |
+ * | `limit=100`  | **50**        |
+ * | `limit=50`   | 50            |
+ *
+ * So an unparameterised read saw thirty, and asking for a hundred silently got
+ * fifty — `MaxResponseItems` caps it. Neither said anything about the rest.
+ *
+ * A binder's tags are its **version history**, so truncating them is not a
+ * display bug. Thirty versions is ten documents at v3: past that, the binder's
+ * History tab — the compliance record, the thing a surveyor is shown — would
+ * quietly stop listing versions that exist, and `nextVersionFrom` would compute
+ * a next version that has already been used.
+ *
+ * This is the same defect the implementation notes already record once, about
+ * the document list: "The unpaged read asked Gitea for a hardcoded 100 and
+ * silently dropped anything past it, so a workspace's 101st document simply did
+ * not exist as far as this list was concerned." Same shape, different endpoint.
+ *
+ * A binder that has published nothing costs one call, as before. The pages are
+ * fetched in sequence rather than in parallel because the total is not known
+ * until a short page arrives — and a mature binder is the rare case, not the
+ * page-load one.
+ */
+export async function listAllTags(params: {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+}): Promise<GitTag[]> {
+  const { client, owner, repo } = params;
+
+  // A stop that cannot be reached by any real binder — 500 pages is 25,000
+  // versions — but that turns a Gitea that ignored `page` from an infinite
+  // loop into a bounded read.
+  return (await readAllPages(
+    (query) =>
+      unwrap(
+        client.GET("/repos/{owner}/{repo}/tags", {
+          params: { path: { owner, repo }, query },
+        }),
+      ),
+    // A mature binder's tags are the one list here that runs to many pages,
+    // and every binder page reads them: three at a time after the first.
+    { maxPages: 500, parallel: 3 },
+  )) as GitTag[];
+}
+
+/**
+ * Every document's versions, from one read of the binder's tags.
+ *
+ * {@link listDocumentVersions} asks per document, which is one call each; a
+ * binder's tags are repository-global, so asking once and grouping is the same
+ * answer for the cost of a single call. That difference is the whole reason
+ * ADR 0004 expects the documents list to get cheaper rather than dearer.
+ *
+ * **Keyed by address, from tags named after identities.** The tags say
+ * `01J8XZ4K7M…/v4`; every caller wants `clinical/infection-control`, because
+ * that is what its rows and its URLs are keyed on. The tree is what joins the
+ * two, and it is a read most callers have already made — hence `documents`.
+ * Pass it and this costs exactly what it did before; omit it and it reads the
+ * tree itself rather than making the caller thread one through.
+ *
+ * **A tag whose identity names no document in the tree is left out**, which is
+ * the one behaviour worth stating plainly. It cannot happen through the
+ * product: nothing deletes a document and nothing strips an identity segment.
+ * It can happen to a binder somebody edited directly in Gitea — the assumption
+ * ADR 0005 records that it rests on — and to tags written under ADR 0004's
+ * `<slugPath>/vN` shape, which are not versions of anything now and which the
+ * seed replaces. Reporting them is the orphan check the ADR describes, and it
+ * is a set difference over exactly these two inputs on the day it is wanted.
+ */
+export async function listVersionsByDocument(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  /**
+   * The binder's tree, if the caller has already read it.
+   *
+   * Most callers have — a list needs both — and passing it keeps this at one
+   * call. A caller that has not gets the tree read for it rather than being
+   * made to thread one through.
+   */
+  documents?: WorkspaceDocumentEntry[];
+}): Promise<Map<string, DocumentVersion[]>> {
+  const { client, org, workspace } = params;
+
+  const [tags, documents] = await Promise.all([
+    listAllTags({ client, owner: org, repo: workspace }),
+    params.documents ?? listWorkspaceDocuments({ client, org, workspace }),
+  ]);
+
+  return groupVersionsByDocument(tags, documents);
+}
+
+/**
+ * The joining rule on its own, for a caller that already holds both reads.
+ *
+ * Separate from the call above so that `readBinderDocuments` can fetch the
+ * tree, the open changes and the tags in one `Promise.all` and still be three
+ * calls for a whole binder — which is the property ADR 0004 exists to buy and
+ * the one this must not quietly spend.
+ */
+/** One thing a change did to one document: published a version, or archived it. */
+export interface BinderTimelineTag {
+  kind: "version" | "archived";
+  /** `nursing/hand-hygiene` — where it was filed when this happened. */
+  slugPath: string;
+  name: string;
+  folder: string;
+  /** The version published, or null for an archiving. */
+  version: number | null;
+  tag: string;
+  commitSha: string;
+  publishedAt: string;
+}
+
+/**
+ * Everything this binder's tags record, as rows a timeline can group.
+ *
+ * **Archived documents are in it, which is the point.** A binder's history has
+ * to answer "what happened to the paper chart retention policy" after somebody
+ * has taken it off the record, and until now the answer was nothing: the rows
+ * were joined to the tree, so a document that is no longer on `main` lost
+ * every version it ever published. A tag's stamp carries the title and the
+ * path as they stood at that publish, so a document off the tree names itself
+ * — and that is point-in-time evidence rather than today's name anyway.
+ *
+ * An archiving is a row too. `<uid>/archived-<n>` is written in the same pass
+ * as the version tags on the same merge commit, so taking a policy off the
+ * record lands on the timeline beside the versions the same change wrote.
+ */
+export function readBinderTimeline(
+  tags: readonly GitTag[],
+  documents: readonly WorkspaceDocumentEntry[],
+): BinderTimelineTag[] {
+  const addressOf = new Map<string, string>();
+  for (const document of documents) {
+    if (document.uid !== null) addressOf.set(document.uid, document.slugPath);
+  }
+
+  const rows: BinderTimelineTag[] = [];
+
+  for (const tag of tags ?? []) {
+    const name = tag.name ?? "";
+    const versionUid = documentUidFromVersionTag(name);
+    const archivedUid = documentUidFromArchivedTag(name);
+    const uid = versionUid ?? archivedUid;
+    const version = versionUid === null ? null : versionFromTag(name);
+    // A tag this app did not write — a release, or something somebody made by
+    // hand. Not a version and not an archiving, so not on the timeline.
+    if (uid === null || (versionUid !== null && version === null)) continue;
+
+    // The tree first, because a document still on the record is named by what
+    // it is called now; the stamp for one that is not.
+    const slugPath =
+      addressOf.get(uid) ?? readVersionStamp(tag.message ?? "").slugPath;
+    if (slugPath === null || slugPath === undefined) continue;
+
+    const cut = slugPath.lastIndexOf("/");
+    rows.push({
+      kind: versionUid === null ? "archived" : "version",
+      slugPath,
+      name: cut === -1 ? slugPath : slugPath.slice(cut + 1),
+      folder: cut === -1 ? "" : slugPath.slice(0, cut),
+      version,
+      tag: name,
+      commitSha: tag.commit?.sha ?? "",
+      publishedAt: tag.commit?.created ?? "",
+    });
+  }
+
+  return rows;
+}
+
+/**
+ * Whether a change brings this document back out of the archive.
+ *
+ * **A restore looks like a revision everywhere else.** It writes the file back
+ * with the identity it always had, so it has versions, a "v3 → v4" step and a
+ * diff against its last version — and the comparison drew it exactly like an
+ * edit to a policy that had never left. The tags know better: the last thing
+ * that happened to this identity before this change was an archiving.
+ *
+ * `mergeCommitSha` is the change's merge commit once it has been published, and
+ * null while it is open. Open, the question is whether it is in the archive
+ * now; published, whether it was in the archive just before the version this
+ * change wrote. A declined change asks neither and answers false.
+ */
+export function isRestoredFromArchive(params: {
+  tags: readonly GitTag[];
+  uid: string | null;
+  open: boolean;
+  mergeCommitSha: string | null;
+}): boolean {
+  const { tags, uid, open, mergeCommitSha } = params;
+  if (uid === null) return false;
+  if (!open && !mergeCommitSha) return false;
+
+  const events = tags
+    .flatMap((tag) => {
+      const name = tag.name ?? "";
+      const kind =
+        documentUidFromVersionTag(name) === uid
+          ? "version"
+          : documentUidFromArchivedTag(name) === uid
+            ? "archived"
+            : null;
+      if (kind === null) return [];
+      return [
+        {
+          kind,
+          sha: tag.commit?.sha ?? "",
+          at: Date.parse(tag.commit?.created ?? "") || 0,
+        },
+      ];
+    })
+    .sort((left, right) => left.at - right.at);
+
+  if (open) return events.at(-1)?.kind === "archived";
+
+  const published = events.findIndex(
+    (event) => event.kind === "version" && event.sha === mergeCommitSha,
+  );
+  if (published <= 0) return false;
+  return events[published - 1]!.kind === "archived";
+}
+
+/**
+ * The change that published each document's latest version, and when.
+ *
+ * Read off the same tags {@link groupVersionsByDocument} reads, so it costs the
+ * binder list nothing it was not already reading. The stamp on a version tag
+ * names the change it came from; a tag written without one — by hand, or
+ * before stamps carried the line — answers with its commit instead, which is
+ * the merge commit of the change that published it. Keyed by address, like
+ * the versions.
+ */
+export function latestChangeByDocument(
+  tags: readonly GitTag[],
+  documents: readonly WorkspaceDocumentEntry[],
+): Map<
+  string,
+  { changeNumber: number | null; commitSha: string; publishedAt: string }
+> {
+  const addressOf = new Map<string, string>();
+  for (const document of documents) {
+    if (document.uid !== null) addressOf.set(document.uid, document.slugPath);
+  }
+
+  const latest = new Map<
+    string,
+    {
+      version: number;
+      changeNumber: number | null;
+      commitSha: string;
+      publishedAt: string;
+    }
+  >();
+
+  for (const tag of tags ?? []) {
+    const name = tag.name ?? "";
+    const uid = documentUidFromVersionTag(name);
+    const version = versionFromTag(name);
+    if (uid === null || version === null) continue;
+
+    const slugPath = addressOf.get(uid);
+    if (slugPath === undefined) continue;
+
+    const existing = latest.get(slugPath);
+    if (existing && existing.version > version) continue;
+    latest.set(slugPath, {
+      version,
+      changeNumber: readStampedChange(tag.message ?? ""),
+      commitSha: tag.commit?.sha ?? "",
+      publishedAt: tag.commit?.created ?? "",
+    });
+  }
+
+  return new Map(
+    [...latest].map(([slugPath, { version: _version, ...rest }]) => [
+      slugPath,
+      rest,
+    ]),
+  );
+}
+
+/**
+ * The version each merge commit published, for a list that shows one number
+ * per change.
+ *
+ * Every version tag a publish writes points at that change's merge commit, so
+ * the tags grouped by commit are the change's versions. A change that took
+ * several documents to different numbers — v3 of one, v7 of another — has no
+ * single "published as", and is left out rather than labelled with whichever
+ * came first.
+ */
+export function publishedVersionByMergeCommit(
+  tags: readonly GitTag[],
+): Map<string, number> {
+  const versionsAt = new Map<string, Set<number>>();
+  for (const tag of tags) {
+    const name = tag.name ?? "";
+    const sha = tag.commit?.sha ?? "";
+    if (sha === "" || documentUidFromVersionTag(name) === null) continue;
+    const version = versionFromTag(name);
+    if (version === null) continue;
+    const seen = versionsAt.get(sha) ?? new Set<number>();
+    seen.add(version);
+    versionsAt.set(sha, seen);
+  }
+
+  const bySha = new Map<string, number>();
+  for (const [sha, versions] of versionsAt) {
+    if (versions.size === 1) bySha.set(sha, [...versions][0]!);
+  }
+  return bySha;
+}
+
+export function groupVersionsByDocument(
+  tags: readonly GitTag[],
+  documents: readonly WorkspaceDocumentEntry[],
+): Map<string, DocumentVersion[]> {
+  const addressOf = new Map<string, string>();
+  for (const document of documents) {
+    if (document.uid !== null) addressOf.set(document.uid, document.slugPath);
+  }
+
+  const byDocument = new Map<string, DocumentVersion[]>();
+
+  for (const tag of tags ?? []) {
+    const name = tag.name ?? "";
+    const uid = documentUidFromVersionTag(name);
+    const version = versionFromTag(name);
+    if (uid === null || version === null) continue;
+
+    const slugPath = addressOf.get(uid);
+    if (slugPath === undefined) continue;
+
+    const entry = {
+      tag: name,
+      version,
+      commitSha: tag.commit?.sha ?? "",
+      publishedAt: tag.commit?.created ?? "",
+    };
+    const existing = byDocument.get(slugPath);
+    if (existing) {
+      existing.push(entry);
+    } else {
+      byDocument.set(slugPath, [entry]);
+    }
+  }
+
+  for (const versions of byDocument.values()) {
+    versions.sort((a, b) => b.version - a.version);
+  }
+
+  return byDocument;
+}

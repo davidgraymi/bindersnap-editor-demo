@@ -10,4 +10,5 @@
  */
 export type GetHomeChanges200OpenItemPendingPRsItemUser = {
   login: string;
+  full_name?: string;
 } | null;

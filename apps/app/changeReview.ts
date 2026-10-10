@@ -38,6 +38,11 @@ function timeOf(value: string | null | undefined): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
+/** How a login is said aloud: "Carol Mendes", or "Carol" when unknown. */
+export type NameOf = (login: string) => string;
+
+const loginAsName: NameOf = (login) => capitalizeFirst(login);
+
 function personName(author: { login: string; fullName: string }): string {
   return author.fullName.trim() || capitalizeFirst(author.login);
 }
@@ -50,10 +55,16 @@ function personName(author: { login: string; fullName: string }): string {
  */
 export function describeChangeOpening(
   change: Pick<ChangeRecord, "submittedBy" | "submittedAt" | "open">,
-  nextVersion: number,
+  /**
+   * The version this change would publish, or `null` when it would publish
+   * none — a change to a binder's sign-off rules versions no document, and
+   * "becomes v1 when published" would be false for it.
+   */
+  nextVersion: number | null,
+  nameOf: NameOf = loginAsName,
 ): { who: string; when: string; becomes: number | null } {
   return {
-    who: capitalizeFirst(change.submittedBy || "Someone"),
+    who: change.submittedBy ? nameOf(change.submittedBy) : "Someone",
     when: formatShortDate(change.submittedAt),
     becomes: change.open ? nextVersion : null,
   };
@@ -74,49 +85,6 @@ export function describeChangeBody(
   const body = description.trim();
   if (!body) return null;
   return body === summary.trim() ? null : body;
-}
-
-/**
- * The proposed-version card's mono line: which file, which update, when.
- *
- * Fixed chrome in a fixed place on every change, so a reviewer never has to
- * hunt for the thing they are being asked to approve. "update 2 of 2" is the
- * honest answer to "am I looking at the latest one?" — a question the old
- * single "Preview" button left a reader to guess at.
- */
-export interface ProposedVersionFacts {
-  fileName: string;
-  /** "update 2 of 2", or null when there is only ever been one. */
-  updateLabel: string | null;
-  /** When the newest update landed. Empty when nothing is known. */
-  date: string;
-  /** The ref to open, newest update first, falling back to the branch. */
-  ref: string | null;
-  /** Whether there is more than one update, so "All updates" is worth showing. */
-  hasHistory: boolean;
-}
-
-export function buildProposedVersionFacts(params: {
-  fileName: string | null;
-  branchName: string | null;
-  submittedAt: string;
-  updates: ChangeUpdate[];
-}): ProposedVersionFacts {
-  const { fileName, branchName, submittedAt, updates } = params;
-  const latest = updates.length > 0 ? updates[updates.length - 1]! : null;
-
-  return {
-    fileName: fileName ?? "The submitted file",
-    updateLabel:
-      updates.length > 1
-        ? `update ${latest!.index} of ${updates.length}`
-        : null,
-    date: formatEventDate(latest?.at ?? submittedAt),
-    // The branch head and the newest update are the same commit, and the
-    // branch keeps working when the updates call fails or returns nothing.
-    ref: branchName,
-    hasHistory: updates.length > 1,
-  };
 }
 
 /**
@@ -257,10 +225,11 @@ function closingEvent(
   decidedBy: string | null,
   publishedVersion: number | null,
   when: string,
+  nameOf: NameOf,
 ): TimelineEvent {
   if (outcome === "published") {
     return {
-      actor: decidedBy ? capitalizeFirst(decidedBy) : null,
+      actor: decidedBy ? nameOf(decidedBy) : null,
       verb:
         publishedVersion === null
           ? "published this"
@@ -274,7 +243,7 @@ function closingEvent(
   }
 
   return {
-    actor: decidedBy ? capitalizeFirst(decidedBy) : null,
+    actor: decidedBy ? nameOf(decidedBy) : null,
     verb:
       outcome === "declined"
         ? "closed this without publishing"
@@ -301,8 +270,16 @@ export function buildReviewTimeline(params: {
   threads: DiscussionThread[];
   updates: ChangeUpdate[];
   resetsApprovals: boolean;
+  /** Who a login is, for the events that record only a login. */
+  nameOf?: NameOf;
 }): TimelineEntry[] {
-  const { change, threads, updates, resetsApprovals } = params;
+  const {
+    change,
+    threads,
+    updates,
+    resetsApprovals,
+    nameOf = loginAsName,
+  } = params;
 
   const opened: TimelineEntry = {
     key: "opened",
@@ -310,7 +287,7 @@ export function buildReviewTimeline(params: {
     at: timeOf(change.submittedAt),
     thread: null,
     event: {
-      actor: capitalizeFirst(change.submittedBy || "Someone"),
+      actor: change.submittedBy ? nameOf(change.submittedBy) : "Someone",
       verb: "opened this change request",
       emphasiseVerb: false,
       tag: null,
@@ -328,12 +305,25 @@ export function buildReviewTimeline(params: {
       at: timeOf(update.at),
       thread: null,
       event: {
-        actor: capitalizeFirst(update.author || "Someone"),
+        actor: update.author ? nameOf(update.author) : "Someone",
         verb: "updated the proposed version",
         emphasiseVerb: false,
         tag: `(update ${update.index})`,
         when: formatEventDate(update.at),
-        note: resetsApprovals ? "earlier approvals were reset" : null,
+        // Only when there was something to clear: an approval given before
+        // this update, which the update then made stale. Saying approvals
+        // were reset on a change nobody had approved yet was a false alarm.
+        note:
+          resetsApprovals &&
+          change.reviewers.some(
+            (reviewer) =>
+              reviewer.stale &&
+              reviewer.status === "approved" &&
+              reviewer.reviewedAt !== "" &&
+              timeOf(reviewer.reviewedAt) <= timeOf(update.at),
+          )
+            ? "the approvals given before this were cleared"
+            : null,
         updateSha: update.sha,
       },
     }));
@@ -376,6 +366,7 @@ export function buildReviewTimeline(params: {
             change.decidedBy,
             change.publishedVersion,
             formatEventDate(change.closedAt ?? ""),
+            nameOf,
           ),
         },
       ]
@@ -400,7 +391,14 @@ export function buildReviewTimeline(params: {
  * Request changes: a full approval count does not end the argument, and an
  * objection to an approved change is exactly when one matters most.
  */
-export type ReviewDecision = "review" | "publish" | "none";
+export type ReviewDecision =
+  | "review"
+  | "publish"
+  /** Shown, dimmed: they may not approve here, and are told why. */
+  | "review-locked"
+  /** Shown, dimmed: ready to publish, but not by them. */
+  | "publish-locked"
+  | "none";
 
 export function resolveReviewDecision(params: {
   open: boolean;
@@ -409,12 +407,29 @@ export function resolveReviewDecision(params: {
   mergeReady: boolean;
   canReview: boolean;
   canMerge: boolean;
+  /** This reader's approval already stands on the change. */
+  hasApproved?: boolean;
 }): ReviewDecision {
-  const { open, isAnonymous, ownSubmission, mergeReady, canReview, canMerge } =
-    params;
+  const {
+    open,
+    isAnonymous,
+    ownSubmission,
+    mergeReady,
+    canReview,
+    canMerge,
+    hasApproved = false,
+  } = params;
 
   if (!open || isAnonymous) return "none";
   if (mergeReady && canMerge) return "publish";
-  if (ownSubmission) return "none";
-  return canReview ? "review" : "none";
+  // **A button they cannot use is drawn dimmed, never hidden.** A change ready
+  // to publish that this reader cannot publish shows Publish greyed out with
+  // the reason beside it, so they know it is somebody else's step rather than
+  // wondering where the button went.
+  if (ownSubmission) return mergeReady ? "publish-locked" : "none";
+  // Their approval is in and the change is ready: what is left is somebody
+  // else's Publish, which is what they are shown.
+  if (mergeReady && hasApproved) return "publish-locked";
+  if (canReview) return "review";
+  return mergeReady ? "publish-locked" : "review-locked";
 }

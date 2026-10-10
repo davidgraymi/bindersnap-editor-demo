@@ -1,0 +1,7 @@
+[Unit]
+Description=Publish Bindersnap backup health metrics to CloudWatch
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/bindersnap-health-metrics

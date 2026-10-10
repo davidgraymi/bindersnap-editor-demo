@@ -212,7 +212,7 @@ async function seedSession(username: string): Promise<string> {
 }
 
 function reactionUrl(threadId: string, commentId: number): string {
-  return `/api/app/documents/alice/contract/pull-requests/3/discussions/${threadId}/comments/${commentId}/reactions`;
+  return `/api/app/binders/alice/contract/changes/3/discussions/${threadId}/comments/${commentId}/reactions`;
 }
 
 function request(

@@ -1,4 +1,4 @@
-import { eq, lte } from "drizzle-orm";
+import { and, desc, eq, gt, lte, ne } from "drizzle-orm";
 import { config } from "./config";
 import { openSqliteDb, type SqliteDb } from "./db/client";
 import { sessions } from "./db/schema";
@@ -19,6 +19,20 @@ export interface SessionBackend {
   put(session: SessionRecord): Promise<void>;
   delete(id: string): Promise<void>;
   reap(now: number): Promise<SessionRecord[]>;
+  /**
+   * Remove every session of this person's except one, and answer with them.
+   *
+   * For the moments a person's other devices must stop being them: a new
+   * password, and an account being deleted. The caller revokes each one's
+   * Gitea token — a deleted row alone would leave the token working.
+   */
+  deleteForUser(username: string, except?: string): Promise<SessionRecord[]>;
+  /**
+   * This person's unexpired sessions, newest first. For the one job that acts
+   * as somebody who is not making the request: finishing an accepted
+   * invitation with an owner's own token.
+   */
+  liveForUser?(username: string, now?: number): Promise<SessionRecord[]>;
 }
 
 export class SessionStore implements SessionBackend {
@@ -65,6 +79,33 @@ export class SessionStore implements SessionBackend {
       .returning()
       .all();
   }
+
+  async deleteForUser(
+    username: string,
+    except?: string,
+  ): Promise<SessionRecord[]> {
+    return this.db
+      .delete(sessions)
+      .where(
+        except === undefined
+          ? eq(sessions.username, username)
+          : and(eq(sessions.username, username), ne(sessions.id, except)),
+      )
+      .returning()
+      .all();
+  }
+
+  async liveForUser(
+    username: string,
+    now = Date.now(),
+  ): Promise<SessionRecord[]> {
+    return this.db
+      .select()
+      .from(sessions)
+      .where(and(eq(sessions.username, username), gt(sessions.expiresAt, now)))
+      .orderBy(desc(sessions.createdAt))
+      .all();
+  }
 }
 
 // Lazy wrapper so importing this module never opens the SQLite file; the DB
@@ -93,6 +134,14 @@ class LazySessionStore implements SessionBackend {
 
   reap(now: number): Promise<SessionRecord[]> {
     return this.store.reap(now);
+  }
+
+  deleteForUser(username: string, except?: string): Promise<SessionRecord[]> {
+    return this.store.deleteForUser(username, except);
+  }
+
+  liveForUser(username: string, now?: number): Promise<SessionRecord[]> {
+    return this.store.liveForUser?.(username, now) ?? Promise.resolve([]);
   }
 }
 

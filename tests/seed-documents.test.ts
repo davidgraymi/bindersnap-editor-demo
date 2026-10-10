@@ -1,7 +1,14 @@
 import { expect, test } from "bun:test";
 
 import { renderSeedDocumentFile, renderSeedMarkdown } from "./seed-documents";
-import { canonicalFileNameFor, type SeedDocument } from "./seed-scenario";
+import {
+  canonicalFileNameFor,
+  seedDocumentUid,
+  type SeedDocument,
+} from "./seed-scenario";
+
+/** What the seed derives for this document, which is what it commits under. */
+const UID = seedDocumentUid("riverside-health", "clinical", "nursing/handover");
 
 /**
  * The bytes the seed commits.
@@ -57,20 +64,32 @@ test("Markdown keeps the document's structure as headings", () => {
 });
 
 test("a seeded Word file is a real .docx", async () => {
-  const file = await renderSeedDocumentFile(policy, "docx");
+  const file = await renderSeedDocumentFile(
+    policy,
+    "docx",
+    "nursing/handover",
+    UID,
+  );
   const bytes = Buffer.from(file.content, "base64");
 
-  expect(file.path).toBe("document.docx");
+  // A file inside a binder, named for where it is filed, which document it is,
+  // and how to render it.
+  expect(file.path).toBe(`nursing/handover.${UID}.docx`);
   // "PK" — a .docx is an Office Open XML package in a ZIP.
   expect([...bytes.subarray(0, 4)]).toEqual([0x50, 0x4b, 0x03, 0x04]);
   expect(bytes.toString("latin1")).toContain("word/document.xml");
 });
 
 test("a seeded PDF is a real PDF carrying the policy's words", async () => {
-  const file = await renderSeedDocumentFile(policy, "pdf");
+  const file = await renderSeedDocumentFile(
+    policy,
+    "pdf",
+    "nursing/handover",
+    UID,
+  );
   const bytes = Buffer.from(file.content, "base64");
 
-  expect(file.path).toBe("document.pdf");
+  expect(file.path).toBe(`nursing/handover.${UID}.pdf`);
   expect(bytes.subarray(0, 5).toString("latin1")).toBe("%PDF-");
 
   // The text layer is the point: the comparison screen reads the words back
@@ -88,11 +107,57 @@ test("re-rendering an unchanged policy produces the same bytes", async () => {
   // A live clock in the Word file's ZIP entries, or in either format's
   // metadata, would add a silent update to every open change on every run.
   for (const format of ["prosemirror", "markdown", "pdf", "docx"] as const) {
-    const first = await renderSeedDocumentFile(policy, format);
+    const first = await renderSeedDocumentFile(
+      policy,
+      format,
+      "nursing/handover",
+      UID,
+    );
     await new Promise((resolve) => setTimeout(resolve, 1_100));
-    const second = await renderSeedDocumentFile(policy, format);
+    const second = await renderSeedDocumentFile(
+      policy,
+      format,
+      "nursing/handover",
+      UID,
+    );
     expect(second.content).toBe(first.content);
   }
+});
+
+test("rendering many documents at once leaves the clock alone", async () => {
+  // The seed applies every binder concurrently, so renders overlap. The Word
+  // render swaps `globalThis.Date` for a pinned one across an await: a PDF
+  // render inside that window failed pdf-lib's `instanceof Date` check, and
+  // two interleaved Word renders put the wrong `Date` back, freezing the
+  // clock for the rest of the process.
+  const RealDate = globalThis.Date;
+  const formats = ["prosemirror", "markdown", "pdf", "docx"] as const;
+
+  const sequential: string[] = [];
+  for (const format of formats) {
+    const file = await renderSeedDocumentFile(
+      policy,
+      format,
+      "nursing/handover",
+      UID,
+    );
+    sequential.push(file.content);
+  }
+
+  const rounds = await Promise.all(
+    Array.from({ length: 6 }, () =>
+      Promise.all(
+        formats.map((format) =>
+          renderSeedDocumentFile(policy, format, "nursing/handover", UID),
+        ),
+      ),
+    ),
+  );
+
+  for (const round of rounds) {
+    expect(round.map((file) => file.content)).toEqual(sequential);
+  }
+  expect(globalThis.Date).toBe(RealDate);
 });
 
 test("editing the prose changes the bytes for every format", async () => {
@@ -111,8 +176,39 @@ test("editing the prose changes the bytes for every format", async () => {
   };
 
   for (const format of ["prosemirror", "markdown", "pdf", "docx"] as const) {
-    const before = await renderSeedDocumentFile(policy, format);
-    const after = await renderSeedDocumentFile(edited, format);
+    const before = await renderSeedDocumentFile(
+      policy,
+      format,
+      "nursing/handover",
+      UID,
+    );
+    const after = await renderSeedDocumentFile(
+      edited,
+      format,
+      "nursing/handover",
+      UID,
+    );
     expect(after.content).not.toBe(before.content);
   }
+});
+
+test("a document's identity is the same on every seed run", () => {
+  // What keeps re-seeding a no-op. A minted identity would file the same policy
+  // under a new name every run, orphan its tags, and restart it at v1 — the
+  // exact bug ADR 0005 exists to prevent, reproduced by the tool that is meant
+  // to demonstrate the fix.
+  expect(
+    seedDocumentUid("riverside-health", "clinical", "nursing/handover"),
+  ).toBe(UID);
+});
+
+test("the same policy name in two binders is two documents", () => {
+  // Derived from the binder as well as the address, so a "Handover" in
+  // Clinical and a "Handover" in Facilities do not share a version series.
+  expect(
+    seedDocumentUid("riverside-health", "facilities", "nursing/handover"),
+  ).not.toBe(UID);
+  expect(
+    seedDocumentUid("mercy-health", "clinical", "nursing/handover"),
+  ).not.toBe(UID);
 });

@@ -1,26 +1,45 @@
+import { useQueryClient } from "@tanstack/react-query";
+
+import { organizationsQuery, queryKeys } from "./data/queries";
 import {
   type FormEvent,
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
 import "./app.css";
 
-import { AnonymousDocumentShell } from "./components/AnonymousDocumentShell";
 import { AppShell } from "./components/AppShell";
 import { BillingPage } from "./components/BillingPage";
+import { PaywallDialog } from "./components/PaywallDialog";
+import type { OfferedPlan } from "./components/PlanOffer";
+import { PaywallProvider } from "./paywallContext";
 import { OrganizationSetupPage } from "./components/OrganizationSetupPage";
 import { BindersnapLogoMark } from "./components/BindersnapLogoMark";
 import { LandingPage } from "./components/LandingPage";
 import { WorkspaceSkeleton } from "./components/WorkspaceSkeleton";
+import { UnsubscribePage } from "./components/UnsubscribePage";
+import {
+  ConfirmEmailPage,
+  VerifyEmailPage,
+} from "./components/EmailVerificationPages";
+import { InvitationPage } from "./components/InvitationPage";
+import { pendingInvitationToken, takeReturnTo } from "./authReturn";
+import { navigateToHref } from "./appLink";
+import {
+  ForgotPasswordPage,
+  ResetPasswordPage,
+} from "./components/PasswordResetPages";
 import {
   type SessionUser,
   createCheckoutSession,
   createOrganization,
   createPortalSession,
   fetchBillingStatus,
+  fetchLegalStatus,
   fetchOrganizations,
   fetchSessionUser,
   login,
@@ -28,27 +47,41 @@ import {
   signup,
 } from "./api";
 import type { OrganizationSummary } from "../../packages/api-schema/schemas/organizations";
-import { usePaymentRequiredHandler } from "./paymentRequired";
+import {
+  usePaymentRequiredHandler,
+  type PaymentRequiredEvent,
+} from "./paymentRequired";
+import { resolveReadOnly } from "./readOnly";
+import { ReadOnlyProvider } from "./readOnlyContext";
+import { ReadOnlyBanner } from "./components/ReadOnlyBanner";
 import {
   asShellRoute,
+  canonicalLocation,
   getRoute,
-  isLegacyDocumentTabPath,
-  isLegacyInboxPath,
   isProtectedAppRoute,
   routeToPath,
   type AppRoute,
 } from "./routes";
 import { resolveSignupPrefill } from "./authIntent";
+import { validateFullName } from "../../packages/utils/personName";
+import { AgreementCheckbox } from "./components/AgreementCheckbox";
+import { AcceptTermsPage } from "./components/AcceptTermsPage";
+import type { LegalStatusPayload } from "../../packages/api-schema/schemas/legal";
 
 type AuthView =
   | "loading"
   | "callback"
   | "landing"
   | "login"
-  | "billing"
+  | "forgotPassword"
+  | "resetPassword"
+  | "unsubscribe"
+  | "verifyEmail"
+  | "confirmEmail"
+  | "acceptTerms"
+  | "invitation"
   | "createOrganization"
-  | "app"
-  | "publicDoc";
+  | "app";
 type AuthMode = "signin" | "signup";
 
 interface LoginPageProps {
@@ -61,10 +94,24 @@ interface LoginPageProps {
     rememberMe: boolean,
   ) => Promise<void>;
   onSignup: (
+    name: { first: string; last: string },
     username: string,
     email: string,
     password: string,
   ) => Promise<void>;
+}
+
+/**
+ * Put an address from before `/-/` into its current form, in place.
+ *
+ * Before anything reads it — the screens below read the address bar
+ * themselves — and as a replace, so Back does not return to the old form.
+ */
+function settleAddress(): void {
+  const { pathname, search, hash } = window.location;
+  const next = canonicalLocation(pathname, search, hash);
+  if (next !== null)
+    window.history.replaceState(window.history.state, "", next);
 }
 
 function navigateTo(route: AppRoute, replace = false): void {
@@ -91,12 +138,15 @@ function LoginPage({
   onLogin,
   onSignup,
 }: LoginPageProps) {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [username, setUsername] = useState("");
   const [identifier, setIdentifier] = useState(
     mode === "signup" ? prefilledEmail : "",
   );
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string | null>(callbackError);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -111,6 +161,11 @@ function LoginPage({
     const normalizedIdentifier = identifier.trim();
 
     if (mode === "signup") {
+      const nameError = validateFullName(firstName, lastName);
+      if (nameError) {
+        setError(nameError);
+        return;
+      }
       if (
         !normalizedUsername ||
         !normalizedIdentifier ||
@@ -127,6 +182,11 @@ function LoginPage({
         setError("Passwords do not match.");
         return;
       }
+
+      if (!agreed) {
+        setError("Agree to the Terms of Service to create an account.");
+        return;
+      }
     } else if (!normalizedIdentifier || !password) {
       setError("Enter your username or email and password.");
       return;
@@ -139,7 +199,12 @@ function LoginPage({
       if (mode === "signin") {
         await onLogin(normalizedIdentifier, password, true);
       } else {
-        await onSignup(normalizedUsername, normalizedIdentifier, password);
+        await onSignup(
+          { first: firstName, last: lastName },
+          normalizedUsername,
+          normalizedIdentifier,
+          password,
+        );
       }
     } catch (submitError) {
       if (submitError instanceof Error && submitError.message.trim() !== "") {
@@ -157,14 +222,14 @@ function LoginPage({
   return (
     <section className="app-login-shell">
       <div className="app-login-wrap">
-        <div className="app-login-logo">
-          <div className="app-login-logo-mark" aria-hidden="true">
-            <BindersnapLogoMark width={24} height={24} />
-          </div>
+        {/* The way back to the site this page was reached from. */}
+        <a className="app-login-logo" href="/">
+          <span className="app-login-logo-mark" aria-hidden="true">
+            <BindersnapLogoMark width={22} height={22} />
+          </span>
           <span className="app-login-logo-text">Bindersnap</span>
-        </div>
+        </a>
         <div className="app-login-panel bs-card">
-          <div className="bs-eyebrow">Secure Access</div>
           <h1>
             {mode === "signin"
               ? "Step into the clean version."
@@ -172,6 +237,33 @@ function LoginPage({
           </h1>
 
           <form className="app-form" onSubmit={handleSubmit}>
+            {mode === "signup" ? (
+              // What every approval of theirs will be signed with, so it is
+              // asked for first and in full.
+              <div className="app-field-pair">
+                <label className="app-field">
+                  <span className="bs-label">First name</span>
+                  <input
+                    className="bs-input"
+                    type="text"
+                    value={firstName}
+                    onChange={(event) => setFirstName(event.target.value)}
+                    autoComplete="given-name"
+                  />
+                </label>
+                <label className="app-field">
+                  <span className="bs-label">Last name</span>
+                  <input
+                    className="bs-input"
+                    type="text"
+                    value={lastName}
+                    onChange={(event) => setLastName(event.target.value)}
+                    autoComplete="family-name"
+                  />
+                </label>
+              </div>
+            ) : null}
+
             {mode === "signup" ? (
               <label className="app-field">
                 <span className="bs-label">Username</span>
@@ -219,6 +311,19 @@ function LoginPage({
               />
             </label>
 
+            {mode === "signin" ? (
+              <a
+                className="app-login-forgot"
+                href="/-/forgot_password"
+                onClick={(event) => {
+                  event.preventDefault();
+                  navigateTo({ kind: "forgotPassword" });
+                }}
+              >
+                Forgot password?
+              </a>
+            ) : null}
+
             {mode === "signup" ? (
               <label className="app-field">
                 <span className="bs-label">Confirm Password</span>
@@ -231,6 +336,14 @@ function LoginPage({
                   autoComplete="new-password"
                 />
               </label>
+            ) : null}
+
+            {mode === "signup" ? (
+              <AgreementCheckbox
+                scope="person"
+                checked={agreed}
+                onChange={setAgreed}
+              />
             ) : null}
 
             <button
@@ -274,9 +387,11 @@ function LoginPage({
 }
 
 export function App() {
-  const [route, setRoute] = useState<AppRoute>(() =>
-    getRoute(window.location.pathname),
-  );
+  const queryClient = useQueryClient();
+  const [route, setRoute] = useState<AppRoute>(() => {
+    settleAddress();
+    return getRoute(window.location.pathname);
+  });
   const [user, setUser] = useState<SessionUser | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(
     () => route.kind !== "callback",
@@ -309,39 +424,116 @@ export function App() {
   const [organizationSetupReason, setOrganizationSetupReason] = useState<
     "blocked-write" | null
   >(null);
+  // Whose bill it is. Only ever used to name the organization in the
+  // read-only banner, which is why it is a name rather than the whole record.
+  const [billingOrganizationName, setBillingOrganizationName] = useState<
+    string | null
+  >(null);
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState<number | null>(null);
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false);
   const [cancelAt, setCancelAt] = useState<number | null>(null);
-  const [plan, setPlan] = useState<{
-    amount: number;
-    currency: string;
-    interval: string;
-    formatted: string;
-  } | null>(null);
-  const handlePaymentRequired = useCallback(() => {
-    if (!user) {
-      return;
-    }
+  const [trialEndsAt, setTrialEndsAt] = useState<number | null>(null);
+  const [canManageBilling, setCanManageBilling] = useState(false);
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  const paywall = useMemo(() => ({ open: () => setPaywallOpen(true) }), []);
+  const [hasBillingAccount, setHasBillingAccount] = useState(false);
+  const [plan, setPlan] = useState<OfferedPlan | null>(null);
+  /**
+   * Whose billing the app is showing: the organization on screen.
+   *
+   * Billing is per organization, so a person in two of them has two answers
+   * to "may I write here?" and "what do I pay?". The app used to ask once, and
+   * the server answered for their oldest organization wherever they were —
+   * so a second organization read as paid for by the first, and could not be
+   * subscribed to at all. Pages that belong to no one organization (Home,
+   * Documents, Change requests) leave it null, which asks for the oldest.
+   */
+  const billingOrganization =
+    route.kind === "organization" ||
+    route.kind === "binder" ||
+    route.kind === "binderDocument" ||
+    route.kind === "billing"
+      ? (route.org ?? null)
+      : null;
+  // Read by `loadBilling`, which `refreshSession` calls from a callback that
+  // must not change identity whenever the route does.
+  const billingOrganizationRef = useRef(billingOrganization);
+  billingOrganizationRef.current = billingOrganization;
+  // Which request is the latest. Walking from one organization to another
+  // while a read is in flight must not let the first answer land last.
+  const billingRequest = useRef(0);
 
-    // A write refused because the session has no organization is not a refusal
-    // to serve someone who has not paid — there is nothing to buy yet. This is
-    // the moment ADR 0004 means when it says the question comes back:
-    // authoring is what needs an organization, so ask for one rather than for
-    // a card.
-    if (accessSource === "no_organization") {
-      setOrganizationSetupReason("blocked-write");
-      navigateTo({ kind: "createOrganization" }, true);
-      return;
-    }
-
-    setSubscriptionStatus("none");
-    setAccessSource(null);
+  const loadBilling = useCallback(async () => {
+    const request = ++billingRequest.current;
+    setSubscriptionStatus("loading");
     setHasBillingStatusError(false);
-    setCurrentPeriodEnd(null);
-    setCancelAtPeriodEnd(false);
-    setCancelAt(null);
-    navigateTo({ kind: "billing" }, true);
-  }, [accessSource, user]);
+    try {
+      const billing = await fetchBillingStatus(billingOrganizationRef.current);
+      if (request !== billingRequest.current) return;
+      setSubscriptionStatus(
+        resolveSubscriptionStatus(billing.status, billing.hasAccess),
+      );
+      setAccessSource(billing.accessSource ?? null);
+      setBillingOrganizationName(billing.organization?.name ?? null);
+      setHasBillingStatusError(false);
+      setCurrentPeriodEnd(billing.currentPeriodEnd);
+      setCancelAtPeriodEnd(billing.cancelAtPeriodEnd);
+      setCancelAt(billing.cancelAt);
+      setPlan(
+        billing.plan ? { ...billing.plan, seats: billing.seats ?? null } : null,
+      );
+      setTrialEndsAt(billing.trialEndsAt);
+      setCanManageBilling(billing.canManageBilling === true);
+      setHasBillingAccount(billing.hasBillingAccount === true);
+    } catch {
+      if (request !== billingRequest.current) return;
+      setSubscriptionStatus("none");
+      setAccessSource(null);
+      setHasBillingStatusError(true);
+      setCurrentPeriodEnd(null);
+      setCancelAtPeriodEnd(false);
+      setCancelAt(null);
+      setPlan(null);
+      setTrialEndsAt(null);
+    }
+  }, []);
+
+  const handlePaymentRequired = useCallback(
+    (event: PaymentRequiredEvent) => {
+      if (!user) {
+        return;
+      }
+
+      // A write refused because the session has no organization is not a refusal
+      // to serve someone who has not paid — there is nothing to buy yet. This is
+      // the moment ADR 0004 means when it says the question comes back:
+      // authoring is what needs an organization, so ask for one rather than for
+      // a card.
+      if (accessSource === "no_organization") {
+        setOrganizationSetupReason("blocked-write");
+        navigateTo({ kind: "createOrganization" }, true);
+        return;
+      }
+
+      // Drop into read-only rather than navigating. The write is refused
+      // either way, but sending them to the card form loses the page they were
+      // on — and ADR 0004's promise is that the record stays in front of them.
+      // The banner appears where they are and says what happened.
+      setSubscriptionStatus("none");
+      setAccessSource(null);
+      setHasBillingStatusError(false);
+      // And say what it costs, there and then: the paywall is the answer to
+      // "why did that not save", not a banner discovered later.
+      setPaywallOpen(true);
+      setCurrentPeriodEnd(null);
+      setCancelAtPeriodEnd(false);
+      setCancelAt(null);
+      if (event.organizationName) {
+        setBillingOrganizationName(event.organizationName);
+      }
+    },
+    [accessSource, user],
+  );
 
   const refreshSession = useCallback(async () => {
     setIsCheckingSession(true);
@@ -354,28 +546,18 @@ export function App() {
       if (resolvedUser) {
         setSubscriptionStatus("loading");
         setHasBillingStatusError(false);
-        try {
-          setOrganizations(await fetchOrganizations().catch(() => null));
-          const billing = await fetchBillingStatus();
-          setSubscriptionStatus(
-            resolveSubscriptionStatus(billing.status, billing.hasAccess),
-          );
-          setAccessSource(billing.accessSource ?? null);
-          setHasBillingStatusError(false);
-          setCurrentPeriodEnd(billing.currentPeriodEnd);
-          setCancelAtPeriodEnd(billing.cancelAtPeriodEnd);
-          setCancelAt(billing.cancelAt);
-          setPlan(billing.plan);
-        } catch {
-          setSubscriptionStatus("none");
-          setAccessSource(null);
-          setHasBillingStatusError(true);
-          setCurrentPeriodEnd(null);
-          setCancelAtPeriodEnd(false);
-          setCancelAt(null);
-          setPlan(null);
-        }
+        // Read fresh, and into the shared cache, so the switcher and every
+        // header naming an organization start from the same answer.
+        setOrganizations(
+          await queryClient
+            .fetchQuery({ ...organizationsQuery(), staleTime: 0 })
+            .catch(() => null),
+        );
+        await loadBilling();
       } else {
+        // Nobody signed in: nothing the last person was shown may be shown
+        // to the next one.
+        queryClient.clear();
         setOrganizations(null);
         setOrganizationSetupReason(null);
         setSubscriptionStatus(null);
@@ -403,24 +585,11 @@ export function App() {
     } finally {
       setIsCheckingSession(false);
     }
-  }, []);
-
-  // `/inbox` is gone — Home shows what used to be there. Rewrite the address
-  // bar so an old link lands somewhere that still exists and stays bookmarkable.
-  useEffect(() => {
-    if (isLegacyInboxPath(window.location.pathname)) {
-      navigateTo({ kind: "workspace" }, true);
-      return;
-    }
-
-    // Same for the document's old Team and Settings tabs, now one page.
-    if (isLegacyDocumentTabPath(window.location.pathname)) {
-      navigateTo(route, true);
-    }
-  }, [route]);
+  }, [loadBilling, queryClient]);
 
   useEffect(() => {
     const handlePopState = () => {
+      settleAddress();
       setRoute(getRoute(window.location.pathname));
     };
 
@@ -432,6 +601,30 @@ export function App() {
   }, []);
 
   usePaymentRequiredHandler(handlePaymentRequired);
+
+  // A different organization on screen is a different bill. Only once signed
+  // in and settled — the first read is `refreshSession`'s.
+  const signedIn = Boolean(user);
+  const lastBillingOrganization = useRef(billingOrganization);
+  useEffect(() => {
+    if (lastBillingOrganization.current === billingOrganization) return;
+    lastBillingOrganization.current = billingOrganization;
+    if (!signedIn || isCheckingSession) return;
+    void loadBilling();
+  }, [billingOrganization, isCheckingSession, loadBilling, signedIn]);
+
+  // `/-/billing`, which names no organization: say which one it is showing,
+  // in the address bar, once the server has answered.
+  useEffect(() => {
+    if (
+      route.kind === "billing" &&
+      !route.org &&
+      billingOrganizationName &&
+      subscriptionStatus !== "loading"
+    ) {
+      navigateTo({ kind: "billing", org: billingOrganizationName }, true);
+    }
+  }, [billingOrganizationName, route, subscriptionStatus]);
 
   useEffect(() => {
     if (route.kind === "callback") {
@@ -451,7 +644,12 @@ export function App() {
     const isAdminSubscriptionRoute =
       route.kind === "adminSubscriptions" && user?.isAdmin;
 
-    if (user && (route.kind === "login" || route.kind === "signup")) {
+    if (
+      user &&
+      (route.kind === "login" ||
+        route.kind === "signup" ||
+        route.kind === "forgotPassword")
+    ) {
       navigateTo({ kind: "home" }, true);
       return;
     }
@@ -465,9 +663,6 @@ export function App() {
       navigateTo({ kind: "home" }, true);
       return;
     }
-
-    const isCheckoutSuccess =
-      window.location.search.includes("checkout=success");
 
     if (
       user &&
@@ -486,31 +681,15 @@ export function App() {
     // Signup sends them to the setup screen, and `handlePaymentRequired`
     // brings them back when a write actually needs an organization.
 
-    if (
-      user &&
-      subscriptionStatus === "none" &&
-      accessSource !== "no_organization" &&
-      route.kind !== "billing" &&
-      route.kind !== "createOrganization" &&
-      !isAdminSubscriptionRoute
-    ) {
-      navigateTo({ kind: "billing" }, true);
-      return;
-    }
+    // No redirect for a delinquent organization either. This used to bounce
+    // every route to /billing, which contradicted the rule the API enforces:
+    // ADR 0004 gates authoring and never gates reading or exporting, and an
+    // app that answers a lapsed subscription by hiding the record is holding
+    // the customer's approval history hostage. They land where they were
+    // going, read everything, and get the banner and no write controls.
 
-    // Bounce back to the workspace only when there is genuinely nothing to do
-    // on this page. A customer on a trial has access but no subscription, and
-    // sending them home would leave them no way to become a paying one.
-    if (
-      user &&
-      subscriptionStatus === "active" &&
-      accessSource === "stripe" &&
-      route.kind === "billing" &&
-      !isCheckoutSuccess
-    ) {
-      navigateTo({ kind: "home" }, true);
-      return;
-    }
+    // No bounce away from /billing for a paying customer either. It is where
+    // they manage the subscription, and the sidebar links to it.
   }, [accessSource, isCheckingSession, route, subscriptionStatus, user]);
 
   useEffect(() => {
@@ -524,6 +703,67 @@ export function App() {
     navigateTo({ kind: "login" }, true);
   }, [route]);
 
+  const readOnly = useMemo(
+    () =>
+      resolveReadOnly({
+        isSignedIn: Boolean(user),
+        subscriptionStatus,
+        accessSource,
+        hasBillingStatusError,
+        organizationName: billingOrganizationName,
+      }),
+    [
+      user,
+      subscriptionStatus,
+      accessSource,
+      hasBillingStatusError,
+      billingOrganizationName,
+    ],
+  );
+
+  // Stable, because the billing page restarts its checkout polling whenever
+  // this changes. A confirmed checkout goes where it always has: into the
+  // workspace it just unlocked.
+  const handleSubscriptionConfirmed = useCallback(() => {
+    setSubscriptionStatus("active");
+    setAccessSource("stripe");
+    setHasBillingStatusError(false);
+    navigateTo({ kind: "home" }, true);
+  }, []);
+
+  // What this account still has to accept: read once it can use the app, and
+  // again whenever the account changes. A failed read lets them in rather
+  // than locking them out over an outage; the next load asks again.
+  const [legalStatus, setLegalStatus] = useState<LegalStatusPayload | null>(
+    null,
+  );
+  const canReadLegal = Boolean(user) && user?.emailVerified !== false;
+  useEffect(() => {
+    if (!canReadLegal) {
+      setLegalStatus(null);
+      return;
+    }
+    let cancelled = false;
+    fetchLegalStatus()
+      .then((status) => {
+        if (!cancelled) setLegalStatus(status);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [canReadLegal, user?.username]);
+  const termsPending =
+    legalStatus !== null &&
+    (legalStatus.person || legalStatus.organizations.length > 0);
+
+  // Stable, because the join step polls with it on an interval it restarts
+  // whenever this changes.
+  const checkForOrganization = useCallback(async () => {
+    const list = await fetchOrganizations();
+    return list.length > 0;
+  }, []);
+
   const view: AuthView = useMemo(() => {
     if (route.kind === "callback") {
       return "callback";
@@ -532,20 +772,19 @@ export function App() {
     // A session with no organization reads "none" here, because it has no
     // access — but it has not failed to pay, and there is nothing for it to
     // buy. Letting this branch answer for it sent it to the card form no
-    // matter where it was going, which is what made `/organizations/new`
+    // matter where it was going, which is what made `/-/organizations/new`
     // render billing and left the setup screen reachable only by people who
     // already had an organization.
-    if (
-      user &&
-      subscriptionStatus === "none" &&
-      accessSource !== "no_organization" &&
-      route.kind !== "createOrganization" &&
-      !(route.kind === "adminSubscriptions" && user.isAdmin)
-    ) {
-      return "billing";
-    }
+    // A delinquent organization no longer replaces the app with the card
+    // form. /billing is still a route they can walk to — and the banner's
+    // "Restore access" takes them there — but it is a destination now rather
+    // than a wall.
 
-    if (route.kind === "home") {
+    // Until the account opens the link its signup emailed, the API refuses
+    // the app's routes — so this is the page, wherever they were going.
+    const unconfirmed = user?.emailVerified === false;
+
+    if (route.kind === "home" && !unconfirmed && !(user && termsPending)) {
       return user ? "app" : "landing";
     }
 
@@ -553,20 +792,56 @@ export function App() {
       return "loading";
     }
 
+    // The link works whoever is signed in here, or nobody: the token is the
+    // credential.
+    if (route.kind === "verifyEmail") {
+      return "verifyEmail";
+    }
+
+    // A reset link works whoever is signed in on this browser: it sets the
+    // password of the account it was sent for, and signs that account in.
+    if (route.kind === "resetPassword") {
+      return "resetPassword";
+    }
+
+    // Reached from an email, signed in or not; the token is the credential.
+    if (route.kind === "unsubscribe") {
+      return "unsubscribe";
+    }
+
+    if (unconfirmed) {
+      return "confirmEmail";
+    }
+
+    // After a material change to the Terms, or with none on record: nothing
+    // else until they accept, or sign out.
+    if (user && termsPending) {
+      return "acceptTerms";
+    }
+
+    // Signed in or not: it says what it is either way, and asks for an
+    // account only when it is time to accept.
+    if (route.kind === "invitation") {
+      return "invitation";
+    }
+
+    if (route.kind === "forgotPassword" && !user) {
+      return "forgotPassword";
+    }
+
     if (route.kind === "createOrganization" && user) {
       return "createOrganization";
     }
 
-    if (route.kind === "billing" && user) {
-      return "billing";
-    }
-
-    if (!user && route.kind === "document") {
-      return "publicDoc";
-    }
-
     return user ? "app" : "login";
-  }, [accessSource, isCheckingSession, route, subscriptionStatus, user]);
+  }, [
+    accessSource,
+    isCheckingSession,
+    route,
+    subscriptionStatus,
+    termsPending,
+    user,
+  ]);
 
   useEffect(() => {
     document.body.setAttribute("data-app-view", view);
@@ -594,6 +869,11 @@ export function App() {
         reason={organizationSetupReason}
         onCreate={async (name) => {
           await createOrganization(name);
+          // Every screen that names organizations reads this list; without a
+          // fresh one the sidebar showed the new one by its slug.
+          await queryClient.invalidateQueries({
+            queryKey: queryKeys.organizations(),
+          });
           // The organization changes what this session can do, so re-read
           // access rather than guessing at it. If that read fails the
           // organization still exists, and stranding someone on this form —
@@ -610,41 +890,107 @@ export function App() {
           setOrganizationSetupReason(null);
           navigateTo({ kind: "home" }, true);
         }}
+        username={user?.username ?? ""}
+        fullName={user?.fullName ?? null}
+        checkForOrganization={checkForOrganization}
+        onJoined={async () => {
+          await queryClient.invalidateQueries({
+            queryKey: queryKeys.organizations(),
+          });
+          await refreshSession().catch(() => undefined);
+          setOrganizationSetupReason(null);
+          navigateTo({ kind: "home" }, true);
+        }}
       />
     );
   }
 
-  if (view === "billing") {
+  if (view === "unsubscribe") {
+    return <UnsubscribePage />;
+  }
+
+  if (view === "verifyEmail") {
     return (
-      <BillingPage
-        subscriptionStatus={subscriptionStatus ?? "loading"}
-        accessSource={accessSource}
-        hasBillingStatusError={hasBillingStatusError}
-        currentPeriodEnd={currentPeriodEnd}
-        cancelAtPeriodEnd={cancelAtPeriodEnd}
-        cancelAt={cancelAt}
-        plan={plan}
-        onSubscribe={async () => {
-          const { url } = await createCheckoutSession();
-          window.location.href = url;
-        }}
-        onManage={async () => {
-          const { url } = await createPortalSession();
-          window.location.href = url;
-        }}
-        onSubscriptionConfirmed={() => {
-          setSubscriptionStatus("active");
-          setAccessSource("stripe");
-          setHasBillingStatusError(false);
-          navigateTo({ kind: "home" }, true);
-        }}
-        onRetryBillingStatus={async () => {
+      <VerifyEmailPage
+        signedIn={Boolean(user)}
+        onContinue={async () => {
           await refreshSession();
+          // Back to the invitation they signed up to accept, if that is how
+          // they got here; otherwise on to naming an organization, as a
+          // signup always goes.
+          const returnTo = takeReturnTo();
+          if (returnTo) {
+            navigateToHref(returnTo);
+            return;
+          }
+          // Read fresh: until a moment ago the API refused to say.
+          const list = await fetchOrganizations().catch(() => null);
+          navigateTo(
+            list?.length === 0
+              ? { kind: "createOrganization" }
+              : { kind: "home" },
+            true,
+          );
+        }}
+      />
+    );
+  }
+
+  if (view === "confirmEmail") {
+    return (
+      <ConfirmEmailPage
+        email={user?.pendingEmail ?? null}
+        onCheck={async () => {
+          // A bare read first: a full refresh draws the loading screen, and
+          // this runs every time the tab comes back into view.
+          const next = await fetchSessionUser();
+          if (next?.user?.emailVerified === false) return false;
+          await refreshSession();
+          return true;
         }}
         onSignOut={async () => {
           await logoutSession();
           setUser(null);
           setCallbackError(null);
+          navigateTo({ kind: "home" }, true);
+        }}
+      />
+    );
+  }
+
+  if (view === "acceptTerms" && legalStatus) {
+    return (
+      <AcceptTermsPage
+        status={legalStatus}
+        onAccepted={setLegalStatus}
+        onSignOut={async () => {
+          await logoutSession();
+          setUser(null);
+          setCallbackError(null);
+          navigateTo({ kind: "home" }, true);
+        }}
+      />
+    );
+  }
+
+  if (view === "invitation" && route.kind === "invitation") {
+    return <InvitationPage token={route.token} user={user} />;
+  }
+
+  if (view === "forgotPassword") {
+    return <ForgotPasswordPage />;
+  }
+
+  if (view === "resetPassword") {
+    return (
+      <ResetPasswordPage
+        onSignedIn={async () => {
+          const nextUser = await refreshSession();
+          if (!nextUser) {
+            throw new Error(
+              "Your password is saved, but signing in failed. Sign in with it.",
+            );
+          }
           navigateTo({ kind: "home" }, true);
         }}
       />
@@ -683,10 +1029,23 @@ export function App() {
               "Sign-in completed, but the session could not be verified.",
             );
           }
+          // Back to the invitation they signed in to accept, if that is how
+          // they got here.
+          const returnTo = takeReturnTo();
+          if (returnTo) {
+            navigateToHref(returnTo);
+            return;
+          }
           navigateTo({ kind: "home" }, true);
         }}
-        onSignup={async (username, email, password) => {
-          const authenticatedSession = await signup(username, email, password);
+        onSignup={async (name, username, email, password) => {
+          const authenticatedSession = await signup(
+            name,
+            username,
+            email,
+            password,
+            pendingInvitationToken(),
+          );
           // Carried from the signup form so the create-organization screen
           // arrives filled in rather than asking again.
           setSuggestedOrganizationName(
@@ -709,14 +1068,17 @@ export function App() {
           // so naming one is the next step — not a wall they hit on the way
           // somewhere else. They arrive un-blocked, and may skip.
           setOrganizationSetupReason(null);
+          // Invited: the invitation is their organization, so it comes before
+          // the offer to make one.
+          const returnTo = takeReturnTo();
+          if (returnTo) {
+            navigateToHref(returnTo);
+            return;
+          }
           navigateTo({ kind: "createOrganization" }, true);
         }}
       />
     );
-  }
-
-  if (view === "publicDoc" && route.kind === "document") {
-    return <AnonymousDocumentShell route={route} onNavigate={navigateTo} />;
   }
 
   if (view === "landing") {
@@ -724,18 +1086,97 @@ export function App() {
   }
 
   return (
-    <div className="app-root">
-      <AppShell
-        user={user}
-        route={asShellRoute(route)}
-        onNavigate={navigateTo}
-        onSignOut={async () => {
-          await logoutSession();
-          setUser(null);
-          setCallbackError(null);
-          navigateTo({ kind: "home" }, true);
-        }}
-      />
-    </div>
+    <ReadOnlyProvider value={readOnly}>
+      <PaywallProvider value={paywall}>
+        <div className="app-root">
+          <ReadOnlyBanner
+            // The same offer every other way in makes.
+            onManageBilling={() => setPaywallOpen(true)}
+          />
+          <AppShell
+            user={user}
+            route={asShellRoute(route)}
+            billing={
+              <BillingPage
+                subscriptionStatus={subscriptionStatus ?? "loading"}
+                accessSource={accessSource}
+                hasBillingStatusError={hasBillingStatusError}
+                currentPeriodEnd={currentPeriodEnd}
+                cancelAtPeriodEnd={cancelAtPeriodEnd}
+                cancelAt={cancelAt}
+                trialEndsAt={trialEndsAt}
+                organization={
+                  route.kind === "billing" && route.org
+                    ? route.org
+                    : billingOrganizationName
+                }
+                plan={plan}
+                onSubscribe={async () => {
+                  const { url } = await createCheckoutSession(
+                    billingOrganizationName,
+                  );
+                  window.location.href = url;
+                }}
+                onManage={async () => {
+                  const { url } = await createPortalSession(
+                    billingOrganizationName,
+                  );
+                  window.location.href = url;
+                }}
+                onCancel={async () => {
+                  const { url } = await createPortalSession(
+                    billingOrganizationName,
+                    "cancel",
+                  );
+                  window.location.href = url;
+                }}
+                canManageBilling={canManageBilling}
+                hasBillingAccount={hasBillingAccount}
+                onSubscriptionConfirmed={handleSubscriptionConfirmed}
+                onRetryBillingStatus={async () => {
+                  await refreshSession();
+                }}
+              />
+            }
+            onNavigate={navigateTo}
+            // Just the person, not the whole session: a full refresh draws the
+            // loading screen, which would take the settings page with it.
+            onAccountChanged={async () => {
+              const next = await fetchSessionUser();
+              if (next?.user) setUser(next.user);
+            }}
+            onSignOut={async () => {
+              await logoutSession();
+              setUser(null);
+              setCallbackError(null);
+              navigateTo({ kind: "home" }, true);
+            }}
+          />
+          {paywallOpen ? (
+            <PaywallDialog
+              organization={billingOrganizationName}
+              standing={
+                trialEndsAt !== null && trialEndsAt * 1000 < Date.now()
+                  ? "trial-ended"
+                  : hasBillingAccount
+                    ? "lapsed"
+                    : "none"
+              }
+              plan={plan}
+              canManage={canManageBilling}
+              onSubscribe={async () => {
+                // The organization the refusal named, which is the one on
+                // screen — never a different one of this person's.
+                const { url } = await createCheckoutSession(
+                  billingOrganizationName,
+                );
+                window.location.href = url;
+              }}
+              onClose={() => setPaywallOpen(false)}
+            />
+          ) : null}
+        </div>
+      </PaywallProvider>
+    </ReadOnlyProvider>
   );
 }

@@ -1,0 +1,839 @@
+import { expect, mock, test } from "bun:test";
+
+import type { GiteaClient } from "./client";
+import {
+  createDocumentVersionTag,
+  findWorkspaceDocument,
+  latestChangeByDocument,
+  listChangedDocuments,
+  listDocumentVersions,
+  listVersionsByDocument,
+  listWorkspaceDocuments,
+  readWorkspaceTree,
+  nextVersionFrom,
+  nextVersionTag,
+  toDocumentEntry,
+  treeRefCandidates,
+  isRestoredFromArchive,
+} from "./workspaceDocuments";
+
+/** Real identities, so the tests exercise the validation the product does. */
+const HANDOVER = "01J8XZ4K7MQ9V3B0RN7YHS2E1D";
+const ADMISSIONS = "01J9A0B1C2D3E4F5G6H7J8K9M0";
+const OTHER_ABSENT = "01JB1C2D3E4F5G6H7J8K9MNPQR";
+
+type Handler = (init?: any) => unknown;
+
+/** A handler returning this answers 404, the way a real Gitea would. */
+const NOT_FOUND = Symbol("not-found");
+
+function createMockClient(handlers: {
+  GET?: Record<string, Handler>;
+  POST?: Record<string, Handler>;
+}) {
+  const notFound = () => ({
+    data: undefined,
+    error: { message: "not found" },
+    response: new Response(null, { status: 404 }),
+  });
+
+  const method = (verb: "GET" | "POST") =>
+    mock(async (path: string, init?: unknown) => {
+      const handler = handlers[verb]?.[path];
+      if (!handler) return notFound();
+      const data = await handler(init);
+      if (data === NOT_FOUND) return notFound();
+      return {
+        data,
+        error: undefined,
+        response: new Response(null, { status: 200 }),
+      };
+    });
+
+  const mockGet = method("GET");
+  const mockPost = method("POST");
+
+  return {
+    client: {
+      GET: mockGet,
+      POST: mockPost,
+      PUT: mock(),
+      PATCH: mock(),
+      DELETE: mock(),
+      use: mock(),
+    } as unknown as GiteaClient,
+    mockGet,
+    mockPost,
+  };
+}
+
+test("toDocumentEntry reads a blob as a document at a path", () => {
+  expect(
+    toDocumentEntry({
+      path: `clinical/infection-control.${HANDOVER}.pdf`,
+      type: "blob",
+      size: 1024,
+      sha: "abc123",
+    }),
+  ).toEqual({
+    path: `clinical/infection-control.${HANDOVER}.pdf`,
+    // The address drops the identity and the extension: it is what a link
+    // carries and what a heading says.
+    slugPath: "clinical/infection-control",
+    name: "infection-control",
+    uid: HANDOVER,
+    folder: "clinical",
+    size: 1024,
+    sha: "abc123",
+  });
+});
+
+test("a document renamed keeps its identity and changes its address", () => {
+  // ADR 0005 in one assertion. Under ADR 0004 these were the same document
+  // becoming two, and the second one started again at v1.
+  const before = toDocumentEntry({
+    path: `nursing/hand-hygiene.${HANDOVER}.md`,
+    type: "blob",
+  });
+  const after = toDocumentEntry({
+    path: `infection-control/hand-hygiene-and-ppe.${HANDOVER}.md`,
+    type: "blob",
+  });
+
+  expect(after?.slugPath).not.toBe(before?.slugPath);
+  expect(after?.uid).toBe(before!.uid!);
+});
+
+test("toDocumentEntry describes a file this product did not write", () => {
+  // Described, not hidden: it is a blob in a tree that has to be listed, and
+  // the publish guard is where the refusal belongs.
+  const entry = toDocumentEntry({ path: "nursing/NOTES.md", type: "blob" });
+  expect(entry?.slugPath).toBe("nursing/NOTES");
+  expect(entry?.uid).toBeNull();
+});
+
+test("toDocumentEntry treats a document at the binder root as folderless", () => {
+  const path = `handover.${HANDOVER}.md`;
+  expect(toDocumentEntry({ path, type: "blob" })?.folder).toBe("");
+  expect(toDocumentEntry({ path, type: "blob" })?.slugPath).toBe("handover");
+});
+
+test("toDocumentEntry reads a document with no extension", () => {
+  // The identity is a segment, so a filename that ends at it parses by the
+  // same rule — the extension was never what identified anything.
+  const entry = toDocumentEntry({
+    path: `readme.${HANDOVER}`,
+    type: "blob",
+  });
+  expect(entry?.slugPath).toBe("readme");
+  expect(entry?.name).toBe("readme");
+  expect(entry?.uid).toBe(HANDOVER);
+});
+
+test("toDocumentEntry ignores directories", () => {
+  expect(toDocumentEntry({ path: "clinical", type: "tree" })).toBeNull();
+});
+
+test("toDocumentEntry ignores repository furniture", () => {
+  // A binder is a repository, so it carries CODEOWNERS and whatever else lives
+  // under `.gitea/`. Listing configuration as policy would put it in front of a
+  // surveyor.
+  expect(
+    toDocumentEntry({ path: ".gitea/CODEOWNERS", type: "blob" }),
+  ).toBeNull();
+  expect(toDocumentEntry({ path: ".gitignore", type: "blob" })).toBeNull();
+});
+
+test("listWorkspaceDocuments walks the binder once and sorts by path", async () => {
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/git/trees/{sha}": () => ({
+        tree: [
+          { path: "nursing", type: "tree" },
+          {
+            path: `nursing/handover.${HANDOVER}.md`,
+            type: "blob",
+            size: 10,
+            sha: "b",
+          },
+          {
+            path: `admissions.${ADMISSIONS}.md`,
+            type: "blob",
+            size: 20,
+            sha: "a",
+          },
+          { path: ".gitea/CODEOWNERS", type: "blob", size: 5, sha: "c" },
+        ],
+      }),
+    },
+  });
+
+  const documents = await listWorkspaceDocuments({
+    client,
+    org: "mercy-health",
+    workspace: "clinical",
+  });
+
+  expect(documents.map((d) => d.slugPath)).toEqual([
+    "admissions",
+    "nursing/handover",
+  ]);
+});
+
+test("listWorkspaceDocuments treats a binder with no commits as empty", async () => {
+  // A workspace somebody just made has no tree yet. That is the ordinary first
+  // state, not a failure.
+  const { client } = createMockClient({
+    GET: { "/repos/{owner}/{repo}/git/trees/{sha}": () => NOT_FOUND },
+  });
+
+  expect(
+    await listWorkspaceDocuments({
+      client,
+      org: "mercy-health",
+      workspace: "clinical",
+    }),
+  ).toEqual([]);
+});
+
+test("a branch named as long as a commit hash is read as the branch", async () => {
+  // `draft/` + a 16-character username + `/` + a 17-digit stamp is exactly
+  // 40 characters, which Gitea's tree endpoint takes for a SHA.
+  const draft = "draft/cmp-993dfc34-d91/20260930181634401";
+  expect(draft).toHaveLength(40);
+  expect(treeRefCandidates(draft)).toEqual([
+    `refs/heads/${draft}`,
+    `refs/tags/${draft}`,
+  ]);
+  // A real hash, and every ordinary name, is passed as it is.
+  const hash = "e122f4cb296e6816bc212c7289c5051d8af5c2eb";
+  expect(treeRefCandidates(hash)).toEqual([hash]);
+  expect(treeRefCandidates("main")).toEqual(["main"]);
+
+  const asked: string[] = [];
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/git/trees/{sha}": (init) => {
+        asked.push(init.params.path.sha);
+        return {
+          tree: [
+            {
+              path: `admissions.${ADMISSIONS}.md`,
+              type: "blob",
+              size: 20,
+              sha: "a",
+            },
+          ],
+        };
+      },
+    },
+  });
+  const tree = await readWorkspaceTree({
+    client,
+    org: "mercy-health",
+    workspace: "clinical",
+    ref: draft,
+  });
+  expect(asked).toEqual([`refs/heads/${draft}`]);
+  expect(tree.documents).toHaveLength(1);
+});
+
+test("listDocumentVersions counts only this document's tags", async () => {
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/tags": () => [
+        { name: `${HANDOVER}/v1`, commit: { sha: "aaa" } },
+        { name: `${HANDOVER}/v2`, commit: { sha: "bbb" } },
+        // Another document in the same binder. Tags are repository-global,
+        // which is exactly why the version has to carry the document.
+        { name: `${ADMISSIONS}/v9`, commit: { sha: "ccc" } },
+        // Not ours. Counting it would invent a version nobody published.
+        { name: "release-2026", commit: { sha: "ddd" } },
+        // The shape ADR 0004 wrote. Not a version of anything now, and
+        // counting it would number this document after a path it had once.
+        { name: "nursing/handover/v9", commit: { sha: "eee" } },
+      ],
+    },
+  });
+
+  const versions = await listDocumentVersions({
+    client,
+    org: "mercy-health",
+    workspace: "clinical",
+    uid: HANDOVER,
+  });
+
+  // Newest first.
+  expect(versions).toEqual([
+    { tag: `${HANDOVER}/v2`, version: 2, commitSha: "bbb", publishedAt: "" },
+    { tag: `${HANDOVER}/v1`, version: 1, commitSha: "aaa", publishedAt: "" },
+  ]);
+});
+
+test("listDocumentVersions finds a version past Gitea's first page of tags", async () => {
+  // Gitea answers an unpaged tag read with 30, newest first. This document's
+  // v1 is older than 60 other tags, so it is on the second page — which is
+  // exactly where publish used to stop looking, number the next version v1,
+  // merge, and then have its tag refused as a duplicate.
+  const others = Array.from({ length: 60 }, (_, index) => ({
+    name: `${ADMISSIONS}/v${60 - index}`,
+    commit: { sha: `other-${index}` },
+  }));
+  const all = [...others, { name: `${HANDOVER}/v1`, commit: { sha: "aaa" } }];
+
+  const { client, mockGet } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/tags": (init) => {
+        const { page = 1, limit = 30 } = init?.params?.query ?? {};
+        return all.slice((page - 1) * limit, page * limit);
+      },
+    },
+  });
+
+  const versions = await listDocumentVersions({
+    client,
+    org: "mercy-health",
+    workspace: "clinical",
+    uid: HANDOVER,
+  });
+
+  expect(versions.map((version) => version.version)).toEqual([1]);
+  expect(nextVersionFrom(versions)).toBe(2);
+  // Page 1, then one wave of three: two round trips, not a page at a time.
+  expect(mockGet).toHaveBeenCalledTimes(4);
+});
+
+test("a file with no identity has published nothing, and costs no call", async () => {
+  const { client, mockGet } = createMockClient({ GET: {} });
+
+  expect(
+    await listDocumentVersions({
+      client,
+      org: "mercy-health",
+      workspace: "clinical",
+      uid: null,
+    }),
+  ).toEqual([]);
+  expect(mockGet).not.toHaveBeenCalled();
+});
+
+test("listVersionsByDocument keys a binder's tags by address", async () => {
+  // The tags are named after identities and every caller's rows are keyed on
+  // the address. The tree is what joins them.
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/git/trees/{sha}": () => ({
+        tree: [
+          { path: `nursing/handover.${HANDOVER}.md`, type: "blob" },
+          { path: `admissions.${ADMISSIONS}.md`, type: "blob" },
+        ],
+      }),
+      "/repos/{owner}/{repo}/tags": () => [
+        { name: `${HANDOVER}/v1`, commit: { sha: "aaa" } },
+        { name: `${HANDOVER}/v2`, commit: { sha: "bbb" } },
+        { name: `${ADMISSIONS}/v9`, commit: { sha: "ccc" } },
+      ],
+    },
+  });
+
+  const byDocument = await listVersionsByDocument({
+    client,
+    org: "mercy-health",
+    workspace: "clinical",
+  });
+
+  expect([...byDocument.keys()].sort()).toEqual([
+    "admissions",
+    "nursing/handover",
+  ]);
+  expect(byDocument.get("nursing/handover")?.map((v) => v.version)).toEqual([
+    2, 1,
+  ]);
+});
+
+test("a tag naming no document in the tree is left out", async () => {
+  // It cannot happen through the product — nothing deletes a document and
+  // nothing strips an identity — but it is what an ADR 0004 tag looks like
+  // now, and what a binder edited directly in Gitea could produce.
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/git/trees/{sha}": () => ({
+        tree: [{ path: `nursing/handover.${HANDOVER}.md`, type: "blob" }],
+      }),
+      "/repos/{owner}/{repo}/tags": () => [
+        { name: `${HANDOVER}/v1`, commit: { sha: "aaa" } },
+        { name: `${ADMISSIONS}/v4`, commit: { sha: "bbb" } },
+        { name: "nursing/handover/v3", commit: { sha: "ccc" } },
+      ],
+    },
+  });
+
+  const byDocument = await listVersionsByDocument({
+    client,
+    org: "mercy-health",
+    workspace: "clinical",
+  });
+
+  expect([...byDocument.keys()]).toEqual(["nursing/handover"]);
+  expect(byDocument.get("nursing/handover")?.map((v) => v.version)).toEqual([
+    1,
+  ]);
+});
+
+test("a document's last change is read off its newest version tag", () => {
+  const documents = [
+    {
+      path: `nursing/handover.${HANDOVER}.md`,
+      slugPath: "nursing/handover",
+      name: "handover",
+      uid: HANDOVER,
+      folder: "nursing",
+      size: 0,
+      sha: "",
+    },
+  ];
+  const tags = [
+    {
+      name: `${HANDOVER}/v1`,
+      commit: { sha: "a", created: "2026-08-01T00:00:00Z" },
+      message: "Handover v1\n\n  From change: #2\n",
+    },
+    {
+      name: `${HANDOVER}/v2`,
+      commit: { sha: "b", created: "2026-09-01T00:00:00Z" },
+      message: "Handover v2\n\n  From change: #7\n",
+    },
+    // Somebody else's document, and a tag this app did not write.
+    { name: `${ADMISSIONS}/v1`, message: "  From change: #3" },
+    { name: "v1.0.0", message: "release" },
+  ];
+
+  expect(latestChangeByDocument(tags, documents)).toEqual(
+    new Map([
+      [
+        "nursing/handover",
+        {
+          changeNumber: 7,
+          commitSha: "b",
+          publishedAt: "2026-09-01T00:00:00Z",
+        },
+      ],
+    ]),
+  );
+
+  // A tag with no stamp still names its commit, which is the merge commit of
+  // the change that published it.
+  expect(
+    latestChangeByDocument(
+      [
+        {
+          name: `${HANDOVER}/v3`,
+          commit: { sha: "c" },
+          message: "Handover v3",
+        },
+      ],
+      documents,
+    ).get("nursing/handover"),
+  ).toEqual({ changeNumber: null, commitSha: "c", publishedAt: "" });
+});
+
+test("the next version follows the highest published one", () => {
+  expect(nextVersionFrom([])).toBe(1);
+  expect(
+    nextVersionFrom([
+      { tag: "handover/v1", version: 1, commitSha: "a", publishedAt: "" },
+      { tag: "handover/v4", version: 4, commitSha: "b", publishedAt: "" },
+    ]),
+  ).toBe(5);
+
+  expect(nextVersionTag(HANDOVER, [])).toBe(`${HANDOVER}/v1`);
+});
+
+test("listChangedDocuments answers with every document a change touched", async () => {
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/pulls/{index}/files": () => [
+        { filename: `nursing/handover.${HANDOVER}.md` },
+        { filename: `admissions.${ADMISSIONS}.md` },
+        // Repository furniture. A change that edits CODEOWNERS alongside two
+        // policies publishes two versions, not three.
+        { filename: ".gitea/CODEOWNERS" },
+      ],
+    },
+  });
+
+  const documents = await listChangedDocuments({
+    client,
+    org: "mercy-health",
+    workspace: "clinical",
+    pullNumber: 7,
+  });
+
+  // The unit of approval is the change, not the document (ADR 0004 §4), so
+  // publishing has to know every document it covers.
+  expect(documents.map((d) => d.slugPath)).toEqual([
+    "admissions",
+    "nursing/handover",
+  ]);
+});
+
+test("listChangedDocuments counts a document once, however many times it changed", async () => {
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/pulls/{index}/files": () => [
+        { filename: `nursing/handover.${HANDOVER}.md` },
+        { filename: `nursing/handover.${HANDOVER}.md` },
+      ],
+    },
+  });
+
+  expect(
+    await listChangedDocuments({
+      client,
+      org: "mercy-health",
+      workspace: "clinical",
+      pullNumber: 7,
+    }),
+  ).toHaveLength(1);
+});
+
+test("a renamed document is one document, at its new address", async () => {
+  // Gitea reports a rename as two entries carrying one identity. Publishing
+  // both would compute the same next version twice and write one tag twice —
+  // git refuses the second, and the publish half-succeeds.
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/pulls/{index}/files": () => [
+        {
+          filename: `nursing/hand-hygiene.${HANDOVER}.md`,
+          // Gitea's spelling, verified against a running one. GitHub says
+          // "removed"; both are treated the same, because guessing wrong here
+          // writes a version tag for a file that is not there.
+          status: "deleted",
+        },
+        {
+          filename: `nursing/hand-hygiene-and-ppe.${HANDOVER}.md`,
+          status: "added",
+        },
+      ],
+    },
+  });
+
+  const documents = await listChangedDocuments({
+    client,
+    org: "mercy-health",
+    workspace: "clinical",
+    pullNumber: 7,
+  });
+
+  expect(documents).toHaveLength(1);
+  expect(documents[0]?.slugPath).toBe("nursing/hand-hygiene-and-ppe");
+  expect(documents[0]?.uid).toBe(HANDOVER);
+});
+
+test("a document a change only deletes publishes nothing", async () => {
+  // Tagging it would name a version after a path that is not in the tree.
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/pulls/{index}/files": () => [
+        { filename: `nursing/handover.${HANDOVER}.md`, status: "removed" },
+        { filename: `nursing/old.${OTHER_ABSENT}.md`, status: "deleted" },
+        { filename: `admissions.${ADMISSIONS}.md`, status: "modified" },
+      ],
+    },
+  });
+
+  const documents = await listChangedDocuments({
+    client,
+    org: "mercy-health",
+    workspace: "clinical",
+    pullNumber: 7,
+  });
+
+  expect(documents.map((d) => d.slugPath)).toEqual(["admissions"]);
+});
+
+test("createDocumentVersionTag names the document in the tag", async () => {
+  let body: Record<string, unknown> = {};
+  const { client } = createMockClient({
+    POST: {
+      "/repos/{owner}/{repo}/tags": (init: {
+        body: Record<string, unknown>;
+      }) => {
+        body = init.body;
+        return { commit: { sha: "merge-sha" } };
+      },
+    },
+  });
+
+  const version = await createDocumentVersionTag({
+    client,
+    org: "mercy-health",
+    workspace: "clinical",
+    uid: HANDOVER,
+    slugPath: "nursing/handover",
+    version: 2,
+    target: "main",
+  });
+
+  // Tags are repository-global and a binder holds many documents, so the
+  // version has to carry the document with it — and it carries the identity
+  // rather than the path, so a rename does not restart the numbering.
+  expect(body.tag_name).toBe(`${HANDOVER}/v2`);
+  expect(body.target).toBe("main");
+  expect(version).toEqual({
+    tag: `${HANDOVER}/v2`,
+    version: 2,
+    commitSha: "merge-sha",
+    publishedAt: "",
+  });
+});
+
+test("two documents differing only by extension share one identity", () => {
+  // The reason uploads refuse this. A URL has to name one thing, and the
+  // identity deliberately drops the extension so that re-uploading a policy as
+  // a PDF keeps its history — which only works if nothing else can claim the
+  // same identity.
+  const markdown = toDocumentEntry({ path: "nursing/policy.md", type: "blob" });
+  const pdf = toDocumentEntry({ path: "nursing/policy.pdf", type: "blob" });
+
+  expect(markdown?.slugPath).toBe("nursing/policy");
+  expect(pdf?.slugPath).toBe("nursing/policy");
+});
+
+test("an exact file path wins over an address match", async () => {
+  // So a link carrying the extension always resolves to that exact file, even
+  // in a binder edited outside Bindersnap that already holds a collision.
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/git/trees/{sha}": () => ({
+        tree: [
+          {
+            path: `nursing/policy.${ADMISSIONS}.pdf`,
+            type: "blob",
+            sha: "pdf",
+          },
+          { path: `nursing/policy.${HANDOVER}.md`, type: "blob", sha: "md" },
+        ],
+      }),
+    },
+  });
+
+  const exact = await findWorkspaceDocument({
+    client,
+    org: "riverside-health",
+    workspace: "clinical",
+    documentPath: `nursing/policy.${HANDOVER}.md`,
+  });
+  expect(exact?.sha).toBe("md");
+
+  // And an address-only link resolves the same way every time rather than
+  // alphabetically by accident.
+  const byIdentity = await findWorkspaceDocument({
+    client,
+    org: "riverside-health",
+    workspace: "clinical",
+    documentPath: "nursing/policy",
+  });
+  expect(byIdentity).not.toBeNull();
+  expect(byIdentity?.slugPath).toBe("nursing/policy");
+});
+
+test("the tree answers with folders, including the empty ones", async () => {
+  // **Git has no empty directories**, so a folder somebody made and has not
+  // filed anything in yet exists because a placeholder is sitting in it — and
+  // that file is furniture, filtered out of the documents. Deriving folders
+  // from document paths, which is what this replaced, made a folder appear
+  // only once it stopped being empty.
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/git/trees/{sha}": () => ({
+        tree: [
+          { path: "nursing", type: "tree" },
+          { path: `nursing/handover.${HANDOVER}.md`, type: "blob" },
+          { path: "ward-3", type: "tree" },
+          { path: "ward-3/.gitkeep", type: "blob" },
+          { path: ".gitea", type: "tree" },
+          { path: ".gitea/CODEOWNERS", type: "blob" },
+        ],
+      }),
+    },
+  });
+
+  const tree = await readWorkspaceTree({
+    client,
+    org: "mercy-health",
+    workspace: "clinical",
+  });
+
+  expect(tree.folders).toEqual(["nursing", "ward-3"]);
+  expect(tree.documents.map((d) => d.slugPath)).toEqual(["nursing/handover"]);
+  // Every blob, furniture included — a rename has to move a placeholder, and a
+  // collision check has to know it is there. Reconstructing this list from the
+  // two above named a placeholder in folders that never had one, and Gitea
+  // refused to move a file that was not there.
+  expect(tree.paths).toEqual([
+    `nursing/handover.${HANDOVER}.md`,
+    "ward-3/.gitkeep",
+  ]);
+});
+
+test("the binder's own configuration is not part of its shape", async () => {
+  // `.gitea/` holds the sign-off rules. Renaming a folder must never sweep it
+  // along, so it is not in the paths a rename operates over.
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/git/trees/{sha}": () => ({
+        tree: [{ path: ".gitea/CODEOWNERS", type: "blob" }],
+      }),
+    },
+  });
+
+  const tree = await readWorkspaceTree({
+    client,
+    org: "mercy-health",
+    workspace: "clinical",
+  });
+  expect(tree.paths).toEqual([]);
+  expect(tree.folders).toEqual([]);
+});
+
+test("a restore is told from a revision by what the tags last recorded", () => {
+  const uid = "01J8XZ4K7MQ9V3B0RN7YHS2E1D";
+  const tag = (name: string, sha: string, created: string) => ({
+    name,
+    commit: { sha, created },
+  });
+  const archivedOnce = [
+    tag(`${uid}/v1`, "m1", "2026-01-01T00:00:00Z"),
+    tag(`${uid}/v2`, "m2", "2026-02-01T00:00:00Z"),
+    tag(`${uid}/archived-1`, "m3", "2026-03-01T00:00:00Z"),
+  ];
+
+  // Open: it is in the archive now, so this change brings it back.
+  expect(
+    isRestoredFromArchive({
+      tags: archivedOnce,
+      uid,
+      open: true,
+      mergeCommitSha: null,
+    }),
+  ).toBe(true);
+  // A policy never archived is only being revised.
+  expect(
+    isRestoredFromArchive({
+      tags: archivedOnce.slice(0, 2),
+      uid,
+      open: true,
+      mergeCommitSha: null,
+    }),
+  ).toBe(false);
+
+  // Published: the version this change wrote came straight after an archiving.
+  const restored = [
+    ...archivedOnce,
+    tag(`${uid}/v3`, "m4", "2026-04-01T00:00:00Z"),
+  ];
+  expect(
+    isRestoredFromArchive({
+      tags: restored,
+      uid,
+      open: false,
+      mergeCommitSha: "m4",
+    }),
+  ).toBe(true);
+  // An earlier change that revised it before it was ever archived was not one.
+  expect(
+    isRestoredFromArchive({
+      tags: restored,
+      uid,
+      open: false,
+      mergeCommitSha: "m2",
+    }),
+  ).toBe(false);
+  // A declined change published nothing and restored nothing.
+  expect(
+    isRestoredFromArchive({
+      tags: restored,
+      uid,
+      open: false,
+      mergeCommitSha: null,
+    }),
+  ).toBe(false);
+  // Another document's archiving says nothing about this one.
+  expect(
+    isRestoredFromArchive({
+      tags: [
+        ...archivedOnce.slice(0, 2),
+        tag(
+          "01J9A0B1C2D3E4F5G6H7J8K9M0/archived-1",
+          "m3",
+          "2026-03-01T00:00:00Z",
+        ),
+      ],
+      uid,
+      open: true,
+      mergeCommitSha: null,
+    }),
+  ).toBe(false);
+});
+
+test("publishedVersionByMergeCommit numbers a change by the tags on its merge", async () => {
+  const { publishedVersionByMergeCommit } =
+    await import("./workspaceDocuments");
+
+  const bySha = publishedVersionByMergeCommit([
+    // One document, one merge: that change published v3.
+    { name: `${HANDOVER}/v3`, commit: { sha: "merge-a" } },
+    // Two documents to the same number on one merge: still one answer.
+    { name: `${HANDOVER}/v4`, commit: { sha: "merge-b" } },
+    { name: `${ADMISSIONS}/v4`, commit: { sha: "merge-b" } },
+    // Two documents to different numbers: no single "published as".
+    { name: `${HANDOVER}/v5`, commit: { sha: "merge-c" } },
+    { name: `${ADMISSIONS}/v9`, commit: { sha: "merge-c" } },
+    // The retired shape, and a tag this app did not write.
+    { name: "doc/v0007", commit: { sha: "merge-d" } },
+    { name: "release-2026", commit: { sha: "merge-e" } },
+  ]);
+
+  expect([...bySha]).toEqual([
+    ["merge-a", 3],
+    ["merge-b", 4],
+  ]);
+});
+
+test("an upload branch nobody proposed does not hold its address", async () => {
+  const { findPendingDocumentBranch } = await import("./workspaceDocuments");
+  const { client } = createMockClient({
+    GET: {
+      // Branches are not asked about at all: a branch left by an upload that
+      // stopped before its change request is not a proposal.
+      "/repos/{owner}/{repo}/branches": () => [
+        { name: "upload/nursing/handover/20260901-orphan" },
+      ],
+      "/repos/{owner}/{repo}/pulls": () => [
+        {
+          number: 3,
+          head: { ref: "upload/nursing/admissions/20260902-alice" },
+        },
+      ],
+    },
+  });
+
+  expect(
+    await findPendingDocumentBranch({
+      client,
+      org: "mercy-health",
+      workspace: "clinical",
+      slugPath: "nursing/handover",
+    }),
+  ).toBeNull();
+  expect(
+    await findPendingDocumentBranch({
+      client,
+      org: "mercy-health",
+      workspace: "clinical",
+      slugPath: "nursing/admissions",
+    }),
+  ).toBe("upload/nursing/admissions/20260902-alice");
+});

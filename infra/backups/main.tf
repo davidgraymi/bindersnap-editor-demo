@@ -65,6 +65,30 @@ variable "daily_backup_tag_value" {
   default     = "daily"
 }
 
+variable "hourly_snapshot_retain_count" {
+  description = "Hourly EBS snapshots to keep (48 = two days of hourly restore points)"
+  type        = number
+  default     = 48
+}
+
+variable "daily_snapshot_retain_count" {
+  description = "Daily EBS snapshots to keep in the primary region"
+  type        = number
+  default     = 35
+}
+
+variable "dr_region" {
+  description = "Region the daily EBS snapshot is copied to, so a regional outage or a deleted volume is survivable. Null disables the copy."
+  type        = string
+  default     = "us-west-2"
+}
+
+variable "dr_copy_retain_days" {
+  description = "Days to keep each daily snapshot copy in dr_region"
+  type        = number
+  default     = 35
+}
+
 variable "ec2_instance_role_name" {
   description = "Existing EC2 IAM role name to attach the Litestream S3 policy to"
   type        = string
@@ -114,6 +138,51 @@ resource "aws_s3_bucket_public_access_block" "litestream" {
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
+}
+
+# Encryption at rest, stated rather than inherited from S3's account default.
+resource "aws_s3_bucket_server_side_encryption_configuration" "litestream" {
+  bucket = aws_s3_bucket.litestream.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# Refuse any request that is not over TLS. The replicas are every account,
+# session and setting the API holds; nothing may read or write them in clear.
+data "aws_iam_policy_document" "litestream_tls_only" {
+  statement {
+    sid     = "DenyInsecureTransport"
+    effect  = "Deny"
+    actions = ["s3:*"]
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    resources = [
+      aws_s3_bucket.litestream.arn,
+      "${aws_s3_bucket.litestream.arn}/*",
+    ]
+
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "litestream" {
+  bucket = aws_s3_bucket.litestream.id
+  policy = data.aws_iam_policy_document.litestream_tls_only.json
+
+  # A bucket policy is refused while the public access block is being set.
+  depends_on = [aws_s3_bucket_public_access_block.litestream]
 }
 
 # IAM policy document for litestream S3 operations

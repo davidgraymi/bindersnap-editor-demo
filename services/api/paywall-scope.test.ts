@@ -10,7 +10,8 @@ import { join } from "node:path";
  * forever, whatever an organization owes us, because holding a customer's
  * approval history hostage would poison a compliance reference permanently.
  * The ADR asks for exactly this check rather than a route-by-route audit: no
- * GET under /api/app/documents may reach requireSubscription.
+ * GET under /api/app/documents or /api/app/binders may reach
+ * requireSubscription.
  *
  * This reads the router out of server.ts rather than mocking a stack, so it
  * catches a new read route the moment it is added, before anyone runs it.
@@ -18,7 +19,12 @@ import { join } from "node:path";
 
 const SERVER = readFileSync(join(import.meta.dir, "server.ts"), "utf8");
 
-const READ_PREFIX = "/api/app/documents";
+/**
+ * The two addresses a record is read at: the document repositories of ADR
+ * 0001's model, and the binders that replace them. Both are covered because
+ * the promise is about reading, not about which shape the record is in.
+ */
+const READ_PREFIXES = ["/api/app/documents", "/api/app/binders"];
 const PAYWALL_FUNCTIONS = ["requireSubscription", "requireSubscriptionOrAdmin"];
 
 interface Route {
@@ -140,7 +146,8 @@ const functions = collectFunctions(SERVER);
 const routes = collectRoutes(SERVER);
 const readRoutes = routes.filter(
   (route) =>
-    route.method === "GET" && readablePath(route.path).startsWith(READ_PREFIX),
+    route.method === "GET" &&
+    READ_PREFIXES.some((prefix) => readablePath(route.path).startsWith(prefix)),
 );
 
 describe("the paywall gates mutation, never reading", () => {
@@ -152,7 +159,7 @@ describe("the paywall gates mutation, never reading", () => {
     expect(functions.has("requireSubscription")).toBe(true);
   });
 
-  test("no GET under /api/app/documents reaches requireSubscription", () => {
+  test("no GET on a record reaches requireSubscription", () => {
     const offenders = readRoutes
       .filter((route) =>
         [...reachableFrom(route.handler, functions)].some((name) =>
@@ -166,17 +173,36 @@ describe("the paywall gates mutation, never reading", () => {
     expect(offenders).toEqual([]);
   });
 
-  test("the download route in particular stays open", () => {
+  test("both shapes of record are actually being checked", () => {
+    // A prefix that matches nothing would let half the rule go unenforced in
+    // silence — which is how it would go wrong.
+    for (const prefix of READ_PREFIXES) {
+      expect(
+        readRoutes.filter((route) =>
+          readablePath(route.path).startsWith(prefix),
+        ).length,
+      ).toBeGreaterThan(0);
+    }
+  });
+
+  test("the way a file leaves in particular stays open", () => {
     // Exporting is the read that matters most: it is how a customer answers a
     // surveyor, and it is the one we can never take away.
-    const download = readRoutes.find((route) =>
-      readablePath(route.path).endsWith("/download"),
+    //
+    // There is one route now, not two. A document used to be a repository with
+    // its own `/download`; with that model deleted, a binder's `/raw/` is the
+    // whole of it. The count stays asserted so the route cannot quietly go to
+    // zero — which would take the export away rather than move it.
+    const exports = readRoutes.filter((route) =>
+      readablePath(route.path).includes("/raw/"),
     );
 
-    expect(download).toBeDefined();
-    expect([...reachableFrom(download!.handler, functions)]).not.toContain(
-      "requireSubscription",
-    );
+    expect(exports.length).toBeGreaterThanOrEqual(1);
+    for (const route of exports) {
+      expect([...reachableFrom(route.handler, functions)]).not.toContain(
+        "requireSubscription",
+      );
+    }
   });
 
   test("mutations are still gated", () => {
@@ -194,6 +220,9 @@ describe("the paywall gates mutation, never reading", () => {
 
     const gatedPaths = gatedMutations.map((route) => readablePath(route.path));
     expect(gatedPaths.some((path) => path.endsWith("/publish"))).toBe(true);
-    expect(gatedPaths).toContain("/api/app/documents");
+    // Filing a policy is the authoring act the paywall exists for. It used to
+    // be `POST /api/app/documents`, which made a repository; it is now a commit
+    // into a binder that already exists.
+    expect(gatedPaths.some((path) => path.endsWith("/documents"))).toBe(true);
   });
 });

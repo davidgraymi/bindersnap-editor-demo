@@ -22,6 +22,7 @@
  */
 
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -101,6 +102,7 @@ let API_PORT: string;
 let API_PROXY_PORT: string;
 let GITEA_PORT: string;
 let HOCUSPOCUS_PORT: string;
+let MAILPIT_PORT: string;
 let APP_BASE_URL: string;
 let API_READY_URL: string;
 let API_PROXY_BASE_URL: string;
@@ -121,6 +123,7 @@ async function resolveStack(): Promise<void> {
   API_PROXY_PORT = String(stack.ports.API_PROXY_PORT);
   GITEA_PORT = String(stack.ports.GITEA_PORT);
   HOCUSPOCUS_PORT = String(stack.ports.HOCUSPOCUS_PORT);
+  MAILPIT_PORT = String(stack.ports.MAILPIT_PORT);
 
   // Playwright's baseURL and the test helpers read these from the
   // environment, and playwright.config.ts has already been evaluated by now.
@@ -130,6 +133,7 @@ async function resolveStack(): Promise<void> {
   process.env.API_PROXY_PORT = API_PROXY_PORT;
   process.env.GITEA_PORT = GITEA_PORT;
   process.env.HOCUSPOCUS_PORT = HOCUSPOCUS_PORT;
+  process.env.MAILPIT_PORT = MAILPIT_PORT;
 
   APP_BASE_URL = `http://localhost:${APP_PORT}`;
   API_READY_URL = `http://localhost:${API_PORT}/auth/me`;
@@ -290,6 +294,18 @@ export default async function globalSetup(): Promise<void> {
     }
   }
 
+  // Every stack on one Stripe test account hears every event on it, so a
+  // checkout in another CI job would otherwise land on this job's
+  // same-numbered organization. The tag goes to the API through compose, and
+  // to the workers through process.env; see services/api/stripe/run-tag.ts.
+  // A SKIP_STACK run keeps whatever the running stack was started with.
+  if (
+    process.env.SKIP_STACK !== "1" &&
+    (process.env.STRIPE_RUN_TAG ?? "").trim() === ""
+  ) {
+    process.env.STRIPE_RUN_TAG = `run-${randomUUID()}`;
+  }
+
   await ensureStripeWebhookSecret({
     allowFallbackSecret: process.env.SKIP_STACK !== "1",
     env: process.env,
@@ -330,6 +346,7 @@ export default async function globalSetup(): Promise<void> {
     API_PROXY_PORT,
     GITEA_PORT,
     HOCUSPOCUS_PORT,
+    MAILPIT_PORT,
     STRIPE_SECRET_KEY:
       process.env.STRIPE_SECRET_KEY || DEFAULT_STRIPE_SECRET_KEY,
     STRIPE_PRICE_ID: process.env.STRIPE_PRICE_ID || DEFAULT_STRIPE_PRICE_ID,

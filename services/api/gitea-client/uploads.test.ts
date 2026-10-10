@@ -3,6 +3,7 @@ import {
   buildCanonicalDocumentFileName,
   buildUploadBranchName,
   buildUploadCommitMessage,
+  documentSlugPathFromUploadBranch,
   createInitialDocumentUpload,
   getFileExtension,
   validateUploadFile,
@@ -216,6 +217,22 @@ test("buildUploadCommitMessage includes all required trailers", () => {
   expect(message).toContain("Bindersnap-File-Hash-SHA256: abc123def456789");
 });
 
+test("buildUploadCommitMessage says an edit when the editor wrote it", () => {
+  const message = buildUploadCommitMessage({
+    docSlug: "nursing/hand-hygiene",
+    canonicalFile: "nursing/hand-hygiene.01J8.json",
+    sourceFilename: "document.json",
+    uploadBranch: "draft/alice/20260927",
+    uploaderSlug: "alice",
+    fileHashSha256: "hash123",
+    subject: "Edit Hand Hygiene",
+  });
+
+  expect(message.split("\n")[0]).toBe("Edit Hand Hygiene");
+  // The trailers are the same either way: the record is the file's.
+  expect(message).toContain("Bindersnap-Source-Filename: document.json");
+});
+
 test("buildUploadCommitMessage format", () => {
   const message = buildUploadCommitMessage({
     docSlug: "test-doc",
@@ -254,187 +271,39 @@ test("buildUploadCommitMessage handles special characters in filenames", () => {
   );
 });
 
-test("createInitialDocumentUpload creates the repo, bootstraps main, and opens a PR", async () => {
-  const file = new File(["hello world"], "Quarterly Report Final.docx", {
-    type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  });
+// ────────────────────────────────────────────────────────────────
+// documentSlugPathFromUploadBranch tests
+// ────────────────────────────────────────────────────────────────
 
-  const { client, mockPost, mockDelete } = createMockClient({
-    GET: {
-      "/repos/{owner}/{repo}/contents/{filepath}": (init: {
-        params?: { path?: { filepath?: string } };
-        query?: { ref?: string };
-      }) => {
-        // README.md exists on main (for bootstrap deletion);
-        // document.docx does NOT exist on the upload branch yet.
-        if (init?.params?.path?.filepath === "README.md") {
-          return { sha: "readme-sha", type: "file" };
-        }
-        throw { status: 404, message: "not found" };
-      },
-      "/repos/{owner}/{repo}/pulls/{index}/reviews": () => [],
-    },
-    POST: {
-      "/user/repos": (init: {
-        body?: {
-          name?: string;
-          private?: boolean;
-          auto_init?: boolean;
-          default_branch?: string;
-          description?: string;
-        };
-      }) => ({
-        id: 99,
-        name: init?.body?.name,
-        full_name: `alice/${init?.body?.name ?? ""}`,
-        owner: { login: "alice" },
-      }),
-      "/repos/{owner}/{repo}/branch_protections": (init: {
-        body?: { rule_name?: string; required_approvals?: number };
-      }) => ({
-        rule_name: init?.body?.rule_name,
-        required_approvals: init?.body?.required_approvals,
-      }),
-      "/repos/{owner}/{repo}/branches": (init: {
-        body?: { new_branch_name?: string; old_branch_name?: string };
-      }) => ({
-        name: init?.body?.new_branch_name,
-      }),
-      "/repos/{owner}/{repo}/contents/{filepath}": (init: {
-        params?: { path?: { filepath?: string } };
-        body?: { content?: string; message?: string; branch?: string };
-      }) => ({
-        commit: { sha: "commit-sha" },
-        content: {
-          path: init?.params?.path?.filepath,
-        },
-      }),
-      "/repos/{owner}/{repo}/pulls": (init: {
-        body?: { title?: string; head?: string; base?: string };
-      }) => ({
-        number: 17,
-        title: init?.body?.title,
-      }),
-    },
-    DELETE: {
-      "/repos/{owner}/{repo}/contents/{filepath}": () => ({}),
-    },
-  });
+test("documentSlugPathFromUploadBranch is the inverse of the builder", () => {
+  const branch = buildUploadBranchName(
+    "nursing/hand-hygiene",
+    "alice",
+    "abc12345",
+    new Date("2026-04-02T14:35:22Z"),
+  );
 
-  const originalFileReader = globalThis.FileReader;
-  class MockFileReader {
-    result: string | ArrayBuffer | null = null;
-    onload:
-      ((this: FileReader, ev: ProgressEvent<FileReader>) => unknown) | null =
-      null;
-    onerror:
-      ((this: FileReader, ev: ProgressEvent<FileReader>) => unknown) | null =
-      null;
+  expect(documentSlugPathFromUploadBranch(branch)).toBe("nursing/hand-hygiene");
+});
 
-    readAsDataURL() {
-      this.result = "data:application/octet-stream;base64,aGVsbG8gd29ybGQ=";
-      this.onload?.(new Event("load") as unknown as ProgressEvent<FileReader>);
-    }
-  }
-  globalThis.FileReader = MockFileReader as unknown as typeof FileReader;
+test("documentSlugPathFromUploadBranch keeps every folder", () => {
+  // The identity carries slashes, so splitting on the separator would stop at
+  // the first folder and call the document "clinical".
+  expect(
+    documentSlugPathFromUploadBranch(
+      "upload/clinical/nursing/infection/policy/20260402/143522Z-alice-abc12345",
+    ),
+  ).toBe("clinical/nursing/infection/policy");
+});
 
-  try {
-    const { computeFileHash, createInitialDocumentUpload } =
-      await import("./uploads");
-    const fullHash = await computeFileHash(file);
-
-    const result = await createInitialDocumentUpload({
-      client,
-      repoName: "quarterly-report",
-      file,
-      uploaderSlug: "alice",
-      nextVersion: 1,
-    });
-
-    expect(result.owner).toBe("alice");
-    expect(result.repo).toBe("quarterly-report");
-    expect(result.canonicalFile).toBe("document.docx");
-    expect(result.prNumber).toBe(17);
-    expect(result.prTitle).toBe("Upload v1: Quarterly Report");
-    expect(result.commitSha).toBe("commit-sha");
-    expect(mockDelete).toHaveBeenCalled();
-
-    const postCalls = mockPost.mock.calls as Array<
-      [
-        string,
-        {
-          body?: {
-            name?: string;
-            private?: boolean;
-            auto_init?: boolean;
-            default_branch?: string;
-            rule_name?: string;
-            required_approvals?: number;
-            new_branch_name?: string;
-            old_branch_name?: string;
-            content?: string;
-            message?: string;
-            branch?: string;
-            title?: string;
-            head?: string;
-            base?: string;
-          };
-        },
-      ]
-    >;
-
-    expect(
-      postCalls.find(([path]) => path === "/user/repos")?.[1]?.body,
-    ).toMatchObject({
-      name: "quarterly-report",
-      private: true,
-      auto_init: true,
-      default_branch: "main",
-    });
-    expect(
-      postCalls.find(
-        ([path]) => path === "/repos/{owner}/{repo}/branch_protections",
-      )?.[1]?.body,
-    ).toMatchObject({
-      rule_name: "main",
-      required_approvals: 1,
-      enable_approvals_whitelist: false,
-      enable_merge_whitelist: false,
-      block_on_rejected_reviews: true,
-    });
-
-    const branchCall = postCalls.find(
-      ([path]) => path === "/repos/{owner}/{repo}/branches",
-    );
-    expect(branchCall?.[1]?.body?.old_branch_name).toBe("main");
-    expect(branchCall?.[1]?.body?.new_branch_name).toContain(
-      "upload/quarterly-report/",
-    );
-    expect(branchCall?.[1]?.body?.new_branch_name).toContain(
-      `-alice-${fullHash.slice(0, 8)}`,
-    );
-
-    const fileCall = postCalls.find(
-      ([path]) => path === "/repos/{owner}/{repo}/contents/{filepath}",
-    );
-    expect(fileCall?.[0]).toBe("/repos/{owner}/{repo}/contents/{filepath}");
-    expect(fileCall?.[1]?.params?.path?.filepath).toBe("document.docx");
-    expect(fileCall?.[1]?.body).toMatchObject({
-      branch: result.branchName,
-    });
-    expect(fileCall?.[1]?.body?.message).toContain(
-      "Bindersnap-Canonical-File: document.docx",
-    );
-
-    const prCall = postCalls.find(
-      ([path]) => path === "/repos/{owner}/{repo}/pulls",
-    );
-    expect(prCall?.[1]?.body).toMatchObject({
-      title: "Upload v1: Quarterly Report",
-      head: result.branchName,
-      base: "main",
-    });
-  } finally {
-    globalThis.FileReader = originalFileReader;
+test("documentSlugPathFromUploadBranch ignores a branch that is not ours", () => {
+  for (const branch of [
+    "main",
+    "upload/policy",
+    "feature/upload/policy/20260402/143522Z-alice-abc12345",
+    "upload/policy/2026040/143522Z-alice-abc12345",
+    "upload/policy/20260402/1435Z-alice-abc12345",
+  ]) {
+    expect(documentSlugPathFromUploadBranch(branch)).toBeNull();
   }
 });

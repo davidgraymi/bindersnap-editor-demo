@@ -11,94 +11,118 @@ afterEach(() => {
   }
 });
 
-function makeFakeLitestream(logPath: string): string {
+/**
+ * A stand-in for `docker`. `docker ps` prints `running` (a container name, or
+ * nothing); `docker run` records its arguments, one per line, in `logPath`.
+ */
+function makeFakeDocker(logPath: string, running = ""): string {
   const dir = mkdtempSync(join(tmpdir(), "bindersnap-restore-test-"));
-  const binPath = join(dir, "litestream");
+  const binPath = join(dir, "docker");
   tempDirs.push(dir);
 
   writeFileSync(
     binPath,
     `#!/usr/bin/env bash
 set -euo pipefail
-printf '%s\n' "$@" > "${logPath}"
+if [ "$1" = "ps" ]; then
+  printf '%s' "${running}"
+  exit 0
+fi
+printf '%s\\n' "$@" > "${logPath}"
 `,
   );
   chmodSync(binPath, 0o755);
   return binPath;
 }
 
+function logFile(name: string): string {
+  const dir = mkdtempSync(join(tmpdir(), "bindersnap-restore-log-"));
+  tempDirs.push(dir);
+  return join(dir, name);
+}
+
 async function runRestore(
-  target: "gitea" | "api",
-  logPath: string,
-): Promise<string[]> {
-  const fakeLitestream = makeFakeLitestream(logPath);
+  target: string,
+  env: Record<string, string>,
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const proc = Bun.spawn({
     cmd: ["bash", "scripts/restore.sh", target],
     cwd: process.cwd(),
-    env: {
-      ...process.env,
-      LITESTREAM_S3_BUCKET: "bindersnap-litestream-test",
-      LITESTREAM_BIN: fakeLitestream,
-      RESTORE_ASSUME_YES: "1",
-    },
+    env: { ...process.env, RESTORE_ASSUME_YES: "1", ...env },
     stdout: "pipe",
     stderr: "pipe",
   });
 
   const exitCode = await proc.exited;
-  const stderr = await new Response(proc.stderr).text();
-  expect(exitCode).toBe(0);
-  expect(stderr).toBe("");
+  return {
+    exitCode,
+    stdout: await new Response(proc.stdout).text(),
+    stderr: await new Response(proc.stderr).text(),
+  };
+}
 
+async function restoreArgs(target: "gitea" | "api"): Promise<string[]> {
+  const logPath = logFile(`${target}.log`);
+  const result = await runRestore(target, {
+    LITESTREAM_S3_BUCKET: "bindersnap-litestream-test",
+    DOCKER_BIN: makeFakeDocker(logPath),
+  });
+  expect(result.exitCode).toBe(0);
+  expect(result.stderr).toBe("");
   return (await Bun.file(logPath).text()).trim().split("\n");
 }
 
 describe("restore.sh", () => {
-  test("maps the gitea target to the expected database path", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "bindersnap-restore-log-"));
-    const logPath = join(dir, "gitea.log");
-    tempDirs.push(dir);
+  test("restores gitea.db into the gitea-data volume through the Litestream image", async () => {
+    const args = await restoreArgs("gitea");
 
-    const args = await runRestore("gitea", logPath);
-    expect(args).toEqual([
-      "restore",
-      "-o",
-      "/data/gitea/gitea.db",
-      "s3://bindersnap-litestream-test/gitea",
-    ]);
+    expect(args.slice(0, 3)).toEqual(["run", "--rm", "-v"]);
+    expect(args[3]).toBe("bindersnap_gitea-data:/data/gitea");
+    expect(args).toContain("--entrypoint");
+    expect(
+      args.find((arg) =>
+        arg.startsWith("litestream/litestream:0.3.14@sha256:"),
+      ),
+    ).toBeDefined();
+    // The trailing positional arguments the inline script reads as $1..$3.
+    expect(args.at(-3)).toBe("/data/gitea/gitea.db");
+    expect(args.at(-1)).toBe("s3://bindersnap-litestream-test/gitea");
   });
 
-  test("maps the api target to the expected database path", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "bindersnap-restore-log-"));
-    const logPath = join(dir, "api.log");
-    tempDirs.push(dir);
+  test("restores sessions.db into the api-data volume", async () => {
+    const args = await restoreArgs("api");
 
-    const args = await runRestore("api", logPath);
-    expect(args).toEqual([
-      "restore",
-      "-o",
-      "/data/api/sessions.db",
-      "s3://bindersnap-litestream-test/api",
-    ]);
+    expect(args[3]).toBe("bindersnap_api-data:/data/api");
+    expect(args.at(-3)).toBe("/data/api/sessions.db");
+    expect(args.at(-1)).toBe("s3://bindersnap-litestream-test/api");
+  });
+
+  test("moves the old database aside instead of deleting it", async () => {
+    const args = await restoreArgs("gitea");
+    const script = args.join("\n");
+
+    expect(script).toContain('mv "$f" "$f.pre-restore-$2"');
+    expect(script).toContain('litestream restore -o "$1" "$3"');
+    expect(args.at(-2)).toMatch(/^\d{8}T\d{6}Z$/);
+  });
+
+  test("refuses while the database's container is running", async () => {
+    const logPath = logFile("running.log");
+    const result = await runRestore("gitea", {
+      LITESTREAM_S3_BUCKET: "bindersnap-litestream-test",
+      DOCKER_BIN: makeFakeDocker(logPath, "bindersnap-gitea-prod"),
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toContain("bindersnap-gitea-prod is running");
+    expect(await Bun.file(logPath).exists()).toBe(false);
   });
 
   test("fails fast when the bucket env var is missing", async () => {
-    const proc = Bun.spawn({
-      cmd: ["bash", "scripts/restore.sh", "gitea"],
-      cwd: process.cwd(),
-      env: {
-        ...process.env,
-        RESTORE_ASSUME_YES: "1",
-        LITESTREAM_S3_BUCKET: "",
-      },
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    const result = await runRestore("gitea", { LITESTREAM_S3_BUCKET: "" });
 
-    const exitCode = await proc.exited;
-    const stdout = await new Response(proc.stdout).text();
-    expect(exitCode).toBe(1);
-    expect(stdout).toContain(
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toContain(
       "LITESTREAM_S3_BUCKET environment variable is not set",
     );
   });

@@ -1,0 +1,89 @@
+name: Deploy bindersnap.com (Cloudflare)
+
+# Builds the public site and the SPA into dist/ and deploys it as the static
+# assets of the `bindersnap-site` Worker (wrangler.jsonc). Replaces GitHub Pages.
+#
+# Needs, in the `production` environment:
+#   secret CLOUDFLARE_API_TOKEN  — "Workers Scripts: Edit" on the account and
+#                                  "Workers Routes: Edit" + "DNS: Edit" on the
+#                                  bindersnap.com zone (the custom domain), nothing else
+#   var    CLOUDFLARE_ACCOUNT_ID
+#   var    TURNSTILE_SITE_KEY    — public; unset, the app shows no feedback button
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "CHANGELOG.md"
+      - "package.json"
+      - "bun.lock"
+      # Infra/deploy-only changes never affect the static site — don't republish.
+      - "deploy/**"
+      - "infra/**"
+      # The feedback Worker deploys itself (feedback-worker.yml).
+      - "services/feedback/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: static-site
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://bindersnap.com
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: ".bun-version"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build unified SPA
+        env:
+          BUN_PUBLIC_API_BASE_URL: https://api.bindersnap.com
+          # The Google tag on the public site's pages only (apps/site), never
+          # the app. Unset, there is no tag. See issue #718.
+          BINDERSNAP_GA_MEASUREMENT_ID: ${{ vars.GA_MEASUREMENT_ID }}
+          # Which build a feedback report came from (apps/app/feedbackTrace.ts).
+          BUN_PUBLIC_APP_COMMIT: ${{ github.sha }}
+          # Where the Send feedback dialog posts (services/feedback), and its
+          # Turnstile widget's public site key, which
+          # services/feedback/put-turnstile-secret.sh prints.
+          BUN_PUBLIC_FEEDBACK_URL: https://feedback.bindersnap.com/
+          BUN_PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
+        run: |
+          export BUN_PUBLIC_APP_VERSION="$(jq -r .version package.json)"
+          rm -rf dist
+          bun build ./apps/app/index.html \
+            --outdir=dist \
+            --target=browser \
+            --minify \
+            --splitting \
+            --public-path=/ \
+            --define:process.env.NODE_ENV='\"production\"' \
+            --env='BUN_PUBLIC_*'
+          cp -R apps/app/public/. dist/
+          bun scripts/build-help.ts
+          bun scripts/build-legal.ts
+          bun scripts/build-site.ts
+
+      - name: Check the response headers file shipped
+        run: test -f dist/_headers
+
+      - name: Deploy to Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: bunx wrangler@4.149.0 deploy

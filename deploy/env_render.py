@@ -5,10 +5,16 @@ pyinfra operation graph, no boto3 client, no SSM read. `deploy.py` imports from
 here for the live render; the unit tests import it in isolation.
 """
 
-# While the Gitea service token has not been minted yet, SSM holds this sentinel
-# instead of a real token. The bootstrap (first run) mints the real value; until
+# While a Gitea service token (`gitea_service_token`, `gitea_admin_token`) has
+# not been minted yet, SSM holds this sentinel instead of a real token. The bootstrap (first run) mints the real value; until
 # then the admin bootstrap creds must stay in `.env.prod` so the mint can run.
 BOOTSTRAP_TOKEN_PLACEHOLDER = "BOOTSTRAP_WITH_scripts/bootstrap-gitea-service-account.ts"
+
+# Values that mean "nobody set this yet". Terraform's old defaults and the
+# example tfvars used them; a Gitea SECRET_KEY of CHANGE_ME... once could have
+# reached production. The render refuses them, so the deploy fails before
+# anything starts.
+UNSET_VALUE_MARKERS = ("CHANGE_ME", "REPLACE_WITH", "SET_WITH_put-secrets")
 
 
 def build_env_content(
@@ -19,7 +25,8 @@ def build_env_content(
     Faithful port of the transform the old host-side refresh-env script
     performed: parameters are sorted by name, each leaf becomes an upper-snake
     env var, and the first-boot admin credentials are dropped once the Gitea
-    service token is a real value (no longer the bootstrap placeholder). Values
+    service token — and the admin token, where SSM has one — is a real value
+    (no longer the bootstrap placeholder). Values
     containing newlines are rejected — they cannot be expressed in a Docker env
     file.
 
@@ -36,11 +43,18 @@ def build_env_content(
     if not items:
         raise SystemExit(f"No SSM parameters found under {prefix}")
 
-    token_value = None
-    for item in items:
-        if item["Name"] == f"{prefix}/gitea_service_token":
-            token_value = item["Value"]
-            break
+    values = {item["Name"]: item["Value"] for item in items}
+    token_value = values.get(f"{prefix}/gitea_service_token")
+    # Absent until the secrets Terraform that adds it is applied: a host that
+    # predates the split has nothing to mint for it.
+    admin_token_value = values.get(f"{prefix}/gitea_admin_token")
+    # The first-boot admin credentials are what mint the tokens, so they stay
+    # until neither token is waiting to be minted.
+    tokens_minted = (
+        bool(token_value)
+        and token_value != BOOTSTRAP_TOKEN_PLACEHOLDER
+        and admin_token_value != BOOTSTRAP_TOKEN_PLACEHOLDER
+    )
 
     lines = []
     has_ssm_api_tag = False
@@ -49,6 +63,11 @@ def build_env_content(
         if not name.startswith(prefix + "/"):
             continue
         value = item["Value"]
+        if any(marker in value for marker in UNSET_VALUE_MARKERS):
+            raise SystemExit(
+                f"{name} still holds a placeholder. Set it with "
+                "infra/secrets/put-secrets.sh before deploying."
+            )
         if "\n" in value:
             raise SystemExit(
                 f"{name} contains a newline and cannot be written to a Docker env file"
@@ -56,11 +75,7 @@ def build_env_content(
         env_name = name.rsplit("/", 1)[-1].replace("-", "_").upper()
         if env_name == "API_TAG":
             has_ssm_api_tag = True
-        if (
-            token_value
-            and token_value != BOOTSTRAP_TOKEN_PLACEHOLDER
-            and env_name in {"GITEA_ADMIN_USER", "GITEA_ADMIN_PASS"}
-        ):
+        if tokens_minted and env_name in {"GITEA_ADMIN_USER", "GITEA_ADMIN_PASS"}:
             continue
         lines.append(f"{env_name}={value}")
 
