@@ -24,7 +24,7 @@ import {
 import { confirmFromEmail } from "./mailpit";
 
 function buildUniqueSignupCredentials() {
-  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const suffix = `${Date.now()}-${randomUUID().slice(0, 8)}`;
   return {
     username: `signup-${suffix}`,
     email: `signup-${suffix}@users.bindersnap.local`,

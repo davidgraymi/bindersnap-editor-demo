@@ -184,7 +184,10 @@ export function code(value: string): string {
  * GitHub unescapes `\|` before it reads code spans, so this is safe on them.
  */
 export function cell(value: string): string {
-  return value.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/\|/g, "\\|")
+    .replace(/\r?\n/g, " ");
 }
 
 /** Text from the browser, shown as text: no tags, no Markdown emphasis. */

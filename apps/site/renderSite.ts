@@ -263,7 +263,10 @@ const CTA = `<section class="site-closing" aria-labelledby="site-closing-heading
 /** A page's second-level headings, for the rail's "On this page". */
 export function pageSections(html: string): { id: string; title: string }[] {
   return [...html.matchAll(/<h2 id="([^"]+)">([\s\S]*?)<\/h2>/g)].map(
-    (match) => ({ id: match[1]!, title: match[2]!.replace(/<[^>]+>/g, "") }),
+    (match) => ({
+      id: match[1]!,
+      title: match[2]!.replace(/<[^>]*>/g, "").replace(/[<>]/g, ""),
+    }),
   );
 }
 

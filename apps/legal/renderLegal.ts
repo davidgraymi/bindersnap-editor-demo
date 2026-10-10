@@ -106,7 +106,8 @@ ${siteFooter()}
 /** A heading's anchor, so "see section 7 of the DPA" can be a link. */
 function headingId(html: string): string {
   return html
-    .replace(/<[^>]+>/g, "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/[<>]/g, "")
     .replace(/&[a-z]+;/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
