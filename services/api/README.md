@@ -38,7 +38,7 @@ The browser only receives a Bindersnap session cookie. Gitea access tokens stay 
 - `BINDERSNAP_SESSION_COOKIE_NAME`: Session cookie name. Default `bindersnap_session`.
 - `BINDERSNAP_SESSION_TTL_MS`: Server-side expiry for non-remembered sessions. Default `604800000` (7 days).
 - `BINDERSNAP_REMEMBER_ME_SESSION_TTL_MS`: Server-side expiry and persistent cookie lifetime for remembered sessions. Default `2592000000` (30 days).
-- `BINDERSNAP_SESSION_COOKIE_DOMAIN`: Optional cookie `Domain` attribute. Set `.bindersnap.com` when the SPA runs at `bindersnap.com` and the API runs at `api.bindersnap.com`.
+- `BINDERSNAP_SESSION_COOKIE_DOMAIN`: Optional cookie `Domain` attribute. Leave it empty: a host-only cookie on `api.bindersnap.com` already reaches the API from the SPA at `bindersnap.com`, because the two are the same site. Production also names the cookie `__Host-bindersnap_session`, which a `Domain` would break.
 - `BINDERSNAP_SESSION_COOKIE_SAME_SITE`: Cookie `SameSite` attribute. Default `Lax`; set `None` only when you explicitly need cross-site cookie delivery.
 - `BINDERSNAP_GITEA_TOKEN_SCOPES`: Optional comma-separated extra Gitea token scopes. The API always adds `write:user`, `write:repository`, and `write:issue` so session-minted tokens can create repos, open PRs, and manage collaborators.
 - `BINDERSNAP_REQUIRE_HTTPS`: Enforce HTTPS for non-local requests. Default `true` in production, `false` otherwise.
