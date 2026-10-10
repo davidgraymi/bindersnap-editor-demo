@@ -4081,6 +4081,71 @@ a.bs-knot {
   width: min(100%, 620px);
 }
 
+/* Send feedback (FeedbackDialog). Long enough to write a real report in, and
+   scrolls inside itself on a short screen rather than off the page. */
+.feedback-dialog {
+  width: min(100%, 620px);
+  max-height: calc(100dvh - 2 * var(--brand-space-6));
+  overflow-y: auto;
+}
+
+/* A grid column grows to its widest line by default, and the trace's JSON
+   has long ones; this keeps it inside the dialog and scrolls the JSON. */
+.feedback-dialog,
+.feedback-dialog .create-document-form {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.feedback-dialog-lede {
+  margin: 0;
+  color: var(--bs-text-secondary);
+}
+
+.feedback-dialog-kinds {
+  flex-wrap: wrap;
+  justify-self: start;
+}
+
+.feedback-dialog-trace {
+  font-size: var(--brand-text-ui-sm);
+  color: var(--bs-text-secondary);
+}
+
+.feedback-dialog-trace summary {
+  cursor: pointer;
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-medium);
+}
+
+.feedback-dialog-trace ul {
+  margin: var(--brand-space-2) 0;
+  padding-left: var(--brand-space-5);
+  display: grid;
+  gap: var(--brand-space-1);
+}
+
+.feedback-dialog-trace code {
+  word-break: break-all;
+}
+
+/* Every byte that will be sent, for anyone who wants to check. */
+.feedback-dialog-json {
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  padding: var(--brand-space-3);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-2);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-sm);
+  white-space: pre;
+}
+
+.feedback-dialog-check:empty {
+  display: none;
+}
+
 .create-document-form {
   display: grid;
   gap: var(--brand-space-4);
@@ -5423,41 +5488,71 @@ a.bs-knot {
   flex: 1;
 }
 
-.app-sidebar-user {
-  padding: var(--brand-space-3) var(--brand-space-4);
+/* Help and Send feedback, stacked, with the collapse toggle beside the last
+   one: its 28px centred on that 32px row. */
+.app-sidebar-foot {
+  padding: var(--brand-space-2) var(--brand-space-2);
   border-top: 1px solid var(--bs-rule);
   display: flex;
-  align-items: center;
-  gap: var(--brand-space-3);
+  align-items: flex-end;
+  gap: var(--brand-space-2);
   font-size: var(--brand-text-ui-md);
 }
 
-.app-sidebar-user-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--bs-coral-dim);
+.app-sidebar-foot > .app-sidebar-collapse {
+  margin-bottom: 2px;
+}
+
+.app-sidebar-foot-actions {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+/* A quiet row, the height of a sidebar entry, and never coral: an aside, not
+   the page's action. */
+.app-sidebar-foot-item {
+  min-width: 0;
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: var(--brand-text-ui-xs);
-  font-weight: var(--brand-weight-semibold);
-  color: var(--brand-coral);
+  gap: var(--brand-space-2);
+  min-height: 32px;
+  padding: 0 var(--brand-space-2);
+  border: none;
+  border-radius: var(--brand-radius-md);
+  background: transparent;
+  color: var(--bs-text-secondary);
+  font: inherit;
+  font-weight: var(--brand-weight-medium);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    color var(--brand-transition-base),
+    background var(--brand-transition-base);
+}
+
+.app-sidebar-foot-item:hover,
+.app-sidebar-foot-item:focus-visible {
+  color: var(--bs-text-primary);
+  background: var(--bs-surface-2);
+}
+
+.app-sidebar-foot-item:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 1px;
+}
+
+.app-sidebar-foot-icon {
+  display: inline-flex;
   flex-shrink: 0;
 }
 
-.app-sidebar-user-name {
-  font-weight: var(--brand-weight-medium);
-  color: var(--bs-text-primary);
-  line-height: 1.2;
+.app-sidebar-foot-label {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.app-sidebar-user-role {
-  font-size: var(--brand-text-ui-xs);
-  color: var(--bs-text-faint);
 }
 
 /* ── NEW MAIN AREA ───────────────────────────────────────────── */
@@ -9372,7 +9467,7 @@ a.bs-row:focus-visible {
 .app-sidebar--collapsed .app-sidebar-item-count,
 .app-sidebar--collapsed .app-sidebar-label,
 .app-sidebar--collapsed .app-sidebar-binder-name,
-.app-sidebar--collapsed .app-sidebar-user-label {
+.app-sidebar--collapsed .app-sidebar-foot-label {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -9402,10 +9497,25 @@ a.bs-row:focus-visible {
   margin: 0;
 }
 
-.app-sidebar--collapsed .app-sidebar-user {
+.app-sidebar--collapsed .app-sidebar-foot {
   flex-direction: column;
-  gap: var(--brand-space-2);
-  padding: var(--brand-space-3) var(--brand-space-1);
+  align-items: center;
+  gap: var(--brand-space-1);
+  padding: var(--brand-space-2) var(--brand-space-1);
+}
+
+.app-sidebar--collapsed .app-sidebar-foot > .app-sidebar-collapse {
+  margin-bottom: 0;
+}
+
+.app-sidebar--collapsed .app-sidebar-foot-actions {
+  flex: 0 0 auto;
+}
+
+.app-sidebar--collapsed .app-sidebar-foot-item {
+  justify-content: center;
+  width: 32px;
+  padding: 0;
 }
 
 /* Acts on the panel rather than going anywhere, so it sits in the foot at the
@@ -11600,8 +11710,7 @@ html.bs-writing .app-main {
    initials show until it arrives, and if it never does. */
 .rev-avatar,
 .app-topnav-avatar,
-.app-profile-menu-avatar,
-.app-sidebar-user-avatar {
+.app-profile-menu-avatar {
   position: relative;
   overflow: hidden;
 }

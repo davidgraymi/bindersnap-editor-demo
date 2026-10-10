@@ -345,7 +345,7 @@ test("done in the app, each step emails the next person, and each link opens the
   await reviewerPage
     .getByRole("textbox", { name: "Describe what needs to change…" })
     .fill("Name the soap dispensers by ward.");
-  await reviewerPage.getByRole("button", { name: "Send" }).click();
+  await reviewerPage.getByRole("button", { name: "Send", exact: true }).click();
   const changes = await waitForEmail(owner.email, /^Changes requested: /);
   expect(changes.html).toContain("Name the soap dispensers by ward.");
 

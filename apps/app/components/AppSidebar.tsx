@@ -1,11 +1,13 @@
 import {
   Building2,
+  CircleHelp,
   CreditCard,
   FileText,
   FilePen,
   History,
   Home,
   Library,
+  MessageSquarePlus,
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
@@ -18,7 +20,6 @@ import { followInApp } from "../appLink";
 import { routeToPath, type AppRoute, type OrganizationTab } from "../routes";
 import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
 import { useCollapsedSidebar } from "../useCollapsedSidebar";
-import { AvatarFace } from "./PersonAvatar";
 import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
 
 /**
@@ -140,8 +141,11 @@ interface AppSidebarProps {
    * makes the level visible without it costing a page's title.
    */
   binder?: SidebarBinder | null;
-  currentUsername: string;
-  currentUserFullName?: string;
+  /**
+   * Open Send feedback. Null in a build that cannot send it, and then the
+   * foot holds only the collapse toggle.
+   */
+  onSendFeedback?: (() => void) | null;
   /** How many changes are in flight, once the queue has counted them. */
   changeCount?: number | null;
   onNavigate: (route: AppRoute) => void;
@@ -160,8 +164,7 @@ export function AppSidebar({
   route,
   org,
   binder = null,
-  currentUsername,
-  currentUserFullName = "",
+  onSendFeedback = null,
   changeCount = null,
   onNavigate,
 }: AppSidebarProps) {
@@ -336,14 +339,6 @@ export function AppSidebar({
     );
   };
 
-  const initials =
-    (currentUserFullName || currentUsername)
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase() ?? "")
-      .join("") || currentUsername.slice(0, 2).toUpperCase();
-
   return (
     <aside
       className={`app-sidebar${collapsed ? " app-sidebar--collapsed" : ""}`}
@@ -407,19 +402,43 @@ export function AppSidebar({
 
       <div className="app-sidebar-spacer" />
 
-      <div className="app-sidebar-user">
-        <span className="app-sidebar-user-avatar" aria-hidden="true">
-          <AvatarFace
-            login={currentUsername}
-            initials={initials}
-            drawnSize={28}
-          />
-        </span>
-        <span className="app-sidebar-user-label">
-          <span className="app-sidebar-user-name">
-            {currentUserFullName || currentUsername}
-          </span>
-        </span>
+      <div className="app-sidebar-foot">
+        {/* **Help and feedback, where the eye ends up when it is looking for
+            a way out.** This was the signed-in person's name, which the
+            avatar at the top right already says. Neither is a destination,
+            so neither is among them: help opens beside the app, and feedback
+            opens a dialog over wherever you are. */}
+        <div className="app-sidebar-foot-actions">
+          {/* Ordinary pages anybody can read, signed in or not (apps/help),
+              in a new tab, so reading about a step keeps the place where you
+              were doing it. */}
+          <a
+            className="app-sidebar-foot-item"
+            href="/help"
+            target="_blank"
+            rel="noopener"
+            aria-label="Help and guides (opens in a new tab)"
+            title={collapsed ? "Help and guides" : undefined}
+          >
+            <span className="app-sidebar-foot-icon" aria-hidden="true">
+              <CircleHelp size={16} strokeWidth={1.75} />
+            </span>
+            <span className="app-sidebar-foot-label">Help and guides</span>
+          </a>
+          {onSendFeedback ? (
+            <button
+              type="button"
+              className="app-sidebar-foot-item"
+              title={collapsed ? "Send feedback" : undefined}
+              onClick={onSendFeedback}
+            >
+              <span className="app-sidebar-foot-icon" aria-hidden="true">
+                <MessageSquarePlus size={16} strokeWidth={1.75} />
+              </span>
+              <span className="app-sidebar-foot-label">Send feedback</span>
+            </button>
+          ) : null}
+        </div>
         {/* **In the foot, at the far end**, which is where a control that acts
             on the panel itself belongs — not among the destinations, which are
             about where you are going rather than about the furniture. The

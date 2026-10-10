@@ -5,6 +5,7 @@ import {
   CreditCard,
   LogOut,
   Map as MapIcon,
+  MessageSquarePlus,
   Moon,
   Shield,
   UserRound,
@@ -28,7 +29,12 @@ import { ReviewQueuePage } from "./ReviewQueuePage";
 import { AppSidebar, type SidebarBinder } from "./AppSidebar";
 import { BinderExplorer } from "./BinderExplorer";
 import { AppBottomNav } from "./AppBottomNav";
-import { useDefaultOrganization } from "../useOrganizationDisplayName";
+import {
+  useDefaultOrganization,
+  useOrganizationDisplayName,
+} from "../useOrganizationDisplayName";
+import { feedbackEnabled } from "../feedback";
+import { FeedbackDialog } from "./FeedbackDialog";
 import { HomePage } from "./HomePage";
 import { NavSearch } from "./NavSearch";
 import { CreateMenu } from "./CreateMenu";
@@ -98,6 +104,10 @@ function renderProfileMenuIcon(icon: string) {
       return <AppIcon icon={Shield} size="md" />;
     case "guide":
       return <AppIcon icon={MapIcon} size="md" />;
+    case "help":
+      return <AppIcon icon={CircleHelp} size="md" />;
+    case "feedback":
+      return <AppIcon icon={MessageSquarePlus} size="md" />;
     case "signout":
       return <AppIcon icon={LogOut} size="md" />;
     default:
@@ -172,6 +182,9 @@ export function AppShell({
     [route],
   );
   const [profileOpen, setProfileOpen] = useState(false);
+  const canSendFeedback = feedbackEnabled();
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const sidebarOrgName = useOrganizationDisplayName(sidebarOrg ?? "");
   // A search that was linked to or reloaded is still the search that is on
   // screen, so the box says so.
   const [initialSearch] = useState(
@@ -236,21 +249,6 @@ export function AppShell({
             onNavigate={onNavigate}
             onSearchLibrary={navigateToSearch}
           />
-
-          {/* **Help opens beside the app, not inside it.** It is ordinary
-              pages anybody can read, signed in or not (apps/help), and
-              reading about a step in a new tab keeps the place where you
-              were doing it. */}
-          <a
-            className="app-topnav-icon-btn"
-            href="/help"
-            target="_blank"
-            rel="noopener"
-            title="Help and guides (opens in a new tab)"
-            aria-label="Help and guides (opens in a new tab)"
-          >
-            <CircleHelp size={16} strokeWidth={1.5} aria-hidden="true" />
-          </a>
 
           {/* What happened on the changes you are part of — Gitea's own
               notifications, with the reason each one is yours. */}
@@ -421,6 +419,42 @@ export function AppShell({
                     role="group"
                     aria-label="Session"
                   >
+                    {/* On a phone the sidebar is not drawn, and with it its
+                        Help and Send feedback; these are the way to them
+                        there. Help opens beside the app, in a new tab. */}
+                    <a
+                      className="app-profile-menu-item"
+                      role="menuitem"
+                      href="/help"
+                      target="_blank"
+                      rel="noopener"
+                      onClick={() => setProfileOpen(false)}
+                    >
+                      <span className="app-profile-menu-icon">
+                        {renderProfileMenuIcon("help")}
+                      </span>
+                      <span className="app-profile-menu-label">
+                        Help and guides
+                      </span>
+                    </a>
+                    {canSendFeedback ? (
+                      <button
+                        type="button"
+                        className="app-profile-menu-item"
+                        role="menuitem"
+                        onClick={() => {
+                          setProfileOpen(false);
+                          setFeedbackOpen(true);
+                        }}
+                      >
+                        <span className="app-profile-menu-icon">
+                          {renderProfileMenuIcon("feedback")}
+                        </span>
+                        <span className="app-profile-menu-label">
+                          Send feedback
+                        </span>
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="app-profile-menu-item app-profile-menu-item--danger"
@@ -451,8 +485,7 @@ export function AppShell({
           route={route}
           org={sidebarOrg}
           binder={sidebarBinder}
-          currentUsername={currentUsername}
-          currentUserFullName={user?.fullName ?? ""}
+          onSendFeedback={canSendFeedback ? () => setFeedbackOpen(true) : null}
           onNavigate={onNavigate}
         />
 
@@ -603,6 +636,28 @@ export function AppShell({
       {/* Below 768px the sidebar is not rendered and this is the navigation.
           Fixed to the bottom, so it sits outside the scrolling body. */}
       <AppBottomNav route={route} org={sidebarOrg} onNavigate={onNavigate} />
+
+      {feedbackOpen ? (
+        <FeedbackDialog
+          context={{
+            route,
+            user: user
+              ? { username: user.username, fullName: user.fullName }
+              : null,
+            organization: sidebarOrg
+              ? { name: sidebarOrg, displayName: sidebarOrgName }
+              : null,
+            state: {
+              readOnly: isReadOnly,
+              siteAdmin: user?.isAdmin === true,
+              theme:
+                document.documentElement.getAttribute("data-theme") ?? "light",
+              binderMissing: missingBinder !== null,
+            },
+          }}
+          onClose={() => setFeedbackOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }
