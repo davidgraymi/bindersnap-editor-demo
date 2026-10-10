@@ -16,7 +16,7 @@ serves which purpose is essential before making any changes.
 bindersnap-editor-demo/
 │
 ├── apps/
-│   └── app/                        ← UNIFIED SPA (deployed to GitHub Pages)
+│   └── app/                        ← UNIFIED SPA (static files on Cloudflare)
 │       ├── index.html              ← Pre-rendered landing shell + React mount root
 │       ├── App.tsx                 ← Auth gate + routing
 │       ├── api.ts                  ← All browser-to-API calls (BFF client)
@@ -61,7 +61,7 @@ bindersnap-editor-demo/
 │
 ├── server.ts                       ← Bun dev/prod server (serves the SPA)
 ├── docs/                           ← Brand assets and ADRs
-├── .github/workflows/              ← CI/CD pipelines (pages.yml, deploy-pyinfra.yml)
+├── .github/workflows/              ← CI/CD pipelines (static-site.yml, deploy-pyinfra.yml)
 ├── .claude/                        ← Claude agent definitions
 ├── AGENTS.md                       ← This file
 ├── docker-compose.yml              ← Local dev stack (Gitea + Hocuspocus + app)
@@ -393,7 +393,7 @@ stack: Lambda, Aurora, API Gateway and the Gitea-as-NAT plumbing were removed
 
 | Component  | Host           | How deployed                                                          |
 | ---------- | -------------- | --------------------------------------------------------------------- |
-| SPA        | GitHub Pages   | `pages.yml` on push to `main`                                         |
+| SPA        | Cloudflare     | `static-site.yml` (`wrangler deploy`) on push to `main`               |
 | API        | EC2 via Docker | `deploy-pyinfra.yml` (pyinfra over SSH-through-SSM) on push to `main` |
 | Gitea      | Same EC2 host  | `docker-compose.prod.yml`, same pyinfra run                           |
 | Hocuspocus | Same EC2 host  | `docker-compose.prod.yml`, same pyinfra run                           |

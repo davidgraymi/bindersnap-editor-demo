@@ -1,5 +1,5 @@
 /**
- * Write the legal pages into `dist/legal` as ordinary files, for GitHub Pages.
+ * Write the legal pages into `dist/legal` as ordinary files, for the static host.
  *
  * `/legal/{slug}` is written as `legal/{slug}.html`, which Pages serves at the
  * address without the extension, and `/legal` as `legal/index.html`. Run after

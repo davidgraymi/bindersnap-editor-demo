@@ -2,7 +2,7 @@
 
 Monorepo with one unified frontend app and supporting services:
 
-- `apps/app`: GitHub Pages SPA with a pre-rendered landing page and authenticated workspace shell
+- `apps/app`: SPA (static, on Cloudflare) with a pre-rendered landing page and authenticated workspace shell
 - `services/api`: auth/BFF API for the product SPA
 - `services/hocuspocus`: collaboration websocket service
 
@@ -161,10 +161,10 @@ See [`tests/README.md`](tests/README.md) for full workflow details.
 
 Two surfaces, both triggered by a push to `main`:
 
-| What                                      | Where                     | Workflow                                                     |
-| ----------------------------------------- | ------------------------- | ------------------------------------------------------------ |
-| SPA                                       | GitHub Pages              | [`pages.yml`](.github/workflows/pages.yml)                   |
-| API, Gitea, Hocuspocus, Caddy, Litestream | One EC2 host, via Compose | [`deploy-pyinfra.yml`](.github/workflows/deploy-pyinfra.yml) |
+| What                                      | Where                      | Workflow                                                     |
+| ----------------------------------------- | -------------------------- | ------------------------------------------------------------ |
+| Public site + SPA                         | Cloudflare Worker (static) | [`static-site.yml`](.github/workflows/static-site.yml)       |
+| API, Gitea, Hocuspocus, Caddy, Litestream | One EC2 host, via Compose  | [`deploy-pyinfra.yml`](.github/workflows/deploy-pyinfra.yml) |
 
 The backend is a single EC2 instance, not a serverless stack. Its entire
 configuration lives in [`deploy/`](deploy/README.md) as a

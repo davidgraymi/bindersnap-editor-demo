@@ -4,9 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!--
-      Never inside another site's frame (clickjacking). The API and Gitea say
-      so with X-Frame-Options, but GitHub Pages serves this page and will not
-      send headers, so the page says it itself: framed, it hides before it
+      Never inside another site's frame (clickjacking). Cloudflare sends
+      X-Frame-Options and frame-ancestors for this page (apps/app/public/_headers),
+      and the page also says it itself, in case it is ever served without
+      them (a local build, another host): framed, it hides before it
       draws anything. It also asks to take over the whole tab, which browsers
       usually refuse a cross-site frame, so hiding is the part that counts.
       First in <head> so it runs before any paint. A frame sandboxed against scripts stops this,

@@ -61,3 +61,6 @@ infra/state/backend.hcl
 
 # Docker
 /data/
+
+# wrangler dev state
+.wrangler/

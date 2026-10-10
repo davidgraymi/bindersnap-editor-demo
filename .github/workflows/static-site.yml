@@ -1,4 +1,13 @@
-name: Deploy to GitHub Pages
+name: Deploy bindersnap.com (Cloudflare)
+
+# Builds the public site and the SPA into dist/ and deploys it as the static
+# assets of the `bindersnap-site` Worker (wrangler.jsonc). Replaces GitHub Pages.
+#
+# Needs, in the `production` environment:
+#   secret CLOUDFLARE_API_TOKEN  — "Workers Scripts: Edit" on the account and
+#                                  "Workers Routes: Edit" + "DNS: Edit" on the
+#                                  bindersnap.com zone (the custom domain), nothing else
+#   var    CLOUDFLARE_ACCOUNT_ID
 
 on:
   push:
@@ -8,23 +17,24 @@ on:
       - "CHANGELOG.md"
       - "package.json"
       - "bun.lock"
-      # Infra/deploy-only changes never affect the static SPA — don't republish.
+      # Infra/deploy-only changes never affect the static site — don't republish.
       - "deploy/**"
       - "infra/**"
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: static-site
   cancel-in-progress: false
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://bindersnap.com
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -33,9 +43,6 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: ".bun-version"
-
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -56,30 +63,16 @@ jobs:
             --public-path=/ \
             --define:process.env.NODE_ENV='\"production\"' \
             --env='BUN_PUBLIC_*'
-          cp dist/index.html dist/404.html
           cp -R apps/app/public/. dist/
           bun scripts/build-help.ts
           bun scripts/build-legal.ts
           bun scripts/build-site.ts
 
-      - name: Disable Jekyll
-        run: touch dist/.nojekyll
+      - name: Check the response headers file shipped
+        run: test -f dist/_headers
 
-      - name: Write CNAME
-        run: echo "bindersnap.com" > dist/CNAME
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Deploy to Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: bunx wrangler@4.149.0 deploy

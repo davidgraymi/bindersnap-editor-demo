@@ -1,11 +1,11 @@
 /**
- * Write the public site into `dist` as ordinary files, for GitHub Pages:
+ * Write the public site into `dist` as ordinary files, for the static host:
  * pricing, the templates and the rest of `apps/site/content`, plus
  * `sitemap.xml`, `robots.txt`, `llms.txt` and `llms-full.txt`, and each
  * template as a Word file.
  *
  * A page at `/templates/{slug}` is written as `templates/{slug}.html`, which
- * Pages serves at the address without the extension, and a collection's index
+ * the static host serves at the address without the extension, and a collection's index
  * as `templates/index.html`. Run after the SPA build, which empties `dist`.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
