@@ -1,7 +1,7 @@
 # Terms of Service
 
-Last updated: October 8, 2026
-Version: 2026-10-08
+Last updated: October 9, 2026
+Version: 2026-10-09
 
 These Terms of Service ("Terms") are the agreement for using Bindersnap. Please read them. They are written to be readable, but they are a binding contract.
 

@@ -1,34 +1,37 @@
 # Security
 
-Last updated: October 7, 2026
-Version: 2026-10-07
+Last updated: October 9, 2026
+Version: 2026-10-09
 
 Your organization trusts Bindersnap with its evidence: every version, approval and review of its documents. This page explains how we protect that record. We also say plainly what we don't have yet. Bindersnap is a small, founder-run company, and we would rather be exact than impressive.
 
 ## Where Bindersnap runs
 
-Bindersnap runs on one Amazon Web Services (AWS) server in the us-east-1 region (Northern Virginia, USA). Everything runs on that server in separate containers: our API, the Gitea server that stores documents as git repositories, the real-time collaboration server, a Caddy web server, and Litestream for database backups.
+Bindersnap runs on one Amazon Web Services (AWS) server in the us-east-1 region (Northern Virginia, USA). Everything runs on that server in separate containers: our API, the Gitea server that stores documents as git repositories, a Caddy web server, Cloudflare's connector, and Litestream for database backups.
 
-Our public website and the app's files are hosted on GitHub Pages. GitHub never receives your organization's documents.
+The server accepts no connections from the internet: it has no open ports. Requests reach it only through an encrypted tunnel that the server itself opens to Cloudflare, which runs the network in front of it and hosts our public website and the app's files. The document server (Gitea) has no public address at all; only our API can reach it.
 
 Because Bindersnap runs on one server in one region, a serious failure there would mean downtime while we restore from backups. We don't offer an uptime guarantee (SLA) yet.
 
 ## Encryption
 
-- **In transit.** Every connection to Bindersnap uses TLS (HTTPS). On our server, Caddy manages the certificates, which come from Let's Encrypt. GitHub Pages provides the certificate for our public website. Our API refuses connections that aren't HTTPS.
-- **At rest.** The server's disks are encrypted with AWS-managed keys. Our backup storage (Amazon S3) blocks all public access and uses S3's default server-side encryption.
-- **Browser protections.** Our API and document server send security headers that stop other sites from framing them (`X-Frame-Options: DENY`), stop browsers from guessing file types (`nosniff`), and keep our addresses from leaking to other sites (same-origin referrer policy). Our public website and the app's files are served by GitHub Pages, which doesn't let us set these headers, so the app checks for itself: loaded inside another site's frame, it hides itself.
+- **In transit.** Every connection to Bindersnap uses TLS 1.2 or newer (HTTPS), terminated at Cloudflare. From Cloudflare to our server, traffic travels inside the encrypted tunnel. Our API refuses requests that didn't arrive over HTTPS.
+- **At rest.** The server's disks are encrypted with AWS-managed keys. Our database backups (Amazon S3) block all public access, are encrypted, and refuse any request not made over TLS. Our off-site backups are encrypted on our server, with a key Cloudflare never holds, before they are sent.
+- **Browser protections.** Our website, the app and our API all send security headers that stop other sites from framing them (`X-Frame-Options: DENY` and `frame-ancestors 'none'`), require HTTPS on every visit (HSTS), stop browsers from guessing file types (`nosniff`), and keep our addresses from leaking to other sites (same-origin referrer policy). The app also checks for itself: loaded inside another site's frame, it hides itself.
 
 ## Backups
 
-- **Continuous.** Litestream copies our databases to a private, versioned S3 bucket as they change. These hold document metadata, settings and sessions. Old versions are deleted after 30 days.
-- **Daily.** We snapshot the data disk every day at 03:00 UTC and keep the last 7 snapshots.
+We keep three independent copies, each made a different way:
 
-Deleted information remains in backups until it ages out, up to 7 days for snapshots and 30 days for database backups.
+- **Continuous.** Litestream copies our databases to a private, versioned S3 bucket as they change. These hold document metadata, settings and sessions. We can restore them to any point in the last 7 days. Old versions are deleted after 30 days.
+- **Hourly disk snapshots.** We snapshot the whole data disk every hour and keep 2 days of them, plus one a day for 35 days. Each daily snapshot is also copied to a second AWS region (us-west-2, Oregon).
+- **Hourly off-site backups.** Every hour, an encrypted backup of all documents and databases goes to Cloudflare R2, outside AWS. These are locked: for 35 days, no one, including us, can delete or change them. That protects them from a mistake, an attacker, or the loss of our AWS account.
+
+Deleted information remains in backups until it ages out: up to 2 days in hourly snapshots, 35 days in daily snapshots, 30 days in database backups and 45 days in off-site backups.
 
 ## Who can reach the servers
 
-- No one can log in to the server over SSH. That port is closed.
+- No one can log in to the server over SSH. That port, like every other, is closed to the internet.
 - Admin access goes only through AWS Systems Manager, using a short-lived key that expires after about 60 seconds.
 - Deployments run from our CI system using GitHub's short-lived identity tokens (OIDC). There are no long-lived deploy keys.
 - Passwords and keys live in AWS Systems Manager Parameter Store, never in our code.
@@ -53,7 +56,7 @@ Deleted information remains in backups until it ages out, up to 7 days for snaps
 
 ## Monitoring
 
-AWS CloudWatch alarms alert us to failed server health checks and to high CPU, disk or memory use. Server logs are kept for 30 days.
+AWS CloudWatch alarms alert us to failed server health checks, high CPU, disk or memory use, and any backup that stops running. Every change to our AWS account is recorded (AWS CloudTrail) and watched for threats (Amazon GuardDuty). Server logs are kept for 30 days.
 
 ## If something goes wrong
 

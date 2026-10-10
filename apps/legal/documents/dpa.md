@@ -1,7 +1,7 @@
 # Data Processing Addendum
 
-Last updated: October 7, 2026
-Version: 2026-10-07
+Last updated: October 9, 2026
+Version: 2026-10-09
 
 This Data Processing Addendum ("DPA") is part of the Terms of Service (the "Terms") between Solid Gray LLC, a [STATE] limited liability company that operates Bindersnap ("Bindersnap," "we"), and the Customer. It applies when we process Personal Data on the Customer's behalf through the Service.
 
@@ -105,8 +105,10 @@ This section describes how data leaves the Service. It matches how the Service w
 
 **10.4 Backups.** After deletion, copies stay in backups until they age out:
 
-- daily disk snapshots: up to 7 days;
-- versions in our private backup storage (S3): up to 30 days; and
+- hourly disk snapshots: up to 2 days;
+- daily disk snapshots, including their copy in a second AWS region: up to 35 days;
+- versions in our private backup storage (S3): up to 30 days;
+- encrypted off-site backups (Cloudflare R2): up to 45 days; and
 - application logs (CloudWatch): 30 days.
 
 We do not restore deleted data from backups to the live Service for the purpose of re-processing it, except to recover from a disaster, and we will delete again anything that was deleted before the restore.
@@ -242,9 +244,10 @@ Our measures are described in full at [/legal/security](/legal/security). In sum
 
 The current list is at [/legal/subprocessors](/legal/subprocessors). As of the date above:
 
-| Subprocessor              | Purpose                                                                               | Location        |
-| ------------------------- | ------------------------------------------------------------------------------------- | --------------- |
-| Amazon Web Services, Inc. | Hosting, storage, and backups (EC2, EBS, S3); logs (CloudWatch); email delivery (SES) | USA (us-east-1) |
-| Stripe, Inc.              | Subscription billing and payments                                                     | USA             |
+| Subprocessor              | Purpose                                                                                                                            | Location                                                         |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Amazon Web Services, Inc. | Hosting, storage, and backups (EC2, EBS, S3); logs (CloudWatch); email delivery (SES)                                              | USA (us-east-1; backups also us-west-2)                          |
+| Cloudflare, Inc.          | Network edge (DNS, TLS, attack protection); hosting of the website and app files; encrypted backups (R2); inbound email forwarding | Requests: nearest Cloudflare data center. Backups: North America |
+| Stripe, Inc.              | Subscription billing and payments                                                                                                  | USA                                                              |
 
 Changes to this list follow Section 6.

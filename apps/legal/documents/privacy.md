@@ -1,7 +1,7 @@
 # Privacy Policy
 
-Last updated: October 8, 2026
-Version: 2026-10-08
+Last updated: October 9, 2026
+Version: 2026-10-09
 
 This policy explains what personal information Bindersnap collects, why we collect it, who else receives it, how long we keep it, and what you can do about it.
 
@@ -81,11 +81,11 @@ Both stay on your device. We don't collect them from there. You can clear them i
 
 ## 5. Who receives your information
 
-We use a small number of companies to run Bindersnap. The full list, with what each one does and where, is at [/legal/subprocessors](/legal/subprocessors), along with the one website host that isn't a subprocessor. In short:
+We use a small number of companies to run Bindersnap. The full list, with what each one does and where, is at [/legal/subprocessors](/legal/subprocessors), along with our website analytics provider, which isn't a subprocessor. In short:
 
-- **Amazon Web Services (AWS)** hosts our servers, storage, backups and logs, and sends our emails. All Customer Content is stored with AWS in the United States.
+- **Amazon Web Services (AWS)** hosts our servers, storage, backups and logs, and sends our emails. Customer Content is stored with AWS in the United States.
 - **Stripe** handles subscription billing and payments.
-- **GitHub** hosts our public website and the app's files. GitHub sees the IP address of each visitor. It never receives Customer Content.
+- **Cloudflare** runs the network in front of our servers and hosts our public website and the app's files. Every request passes through it, so it sees your IP address and the content of your requests in transit. It also stores an encrypted copy of our backups, which it cannot read, and forwards email sent to our @bindersnap.com addresses.
 - **Google** provides Google Analytics on our public marketing pages. It receives the details in the website analytics row of section 3 for people who read those pages. It never receives Customer Content or account data, and it isn't loaded in the app.
 
 **Fonts and profile pictures come from us.** Our fonts are served from our own website, so loading a page doesn't contact Google or any other font service. Profile pictures are patterns our own server draws from each username. We don't use Gravatar or any other outside picture service, and no hash of your email address leaves Bindersnap.
@@ -115,7 +115,7 @@ You can turn notification types on or off in your settings. Every notification e
 
 We don't send marketing email from the app. If we ever want to send product news, we will ask for your permission first.
 
-Amazon SES (part of AWS) delivers our email.
+Amazon SES (part of AWS) delivers our email. Email you send to an @bindersnap.com address passes through Cloudflare, which forwards it to us.
 
 ## 8. How long we keep information
 
@@ -143,13 +143,13 @@ You can't delete your account while you are the only owner of an organization. A
 
 **Messages you send us.** As long as we need to answer you, and to show we handled any privacy request.
 
-**Backups.** Deleted information stays in our backups until they age out: up to 7 days in daily disk snapshots, and up to 30 days in our database backups. We don't restore deleted information from backups, except to recover from a failure.
+**Backups.** Deleted information stays in our backups until they age out: up to 2 days in hourly disk snapshots, up to 35 days in daily disk snapshots, up to 30 days in our database backups, and up to 45 days in our encrypted off-site backups. We don't restore deleted information from backups, except to recover from a failure.
 
 **Exports.** Your organization can download document audit packets and PDF or Word copies, even if its subscription has lapsed. Our Terms of Service explain how long that lasts.
 
 ## 9. International transfers
 
-Bindersnap is offered to organizations based in the United States and is hosted there, in AWS's us-east-1 region (Northern Virginia). If you use Bindersnap from outside the United States, for example while traveling, your information is transferred to the United States and processed there. US data protection law may differ from the law where you live.
+Bindersnap is offered to organizations based in the United States and is hosted there, in AWS's us-east-1 region (Northern Virginia), with backup copies in us-west-2 (Oregon) and in Cloudflare R2 in North America. Your connection to us passes through the Cloudflare data center nearest you. If you use Bindersnap from outside the United States, for example while traveling, your information is transferred to the United States and processed there. US data protection law may differ from the law where you live.
 
 For Customer Content, the transfer safeguards, including the EU Standard Contractual Clauses, are set out in our Data Processing Addendum at [/legal/dpa](/legal/dpa). For account and billing information we collect from you directly, we process it in the United States to provide the service you signed up for.
 
@@ -190,15 +190,15 @@ Email [privacy@bindersnap.com](mailto:privacy@bindersnap.com). Tell us what you'
 
 This section adds the details California and other US state privacy laws ask for. It covers the past 12 months.
 
-| Category                                       | What we collect                                                                                    | Source                                 | Why                                                   | Disclosed to                                                                                                                              |
-| ---------------------------------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Identifiers                                    | Name, username, email address, IP address                                                          | You, your organization, your device    | To provide, secure and bill for the service           | AWS; Stripe (username of the subscriber); GitHub (IP address of website visitors); Google (IP address of visitors to our marketing pages) |
-| Customer records (Cal. Civ. Code § 1798.80(e)) | Name, email address                                                                                | You, your organization                 | To provide the service                                | AWS                                                                                                                                       |
-| Commercial information                         | Subscription, trial and billing history for your organization                                      | You, Stripe                            | Billing                                               | Stripe, AWS                                                                                                                               |
-| Internet or network activity                   | Server logs of your requests                                                                       | Your device                            | Security, abuse prevention, troubleshooting           | AWS                                                                                                                                       |
-| Internet or network activity                   | Pages viewed on our public marketing pages, the site that sent you, and browser and device details | Your browser, through Google Analytics | To learn which of our public pages people find useful | Google                                                                                                                                    |
-| Professional information                       | The organization you belong to and your roles in its binders                                       | Your organization                      | To provide the service                                | AWS                                                                                                                                       |
-| Sensitive personal information                 | Your username with your password                                                                   | You                                    | Only to sign you in                                   | AWS (hosting)                                                                                                                             |
+| Category                                       | What we collect                                                                                    | Source                                 | Why                                                   | Disclosed to                                                                                                                               |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Identifiers                                    | Name, username, email address, IP address                                                          | You, your organization, your device    | To provide, secure and bill for the service           | AWS; Stripe (username of the subscriber); Cloudflare (IP address of every visitor); Google (IP address of visitors to our marketing pages) |
+| Customer records (Cal. Civ. Code § 1798.80(e)) | Name, email address                                                                                | You, your organization                 | To provide the service                                | AWS                                                                                                                                        |
+| Commercial information                         | Subscription, trial and billing history for your organization                                      | You, Stripe                            | Billing                                               | Stripe, AWS                                                                                                                                |
+| Internet or network activity                   | Server logs of your requests                                                                       | Your device                            | Security, abuse prevention, troubleshooting           | AWS                                                                                                                                        |
+| Internet or network activity                   | Pages viewed on our public marketing pages, the site that sent you, and browser and device details | Your browser, through Google Analytics | To learn which of our public pages people find useful | Google                                                                                                                                     |
+| Professional information                       | The organization you belong to and your roles in its binders                                       | Your organization                      | To provide the service                                | AWS                                                                                                                                        |
+| Sensitive personal information                 | Your username with your password                                                                   | You                                    | Only to sign you in                                   | AWS (hosting)                                                                                                                              |
 
 We don't collect precise location, biometric, health or financial-account information for our own purposes. We disclose information only to the service providers in section 5, for the purposes listed. We don't sell or share it (section 6). How long we keep each category is in section 8.
 
