@@ -292,6 +292,25 @@ if _data_device:
         mode="0644",
     )
 
+    # Docker's data-root is /data/docker, and `nofail` lets boot continue without
+    # the mount. Without this ordering Docker can start first and create a fresh,
+    # empty data-root on the root disk. Refusing to start is the safe failure.
+    files.directory(
+        name="Ensure Docker systemd drop-in dir",
+        path="/etc/systemd/system/docker.service.d",
+        mode="0755",
+    )
+    docker_dropin_put = files.put(
+        name="Require the data volume before Docker starts",
+        src=os.path.join(_FILES, "docker-requires-data.conf"),
+        dest="/etc/systemd/system/docker.service.d/10-bindersnap-data.conf",
+        mode="0644",
+    )
+    systemd.daemon_reload(
+        name="Reload systemd after Docker drop-in change",
+        _if=docker_dropin_put.did_change,
+    )
+
     # Restart Docker only when the daemon config actually changed, replacing the
     # hand-rolled hash compare in the old storage-setup shell script.
     systemd.service(
@@ -301,11 +320,16 @@ if _data_device:
         _if=daemon_put.did_change,
     )
 else:
+    # Never fall back to the root volume. Gitea would start on an empty database
+    # there, Litestream would replicate that empty database as the newest
+    # generation (the one `litestream restore` picks), and the root volume is
+    # neither snapshotted nor kept when the instance is replaced.
     server.shell(
-        name="Warn: EBS data volume not found — Docker will use root volume",
+        name="Abort: EBS data volume not found",
         commands=[
-            "echo 'WARNING: EBS data volume not found"
-            " — Docker will use the root volume' >&2"
+            "echo 'ERROR: EBS data volume not found — refusing to run the stack"
+            " on the root volume. Attach the data volume and redeploy.' >&2",
+            "exit 1",
         ],
     )
 
