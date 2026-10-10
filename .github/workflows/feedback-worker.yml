@@ -1,0 +1,58 @@
+name: Deploy feedback Worker (Cloudflare)
+
+# Deploys services/feedback as the `bindersnap-feedback` Worker on
+# feedback.bindersnap.com. See docs/adr/0006-cloudflare-workers-at-the-edge.md.
+#
+# Its secrets are not set here; they are set once by hand
+# (services/feedback/README.md) and survive every deploy.
+#
+# Needs, in the `production` environment (the same ones static-site.yml uses):
+#   secret CLOUDFLARE_API_TOKEN  — "Workers Scripts: Edit" on the account and
+#                                  "Workers Routes: Edit" + "DNS: Edit" on the
+#                                  bindersnap.com zone (the custom domain)
+#   var    CLOUDFLARE_ACCOUNT_ID
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "services/feedback/**"
+      - "packages/utils/feedbackReport.ts"
+      - "bun.lock"
+      - ".github/workflows/feedback-worker.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: feedback-worker
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://feedback.bindersnap.com
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: ".bun-version"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Test
+        run: bun test services/feedback
+
+      - name: Deploy to Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: bunx wrangler@4.149.0 deploy --config services/feedback/wrangler.jsonc
