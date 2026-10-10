@@ -14,19 +14,11 @@
 	}
 }
 
-gitea.bindersnap.com {
-	import security_headers
-
-	# Optional: restrict Gitea admin UI to your IP.
-	# Uncomment and replace YOUR.IP.HERE with your static IP.
-	# @admin_routes path /admin/* /-/admin/*
-	# handle @admin_routes {
-	#     @blocked not remote_ip YOUR.IP.HERE
-	#     respond @blocked 403
-	# }
-
-	reverse_proxy gitea:3000
-}
+# Gitea has no public hostname. The browser never talks to it: the API (BFF)
+# reaches it at http://gitea:3000 on the Docker network, and avatars come from
+# the API (/api/app/avatars/). Serving gitea.bindersnap.com exposed Gitea's
+# whole UI and API, /admin included, to the internet. For admin work, see
+# "Reaching Gitea" in docs/ops/break-glass.md.
 
 api.bindersnap.com {
 	import security_headers
