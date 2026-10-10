@@ -220,7 +220,7 @@ export function buildRemoteBootstrapCommands(
     'cleanup() { rm -f "$TMP_ENV" "$TMP_JSON"; }',
     "trap cleanup EXIT",
     'aws ssm get-parameters-by-path --path "$PARAMETER_PATH" --recursive --with-decryption --output json > "$TMP_JSON"',
-    'docker run --rm -i -v "$APP_DIR:/workspace" -w /workspace oven/bun:1 bun scripts/bootstrap-gitea-service-account.ts render-env --parameter-path "$PARAMETER_PATH" < "$TMP_JSON" > "$TMP_ENV"',
+    'docker run --rm -i -v "$APP_DIR:/workspace" -w /workspace oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 bun scripts/bootstrap-gitea-service-account.ts render-env --parameter-path "$PARAMETER_PATH" < "$TMP_JSON" > "$TMP_ENV"',
     'install -m 0600 "$TMP_ENV" "$ENV_FILE"',
     "SERVICE_TOKEN=$(grep '^GITEA_SERVICE_TOKEN=' \"$ENV_FILE\" | cut -d= -f2- || true)",
     'if [ -z "$SERVICE_TOKEN" ]; then echo "GITEA_SERVICE_TOKEN is missing from $ENV_FILE"; exit 1; fi',
@@ -238,7 +238,7 @@ export function buildRemoteBootstrapCommands(
     'if [ "$STATUS" != "healthy" ]; then echo "Gitea did not become ready in time"; exit 1; fi',
     'GITEA_ADMIN_EMAIL="${GITEA_ADMIN_EMAIL:-${GITEA_ADMIN_USER}@${BINDERSNAP_USER_EMAIL_DOMAIN:-users.bindersnap.com}}"',
     'if ! docker exec --user "${GITEA_EXEC_USER:-1000:1000}" bindersnap-gitea-prod gitea --config /data/gitea/conf/app.ini admin user create --username "$GITEA_ADMIN_USER" --password "$GITEA_ADMIN_PASS" --email "$GITEA_ADMIN_EMAIL" --admin --must-change-password=false; then docker exec --user "${GITEA_EXEC_USER:-1000:1000}" bindersnap-gitea-prod gitea --config /data/gitea/conf/app.ini admin user change-password --username "$GITEA_ADMIN_USER" --password "$GITEA_ADMIN_PASS" --must-change-password=false; fi',
-    'mint() { docker run --rm --network bindersnap-prod -e GITEA_ADMIN_USER -e GITEA_ADMIN_PASS -e GITEA_INTERNAL_URL=http://gitea:3000 -e BINDERSNAP_USER_EMAIL_DOMAIN="${BINDERSNAP_USER_EMAIL_DOMAIN:-users.bindersnap.com}" -v "$APP_DIR:/workspace" -w /workspace oven/bun:1 bun scripts/bootstrap-gitea-service-account.ts mint-token --kind "$1"; }',
+    'mint() { docker run --rm --network bindersnap-prod -e GITEA_ADMIN_USER -e GITEA_ADMIN_PASS -e GITEA_INTERNAL_URL=http://gitea:3000 -e BINDERSNAP_USER_EMAIL_DOMAIN="${BINDERSNAP_USER_EMAIL_DOMAIN:-users.bindersnap.com}" -v "$APP_DIR:/workspace" -w /workspace oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 bun scripts/bootstrap-gitea-service-account.ts mint-token --kind "$1"; }',
     // Both are minted whenever either is due: the service token is re-minted
     // read-only, which takes `write:admin` off a host's pre-split token.
     'if [ -z "$ADMIN_TOKEN" ]; then SERVICE_KIND=combined; else SERVICE_KIND=service; fi',
@@ -247,7 +247,7 @@ export function buildRemoteBootstrapCommands(
     'aws ssm put-parameter --name "$PARAMETER_PATH/gitea_service_token" --type SecureString --value "$SERVICE_TOKEN" --overwrite --region "${AWS_REGION:-us-east-1}"',
     'if [ -n "$ADMIN_TOKEN" ]; then ADMIN_TOKEN=$(mint admin); if [ -z "$ADMIN_TOKEN" ]; then echo "mint-token returned an empty admin token"; exit 1; fi; aws ssm put-parameter --name "$PARAMETER_PATH/gitea_admin_token" --type SecureString --value "$ADMIN_TOKEN" --overwrite --region "${AWS_REGION:-us-east-1}"; fi',
     'aws ssm get-parameters-by-path --path "$PARAMETER_PATH" --recursive --with-decryption --output json > "$TMP_JSON"',
-    'docker run --rm -i -v "$APP_DIR:/workspace" -w /workspace oven/bun:1 bun scripts/bootstrap-gitea-service-account.ts render-env --parameter-path "$PARAMETER_PATH" < "$TMP_JSON" > "$TMP_ENV"',
+    'docker run --rm -i -v "$APP_DIR:/workspace" -w /workspace oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 bun scripts/bootstrap-gitea-service-account.ts render-env --parameter-path "$PARAMETER_PATH" < "$TMP_JSON" > "$TMP_ENV"',
     'install -m 0600 "$TMP_ENV" "$ENV_FILE"',
     'docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d api caddy',
   ];
