@@ -11,9 +11,9 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-09-01",
   "vars": {
-    // Where the SPA is served from: bindersnap.com today, app.bindersnap.com
-    // once the split in docs/ops/production-architecture.md §2 lands.
-    "ALLOWED_ORIGINS": "https://bindersnap.com,https://app.bindersnap.com",
+    // Where the app is served from. The public site, bindersnap.com, has no
+    // Send feedback button.
+    "ALLOWED_ORIGINS": "https://app.bindersnap.com",
     "FEEDBACK_REPOSITORY": "davidgraymi/bindersnap-feedback",
   },
   // Five reports a minute from one address. The free plan's one WAF

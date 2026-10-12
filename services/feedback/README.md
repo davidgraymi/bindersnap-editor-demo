@@ -50,7 +50,7 @@ every report answers 502 and nothing else is affected.
    `TURNSTILE_SITE_KEY` variable of the GitHub `production` environment, then
    re-run `static-site.yml` so the app picks it up.
 
-Check it: `curl -si -X OPTIONS -H 'Origin: https://bindersnap.com'
+Check it: `curl -si -X OPTIONS -H 'Origin: https://app.bindersnap.com'
 https://feedback.bindersnap.com/` answers 204, then send one from the app and
 watch the issue appear.
 

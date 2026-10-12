@@ -46,7 +46,7 @@ provider "stripe" {
 variable "app_origin" {
   description = "Origin of the app; the portal returns here when a session names no return URL (the API always names one)"
   type        = string
-  default     = "https://bindersnap.com"
+  default     = "https://app.bindersnap.com"
 }
 
 variable "site_origin" {
