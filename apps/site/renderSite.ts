@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { stripTags } from "../../packages/utils/stripTags";
 import { renderHelpCss } from "../help/renderHelp";
 import { renderLegalBody } from "../legal/renderLegal";
 import {
@@ -263,10 +264,7 @@ const CTA = `<section class="site-closing" aria-labelledby="site-closing-heading
 /** A page's second-level headings, for the rail's "On this page". */
 export function pageSections(html: string): { id: string; title: string }[] {
   return [...html.matchAll(/<h2 id="([^"]+)">([\s\S]*?)<\/h2>/g)].map(
-    (match) => ({
-      id: match[1]!,
-      title: match[2]!.replace(/<[^>]*>/g, "").replace(/[<>]/g, ""),
-    }),
+    (match) => ({ id: match[1]!, title: stripTags(match[2]!) }),
   );
 }
 

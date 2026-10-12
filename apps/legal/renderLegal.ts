@@ -1,3 +1,4 @@
+import { stripTags } from "../../packages/utils/stripTags";
 import { markdownToHtml } from "../app/markdown";
 import { renderHelpCss } from "../help/renderHelp";
 import { linkCard, pageHero, siteFooter, siteHeader } from "../site/chrome";
@@ -105,9 +106,7 @@ ${siteFooter()}
 
 /** A heading's anchor, so "see section 7 of the DPA" can be a link. */
 function headingId(html: string): string {
-  return html
-    .replace(/<[^>]*>/g, "")
-    .replace(/[<>]/g, "")
+  return stripTags(html)
     .replace(/&[a-z]+;/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
