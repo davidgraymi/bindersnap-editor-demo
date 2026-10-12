@@ -50,6 +50,11 @@ export const SignupBodySchema = z.object({
    * the box for. Signup refuses anything but the current one.
    */
   acceptedTerms: z.string().min(1),
+  /**
+   * The signup form's Turnstile token. Required where the API has a Turnstile
+   * secret (production); refused with `403`, `code: "turnstile_failed"`.
+   */
+  turnstileToken: z.string().optional(),
 });
 export type SignupBody = z.infer<typeof SignupBodySchema>;
 

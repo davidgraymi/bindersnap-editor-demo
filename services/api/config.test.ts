@@ -83,6 +83,7 @@ describe("API config", () => {
       STRIPE_SECRET_KEY: "sk_live_test",
       STRIPE_WEBHOOK_SECRET: "whsec_test",
       STRIPE_PRICE_ID: "price_test",
+      SIGNUP_TURNSTILE_SECRET_KEY: "0x_turnstile_secret",
     };
 
     expect(() =>
@@ -92,6 +93,14 @@ describe("API config", () => {
       }),
     ).toThrow("STRIPE_PRICE_ID is required in production.");
 
+    // Without it, signup in production would skip the bot check.
+    expect(() =>
+      initializeConfig({
+        ...productionBaseEnv,
+        SIGNUP_TURNSTILE_SECRET_KEY: "",
+      }),
+    ).toThrow("SIGNUP_TURNSTILE_SECRET_KEY is required in production.");
+
     expect(() =>
       initializeConfig({
         NODE_ENV: "production",
@@ -99,6 +108,7 @@ describe("API config", () => {
         STRIPE_SECRET_KEY: "sk_live_test",
         STRIPE_WEBHOOK_SECRET: "whsec_test",
         STRIPE_PRICE_ID: "price_test",
+        SIGNUP_TURNSTILE_SECRET_KEY: "0x_turnstile_secret",
       }),
     ).toThrow(
       "BINDERSNAP_ALLOWED_ORIGINS or BINDERSNAP_APP_ORIGIN is required in production.",
@@ -116,6 +126,7 @@ describe("API config", () => {
       STRIPE_SECRET_KEY: "sk_live_test",
       STRIPE_WEBHOOK_SECRET: "whsec_test",
       STRIPE_PRICE_ID: "price_test",
+      SIGNUP_TURNSTILE_SECRET_KEY: "0x_turnstile_secret",
       LOG_LEVEL: "warn",
     });
 

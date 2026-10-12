@@ -45,6 +45,7 @@ import {
   login,
   logoutSession,
   signup,
+  signupTurnstileSiteKey,
 } from "./api";
 import type { OrganizationSummary } from "../../packages/api-schema/schemas/organizations";
 import {
@@ -66,6 +67,7 @@ import { resolveSignupPrefill } from "./authIntent";
 import { validateFullName } from "../../packages/utils/personName";
 import { AgreementCheckbox } from "./components/AgreementCheckbox";
 import { AcceptTermsPage } from "./components/AcceptTermsPage";
+import { useTurnstile } from "./turnstile";
 import type { LegalStatusPayload } from "../../packages/api-schema/schemas/legal";
 
 type AuthView =
@@ -98,6 +100,7 @@ interface LoginPageProps {
     username: string,
     email: string,
     password: string,
+    turnstileToken: string | null,
   ) => Promise<void>;
 }
 
@@ -149,6 +152,9 @@ function LoginPage({
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string | null>(callbackError);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Signup only: it is the form that makes something for whoever asks.
+  const signupCheckKey = mode === "signup" ? signupTurnstileSiteKey() : "";
+  const turnstile = useTurnstile(signupCheckKey);
 
   useEffect(() => {
     setError(callbackError);
@@ -187,6 +193,17 @@ function LoginPage({
         setError("Agree to the Terms of Service to create an account.");
         return;
       }
+
+      if (signupCheckKey && turnstile.failed) {
+        setError(
+          "We couldn't load the check that keeps robots out. Reload the page, or allow challenges.cloudflare.com if something blocks it.",
+        );
+        return;
+      }
+      if (signupCheckKey && !turnstile.token) {
+        setError("Still checking you're not a robot. Try again in a moment.");
+        return;
+      }
     } else if (!normalizedIdentifier || !password) {
       setError("Enter your username or email and password.");
       return;
@@ -199,12 +216,18 @@ function LoginPage({
       if (mode === "signin") {
         await onLogin(normalizedIdentifier, password, true);
       } else {
-        await onSignup(
-          { first: firstName, last: lastName },
-          normalizedUsername,
-          normalizedIdentifier,
-          password,
-        );
+        try {
+          await onSignup(
+            { first: firstName, last: lastName },
+            normalizedUsername,
+            normalizedIdentifier,
+            password,
+            turnstile.token,
+          );
+        } finally {
+          // The API spent the token, whatever else it said.
+          turnstile.reset();
+        }
       }
     } catch (submitError) {
       if (submitError instanceof Error && submitError.message.trim() !== "") {
@@ -344,6 +367,11 @@ function LoginPage({
                 checked={agreed}
                 onChange={setAgreed}
               />
+            ) : null}
+
+            {signupCheckKey ? (
+              // Turnstile draws itself here only when it needs a click.
+              <div ref={turnstile.box} className="app-login-check" />
             ) : null}
 
             <button
@@ -1038,12 +1066,13 @@ export function App() {
           }
           navigateTo({ kind: "home" }, true);
         }}
-        onSignup={async (name, username, email, password) => {
+        onSignup={async (name, username, email, password, turnstileToken) => {
           const authenticatedSession = await signup(
             name,
             username,
             email,
             password,
+            turnstileToken,
             pendingInvitationToken(),
           );
           // Carried from the signup form so the create-organization screen

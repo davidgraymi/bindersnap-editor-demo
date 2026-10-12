@@ -48,13 +48,20 @@ cd infra/edge
 terraform init -backend-config=../state/backend.hcl
 terraform apply -var-file=terraform.tfvars
 ./put-tunnel-token.sh   # tunnel token → SSM /bindersnap/prod/cloudflare_tunnel_token
+CLOUDFLARE_ACCOUNT_ID=… ./put-signup-turnstile-secret.sh
+                        # signup's Turnstile widget; secret → SSM
+                        # /bindersnap/prod/signup_turnstile_secret_key
 ```
 
 Cloudflare then emails `email_routing_destination` a verification link.
 **Nothing is forwarded until it is clicked.**
 
-Then redeploy the host. `cloudflared` reads the token from `.env.prod`, so
-the deploy fails at `compose config` until the token is in SSM.
+Set the site key the second script prints as the `SIGNUP_TURNSTILE_SITE_KEY`
+variable of the GitHub `production` environment.
+
+Then redeploy the host. `cloudflared` and the API read the tunnel token and the
+Turnstile secret from `.env.prod`, so the deploy fails at `compose config` until
+both are in SSM.
 
 ## Checking it
 

@@ -33,6 +33,7 @@ The browser only receives a Bindersnap session cookie. Gitea access tokens stay 
 - `BINDERSNAP_ALLOWED_ORIGINS`: Optional comma-separated override for multiple allowed origins.
 - `STRIPE_SECRET_KEY`: Stripe secret key used to create Checkout and Customer Portal sessions.
 - `STRIPE_WEBHOOK_SECRET`: Stripe webhook signing secret used to verify `/stripe/webhook`.
+- `SIGNUP_TURNSTILE_SECRET_KEY`: the signup form's Turnstile secret. Required in production, where a signup without a token Turnstile accepts is refused (`403`, `code: "turnstile_failed"`) before Gitea creates anything. Unset elsewhere, which skips the check. `infra/edge/put-signup-turnstile-secret.sh` writes it to SSM.
 - `STRIPE_PRICE_ID`: the per-unit seat price (one unit per writer) the API checks out, and whose quantity it keeps equal to the organization's paid seats. See `docs/payments-plan.md`, "Seat billing".
 - `BINDERSNAP_USER_EMAIL_DOMAIN`: Placeholder signup email domain. Default `users.bindersnap.local`.
 - `BINDERSNAP_SESSION_COOKIE_NAME`: Session cookie name. Default `bindersnap_session`.

@@ -18,4 +18,5 @@ export type AuthSignupBody = {
   invitation?: string;
   /** @minLength 1 */
   acceptedTerms: string;
+  turnstileToken?: string;
 };

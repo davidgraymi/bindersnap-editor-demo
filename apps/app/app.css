@@ -180,6 +180,11 @@ input {
 
 /* "Forgot password?" under the password field. Quiet: the coral on this
    panel belongs to the submit button. */
+/* The signup form's Turnstile check: no room taken until it asks for a click. */
+.app-login-check:empty {
+  display: none;
+}
+
 .app-login-forgot {
   justify-self: end;
   margin-top: calc(-1 * var(--brand-space-2));

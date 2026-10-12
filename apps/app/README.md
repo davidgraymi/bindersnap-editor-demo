@@ -51,6 +51,14 @@ without both:
 - `BUN_PUBLIC_TURNSTILE_SITE_KEY`: the Turnstile widget's public key. The
   local stack uses Turnstile's always-pass test key.
 
+Signup has its own Turnstile widget, so a script cannot fill Gitea with
+accounts or send confirmation emails to strangers:
+
+- `BUN_PUBLIC_SIGNUP_TURNSTILE_SITE_KEY`: its public key, which
+  `infra/edge/put-signup-turnstile-secret.sh` prints. Unset (the local stack,
+  CI), the form shows no check, and the API, which has no secret either,
+  checks nothing.
+
 `BUN_PUBLIC_APP_VERSION` and `BUN_PUBLIC_APP_COMMIT` say which build a report
 came from; unset, both read "dev". Read any optional `BUN_PUBLIC_` variable
 through `publicEnv()`: Bun inlines only the ones a build has, and an unset one

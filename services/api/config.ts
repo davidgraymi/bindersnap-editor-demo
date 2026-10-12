@@ -19,6 +19,9 @@ export interface ApiConfig {
   // Set only where several stacks share one Stripe account (CI). See
   // stripe/run-tag.ts.
   stripeRunTag: string;
+  // Turnstile's secret for the signup form's widget. Empty outside production,
+  // which skips the check: the local stack and CI sign up with no widget.
+  signupTurnstileSecret: string;
   defaultAppOrigin: string;
   appOrigin: string;
   // Where the API itself is reached from outside — for links that must hit
@@ -81,6 +84,8 @@ const STRING_ENV: Record<string, StringSpec> = {
   STRIPE_WEBHOOK_SECRET: { requiredInProduction: true, default: "" },
   STRIPE_PRICE_ID: { requiredInProduction: true, default: "" },
   STRIPE_RUN_TAG: { default: "" },
+  // infra/edge/put-signup-turnstile-secret.sh writes it to SSM.
+  SIGNUP_TURNSTILE_SECRET_KEY: { requiredInProduction: true, default: "" },
   BINDERSNAP_ALLOWED_ORIGINS: { default: "" },
   BINDERSNAP_APP_ORIGIN: { default: "" },
   BINDERSNAP_API_ORIGIN: { default: "" },
@@ -403,6 +408,11 @@ export function initializeConfig(
     ),
     stripePriceId: parseString(resolvedEnv, "STRIPE_PRICE_ID", isProduction),
     stripeRunTag: parseString(resolvedEnv, "STRIPE_RUN_TAG", isProduction),
+    signupTurnstileSecret: parseString(
+      resolvedEnv,
+      "SIGNUP_TURNSTILE_SECRET_KEY",
+      isProduction,
+    ),
     defaultAppOrigin,
     appOrigin: resolvePrimaryAppOrigin(
       allowedOriginsRaw,

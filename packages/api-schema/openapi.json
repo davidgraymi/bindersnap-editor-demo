@@ -97,6 +97,9 @@
           "acceptedTerms": {
             "type": "string",
             "minLength": 1
+          },
+          "turnstileToken": {
+            "type": "string"
           }
         },
         "required": [
@@ -2808,6 +2811,9 @@
                   "acceptedTerms": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "turnstileToken": {
+                    "type": "string"
                   }
                 },
                 "required": [
