@@ -1682,7 +1682,7 @@ export function downloadHeaders(
   return headers;
 }
 
-function responseFromError(
+export function responseFromError(
   err: unknown,
   baseHeaders: Headers,
   fallback: string,
@@ -1691,7 +1691,13 @@ function responseFromError(
     // Status 0 marks an error detected on our side (input validation, missing
     // data) rather than an HTTP status from Gitea. Response() rejects 0, and
     // these are request-shaped problems, so surface them as 400.
-    const status = err.status === 0 ? 400 : err.status;
+    //
+    // **An error is never a success.** Gitea has answered a read with a 200
+    // and no body, which `unwrap` refuses with the status it was given. Passed
+    // through, that sent the browser a 200 whose body was `{ error }`, and the
+    // app read it as the binder it asked for and crashed. Anything below 400
+    // that still failed is a bad answer from upstream: 502.
+    const status = err.status === 0 ? 400 : err.status < 400 ? 502 : err.status;
     if (status >= 500) {
       logger.error("Gitea API error (5xx)", {
         status,

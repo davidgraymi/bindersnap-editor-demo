@@ -3,7 +3,13 @@ import { randomUUID } from "crypto";
 
 import { config } from "./config";
 import { OrganizationStore, organizationStore } from "./organizations";
-import { corsHeaders, createApiServer, downloadHeaders } from "./server";
+import {
+  corsHeaders,
+  createApiServer,
+  downloadHeaders,
+  responseFromError,
+} from "./server";
+import { GiteaApiError } from "./gitea-client/client";
 import { SessionStore, sessionStore } from "./sessions";
 import { resetStripeClientForTests } from "./stripe/client";
 import {
@@ -2194,4 +2200,25 @@ describe("a document's bytes and the browser's cache", () => {
     expect(headers.get("cache-control")).toBe("private, max-age=21600");
     expect(headers.get("etag")).toBe('"0be6a65b"');
   });
+});
+
+test("a failed Gitea read never reaches the browser as a success", async () => {
+  // Gitea answered 200 with no body; `unwrap` refused it with that status.
+  const empty = responseFromError(
+    new GiteaApiError(200, "Gitea request failed."),
+    new Headers(),
+    "Unable to open this binder.",
+  );
+  expect(empty.status).toBe(502);
+  expect(await empty.json()).toEqual({ error: "Gitea request failed." });
+
+  // Real errors keep their status, and ours stay request-shaped.
+  expect(
+    responseFromError(new GiteaApiError(404, "Not found"), new Headers(), "x")
+      .status,
+  ).toBe(404);
+  expect(
+    responseFromError(new GiteaApiError(0, "Bad input"), new Headers(), "x")
+      .status,
+  ).toBe(400);
 });
