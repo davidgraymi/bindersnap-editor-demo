@@ -357,15 +357,14 @@ test("billing names the organization it is about", () => {
   expect(routeToPath({ kind: "billing" })).toBe("/-/billing");
 });
 
-test("help is not the app's: its addresses are never a route in it", () => {
-  // `/help` is served as plain pages (apps/help), and the name is reserved so
-  // no organization can take it.
-  expect(getRoute("/help").kind).not.toBe("organization");
-  expect(getRoute("/help/approvals").kind).not.toBe("binder");
+test("help and legal are another origin's, so their names are organizations'", () => {
+  // They are pages on bindersnap.com (apps/help, apps/legal); the app is
+  // app.bindersnap.com, since issue 718.
+  expect(getRoute("/help")).toEqual({ kind: "organization", org: "help" });
+  expect(getRoute("/legal/terms").kind).toBe("binder");
 });
 
-test("the legal pages are not the app's either", () => {
-  // `/legal` is plain pages too (apps/legal), reserved the same way.
-  expect(getRoute("/legal").kind).not.toBe("organization");
-  expect(getRoute("/legal/terms").kind).not.toBe("binder");
+test("the files the app's host serves are never a route in it", () => {
+  expect(getRoute("/favicon.ico").kind).not.toBe("organization");
+  expect(getRoute("/fonts/fonts.css").kind).not.toBe("binder");
 });

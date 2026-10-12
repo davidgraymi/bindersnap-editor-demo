@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 
-import { RESERVED_ORGANIZATION_NAMES } from "../../packages/utils/organizationName";
 import { publicSiteFiles } from "./publicSite";
 import { REQUIRED_POLICIES, SITUATIONS } from "./requiredPolicies";
 import {
@@ -188,35 +187,6 @@ describe("every page on the public site", () => {
     const descriptions = pages.map((page) => page.description);
     expect(new Set(titles).size).toBe(titles.length);
     expect(new Set(descriptions).size).toBe(descriptions.length);
-  });
-
-  test("no organization can take a page's address", () => {
-    for (const collection of SITE_COLLECTIONS) {
-      if (collection.prefix) {
-        expect(RESERVED_ORGANIZATION_NAMES.has(collection.prefix)).toBe(true);
-      }
-    }
-    for (const page of pages) {
-      const first = page.path.split("/")[1]!;
-      expect({
-        first,
-        reserved: RESERVED_ORGANIZATION_NAMES.has(first),
-      }).toEqual({
-        first,
-        reserved: true,
-      });
-    }
-    for (const path of files.keys()) {
-      const first = path.split("/")[1]!;
-      if (first.startsWith("_") || first === "404") continue;
-      expect({
-        path,
-        reserved: RESERVED_ORGANIZATION_NAMES.has(first),
-      }).toEqual({
-        path,
-        reserved: true,
-      });
-    }
   });
 });
 
