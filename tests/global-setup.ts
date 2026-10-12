@@ -103,7 +103,9 @@ let API_PROXY_PORT: string;
 let GITEA_PORT: string;
 let HOCUSPOCUS_PORT: string;
 let MAILPIT_PORT: string;
+let SITE_PORT: string;
 let APP_BASE_URL: string;
+let SITE_BASE_URL: string;
 let API_READY_URL: string;
 let API_PROXY_BASE_URL: string;
 let CADDY_READY_URL: string;
@@ -124,6 +126,7 @@ async function resolveStack(): Promise<void> {
   GITEA_PORT = String(stack.ports.GITEA_PORT);
   HOCUSPOCUS_PORT = String(stack.ports.HOCUSPOCUS_PORT);
   MAILPIT_PORT = String(stack.ports.MAILPIT_PORT);
+  SITE_PORT = String(stack.ports.SITE_PORT);
 
   // Playwright's baseURL and the test helpers read these from the
   // environment, and playwright.config.ts has already been evaluated by now.
@@ -134,8 +137,10 @@ async function resolveStack(): Promise<void> {
   process.env.GITEA_PORT = GITEA_PORT;
   process.env.HOCUSPOCUS_PORT = HOCUSPOCUS_PORT;
   process.env.MAILPIT_PORT = MAILPIT_PORT;
+  process.env.SITE_PORT = SITE_PORT;
 
   APP_BASE_URL = `http://localhost:${APP_PORT}`;
+  SITE_BASE_URL = `http://localhost:${SITE_PORT}`;
   API_READY_URL = `http://localhost:${API_PORT}/auth/me`;
   API_PROXY_BASE_URL = `http://localhost:${API_PROXY_PORT}`;
   CADDY_READY_URL = `${API_PROXY_BASE_URL}/auth/me`;
@@ -347,6 +352,7 @@ export default async function globalSetup(): Promise<void> {
     GITEA_PORT,
     HOCUSPOCUS_PORT,
     MAILPIT_PORT,
+    SITE_PORT,
     STRIPE_SECRET_KEY:
       process.env.STRIPE_SECRET_KEY || DEFAULT_STRIPE_SECRET_KEY,
     STRIPE_PRICE_ID: process.env.STRIPE_PRICE_ID || DEFAULT_STRIPE_PRICE_ID,
@@ -396,6 +402,8 @@ export default async function globalSetup(): Promise<void> {
 
     log(`Waiting for app at ${APP_BASE_URL} ...`);
     await waitForUrl(APP_BASE_URL, 60, 2000);
+    log(`Waiting for site at ${SITE_BASE_URL} ...`);
+    await waitForUrl(SITE_BASE_URL, 60, 2000);
     log("Stack is ready.");
   } catch (error) {
     try {

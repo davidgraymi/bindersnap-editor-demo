@@ -6,6 +6,7 @@ import {
   PRIVACY_PATH,
   TERMS_PATH,
 } from "../../../packages/utils/legal";
+import { siteUrl } from "../siteLink";
 
 /**
  * The box a person ticks to agree to the Terms, worded as `AGREEMENT_WORDS`
@@ -45,12 +46,12 @@ function agreementSentence(
 ): ReactNode[] {
   const links: Record<string, ReactNode> = {
     terms: (
-      <a href={TERMS_PATH} target="_blank" rel="noopener">
+      <a href={siteUrl(TERMS_PATH)} target="_blank" rel="noopener">
         Terms of Service
       </a>
     ),
     privacy: (
-      <a href={PRIVACY_PATH} target="_blank" rel="noopener">
+      <a href={siteUrl(PRIVACY_PATH)} target="_blank" rel="noopener">
         Privacy Policy
       </a>
     ),

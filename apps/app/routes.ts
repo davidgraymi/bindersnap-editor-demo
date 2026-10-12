@@ -138,10 +138,6 @@ function decodeSegment(segment: string): string {
   }
 }
 
-export function isHomePath(pathname: string): boolean {
-  return normalizePathname(pathname) === "/";
-}
-
 /**
  * First path segments that are the app's own, not an organization's.
  *
@@ -397,6 +393,9 @@ export function canonicalLocation(
 
 export function isProtectedAppRoute(route: AppRoute): boolean {
   return (
+    // The workspace. The landing page is the public site's (bindersnap.com),
+    // so a signed-out visitor here is asked to sign in, as on any other page.
+    route.kind === "home" ||
     route.kind === "workspace" ||
     route.kind === "documents" ||
     route.kind === "changes" ||

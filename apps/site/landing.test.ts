@@ -4,9 +4,7 @@ import { JSDOM } from "jsdom";
 import {
   bindSignupEnterKeys,
   buildSignupUrl,
-  hideLandingContent,
   routeLandingSignup,
-  shouldShowLanding,
   showLandingContent,
 } from "./landing";
 
@@ -51,13 +49,9 @@ afterEach(() => {
   });
 });
 
-test("landing visibility helpers toggle the pre-rendered shell", () => {
+test("the landing page reveals its pre-rendered content", () => {
   installDom();
   const landingContent = document.getElementById("landing-content");
-
-  hideLandingContent(landingContent);
-  expect(landingContent?.style.display).toBe("none");
-  expect(landingContent?.getAttribute("aria-hidden")).toBe("true");
 
   showLandingContent(landingContent);
   expect(landingContent?.style.display).toBe("");
@@ -65,11 +59,11 @@ test("landing visibility helpers toggle the pre-rendered shell", () => {
   expect(landingContent?.hasAttribute("aria-hidden")).toBe(false);
 });
 
-test("buildSignupUrl opens signup mode and preserves a typed email", () => {
+test("buildSignupUrl opens the app's signup and preserves a typed email", () => {
   expect(buildSignupUrl(" team@bindersnap.com ")).toBe(
-    "/-/signup?email=team%40bindersnap.com",
+    "https://app.bindersnap.com/-/signup?email=team%40bindersnap.com",
   );
-  expect(buildSignupUrl("")).toBe("/-/signup");
+  expect(buildSignupUrl("")).toBe("https://app.bindersnap.com/-/signup");
 });
 
 test("landing signup routes to the signup page with the typed email", () => {
@@ -80,7 +74,9 @@ test("landing signup routes to the signup page with the typed email", () => {
     navigations.push(url);
   });
 
-  expect(targetUrl).toBe("/-/signup?email=team%40bindersnap.com");
+  expect(targetUrl).toBe(
+    "https://app.bindersnap.com/-/signup?email=team%40bindersnap.com",
+  );
   expect(navigations).toEqual([targetUrl]);
 });
 
@@ -99,10 +95,4 @@ test("pressing Enter in a landing email field routes to signup", () => {
     );
 
   expect(submittedSources).toEqual(["cta"]);
-});
-
-test("only the root pathname should show the landing shell", () => {
-  expect(shouldShowLanding("/")).toBe(true);
-  expect(shouldShowLanding("/-/login")).toBe(false);
-  expect(shouldShowLanding("/docs/alice/quarterly-report")).toBe(false);
 });

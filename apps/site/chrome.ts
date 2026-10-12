@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { appUrl } from "./appLink";
+
 /**
  * The bar and the footer every public page wears: the landing page, the
  * marketing pages, help and legal. One set, so a reader who follows a link
@@ -28,8 +30,15 @@ export const HEADER_LINKS: readonly ChromeLink[] = [
   { href: "/help", label: "Help" },
 ];
 
-export const SIGN_IN: ChromeLink = { href: "/-/login", label: "Sign in" };
-export const SIGN_UP: ChromeLink = { href: "/-/signup", label: "Sign up" };
+// The app is its own origin (app.bindersnap.com), so these are absolute.
+export const SIGN_IN: ChromeLink = {
+  href: appUrl("/-/login"),
+  label: "Sign in",
+};
+export const SIGN_UP: ChromeLink = {
+  href: appUrl("/-/signup"),
+  label: "Sign up",
+};
 
 export const FOOTER_COLUMNS: readonly {
   heading: string;
@@ -42,7 +51,7 @@ export const FOOTER_COLUMNS: readonly {
       { href: "/for", label: "Who it's for" },
       { href: "/help", label: "Help and guides" },
       SIGN_IN,
-      { href: "/-/signup", label: "Create an account" },
+      { href: appUrl("/-/signup"), label: "Create an account" },
     ],
   },
   {

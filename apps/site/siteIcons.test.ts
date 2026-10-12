@@ -4,10 +4,11 @@ import { join } from "node:path";
 
 /**
  * What a browser tab, a home screen and a link pasted into a text or a post
- * show for bindersnap.com. The images come from scripts/brand-images.ts.
+ * show for bindersnap.com. The images come from scripts/brand-images.ts, and
+ * live in apps/app/public, which the build copies to both origins.
  */
 
-const PUBLIC_DIR = join(import.meta.dir, "public");
+const PUBLIC_DIR = join(import.meta.dir, "../app/public");
 const html = readFileSync(join(import.meta.dir, "index.html"), "utf8");
 
 const meta = (property: string) =>
@@ -31,7 +32,7 @@ describe("the site's icons and link preview", () => {
     ].map((match) => match[1]!);
     expect(hrefs.length).toBeGreaterThanOrEqual(4);
     for (const href of hrefs) {
-      expect(href).toStartWith("./public/");
+      expect(href).toStartWith("../app/public/");
       expect(existsSync(join(import.meta.dir, href)), href).toBe(true);
     }
   });

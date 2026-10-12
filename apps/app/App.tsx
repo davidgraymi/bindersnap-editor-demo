@@ -19,7 +19,6 @@ import type { OfferedPlan } from "./components/PlanOffer";
 import { PaywallProvider } from "./paywallContext";
 import { OrganizationSetupPage } from "./components/OrganizationSetupPage";
 import { BindersnapLogoMark } from "./components/BindersnapLogoMark";
-import { LandingPage } from "./components/LandingPage";
 import { WorkspaceSkeleton } from "./components/WorkspaceSkeleton";
 import { UnsubscribePage } from "./components/UnsubscribePage";
 import {
@@ -68,12 +67,12 @@ import { validateFullName } from "../../packages/utils/personName";
 import { AgreementCheckbox } from "./components/AgreementCheckbox";
 import { AcceptTermsPage } from "./components/AcceptTermsPage";
 import { useTurnstile } from "./turnstile";
+import { siteUrl } from "./siteLink";
 import type { LegalStatusPayload } from "../../packages/api-schema/schemas/legal";
 
 type AuthView =
   | "loading"
   | "callback"
-  | "landing"
   | "login"
   | "forgotPassword"
   | "resetPassword"
@@ -246,7 +245,7 @@ function LoginPage({
     <section className="app-login-shell">
       <div className="app-login-wrap">
         {/* The way back to the site this page was reached from. */}
-        <a className="app-login-logo" href="/">
+        <a className="app-login-logo" href={siteUrl("/")}>
           <span className="app-login-logo-mark" aria-hidden="true">
             <BindersnapLogoMark width={22} height={22} />
           </span>
@@ -812,10 +811,6 @@ export function App() {
     // the app's routes — so this is the page, wherever they were going.
     const unconfirmed = user?.emailVerified === false;
 
-    if (route.kind === "home" && !unconfirmed && !(user && termsPending)) {
-      return user ? "app" : "landing";
-    }
-
     if (isCheckingSession) {
       return "loading";
     }
@@ -1108,10 +1103,6 @@ export function App() {
         }}
       />
     );
-  }
-
-  if (view === "landing") {
-    return <LandingPage />;
   }
 
   return (

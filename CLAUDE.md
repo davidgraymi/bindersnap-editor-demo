@@ -15,8 +15,8 @@ bun run down          # Tear down this worktree's stack, and only this one
 bun run stack status  # Your ports, your URLs, your login — add --json to parse
 
 # Partial servers — neither gives you a working app on its own
-bun run dev:app       # SPA only: landing page and other UI that calls no API.
-                      # Binds APP_PORT from .env (5173 if unset).
+bun run dev:app       # The app shell on APP_PORT and the public site (landing,
+                      # marketing, help, legal) on SITE_PORT. Calls no API.
 bun run dev:api       # API only: still needs Gitea, which only `bun run up` runs.
 
 # Build
@@ -92,7 +92,12 @@ CORS headers for exactly one origin — your stack's own `APP_PORT`, set as
 `BINDERSNAP_APP_ORIGIN` in `docker-compose.yml` — and compose does not pass
 `BINDERSNAP_ALLOWED_ORIGINS` through, so there is no override. A `bun run dev:app`
 on any other port gets every API call blocked by CORS and can never sign in. It
-renders the landing page and nothing behind auth.
+renders the sign-in page and nothing behind auth.
+
+The app and the public site are two origins, as in production
+(`app.bindersnap.com` and `bindersnap.com`): the app on `APP_PORT`, the landing
+page, marketing, help and legal on `SITE_PORT`. `bun run stack status` prints
+both.
 
 A dependency change is the one thing hot reload cannot pick up: the container
 bakes its own `node_modules` into a volume at image build, so a package added on

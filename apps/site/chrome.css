@@ -2,7 +2,7 @@
  * The bar and footer every public page wears — the landing page, the
  * marketing pages, help and legal — and the hero band and link cards the
  * marketing pages, help and legal share. Markup comes from `apps/site/chrome.ts`
- * (copied into `apps/app/index.html` for the landing page).
+ * (copied into `apps/site/index.html` for the landing page).
  * Requires bindersnap-tokens.css first.
  */
 

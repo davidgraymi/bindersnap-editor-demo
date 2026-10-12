@@ -3,6 +3,7 @@ import { ArrowRight, BookOpen, Check } from "lucide-react";
 import type { OnboardingPayload } from "../api";
 import { doneCount, nextStep, STEP_COPY } from "../onboardingSteps";
 import { AppIcon } from "./AppIcon";
+import { siteUrl } from "../siteLink";
 
 /**
  * The first thing a new customer sees on Home: where they are in moving in,
@@ -92,7 +93,7 @@ export function GettingStarted({
                     ) : null}
                     <a
                       className="bs-btn bs-btn--sm bs-btn--quiet"
-                      href={`/help/${copy.guide}`}
+                      href={siteUrl(`/help/${copy.guide}`)}
                       target="_blank"
                       rel="noopener"
                       title="Opens in a new tab"

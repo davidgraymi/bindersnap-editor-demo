@@ -247,6 +247,12 @@ services:
     environment:
       - APP_PORT=${APP_PORT:-5173}
       - PORT=${APP_PORT:-5173}
+      # server.ts serves two origins, as production does: the app on APP_PORT
+      # (app.bindersnap.com) and the public site on SITE_PORT (bindersnap.com).
+      # Each links to the other by these.
+      - SITE_PORT=${SITE_PORT:-5174}
+      - BUN_PUBLIC_APP_URL=http://localhost:${APP_PORT:-5173}
+      - BUN_PUBLIC_SITE_URL=http://localhost:${SITE_PORT:-5174}
       - BUN_PUBLIC_API_BASE_URL=http://localhost:${API_PROXY_PORT:-8788}
       - BUN_PUBLIC_API_URL=http://localhost:${API_PROXY_PORT:-8788}
       - VITE_API_URL=http://localhost:${API_PROXY_PORT:-8788}
@@ -265,6 +271,7 @@ services:
       - GITEA_ADMIN_PASS=${GITEA_ADMIN_PASS:-dev}
     ports:
       - "${APP_PORT:-5173}:${APP_PORT:-5173}"
+      - "${SITE_PORT:-5174}:${SITE_PORT:-5174}"
     volumes:
       - .:/app
       - app-node-modules:/app/node_modules

@@ -1,0 +1,22 @@
+// app.bindersnap.com: the app, served as static files by a Cloudflare Worker
+// with no code of its own (an "assets-only" Worker). The public site is
+// another Worker, on bindersnap.com (wrangler.jsonc at the repo root).
+// `.github/workflows/static-site.yml` builds both (scripts/build.ts) and
+// deploys them on every push to `main`; nothing else deploys them.
+//
+// See docs/ops/production-architecture.md §2.
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "bindersnap-app",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "../../dist/app",
+    // Any path with no file — `/{org}/...`, `/-/login` — gets index.html with
+    // a 200, and the SPA routes it.
+    "not_found_handling": "single-page-application",
+  },
+  // Wrangler creates the proxied DNS record for the custom domain itself.
+  "routes": [{ "pattern": "app.bindersnap.com", "custom_domain": true }],
+  "workers_dev": false,
+  "preview_urls": false,
+}
