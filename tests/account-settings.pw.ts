@@ -275,8 +275,8 @@ test("the only owner cannot delete their account; a member can, and their draft 
   await page.getByLabel("Current password").last().fill(member.password);
   await remove.click();
 
-  // Signed out, and gone.
-  await expect(page).toHaveURL(`${APP_BASE_URL}/`);
+  // Signed out, and gone: the app's home asks a signed-out visitor to sign in.
+  await expect(page).toHaveURL(`${APP_BASE_URL}/-/login`);
   expect(await signIn(member.username, member.password)).toBe(401);
   const people = await (
     await call(owner.session, "GET", `/api/app/orgs/${org}/people`)
