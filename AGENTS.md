@@ -87,7 +87,7 @@ bun run build         # Build the app and the site to dist/
 # Tests
 bun run test          # All unit tests (test:app + test:ops + test:seed)
 bun run test:app      # apps/app, apps/help, apps/legal, apps/site, packages/editor, packages/utils, packages/ui-tokens
-bun run test:ops      # services/api, services/feedback, scripts, infra/backups
+bun run test:ops      # services/api, services/feedback, services/uptime, scripts, infra/backups
 bun run test:seed     # The seed scenario and its documents
 bun run test:integration  # Playwright — starts and stops its own stack
                           # SKIP_STACK=1 reuses a running `bun run up` stack
@@ -569,8 +569,9 @@ logic goes in `deploy/deploy.py`, in Python, in version control.
 run our code only if it is stateless, keeps no customer content, sits off the
 critical path, and never touches Gitea or the API's databases. Today that is
 `bindersnap-feedback` (in-app feedback → a private GitHub repository) and
-nothing else; `bindersnap-site` and `bindersnap-app` serve static files and run
-no code. Auth, sessions, jobs, webhooks and anything that reads evidence or
+`bindersnap-uptime` (checks `/healthz` every minute, emails on down and up; the
+one Worker allowed a KV key, for its last result) and nothing else;
+`bindersnap-site` and `bindersnap-app` serve static files and run no code. Auth, sessions, jobs, webhooks and anything that reads evidence or
 configuration stay in the BFF.
 
 `docs/adr/0002-mvp-backend-aws-s3-dynamodb-cognito.md` describes an AWS-native

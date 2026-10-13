@@ -28,7 +28,7 @@ when `development/binders-gitea-28` merges, so nothing here migrates data._
                                    │
           ┌────────────────────────▼─────────────────────────────┐
           │ Cloudflare  (DNS · proxy · WAF · rate limits ·       │
-          │              Turnstile · health checks)              │
+          │              Turnstile · uptime Worker)              │
           │                                                      │
           │  bindersnap.com ──────► Worker static assets: site   │  GA allowed here only
           │  app.bindersnap.com ──► Worker static assets: SPA    │  CSP/HSTS via _headers
@@ -47,7 +47,7 @@ when `development/binders-gitea-28` merges, so nothing here migrates data._
    │ EBS /data ── DLM hourly(48) + daily(35) ── daily copy to us-west-2 (#618/#619)         │
    └────────────────────────────────────────────────────────────────────────────────────────┘
    Outbound email: SES (infra/email, unchanged)     Billing: Stripe → api.bindersnap.com/stripe/webhook
-   Alerts: CloudWatch + Cloudflare health checks → SNS/email     Guardrails: CloudTrail · GuardDuty · Budgets
+   Alerts: CloudWatch → SNS/email; uptime Worker → Email Routing     Guardrails: CloudTrail · GuardDuty · Budgets
 ```
 
 Hostnames that exist after cutover: `bindersnap.com`, `www` (redirect),
@@ -89,8 +89,12 @@ goes away** (§4, S3).
    credentials, no egress fee to restore, and a bucket lock means no token can
    delete it.
 7. **Health checks.** An external check on `https://api.bindersnap.com/healthz`
-   every minute, alerting to email. (Cloudflare's health checks need a paid
-   plan; a free UptimeRobot or Better Stack monitor does the same job.)
+   every minute, alerting to email. Cloudflare's health checks need a paid
+   plan, so it is the `bindersnap-uptime` Worker (`services/uptime`): a cron
+   trigger that requests `/healthz` through Cloudflare like a browser and emails
+   through Email Routing once when it goes down and once when it is back. It
+   costs nothing. It cannot see Cloudflare itself fail; a free external
+   monitor can cover that, added by hand.
 
 ### Don't move
 
@@ -281,31 +285,31 @@ data volume (#616).
 
 ## 5. Operations: the minimum for a production system
 
-| Area          | Minimum                                                                                                                                                                                             |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Detection     | External uptime check on `api.…/healthz` (1 min); CloudWatch: status check, CPU, memory, disk (#617), DLM (#619), Litestream age, restic age; **confirm the SNS email subscription**                |
-| Deploys       | Post-deploy health gate in `deploy-pyinfra.yml`: poll `/healthz` through the tunnel for 2 min, fail the run otherwise (#620 H9). Static sites deploy atomically with instant rollback in Cloudflare |
-| Logs          | API → CloudWatch Logs (`awslogs`, already). Rotate the other containers' logs (`daemon.json` `max-size`) (#620 H2). Set a retention (30 d) on the log group                                         |
-| Errors        | An error tracker for the API and the SPA (Sentry's free tier is enough), with PII scrubbing on; list it as a subprocessor in the privacy policy                                                     |
-| Recovery      | `docs/ops/restore.md` with both paths (EBS, restic). **One rehearsed restore before the first customer**, timed. Target RTO ≤ 2 h, RPO ≤ 1 h for documents, seconds for databases                   |
-| Capacity      | `t4g.medium`; data volume 50 GB (25 MiB uploads add up); disk alarm at 80 %                                                                                                                         |
-| Infra as code | A new `infra/edge` Terraform module with the Cloudflare provider: zone records, tunnel, WAF and rate-limit rules, the two Workers' custom domains, the R2 bucket and its lock                       |
+| Area          | Minimum                                                                                                                                                                                                 |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Detection     | External uptime check on `api.…/healthz` (1 min, `services/uptime`); CloudWatch: status check, CPU, memory, disk (#617), DLM (#619), Litestream age, restic age; **confirm the SNS email subscription** |
+| Deploys       | Post-deploy health gate in `deploy-pyinfra.yml`: poll `/healthz` through the tunnel for 2 min, fail the run otherwise (#620 H9). Static sites deploy atomically with instant rollback in Cloudflare     |
+| Logs          | API → CloudWatch Logs (`awslogs`, already). Rotate the other containers' logs (`daemon.json` `max-size`) (#620 H2). Set a retention (30 d) on the log group                                             |
+| Errors        | An error tracker for the API and the SPA (Sentry's free tier is enough), with PII scrubbing on; list it as a subprocessor in the privacy policy                                                         |
+| Recovery      | `docs/ops/restore.md` with both paths (EBS, restic). **One rehearsed restore before the first customer**, timed. Target RTO ≤ 2 h, RPO ≤ 1 h for documents, seconds for databases                       |
+| Capacity      | `t4g.medium`; data volume 50 GB (25 MiB uploads add up); disk alarm at 80 %                                                                                                                             |
+| Infra as code | A new `infra/edge` Terraform module with the Cloudflare provider: zone records, tunnel, WAF and rate-limit rules, the two Workers' custom domains, the R2 bucket and its lock                           |
 
 ---
 
 ## 6. Cost (≈ per month)
 
-| Item                                                     | Today    | Target   |
-| -------------------------------------------------------- | -------- | -------- |
-| EC2 t4g.small → t4g.medium                               | $12      | $24      |
-| EBS gp3 root 30 GB + data 20 → 50 GB                     | $4       | $6.40    |
-| Public IPv4 (EIP → auto-assigned, still billed)          | $3.60    | $3.60    |
-| EBS snapshots + us-west-2 copy                           | <$1      | $2–4     |
-| S3 Litestream                                            | <$1      | <$1      |
-| R2 (restic, a few GB; no egress)                         | —        | <$1      |
-| CloudWatch, SNS, KMS, SSM, GuardDuty, CloudTrail         | ~$3      | ~$6      |
-| Cloudflare (free plan: DNS, proxy, WAF, Tunnel, Workers) | —        | $0       |
-| **Total**                                                | **~$25** | **~$45** |
+| Item                                                         | Today    | Target   |
+| ------------------------------------------------------------ | -------- | -------- |
+| EC2 t4g.small → t4g.medium                                   | $12      | $24      |
+| EBS gp3 root 30 GB + data 20 → 50 GB                         | $4       | $6.40    |
+| Public IPv4 (EIP → auto-assigned, still billed)              | $3.60    | $3.60    |
+| EBS snapshots + us-west-2 copy                               | <$1      | $2–4     |
+| S3 Litestream                                                | <$1      | <$1      |
+| R2 (restic, a few GB; no egress)                             | —        | <$1      |
+| CloudWatch, SNS, KMS, SSM, GuardDuty, CloudTrail             | ~$3      | ~$6      |
+| Cloudflare (free plan: DNS, proxy, WAF, Tunnel, Workers, KV) | —        | $0       |
+| **Total**                                                    | **~$25** | **~$45** |
 
 The instance keeps a public IPv4 for outbound traffic. Removing it needs a
 NAT gateway (~$32) or IPv6-only egress, neither worth it yet. Once the size
