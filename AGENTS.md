@@ -215,7 +215,7 @@ bindersnap-editor-demo/
 ├── services/
 │   ├── api/              ← The BFF: auth + data (Bun). README: env vars
 │   ├── hocuspocus/       ← Yjs collaboration server; no stack runs it (no real-time editing yet)
-│   └── feedback/         ← Cloudflare Worker: in-app feedback → GitHub issue (ADR 0006)
+│   └── feedback/         ← Cloudflare Worker: in-app feedback and error reports → GitHub issues (ADR 0006)
 ├── deploy/               ← Configuration as code: pyinfra push deploy to the one host
 ├── infra/                ← Terraform only
 │   ├── compute/          ← The EC2 host
@@ -568,7 +568,8 @@ logic goes in `deploy/deploy.py`, in Python, in version control.
 **Cloudflare Workers are the one exception, and a narrow one.** A Worker may
 run our code only if it is stateless, keeps no customer content, sits off the
 critical path, and never touches Gitea or the API's databases. Today that is
-`bindersnap-feedback` (in-app feedback → a private GitHub repository) and
+`bindersnap-feedback` (in-app feedback, and error reports from the app and the
+API, → private GitHub repositories) and
 `bindersnap-uptime` (checks `/healthz` every minute, emails on down and up; the
 one Worker allowed a KV key, for its last result) and nothing else;
 `bindersnap-site` and `bindersnap-app` serve static files and run no code. Auth, sessions, jobs, webhooks and anything that reads evidence or
