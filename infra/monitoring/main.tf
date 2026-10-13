@@ -62,6 +62,12 @@ variable "dlm_policy_id" {
   default     = null
 }
 
+variable "api_health_check_host" {
+  description = "Public API hostname the external uptime check requests /healthz on"
+  type        = string
+  default     = "api.bindersnap.com"
+}
+
 locals {
   alerts_topic_name      = "${var.project}-alerts"
   email_subscription     = var.alert_email != null && trimspace(var.alert_email) != ""
@@ -252,6 +258,48 @@ resource "aws_cloudwatch_metric_alarm" "litestream_unhealthy" {
   tags = local.common_tags
 }
 
+# ---------- External uptime check ----------
+# Every alarm above watches the VM from inside AWS. None notices a healthy
+# instance whose API, Caddy, tunnel or Cloudflare route is broken. Route 53
+# health checkers request /healthz from the internet, through the same path a
+# browser takes (Cloudflare → tunnel → Caddy → API), every 30 seconds.
+
+resource "aws_route53_health_check" "api" {
+  type              = "HTTPS"
+  fqdn              = var.api_health_check_host
+  port              = 443
+  resource_path     = "/healthz"
+  request_interval  = 30
+  failure_threshold = 3
+  # Three regions is the minimum Route 53 allows, and keeps the checkers'
+  # requests (and their API log lines) to a few a minute.
+  regions = ["us-east-1", "us-west-1", "us-west-2"]
+
+  tags = merge(local.common_tags, { Name = "${var.project}-api-healthz" })
+}
+
+# Route 53 publishes HealthCheckStatus only in us-east-1, the region this
+# module already uses. 1 is healthy. Two minutes unhealthy pages; a deploy's
+# API restart is seconds and never reaches the failure threshold. Missing data
+# breaches, as with the status check: a check that stops reporting is no check.
+resource "aws_cloudwatch_metric_alarm" "api_unreachable" {
+  alarm_name          = "${var.project}-api-unreachable"
+  alarm_description   = "https://${var.api_health_check_host}/healthz has not answered 200 from outside AWS for 2 minutes"
+  namespace           = "AWS/Route53"
+  metric_name         = "HealthCheckStatus"
+  dimensions          = { HealthCheckId = aws_route53_health_check.api.id }
+  statistic           = "Minimum"
+  period              = 60
+  evaluation_periods  = 2
+  threshold           = 1
+  comparison_operator = "LessThanThreshold"
+  treat_missing_data  = "breaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+
+  tags = local.common_tags
+}
+
 # Memory usage alarm — bonus, since CW agent is already installed.
 resource "aws_cloudwatch_metric_alarm" "mem_high" {
   alarm_name          = "${var.project}-instance-mem-high"
@@ -339,6 +387,16 @@ output "status_check_alarm_name" {
 output "cpu_warning_alarm_name" {
   description = "CloudWatch alarm name for sustained CPU warning"
   value       = aws_cloudwatch_metric_alarm.cpu_high_warning.alarm_name
+}
+
+output "api_health_check_id" {
+  description = "Route 53 health check ID for the external /healthz check"
+  value       = aws_route53_health_check.api.id
+}
+
+output "api_unreachable_alarm_name" {
+  description = "CloudWatch alarm name for the external uptime check"
+  value       = aws_cloudwatch_metric_alarm.api_unreachable.alarm_name
 }
 
 output "alerts_email_subscription_arn" {
