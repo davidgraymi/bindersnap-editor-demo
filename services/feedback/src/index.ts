@@ -1,7 +1,7 @@
 /**
  * The feedback Worker: `POST https://feedback.bindersnap.com/` with a
  * {@link FeedbackReport}, and an issue opens in the private feedback
- * repository.
+ * repository. `POST /errors` is error reports, in `errors.ts`.
  *
  * It runs on Cloudflare, not on the EC2 host, so a report still goes through
  * when the host is down — the time one matters most. It is allowed to by
@@ -15,7 +15,9 @@
  */
 
 import { FEEDBACK_MAX_BYTES } from "../../../packages/utils/feedbackReport";
+import { handleErrorReport } from "./errors";
 import { createIssue, GitHubError } from "./github";
+import { allowedOrigin, corsHeaders, log, readCapped, reply } from "./http";
 import { feedbackIssue } from "./issue";
 import { feedbackReportSchema } from "./schema";
 import { verifyTurnstile } from "../../../packages/utils/turnstile";
@@ -36,6 +38,19 @@ export interface Env {
   /** Secret: `wrangler secret put TURNSTILE_SECRET_KEY`. */
   TURNSTILE_SECRET_KEY: string;
   FEEDBACK_LIMITER: RateLimit;
+  /** `owner/name` of the private repository error reports go to. */
+  ERRORS_REPOSITORY: string;
+  /**
+   * Secret: `wrangler secret put ERROR_REPORT_SECRET`, the API's bearer for
+   * `/errors`. Unset, the API's reports are refused and the app's still work.
+   */
+  ERROR_REPORT_SECRET?: string;
+  /** The app's error reports, per IP. */
+  ERROR_IP_LIMITER: RateLimit;
+  /** One write a minute per fingerprint: a burst becomes one comment. */
+  ERROR_FINGERPRINT_LIMITER: RateLimit;
+  /** Every error write, together: GitHub's search allows 30 a minute. */
+  ERROR_OVERALL_LIMITER: RateLimit;
 }
 
 export default {
@@ -50,18 +65,21 @@ export async function handle(
   fetcher: typeof fetch = fetch,
 ): Promise<Response> {
   const origin = request.headers.get("Origin");
-  const allowed = allowedOrigin(origin, env);
+  const allowed = allowedOrigin(origin, env.ALLOWED_ORIGINS);
   const cors = corsHeaders(allowed);
 
-  if (new URL(request.url).pathname !== "/") {
+  const path = new URL(request.url).pathname;
+  if (path !== "/" && path !== "/errors") {
     return reply(404, { error: "Not found." }, cors);
   }
   if (request.method === "OPTIONS") {
     return new Response(null, { status: allowed ? 204 : 403, headers: cors });
   }
   if (request.method !== "POST") {
-    return reply(405, { error: "Send feedback with POST." }, cors);
+    return reply(405, { error: "Send it with POST." }, cors);
   }
+  if (path === "/errors") return handleErrorReport(request, env, cors, fetcher);
+
   if (!allowed) {
     log("refused", { reason: "origin", origin });
     return reply(403, { error: "This origin may not send feedback." }, cors);
@@ -80,12 +98,8 @@ export async function handle(
     );
   }
 
-  const declared = Number(request.headers.get("Content-Length") ?? 0);
-  if (declared > FEEDBACK_MAX_BYTES) return tooLarge(cors);
-  const raw = await request.text();
-  if (new TextEncoder().encode(raw).length > FEEDBACK_MAX_BYTES) {
-    return tooLarge(cors);
-  }
+  const raw = await readCapped(request, FEEDBACK_MAX_BYTES);
+  if (raw === null) return tooLarge(cors);
 
   let body: unknown;
   try {
@@ -143,34 +157,7 @@ export async function handle(
   return reply(201, { received: true }, cors);
 }
 
-function allowedOrigin(origin: string | null, env: Env): string | null {
-  if (!origin) return null;
-  const origins = env.ALLOWED_ORIGINS.split(",").map((value) => value.trim());
-  return origins.includes(origin) ? origin : null;
-}
-
-function corsHeaders(origin: string | null): Headers {
-  const headers = new Headers({ Vary: "Origin" });
-  if (origin) {
-    headers.set("Access-Control-Allow-Origin", origin);
-    headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-    headers.set("Access-Control-Allow-Headers", "Content-Type");
-    headers.set("Access-Control-Max-Age", "86400");
-  }
-  return headers;
-}
-
-function reply(status: number, body: unknown, headers: Headers): Response {
-  const out = new Headers(headers);
-  out.set("Content-Type", "application/json");
-  return new Response(JSON.stringify(body), { status, headers: out });
-}
-
 function tooLarge(cors: Headers): Response {
   log("refused", { reason: "size" });
   return reply(413, { error: "The report is too large." }, cors);
-}
-
-function log(event: string, fields: Record<string, unknown>): void {
-  console.log(JSON.stringify({ event, ...fields }));
 }

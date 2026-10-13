@@ -19,6 +19,7 @@ on:
     paths:
       - "services/feedback/**"
       - "packages/utils/feedbackReport.ts"
+      - "packages/utils/errorReport.ts"
       - "bun.lock"
       - ".github/workflows/feedback-worker.yml"
   workflow_dispatch:
