@@ -71,7 +71,7 @@ breaking one, stop and open a `human-needed` issue. Each is explained under
 All commands use **Bun** as the runtime and package manager.
 
 ```bash
-# Run the app (Gitea + seed + Hocuspocus + API + Caddy + app)
+# Run the app (Gitea + seed + API + Caddy + Mailpit + app)
 bun run up            # Start this worktree's stack; waits until ready, then exits
 bun run down          # Tear down this worktree's stack, and only this one
 bun run stack status  # Your ports, your URLs, your login — add --json to parse
@@ -214,7 +214,7 @@ bindersnap-editor-demo/
 │   └── utils/            ← Shared code: sanitizer, document UIDs, CODEOWNERS
 ├── services/
 │   ├── api/              ← The BFF: auth + data (Bun). README: env vars
-│   ├── hocuspocus/       ← Yjs collaboration server; runs in the stack, unused by the app
+│   ├── hocuspocus/       ← Yjs collaboration server; no stack runs it (no real-time editing yet)
 │   └── feedback/         ← Cloudflare Worker: in-app feedback → GitHub issue (ADR 0006)
 ├── deploy/               ← Configuration as code: pyinfra push deploy to the one host
 ├── infra/                ← Terraform only
@@ -329,15 +329,14 @@ the Gitea-as-NAT plumbing were removed (epic #302). See
 `docs/adr/0003-single-ec2-host-pyinfra-push-deploys.md`, and
 `docs/adr/0006-cloudflare-workers-at-the-edge.md` for the Workers.
 
-| Component  | Host           | How deployed                                                          |
-| ---------- | -------------- | --------------------------------------------------------------------- |
-| App (SPA)  | Cloudflare     | `static-site.yml` (`wrangler deploy`) on push to `main`               |
-| Site       | Cloudflare     | same workflow; `bindersnap.com`, landing/marketing/help/legal         |
-| API        | EC2 via Docker | `deploy-pyinfra.yml` (pyinfra over SSH-through-SSM) on push to `main` |
-| Gitea      | Same EC2 host  | `docker-compose.prod.yml`, same pyinfra run                           |
-| Hocuspocus | Same EC2 host  | `docker-compose.prod.yml`, same pyinfra run                           |
-| Caddy      | Same EC2 host  | `docker-compose.prod.yml`, same pyinfra run                           |
-| Feedback   | Cloudflare     | `feedback-worker.yml` (`wrangler deploy`) on push to `main`           |
+| Component | Host           | How deployed                                                          |
+| --------- | -------------- | --------------------------------------------------------------------- |
+| App (SPA) | Cloudflare     | `static-site.yml` (`wrangler deploy`) on push to `main`               |
+| Site      | Cloudflare     | same workflow; `bindersnap.com`, landing/marketing/help/legal         |
+| API       | EC2 via Docker | `deploy-pyinfra.yml` (pyinfra over SSH-through-SSM) on push to `main` |
+| Gitea     | Same EC2 host  | `docker-compose.prod.yml`, same pyinfra run                           |
+| Caddy     | Same EC2 host  | `docker-compose.prod.yml`, same pyinfra run                           |
+| Feedback  | Cloudflare     | `feedback-worker.yml` (`wrangler deploy`) on push to `main`           |
 
 The app is built with `BUN_PUBLIC_API_BASE_URL=https://api.bindersnap.com`
 baked in at compile time. Locally every address comes from your stack's ports;

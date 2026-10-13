@@ -4,7 +4,7 @@ Monorepo with one unified frontend app and supporting services:
 
 - `apps/app`: SPA (static, on Cloudflare) with a pre-rendered landing page and authenticated workspace shell
 - `services/api`: auth/BFF API for the product SPA
-- `services/hocuspocus`: collaboration websocket service
+- `services/hocuspocus`: a collaboration websocket server, not run by any stack (the app has no real-time editing yet)
 
 ## Quick Start
 
@@ -46,7 +46,6 @@ This is the complete environment variable reference used by repo code, scripts, 
 | --------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `STACK_NAME`                            | `bindersnap`                              | `docker-compose.yml`, Playwright global setup/teardown                   | Compose project name, container name prefix, and network name. Change it per worktree to run several stacks side by side.                                                  |
 | `GITEA_PORT`                            | `3000`                                    | `docker-compose.yml`, `tests/seed.ts`, `tests/helpers.ts`                | Gitea HTTP port, published on the host and used inside the compose network.                                                                                                |
-| `HOCUSPOCUS_PORT`                       | `1234`                                    | `services/hocuspocus/server.ts`, compose                                 | Port for the Yjs collaboration websocket server.                                                                                                                           |
 | `API_PROXY_PORT`                        | `8788`                                    | `docker-compose.yml` (`caddy`), `tests/Caddyfile.integration`, tests     | Port for the local Caddy proxy that fronts the API.                                                                                                                        |
 | `APP_PORT`                              | `5173`                                    | `server.ts`, compose, Playwright config, seed script, integration script | Port for the app web server and base URL construction in local/test flows.                                                                                                 |
 | `API_PORT`                              | `8787`                                    | `services/api/server.ts`, compose                                        | Port for the Bun API service. The browser does not use it — it calls whatever `BUN_PUBLIC_API_BASE_URL` was built with (the Caddy proxy port in the local stack).          |
@@ -101,8 +100,6 @@ This is the complete environment variable reference used by repo code, scripts, 
 | `LITESTREAM_S3_BUCKET`                  | none                                      | `docker-compose.prod.yml`, `litestream.yml`, `scripts/restore.sh`        | Required S3 bucket for continuous SQLite replication and restores.                                                                                                         |
 | `PLAYWRIGHT_BASE_URL`                   | `http://localhost:${APP_PORT}`            | Playwright config, integration script                                    | Base URL for integration browser tests.                                                                                                                                    |
 | `VITE_GITEA_TOKEN`                      | none                                      | smoke/integration tests                                                  | Optional pre-existing token for direct Gitea API assertions.                                                                                                               |
-| `BUN_PUBLIC_HOCUSPOCUS_URL`             | `ws://localhost:1234`                     | `docker-compose.yml`                                                     | Websocket URL passed to the app container. Collaboration is not wired into the SPA yet, so no app code reads it.                                                           |
-| `VITE_HOCUSPOCUS_URL`                   | `ws://localhost:1234`                     | `docker-compose.yml`                                                     | Vite-style alias of the above; no app code reads it.                                                                                                                       |
 | `BUN_PUBLIC_GITEA_OAUTH_CLIENT_ID`      | none                                      | `apps/app/` auth flow                                                    | Public OAuth2 client ID for PKCE login — printed by seed script on first `bun run up`.                                                                                     |
 | `BUN_PUBLIC_GITEA_OAUTH_REDIRECT_URI`   | `http://localhost:5173/auth/callback`     | `apps/app/` auth flow                                                    | Redirect URI registered with the Gitea OAuth2 app.                                                                                                                         |
 | `BUN_PUBLIC_PANDOC_SERVICE_URL`         | `http://localhost:3001`                   | `apps/app/` import/export                                                | Base URL for the Pandoc conversion service.                                                                                                                                |
@@ -149,7 +146,6 @@ APP_PORT=5273
 API_PORT=8887
 API_PROXY_PORT=8888
 GITEA_PORT=3100
-HOCUSPOCUS_PORT=1334
 ```
 
 `STACK_NAME` sets the Compose project name, the container name prefix, the
@@ -162,10 +158,10 @@ See [`tests/README.md`](tests/README.md) for full workflow details.
 
 Two surfaces, both triggered by a push to `main`:
 
-| What                                      | Where                      | Workflow                                                     |
-| ----------------------------------------- | -------------------------- | ------------------------------------------------------------ |
-| Public site + SPA                         | Cloudflare Worker (static) | [`static-site.yml`](.github/workflows/static-site.yml)       |
-| API, Gitea, Hocuspocus, Caddy, Litestream | One EC2 host, via Compose  | [`deploy-pyinfra.yml`](.github/workflows/deploy-pyinfra.yml) |
+| What                          | Where                      | Workflow                                                     |
+| ----------------------------- | -------------------------- | ------------------------------------------------------------ |
+| Public site + SPA             | Cloudflare Worker (static) | [`static-site.yml`](.github/workflows/static-site.yml)       |
+| API, Gitea, Caddy, Litestream | One EC2 host, via Compose  | [`deploy-pyinfra.yml`](.github/workflows/deploy-pyinfra.yml) |
 
 The backend is a single EC2 instance, not a serverless stack. Its entire
 configuration lives in [`deploy/`](deploy/README.md) as a

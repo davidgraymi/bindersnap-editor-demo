@@ -7,7 +7,6 @@ Everything needed to run the **full Bindersnap target architecture locally** for
 | Service        | URL                                        | Purpose                                              |
 | -------------- | ------------------------------------------ | ---------------------------------------------------- |
 | Gitea          | `http://localhost:${GITEA_PORT:-3000}`     | Git backend, auth source, document storage           |
-| Hocuspocus     | `ws://localhost:${HOCUSPOCUS_PORT:-1234}`  | Real-time collaboration WebSocket server             |
 | Caddy          | `http://localhost:${API_PROXY_PORT:-8788}` | Local reverse proxy for production-style API ingress |
 | API            | `http://localhost:${API_PORT:-8787}`       | The BFF (`services/api/`)                            |
 | Bindersnap app | `http://localhost:${APP_PORT:-5173}`       | The unified SPA (`apps/app/`) with hot reload        |
@@ -111,13 +110,12 @@ The values are still plain environment variables, so a one-off override works â€
 but the managed `.env` block is the supported path, and a hand-edited port that
 another stack already owns will simply fail to bind:
 
-| Variable          | Default | What it moves                       |
-| ----------------- | ------- | ----------------------------------- |
-| `APP_PORT`        | `5173`  | The SPA                             |
-| `API_PORT`        | `8787`  | The BFF                             |
-| `API_PROXY_PORT`  | `8788`  | The Caddy proxy in front of the BFF |
-| `GITEA_PORT`      | `3000`  | Gitea                               |
-| `HOCUSPOCUS_PORT` | `1234`  | The collaboration websocket server  |
+| Variable         | Default | What it moves                       |
+| ---------------- | ------- | ----------------------------------- |
+| `APP_PORT`       | `5173`  | The SPA                             |
+| `API_PORT`       | `8787`  | The BFF                             |
+| `API_PROXY_PORT` | `8788`  | The Caddy proxy in front of the BFF |
+| `GITEA_PORT`     | `3000`  | Gitea                               |
 
 ```bash
 APP_PORT=4000 bun run test:integration

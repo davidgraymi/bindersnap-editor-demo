@@ -101,8 +101,8 @@ goes away** (§4, S3).
   process, and a round trip to Gitea in another cloud on every call.
 - **Gitea.** Needs a POSIX filesystem with real locking for git and SQLite.
 - **Outbound email, for now.** See §2a.
-- **Hocuspocus.** It is in the dev compose only; the app doesn't call it in
-  production. Leave it out of prod until real-time editing ships.
+- **Hocuspocus.** No stack runs it, dev or prod: the app has no real-time
+  editing. The source stays in `services/hocuspocus/` until that ships.
 
 ## 2a. Email
 

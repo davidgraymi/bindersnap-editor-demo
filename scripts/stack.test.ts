@@ -27,6 +27,7 @@ import {
   parseEnv,
   portsForSlot,
   pruneMissing,
+  readRegistry,
   renderEnv,
   seedPassword,
   stackNameFor,
@@ -245,6 +246,25 @@ describe("ensureStackEnv", () => {
     expect(worktreeEnv.GITEA_ADMIN_USER).toBe("alice");
     expect(worktreeEnv.GITEA_ADMIN_PASS).toBeUndefined();
     expect(seedPassword(worktree)).toBe("dev");
+  });
+
+  test("drops a port that has left the block from an old registry record", async () => {
+    // Records written while Hocuspocus was in the stack carry its port.
+    const { worktrees } = makeRepoWithWorktrees(1);
+    const stack = await ensureStackEnv(worktrees[0]!);
+    const registry = readRegistryFile();
+    for (const record of registry.stacks) {
+      (record.ports as Record<string, number>).HOCUSPOCUS_PORT = 21234;
+    }
+    writeFileSync(join(stackHome, "stacks.json"), JSON.stringify(registry));
+
+    const loaded = readRegistry().stacks.find((r) => r.slot === stack.slot);
+    expect(Object.keys(loaded!.ports).sort()).toEqual([...PORT_KEYS].sort());
+
+    const again = await ensureStackEnv(worktrees[0]!);
+    expect(again.ports).toEqual(stack.ports);
+    const env = parseEnv(readFileSync(join(worktrees[0]!, ".env"), "utf8"));
+    expect(env.HOCUSPOCUS_PORT).toBeUndefined();
   });
 
   test("a second clone does not also claim slot 0", async () => {
