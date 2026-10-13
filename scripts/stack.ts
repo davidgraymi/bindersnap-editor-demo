@@ -46,7 +46,6 @@ export const PORT_KEYS = [
   "API_PORT",
   "API_PROXY_PORT",
   "GITEA_PORT",
-  "HOCUSPOCUS_PORT",
   "MAILPIT_PORT",
   // The public site (bindersnap.com in production): the landing page, the
   // marketing pages, help and legal. The app is APP_PORT (app.bindersnap.com).
@@ -59,7 +58,7 @@ export type Ports = Record<PortKey, number>;
 /**
  * Slot 0 is the main checkout and keeps the historical ports, so a developer
  * who has been typing `localhost:5173` for a year keeps typing it. Every other
- * worktree gets a contiguous block of seven ports well clear of the defaults —
+ * worktree gets a block of ports well clear of the defaults —
  * one block per slot, so a slot number is the only thing that has to be
  * unique.
  */
@@ -68,7 +67,6 @@ export const LEGACY_PORTS: Ports = {
   API_PORT: 8787,
   API_PROXY_PORT: 8788,
   GITEA_PORT: 3000,
-  HOCUSPOCUS_PORT: 1234,
   MAILPIT_PORT: 8025,
   SITE_PORT: 5174,
 };
@@ -82,7 +80,7 @@ const SLOT_OFFSETS: Record<PortKey, number> = {
   API_PORT: 1,
   API_PROXY_PORT: 2,
   GITEA_PORT: 3,
-  HOCUSPOCUS_PORT: 4,
+  // 4 was Hocuspocus. Left empty so that no existing worktree's ports move.
   MAILPIT_PORT: 5,
   SITE_PORT: 6,
 };
@@ -163,13 +161,19 @@ export function readRegistry(): Registry {
     }
     // A record written before a port joined the block lacks it. The slot
     // decides every port, so fill the gap from the slot rather than hand
-    // compose an "undefined" — or the shared default.
+    // compose an "undefined" — or the shared default. A port that has since
+    // left the block (HOCUSPOCUS_PORT) is dropped.
     return {
       ...parsed,
-      stacks: parsed.stacks.map((record) => ({
-        ...record,
-        ports: { ...portsForSlot(record.slot), ...record.ports },
-      })),
+      stacks: parsed.stacks.map((record) => {
+        const ports = { ...portsForSlot(record.slot), ...record.ports };
+        return {
+          ...record,
+          ports: Object.fromEntries(
+            PORT_KEYS.map((key) => [key, ports[key]]),
+          ) as Ports,
+        };
+      }),
     };
   } catch {
     // A truncated registry is recoverable: every record is re-derivable from
@@ -617,7 +621,6 @@ export interface StackUrls {
   api: string;
   apiProxy: string;
   gitea: string;
-  hocuspocus: string;
   mail: string;
 }
 
@@ -629,7 +632,6 @@ export function urlsFor(config: StackConfig): StackUrls {
     api: `http://localhost:${p.API_PORT}`,
     apiProxy: `http://localhost:${p.API_PROXY_PORT}`,
     gitea: `http://localhost:${p.GITEA_PORT}`,
-    hocuspocus: `ws://localhost:${p.HOCUSPOCUS_PORT}`,
     mail: `http://localhost:${p.MAILPIT_PORT}`,
   };
 }
@@ -734,7 +736,6 @@ async function cmdUp(args: string[]): Promise<void> {
       `    API        ${urls.api}`,
       `    API proxy  ${urls.apiProxy}`,
       `    Gitea      ${urls.gitea}`,
-      `    Hocuspocus ${urls.hocuspocus}`,
       `    Mail       ${urls.mail} (Mailpit — every email the stack sends)`,
       "",
       `    Sign in as alice, bob, carol or dan — password \`${seedPassword(config)}\`.`,

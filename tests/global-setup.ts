@@ -2,7 +2,7 @@
  * Playwright globalSetup — manages the Docker Compose integration stack.
  *
  * Invoked automatically by Playwright before any test file runs.
- * Brings up the full stack (Gitea + seed + Hocuspocus + API + app),
+ * Brings up the full stack (Gitea + seed + API + Caddy + app),
  * waits until the app is reachable, then lets Playwright proceed.
  *
  * The companion globalTeardown tears everything down after the run.
@@ -13,7 +13,6 @@
  *   API_PORT         API container port (default: 8787)
  *   API_PROXY_PORT   Caddy proxy port in front of the API (default: 8788)
  *   GITEA_PORT       Gitea HTTP port (default: 3000)
- *   HOCUSPOCUS_PORT  Collaboration websocket port (default: 1234)
  *   SKIP_STACK       Set to "1" to skip docker compose entirely (use an
  *                    already-running stack, e.g. from `bun run up`)
  *   BUN_PUBLIC_API_BASE_URL
@@ -101,7 +100,6 @@ let APP_PORT: string;
 let API_PORT: string;
 let API_PROXY_PORT: string;
 let GITEA_PORT: string;
-let HOCUSPOCUS_PORT: string;
 let MAILPIT_PORT: string;
 let SITE_PORT: string;
 let APP_BASE_URL: string;
@@ -124,7 +122,6 @@ async function resolveStack(): Promise<void> {
   API_PORT = String(stack.ports.API_PORT);
   API_PROXY_PORT = String(stack.ports.API_PROXY_PORT);
   GITEA_PORT = String(stack.ports.GITEA_PORT);
-  HOCUSPOCUS_PORT = String(stack.ports.HOCUSPOCUS_PORT);
   MAILPIT_PORT = String(stack.ports.MAILPIT_PORT);
   SITE_PORT = String(stack.ports.SITE_PORT);
 
@@ -135,7 +132,6 @@ async function resolveStack(): Promise<void> {
   process.env.API_PORT = API_PORT;
   process.env.API_PROXY_PORT = API_PROXY_PORT;
   process.env.GITEA_PORT = GITEA_PORT;
-  process.env.HOCUSPOCUS_PORT = HOCUSPOCUS_PORT;
   process.env.MAILPIT_PORT = MAILPIT_PORT;
   process.env.SITE_PORT = SITE_PORT;
 
@@ -350,7 +346,6 @@ export default async function globalSetup(): Promise<void> {
     API_PORT,
     API_PROXY_PORT,
     GITEA_PORT,
-    HOCUSPOCUS_PORT,
     MAILPIT_PORT,
     SITE_PORT,
     STRIPE_SECRET_KEY:

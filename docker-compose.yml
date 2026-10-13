@@ -145,18 +145,6 @@ services:
       # HTTP, and the proxy is what says the request arrived over HTTPS.
       - BUN_PUBLIC_API_BASE_URL=http://caddy:${API_PROXY_PORT:-8788}
 
-  hocuspocus:
-    build:
-      context: .
-      dockerfile: services/hocuspocus/Dockerfile
-      args:
-        HOCUSPOCUS_PORT: ${HOCUSPOCUS_PORT:-1234}
-    container_name: ${STACK_NAME:-bindersnap}-hocuspocus
-    environment:
-      - HOCUSPOCUS_PORT=${HOCUSPOCUS_PORT:-1234}
-    ports:
-      - "${HOCUSPOCUS_PORT:-1234}:${HOCUSPOCUS_PORT:-1234}"
-
   # In dev the API runs from the bind-mounted repo on the app's dev image, so
   # an edit under services/api or packages/ restarts it in place. `--watch`,
   # not `--hot`: server.ts starts interval jobs (session cleanup, Stripe
@@ -250,8 +238,6 @@ services:
         condition: service_started
       gitea:
         condition: service_healthy
-      hocuspocus:
-        condition: service_started
       seed:
         condition: service_completed_successfully
     environment:
@@ -268,8 +254,6 @@ services:
       - VITE_API_URL=http://localhost:${API_PROXY_PORT:-8788}
       - BUN_PUBLIC_GITEA_URL=http://localhost:${GITEA_PORT:-3000}
       - VITE_GITEA_URL=http://localhost:${GITEA_PORT:-3000}
-      - BUN_PUBLIC_HOCUSPOCUS_URL=ws://localhost:${HOCUSPOCUS_PORT:-1234}
-      - VITE_HOCUSPOCUS_URL=ws://localhost:${HOCUSPOCUS_PORT:-1234}
       # The feedback Worker (services/feedback) is not part of this stack.
       # Nothing answers at this address: the integration tests stand in for
       # the Worker, and `wrangler dev` can be pointed at to try the real one.
