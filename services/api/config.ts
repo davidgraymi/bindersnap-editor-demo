@@ -49,6 +49,12 @@ export interface ApiConfig {
   mailFrom: string;
   mailpitUrl: string;
   awsRegion: string;
+  // Error reports (errorReporter.ts): the feedback Worker's /errors, and the
+  // bearer it knows the API by. Both set, or nothing is sent.
+  errorReportUrl: string;
+  errorReportSecret: string;
+  // Which build this is: the deployed commit, for an error report.
+  release: string;
 }
 
 const REQUIRED_GITEA_TOKEN_SCOPES = [
@@ -107,6 +113,11 @@ const STRING_ENV: Record<string, StringSpec> = {
   },
   BINDERSNAP_MAILPIT_URL: { default: "http://mailpit:8025" },
   AWS_REGION: { default: "us-east-1" },
+  // Optional: unset, the API reports no errors. The secret is the SSM leaf
+  // `error_report_secret` (services/feedback/README.md).
+  ERROR_REPORT_URL: { default: "" },
+  ERROR_REPORT_SECRET: { default: "" },
+  BINDERSNAP_RELEASE: { default: "dev" },
 };
 
 const INT_ENV: Record<string, IntSpec> = {
@@ -501,6 +512,13 @@ export function initializeConfig(
       isProduction,
     ),
     awsRegion: parseString(resolvedEnv, "AWS_REGION", isProduction),
+    errorReportUrl: parseString(resolvedEnv, "ERROR_REPORT_URL", isProduction),
+    errorReportSecret: parseString(
+      resolvedEnv,
+      "ERROR_REPORT_SECRET",
+      isProduction,
+    ),
+    release: parseString(resolvedEnv, "BINDERSNAP_RELEASE", isProduction),
   };
 }
 

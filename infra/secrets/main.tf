@@ -97,6 +97,7 @@ locals {
     "stripe_webhook_secret",
     "cloudflare_tunnel_token",     # infra/edge/put-tunnel-token.sh
     "signup_turnstile_secret_key", # infra/edge/put-signup-turnstile-secret.sh
+    "error_report_secret",         # services/feedback/README.md, step 5
     "restic_repository",       # docs/ops/restore.md
     "restic_password",
     "restic_r2_access_key_id",

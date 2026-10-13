@@ -15,8 +15,9 @@
 #   stripe_secret_key, stripe_webhook_secret prompted for, without echo
 #
 # Not here: cloudflare_tunnel_token (infra/edge/put-tunnel-token.sh),
-# signup_turnstile_secret_key (infra/edge/put-signup-turnstile-secret.sh) and
-# the restic_* leaves (docs/ops/restore.md).
+# signup_turnstile_secret_key (infra/edge/put-signup-turnstile-secret.sh),
+# error_report_secret (services/feedback/README.md, which sets the Worker's copy
+# too) and the restic_* leaves (docs/ops/restore.md).
 #
 # Needs AWS credentials allowed to ssm:PutParameter/GetParameter under the path
 # and to use the KMS key. Rotating Gitea's SECRET_KEY on a live Gitea breaks

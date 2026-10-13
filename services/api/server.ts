@@ -4,6 +4,7 @@ import { isIP } from "net";
 import { config, type SessionCookieSameSite } from "./config";
 import { logger, withLogContext } from "./logger";
 import { jobStore, withGroupLock, type JobRecord } from "./jobs/store";
+import { startErrorReporter } from "./errorReporter";
 import { startJobRunner } from "./jobs/runner";
 import { queueEmail, startMail } from "./mail";
 import {
@@ -15824,6 +15825,13 @@ async function handleRequest(req: Request): Promise<Response> {
 }
 
 if (import.meta.main) {
+  // First, so an error while starting is reported too. Nothing is sent
+  // without ERROR_REPORT_URL and ERROR_REPORT_SECRET. See `errorReporter.ts`.
+  startErrorReporter({
+    url: config.errorReportUrl,
+    secret: config.errorReportSecret,
+    release: config.release,
+  });
   const server = createApiServer();
   startCleanupTimer();
   // Outside production with no service tokens configured, privileged calls
