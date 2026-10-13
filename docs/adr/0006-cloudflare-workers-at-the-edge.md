@@ -2,6 +2,7 @@
 
 Status: Accepted
 Date: 2026-10-09
+Amended: 2026-10-13, one KV key for the uptime Worker (an exception to rule 1)
 Amends: [ADR 0003](0003-single-ec2-host-pyinfra-push-deploys.md) in one place —
 what "no serverless" forbids. Everything else in ADR 0003 stands: the API,
 Gitea and every database run on one EC2 host, configured by `deploy/`.
@@ -52,6 +53,26 @@ Rule 4 matters most. Auth, sessions, the job runner, the email outbox, the
 Stripe webhook and anything else that reads or writes evidence or
 configuration stays in the BFF. Non-negotiables 1–3 are unchanged.
 
+### One exception to rule 1: the uptime Worker's last result
+
+An uptime check has to remember what it saw last, or it cannot tell a new
+outage from one it already reported, and it emails on every failed check. So
+the uptime Worker may keep **one Workers KV key** holding the last result of
+its `/healthz` check: up or down, the count of consecutive failures, and
+since when. Nothing else, and no other Worker.
+
+None of what rule 1 guards against applies: there is nothing in it to back
+up, migrate or restore. It holds no customer content (rule 2). Losing it
+costs at most one duplicate or missing email, and a fresh namespace starts
+correct on the next check. KV's free tier covers it many times over: one read
+a minute and a write only when the result changes.
+
+The uptime Worker meets the other four rules. It is off the critical path,
+because nothing in the product calls it. It requests the API's public
+`/healthz` the way any browser can, with no credentials, and never touches
+Gitea. Its config and deploy live in the repository, like the feedback
+Worker's.
+
 ### Workers today
 
 | Worker                | Code of ours | What it does                                                             |
@@ -59,6 +80,7 @@ configuration stays in the BFF. Non-negotiables 1–3 are unchanged.
 | `bindersnap-site`     | none         | Serves `dist/site` (landing, marketing, help, legal) on `bindersnap.com` |
 | `bindersnap-app`      | none         | Serves `dist/app` (the SPA) on `app.bindersnap.com`                      |
 | `bindersnap-feedback` | yes          | Turns a feedback report into an issue in the private feedback repo       |
+| `bindersnap-uptime`   | yes          | Checks `api.bindersnap.com/healthz` every minute; emails down and up     |
 
 ## The Feedback Worker
 
