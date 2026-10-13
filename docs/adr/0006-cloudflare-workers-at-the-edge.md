@@ -16,8 +16,8 @@ against a second backend: two places for state, two deploy models, a database
 billing around the clock before launch.
 
 The move to Cloudflare (`production-architecture.md`) put two things on Workers
-anyway: `bindersnap.com` is an assets-only Worker (`wrangler.jsonc`,
-`static-site.yml`). That document squared it with the rule by reading "no
+anyway: `bindersnap.com` and `app.bindersnap.com` are assets-only Workers
+(`wrangler.jsonc`, `apps/app/wrangler.jsonc`, `static-site.yml`). That document squared it with the rule by reading "no
 serverless" as "no code of ours on serverless", since a static Worker runs
 none. That reading holds for static files and fails the first time a Worker
 needs a `fetch` handler.
@@ -54,10 +54,11 @@ configuration stays in the BFF. Non-negotiables 1–3 are unchanged.
 
 ### Workers today
 
-| Worker                | Code of ours | What it does                                                       |
-| --------------------- | ------------ | ------------------------------------------------------------------ |
-| `bindersnap-site`     | none         | Serves `dist/` (site + SPA) on `bindersnap.com`                    |
-| `bindersnap-feedback` | yes          | Turns a feedback report into an issue in the private feedback repo |
+| Worker                | Code of ours | What it does                                                             |
+| --------------------- | ------------ | ------------------------------------------------------------------------ |
+| `bindersnap-site`     | none         | Serves `dist/site` (landing, marketing, help, legal) on `bindersnap.com` |
+| `bindersnap-app`      | none         | Serves `dist/app` (the SPA) on `app.bindersnap.com`                      |
+| `bindersnap-feedback` | yes          | Turns a feedback report into an issue in the private feedback repo       |
 
 ## The Feedback Worker
 

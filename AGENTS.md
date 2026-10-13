@@ -114,8 +114,9 @@ at `{path}.md`, JSON-LD, and listed in `/sitemap.xml`, `/llms.txt` and
 descriptions, minimum words, no broken internal links, no claims we cannot
 make (never "HIPAA compliant": Bindersnap holds no patient data), and every
 address reserved from organizations. Marketing copy may say "policy";
-the app says "document". Issue #718 moves the app to app.bindersnap.com so the
-public site stops taking organization names.
+the app says "document". The public site is `bindersnap.com` and the app is
+`app.bindersnap.com` (issue #718), so a marketing page never takes an
+organization's name.
 
 ### The document editor
 
@@ -397,7 +398,8 @@ Gitea-as-NAT plumbing were removed (epic #302). See
 
 | Component  | Host           | How deployed                                                          |
 | ---------- | -------------- | --------------------------------------------------------------------- |
-| SPA        | Cloudflare     | `static-site.yml` (`wrangler deploy`) on push to `main`               |
+| App (SPA)  | Cloudflare     | `static-site.yml` (`wrangler deploy`) on push to `main`               |
+| Site       | Cloudflare     | same workflow; `bindersnap.com`, landing/marketing/help/legal         |
 | API        | EC2 via Docker | `deploy-pyinfra.yml` (pyinfra over SSH-through-SSM) on push to `main` |
 | Gitea      | Same EC2 host  | `docker-compose.prod.yml`, same pyinfra run                           |
 | Hocuspocus | Same EC2 host  | `docker-compose.prod.yml`, same pyinfra run                           |
@@ -405,7 +407,9 @@ Gitea-as-NAT plumbing were removed (epic #302). See
 | Feedback   | Cloudflare     | `feedback-worker.yml` (`wrangler deploy`) on push to `main`           |
 
 The SPA is built with `BUN_PUBLIC_API_BASE_URL=https://api.bindersnap.com`
-baked in at compile time. Locally, this is `http://localhost:8787`.
+baked in at compile time, and served from `app.bindersnap.com`; the public
+site is `bindersnap.com`. Locally, the API is `http://localhost:8787`, and the
+app and the site are `APP_PORT` and `SITE_PORT`.
 
 **How a production deploy runs.** On every push to `main`,
 `deploy-pyinfra.yml` runs the unit suites, builds and pushes
@@ -644,7 +648,8 @@ logic goes in `deploy/deploy.py`, in Python, in version control.
 run our code only if it is stateless, keeps no customer content, sits off the
 critical path, and never touches Gitea or the API's databases. Today that is
 `bindersnap-feedback` (in-app feedback → a private GitHub repository) and
-nothing else; `bindersnap-site` serves static files and runs no code. Auth,
+nothing else; `bindersnap-site` and `bindersnap-app` serve static files and run
+no code. Auth,
 sessions, jobs, webhooks and anything that reads evidence or configuration stay
 in the BFF. See `docs/adr/0006-cloudflare-workers-at-the-edge.md`.
 

@@ -29,7 +29,7 @@ The browser only receives a Bindersnap session cookie. Gitea access tokens stay 
 - `API_PORT` or `PORT`: API listen port. Default `8787`.
 - `GITEA_INTERNAL_URL`: Internal Gitea URL used by the API. Default `http://localhost:3000`.
 - `BINDERSNAP_GITEA_SERVICE_TOKEN`: Dedicated Gitea service-account token used for signup, email lookup during login, and token revocation fallback.
-- `BINDERSNAP_APP_ORIGIN`: Single allowed SPA origin for CORS. Default `http://localhost:${APP_PORT:-5173}`. Production should be `https://bindersnap.com`.
+- `BINDERSNAP_APP_ORIGIN`: Single allowed SPA origin for CORS. Default `http://localhost:${APP_PORT:-5173}`. Production is `https://app.bindersnap.com`; the public site, `https://bindersnap.com`, calls no API.
 - `BINDERSNAP_ALLOWED_ORIGINS`: Optional comma-separated override for multiple allowed origins.
 - `STRIPE_SECRET_KEY`: Stripe secret key used to create Checkout and Customer Portal sessions.
 - `STRIPE_WEBHOOK_SECRET`: Stripe webhook signing secret used to verify `/stripe/webhook`.
