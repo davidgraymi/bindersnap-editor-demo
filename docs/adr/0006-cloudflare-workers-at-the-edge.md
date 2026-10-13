@@ -3,6 +3,7 @@
 Status: Accepted
 Date: 2026-10-09
 Amended: 2026-10-13, one KV key for the uptime Worker (an exception to rule 1)
+Amended: 2026-10-13, error reports through the feedback Worker
 Amends: [ADR 0003](0003-single-ec2-host-pyinfra-push-deploys.md) in one place —
 what "no serverless" forbids. Everything else in ADR 0003 stands: the API,
 Gitea and every database run on one EC2 host, configured by `deploy/`.
@@ -75,12 +76,12 @@ Worker's.
 
 ### Workers today
 
-| Worker                | Code of ours | What it does                                                             |
-| --------------------- | ------------ | ------------------------------------------------------------------------ |
-| `bindersnap-site`     | none         | Serves `dist/site` (landing, marketing, help, legal) on `bindersnap.com` |
-| `bindersnap-app`      | none         | Serves `dist/app` (the SPA) on `app.bindersnap.com`                      |
-| `bindersnap-feedback` | yes          | Turns a feedback report into an issue in the private feedback repo       |
-| `bindersnap-uptime`   | yes          | Checks `api.bindersnap.com/healthz` every minute; emails down and up     |
+| Worker                | Code of ours | What it does                                                                                                                     |
+| --------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `bindersnap-site`     | none         | Serves `dist/site` (landing, marketing, help, legal) on `bindersnap.com`                                                         |
+| `bindersnap-app`      | none         | Serves `dist/app` (the SPA) on `app.bindersnap.com`                                                                              |
+| `bindersnap-feedback` | yes          | Turns a feedback report into an issue in the private feedback repo, and an error report into an issue in the private errors repo |
+| `bindersnap-uptime`   | yes          | Checks `api.bindersnap.com/healthz` every minute; emails down and up                                                             |
 
 ## The Feedback Worker
 
@@ -121,12 +122,65 @@ SPA                                         feedback.bindersnap.com
   (the free plan's one WAF rate-limit rule already guards sign-in), and hard
   size caps.
 
+## Error Reports
+
+`production-architecture.md` §5 asks for an error tracker for the API and the
+SPA. Sentry would be a new subprocessor and a third-party SDK in an app whose
+privacy policy says it runs none. The feedback Worker already has everything
+an error tracker needs at this size: a GitHub App, a rate limiter, and a
+private repository on the other end. So errors take the same road, on a second
+route.
+
+```
+SPA  window "error" / "unhandledrejection"     feedback.bindersnap.com/errors
+ errorReporter: scrub, dedupe, ≤ 10 a page ─►  1. SPA: the app's origins only
+API  logger.error ─────────────────────────►     API: Bearer ERROR_REPORT_SECRET
+ errorReporter: scrub, dedupe, ≤ 1 a minute    2. per-IP limit, size, shape
+                                                3. scrub again, fingerprint
+                                                4. per-fingerprint limit: 1 a minute
+                                                5. find the fingerprint's issue:
+                                                   none → open one
+                                                   open → comment
+                                                   closed as done → reopen, "regression"
+                                                   closed as not planned → muted
+```
+
+- **Its own private repository**, `bindersnap-errors`, filed by the same
+  GitHub App. Automatic reports stay out of the human feedback queue.
+- **What it carries: what broke, never for whom.** The error's type, its
+  message and stack with emails, tokens, long numbers and quoted phrases cut
+  out, the app's version, which kind of page (`binderDocument`, never the
+  organization, binder or document), the browser, and the API's request ID.
+  No user, no organization, no URL. The request ID finds everything else in
+  CloudWatch, which is where the rest of the detail already lives.
+- **Grouping without state (rule 1).** The Worker names each error by a
+  fingerprint: its source, its type and its message with every number and ID
+  taken out. The fingerprint goes in the issue's title, and GitHub's search
+  finds it again. A Rate Limiting binding keyed on the fingerprint lets one
+  write through a minute, so a burst becomes one comment, and the lag in
+  GitHub's search index cannot open the same issue twice.
+- **Muting is closing.** Close an issue as _not planned_ and its error stops
+  writing to it. Close it as _completed_ and the next occurrence reopens it as
+  a regression.
+- **No Turnstile.** An error cannot stop to solve a challenge. The SPA route
+  is open to anyone who sends the right `Origin`, so the worst abuse is fake
+  issues in a private repository: noise, not a leak. The per-IP,
+  per-fingerprint and overall limits bound it. If it happens, the answer is
+  the BFF-signed ticket feedback would use too.
+- **The API sends its own** with a shared secret, `ERROR_REPORT_SECRET`. It is
+  not a Gitea or session credential, and the Worker still never calls the
+  API (rule 4). It is off the critical path: a report that fails is a warning
+  in the log, never an error, so it cannot report itself.
+
 ## Consequences
 
 - **Two kinds of deploy.** The host by pyinfra, the Workers by `wrangler`.
   Both run from GitHub Actions on push to `main`.
 - **GitHub becomes a subprocessor for feedback.** People can type personal
   data into the form. The subprocessor list and privacy policy say so.
+- **GitHub also receives error reports, without anyone pressing a button.**
+  They carry no user or organization, but an error message is not something a
+  person chose to send, so the privacy policy names them as their own row.
 - **Free-plan limits apply.** 100,000 requests a day and 10 ms of CPU per
   request; the feedback Worker spends its time waiting on GitHub, which does
   not count against CPU.
@@ -142,6 +196,9 @@ SPA                                         feedback.bindersnap.com
   good. It cannot see the session, the route or the API's request IDs, and
   those are most of a report's value.
 - **Sentry User Feedback.** Good at what it does, but turning feedback into a
-  GitHub issue needs a paid plan, and it adds a subprocessor for this alone. It
-  is still the likely error tracker (`production-architecture.md` §5). If it
-  arrives, its event ID can join the trace.
+  GitHub issue needs a paid plan, and it adds a subprocessor for this alone.
+- **Sentry as the error tracker.** Better grouping, source maps and a UI built
+  for it. It costs a new subprocessor, a third-party SDK in the app, and a
+  change to the privacy policy's promise of none. At this size, an issue per
+  error in a private repository is enough, and nothing about it stops a move
+  to Sentry later.
