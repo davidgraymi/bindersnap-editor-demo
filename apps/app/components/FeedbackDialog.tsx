@@ -1,16 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
   FEEDBACK_LIMITS,
   type FeedbackKind,
 } from "../../../packages/utils/feedbackReport";
-import {
-  mountTurnstile,
-  sendFeedback,
-  type TurnstileHandle,
-} from "../feedback";
+import { feedbackTurnstileSiteKey, sendFeedback } from "../feedback";
 import { captureFeedbackTrace, type FeedbackContext } from "../feedbackTrace";
+import { useTurnstile } from "../turnstile";
 
 /**
  * **Send feedback**: a few words from the person, and what the app knew when
@@ -64,35 +61,13 @@ export function FeedbackDialog({ context, onClose }: FeedbackDialogProps) {
   const [kind, setKind] = useState<FeedbackKind>("bug");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [token, setToken] = useState<string | null>(null);
-  const [checkFailed, setCheckFailed] = useState(false);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const turnstileBox = useRef<HTMLDivElement>(null);
-  const turnstile = useRef<TurnstileHandle | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    const box = turnstileBox.current;
-    if (!box) return;
-    mountTurnstile(box, (next) => {
-      if (!cancelled) setToken(next);
-    })
-      .then((handle) => {
-        if (cancelled) handle.remove();
-        else turnstile.current = handle;
-      })
-      .catch(() => {
-        if (!cancelled) setCheckFailed(true);
-      });
-    return () => {
-      cancelled = true;
-      turnstile.current?.remove();
-      turnstile.current = null;
-    };
-  }, []);
+  const turnstile = useTurnstile(feedbackTurnstileSiteKey());
+  const { token } = turnstile;
+  const checkFailed = turnstile.failed;
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -125,7 +100,7 @@ export function FeedbackDialog({ context, onClose }: FeedbackDialogProps) {
           : "We couldn't send that. Try again.",
       );
       // A token works once, sent or not.
-      turnstile.current?.reset();
+      turnstile.reset();
     } finally {
       setSending(false);
     }
@@ -264,7 +239,7 @@ export function FeedbackDialog({ context, onClose }: FeedbackDialogProps) {
               </details>
 
               {/* Turnstile draws itself here only when it needs a click. */}
-              <div ref={turnstileBox} className="feedback-dialog-check" />
+              <div ref={turnstile.box} className="feedback-dialog-check" />
               {checkFailed ? (
                 <p className="upload-error-message" role="alert">
                   We couldn’t load the check that keeps out spam. Reload the

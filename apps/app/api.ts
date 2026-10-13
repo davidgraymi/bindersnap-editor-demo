@@ -196,6 +196,7 @@ import type { DocumentSearchParams } from "./documentSearch";
 import type { ChangeScope } from "./changeScope";
 import { scopeChangeBase, scopeRepo } from "./changeScope";
 import { LEGAL_VERSION } from "../../packages/utils/legal";
+import { publicEnv } from "./publicEnv";
 
 /**
  * What a read can be told by whoever asked for it: to stop. TanStack Query
@@ -244,11 +245,21 @@ export async function login(
   return response.data;
 }
 
+/**
+ * The signup form's Turnstile widget. Empty where none is configured (the
+ * local stack, CI), and then the API, which has no secret either, checks
+ * nothing.
+ */
+export function signupTurnstileSiteKey(): string {
+  return publicEnv(() => process.env.BUN_PUBLIC_SIGNUP_TURNSTILE_SITE_KEY);
+}
+
 export async function signup(
   name: { first: string; last: string },
   username: string,
   email: string,
   password: string,
+  turnstileToken: string | null,
   invitation?: string | null,
 ): Promise<SessionAuthState> {
   const response = await AuthClient.authSignup({
@@ -259,6 +270,7 @@ export async function signup(
     password,
     // The form will not submit until its box is ticked.
     acceptedTerms: LEGAL_VERSION,
+    ...(turnstileToken ? { turnstileToken } : {}),
     ...(invitation ? { invitation } : {}),
   });
   return response.data;

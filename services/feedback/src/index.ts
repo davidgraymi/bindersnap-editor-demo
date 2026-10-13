@@ -18,7 +18,7 @@ import { FEEDBACK_MAX_BYTES } from "../../../packages/utils/feedbackReport";
 import { createIssue, GitHubError } from "./github";
 import { feedbackIssue } from "./issue";
 import { feedbackReportSchema } from "./schema";
-import { verifyTurnstile } from "./turnstile";
+import { verifyTurnstile } from "../../../packages/utils/turnstile";
 
 /** Cloudflare's Rate Limiting binding; only the part used here. */
 export interface RateLimit {

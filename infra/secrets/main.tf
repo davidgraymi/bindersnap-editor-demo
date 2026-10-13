@@ -95,7 +95,8 @@ locals {
     "gitea_admin_token",   # minted by the deploy bootstrap
     "stripe_secret_key",
     "stripe_webhook_secret",
-    "cloudflare_tunnel_token", # infra/edge/put-tunnel-token.sh
+    "cloudflare_tunnel_token",     # infra/edge/put-tunnel-token.sh
+    "signup_turnstile_secret_key", # infra/edge/put-signup-turnstile-secret.sh
     "restic_repository",       # docs/ops/restore.md
     "restic_password",
     "restic_r2_access_key_id",

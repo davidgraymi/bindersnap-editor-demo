@@ -359,6 +359,9 @@ tf_run "edge"
 if [[ -z "$(aws ssm get-parameter --name "${SSM_PATH}/cloudflare_tunnel_token" --query Parameter.Name --output text 2>/dev/null || true)" ]]; then
   echo "  Edge: no tunnel token in SSM yet. Run infra/edge/put-tunnel-token.sh before the next deploy."
 fi
+if [[ -z "$(aws ssm get-parameter --name "${SSM_PATH}/signup_turnstile_secret_key" --query Parameter.Name --output text 2>/dev/null || true)" ]]; then
+  echo "  Edge: no signup Turnstile secret in SSM yet. Run infra/edge/put-signup-turnstile-secret.sh before the next deploy."
+fi
 
 if [[ "$ACTION" == "drift" ]]; then
   echo ""

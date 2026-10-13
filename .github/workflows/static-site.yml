@@ -9,6 +9,9 @@ name: Deploy bindersnap.com (Cloudflare)
 #                                  bindersnap.com zone (the custom domain), nothing else
 #   var    CLOUDFLARE_ACCOUNT_ID
 #   var    TURNSTILE_SITE_KEY    — public; unset, the app shows no feedback button
+#   var    SIGNUP_TURNSTILE_SITE_KEY — public; infra/edge/put-signup-turnstile-secret.sh
+#                                  prints it. Unset, signup shows no check, and
+#                                  production's API refuses every signup
 
 on:
   push:
@@ -63,6 +66,8 @@ jobs:
           # services/feedback/put-turnstile-secret.sh prints.
           BUN_PUBLIC_FEEDBACK_URL: https://feedback.bindersnap.com/
           BUN_PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
+          # The signup form's own widget; the API holds its secret.
+          BUN_PUBLIC_SIGNUP_TURNSTILE_SITE_KEY: ${{ vars.SIGNUP_TURNSTILE_SITE_KEY }}
         run: |
           export BUN_PUBLIC_APP_VERSION="$(jq -r .version package.json)"
           rm -rf dist

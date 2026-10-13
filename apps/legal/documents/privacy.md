@@ -1,7 +1,7 @@
 # Privacy Policy
 
 Last updated: October 9, 2026
-Version: 2026-10-09
+Version: 2026-10-12
 
 This policy explains what personal information Bindersnap collects, why we collect it, who else receives it, how long we keep it, and what you can do about it.
 
@@ -59,7 +59,7 @@ Most of this policy covers that second group.
 
 When we rely on legitimate interests, those interests are: keeping Bindersnap secure, preventing abuse, keeping it working, keeping a record of what was agreed, and delivering and improving our website. We have weighed them against your rights, and you can object (see section 11).
 
-**What we don't collect.** We don't use analytics tools, advertising trackers, or third-party scripts in the app, on our home page, or on our help and legal pages. The one exception is Cloudflare Turnstile, which loads only when you open Send feedback in the app. It checks that a report comes from a person, and to do that it sends Cloudflare your IP address and details about your browser. The only analytics we run are on the public marketing pages described above. We don't collect your precise location. We don't buy information about you from anyone.
+**What we don't collect.** We don't use analytics tools, advertising trackers, or third-party scripts in the app, on our home page, or on our help and legal pages. The one exception is Cloudflare Turnstile, which loads only on the page where you create an account and when you open Send feedback in the app. It checks that a new account or a report comes from a person, and to do that it sends Cloudflare your IP address and details about your browser. The only analytics we run are on the public marketing pages described above. We don't collect your precise location. We don't buy information about you from anyone.
 
 **What you must give us.** You need a username, name, email address and password to have an account. Without them, we can't give you one.
 
@@ -86,7 +86,7 @@ We use a small number of companies to run Bindersnap. The full list, with what e
 
 - **Amazon Web Services (AWS)** hosts our servers, storage, backups and logs, and sends our emails. Customer Content is stored with AWS in the United States.
 - **Stripe** handles subscription billing and payments.
-- **Cloudflare** runs the network in front of our servers and hosts our public website and the app's files. Every request passes through it, so it sees your IP address and the content of your requests in transit. It also stores an encrypted copy of our backups, which it cannot read, and forwards email sent to our @bindersnap.com addresses. It runs our feedback service, which passes your report to GitHub, and its spam check (Turnstile).
+- **Cloudflare** runs the network in front of our servers and hosts our public website and the app's files. Every request passes through it, so it sees your IP address and the content of your requests in transit. It also stores an encrypted copy of our backups, which it cannot read, and forwards email sent to our @bindersnap.com addresses. It runs our feedback service, which passes your report to GitHub, and the spam check (Turnstile) on the signup and feedback forms.
 - **GitHub** stores the feedback you send from the app, in a private repository only our team can open. It receives the details in the feedback row of section 3, and only when you press Send.
 - **Google** provides Google Analytics on our public marketing pages. It receives the details in the website analytics row of section 3 for people who read those pages. It never receives Customer Content or account data, and it isn't loaded in the app.
 

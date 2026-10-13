@@ -697,3 +697,75 @@ test("App asks a no-organization session to name one when a write is refused", a
     unmount();
   }
 });
+
+/** Type into a React-controlled field the way a person's keystroke would. */
+function typeInto(input: HTMLInputElement, value: string) {
+  const setValue = Object.getOwnPropertyDescriptor(
+    window.HTMLInputElement.prototype,
+    "value",
+  )?.set;
+  setValue?.call(input, value);
+  input.dispatchEvent(new window.Event("input", { bubbles: true }));
+}
+
+test("App sends the signup form's Turnstile token, and asks for a new one after", async () => {
+  installDom("/-/signup");
+  process.env.BUN_PUBLIC_SIGNUP_TURNSTILE_SITE_KEY = "1x00000000000000000000AA";
+  let resets = 0;
+  (window as { turnstile?: unknown }).turnstile = {
+    render: (_: HTMLElement, options: { callback: (t: string) => void }) => {
+      queueMicrotask(() => options.callback("signup-token"));
+      return "widget-1";
+    },
+    reset: () => {
+      resets += 1;
+    },
+    remove: () => {},
+  };
+  // The username is taken, say: the API has still spent the token.
+  mockSignup.mockImplementationOnce(async () => {
+    throw new Error("That username is taken.");
+  });
+
+  const { App } = await import("./App");
+  const { container, unmount } = mountApp(App);
+
+  try {
+    await waitFor(() => {
+      expect(container.querySelector(".app-login-check")).not.toBeNull();
+    });
+    const inputs = [
+      ...container.querySelectorAll<HTMLInputElement>(".app-form input"),
+    ];
+    const byAutocomplete = (value: string) =>
+      inputs.filter((input) => input.autocomplete === value);
+    flushSync(() => {
+      typeInto(byAutocomplete("given-name")[0]!, "Jordan");
+      typeInto(byAutocomplete("family-name")[0]!, "Kim");
+      typeInto(byAutocomplete("username")[0]!, "jkim");
+      typeInto(byAutocomplete("email")[0]!, "jordan@example.com");
+      for (const password of byAutocomplete("new-password")) {
+        typeInto(password, "correct horse battery");
+      }
+      container
+        .querySelector<HTMLInputElement>('input[type="checkbox"]')!
+        .click();
+    });
+    container
+      .querySelector<HTMLButtonElement>(".app-submit")!
+      .dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+
+    await waitFor(() => {
+      expect(mockSignup).toHaveBeenCalledTimes(1);
+      expect((mockSignup.mock.calls[0] as unknown[])[4]).toBe("signup-token");
+      expect(resets).toBe(1);
+      expect(container.querySelector(".app-inline-error")?.textContent).toBe(
+        "That username is taken.",
+      );
+    });
+  } finally {
+    unmount();
+    delete process.env.BUN_PUBLIC_SIGNUP_TURNSTILE_SITE_KEY;
+    delete (window as { turnstile?: unknown }).turnstile;
+  }
+});

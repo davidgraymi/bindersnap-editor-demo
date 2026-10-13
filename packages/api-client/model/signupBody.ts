@@ -18,4 +18,5 @@ export interface SignupBody {
   invitation?: string;
   /** @minLength 1 */
   acceptedTerms: string;
+  turnstileToken?: string;
 }

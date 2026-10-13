@@ -133,6 +133,8 @@ services:
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:?set in the generated env file}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:?set in the generated env file}
       - STRIPE_PRICE_ID=${STRIPE_PRICE_ID:?set in the generated env file}
+      # The signup form's Turnstile check (infra/edge/put-signup-turnstile-secret.sh).
+      - SIGNUP_TURNSTILE_SECRET_KEY=${SIGNUP_TURNSTILE_SECRET_KEY:?set in the generated env file}
       - BINDERSNAP_REMEMBER_ME_SESSION_TTL_MS=${BINDERSNAP_REMEMBER_ME_SESSION_TTL_MS:-2592000000}
       # Host-only: the session cookie goes to api.bindersnap.com and nowhere
       # else. The SPA calls the API with `credentials: "include"`, and

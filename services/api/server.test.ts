@@ -1450,6 +1450,72 @@ describe("admin subscription access overrides", () => {
     }
   });
 
+  test("signup needs Turnstile's word where a secret is configured", async () => {
+    const server = createApiServer();
+    const originalSecret = config.signupTurnstileSecret;
+    const stubbedFetch = globalThis.fetch;
+    const verified: { secret: string; response: string }[] = [];
+    config.signupTurnstileSecret = "0x_signup_secret";
+    globalThis.fetch = (async (input, init) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.startsWith("https://challenges.cloudflare.com/")) {
+        const form = init?.body as FormData;
+        const response = String(form.get("response"));
+        verified.push({ secret: String(form.get("secret")), response });
+        return Response.json({
+          success: response === "good-token",
+          "error-codes": response === "good-token" ? [] : ["invalid-input"],
+        });
+      }
+      return stubbedFetch(input, init);
+    }) as typeof fetch;
+
+    const signup = (turnstileToken?: string) =>
+      server.fetch(
+        new Request("http://localhost/auth/signup", {
+          method: "POST",
+          headers: {
+            Origin: config.appOrigin,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            firstName: "Jordan",
+            lastName: "Kim",
+            username: `bot-${randomUUID().slice(0, 8)}`,
+            email: "jordan@example.com",
+            password: "correct horse battery",
+            acceptedTerms: LEGAL_VERSION,
+            ...(turnstileToken === undefined ? {} : { turnstileToken }),
+          }),
+        }),
+      );
+    try {
+      // No token: refused without asking Cloudflare.
+      const missing = await signup();
+      expect(missing.status).toBe(403);
+      expect(await missing.json()).toMatchObject({ code: "turnstile_failed" });
+      expect(verified).toEqual([]);
+
+      const forged = await signup("forged-token");
+      expect(forged.status).toBe(403);
+      expect(verified).toEqual([
+        { secret: "0x_signup_secret", response: "forged-token" },
+      ]);
+
+      // A real token gets past the check to the next step, Gitea, which this
+      // test has no credentials for.
+      const real = await signup("good-token");
+      expect(real.status).toBe(502);
+      expect(await real.json()).toMatchObject({
+        error: "Gitea service credentials are not configured.",
+      });
+    } finally {
+      config.signupTurnstileSecret = originalSecret;
+      globalThis.fetch = stubbedFetch;
+      server.stop(true);
+    }
+  });
+
   test("creating an organization needs the Terms accepted for it", async () => {
     const server = createApiServer();
     const sessionId = await seedSession(`founder-${randomUUID()}`, {

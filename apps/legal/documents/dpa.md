@@ -1,7 +1,7 @@
 # Data Processing Addendum
 
 Last updated: October 9, 2026
-Version: 2026-10-09
+Version: 2026-10-12
 
 This Data Processing Addendum ("DPA") is part of the Terms of Service (the "Terms") between Solid Gray LLC, a [STATE] limited liability company that operates Bindersnap ("Bindersnap," "we"), and the Customer. It applies when we process Personal Data on the Customer's behalf through the Service.
 
@@ -244,11 +244,11 @@ Our measures are described in full at [/legal/security](/legal/security). In sum
 
 The current list is at [/legal/subprocessors](/legal/subprocessors). As of the date above:
 
-| Subprocessor              | Purpose                                                                                                                                                                                 | Location                                                         |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Amazon Web Services, Inc. | Hosting, storage, and backups (EC2, EBS, S3); logs (CloudWatch); email delivery (SES)                                                                                                   | USA (us-east-1; backups also us-west-2)                          |
-| Cloudflare, Inc.          | Network edge (DNS, TLS, attack protection); hosting of the website and app files; encrypted backups (R2); inbound email forwarding; the feedback service and its spam check (Turnstile) | Requests: nearest Cloudflare data center. Backups: North America |
-| GitHub, Inc.              | Storing feedback and bug reports sent from the app, in a private repository                                                                                                             | USA                                                              |
-| Stripe, Inc.              | Subscription billing and payments                                                                                                                                                       | USA                                                              |
+| Subprocessor              | Purpose                                                                                                                                                                                                               | Location                                                         |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Amazon Web Services, Inc. | Hosting, storage, and backups (EC2, EBS, S3); logs (CloudWatch); email delivery (SES)                                                                                                                                 | USA (us-east-1; backups also us-west-2)                          |
+| Cloudflare, Inc.          | Network edge (DNS, TLS, attack protection); hosting of the website and app files; encrypted backups (R2); inbound email forwarding; the feedback service; the spam check (Turnstile) on the signup and feedback forms | Requests: nearest Cloudflare data center. Backups: North America |
+| GitHub, Inc.              | Storing feedback and bug reports sent from the app, in a private repository                                                                                                                                           | USA                                                              |
+| Stripe, Inc.              | Subscription billing and payments                                                                                                                                                                                     | USA                                                              |
 
 Changes to this list follow Section 6.

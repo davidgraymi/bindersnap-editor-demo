@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "crypto";
+import { isIP } from "net";
 
 import { config, type SessionCookieSameSite } from "./config";
 import { logger, withLogContext } from "./logger";
@@ -92,6 +93,7 @@ import {
 import { claimLegacyBillingForOrganization } from "./legacy-billing-claim";
 import { provisionSignup } from "./signup-provisioning";
 import { slugifyOrganizationName } from "../../packages/utils/organizationName";
+import { verifyTurnstile } from "../../packages/utils/turnstile";
 import { slugifyGroupName } from "../../packages/utils/groupName";
 import {
   joinFullName,
@@ -2398,6 +2400,49 @@ async function revokeAndDeleteSession(session: SessionRecord): Promise<void> {
   await revokeUserToken(session).catch(() => undefined);
 }
 
+/**
+ * The signup form's Turnstile check (Cloudflare's bot check). Signup is the
+ * one form that makes something — a Gitea account and a confirmation email —
+ * for whoever asks, so a script that can post to it can fill Gitea with
+ * accounts and send our mail to addresses that never asked for it. The rate
+ * limit slows one address down; this stops the script.
+ *
+ * Skipped when no secret is configured: the local stack and CI have no widget.
+ * Production refuses to start without one (config.ts).
+ */
+async function refuseFailedSignupTurnstile(
+  token: unknown,
+  clientIp: string,
+  baseHeaders: Headers,
+): Promise<Response | null> {
+  if (!config.signupTurnstileSecret) return null;
+
+  const verdict =
+    typeof token === "string" && token !== ""
+      ? await verifyTurnstile(
+          config.signupTurnstileSecret,
+          token,
+          // requestClientIp falls back to the request's host name, which is
+          // no address Turnstile could compare against.
+          isIP(clientIp) ? clientIp : null,
+        )
+      : { success: false, errorCodes: ["missing-input-response"] };
+  if (verdict.success) return null;
+
+  logger.warn("Signup refused by Turnstile", {
+    clientIp,
+    codes: verdict.errorCodes,
+  });
+  return json(
+    403,
+    {
+      code: "turnstile_failed",
+      error: "We couldn't confirm you're not a robot. Try again.",
+    },
+    baseHeaders,
+  );
+}
+
 async function handleSignup(
   req: Request,
   baseHeaders: Headers,
@@ -2434,6 +2479,7 @@ async function handleSignup(
     organization?: unknown;
     invitation?: unknown;
     acceptedTerms?: unknown;
+    turnstileToken?: unknown;
   }>(req);
   const username =
     typeof payload?.username === "string" ? payload.username : "";
@@ -2469,6 +2515,15 @@ async function handleSignup(
   if (nameError) {
     return json(400, { error: nameError }, baseHeaders);
   }
+
+  // Last before Gitea, so a script that fails the form's own checks never
+  // costs a call to Cloudflare, and one that fails this never makes an account.
+  const botCheck = await refuseFailedSignupTurnstile(
+    payload?.turnstileToken,
+    clientIp,
+    baseHeaders,
+  );
+  if (botCheck) return botCheck;
 
   logger.debug("Attempting Gitea user creation", { username, clientIp });
 

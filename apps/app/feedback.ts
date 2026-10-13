@@ -1,6 +1,6 @@
 /**
- * Sending a feedback report to the feedback Worker, and the Turnstile check
- * that goes with it. See `services/feedback` and ADR 0006.
+ * Sending a feedback report to the feedback Worker. Its Turnstile check is in
+ * `turnstile.ts`. See `services/feedback` and ADR 0006.
  *
  * Not through the API: the Worker is on Cloudflare so a report still goes
  * through when the API is down. It wants no cookie, so none is sent.
@@ -14,7 +14,8 @@ function feedbackUrl(): string {
   return publicEnv(() => process.env.BUN_PUBLIC_FEEDBACK_URL);
 }
 
-function turnstileSiteKey(): string {
+/** The feedback dialog's own Turnstile widget (services/feedback). */
+export function feedbackTurnstileSiteKey(): string {
   return publicEnv(() => process.env.BUN_PUBLIC_TURNSTILE_SITE_KEY);
 }
 
@@ -24,7 +25,7 @@ function turnstileSiteKey(): string {
  * before its Turnstile widget exists.
  */
 export function feedbackEnabled(): boolean {
-  return feedbackUrl() !== "" && turnstileSiteKey() !== "";
+  return feedbackUrl() !== "" && feedbackTurnstileSiteKey() !== "";
 }
 
 export class FeedbackSendError extends Error {}
@@ -52,81 +53,4 @@ export async function sendFeedback(report: FeedbackReport): Promise<void> {
       ? payload.error
       : "We couldn't send that just now. Try again in a moment.",
   );
-}
-
-/** The part of Turnstile's browser API used here. */
-interface Turnstile {
-  render(
-    container: HTMLElement,
-    options: {
-      sitekey: string;
-      appearance: "always" | "execute" | "interaction-only";
-      theme: "auto" | "light" | "dark";
-      callback: (token: string) => void;
-      "expired-callback": () => void;
-      "error-callback": () => void;
-    },
-  ): string;
-  reset(widgetId: string): void;
-  remove(widgetId: string): void;
-}
-
-const TURNSTILE_SCRIPT =
-  "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
-
-let loading: Promise<Turnstile> | null = null;
-
-/** Turnstile's script, loaded the first time the dialog opens and kept. */
-function loadTurnstile(): Promise<Turnstile> {
-  const ready = (window as { turnstile?: Turnstile }).turnstile;
-  if (ready) return Promise.resolve(ready);
-  loading ??= new Promise<Turnstile>((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = TURNSTILE_SCRIPT;
-    script.async = true;
-    script.onload = () => {
-      const turnstile = (window as { turnstile?: Turnstile }).turnstile;
-      if (turnstile) resolve(turnstile);
-      else reject(new Error("Turnstile did not load."));
-    };
-    script.onerror = () => {
-      loading = null;
-      reject(new Error("Turnstile did not load."));
-    };
-    document.head.appendChild(script);
-  });
-  return loading;
-}
-
-export interface TurnstileHandle {
-  /** Ask for a new token: each one works once. */
-  reset(): void;
-  remove(): void;
-}
-
-/**
- * Put a Turnstile check in `container`. Most people never see it — it shows
- * itself only when it needs somebody to click — and `onToken` hears each token
- * it issues, or `null` when the last one expired or the check failed.
- */
-export async function mountTurnstile(
-  container: HTMLElement,
-  onToken: (token: string | null) => void,
-): Promise<TurnstileHandle> {
-  const turnstile = await loadTurnstile();
-  const id = turnstile.render(container, {
-    sitekey: turnstileSiteKey(),
-    appearance: "interaction-only",
-    theme: "auto",
-    callback: (token) => onToken(token),
-    "expired-callback": () => onToken(null),
-    "error-callback": () => onToken(null),
-  });
-  return {
-    reset: () => {
-      onToken(null);
-      turnstile.reset(id);
-    },
-    remove: () => turnstile.remove(id),
-  };
 }
