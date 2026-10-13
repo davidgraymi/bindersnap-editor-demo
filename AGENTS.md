@@ -73,7 +73,7 @@ another session's stack. Four rules:
    `running`).
 3. **`bun run up` exits when the stack is ready** — it is safe to await. It
    builds, starts detached, waits for Gitea, the API, the proxy and the app to
-   answer, then prints your URLs. Use `bun run up:fg`
+   answer, then prints your URLs and the seeded password. Use `bun run up:fg`
    only if a human wants the log stream; it never returns.
 4. **`bun run down` before you delete a worktree.** A running stack holds files
    in `data/`, which is what makes `git worktree remove` fail. If a worktree is
@@ -92,7 +92,9 @@ the repo and runs `bun --hot server.ts` — it **is** the dev server. Edits unde
 `bun run stack status` prints. The `api` container runs the bind-mounted
 `services/api/server.ts` under `bun --watch`, so a server edit restarts the API
 on its own. Sign in as `alice`, `bob`, `carol`, or `dan` with the password
-`dev` — on every stack, always.
+`dev`. Setting `GITEA_ADMIN_PASS` in a checkout's own `.env` overrides it for
+that stack, and `bun run stack status` prints whichever is in force; a new
+worktree never inherits the main checkout's.
 
 **Do not start a second SPA on another port to preview a change.** The API sends
 CORS headers for exactly one origin — your stack's own `APP_PORT`, set as

@@ -88,21 +88,11 @@ const SLOT_OFFSETS: Record<PortKey, number> = {
 };
 
 /**
- * The password of every seeded account on every local stack: always `dev`.
- *
- * It used to be whatever `GITEA_ADMIN_PASS` said in `.env`, inherited from the
- * main checkout, so it differed between machines and worktrees and every
- * agent had to look it up. `docker-compose.yml` now hardcodes it, and the
- * managed block of each `.env` pins it (superseding any older value), so a
- * process on the host that loads `.env` agrees with the containers.
- */
-export const DEV_PASSWORD = "dev";
-
-/**
  * Keys worth inheriting from the main checkout's `.env` when a worktree is
  * first set up. Deliberately excludes anything carrying a port or an origin:
  * those are derived per stack, and a copied one would silently point a
- * worktree's app at another worktree's API.
+ * worktree's app at another worktree's API. `GITEA_ADMIN_PASS` is left out
+ * too: the seeded password is `dev` unless a checkout sets its own.
  */
 const INHERITED_KEYS = [
   "GITEA_ADMIN_USER",
@@ -407,7 +397,6 @@ export async function ensureStackEnv(
     ...Object.fromEntries(
       PORT_KEYS.map((key) => [key, String(record.ports[key])]),
     ),
-    GITEA_ADMIN_PASS: DEV_PASSWORD,
   };
 
   // A brand-new worktree starts from the main checkout's non-port settings so
@@ -645,6 +634,21 @@ export function urlsFor(config: StackConfig): StackUrls {
   };
 }
 
+/**
+ * The password the seed job gave every demo account: `dev`, unless this
+ * checkout's own `.env` sets `GITEA_ADMIN_PASS`. A worktree no longer inherits
+ * that key from the main checkout, so an override is always one somebody made
+ * in this checkout on purpose.
+ */
+export function seedPassword(config: StackConfig): string {
+  const envPath = join(config.path, ".env");
+  if (existsSync(envPath)) {
+    const parsed = parseEnv(readFileSync(envPath, "utf8"));
+    if (parsed.GITEA_ADMIN_PASS) return parsed.GITEA_ADMIN_PASS;
+  }
+  return "dev";
+}
+
 export function isRunning(config: StackConfig): boolean {
   const result = spawnSync(
     "docker",
@@ -733,7 +737,7 @@ async function cmdUp(args: string[]): Promise<void> {
       `    Hocuspocus ${urls.hocuspocus}`,
       `    Mail       ${urls.mail} (Mailpit — every email the stack sends)`,
       "",
-      `    Sign in as alice, bob, carol or dan — password \`${DEV_PASSWORD}\`.`,
+      `    Sign in as alice, bob, carol or dan — password \`${seedPassword(config)}\`.`,
       "",
       `    Tests:   SKIP_STACK=1 bun run test:integration`,
       `    Logs:    bun run stack logs api`,
@@ -795,7 +799,7 @@ async function cmdStatus(args: string[]): Promise<void> {
       `  api     ${urls.api} (proxy ${urls.apiProxy})`,
       `  gitea   ${urls.gitea}`,
       `  mail    ${urls.mail}`,
-      `  login   alice / bob / carol / dan — password \`${DEV_PASSWORD}\``,
+      `  login   alice / bob / carol / dan — password \`${seedPassword(config)}\``,
       "",
     ].join("\n"),
   );

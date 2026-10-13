@@ -19,7 +19,6 @@ import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import {
-  DEV_PASSWORD,
   LEGACY_PORTS,
   canonicalPath,
   PORT_KEYS,
@@ -29,6 +28,7 @@ import {
   portsForSlot,
   pruneMissing,
   renderEnv,
+  seedPassword,
   stackNameFor,
   withLock,
 } from "./stack";
@@ -225,25 +225,26 @@ describe("ensureStackEnv", () => {
     }
   });
 
-  test("pins the seeded password to dev, whatever the main checkout says", async () => {
-    // The main checkout's password used to be copied into each new worktree,
-    // so every stack signed in with something different.
+  test("a worktree does not inherit the main checkout's password", async () => {
+    // It used to be copied into each new worktree, so a password set once in
+    // the main checkout quietly became every stack's, and nobody knew it was
+    // not `dev`.
     const { main, worktrees } = makeRepoWithWorktrees(1);
-    writeFileSync(join(main, ".env"), "GITEA_ADMIN_PASS=hunter2\nKEEP=1\n");
+    writeFileSync(
+      join(main, ".env"),
+      "GITEA_ADMIN_PASS=hunter2\nGITEA_ADMIN_USER=alice\n",
+    );
 
-    await ensureStackEnv(main);
-    await ensureStackEnv(worktrees[0]!);
+    const mainStack = await ensureStackEnv(main);
+    const worktree = await ensureStackEnv(worktrees[0]!);
 
-    const mainText = readFileSync(join(main, ".env"), "utf8");
-    expect(parseEnv(mainText).GITEA_ADMIN_PASS).toBe(DEV_PASSWORD);
-    expect(parseEnv(mainText).KEEP).toBe("1");
-    expect(mainText).toContain("# superseded by the managed stack block below");
-
+    expect(seedPassword(mainStack)).toBe("hunter2");
     const worktreeEnv = parseEnv(
       readFileSync(join(worktrees[0]!, ".env"), "utf8"),
     );
-    expect(worktreeEnv.GITEA_ADMIN_PASS).toBe(DEV_PASSWORD);
-    expect(DEV_PASSWORD).toBe("dev");
+    expect(worktreeEnv.GITEA_ADMIN_USER).toBe("alice");
+    expect(worktreeEnv.GITEA_ADMIN_PASS).toBeUndefined();
+    expect(seedPassword(worktree)).toBe("dev");
   });
 
   test("a second clone does not also claim slot 0", async () => {
