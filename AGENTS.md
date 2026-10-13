@@ -4,6 +4,115 @@ This file is for AI agents, LLMs, and automated tools working in this codebase.
 It describes what Bindersnap is, how the product is designed, and the rules you
 must follow when generating or modifying any code, copy, or assets.
 
+It is the one instruction file. `CLAUDE.md` holds only `@AGENTS.md`, so Claude
+Code reads this file even where it would not load `AGENTS.md` on its own. Put
+new instructions here, never in `CLAUDE.md`.
+
+---
+
+## Commands
+
+All commands use **Bun** as the runtime and package manager.
+
+```bash
+# Run the app (Gitea + seed + Hocuspocus + API + Caddy + app)
+bun run up            # Start this worktree's stack; waits until ready, then exits
+bun run down          # Tear down this worktree's stack, and only this one
+bun run stack status  # Your ports, your URLs, your login — add --json to parse
+
+# Partial servers — neither gives you a working app on its own
+bun run dev:app       # The app shell on APP_PORT and the public site (landing,
+                      # marketing, help, legal) on SITE_PORT. Calls no API.
+bun run dev:api       # API only: still needs Gitea, which only `bun run up` runs.
+
+# Build
+bun run build         # Build SPA to dist/
+
+# Tests
+bun run test          # All unit tests (test:app + test:ops + test:seed)
+bun run test:app      # apps/app, apps/help, apps/legal, apps/site, packages/editor, packages/utils, packages/ui-tokens
+bun run test:ops      # services/api, services/feedback, scripts, infra/backups
+bun run test:integration  # Playwright — starts and stops its own stack
+                          # SKIP_STACK=1 reuses a running `bun run up` stack
+                          # Both find this worktree's ports on their own
+bun test path/to/file.test.ts  # Single file
+
+# Code formatting
+bun run format        # Format all source files
+bun run format:check  # Check without writing
+```
+
+Test files live alongside source as `*.test.ts`. TypeScript strict mode is the linter.
+
+Production deploys run themselves — `deploy-pyinfra.yml` on every push to `main`.
+To drive one by hand (Python, not Bun):
+
+```bash
+python3 -m venv deploy/.venv
+deploy/.venv/bin/pip install -r deploy/requirements.txt
+source deploy/.venv/bin/activate
+
+deploy/bin/ssm-connect.sh --dry   # report changes without applying
+deploy/bin/ssm-connect.sh         # apply
+```
+
+## The stack, if you are an agent in a worktree
+
+**Everything you need is `bun run up`, `bun run down`, and `bun run stack status`.**
+Run them from your own worktree and you cannot collide with, or tear down,
+another session's stack. Four rules:
+
+1. **Never run `docker compose` directly, and never edit the ports in `.env`.**
+   `docker-compose.yml` derives its project name and every published port from
+   `STACK_NAME` and the `*_PORT` variables, which fall back to one shared
+   default. A raw `docker compose down` from a worktree kills whatever is
+   running on the defaults — in practice the developer's own stack.
+2. **Never assume port 5173.** Your worktree gets its own port block, claimed
+   automatically on first use and recorded in `.env`. Ask for it:
+   `bun run stack status` (or `--json` for `ports`, `urls`, `stackName`,
+   `running`).
+3. **`bun run up` exits when the stack is ready** — it is safe to await. It
+   builds, starts detached, waits for Gitea, the API, the proxy and the app to
+   answer, then prints your URLs and the seeded password. Use `bun run up:fg`
+   only if a human wants the log stream; it never returns.
+4. **`bun run down` before you delete a worktree.** A running stack holds files
+   in `data/`, which is what makes `git worktree remove` fail. If a worktree is
+   already gone, `bun run stack prune` tears down its orphaned stack and frees
+   its ports.
+
+Other commands: `bun run stack logs [service]`, `bun run up --fresh` (wipe
+volumes and seeded Gitea data first), `bun run stack status --all` (every stack
+on this machine).
+
+## Validating a change in the browser
+
+`bun run up` is the only way to see the real app. Its `app` container bind-mounts
+the repo and runs `bun --hot server.ts` — it **is** the dev server. Edits under
+`apps/` and `packages/` hot-reload with nothing to restart, at the app URL that
+`bun run stack status` prints. The `api` container runs the bind-mounted
+`services/api/server.ts` under `bun --watch`, so a server edit restarts the API
+on its own. Sign in as `alice`, `bob`, `carol`, or `dan`, with
+the password on that same line — it is `GITEA_ADMIN_PASS` from `.env`, which is
+not always `dev`.
+
+**Do not start a second SPA on another port to preview a change.** The API sends
+CORS headers for exactly one origin — your stack's own `APP_PORT`, set as
+`BINDERSNAP_APP_ORIGIN` in `docker-compose.yml` — and compose does not pass
+`BINDERSNAP_ALLOWED_ORIGINS` through, so there is no override. A `bun run dev:app`
+on any other port gets every API call blocked by CORS and can never sign in. It
+renders the sign-in page and nothing behind auth.
+
+The app and the public site are two origins, as in production
+(`app.bindersnap.com` and `bindersnap.com`): the app on `APP_PORT`, the landing
+page, marketing, help and legal on `SITE_PORT`. `bun run stack status` prints
+both.
+
+A dependency change is the one thing hot reload cannot pick up: the container
+bakes its own `node_modules` into a volume at image build, so a package added on
+the host stays invisible until the stack is rebuilt. Fix that with a full
+`bun run down && bun run up` — never by killing a process or rebuilding a single
+container, which leaves the stack in a half-state.
+
 ---
 
 ## Repo Architecture — Read This First
@@ -66,6 +175,7 @@ bindersnap-editor-demo/
 ├── .github/workflows/              ← CI/CD pipelines (static-site.yml, deploy-pyinfra.yml)
 ├── .claude/                        ← Claude agent definitions
 ├── AGENTS.md                       ← This file
+├── CLAUDE.md                       ← `@AGENTS.md`, nothing else
 ├── docker-compose.yml              ← Local dev stack (Gitea + Hocuspocus + app)
 └── Dockerfile                      ← Dev-only Dockerfile for the app container
 ```
@@ -382,7 +492,7 @@ state does not mean building it first. Its header indexes what is in there and
 - See how the real app looks with realistic data — the app container is the
   hot-reloading dev server, so edits show up at the app URL `bun run stack
 status` prints, without a restart. See "Validating a change in the browser"
-  in `CLAUDE.md`.
+  above.
 
 See `tests/README.md` for full usage.
 
@@ -450,6 +560,23 @@ unavailable.
 These are settled, non-negotiable decisions. Do not reopen them. Do not work
 around them. If a task seems to require violating one of these, stop and create
 a `human-needed` issue instead.
+
+In short — each is explained below:
+
+1. **The BFF owns auth; Gitea tokens stay server-side.** The browser holds only
+   an `HttpOnly` session cookie.
+2. **Evidence lives in Gitea; configuration lives in SQLite.** Documents,
+   versions, approvals, reviews, comments and tags are git objects, never
+   SQLite rows. See ADR 0004.
+3. **File uploads flow browser → BFF → Gitea.** ADR 0001 is law, except its
+   "one document = one repository", superseded by ADR 0004.
+4. **Two independent workflows.** The file vault (external uploads) and the
+   inline editor are separate. Do not conflate them.
+5. **Editor UI changes need a flag.** If you change `packages/editor/` visuals,
+   note it in your PR.
+6. **`deploy/` configures the host; Terraform does not.** No serverless backend,
+   no config bucket, no bootstrap logic in `user-data.sh`. Cloudflare Workers
+   only within ADR 0006.
 
 ### The BFF owns auth; Gitea tokens never reach the browser as cookies.
 
