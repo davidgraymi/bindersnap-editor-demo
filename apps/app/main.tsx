@@ -3,11 +3,13 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { queryClient } from "./data/queryClient";
+import { startErrorReporter } from "./errorReporter";
 import { startFeedbackTrace } from "./feedbackTrace";
 
 // Before anything renders, so the first API calls and errors are in the
-// trace a feedback report sends.
+// trace a feedback report sends, and an error on the first screen is reported.
 startFeedbackTrace();
+startErrorReporter();
 
 const elem = document.getElementById("root");
 

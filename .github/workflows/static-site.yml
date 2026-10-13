@@ -70,6 +70,9 @@ jobs:
           # Turnstile widget's public site key, which
           # services/feedback/put-turnstile-secret.sh prints.
           BUN_PUBLIC_FEEDBACK_URL: https://feedback.bindersnap.com/
+          # Where the app reports an error nothing caught: the same Worker's
+          # /errors route (apps/app/errorReporter.ts). Unset, it reports none.
+          BUN_PUBLIC_ERROR_REPORT_URL: https://feedback.bindersnap.com/errors
           BUN_PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
           # The signup form's own widget; the API holds its secret.
           BUN_PUBLIC_SIGNUP_TURNSTILE_SITE_KEY: ${{ vars.SIGNUP_TURNSTILE_SITE_KEY }}

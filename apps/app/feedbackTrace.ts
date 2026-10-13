@@ -132,6 +132,21 @@ export function captureFeedbackTrace(context: FeedbackContext): FeedbackTrace {
   };
 }
 
+/**
+ * The API's request IDs for the most recent calls that failed or got no good
+ * answer, newest last. An error report carries them: an error in the app is
+ * often a call that failed a moment before.
+ */
+export function recentFailedRequestIds(limit: number): string[] {
+  return apiCalls
+    .list()
+    .filter(
+      (call) => call.requestId && (call.status === 0 || call.status >= 400),
+    )
+    .map((call) => call.requestId as string)
+    .slice(-limit);
+}
+
 /** Which build this is. Baked in by `static-site.yml`; "dev" anywhere else. */
 export function appBuild(): FeedbackTrace["app"] {
   return {
