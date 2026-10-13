@@ -219,19 +219,9 @@ Routes:
 
 ### The public site
 
-`apps/site/` is the marketing site: pricing, policy templates, regulatory
-requirements, pages per kind of provider, comparisons and a glossary. Each page
-is Markdown with front matter in `apps/site/content/{collection}/{slug}.md`, so
-whoever checks a regulatory claim reviews it as a text diff. It is rendered the
-way `/help` and `/legal` are: plain HTML with nothing to run, a Markdown copy
-at `{path}.md`, JSON-LD, and listed in `/sitemap.xml`, `/llms.txt` and
-`/llms-full.txt` (`scripts/build-site.ts`, served live by `server.ts`).
-`apps/site/renderSite.test.ts` is the quality gate: length of titles and
-descriptions, minimum words, no broken internal links, no claims we cannot
-make (never "HIPAA compliant": Bindersnap holds no patient data). Marketing copy may say "policy";
-the app says "document". The public site is `bindersnap.com` and the app is
-`app.bindersnap.com` (issue #718), so a marketing page never takes an
-organization's name.
+`apps/site/` is `bindersnap.com`: the landing page and the marketing pages,
+Markdown in `apps/site/content/`. Its own guide, `apps/site/AGENTS.md`, loads
+when you work there. Marketing copy may say "policy"; the app says "document".
 
 ### The document editor
 
@@ -314,8 +304,7 @@ sanitizer keeps a filtered set of inline styles (`safeStyle` in
 `packages/utils/sanitizer.ts`) for the same reason.
 
 If you change anything in `packages/editor/` that affects visual appearance, note it
-in your PR description. The landing page no longer embeds the editor, so there is
-nothing to re-sync.
+in your PR description.
 
 ### The change comparison
 
@@ -957,9 +946,8 @@ Key token categories, using the real names as defined in the token file:
 The file also includes pre-built utility classes for common patterns:
 `.bs-btn` (`.bs-btn-primary`, `.bs-btn-secondary`, `.bs-btn-dark`, size and
 danger modifiers), `.bs-card`, `.bs-input`, `.bs-eyebrow`, `.bs-label`,
-`.bs-status` (tone modifiers). The landing page's own primitives — the email
-capture row, the reveal-on-scroll animation, the comparison table row — live
-in `apps/site/landing.css` instead; see Component Patterns below.
+`.bs-status` (tone modifiers). The landing page's own primitives live in
+`apps/site/landing.css`; see `apps/site/AGENTS.md`.
 
 ---
 
@@ -985,7 +973,7 @@ Reference `packages/ui-tokens/css/bindersnap-tokens.css` for all values.
 
 **Coral (`--brand-coral`, `#E85D26`):**
 Used for CTAs, the top-border reveal on hover cards, section eyebrow labels,
-waitlist badges, form focus rings, and key emphasis. Maximum one coral element
+form focus rings, and key emphasis. Maximum one coral element
 per section. Never use coral decoratively.
 
 White on `--brand-coral` measures 3.49:1 and fails WCAG AA. That constrains
@@ -1093,14 +1081,6 @@ Before/After:       "From reply-all chaos to a clean audit trail — in one tool
 
 ## Component Patterns
 
-### Email capture form
-
-The primary conversion element on every marketing page. Always use the
-`.email-row` pattern from `apps/site/landing.css`: email input + coral button
-inside a shared rounded container with a coral focus ring. Form hint text
-below in `--brand-font-mono` at `--brand-text-label` size. Always include the
-waitlist counter with avatar stack above the form.
-
 ### Section eyebrow label
 
 Every section opens with a mono label in coral with flanking line decorations:
@@ -1113,46 +1093,10 @@ Every section opens with a mono label in coral with flanking line decorations:
 
 Cards use `.bs-card`. On hover: translate up 4px, elevate shadow, border
 becomes transparent, and a 3px coral top border scales in from the left via
-`scaleX`. Never apply this pattern to non-interactive content — and note that
-the landing page's mid-page sections deliberately do not use cards at all (see
-Landing page scroll rhythm).
+`scaleX`. Never apply this pattern to non-interactive content.
 
-### Landing page scroll rhythm
-
-The four sections between the chaos strip and the founder note — The Solution,
-The Record, the before/after, The Review — each have a **different silhouette,
-on purpose**:
-
-| Section        | Shape                                               | Tone   |
-| -------------- | --------------------------------------------------- | ------ |
-| The Solution   | sticky left lede + three numbered rows on hairlines | paper  |
-| The Record     | one framed chain diagram + a divided claims line    | tinted |
-| Before / after | one ledger, the pairs answering across each row     | paper  |
-| The Review     | a three-column strip divided by hairlines           | tinted |
-
-They used to be four consecutive "centred header, then a row of bordered
-cards" sections. The eye pattern-matches that by the second one and starts
-skimming — on the half of the page that leads to the CTA, which is exactly
-where interest should be building instead.
-
-So when you add or rework a section in this stretch: **do not reach for a
-three-across card grid**, and keep the tinted/paper alternation intact
-(`.section-band` puts a bare `<section>` on the tinted beat). If a new section
-needs a shape, give it one nothing adjacent already has.
-
-### Scroll reveal
-
-Add `.reveal` (defined in `apps/site/landing.css`) to any element that should
-animate in on scroll. Add `.reveal-d1` through `.reveal-d3` for staggered
-delays. The IntersectionObserver that adds `.in` on intersect lives in
-`landing-inline.ts`.
-
-### Dark sections
-
-When a section uses `--brand-ink` as the background (the villain/problem
-section, footer — always dark, regardless of theme), text uses
-`--brand-on-dark-primary`, secondary text uses `--brand-on-dark-secondary`,
-and rules use `--brand-on-dark-rule`.
+The landing page's own patterns — sign-up form, scroll rhythm, scroll reveal,
+dark sections — are in `apps/site/AGENTS.md`.
 
 ---
 
@@ -1182,10 +1126,6 @@ When generating new pages, components, or templates:
 3. Check `docs/bindersnap-social-cheatsheet.html` for exact dimensions before
    generating any image assets or meta tags
 4. Default background is always `var(--bs-page-bg)` (`#FAFAF7`), never `#fff`
-5. Every new section needs: a `.bs-eyebrow` label, a Lora serif headline, and
-   a single clear action — never two competing CTAs
-6. Add `.reveal` (from `apps/site/landing.css`) to any block-level element
-   introduced below the fold, on marketing pages only
 
 ---
 

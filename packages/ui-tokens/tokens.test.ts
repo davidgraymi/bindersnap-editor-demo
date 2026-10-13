@@ -14,7 +14,10 @@ import { join, relative } from "node:path";
 const REPO_ROOT = join(import.meta.dir, "..", "..");
 const TOKENS_CSS_REL = "packages/ui-tokens/css/bindersnap-tokens.css";
 const TOKENS_CSS_PATH = join(REPO_ROOT, TOKENS_CSS_REL);
-const AGENTS_MD_PATH = join(REPO_ROOT, "AGENTS.md");
+// Every guide that names tokens: the root one and each directory's own.
+const AGENTS_MD_PATHS = ["AGENTS.md", "apps/site/AGENTS.md"].map((p) =>
+  join(REPO_ROOT, p),
+);
 
 const tokensCss = readFileSync(TOKENS_CSS_PATH, "utf8");
 
@@ -175,7 +178,9 @@ describe("design tokens (docs/design/design-system-audit.md, Task 6)", () => {
   });
 
   test("every token name mentioned in AGENTS.md exists", () => {
-    const agentsMd = readFileSync(AGENTS_MD_PATH, "utf8");
+    const agentsMd = AGENTS_MD_PATHS.map((p) => readFileSync(p, "utf8")).join(
+      "\n",
+    );
     // Only our two prefixes: AGENTS.md also documents CLI flags (`--json`).
     const mentioned = [
       ...agentsMd.matchAll(/(?<![a-zA-Z0-9-])--(?:bs|brand)-[a-zA-Z0-9-]*/g),
