@@ -829,7 +829,7 @@ The file also includes pre-built utility classes for common patterns:
 danger modifiers), `.bs-card`, `.bs-input`, `.bs-eyebrow`, `.bs-label`,
 `.bs-status` (tone modifiers). The landing page's own primitives — the email
 capture row, the reveal-on-scroll animation, the comparison table row — live
-in `apps/app/landing.css` instead; see Component Patterns below.
+in `apps/site/landing.css` instead; see Component Patterns below.
 
 ---
 
@@ -966,7 +966,7 @@ Before/After:       "From reply-all chaos to a clean audit trail — in one tool
 ### Email capture form
 
 The primary conversion element on every marketing page. Always use the
-`.email-row` pattern from `apps/app/landing.css`: email input + coral button
+`.email-row` pattern from `apps/site/landing.css`: email input + coral button
 inside a shared rounded container with a coral focus ring. Form hint text
 below in `--brand-font-mono` at `--brand-text-label` size. Always include the
 waitlist counter with avatar stack above the form.
@@ -1012,7 +1012,7 @@ needs a shape, give it one nothing adjacent already has.
 
 ### Scroll reveal
 
-Add `.reveal` (defined in `apps/app/landing.css`) to any element that should
+Add `.reveal` (defined in `apps/site/landing.css`) to any element that should
 animate in on scroll. Add `.reveal-d1` through `.reveal-d3` for staggered
 delays. The IntersectionObserver that adds `.in` on intersect lives in
 `landing-inline.ts`.
@@ -1054,7 +1054,7 @@ When generating new pages, components, or templates:
 4. Default background is always `var(--bs-page-bg)` (`#FAFAF7`), never `#fff`
 5. Every new section needs: a `.bs-eyebrow` label, a Lora serif headline, and
    a single clear action — never two competing CTAs
-6. Add `.reveal` (from `apps/app/landing.css`) to any block-level element
+6. Add `.reveal` (from `apps/site/landing.css`) to any block-level element
    introduced below the fold, on marketing pages only
 
 ---

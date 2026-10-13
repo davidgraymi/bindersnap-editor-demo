@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { stripTags } from "../../packages/utils/stripTags";
+import { appOrigin, appUrl } from "./appLink";
 import { renderHelpCss } from "../help/renderHelp";
 import { renderLegalBody } from "../legal/renderLegal";
 import {
@@ -29,10 +30,11 @@ import {
  * the organization, a breadcrumb trail, the article, and its questions and
  * answers when it has a "Frequently asked questions" section.
  *
- * The Google tag goes on these pages only — never on the landing page, help,
- * legal, or anywhere the app runs, where signed-in customers read — and only
- * when the build names a measurement ID. Issue #718 moves the app to its own
- * subdomain, after which the landing page can carry it too.
+ * The Google tag goes on these pages only — never on the landing page, help or
+ * legal — and only when the build names a measurement ID. The app is another
+ * origin (app.bindersnap.com) and never carries it. The Privacy Policy names
+ * these pages as the only ones with analytics; it changes first if the tag
+ * ever spreads.
  */
 
 export const SITE = "https://bindersnap.com";
@@ -256,7 +258,7 @@ const CTA = `<section class="site-closing" aria-labelledby="site-closing-heading
 <p class="site-closing-tag">Get started</p>
 <h2 id="site-closing-heading">Keep the approval record <em>with the policy.</em></h2>
 <p>Bindersnap keeps every policy's current version, every earlier one, and who approved each — ready when the surveyor asks.</p>
-<a class="site-closing-button" href="/-/signup">Start your 14-day free trial</a>
+<a class="site-closing-button" href="${appUrl("/-/signup")}">Start your 14-day free trial</a>
 <p class="site-closing-hint">No card required · Reviewers and readers are free</p>
 </div>
 </section>`;
@@ -277,7 +279,7 @@ function railHtml(
     .join("")}</ol></nav>
 <div class="site-rail-card">
 <p>Every version of every policy, and who approved each.</p>
-<a href="/-/signup">Try Bindersnap free</a>
+<a href="${appUrl("/-/signup")}">Try Bindersnap free</a>
 </div>`;
 }
 
@@ -525,6 +527,40 @@ export function renderCollectionIndex(
   });
 }
 
+/**
+ * The site's 404, which is also how an app address that reached this origin
+ * finds the app. Before issue #718 the app lived here, at `/{org}/...`, so a
+ * link shared then names bindersnap.com. Every address whose first segment is
+ * not one of the site's own `sections` goes, with its query and fragment, to
+ * the same path on the app; `_redirects` already sends `/-/` there with a 301.
+ * A static host cannot tell an organization from a typo, so a mistyped
+ * marketing address ends at the app's own "not found".
+ */
+export function renderNotFoundPage(
+  sections: readonly string[],
+  pages: readonly SitePage[],
+): string {
+  const forward = `(function(){var sections=${JSON.stringify(
+    [...sections].sort(),
+  )};var first=location.pathname.split("/")[1]||"";if(first&&sections.indexOf(first)===-1){location.replace(${JSON.stringify(
+    appOrigin(),
+  )}+location.pathname+location.search+location.hash);}})();`;
+  return shell({
+    title: pageTitle("Page not found"),
+    description: "There is no page at this address.",
+    path: "/404",
+    crumbs: [{ name: "Home", path: "/" }],
+    structuredData: [],
+    pages,
+    hero: {
+      eyebrow: "Not found",
+      title: "There is no page here.",
+      lede: `It may have moved. Your documents are in <a href="${escape(appUrl("/"))}">the app</a>; everything else starts at <a href="/">the home page</a>.`,
+    },
+    body: `<script>${forward}</script>`,
+  });
+}
+
 const MONTHS = [
   "January",
   "February",
@@ -647,14 +683,12 @@ ${urls}
 /**
  * Every crawler is welcome, AI search included: being cited by ChatGPT,
  * Claude or Perplexity is how a growing share of buyers find software. The
- * app's own pages behind `/-/` hold nothing a crawler can read.
+ * app is another origin with its own robots.txt, which turns them all away.
  */
 export function renderRobotsTxt(): string {
   return `# Bindersnap welcomes search engines and AI assistants.
 User-agent: *
 Allow: /
-Disallow: /-/
-Disallow: /auth/
 
 Sitemap: ${SITE}/sitemap.xml
 `;
@@ -693,6 +727,13 @@ export function siteFiles(
   for (const collection of indexes) {
     files.set(siteHref(collection), renderCollectionIndex(collection, pages));
   }
+  // Every first segment the site answers for; anything else is the app's.
+  const sections = new Set(["help", "legal", "fonts", "_site"]);
+  for (const path of files.keys()) {
+    const first = path.split("/")[1]?.replace(/\.[a-z]+$/, "");
+    if (first) sections.add(first);
+  }
+  files.set("/404", renderNotFoundPage([...sections], pages));
   files.set(
     "/sitemap.xml",
     renderSitemap([

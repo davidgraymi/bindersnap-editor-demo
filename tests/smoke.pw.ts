@@ -224,19 +224,12 @@ test.describe("Gitea dev stack health", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("app shell routes", () => {
-  test("/ shows the pre-rendered landing page to unauthenticated users", async ({
-    page,
-  }) => {
+  test("/ asks unauthenticated users to sign in", async ({ page }) => {
+    // The landing page is the public site's (bindersnap.com), not the app's.
     await page.goto("/");
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(/\/-\/login$/);
     await expect(
-      page.getByRole("heading", { name: /which version you approved/i }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: /Create Your Account/i }).first(),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("link", { name: "Sign Up" }).first(),
+      page.getByRole("heading", { name: "Step into the clean version." }),
     ).toBeVisible();
   });
 

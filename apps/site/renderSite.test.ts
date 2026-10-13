@@ -208,7 +208,7 @@ describe("every page on the public site", () => {
     }
     for (const path of files.keys()) {
       const first = path.split("/")[1]!;
-      if (first.startsWith("_")) continue;
+      if (first.startsWith("_") || first === "404") continue;
       expect({
         path,
         reserved: RESERVED_ORGANIZATION_NAMES.has(first),
@@ -299,7 +299,7 @@ describe("the files crawlers and agents read", () => {
 describe("the landing page", () => {
   test("its JSON-LD parses, and offers only the price /pricing states", async () => {
     const html = await Bun.file(
-      new URL("../app/index.html", import.meta.url),
+      new URL("./index.html", import.meta.url),
     ).text();
     const ld = html.match(
       /<script type="application\/ld\+json">([\s\S]*?)<\/script>/,
@@ -385,7 +385,7 @@ describe("the Google tag", () => {
 
   test("is never on the landing page, which signed-in customers load", async () => {
     const landing = await Bun.file(
-      new URL("../app/index.html", import.meta.url),
+      new URL("./index.html", import.meta.url),
     ).text();
     expect(landing).not.toContain("googletagmanager");
   });
@@ -429,7 +429,7 @@ describe("the required policies checklist", () => {
 describe("the landing page's links into the public site", () => {
   test("go to sections that exist", async () => {
     const landing = await Bun.file(
-      new URL("../app/index.html", import.meta.url),
+      new URL("./index.html", import.meta.url),
     ).text();
     const hrefs = [
       ...landing.matchAll(
@@ -440,5 +440,33 @@ describe("the landing page's links into the public site", () => {
     for (const href of hrefs) {
       expect({ href, exists: files.has(href) }).toEqual({ href, exists: true });
     }
+  });
+});
+
+describe("the 404 page", () => {
+  const notFound = () => files.get("/404")!;
+
+  test("forwards an address that is not the site's to the app", () => {
+    const script = notFound().match(
+      /<script>(\(function\(\)\{var sections[\s\S]*?)<\/script>/,
+    )?.[1];
+    expect(script).toBeDefined();
+    const run = (pathname: string) => {
+      const replaced: string[] = [];
+      new Function("location", script!)({
+        pathname,
+        search: "?x=1",
+        hash: "#h",
+        replace: (url: string) => replaced.push(url),
+      });
+      return replaced;
+    };
+    expect(run("/riverside-health/policies")).toEqual([
+      "https://app.bindersnap.com/riverside-health/policies?x=1#h",
+    ]);
+    // The site's own sections stay, and say "not found".
+    expect(run("/templates/no-such-template")).toEqual([]);
+    expect(run("/help/no-such-guide")).toEqual([]);
+    expect(run("/pricing")).toEqual([]);
   });
 });

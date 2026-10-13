@@ -1,10 +1,9 @@
+import { retargetAppLinks } from "./appLink";
 import {
   bindSignupEnterKeys,
-  hideLandingContent,
   installScrollReveal,
   restoreTheme,
   routeLandingSignup,
-  shouldShowLanding,
   showLandingContent,
   toggleTheme,
   type SignupSource,
@@ -26,12 +25,8 @@ document.documentElement.setAttribute("data-landing-ready", "");
 
 restoreTheme();
 mountLandingIcons();
-
-if (shouldShowLanding(window.location.pathname)) {
-  showLandingContent(landingContent);
-} else {
-  hideLandingContent(landingContent);
-}
+retargetAppLinks();
+showLandingContent(landingContent);
 
 installScrollReveal();
 

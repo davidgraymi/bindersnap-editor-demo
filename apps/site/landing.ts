@@ -1,4 +1,4 @@
-import { isHomePath } from "./routes";
+import { appUrl } from "./appLink";
 
 export type SignupSource = "hero" | "cta";
 
@@ -20,18 +20,6 @@ export function showLandingContent(
   landingContent.style.display = "";
   landingContent.style.opacity = "1";
   landingContent.removeAttribute("aria-hidden");
-}
-
-export function hideLandingContent(
-  landingContent: HTMLElement | null | undefined,
-): void {
-  if (!landingContent) {
-    return;
-  }
-
-  landingContent.style.opacity = "0";
-  landingContent.style.display = "none";
-  landingContent.setAttribute("aria-hidden", "true");
 }
 
 export function restoreTheme(doc: Document = document): string {
@@ -62,8 +50,9 @@ export function buildSignupUrl(email: string | null | undefined): string {
     params.set("email", normalizedEmail);
   }
 
+  // The app's own origin (app.bindersnap.com), not this site's.
   const query = params.toString();
-  return query ? `/-/signup?${query}` : "/-/signup";
+  return appUrl(query ? `/-/signup?${query}` : "/-/signup");
 }
 
 export function routeLandingSignup(
@@ -124,8 +113,4 @@ export function installScrollReveal(doc: Document = document): void {
   for (const element of doc.querySelectorAll(".reveal")) {
     observer.observe(element);
   }
-}
-
-export function shouldShowLanding(pathname: string): boolean {
-  return isHomePath(pathname);
 }

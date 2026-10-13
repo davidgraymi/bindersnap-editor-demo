@@ -17,6 +17,7 @@ import {
   GITEA_ADMIN_PASS,
   GITEA_ADMIN_USER,
   OWNER,
+  SITE_BASE_URL,
   acceptTermsForOrganization,
   agreeToTerms,
   signOutCurrentUser,
@@ -254,7 +255,8 @@ test.describe("signup flow", () => {
   }) => {
     const email = `landing-${Date.now()}@users.bindersnap.local`;
 
-    await page.goto("/");
+    // The landing page is the site's; the form it leads to is the app's.
+    await page.goto(`${SITE_BASE_URL}/`);
     await page.locator("#hero-email").fill(email);
     await page.locator("#hero-form button").click();
 
@@ -415,8 +417,8 @@ test.describe("signup flow", () => {
 
     // Each opens beside the form, so reading them loses nothing typed.
     for (const [name, href] of [
-      ["Terms of Service", "/legal/terms"],
-      ["Privacy Policy", "/legal/privacy"],
+      ["Terms of Service", `${SITE_BASE_URL}/legal/terms`],
+      ["Privacy Policy", `${SITE_BASE_URL}/legal/privacy`],
     ] as const) {
       const link = page.getByRole("link", { name, exact: true });
       await expect(link).toHaveAttribute("href", href);

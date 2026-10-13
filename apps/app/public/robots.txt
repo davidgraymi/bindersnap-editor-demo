@@ -1,0 +1,4 @@
+# app.bindersnap.com is the app: nothing here for a search engine.
+# The public site is bindersnap.com.
+User-agent: *
+Disallow: /

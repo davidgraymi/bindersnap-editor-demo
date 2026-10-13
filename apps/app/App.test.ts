@@ -128,10 +128,6 @@ mock.module("./components/AnonymousDocumentShell", () => ({
     ),
 }));
 
-mock.module("./components/LandingPage", () => ({
-  LandingPage: () => createElement("div", { "data-testid": "landing-page" }),
-}));
-
 let originalWindow: typeof globalThis.window | undefined;
 let originalDocument: typeof globalThis.document | undefined;
 let originalNavigator: typeof globalThis.navigator | undefined;

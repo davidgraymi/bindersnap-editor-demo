@@ -3,7 +3,9 @@ import { join, relative } from "node:path";
 
 import { file, serve } from "bun";
 import appIndex from "./apps/app/index.html";
+import landingIndex from "./apps/site/index.html";
 import { HELP_GUIDES } from "./apps/app/helpGuides";
+import { appUrl } from "./apps/site/appLink";
 import { helpContentType, helpFiles } from "./apps/help/renderHelp";
 import { readLegalDocuments } from "./apps/legal/legalDocuments";
 import { legalFiles } from "./apps/legal/renderLegal";
@@ -76,29 +78,71 @@ const siteRoutes = Object.fromEntries([
 ]);
 
 /**
- * The icons, the link-preview image and the fonts, at the site root where the
- * build copies them for the static host: `/favicon.ico`, `/fonts/fonts.css` and
+ * The icons, the link-preview image and the fonts, at the root where the build
+ * copies them for each static host: `/favicon.ico`, `/fonts/fonts.css` and
  * the rest.
  */
-const PUBLIC_DIR = join(import.meta.dir, "apps/app/public");
-const publicFiles = Object.fromEntries(
-  readdirSync(PUBLIC_DIR, { recursive: true, withFileTypes: true })
-    .filter((entry) => entry.isFile())
-    .map((entry) => {
-      const path = join(entry.parentPath, entry.name);
-      return [`/${relative(PUBLIC_DIR, path)}`, () => new Response(file(path))];
-    }),
-);
+function publicFilesIn(dir: string): Record<string, () => Response> {
+  return Object.fromEntries(
+    readdirSync(dir, { recursive: true, withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => {
+        const path = join(entry.parentPath, entry.name);
+        return [`/${relative(dir, path)}`, () => new Response(file(path))];
+      }),
+  );
+}
+const publicFiles = publicFilesIn(join(import.meta.dir, "apps/app/public"));
 
-const configuredPort = Number.parseInt(
-  process.env.PORT ?? process.env.APP_PORT ?? "5173",
-  10,
-);
-const appPort =
-  Number.isFinite(configuredPort) && configuredPort > 0 ? configuredPort : 5173;
+/**
+ * What the site's Worker does with an address it has no file for: `/-/` goes
+ * to the app with a 301 (`apps/site/public/_redirects`), and anything else
+ * gets the 404 page, which forwards an organization's address to the app.
+ */
+function siteNotFound(req: Request): Response {
+  const { pathname, search } = new URL(req.url);
+  if (pathname.startsWith("/-/") || pathname.startsWith("/auth/")) {
+    return Response.redirect(appUrl(`${pathname}${search}`), 301);
+  }
+  return new Response(publicSiteFiles().get("/404"), {
+    status: 404,
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  });
+}
 
-const server = serve({
+function port(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const appPort = port(process.env.PORT ?? process.env.APP_PORT, 5173);
+const sitePort = port(process.env.SITE_PORT, 5174);
+
+const development = process.env.NODE_ENV !== "production" && {
+  // Enable browser hot reloading in development
+  hmr: true,
+
+  // Echo console logs from the browser to the server
+  console: true,
+};
+
+/**
+ * Two origins, as in production (issue #718): the app, app.bindersnap.com,
+ * on APP_PORT, and the public site, bindersnap.com, on SITE_PORT. Each links
+ * to the other through BUN_PUBLIC_APP_URL and BUN_PUBLIC_SITE_URL, which
+ * docker-compose.yml sets.
+ */
+serve({
   port: appPort,
+  routes: {
+    ...publicFiles,
+    "/*": appIndex,
+  },
+  development,
+});
+
+serve({
+  port: sitePort,
   routes: {
     ...publicFiles,
     ...siteRoutes,
@@ -106,19 +150,11 @@ const server = serve({
     "/help/*": serveHelp,
     "/legal": serveLegal,
     "/legal/*": serveLegal,
-    "/": appIndex,
-    "/docs/*": appIndex,
-    "/auth/callback": appIndex,
-    "/*": appIndex,
+    "/": landingIndex,
   },
-
-  development: process.env.NODE_ENV !== "production" && {
-    // Enable browser hot reloading in development
-    hmr: true,
-
-    // Echo console logs from the browser to the server
-    console: true,
-  },
+  fetch: siteNotFound,
+  development,
 });
 
-console.log(`🚀 App server running at http://localhost:${appPort}/`);
+console.log(`🚀 App running at http://localhost:${appPort}/`);
+console.log(`🌐 Site running at http://localhost:${sitePort}/`);

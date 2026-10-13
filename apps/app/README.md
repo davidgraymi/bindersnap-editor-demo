@@ -1,8 +1,9 @@
-# `apps/app/` — Unified Bindersnap SPA
+# `apps/app/` — the Bindersnap app
 
-This is the single Bindersnap frontend deployed to GitHub Pages.
-The landing page is pre-rendered into `index.html`, and React swaps to the
-workspace shell when a valid session is present.
+The app, served from `app.bindersnap.com` by its own assets-only Cloudflare
+Worker (`wrangler.jsonc` here). The landing page and the rest of the public
+site are `apps/site`, on `bindersnap.com` (issue #718). A signed-out visitor
+at `/` is sent to `/-/login`.
 
 ## Runtime model
 
@@ -12,10 +13,11 @@ workspace shell when a valid session is present.
 
 ## Entry points
 
-- `index.html`: Pre-rendered landing shell plus the React mount root.
+- `index.html`: the shell — icons, fonts, theme, and the React mount root.
 - `App.tsx`: Route/auth gate. The app's own pages are behind `/-/`
   (`/-/login`, `/-/documents`, …); see `routes.ts`.
-- `components/LandingPage.tsx`: Controls the static landing shell visibility.
+- `siteLink.ts`: links to the public site (help, legal), which is another
+  origin; `BUN_PUBLIC_SITE_URL` names it.
 - `components/AppShell.tsx`: Authenticated workspace shell and data fetch.
 
 ## Local dev
@@ -29,9 +31,12 @@ bun run up
 
 The app container bind-mounts the repo and runs `bun --hot server.ts`, so this
 already is the hot-reloading dev server — edits appear at
-`http://localhost:${APP_PORT:-5173}` without a restart.
+`http://localhost:${APP_PORT:-5173}` without a restart. It serves the public
+site too, as a second origin, on `SITE_PORT` (`bun run stack status` prints
+both).
 
-`bun run dev:app` on its own serves the landing page and nothing else. It has no
+`bun run dev:app` on its own serves the sign-in page and the public site, and
+nothing behind auth. It has no
 API: with `BUN_PUBLIC_API_BASE_URL` unset the browser calls the app server
 same-origin, and `server.ts` answers every path with the SPA's HTML, so each API
 call comes back as an unparseable 200. Pointing it at a running stack does not

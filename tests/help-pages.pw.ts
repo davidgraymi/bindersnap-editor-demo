@@ -4,12 +4,12 @@
  */
 import { expect, test } from "@playwright/test";
 
-import { APP_BASE_URL, signInAsAlice } from "./helpers";
+import { SITE_BASE_URL, signInAsAlice } from "./helpers";
 
 test("anybody can read help, and move between the guides on their own", async ({
   page,
 }) => {
-  await page.goto(`${APP_BASE_URL}/help`);
+  await page.goto(`${SITE_BASE_URL}/help`);
   await expect(
     page.getByRole("heading", { level: 1, name: "Help and guides" }),
   ).toBeVisible();
@@ -41,28 +41,28 @@ test("anybody can read help, and move between the guides on their own", async ({
 });
 
 test("an agent can read the guides as text", async ({ request }) => {
-  const index = await request.get(`${APP_BASE_URL}/help/llms.txt`);
+  const index = await request.get(`${SITE_BASE_URL}/help/llms.txt`);
   expect(index.status()).toBe(200);
   const text = await index.text();
   expect(text).toContain("# Bindersnap Help");
   expect(text).toContain("(/help/approvals.md)");
 
   // The site's own index, at the root, lists the guides among everything else.
-  const site = await (await request.get(`${APP_BASE_URL}/llms.txt`)).text();
+  const site = await (await request.get(`${SITE_BASE_URL}/llms.txt`)).text();
   expect(site).toMatch(/^# Bindersnap\n/);
   expect(site).toContain("(https://bindersnap.com/help/approvals.md)");
 
-  const guide = await request.get(`${APP_BASE_URL}/help/approvals.md`);
+  const guide = await request.get(`${SITE_BASE_URL}/help/approvals.md`);
   expect(guide.status()).toBe(200);
   expect(guide.headers()["content-type"]).toContain("text/markdown");
   expect(await guide.text()).toMatch(/^# How a change becomes the record/);
 
-  const page = await request.get(`${APP_BASE_URL}/help/approvals`);
+  const page = await request.get(`${SITE_BASE_URL}/help/approvals`);
   // The words are in the page as served, with nothing to run first.
   expect(await page.text()).toContain("<h2>How many approvals</h2>");
 
   expect(
-    (await request.get(`${APP_BASE_URL}/help/no-such-guide`)).status(),
+    (await request.get(`${SITE_BASE_URL}/help/no-such-guide`)).status(),
   ).toBe(404);
 });
 
@@ -76,7 +76,8 @@ test("the app opens help in a new tab", async ({ page }) => {
     help.click(),
   ]);
   await tab.waitForLoadState();
-  await expect(tab).toHaveURL(/\/help$/);
+  // The site's origin, not the app's (issue #718).
+  await expect(tab).toHaveURL(`${SITE_BASE_URL}/help`);
   await expect(
     tab.getByRole("heading", { level: 1, name: "Help and guides" }),
   ).toBeVisible();

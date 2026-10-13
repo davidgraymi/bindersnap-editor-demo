@@ -40,6 +40,7 @@ import { NavSearch } from "./NavSearch";
 import { CreateMenu } from "./CreateMenu";
 import { AccountSettingsPage } from "./AccountSettingsPage";
 import { AvatarFace } from "./PersonAvatar";
+import { siteUrl } from "../siteLink";
 
 interface AppShellProps {
   user: SessionUser | null;
@@ -425,7 +426,7 @@ export function AppShell({
                     <a
                       className="app-profile-menu-item"
                       role="menuitem"
-                      href="/help"
+                      href={siteUrl("/help")}
                       target="_blank"
                       rel="noopener"
                       onClick={() => setProfileOpen(false)}

@@ -39,6 +39,14 @@ export const APP_BASE_URL =
   process.env.PLAYWRIGHT_BASE_URL ??
   `http://localhost:${process.env.APP_PORT ?? "5173"}`;
 
+/**
+ * The public site — landing, marketing, help and legal — which is its own
+ * origin (bindersnap.com in production), as `baseURL` is the app's.
+ */
+export const SITE_BASE_URL =
+  process.env.PLAYWRIGHT_SITE_URL ??
+  `http://localhost:${process.env.SITE_PORT ?? "5174"}`;
+
 export const API_BASE_URL =
   process.env.BUN_PUBLIC_API_BASE_URL ??
   `http://localhost:${process.env.API_PROXY_PORT ?? "8788"}`;
@@ -435,9 +443,11 @@ export async function signOutCurrentUser(page: Page): Promise<void> {
   );
   await expect(button).toBeVisible({ timeout: 5_000 });
   await button.click({ force: true });
-  await page.waitForURL(/\/$/, { timeout: 5_000 });
+  // The app's home asks a signed-out visitor to sign in; the landing page is
+  // the public site's, another origin (issue #718).
+  await page.waitForURL(/\/-\/login$/, { timeout: 5_000 });
   await expect(
-    page.getByRole("heading", { name: /which version you approved/i }),
+    page.getByRole("heading", { name: "Step into the clean version." }),
   ).toBeVisible({ timeout: 10_000 });
   await clearBrowserAuthState(page);
 }

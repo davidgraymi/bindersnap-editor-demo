@@ -15,6 +15,7 @@ import {
   GITEA_ADMIN_PASS,
   GITEA_ADMIN_USER,
   GITEA_URL,
+  SITE_BASE_URL,
 } from "./helpers";
 
 async function createAccountWithNoAgreement(): Promise<{
@@ -56,7 +57,8 @@ test("an account with nothing on record accepts the Terms before going on", asyn
     page.getByRole("heading", { name: "Accept our updated Terms." }),
   ).toBeVisible({ timeout: 30_000 });
   const terms = page.getByRole("link", { name: "Terms of Service" });
-  await expect(terms).toHaveAttribute("href", "/legal/terms");
+  // On the public site, another origin.
+  await expect(terms).toHaveAttribute("href", `${SITE_BASE_URL}/legal/terms`);
 
   // Not without the box.
   await page.getByRole("button", { name: "Accept and continue" }).click();

@@ -11,22 +11,33 @@ The production host workflow assumes the AWS role provisioned by [`../../infra/c
 > [`break-glass.md`](break-glass.md) — recover the host directly over SSM without
 > the CI pipeline.
 
-## The static site (Cloudflare)
+## The app and the public site (Cloudflare)
 
-Pushes to `main` build `apps/app/index.html` and the public site into `dist/`,
-then `static-site.yml` runs `wrangler deploy`. `wrangler.jsonc` makes `dist/`
-the static assets of the `bindersnap-site` Worker, which serves `bindersnap.com`.
-The Worker runs no code of ours.
+Pushes to `main` run `static-site.yml`: `bun run build` (`scripts/build.ts`)
+writes the app into `dist/app` and the public site into `dist/site`, and
+`wrangler deploy` publishes each as the static assets of its own Worker. Neither
+Worker runs code of ours.
 
-- Any path with no file (`/{org}/...`, `/-/login`) gets `index.html`
-  (`not_found_handling: single-page-application`), with status 200.
-- `apps/app/public/_headers` sets the response headers: `X-Frame-Options`,
-  `frame-ancestors`, HSTS, `nosniff`, `Referrer-Policy`, `Permissions-Policy`.
-- `/pricing/` redirects to `/pricing`.
+| Worker            | Domain               | Config                    | Serves                                |
+| ----------------- | -------------------- | ------------------------- | ------------------------------------- |
+| `bindersnap-app`  | `app.bindersnap.com` | `apps/app/wrangler.jsonc` | the SPA                               |
+| `bindersnap-site` | `bindersnap.com`     | `wrangler.jsonc`          | landing, marketing pages, help, legal |
+
+- On the app, any path with no file (`/{org}/...`, `/-/login`) gets
+  `index.html` with a 200 (`not_found_handling: single-page-application`).
+- On the site, `/-/...` and `/auth/...` redirect to the app with a 301
+  (`apps/site/public/_redirects`). Any other path with no file gets
+  `404.html`, which forwards an organization's address (`/{org}/...`, from
+  before the app moved) to the app. `/pricing/` redirects to `/pricing`.
+- Each sets its own response headers (`apps/app/public/_headers`,
+  `apps/site/public/_headers`): `X-Frame-Options`, `frame-ancestors`, HSTS,
+  `nosniff`, `Referrer-Policy`, `Permissions-Policy`. The app adds
+  `X-Robots-Tag: noindex` and a `robots.txt` that turns crawlers away.
 
 The workflow needs the `CLOUDFLARE_API_TOKEN` secret and the
 `CLOUDFLARE_ACCOUNT_ID` variable in the `production` environment. To check a
-build locally: `bun run build && bunx wrangler@4.149.0 dev`.
+build locally: `bun run build`, then `bunx wrangler@4.149.0 dev` for the site or
+`bunx wrangler@4.149.0 dev --config apps/app/wrangler.jsonc` for the app.
 
 A rollback is `bunx wrangler@4.149.0 rollback` (or Workers → bindersnap-site →
 Deployments in the dashboard). It is instant and needs no rebuild.
@@ -271,8 +282,8 @@ the new stack has been checked.
 
 ## Validation Checklist
 
-- A push to `main` deploys `dist/` to the `bindersnap-site` Worker.
-- A deep link such as `/-/login` loads the SPA shell, and `curl -I https://bindersnap.com` shows `x-frame-options: DENY`.
+- A push to `main` deploys `dist/app` to `bindersnap-app` and `dist/site` to `bindersnap-site`.
+- `https://app.bindersnap.com/-/login` loads the SPA shell; `https://bindersnap.com/-/login` is a 301 to it; `curl -I` on either shows `x-frame-options: DENY`.
 - A push to `main` triggers `deploy-pyinfra.yml`, which validates the compose + Caddy config on the host before bringing the stack up.
 - A forced test failure prevents the pyinfra deploy job from running.
 - `deploy-pyinfra.yml` with `dry_run=true` reports pyinfra changes without applying them.

@@ -48,6 +48,9 @@ export const PORT_KEYS = [
   "GITEA_PORT",
   "HOCUSPOCUS_PORT",
   "MAILPIT_PORT",
+  // The public site (bindersnap.com in production): the landing page, the
+  // marketing pages, help and legal. The app is APP_PORT (app.bindersnap.com).
+  "SITE_PORT",
 ] as const;
 
 export type PortKey = (typeof PORT_KEYS)[number];
@@ -56,7 +59,7 @@ export type Ports = Record<PortKey, number>;
 /**
  * Slot 0 is the main checkout and keeps the historical ports, so a developer
  * who has been typing `localhost:5173` for a year keeps typing it. Every other
- * worktree gets a contiguous block of six ports well clear of the defaults —
+ * worktree gets a contiguous block of seven ports well clear of the defaults —
  * one block per slot, so a slot number is the only thing that has to be
  * unique.
  */
@@ -67,6 +70,7 @@ export const LEGACY_PORTS: Ports = {
   GITEA_PORT: 3000,
   HOCUSPOCUS_PORT: 1234,
   MAILPIT_PORT: 8025,
+  SITE_PORT: 5174,
 };
 
 const SLOT_PORT_BASE = 21000;
@@ -80,6 +84,7 @@ const SLOT_OFFSETS: Record<PortKey, number> = {
   GITEA_PORT: 3,
   HOCUSPOCUS_PORT: 4,
   MAILPIT_PORT: 5,
+  SITE_PORT: 6,
 };
 
 /**
@@ -608,6 +613,7 @@ async function waitForUrl(
 
 export interface StackUrls {
   app: string;
+  site: string;
   api: string;
   apiProxy: string;
   gitea: string;
@@ -619,6 +625,7 @@ export function urlsFor(config: StackConfig): StackUrls {
   const p = config.ports;
   return {
     app: `http://localhost:${p.APP_PORT}`,
+    site: `http://localhost:${p.SITE_PORT}`,
     api: `http://localhost:${p.API_PORT}`,
     apiProxy: `http://localhost:${p.API_PROXY_PORT}`,
     gitea: `http://localhost:${p.GITEA_PORT}`,
@@ -716,6 +723,8 @@ async function cmdUp(args: string[]): Promise<void> {
   await waitForUrl(`${urls.apiProxy}/auth/me`);
   log(`waiting for the app at ${urls.app} ...`);
   await waitForUrl(urls.app, { ok: (r) => r.ok });
+  log(`waiting for the site at ${urls.site} ...`);
+  await waitForUrl(urls.site, { ok: (r) => r.ok });
 
   process.stdout.write(
     [
@@ -723,6 +732,7 @@ async function cmdUp(args: string[]): Promise<void> {
       `  Stack ready: ${config.stackName}`,
       "",
       `    App        ${urls.app}`,
+      `    Site       ${urls.site} (landing, marketing, help, legal)`,
       `    API        ${urls.api}`,
       `    API proxy  ${urls.apiProxy}`,
       `    Gitea      ${urls.gitea}`,
@@ -787,6 +797,7 @@ async function cmdStatus(args: string[]): Promise<void> {
       `  path    ${config.path}`,
       `  state   ${running ? "running" : "stopped"}`,
       `  app     ${urls.app}`,
+      `  site    ${urls.site}`,
       `  api     ${urls.api} (proxy ${urls.apiProxy})`,
       `  gitea   ${urls.gitea}`,
       `  mail    ${urls.mail}`,

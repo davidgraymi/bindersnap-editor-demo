@@ -15,7 +15,7 @@ const fragment = (html: string) => JSDOM.fragment(html);
 
 test("the landing page wears the same bar and footer as every other public page", () => {
   const landing = new JSDOM(
-    readFileSync(join(import.meta.dir, "../app/index.html"), "utf8"),
+    readFileSync(join(import.meta.dir, "./index.html"), "utf8"),
   ).window.document;
 
   expect(links(landing, ".site-header")).toEqual(
@@ -47,7 +47,8 @@ test("every link in the bar and footer goes to a page the site has", () => {
   const files = publicSiteFiles();
   const known = (href: string) =>
     href === "/" ||
-    href.startsWith("/-/") ||
+    // Sign in and Sign up: the app is its own origin.
+    href.startsWith("https://app.bindersnap.com/-/") ||
     href.startsWith("/help") ||
     href.startsWith("/legal/") ||
     files.has(href);

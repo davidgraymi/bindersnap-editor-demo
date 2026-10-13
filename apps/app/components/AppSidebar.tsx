@@ -21,6 +21,7 @@ import { routeToPath, type AppRoute, type OrganizationTab } from "../routes";
 import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
 import { useCollapsedSidebar } from "../useCollapsedSidebar";
 import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
+import { siteUrl } from "../siteLink";
 
 /**
  * The map of the product, always on screen.
@@ -414,7 +415,7 @@ export function AppSidebar({
               were doing it. */}
           <a
             className="app-sidebar-foot-item"
-            href="/help"
+            href={siteUrl("/help")}
             target="_blank"
             rel="noopener"
             aria-label="Help and guides (opens in a new tab)"

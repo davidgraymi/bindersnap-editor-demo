@@ -29,6 +29,8 @@ const LITERAL_ALLOWLIST: ReadonlyArray<{ file: string; literal: string }> = [
   // dark.
   { file: "apps/app/index.html", literal: "#fafaf7" },
   { file: "apps/app/index.html", literal: "#1c1917" },
+  { file: "apps/site/index.html", literal: "#fafaf7" },
+  { file: "apps/site/index.html", literal: "#1c1917" },
 ];
 
 // Files exempt from the literal rule entirely, with the reason. Not a
@@ -79,6 +81,9 @@ function walk(dir: string, extensions: string[]): string[] {
  */
 const STYLE_FILES = [
   ...walk(join(REPO_ROOT, "apps/app"), [".css", ".html", ".ts", ".tsx"]),
+  // The landing page and its stylesheet, which moved to the site (#718).
+  join(REPO_ROOT, "apps/site/index.html"),
+  join(REPO_ROOT, "apps/site/landing.css"),
   ...walk(join(REPO_ROOT, "packages/editor"), [".css", ".ts", ".tsx"]),
 ].filter(
   (f) =>
@@ -93,7 +98,7 @@ const STYLE_FILES = [
  */
 const SOURCE_FILES = [
   ...walk(join(REPO_ROOT, "apps/app"), [".css", ".html", ".ts", ".tsx"]),
-  ...walk(join(REPO_ROOT, "apps/site"), [".css", ".ts"]),
+  ...walk(join(REPO_ROOT, "apps/site"), [".css", ".html", ".ts", ".tsx"]),
   ...walk(join(REPO_ROOT, "packages/editor"), [".css", ".tsx", ".ts"]),
   TOKENS_CSS_PATH,
 ];
