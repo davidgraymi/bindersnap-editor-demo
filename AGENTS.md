@@ -112,8 +112,7 @@ at `{path}.md`, JSON-LD, and listed in `/sitemap.xml`, `/llms.txt` and
 `/llms-full.txt` (`scripts/build-site.ts`, served live by `server.ts`).
 `apps/site/renderSite.test.ts` is the quality gate: length of titles and
 descriptions, minimum words, no broken internal links, no claims we cannot
-make (never "HIPAA compliant": Bindersnap holds no patient data), and every
-address reserved from organizations. Marketing copy may say "policy";
+make (never "HIPAA compliant": Bindersnap holds no patient data). Marketing copy may say "policy";
 the app says "document". The public site is `bindersnap.com` and the app is
 `app.bindersnap.com` (issue #718), so a marketing page never takes an
 organization's name.

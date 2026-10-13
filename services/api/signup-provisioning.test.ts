@@ -322,9 +322,11 @@ test("an invisible collision does not swallow a real creation failure", async ()
 });
 
 test("an organization never takes an address the app cannot move", () => {
-  // `/help` is a separate site. An organization called that would be
-  // shadowed by it, binders and all.
-  expect(deriveOrganizationName("maria", "Help")).toBe("help-org");
+  // `/fonts` is a folder the app's host serves. An organization called that
+  // would be shadowed by it, binders and all.
+  expect(deriveOrganizationName("maria", "Fonts")).toBe("fonts-org");
+  // Help is on the public site, another origin, so its name is free.
+  expect(deriveOrganizationName("maria", "Help")).toBe("help");
   // The app's own pages are behind `/-/`, so these names are free to take.
   expect(deriveOrganizationName("maria", "Billing")).toBe("billing");
   expect(deriveOrganizationName("maria", "Settings")).toBe("settings");
