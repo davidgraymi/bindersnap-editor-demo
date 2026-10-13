@@ -125,12 +125,15 @@ serves which purpose is essential before making any changes.
 bindersnap-editor-demo/
 │
 ├── apps/
-│   └── app/                        ← UNIFIED SPA (static files on Cloudflare)
-│       ├── index.html              ← Pre-rendered landing shell + React mount root
-│       ├── App.tsx                 ← Auth gate + routing
-│       ├── api.ts                  ← All browser-to-API calls (BFF client)
-│       ├── routes.ts               ← Client-side route definitions
-│       └── components/             ← App shell, landing page, document UI
+│   ├── app/                        ← THE APP, app.bindersnap.com (static files on Cloudflare)
+│   │   ├── index.html              ← React mount root
+│   │   ├── App.tsx                 ← Auth gate + routing
+│   │   ├── api.ts                  ← All browser-to-API calls (BFF client)
+│   │   ├── routes.ts               ← Client-side route definitions
+│   │   └── components/             ← App shell, binder and document UI
+│   ├── site/                       ← THE PUBLIC SITE, bindersnap.com: landing + marketing
+│   ├── help/                       ← bindersnap.com/help
+│   └── legal/                      ← bindersnap.com/legal
 │
 ├── deploy/                         ← CONFIGURATION AS CODE (pyinfra push deploy)
 │   ├── deploy.py                   ← The production deployment itself
@@ -141,6 +144,10 @@ bindersnap-editor-demo/
 │
 ├── infra/                          ← INFRASTRUCTURE AS CODE (Terraform only)
 │   ├── compute/                    ← EC2 Terraform for the app host
+│   ├── edge/                       ← Cloudflare: DNS, tunnel, email routing
+│   ├── email/                      ← SES
+│   ├── billing/, billing-test/     ← Stripe catalog (live, and CI's test mode)
+│   ├── account-baseline/           ← CloudTrail, GuardDuty, budgets
 │   ├── backups/                    ← DLM snapshot policy
 │   ├── ci/                         ← GitHub Actions OIDC role
 │   ├── secrets/                    ← AWS Secrets Manager
@@ -148,10 +155,12 @@ bindersnap-editor-demo/
 │   └── monitoring/                 ← CloudWatch / alerting
 │
 ├── packages/                       ← Shared internal libraries
-│   ├── editor/                     ← Tiptap editor component (shared by landing + app)
+│   ├── editor/                     ← Tiptap editor component, imported by the app
 │   │   └── README.md               ← Read before editing
+│   ├── api-schema/                 ← Zod schemas → openapi.json for the BFF
+│   ├── api-client/                 ← Typed client generated from that schema
 │   ├── ui-tokens/                  ← CSS design tokens, fonts, icons
-│   └── utils/                      ← Shared utilities (sanitizer, etc.)
+│   └── utils/                      ← Shared utilities (sanitizer, document UIDs, CODEOWNERS)
 │
 ├── services/                       ← Deployable backend services
 │   ├── api/                        ← Auth + data BFF (Bun, port 8787)
@@ -170,7 +179,7 @@ bindersnap-editor-demo/
 ├── scripts/                        ← Build and utility scripts
 │   └── bootstrap-gitea-service-account.ts  ← Provisions the service account token
 │
-├── server.ts                       ← Bun dev/prod server (serves the SPA)
+├── server.ts                       ← Bun dev server: the app on APP_PORT, the site on SITE_PORT
 ├── docs/                           ← Brand assets and ADRs
 ├── .github/workflows/              ← CI/CD pipelines (static-site.yml, deploy-pyinfra.yml)
 ├── .claude/                        ← Claude agent definitions
@@ -180,15 +189,14 @@ bindersnap-editor-demo/
 └── Dockerfile                      ← Dev-only Dockerfile for the app container
 ```
 
-### The unified SPA
+### The app
 
-`apps/app/` is a single deployable frontend. It pre-renders a static landing shell
-into `index.html`; React swaps to the workspace shell when a valid session is
-present. There is no separate `apps/landing/` directory.
+`apps/app/` is the app at `app.bindersnap.com`, a React SPA. It holds no
+landing page: that is `apps/site/`, on `bindersnap.com` (see "The public site").
 
 Routes:
 
-- `/` — landing page (unauthenticated) or workspace home (authenticated)
+- `/` — the signed-in person's home; signed out, it sends you to `/-/login`
 - **The app's own pages are behind `/-/`**, the way GitLab keeps
   `/-/user_settings/profile` apart from `/{group}`. No organization can be
   called `-`, so none of them can shadow one, and an organization may be named
@@ -205,11 +213,9 @@ Routes:
   `/-/` (`/-/changes/3`, `/-/blob/main/{path}`, `/-/settings`)
 - Reserved first segments (`RESERVED_ORGANIZATION_NAMES` in
   `packages/utils/organizationName.ts`) are only what cannot move off the
-  root: `help` and `legal` (separate static sites, built from
-  `apps/help` and `apps/legal`), the public site's sections (`pricing`,
-  `templates`, `requirements`, `for`, `compare`, `glossary`, built from
-  `apps/site`; see "The public site" below), `auth` (`/auth/callback`, where
-  Gitea's sign-in returns), and the files browsers ask for at the root.
+  root: `-`, `auth` (`/auth/callback`, where Gitea's sign-in returns), and the
+  files in `apps/app/public` (icons, fonts, `robots.txt`). Help, legal and the
+  marketing sections are on `bindersnap.com`, another origin, and take no names.
 
 ### The public site
 
@@ -435,41 +441,34 @@ the page read, and is refused if either has moved.
 All browser-to-data calls go through the BFF. The browser never contacts Gitea
 directly.
 
-- `POST /auth/signup` — create Gitea account + session, then provision the
-  organization and its first binder (ADR 0004). Accepts an optional
-  `organization` display name; the org's Gitea name is derived from it
-- `POST /auth/login` — authenticate + set `HttpOnly` session cookie
-- `POST /auth/logout` — revoke session + Gitea token
-- `GET /auth/me` — return current session user + a Gitea token for the client
-- `GET /api/app/documents` — list workspace repos with PR state
-- `GET /api/app/documents/search` — one page of quick-find matches (repo rows only)
-- `POST /api/app/documents` — create repo + upload initial file
-- `GET /api/app/documents/:owner/:repo` — document detail
-- `GET /api/app/documents/:owner/:repo/changes/closed` — closed changes with how each ended
-- A binder change's detail carries `documents` (what publishing would version)
-  **and** `removedDocuments` (what it takes off the record) — separate lists,
-  because a tag on a file that is no longer in the merged tree is the bug the
-  publish guard exists to prevent. A rename is in neither: Gitea reports one as
-  a delete plus an add, and the server subtracts the UIDs that came back
-- `POST /api/app/documents/:owner/:repo/versions` — upload new version
-- `POST /api/app/documents/:owner/:repo/pull-requests/:n/reviews` — submit review
-- `PUT /api/app/documents/:owner/:repo/pull-requests/:n/assignments` — set the assignee and reviewers
-- `GET/POST /api/app/documents/:owner/:repo/pull-requests/:n/discussions` — review threads
-- `POST /api/app/documents/:owner/:repo/pull-requests/:n/discussions/:threadId/comments` — reply
-- `POST /api/app/documents/:owner/:repo/pull-requests/:n/discussions/:threadId/resolve` — resolve/unresolve
-- `PUT /api/app/documents/:owner/:repo/pull-requests/:n/discussions/:threadId/comments/:commentId/reactions` — leave or take back a reaction
-- `POST /api/app/documents/:owner/:repo/pull-requests/:n/publish` — merge + tag
-- `GET/POST /api/app/binders/:org/:binder/changes/:n/conflicts` — what clashes
-  with the binder, read three ways; and resolving it
-- `GET /api/app/documents/:owner/:repo/download` — proxy file download
-- `GET/PUT/DELETE /api/app/documents/:owner/:repo/collaborators/:user` — manage access
-- `GET /api/app/users/search` — user search
+The router is the `pathname` chain at the bottom of `services/api/server.ts`;
+`packages/api-schema` describes the same routes as Zod schemas and generates
+`openapi.json`, which `packages/api-client` is typed from. The families:
+
+- `/auth/*` — signup (creates the Gitea account, then the organization and its
+  first binder, ADR 0004), login, logout, `me`, email verification, password reset
+- `/api/app/binders/:org/:binder/...` — a binder: its documents, folders,
+  renames, archives and restores, drafts, changes (reviews, discussions,
+  reactions, assignments, conflicts, update, publish), people, groups, rules,
+  settings, history, raw files, audit and export
+- `/api/app/orgs/:org/...` — an organization: its binders, people, groups,
+  invitations, deletion
+- `/api/app/documents` and `/api/app/home/changes` (across every binder),
+  `/api/app/organizations`, `/api/app/invitations/*`, `/api/app/account/*`,
+  `/api/app/billing/*`, `/api/app/notifications*`, `/api/app/legal*`,
+  `/api/app/users/search`, `/api/app/onboarding`, `/api/app/admin/*`
+- `/stripe/webhook`, `/email/unsubscribe`, `/healthz`
+
+A binder change's detail carries `documents` (what publishing would version)
+**and** `removedDocuments` (what it takes off the record) — separate lists,
+because a tag on a file that is no longer in the merged tree is the bug the
+publish guard exists to prevent. A rename is in neither: Gitea reports one as
+a delete plus an add, and the server subtracts the UIDs that came back.
 
 Per-session Gitea tokens are stored server-side in a SQLite session store
 (`services/api/sessions.ts`). The browser holds only the `bindersnap_session`
-`HttpOnly` cookie. After login, `/auth/me` also returns the token to the client
-for storage in `sessionStorage` as a runtime cache — but the session cookie is
-the source of truth.
+`HttpOnly` cookie, and no response ever carries a Gitea token — not `/auth/me`,
+not login (#662).
 
 ### The integration testing stack
 
@@ -601,7 +600,7 @@ A change is a pull request and may touch several documents; each document it
 publishes gets its own tag on the shared merge commit. Retiring a document is
 `git rm` in an approved change — the history stays.
 
-Role teams, verified against Gitea 1.26 by
+Role teams, verified against Gitea 28.0.0 by
 `tests/gitea-permission-model.pw.ts`: `<ws>-admins` is `permission: admin`,
 `<ws>-authors` is write on `repo.code`/`repo.pulls`/`repo.issues`/`repo.releases`,
 `<ws>-reviewers` is **read** on `repo.code`/`repo.pulls`/`repo.issues`. Read on
@@ -610,24 +609,24 @@ both units is all a reviewer needs to comment, approve and reject.
 **Every workspace's branch protection must set `enable_approvals_whitelist: true`
 with the three role teams in `approvals_whitelist_teams`.** Without it Gitea
 resolves "official reviewer" as "has write access on `repo.code`", so a free
-reviewer's approval is recorded and counts for nothing, their rejection blocks
-nothing, and a CODEOWNERS request blocks no merge. This one field is what makes
-free reviewers real. `.gitea/CODEOWNERS` patterns are anchored regexes, not
+reviewer's approval is recorded and counts for nothing and their rejection blocks
+nothing. This one field is what makes free reviewers real. `.gitea/CODEOWNERS` patterns are anchored regexes, not
 gitignore globs — a folder rule is `policies/nursing/.*` — and the file is read
 from the base branch, so a CODEOWNERS change never governs its own change.
 
-**A CODEOWNERS entry names people, not teams.** Gitea 1.26 writes a team review
-request and then clears its own `official` flag (`AddTeamReviewRequest`,
-`models/issues/review.go`), so a team code owner is assignment only and blocks
-no merge; a user code owner blocks it. `tests/gitea-permission-model.pw.ts`
-asserts both, so the day Gitea fixes the ordering the team case fails and says
-so.
+**A sign-off rule blocks through `block_on_codeowner_reviews`** (Gitea 28.0.0):
+for every CODEOWNERS rule matching a changed file, one of that rule's owners
+must approve, whether the owner is a person or a team.
+`block_on_official_review_requests` stays **off**. It never made a team code
+owner block, because Gitea clears a team request's own `official` flag
+(`AddTeamReviewRequest`), and left on it lets any member stall a publish by
+requesting a review. `services/api/gitea-client/workspaces.ts` writes both, and
+`services/api/requiredReviewers.ts` reads which gate a binder is under.
+`tests/gitea-permission-model.pw.ts` asserts both gates side by side.
 
-This is design, recorded in
-`docs/adr/0004-organization-workspace-folder-and-org-billing.md`, and it
-supersedes ADR 0001's "one document equals one repository". The routes and BFF
-endpoints documented above describe the **shipped** one-repo-per-document code,
-which is still what runs.
+This is recorded in
+`docs/adr/0004-organization-workspace-folder-and-org-billing.md`, it supersedes
+ADR 0001's "one document equals one repository", and it is what runs.
 
 ### We bill the organization, never a person.
 
@@ -703,16 +702,12 @@ pull-request time and lives on the same timeline as the content it governs, so
 
 A document's **identity** is a ULID carried as a segment of its filename —
 `nursing/hand-hygiene.01J8XZ4K7M….md` — and its version tags are keyed on that
-ULID rather than on its path, so renaming a policy cannot restart its numbering.
-Design only, not built:
-`docs/adr/0005-document-identity-and-version-tags.md`. Its title stays the
+ULID rather than on its path (`01J8XZ4K7M…/v4`), so renaming a policy cannot
+restart its numbering. See `docs/adr/0005-document-identity-and-version-tags.md`
+and `packages/utils/documentUid.ts`. Its title stays the
 filename, which is already point-in-time evidence: the tree at each version's tag
 records what the document was called when that version was approved. The derived
 index above stays deferred.
-
-Migrating in: `.bindersnap/config.json` on the `bindersnap-config` branch
-(`reviewSettings.ts`) predates this rule and is moving to a per-workspace settings
-row. Do not copy the pattern.
 
 **Review threads** follow the same rule. Gitea has no thread primitive (its
 review comments are anchored to a file path and line, which is meaningless for
@@ -738,13 +733,14 @@ reviewer states the UI shows are derived from those two facts plus the reviews
 (`services/api/change-assignments.ts`) — nothing about an assignment is stored
 outside Gitea.
 
-**Per-document review policy** lives in `.bindersnap/config.json` on a
-dedicated `bindersnap-config` branch (`reviewSettings.ts`), so policy changes
-are commits with an author and a timestamp. It is a side branch because `main`
-is protected with `enable_push: false` on every document repo. The companion
-"reset approvals on a new version" setting maps onto Gitea's native
-`dismiss_stale_approvals` branch protection flag and lives there instead, so
-Gitea enforces it during merge.
+**A binder's review policy** — what branch protection cannot express, today
+"refuse to publish while a review thread is unresolved" — is a SQLite row
+(`services/api/workspace-settings.ts`), with every change logged in
+`settings_events`. It replaced a `bindersnap-config` branch; do not bring that
+pattern back. What the policy was when a version was published is stamped into
+that version's tag. "Reset approvals on a new version" is Gitea's own
+`dismiss_stale_approvals`, on the branch protection, so Gitea enforces it at
+merge.
 
 ### File uploads flow browser → BFF → Gitea.
 
@@ -752,8 +748,11 @@ The upload flow for the file vault:
 
 1. User selects file
 2. SPA validates client-side (size ≤ 25 MiB; any extension allowed)
-3. SPA sends multipart form to BFF (`POST /api/app/documents` or `.../versions`)
-4. BFF reads the file as base64, commits to Gitea contents API, opens PR
+3. SPA sends a multipart form to the BFF (`POST /api/app/binders/:org/:binder/documents`
+   for a new document, `.../document-revisions` for a new version)
+4. BFF reads the file as base64 and commits it through the Gitea contents API
+   — into the named draft or change, otherwise onto a new change request.
+   `main` is protected, so nothing writes to it directly
 
 There is no multipart endpoint that bypasses the BFF. The BFF is always the
 server that writes to Gitea. File type and size validation happen client-side
