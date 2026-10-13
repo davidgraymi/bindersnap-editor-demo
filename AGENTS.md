@@ -328,22 +328,6 @@ baked in at compile time, and served from `app.bindersnap.com`; the public
 site is `bindersnap.com`. Locally, the API is `http://localhost:8787`, and the
 app and the site are `APP_PORT` and `SITE_PORT`.
 
-**How a production deploy runs.** On every push to `main`,
-`deploy-pyinfra.yml` runs the unit suites, builds and pushes
-`ghcr.io/davidgraymi/bindersnap-api:<sha>`, assumes the OIDC deploy role, then
-runs `deploy/bin/ssm-connect.sh`. That script resolves the instance by tag,
-pushes a ~60-second ephemeral key with EC2 Instance Connect, tunnels SSH through
-`aws ssm start-session`, and runs `pyinfra deploy/inventory.py deploy/deploy.py`.
-**There is no inbound port 22 and no long-lived key material anywhere in this
-path.** `deploy.py` is idempotent: it installs Docker, mounts the EBS volume,
-uploads `deploy/files/`, renders `/opt/bindersnap/.env.prod` from SSM Parameter
-Store, and force-recreates the stack only when config or secrets actually
-changed.
-
-Rollback is `git revert` on `main` (the deploy re-applies the prior stack), or a
-`workflow_dispatch` run with an explicit `api_tag`. Each deploy pins `API_TAG`
-to the deployed commit's SHA — never mutable `:latest`.
-
 **Terraform provisions; pyinfra configures.** These do not overlap:
 
 - Anything about the _host's contents_ — packages, config files, secrets,
@@ -356,8 +340,10 @@ to the deployed commit's SHA — never mutable `:latest`.
   bucket. If you find yourself editing Terraform to change how the app is
   configured, you are in the wrong directory.
 
-Read `deploy/README.md` before changing anything under `deploy/`, and
-`docs/ops/deploy.md` for the pipeline, required GitHub variables, and rollback.
+How a deploy runs, rollback and the production security rules are in
+`deploy/AGENTS.md`, which loads when you work in `deploy/`. Read
+`deploy/README.md` before changing anything there, and `docs/ops/deploy.md` for
+the pipeline, required GitHub variables, and rollback.
 `docs/ops/break-glass.md` covers recovering the host over SSM when CI is
 unavailable.
 
@@ -965,15 +951,11 @@ This repository uses either `gh` CLI or an MCP tool.
 
 ---
 
-## Production Security Rules
+## Gitea service tokens
 
-These apply to any changes touching `deploy/`, `deploy/files/docker-compose.prod.yml`, `deploy/files/Caddyfile.prod`, or EC2 deployment:
+**Service account tokens are split by power.** `BINDERSNAP_GITEA_SERVICE_TOKEN` (read scopes only) must be set; the API exits at startup if it is missing in production. `BINDERSNAP_GITEA_ADMIN_TOKEN` (`write:admin` only) is used solely for signup, password changes, account deletion and token revocation. Never give the read token a write scope, and never use the admin token for a read: the read token runs on nearly every request. Anything a person can do in Gitea themselves — renaming their own draft, say — is done with their own session token, not either of these.
 
-1. **Never hardcode credentials.** All secrets (`GITEA_ADMIN_PASS`, `GITEA_SECRET_KEY`, `BINDERSNAP_GITEA_SERVICE_TOKEN`, etc.) must come from environment variables in `/opt/bindersnap/.env.prod`, which `deploy.py` renders on every run from `/bindersnap/prod/*` in SSM Parameter Store. The SSM read happens on the control plane and the file is uploaded `0600` — secrets are never written to a control-plane disk file, printed, or committed. Never commit an `.env.prod`; it is in `.gitignore`.
-2. **Registration is disabled in prod.** `GITEA__service__DISABLE_REGISTRATION=true` is non-negotiable for production. Dev compose may differ.
-3. **`INSTALL_LOCK=true` in prod.** Prevents Gitea setup wizard from re-running after first boot.
-4. **Rotate credentials on first deploy.** Generate with `openssl rand -base64 20` for passwords and `openssl rand -base64 32` for secret keys.
-5. **Service account tokens are split by power.** `BINDERSNAP_GITEA_SERVICE_TOKEN` (read scopes only) must be set; the API exits at startup if it is missing in production. `BINDERSNAP_GITEA_ADMIN_TOKEN` (`write:admin` only) is used solely for signup, password changes, account deletion and token revocation. Never give the read token a write scope, and never use the admin token for a read: the read token runs on nearly every request. Anything a person can do in Gitea themselves — renaming their own draft, say — is done with their own session token, not either of these.
+The rest of the production security rules are in `deploy/AGENTS.md`.
 
 ---
 
