@@ -15,9 +15,11 @@ const REPO_ROOT = join(import.meta.dir, "..", "..");
 const TOKENS_CSS_REL = "packages/ui-tokens/css/bindersnap-tokens.css";
 const TOKENS_CSS_PATH = join(REPO_ROOT, TOKENS_CSS_REL);
 // Every guide that names tokens: the root one and each directory's own.
-const AGENTS_MD_PATHS = ["AGENTS.md", "apps/site/AGENTS.md"].map((p) =>
-  join(REPO_ROOT, p),
-);
+const AGENTS_MD_PATHS = [
+  "AGENTS.md",
+  "apps/app/AGENTS.md",
+  "apps/site/AGENTS.md",
+].map((p) => join(REPO_ROOT, p));
 
 const tokensCss = readFileSync(TOKENS_CSS_PATH, "utf8");
 
