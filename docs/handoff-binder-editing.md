@@ -655,7 +655,7 @@ the tree renamed.
 
 ```bash
 bun run up            # start this worktree's stack, waits until ready
-bun run stack status  # your ports, URLs and the seeded password
+bun run stack status  # your ports, URLs and password (dev unless GITEA_ADMIN_PASS overrides it)
 bun run down          # tear it down
 
 bun run test:app      # apps/app, packages/*

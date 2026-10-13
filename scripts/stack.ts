@@ -91,11 +91,11 @@ const SLOT_OFFSETS: Record<PortKey, number> = {
  * Keys worth inheriting from the main checkout's `.env` when a worktree is
  * first set up. Deliberately excludes anything carrying a port or an origin:
  * those are derived per stack, and a copied one would silently point a
- * worktree's app at another worktree's API.
+ * worktree's app at another worktree's API. `GITEA_ADMIN_PASS` is left out
+ * too: the seeded password is `dev` unless a checkout sets its own.
  */
 const INHERITED_KEYS = [
   "GITEA_ADMIN_USER",
-  "GITEA_ADMIN_PASS",
   "BINDERSNAP_GITEA_TOKEN_SCOPES",
   "STRIPE_SECRET_KEY",
   "STRIPE_PRICE_ID",
@@ -635,12 +635,10 @@ export function urlsFor(config: StackConfig): StackUrls {
 }
 
 /**
- * The password the seed job gave every demo account.
- *
- * It is `GITEA_ADMIN_PASS`, not the `dev` that the docs assume: a worktree
- * inherits that key from the main checkout, where it is often something else,
- * and an agent that reports the wrong one sends the next session hunting a
- * login failure that is not a bug.
+ * The password the seed job gave every demo account: `dev`, unless this
+ * checkout's own `.env` sets `GITEA_ADMIN_PASS`. A worktree no longer inherits
+ * that key from the main checkout, so an override is always one somebody made
+ * in this checkout on purpose.
  */
 export function seedPassword(config: StackConfig): string {
   const envPath = join(config.path, ".env");
