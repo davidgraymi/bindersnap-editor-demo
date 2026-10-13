@@ -83,7 +83,9 @@ on this machine).
 `bun run up` is the only way to see the real app. Its `app` container bind-mounts
 the repo and runs `bun --hot server.ts` — it **is** the dev server. Edits under
 `apps/` and `packages/` hot-reload with nothing to restart, at the app URL that
-`bun run stack status` prints. Sign in as `alice`, `bob`, `carol`, or `dan`, with
+`bun run stack status` prints. The `api` container runs the bind-mounted
+`services/api/server.ts` under `bun --watch`, so a server edit restarts the API
+on its own. Sign in as `alice`, `bob`, `carol`, or `dan`, with
 the password on that same line — it is `GITEA_ADMIN_PASS` from `.env`, which is
 not always `dev`.
 

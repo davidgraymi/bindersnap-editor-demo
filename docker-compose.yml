@@ -157,10 +157,18 @@ services:
     ports:
       - "${HOCUSPOCUS_PORT:-1234}:${HOCUSPOCUS_PORT:-1234}"
 
+  # In dev the API runs from the bind-mounted repo on the app's dev image, so
+  # an edit under services/api or packages/ restarts it in place. `--watch`,
+  # not `--hot`: server.ts starts interval jobs (session cleanup, Stripe
+  # reconcile, seat sync) at module level, and `--hot` re-runs the module in
+  # the same process, stacking another copy of each on every save. Production
+  # still builds services/api/Dockerfile; image-contents.test.ts guards what
+  # that image copies, which this setup no longer exercises.
   api:
     build:
       context: .
-      dockerfile: services/api/Dockerfile
+      dockerfile: Dockerfile
+    command: ["bun", "--watch", "services/api/server.ts"]
     container_name: ${STACK_NAME:-bindersnap}-api
     depends_on:
       gitea:
@@ -210,6 +218,8 @@ services:
     ports:
       - "${API_PORT:-8787}:${API_PORT:-8787}"
     volumes:
+      - .:/app
+      - app-node-modules:/app/node_modules
       - api-data:/var/lib/bindersnap
 
   caddy:

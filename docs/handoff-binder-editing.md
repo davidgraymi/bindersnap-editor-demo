@@ -555,10 +555,11 @@ Still outstanding, in no fixed order:
 Things that cost time to find out. None are in the code comments because they
 are about the environment, not the code.
 
-**The `api` container does not hot-reload.** `apps/` and `packages/` are
-bind-mounted and reload; `services/api` builds into the image. Any server change
-needs `bun run down && bun run up` before an integration test will see it. This
-will otherwise look like your fix did nothing.
+**The `api` container restarts on save.** It runs `bun --watch
+services/api/server.ts` from the bind-mounted repo, so an edit under
+`services/api` or `packages/` restarts the API in about a second. Sessions live
+in SQLite, so a restart does not sign you out. A request in flight at that
+moment fails — retry it rather than chase it.
 
 **A fresh worktree needs `bun install` before the stack will come up.** The
 seed container mounts this worktree at `/workspace` and nothing above it, so
