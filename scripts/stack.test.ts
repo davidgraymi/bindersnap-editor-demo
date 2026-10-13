@@ -7,12 +7,19 @@
  */
 
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import {
+  DEV_PASSWORD,
   LEGACY_PORTS,
   canonicalPath,
   PORT_KEYS,
@@ -216,6 +223,27 @@ describe("ensureStackEnv", () => {
     for (const key of PORT_KEYS) {
       expect(env[key]).toBe(String(stack.ports[key]));
     }
+  });
+
+  test("pins the seeded password to dev, whatever the main checkout says", async () => {
+    // The main checkout's password used to be copied into each new worktree,
+    // so every stack signed in with something different.
+    const { main, worktrees } = makeRepoWithWorktrees(1);
+    writeFileSync(join(main, ".env"), "GITEA_ADMIN_PASS=hunter2\nKEEP=1\n");
+
+    await ensureStackEnv(main);
+    await ensureStackEnv(worktrees[0]!);
+
+    const mainText = readFileSync(join(main, ".env"), "utf8");
+    expect(parseEnv(mainText).GITEA_ADMIN_PASS).toBe(DEV_PASSWORD);
+    expect(parseEnv(mainText).KEEP).toBe("1");
+    expect(mainText).toContain("# superseded by the managed stack block below");
+
+    const worktreeEnv = parseEnv(
+      readFileSync(join(worktrees[0]!, ".env"), "utf8"),
+    );
+    expect(worktreeEnv.GITEA_ADMIN_PASS).toBe(DEV_PASSWORD);
+    expect(DEV_PASSWORD).toBe("dev");
   });
 
   test("a second clone does not also claim slot 0", async () => {
