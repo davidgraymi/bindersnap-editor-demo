@@ -11,7 +11,7 @@ Litestream continuously replicates the two SQLite databases (`gitea.db` and
 the API's `sessions.db`). It does **not** touch the git repositories under
 `/data/git/repositories`. Those repositories are the product: every document,
 every version, every uploaded file. ADR 0001 and non-negotiable #2 in
-`CLAUDE.md` make them the permanent record. Before #616–#619, the only copy
+`AGENTS.md` make them the permanent record. Before #616–#619, the only copy
 of them anywhere was:
 
 - one EBS snapshot a day (`infra/backups/dlm.tf`, 03:00 UTC),

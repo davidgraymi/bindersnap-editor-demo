@@ -11,7 +11,7 @@ page and word counts in a status bar — in Bindersnap's type and colour.
   through `onSave` (Ctrl+S); the page around it decides what those mean. In
   the app that page is `apps/app/components/DocumentEditorPage.tsx`, which
   commits into the author's draft.
-- Visual changes here need a note in the PR (CLAUDE.md, decision 5).
+- Visual changes here need a note in the PR (AGENTS.md, decision 5).
 
 ## Structure
 

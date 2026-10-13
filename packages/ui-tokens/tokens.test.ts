@@ -176,8 +176,9 @@ describe("design tokens (docs/design/design-system-audit.md, Task 6)", () => {
 
   test("every token name mentioned in AGENTS.md exists", () => {
     const agentsMd = readFileSync(AGENTS_MD_PATH, "utf8");
+    // Only our two prefixes: AGENTS.md also documents CLI flags (`--json`).
     const mentioned = [
-      ...agentsMd.matchAll(/(?<![a-zA-Z0-9-])--[a-zA-Z0-9][a-zA-Z0-9-]*/g),
+      ...agentsMd.matchAll(/(?<![a-zA-Z0-9-])--(?:bs|brand)-[a-zA-Z0-9-]*/g),
     ].map((m) => m[0].slice(2));
     // A name ending in "-" is a family mention ("--bs-status-warn-*"
     // written without the asterisk our regex can't match), not a literal
