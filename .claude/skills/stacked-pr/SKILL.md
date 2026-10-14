@@ -33,7 +33,11 @@ git diff origin/<base>...HEAD               # review against the real base, neve
 3. Open each PR against the branch below it:
    `gh pr create --base <previous> --head <next>`. The bottom PR's base is the
    `development/*` branch (or `main`).
-4. Link them: `gh stack link` (see `gh stack --help`).
+4. Link them, bottom to top, **always with `--base`**:
+   `gh stack link --base <development-branch> <pr> <pr> …`. Without it the
+   bottom PR is retargeted to `main`, and GitHub then refuses to change the
+   base of a stacked PR: fixing it takes `gh stack unstack <n>`,
+   `gh pr edit <bottom> --base <branch>`, and linking again.
 5. The body follows `.github/pull_request_template.md`: Summary, Scope Check,
    Validation with the commands actually run. Flag any visual change under
    `packages/editor/`.
