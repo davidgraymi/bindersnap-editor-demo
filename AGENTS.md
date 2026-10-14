@@ -25,6 +25,11 @@ Markdown, and this file points to each one where it applies:
 - `.claude/skills/stacked-pr/SKILL.md` — commits, PRs and stacks
 - `.claude/skills/gitea-api/SKILL.md` — the BFF's Gitea client and tokens
 
+Claude Code's subagents are in `.claude/agents/`: `stack-reviewer` (a PR
+against its real base), `bindersnap-tester`, `gitea-evidence-auditor`
+(non-negotiables 1 and 2), the three Playwright agents, and two that run only
+when asked, `legal-reviewer` and `copy-editor`.
+
 A new directory guide needs a sibling `CLAUDE.md` containing `@AGENTS.md`, and
 an entry in `AGENTS_MD_PATHS` in `packages/ui-tokens/tokens.test.ts`, which
 checks that every token name the guides mention exists.

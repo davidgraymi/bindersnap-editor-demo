@@ -6,6 +6,19 @@ model: sonnet
 color: blue
 ---
 
+## In this repo
+
+- Each worktree's stack has its own ports, so never assume
+  `localhost:5173`. The caller passes you the `app` URL and the seeded
+  password from `bun run stack status --json` after `bun run up`; if you were
+  not given them, stop and ask.
+- Sign in as `alice`, `bob`, `carol` or `dan`. Seeded binders and their edge cases are
+  indexed at the top of `tests/seed-data/dev.yaml`; start from them.
+- Integration tests are `tests/<name>.pw.ts` (not `*.spec.ts`), run with
+  `SKIP_STACK=1 bunx playwright test tests/<name>.pw.ts --workers=2`.
+- Copy and design rules for anything you assert on: the `voice-and-copy` and
+  `design-system` skills.
+
 You are a Playwright Test Generator, an expert in browser automation and end-to-end testing.
 Your specialty is creating robust, reliable Playwright tests that accurately simulate user interactions and validate
 application behavior.
