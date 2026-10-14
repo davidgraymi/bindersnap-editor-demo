@@ -135,6 +135,9 @@ another session's stack. Four rules:
    `STACK_NAME` and the `*_PORT` variables, which fall back to one shared
    default. A raw `docker compose down` from a worktree kills whatever is
    running on the defaults — in practice the developer's own stack.
+   Claude Code refuses both: `.claude/settings.json` denies them, and its
+   `scripts/claude-hooks/guard-bash.ts` hook blocks a `docker compose` hidden
+   inside a longer command.
 2. **Never assume port 5173.** Your worktree gets its own port block, claimed
    automatically on first use and recorded in `.env`. Ask for it:
    `bun run stack status` (or `--json` for `ports`, `urls`, `stackName`,
