@@ -137,6 +137,12 @@ services:
       - STRIPE_PRICE_ID=${STRIPE_PRICE_ID:?set in the generated env file}
       # The signup form's Turnstile check (infra/edge/put-signup-turnstile-secret.sh).
       - SIGNUP_TURNSTILE_SECRET_KEY=${SIGNUP_TURNSTILE_SECRET_KEY:?set in the generated env file}
+      # Every logged error, scrubbed, to the feedback Worker's /errors (ADR 0006,
+      # "Error Reports"). Optional: until the SSM leaf `error_report_secret`
+      # exists, the secret is empty and nothing is sent.
+      - ERROR_REPORT_URL=https://feedback.bindersnap.com/errors
+      - ERROR_REPORT_SECRET=${ERROR_REPORT_SECRET:-}
+      - BINDERSNAP_RELEASE=${API_TAG:-unknown}
       - BINDERSNAP_REMEMBER_ME_SESSION_TTL_MS=${BINDERSNAP_REMEMBER_ME_SESSION_TTL_MS:-2592000000}
       # Host-only: the session cookie goes to api.bindersnap.com and nowhere
       # else. The SPA calls the API with `credentials: "include"`, and

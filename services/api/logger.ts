@@ -61,6 +61,32 @@ function emit(level: LogLevel, message: string, meta?: LogMeta): void {
   process.stdout.write(JSON.stringify(entry) + "\n");
 }
 
+/**
+ * Hears every `error` line, with the request's context, after it is written.
+ * The error reporter (`errorReporter.ts`) is the only listener.
+ */
+export type ErrorListener = (message: string, meta: LogMeta) => void;
+
+let errorListener: ErrorListener | null = null;
+let inListener = false;
+
+export function setErrorListener(listener: ErrorListener | null): void {
+  errorListener = listener;
+}
+
+/** A listener that throws, or logs an error itself, is not heard again. */
+function tellErrorListener(message: string, meta?: LogMeta): void {
+  if (!errorListener || inListener) return;
+  inListener = true;
+  try {
+    errorListener(message, { ...context.getStore(), ...meta });
+  } catch {
+    // Reporting an error must never become one.
+  } finally {
+    inListener = false;
+  }
+}
+
 export const logger = {
   debug(message: string, meta?: LogMeta): void {
     emit("debug", message, meta);
@@ -76,5 +102,6 @@ export const logger = {
 
   error(message: string, meta?: LogMeta): void {
     emit("error", message, meta);
+    tellErrorListener(message, meta);
   },
 };
