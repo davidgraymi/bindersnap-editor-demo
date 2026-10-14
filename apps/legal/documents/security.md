@@ -1,7 +1,7 @@
 # Security
 
 Last updated: October 9, 2026
-Version: 2026-10-12
+Version: 2026-10-13
 
 Your organization trusts Bindersnap with its evidence: every version, approval and review of its documents. This page explains how we protect that record. We also say plainly what we don't have yet. Bindersnap is a small, founder-run company, and we would rather be exact than impressive.
 
