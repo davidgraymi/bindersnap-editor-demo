@@ -8,6 +8,8 @@ describe("guard-bash", () => {
     "docker compose down",
     "docker compose -f docker-compose.yml up -d",
     "docker --context default compose ps",
+    "docker --debug compose ps",
+    "docker --log-level=debug compose up",
     "docker-compose up",
     "cd infra && docker compose logs api",
     "sudo docker compose restart",
@@ -33,6 +35,12 @@ describe("guard-bash", () => {
     "gh pr create --body-file - <<'EOF'\nNever `cd x && docker compose down`\ndocker compose up\nEOF",
   ])("allows %s", (command) => {
     expect(refusalFor(command)).toBeNull();
+  });
+
+  test("a long run of flags is checked in linear time", () => {
+    const started = performance.now();
+    expect(refusalFor(`docker -${" -- -".repeat(20_000)}`)).toBeNull();
+    expect(performance.now() - started).toBeLessThan(500);
   });
 });
 

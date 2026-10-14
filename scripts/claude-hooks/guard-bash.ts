@@ -25,16 +25,35 @@ export function withoutQuotedText(command: string): string {
     .replace(/"(?:[^"\\]|\\.)*"/g, '""');
 }
 
+/**
+ * Whether the tokens run `docker compose`, allowing global flags in between
+ * (`docker --context default compose`). A token scan rather than a regex, so
+ * the time it takes grows with the command, never faster.
+ */
+export function runsDockerCompose(tokens: string[]): boolean {
+  const start = tokens[0] === "sudo" ? 1 : 0;
+  if (tokens[start] === "docker-compose") return true;
+  if (tokens[start] !== "docker") return false;
+
+  let previousWasBareFlag = false;
+  for (const token of tokens.slice(start + 1)) {
+    if (token === "compose") return true;
+    if (token.startsWith("-")) {
+      previousWasBareFlag = !token.includes("=");
+    } else if (previousWasBareFlag) {
+      previousWasBareFlag = false; // that flag's value
+    } else {
+      return false; // another subcommand: `docker ps`, `docker logs`
+    }
+  }
+  return false;
+}
+
 export function refusalFor(command: string): Refusal | null {
   for (const part of withoutQuotedText(command).split(/&&|\|\||;|\n/)) {
     const words = part.trim();
 
-    if (
-      /^(sudo\s+)?docker(\s+--?[\w-]+(=\S+|\s+[^-\s]\S*)?)*\s+compose\b/.test(
-        words,
-      ) ||
-      /^(sudo\s+)?docker-compose\b/.test(words)
-    ) {
+    if (runsDockerCompose(words.split(/\s+/))) {
       return {
         reason:
           "Never run docker compose directly: it acts on the shared default " +
