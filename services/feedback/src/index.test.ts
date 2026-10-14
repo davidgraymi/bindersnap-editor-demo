@@ -30,6 +30,10 @@ function env(overrides: Partial<Env> = {}): Env {
         return { success: underLimit };
       },
     },
+    ERRORS_REPOSITORY: "davidgraymi/bindersnap-errors",
+    ERROR_IP_LIMITER: { limit: async () => ({ success: true }) },
+    ERROR_FINGERPRINT_LIMITER: { limit: async () => ({ success: true }) },
+    ERROR_OVERALL_LIMITER: { limit: async () => ({ success: true }) },
     ...overrides,
   };
 }
