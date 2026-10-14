@@ -69,6 +69,19 @@ came from; unset, both read "dev". Read any optional `BUN_PUBLIC_` variable
 through `publicEnv()`: Bun inlines only the ones a build has, and an unset one
 throws in a browser.
 
+## Error reports
+
+An error nothing caught — an uncaught exception, an unhandled rejection, a
+screen React could not render — is reported to the same Worker's `/errors`
+route by `errorReporter.ts`: the error's type, its scrubbed message and stack,
+the route's kind and nothing else from it, the build, the browser, and the
+request IDs of API calls that had just failed. Never who, never which
+organization. Ten a page at most, each error once.
+
+- `BUN_PUBLIC_ERROR_REPORT_URL`: where they go. Production:
+  `https://feedback.bindersnap.com/errors`. Unset, nothing is sent. The local
+  stack sets an address nothing answers at.
+
 ## Deployment note
 
 `bun run build` emits a single `dist/` artifact for GitHub Pages and copies

@@ -260,6 +260,9 @@ services:
       # The site key is Turnstile's documented always-pass test key.
       - BUN_PUBLIC_FEEDBACK_URL=${BINDERSNAP_FEEDBACK_URL:-https://feedback.invalid/}
       - BUN_PUBLIC_TURNSTILE_SITE_KEY=1x00000000000000000000AA
+      # Error reports go to the same Worker's /errors, which nothing answers
+      # here either; the integration tests stand in for it.
+      - BUN_PUBLIC_ERROR_REPORT_URL=${BINDERSNAP_ERROR_REPORT_URL:-https://feedback.invalid/errors}
       - GITEA_INTERNAL_URL=${GITEA_INTERNAL_URL:-http://gitea:${GITEA_PORT:-3000}}
       - GITEA_ADMIN_USER=${GITEA_ADMIN_USER:-alice}
       - GITEA_ADMIN_PASS=${GITEA_ADMIN_PASS:-dev}
