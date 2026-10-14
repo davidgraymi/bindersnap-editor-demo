@@ -15,6 +15,16 @@ which loads when you work there:
 - `deploy/AGENTS.md` — how a production deploy runs, and the host's security
   rules
 
+Rules that matter only for one kind of task live in `.claude/skills/`, which
+Claude Code loads when the task calls for it. Any agent can read them as plain
+Markdown, and this file points to each one where it applies:
+
+- `.claude/skills/stack/SKILL.md` — running and validating against the stack
+- `.claude/skills/design-system/SKILL.md` — tokens, type, color, components
+- `.claude/skills/voice-and-copy/SKILL.md` — every word a person reads
+- `.claude/skills/stacked-pr/SKILL.md` — commits, PRs and stacks
+- `.claude/skills/gitea-api/SKILL.md` — the BFF's Gitea client and tokens
+
 A new directory guide needs a sibling `CLAUDE.md` containing `@AGENTS.md`, and
 an entry in `AGENTS_MD_PATHS` in `packages/ui-tokens/tokens.test.ts`, which
 checks that every token name the guides mention exists.
@@ -151,48 +161,10 @@ another session's stack. Four rules:
    already gone, `bun run stack prune` tears down its orphaned stack and frees
    its ports.
 
-Other commands: `bun run stack logs [service]`, `bun run up --fresh` (wipe
-volumes and seeded Gitea data first), `bun run stack status --all` (every stack
-on this machine).
-
-The stack seeds eleven accounts and seven binders from
-`tests/seed-data/dev.yaml`. That file is deliberately full of edge cases — a
-binder with nothing in it and one covered in sign-off rules, a change six people
-have been asked to review and one nobody has looked at in three versions, empty
-folders, every file type the comparison screen can meet — so that looking at a
-state does not mean building it first. Its header indexes what is in there, and
-`tests/README.md` covers the integration tests.
-
-## Validating a change in the browser
-
-`bun run up` is the only way to see the real app. Its `app` container bind-mounts
-the repo and runs `bun --hot server.ts` — it **is** the dev server. Edits under
-`apps/` and `packages/` hot-reload with nothing to restart, at the app URL that
-`bun run stack status` prints. The `api` container runs the bind-mounted
-`services/api/server.ts` under `bun --watch`, so a server edit restarts the API
-on its own. Sign in as `alice`, `bob`, `carol`, or `dan` with the password
-`dev`. Setting `GITEA_ADMIN_PASS` in a checkout's own `.env` overrides it for
-that stack, and `bun run stack status` prints whichever is in force; a new
-worktree never inherits the main checkout's.
-
-**Do not start a second SPA on another port to preview a change.** The API sends
-CORS headers for exactly one origin — your stack's own `APP_PORT`, set as
-`BINDERSNAP_APP_ORIGIN` in `docker-compose.yml` — and compose does not pass
-`BINDERSNAP_ALLOWED_ORIGINS` through, so there is no override. A `bun run dev:app`
-on any other port gets every API call blocked by CORS and can never sign in. It
-renders the sign-in page and nothing behind auth.
-
-The app and the public site are two origins, as in production
-(`app.bindersnap.com` and `bindersnap.com`): the app on `APP_PORT`, the landing
-page, marketing, help and legal on `SITE_PORT`. `bun run stack status` prints
-both.
-
-A dependency change is the one thing hot reload cannot pick up: the container
-bakes its own `node_modules` into a volume at image build, so a package added on
-the host stays invisible until the stack is rebuilt. Fix that with a full
-`bun run down && bun run up` — never by killing a process or rebuilding a single
-container, which leaves the stack in a half-state. The seed jobs use the host's
-`node_modules`, so run `bun install` on the host as well.
+Everything else — other `stack` commands, the seeded accounts and binders,
+integration tests, signing in, the CORS trap that stops a second SPA, and what
+to do after a dependency change — is in `.claude/skills/stack/SKILL.md`. Read
+it before you open the app in a browser.
 
 ---
 
@@ -595,201 +567,19 @@ version. Do not conflate the two.
 ## Design system
 
 The visual identity is **warm, human, and empathy-first** — not corporate, not
-"enterprise software". _If it doesn't feel like it was built by someone who
-lived the problem, rebuild it._ Lead with the pain the reader recognizes; the
-product is the resolution.
-
-The sources of truth:
-
-- **Tokens:** `packages/ui-tokens/css/bindersnap-tokens.css`. Import it before
-  any other stylesheet. **Never hardcode a hex value or a pixel size** in a
-  component.
-- **Image assets and meta tags:** `docs/bindersnap-social-cheatsheet.html` has
-  the exact dimensions.
-- **Open design-system work:** `docs/design/design-system-audit.md`.
-
-### Tokens
-
-Two layers:
-
-- **`--bs-*` semantic tokens** flip with the theme. Components use these.
-- **`--brand-*` tokens** never change between modes. Reference one directly
-  only when the value is meant to stay fixed across themes (the chaos strip is
-  always dark ink; the email-thread mockup is always a light UI).
-
-The names, as the token file defines them:
-
-```css
-/* Semantic surfaces / text / borders (--bs-*, flip with theme) */
---bs-page-bg, --bs-surface-1, --bs-surface-2, --bs-surface-3, --bs-nav-bg
---bs-text-primary, --bs-text-secondary, --bs-text-muted, --bs-text-faint
---bs-rule, --bs-rule-warm
---bs-coral-dim, --bs-coral-glow, --bs-coral-border, --bs-coral-border-soft
---bs-green-dim, --bs-green-border, --bs-green-border-soft
-
-/* Coral that has to stay legible in both themes (--bs-*, flip with theme) */
---bs-cta-fill, --bs-cta-fill-hover   /* filled primary button       */
---bs-coral-text                      /* coral labels, links, emphasis */
-
-/* Semantic status ramp (--bs-*, flip with theme) */
---bs-status-warn-fg, --bs-status-warn-bg, --bs-status-warn-border      /* needs review        */
---bs-status-info-fg, --bs-status-info-bg, --bs-status-info-border      /* waiting             */
---bs-status-danger-fg, --bs-status-danger-bg, --bs-status-danger-border /* changes / declined */
---bs-status-ok-fg, --bs-status-ok-bg, --bs-status-ok-border            /* approved            */
-
-/* Fixed brand colors (--brand-*, never flip) */
---brand-coral, --brand-coral-dark, --brand-coral-mid
---brand-green, --brand-green-dim
---brand-ink                          /* chaos strip / footer fill   */
---brand-on-brand                     /* text/icon on a solid fill   */
---brand-on-coral                     /* ink label on a coral fill   */
-
-/* Typography (--brand-*) */
---brand-font-serif    /* 'Lora' — headlines only */
---brand-font-sans     /* 'Geist' — body and UI */
---brand-font-mono     /* 'Geist Mono' — labels, code, metadata */
-
-/* Type scale (--brand-*) */
---brand-text-h1, --brand-text-h2, --brand-text-h3
---brand-text-body-lg, --brand-text-body, --brand-text-sm, --brand-text-xs
---brand-text-label
---brand-text-ui-xs, --brand-text-ui-sm, --brand-text-ui-md  /* dense UI */
-
-/* Spacing (--brand-space-*): the number × 4px, so -6 is 24px */
---brand-space-0-5, --brand-space-1, --brand-space-1-5, --brand-space-2,
---brand-space-2-5, --brand-space-3, --brand-space-4, --brand-space-5,
---brand-space-6, --brand-space-8, --brand-space-10, --brand-space-12,
---brand-space-16, --brand-space-20, --brand-space-24, --brand-space-30
-
-/* Border radius (--brand-*) */
---brand-radius-xs, --brand-radius-sm, --brand-radius-md, --brand-radius-lg,
---brand-radius-xl, --brand-radius-2xl, --brand-radius-full
-
-/* Shadows */
---bs-shadow-sm, --bs-shadow-md, --bs-shadow-lg, --bs-shadow-xl  /* flip with theme */
---brand-shadow-coral                                            /* fixed */
---bs-elevation-card, --bs-elevation-menu, --bs-elevation-modal   /* named by role */
-
-/* Transitions (--brand-*) */
---brand-transition-fast (0.15s), --brand-transition-base (0.2s)
---brand-transition-slow (0.3s), --brand-transition-reveal (0.7s)
-
-/* Icons (--brand-*) */
---brand-icon-xs, --brand-icon-sm, --brand-icon-md, --brand-icon-lg
---brand-icon-stroke, --brand-icon-stroke-heavy
-```
-
-The file also defines utility classes: `.bs-btn` (`.bs-btn-primary`,
-`.bs-btn-secondary`, `.bs-btn-dark`, size and danger modifiers), `.bs-card`,
-`.bs-input`, `.bs-eyebrow`, `.bs-label`, `.bs-status` (tone modifiers).
-
-### Typography
-
-Each font has one job:
-
-| Font           | Role                                                           | Rule                                                                                      |
-| -------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| **Lora**       | All headlines (H1–H3), pull quotes, display text               | Warm, literary, serif. Use Bold or SemiBold. Italic for `<em>` accent phrases in coral.   |
-| **Geist**      | All body copy, UI labels, buttons, navigation                  | Clean, modern. Light (300) for hero subtext, Regular (400) for body, Medium (500) for UI. |
-| **Geist Mono** | Section eyebrow tags, code, filenames, timestamps, data labels | Fixed-width, technical. Always uppercase + wide letter-spacing for section labels.        |
-
-Never mix fonts within a heading level. Never use Lora for body copy, or Geist
-for a main headline.
-
-### Color
-
-- **Coral (`--brand-coral`, `#E85D26`)** is for CTAs, the top-border reveal on
-  hover cards, section eyebrow labels, form focus rings, and key emphasis.
-  **Exactly one primary action or emphasis element per section** — when
-  everything is coral, nothing is. Never decorative.
-- **White on `--brand-coral` measures 3.49:1 and fails WCAG AA.** Never fill a
-  button with `--brand-coral` and put white on it. Instead:
-  - **Landing CTAs** (hero, closing, nav) fill with `--brand-coral` and set the
-    label in `--brand-on-coral` — ink, 5.02:1. On hover the fill darkens to
-    `--brand-coral-dark` and the label flips to `--brand-on-brand` (4.61:1).
-  - **White-label buttons** (in-app primaries, where an ink label would read as
-    disabled in dense UI) fill with `--bs-cta-fill` / `--bs-cta-fill-hover` —
-    the coral hue dropped in lightness until white clears 4.5:1.
-- **Paper (`--bs-page-bg`, `#FAFAF7` in light mode)** is the page background,
-  never `#FFFFFF`. White is for card and input interiors only (`--bs-surface-1`).
-  **Paper warm (`--bs-surface-2`, `#F5F0E8`)** is for alternating sections,
-  card backgrounds and tag fills.
-- **Ink (`--bs-text-primary`, `#1C1917` in light mode)** is primary text, a warm
-  charcoal, not black. Backgrounds that stay dark in both themes (the chaos
-  strip, the footer) use `--brand-ink`.
-- **`--bs-text-muted`** is secondary body text. **`--bs-text-faint`** is the
-  floor — placeholders and hints only; nothing readable goes lighter.
-- **Green (`--brand-green`, `#16A34A`)** means success and nothing else:
-  success states, compliance badges, the "after" column in comparisons.
-- **The status ramp** (`--bs-status-warn-*`, `-info-*`, `-danger-*`, `-ok-*`,
-  each a `-fg`/`-bg`/`-border` triad) is for needs-review (amber), waiting
-  (blue), declined or changes requested, and approved. Never a hand-picked hex:
-  a literal amber or blue passes contrast in light mode and fails it in dark.
-
-### Spacing and radius
-
-A `--brand-space-*` token is its number × 4px, from `--brand-space-0-5` (2px) to
-`--brand-space-30` (120px). Use one of the sixteen tokens — never a raw pixel
-value. Section vertical padding is `--brand-space-30` by default,
-`--brand-space-24` (96px) for compressed sections.
-
-Each radius has a use. Do not apply them arbitrarily:
-
-| Token                 | Value  | Use                                           |
-| --------------------- | ------ | --------------------------------------------- |
-| `--brand-radius-xs`   | 2px    | Code blocks, compliance badges, table rows    |
-| `--brand-radius-sm`   | 4px    | Tags, pills, small chips                      |
-| `--brand-radius-md`   | 8px    | Nav elements, feature icons, small cards      |
-| `--brand-radius-lg`   | 12px   | Inputs, form elements, standard cards         |
-| `--brand-radius-xl`   | 16px   | Large cards, feature panels, comparison boxes |
-| `--brand-radius-2xl`  | 24px   | CTA boxes, hero containers, modal dialogs     |
-| `--brand-radius-full` | 9999px | Pills, avatars, count badges                  |
-
-### Components
-
-- **Section eyebrow:** every section opens with a mono coral label with
-  flanking rules: `<div class="bs-eyebrow">The Solution</div>`.
-- **Card hover:** `.bs-card` translates up 4px, elevates its shadow, drops its
-  border, and scales a 3px coral top border in from the left. Never on
-  non-interactive content.
-- The landing page's own patterns — sign-up form, scroll rhythm, scroll reveal,
-  dark sections — are in `apps/site/AGENTS.md`.
+"enterprise software". The tokens are `packages/ui-tokens/css/bindersnap-tokens.css`:
+**never hardcode a hex value or a pixel size** in a component. Every other rule
+— tokens by name, typography, color and contrast, spacing, radius, components —
+is in `.claude/skills/design-system/SKILL.md`. Read it before any visual change.
 
 ---
 
 ## Voice and copy
 
-For all copy — marketing, UI labels, error messages, documentation, email
-subjects:
-
-**Do:**
-
-- Lead with the pain before the product
-- Use short, active sentences
-- Be direct: make claims you can back up, don't hedge with "may" or "might"
-- Keep UI copy warm and human — write as if a helpful colleague wrote it
-
-**Don't:**
-
-- Use enterprise jargon: leverage, synergize, paradigm, ecosystem, streamline
-- Bury the value proposition behind feature descriptions
-- Use passive voice for anything action-oriented
-- Write anything that sounds like it came from a compliance manual
-- Claim what we cannot back up — never "HIPAA compliant"
-
-The landing page's hook: _"The surveyor asks which version you approved. Show
-them."_
-
-**Never frame Bindersnap as:**
-
-- An "AI-powered" tool (we don't lead with AI)
-- "Enterprise software" (we're priced and built for small providers)
-- A competitor to DocuSign (we're upstream — writing and approving the policy)
-- A project management tool (we're document-specific)
-- A replacement for Word (we're an upgrade to the approval workflow around documents)
-
-The positioning: **the only document tool where the approval trail is the
-product, not a plugin.**
+Lead with the pain before the product, in short active sentences. The app says
+**document**; never claim "HIPAA compliant". The full rules, and what Bindersnap
+must never be framed as, are in `.claude/skills/voice-and-copy/SKILL.md`. Read
+it before writing any text a person will see.
 
 ---
 
@@ -806,6 +596,7 @@ product, not a plugin.**
 - **Releases are automatic.** `release.yml` bumps the version and the
   changelog in a `chore: release vX.Y.Z [skip ci]` commit. Do not edit
   `CHANGELOG.md` or the version by hand.
+- How to build and push a stack, step by step: `.claude/skills/stacked-pr/SKILL.md`.
 - Use local `git` for the working tree, and `gh` or a GitHub MCP server for
   issues, PRs and reviews. Use one GitHub MCP auth path at a time (not OAuth and
   a PAT together), or writes fail unpredictably.
