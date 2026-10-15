@@ -805,12 +805,6 @@ function reserveAccountLoginAttempt(name: string): number | null {
   return null;
 }
 
-/** Give a slot back: the attempt never reached a password check. */
-function releaseAccountLoginAttempt(name: string): void {
-  const entry = authAttempts.get(accountLoginKey(name));
-  if (entry && entry.count > 0) entry.count -= 1;
-}
-
 function clearAccountLoginFailures(name: string): void {
   authAttempts.delete(accountLoginKey(name));
 }
@@ -2823,7 +2817,8 @@ async function handleLogin(
   );
 
   if (resolution.kind === "unavailable") {
-    releaseAccountLoginAttempt(identifier);
+    // Not given back: by the time the email lookup can fail, the password
+    // has already been tried against the name as typed.
     logger.warn("Login resolution unavailable", {
       status: resolution.status,
       error: resolution.error,

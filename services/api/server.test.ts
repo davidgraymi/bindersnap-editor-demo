@@ -1218,6 +1218,25 @@ describe("guessing at one account from many addresses", () => {
     }
   });
 
+  test("an email sign-in counts even when the address cannot be looked up", async () => {
+    // The password is tried against the name as typed before the lookup can
+    // fail, so a failed lookup is still a guess.
+    const server = createApiServer();
+    const original = config.authRateLimitEnabled;
+    config.authRateLimitEnabled = true;
+    const target = `victim-${randomUUID()}@example.com`;
+    try {
+      for (let n = 1; n <= 10; n += 1) {
+        const response = await login(server, n, { email: target });
+        expect(response.status).not.toBe(429);
+      }
+      expect((await login(server, 11, { email: target })).status).toBe(429);
+    } finally {
+      config.authRateLimitEnabled = original;
+      server.stop(true);
+    }
+  });
+
   test("a burst at once is counted before any password is checked", async () => {
     const server = createApiServer();
     const original = config.authRateLimitEnabled;
