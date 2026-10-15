@@ -2324,7 +2324,7 @@ test("a failed Gitea read never reaches the browser as a success", async () => {
     "Unable to open this binder.",
   );
   expect(empty.status).toBe(502);
-  expect(await empty.json()).toEqual({ error: "Gitea request failed." });
+  expect(await empty.json()).toEqual({ error: "Unable to open this binder." });
 
   // Real errors keep their status, and ours stay request-shaped.
   expect(
@@ -2335,4 +2335,32 @@ test("a failed Gitea read never reaches the browser as a success", async () => {
     responseFromError(new GiteaApiError(0, "Bad input"), new Headers(), "x")
       .status,
   ).toBe(400);
+});
+
+test("a server's own error text never reaches the browser", async () => {
+  const gitea = responseFromError(
+    new GiteaApiError(500, "database is locked: /data/gitea.db"),
+    new Headers(),
+    "Unable to open this binder.",
+  );
+  expect(gitea.status).toBe(500);
+  expect(await gitea.json()).toEqual({ error: "Unable to open this binder." });
+
+  const thrown = responseFromError(
+    new Error("SQLITE_CONSTRAINT: UNIQUE constraint failed: sessions.id"),
+    new Headers(),
+    "Unable to sign in.",
+  );
+  expect(thrown.status).toBe(500);
+  expect(await thrown.json()).toEqual({ error: "Unable to sign in." });
+
+  // A request-shaped refusal still says what to change.
+  const refused = responseFromError(
+    new GiteaApiError(409, "A branch with that name already exists."),
+    new Headers(),
+    "x",
+  );
+  expect(await refused.json()).toEqual({
+    error: "A branch with that name already exists.",
+  });
 });

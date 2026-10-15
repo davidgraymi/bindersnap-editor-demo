@@ -1741,7 +1741,14 @@ export function responseFromError(
       });
       logger.debug("Gitea API error details", { err });
     }
-    return json(status, { error: err.message || fallback }, baseHeaders);
+    // **A server's own words stay in its log.** Gitea's 5xx text names its
+    // database and its internals; a 4xx is about the request, and says what
+    // to change.
+    return json(
+      status,
+      { error: status >= 500 ? fallback : err.message || fallback },
+      baseHeaders,
+    );
   }
 
   const message = err instanceof Error && err.message ? err.message : fallback;
@@ -1752,7 +1759,9 @@ export function responseFromError(
   });
   logger.debug("Gitea API error details", { err });
 
-  return json(500, { error: message }, baseHeaders);
+  // Whatever threw — SQLite, a parser, a bug — its message is for us. The
+  // person gets the sentence the route chose, and the request ID to quote.
+  return json(500, { error: fallback }, baseHeaders);
 }
 
 async function verifyUserCredentials(
