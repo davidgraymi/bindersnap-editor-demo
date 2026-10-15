@@ -149,3 +149,23 @@ test("the name the owner typed survives slugification", () => {
     ]);
   });
 });
+
+test("a named organization is that one, or none — never another", async () => {
+  const { client } = createClient({
+    "/user/orgs": {
+      status: 200,
+      body: [
+        { id: 7, username: "paid-org" },
+        { id: 9, username: "Lapsed-Org" },
+      ],
+    },
+  });
+
+  expect(
+    (await resolveSessionOrganization(client, session, "lapsed-org"))?.id,
+  ).toBe(9);
+  // Not in it: the paywall must not judge the write by "paid-org".
+  expect(
+    await resolveSessionOrganization(client, session, "someone-elses"),
+  ).toBeNull();
+});

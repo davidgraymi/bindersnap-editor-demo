@@ -1210,13 +1210,16 @@ async function requireSubscription(
   // The organization is what owes us money, so it is what gets checked. A
   // delinquent org blocks everyone in it — its reviewers included, because the
   // org is delinquent, not them.
+  // The organization the path names, and only that one: a writer who is not
+  // in it is not covered by whichever organization they are in.
+  const named = requestOrganization(req);
   const organization = await resolveSessionOrganization(
     auth.client,
     auth.session,
-    requestOrganization(req),
+    named,
   );
   if (!organization || !(await organizationHasAccess(organization.id))) {
-    return paymentRequired(baseHeaders, organization?.name ?? null);
+    return paymentRequired(baseHeaders, organization?.name ?? named);
   }
 
   return auth;
@@ -1270,10 +1273,11 @@ async function requireSubscriptionOrAdmin(
     return auth;
   }
 
+  const named = requestOrganization(req);
   const organization = await resolveSessionOrganization(
     auth.client,
     auth.session,
-    requestOrganization(req),
+    named,
   );
   if (organization && (await organizationHasAccess(organization.id))) {
     return auth;
@@ -1284,7 +1288,7 @@ async function requireSubscriptionOrAdmin(
     return auth;
   }
 
-  return paymentRequired(baseHeaders, organization?.name ?? null);
+  return paymentRequired(baseHeaders, organization?.name ?? named);
 }
 
 type SubscriptionAccessSource =

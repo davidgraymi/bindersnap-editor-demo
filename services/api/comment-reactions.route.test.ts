@@ -13,7 +13,8 @@ import {
 } from "./subscriptions";
 
 const TEST_GITEA_ORG_ID = 4004;
-const TEST_ORG_NAME = "adr0004-test-org";
+// The organization the routes below write into: the paywall judges that one.
+const TEST_ORG_NAME = "alice";
 
 /**
  * End-to-end coverage for reacting to a review comment.

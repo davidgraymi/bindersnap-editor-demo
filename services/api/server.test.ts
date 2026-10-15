@@ -782,6 +782,26 @@ describe("billing is per organization", () => {
     await activate(second.id);
     expect((await rename(second.username)).status).not.toBe(402);
   });
+
+  test("a write into an organization the writer is not in is not covered by theirs", async () => {
+    const server = createApiServer();
+    const username = `outsider-${randomUUID()}`;
+    const sessionId = await seedSession(username);
+    // Their own organization is paid for.
+    await activate(orgIdFor(username));
+
+    const response = await server.fetch(
+      makeSessionRequest(
+        `/api/app/binders/someone-elses-org/handbook/name`,
+        sessionId,
+        { method: "POST", body: { name: "Handbook" } },
+      ),
+    );
+    expect(response.status).toBe(402);
+    expect(await response.json()).toMatchObject({
+      organization: "someone-elses-org",
+    });
+  });
 });
 
 describe("billing Stripe idempotency", () => {
