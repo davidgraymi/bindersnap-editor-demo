@@ -9,7 +9,7 @@
 
 import { describe, test, expect, beforeEach } from "bun:test";
 import { runSessionReaper } from "./session-reaper";
-import { SessionStore, sessionReference, type SessionRecord } from "./sessions";
+import { SessionStore, type SessionRecord } from "./sessions";
 
 function makeSession(overrides: Partial<SessionRecord> = {}): SessionRecord {
   const now = 1_700_000_000_000;
@@ -58,7 +58,7 @@ describe("session reaper × SessionStore (SQLite, integration)", () => {
 
     expect(result).toEqual({ reaped: 2, revokeErrors: 0 });
     expect(revoked.sort()).toEqual(
-      [sessionReference("expired-a"), sessionReference("expired-b")].sort(),
+      [store.reference("expired-a"), store.reference("expired-b")].sort(),
     );
     expect(await store.get("live-1")).not.toBeNull();
     expect(await store.get("expired-a")).toBeNull();
@@ -87,7 +87,7 @@ describe("session reaper × SessionStore (SQLite, integration)", () => {
     expect(observed).not.toBeNull();
     // The cookie is not stored, so it cannot come back; its reference does.
     expect(observed!).toMatchObject({
-      id: sessionReference("rt-1"),
+      id: store.reference("rt-1"),
       username: "carol",
       giteaToken: "tok_unique_carol",
       giteaTokenName: "carol-tok",

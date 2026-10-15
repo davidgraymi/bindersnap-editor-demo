@@ -3,7 +3,7 @@ import { Database } from "bun:sqlite";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SessionStore, sessionReference, type SessionRecord } from "./sessions";
+import { SessionStore, type SessionRecord } from "./sessions";
 
 function makeStore(): SessionStore {
   return new SessionStore(":memory:");
@@ -67,7 +67,7 @@ describe("SessionStore", () => {
 
     expect(reaped).toHaveLength(1);
     // The cookie cannot be read back; the token, to revoke, can.
-    expect(reaped[0]!.id).toBe(sessionReference("expired-session"));
+    expect(reaped[0]!.id).toBe(store.reference("expired-session"));
     expect(reaped[0]!.giteaToken).toBe("tok_abc123");
 
     expect(await store.get("expired-session")).toBeNull();
@@ -92,7 +92,7 @@ describe("SessionStore", () => {
     const ended = await store.deleteForUser("jkim", "here");
 
     expect(ended.map((session) => session.id)).toEqual([
-      sessionReference("laptop"),
+      store.reference("laptop"),
     ]);
     expect(await store.get("here")).not.toBeNull();
     expect(await store.get("laptop")).toBeNull();
@@ -100,7 +100,7 @@ describe("SessionStore", () => {
 
     // Without an exception, every one of them goes.
     expect((await store.deleteForUser("jkim")).map((s) => s.id)).toEqual([
-      sessionReference("here"),
+      store.reference("here"),
     ]);
   });
 
@@ -108,9 +108,18 @@ describe("SessionStore", () => {
     await store.put(makeSession({ id: "phone", username: "jkim" }));
     const [live] = await store.liveForUser("jkim");
     expect(live!.giteaToken).toBe("tok_abc123");
-    expect((await store.get(live!.id))?.username).toBe("jkim");
-    await store.delete(live!.id);
-    expect(await store.get("phone")).toBeNull();
+    expect((await store.getByReference(live!.id))?.username).toBe("jkim");
+    // A reference is not a cookie: `get` hashes whatever it is given.
+    expect(await store.get(live!.id)).toBeNull();
+  });
+
+  test("a cookie built from a row's key is no session", async () => {
+    await store.put(makeSession({ id: "real-cookie", username: "jkim" }));
+    // What somebody holding a copy of the database could read off a row.
+    const forged = store.reference("real-cookie");
+    expect(await store.get(forged)).toBeNull();
+    expect(await store.get(forged.slice("ref:".length))).toBeNull();
+    expect((await store.get("real-cookie"))?.username).toBe("jkim");
   });
 });
 

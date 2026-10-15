@@ -1,7 +1,7 @@
 import {
   createCipheriv,
   createDecipheriv,
-  createHash,
+  createHmac,
   hkdfSync,
   randomBytes,
 } from "node:crypto";
@@ -41,6 +41,13 @@ export interface SessionBackend {
    * invitation with an owner's own token.
    */
   liveForUser?(username: string, now?: number): Promise<SessionRecord[]>;
+  /**
+   * A handle on a session that is not its cookie, for another table to keep
+   * (`jobs.session_id`), and the session it names. Never fed from a request:
+   * `get` takes only a cookie.
+   */
+  reference(id: string): string;
+  getByReference(reference: string): Promise<SessionRecord | null>;
 }
 
 /**
@@ -48,35 +55,23 @@ export interface SessionBackend {
  *
  * A row used to hold the cookie's value and the person's Gitea token as they
  * were, and Litestream copies the file off the host: a backup was a key to
- * every signed-in account. Now the row is keyed by a hash of the cookie, which
- * cannot be turned back into one, and the token is sealed (AES-256-GCM) with a
+ * every signed-in account. Now the row is keyed by an HMAC of the cookie under a
+ * key outside the file, which cannot be turned back into one, and the token is sealed (AES-256-GCM) with a
  * key that lives in the environment, never in the file.
  *
  * A record read back from a list — `reap`, `deleteForUser`, `liveForUser` —
- * has no cookie to give, so its `id` is the stored hash, marked so that
- * handing it back to `delete` finds the same row.
+ * has no cookie to give, so its `id` is a reference (`ref:` and the row's
+ * key), which only `getByReference` reads.
+ *
+ * **A cookie is always hashed.** `get` and `delete` never take a reference:
+ * a cookie that looked like one would otherwise be the row's key, read
+ * straight out of a leaked database.
  */
-const STORED_ID = "stored:";
+const REFERENCE = "ref:";
 const SEALED = "enc:v1:";
 
-/** The row's key for a session id: a hash, or the stored hash handed back. */
-function storedId(id: string): string {
-  if (id.startsWith(STORED_ID)) return id.slice(STORED_ID.length);
-  return createHash("sha256").update(id).digest("hex");
-}
-
-/**
- * A handle on a session that is not its cookie: what another table may keep
- * to find the session again (`jobs.session_id`). `get` takes it like an id.
- */
-export function sessionReference(id: string): string {
-  return `${STORED_ID}${storedId(id)}`;
-}
-
-function sealingKey(secret: string): Buffer {
-  return Buffer.from(
-    hkdfSync("sha256", secret, "", "bindersnap-session-token", 32),
-  );
+function derivedKey(secret: string, purpose: string): Buffer {
+  return Buffer.from(hkdfSync("sha256", secret, "", purpose, 32));
 }
 
 export function sealToken(token: string, key: Buffer): string {
@@ -110,13 +105,15 @@ type SessionRow = typeof sessions.$inferSelect;
 export class SessionStore implements SessionBackend {
   private db: SqliteDb;
   private key: Buffer;
+  private idKey: Buffer;
 
   constructor(
     path: string = config.sessionsDbPath,
     secret: string = config.sessionSecret,
   ) {
     this.db = openSqliteDb(path);
-    this.key = sealingKey(secret);
+    this.key = derivedKey(secret, "bindersnap-session-token");
+    this.idKey = derivedKey(secret, "bindersnap-session-id");
     this.sealLegacyRows();
   }
 
@@ -135,7 +132,7 @@ export class SessionStore implements SessionBackend {
       for (const row of legacy) {
         tx.update(sessions)
           .set({
-            id: storedId(row.id),
+            id: this.rowKey(row.id),
             giteaToken: sealToken(row.giteaToken, this.key),
           })
           .where(eq(sessions.id, row.id))
@@ -145,6 +142,39 @@ export class SessionStore implements SessionBackend {
     logger.info("Sealed sessions written before tokens were sealed", {
       sessions: legacy.length,
     });
+  }
+
+  /** The row's key for a cookie: an HMAC, so the file alone cannot make one. */
+  private rowKey(cookie: string): string {
+    return createHmac("sha256", this.idKey).update(cookie).digest("hex");
+  }
+
+  reference(id: string): string {
+    return `${REFERENCE}${this.rowKey(id)}`;
+  }
+
+  /**
+   * A reference's row key. A value without the prefix is a cookie a jobs row
+   * kept before references existed — read from our own database, not a
+   * request — and is hashed like one.
+   */
+  private referencedKey(reference: string): string {
+    return reference.startsWith(REFERENCE)
+      ? reference.slice(REFERENCE.length)
+      : this.rowKey(reference);
+  }
+
+  private readRow(key: string, id: string): SessionRecord | null {
+    const row = this.db
+      .select()
+      .from(sessions)
+      .where(eq(sessions.id, key))
+      .get();
+    if (!row) return null;
+    const record = this.toRecord(row, id);
+    // Sealed with another key — the secret was rotated. The session cannot
+    // act as anybody, so it is not one.
+    return record.giteaToken === "" ? null : record;
   }
 
   /** A row as a record; its token is "" when this key cannot open it. */
@@ -157,26 +187,21 @@ export class SessionStore implements SessionBackend {
   }
 
   private listed(rows: SessionRow[]): SessionRecord[] {
-    return rows.map((row) => this.toRecord(row, `${STORED_ID}${row.id}`));
+    return rows.map((row) => this.toRecord(row, `${REFERENCE}${row.id}`));
   }
 
   async get(id: string): Promise<SessionRecord | null> {
-    const row = this.db
-      .select()
-      .from(sessions)
-      .where(eq(sessions.id, storedId(id)))
-      .get();
-    if (!row) return null;
-    const record = this.toRecord(row, id);
-    // Sealed with another key — the secret was rotated. The session cannot
-    // act as anybody, so it is not one.
-    return record.giteaToken === "" ? null : record;
+    return this.readRow(this.rowKey(id), id);
+  }
+
+  async getByReference(reference: string): Promise<SessionRecord | null> {
+    return this.readRow(this.referencedKey(reference), reference);
   }
 
   async put(session: SessionRecord): Promise<void> {
     const row = {
       ...session,
-      id: storedId(session.id),
+      id: this.rowKey(session.id),
       giteaToken: sealToken(session.giteaToken, this.key),
     };
     this.db
@@ -198,7 +223,7 @@ export class SessionStore implements SessionBackend {
   async delete(id: string): Promise<void> {
     this.db
       .delete(sessions)
-      .where(eq(sessions.id, storedId(id)))
+      .where(eq(sessions.id, this.rowKey(id)))
       .run();
   }
 
@@ -224,7 +249,7 @@ export class SessionStore implements SessionBackend {
             ? eq(sessions.username, username)
             : and(
                 eq(sessions.username, username),
-                ne(sessions.id, storedId(except)),
+                ne(sessions.id, this.rowKey(except)),
               ),
         )
         .returning()
@@ -283,6 +308,14 @@ class LazySessionStore implements SessionBackend {
 
   liveForUser(username: string, now?: number): Promise<SessionRecord[]> {
     return this.store.liveForUser?.(username, now) ?? Promise.resolve([]);
+  }
+
+  reference(id: string): string {
+    return this.store.reference(id);
+  }
+
+  getByReference(reference: string): Promise<SessionRecord | null> {
+    return this.store.getByReference(reference);
   }
 }
 

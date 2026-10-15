@@ -75,7 +75,7 @@ import {
 } from "./gitea-client/request-gate";
 import { GITEA_CALL_TIMEOUT_MS } from "./gitea-client/client";
 import { runSessionReaper } from "./session-reaper";
-import { sessionReference, sessionStore, type SessionRecord } from "./sessions";
+import { sessionStore, type SessionRecord } from "./sessions";
 import {
   subscriptionStore,
   organizationHasAccess,
@@ -6143,7 +6143,9 @@ function publishJobResponse(
  * to the binder presses Publish again, which resumes it as them.
  */
 async function resumePublishJob(job: JobRecord): Promise<void> {
-  const session = job.sessionId ? await sessionStore.get(job.sessionId) : null;
+  const session = job.sessionId
+    ? await sessionStore.getByReference(job.sessionId)
+    : null;
   if (!session || session.expiresAt <= Date.now()) {
     jobStore().fail(
       job.id,
@@ -6450,7 +6452,7 @@ async function handlePublishWorkspaceChange(
         plan,
         createdBy: session.username,
         // Never the cookie itself: the jobs table is not where that lives.
-        sessionId: sessionReference(session.id),
+        sessionId: sessionStore.reference(session.id),
         idempotencyKey: req.headers.get("Idempotency-Key"),
       });
 
@@ -13654,7 +13656,9 @@ function provisionJobResponse(
 
 /** The runner's turn at a binder: finish it as the person who created it. */
 async function resumeProvisionJob(job: JobRecord): Promise<void> {
-  const session = job.sessionId ? await sessionStore.get(job.sessionId) : null;
+  const session = job.sessionId
+    ? await sessionStore.getByReference(job.sessionId)
+    : null;
   if (!session || session.expiresAt <= Date.now()) {
     jobStore().fail(
       job.id,
@@ -13739,7 +13743,7 @@ async function handleCreateWorkspace(
           openToOrganization: payload?.openToOrganization !== false,
         },
         createdBy: auth.session.username,
-        sessionId: sessionReference(auth.session.id),
+        sessionId: sessionStore.reference(auth.session.id),
         idempotencyKey: req.headers.get("Idempotency-Key"),
       });
 
