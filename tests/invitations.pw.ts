@@ -270,6 +270,42 @@ test("accepted with no owner signed in, it waits, and finishes when one signs in
     .toContain(invitee.username);
 });
 
+test("an invitation sent by an owner who has since been demoted is withdrawn", async () => {
+  const owner = await signUp("owner");
+  const { org } = await orgWithBinder(owner);
+  const second = await signUp("second");
+  await ok(owner.session, "POST", `/api/app/orgs/${org}/people`, {
+    username: second.username,
+    owner: true,
+  });
+
+  // The second owner invites somebody as an owner, then stops being one.
+  const address = `demoted-${randomUUID().slice(0, 10)}@users.bindersnap.local`;
+  await ok(second.session, "POST", `/api/app/orgs/${org}/invitations`, {
+    email: address,
+    owner: true,
+  });
+  const link = (await waitForEmail(address, /invited you to/)).links.find(
+    (href) => href.includes("/-/invitations/"),
+  )!;
+  await ok(
+    owner.session,
+    "POST",
+    `/api/app/orgs/${org}/people/${second.username}/role`,
+    { owner: false },
+  );
+
+  // The first owner is still signed in, so nothing but the check stops it.
+  const invitee = await signUp("invitee", address);
+  const refused = await call(
+    invitee.session,
+    "POST",
+    `/api/app/invitations/${tokenOf(link)}/accept`,
+  );
+  expect(refused.status).toBe(410);
+  expect(await members(owner, org)).not.toContain(invitee.username);
+});
+
 test("a member who is not an owner cannot invite", async () => {
   const owner = await signUp("owner");
   const { org } = await orgWithBinder(owner);

@@ -9277,6 +9277,25 @@ async function handleAcceptInvitation(
     );
   }
 
+  const standing = await inviterStanding(invitation);
+  if (standing === "unknown") {
+    return json(
+      503,
+      { error: "This invitation cannot be checked right now. Try again." },
+      baseHeaders,
+    );
+  }
+  if (standing === "withdrawn") {
+    return json(
+      410,
+      {
+        error:
+          "This invitation was withdrawn. Ask whoever sent it for a new one.",
+      },
+      baseHeaders,
+    );
+  }
+
   const client = createPrivilegedGiteaClient();
   const { email } = client
     ? await readPerson(client, session.username)
@@ -9320,6 +9339,9 @@ async function handleAcceptInvitation(
 async function completeInvitation(invitation: Invitation): Promise<boolean> {
   const username = invitation.acceptedBy;
   if (!username || invitation.joinedAt !== null) return false;
+  // Finished with another owner's session, so it must still be an act the
+  // inviter could make: an invitation outlives nobody's authority.
+  if ((await inviterStanding(invitation)) !== "owner") return false;
 
   const candidates = [invitation.invitedBy];
   const privileged = createPrivilegedGiteaClient();
@@ -9382,6 +9404,47 @@ async function completeInvitation(invitation: Invitation): Promise<boolean> {
     }
   }
   return false;
+}
+
+/**
+ * Whether the person who sent an invitation is still an owner of its
+ * organization — and if they are not, the invitation is withdrawn.
+ *
+ * An invitation is an owner's act carried out later, sometimes with another
+ * owner's session. Sent by somebody since demoted or removed, it would let
+ * them grant from outside what they can no longer grant from inside —
+ * ownership included. Read with the service account, which sees every team.
+ * Unknown (no service client, Gitea unreachable) withdraws nothing and
+ * grants nothing.
+ */
+async function inviterStanding(
+  invitation: Invitation,
+): Promise<"owner" | "withdrawn" | "unknown"> {
+  const client = createPrivilegedGiteaClient();
+  if (!client) return "unknown";
+  let owners: { login: string }[];
+  try {
+    owners = await listOrganizationOwners({ client, org: invitation.orgName });
+  } catch (err) {
+    logger.warn("Could not check an invitation's sender is still an owner", {
+      organization: invitation.orgName,
+      invitationId: invitation.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return "unknown";
+  }
+  const inviter = invitation.invitedBy.toLowerCase();
+  if (owners.some((owner) => owner.login.toLowerCase() === inviter)) {
+    return "owner";
+  }
+  if (invitationStore().withdrawUnjoined(invitation.id)) {
+    logger.info("Invitation withdrawn: its sender is no longer an owner", {
+      organization: invitation.orgName,
+      invitationId: invitation.id,
+      invitedBy: invitation.invitedBy,
+    });
+  }
+  return "withdrawn";
 }
 
 /** Finish every accepted invitation that was waiting for an owner. */

@@ -43,8 +43,10 @@ export function invitationStatus(
   now = Date.now(),
 ): InvitationStatus {
   if (invitation.joinedAt !== null) return "joined";
-  if (invitation.acceptedAt !== null) return "accepted";
+  // Before "accepted": an accepted invitation is withdrawn when its sender
+  // stops being an owner before anybody could finish it.
   if (invitation.revokedAt !== null) return "revoked";
+  if (invitation.acceptedAt !== null) return "accepted";
   if (invitation.expiresAt <= now) return "expired";
   return "pending";
 }
@@ -232,10 +234,31 @@ export class InvitationStore {
         and(
           isNotNull(organizationInvitations.acceptedAt),
           isNull(organizationInvitations.joinedAt),
+          isNull(organizationInvitations.revokedAt),
         ),
       )
       .all()
       .map(toInvitation);
+  }
+
+  /**
+   * Withdraw an invitation nobody has joined by, accepted or not: the owner
+   * who sent it no longer could. Answers whether it was still open.
+   */
+  withdrawUnjoined(id: string, now = Date.now()): boolean {
+    const row = this.db
+      .update(organizationInvitations)
+      .set({ revokedAt: now })
+      .where(
+        and(
+          eq(organizationInvitations.id, id),
+          isNull(organizationInvitations.joinedAt),
+          isNull(organizationInvitations.revokedAt),
+        ),
+      )
+      .returning({ id: organizationInvitations.id })
+      .get();
+    return Boolean(row);
   }
 }
 
