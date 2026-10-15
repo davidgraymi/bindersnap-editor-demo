@@ -61,6 +61,10 @@ services:
       # "database is locked").
       - GITEA__database__SQLITE_JOURNAL_MODE=WAL
       - GITEA__service__DISABLE_REGISTRATION=false
+      # A new account's email is its own: Gitea otherwise shows it to every
+      # signed-in account, which is every customer's people. The API also sets
+      # it on each sign-in, for accounts made before this line.
+      - GITEA__service__DEFAULT_KEEP_EMAIL_PRIVATE=true
       # ADR 0004: signup creates the organization with the new user's own
       # token, so a new account must be allowed to create one. Gitea's default
       # is already true, but provisioning fails with a bare 403 when it is not

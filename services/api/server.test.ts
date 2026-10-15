@@ -243,6 +243,34 @@ beforeEach(() => {
       );
     }
 
+    const orgMembersMatch = url.pathname.match(
+      /^\/api\/v1\/orgs\/([^/]+)\/members$/,
+    );
+    if (orgMembersMatch) {
+      const org = decodeURIComponent(orgMembersMatch[1]!).toLowerCase();
+      const inOrg = (login: string) =>
+        [
+          giteaOrgsByUsername.get(login),
+          ...(giteaExtraOrgsByUsername.get(login) ?? []),
+        ].some((entry) => (entry?.username ?? "").toLowerCase() === org);
+      const page = Number.parseInt(url.searchParams.get("page") ?? "1", 10);
+      const members =
+        page > 1
+          ? []
+          : [...giteaUsersByLogin.values()]
+              .filter((user) => inOrg(user.login))
+              .map((user, index) => ({
+                id: index + 1,
+                login: user.login,
+                full_name: user.fullName ?? "",
+                email: user.email,
+              }));
+      return new Response(JSON.stringify(members), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     if (url.pathname === "/api/v1/users/search") {
       const query = (url.searchParams.get("q") ?? "").trim().toLowerCase();
       const page = Number.parseInt(url.searchParams.get("page") ?? "1", 10);
@@ -2122,6 +2150,36 @@ describe("admin subscription access overrides", () => {
       );
       expect(stillGated.status).toBe(402);
     } finally {
+      server.stop(true);
+    }
+  });
+});
+
+describe("finding a reviewer", () => {
+  test("searches only the caller's colleagues, and never shows an address", async () => {
+    const server = createApiServer();
+    const caller = `caller-${randomUUID()}`;
+    const colleague = `colleague-${randomUUID()}`;
+    const stranger = `stranger-${randomUUID()}`;
+    const callerSession = await seedSession(caller, { fullName: "Pat Lee" });
+    await seedSession(colleague, { fullName: "Sam Reviewer" });
+    await seedSession(stranger, { fullName: "Sam Elsewhere" });
+    giteaExtraOrgsByUsername.set(colleague, [giteaOrgsByUsername.get(caller)!]);
+    config.bypassSubscriptionForUsers.push(caller);
+
+    try {
+      const response = await server.fetch(
+        makeSessionRequest(`/api/app/users/search?q=sam`, callerSession),
+      );
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as {
+        users: { login: string; email: string }[];
+      };
+      expect(body.users.map((user) => user.login)).toEqual([colleague]);
+      expect(body.users[0]!.email).toBe("");
+    } finally {
+      config.bypassSubscriptionForUsers =
+        config.bypassSubscriptionForUsers.filter((name) => name !== caller);
       server.stop(true);
     }
   });

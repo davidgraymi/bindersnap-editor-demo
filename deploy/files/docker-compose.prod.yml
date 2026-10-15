@@ -57,6 +57,10 @@ services:
       - GITEA__database__SQLITE_JOURNAL_MODE=WAL
       # --- Service (registration disabled) ---
       - GITEA__service__DISABLE_REGISTRATION=true
+      # A new account's email is its own: Gitea otherwise shows it to every
+      # signed-in account, which is every customer's people. The API also sets
+      # it on each sign-in, for accounts made before this line.
+      - GITEA__service__DEFAULT_KEEP_EMAIL_PRIVATE=true
       - GITEA__service__REQUIRE_SIGNIN_VIEW=true
       - GITEA__service__ALLOW_ONLY_EXTERNAL_REGISTRATION=false
       - GITEA__service__ENABLE_CAPTCHA=false
