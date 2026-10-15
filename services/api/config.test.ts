@@ -84,6 +84,7 @@ describe("API config", () => {
       STRIPE_WEBHOOK_SECRET: "whsec_test",
       STRIPE_PRICE_ID: "price_test",
       SIGNUP_TURNSTILE_SECRET_KEY: "0x_turnstile_secret",
+      BINDERSNAP_SESSION_SECRET: "session_secret",
     };
 
     expect(() =>
@@ -101,6 +102,14 @@ describe("API config", () => {
       }),
     ).toThrow("SIGNUP_TURNSTILE_SECRET_KEY is required in production.");
 
+    // Without it, every session's Gitea token would sit in the database as is.
+    expect(() =>
+      initializeConfig({
+        ...productionBaseEnv,
+        BINDERSNAP_SESSION_SECRET: "",
+      }),
+    ).toThrow("BINDERSNAP_SESSION_SECRET is required in production.");
+
     expect(() =>
       initializeConfig({
         NODE_ENV: "production",
@@ -109,6 +118,7 @@ describe("API config", () => {
         STRIPE_WEBHOOK_SECRET: "whsec_test",
         STRIPE_PRICE_ID: "price_test",
         SIGNUP_TURNSTILE_SECRET_KEY: "0x_turnstile_secret",
+        BINDERSNAP_SESSION_SECRET: "session_secret",
       }),
     ).toThrow(
       "BINDERSNAP_ALLOWED_ORIGINS or BINDERSNAP_APP_ORIGIN is required in production.",
@@ -127,6 +137,7 @@ describe("API config", () => {
       STRIPE_WEBHOOK_SECRET: "whsec_test",
       STRIPE_PRICE_ID: "price_test",
       SIGNUP_TURNSTILE_SECRET_KEY: "0x_turnstile_secret",
+      BINDERSNAP_SESSION_SECRET: "session_secret",
       LOG_LEVEL: "warn",
     });
 

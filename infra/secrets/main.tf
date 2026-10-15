@@ -91,6 +91,7 @@ locals {
     "gitea_secret_key",
     "gitea_internal_token",
     "gitea_admin_pass",
+    "bindersnap_session_secret", # seals session tokens at rest
     "gitea_service_token", # minted by the deploy bootstrap
     "gitea_admin_token",   # minted by the deploy bootstrap
     "stripe_secret_key",

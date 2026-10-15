@@ -1,5 +1,9 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { SessionStore, type SessionRecord } from "./sessions";
+import { Database } from "bun:sqlite";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { SessionStore, sessionReference, type SessionRecord } from "./sessions";
 
 function makeStore(): SessionStore {
   return new SessionStore(":memory:");
@@ -62,7 +66,9 @@ describe("SessionStore", () => {
     const reaped = await store.reap(now);
 
     expect(reaped).toHaveLength(1);
-    expect(reaped[0]!.id).toBe("expired-session");
+    // The cookie cannot be read back; the token, to revoke, can.
+    expect(reaped[0]!.id).toBe(sessionReference("expired-session"));
+    expect(reaped[0]!.giteaToken).toBe("tok_abc123");
 
     expect(await store.get("expired-session")).toBeNull();
     expect(await store.get("future-session")).not.toBeNull();
@@ -85,14 +91,82 @@ describe("SessionStore", () => {
 
     const ended = await store.deleteForUser("jkim", "here");
 
-    expect(ended.map((session) => session.id)).toEqual(["laptop"]);
+    expect(ended.map((session) => session.id)).toEqual([
+      sessionReference("laptop"),
+    ]);
     expect(await store.get("here")).not.toBeNull();
     expect(await store.get("laptop")).toBeNull();
     expect(await store.get("someone-else")).not.toBeNull();
 
     // Without an exception, every one of them goes.
     expect((await store.deleteForUser("jkim")).map((s) => s.id)).toEqual([
-      "here",
+      sessionReference("here"),
     ]);
+  });
+
+  test("a listed session's id finds the same row again", async () => {
+    await store.put(makeSession({ id: "phone", username: "jkim" }));
+    const [live] = await store.liveForUser("jkim");
+    expect(live!.giteaToken).toBe("tok_abc123");
+    expect((await store.get(live!.id))?.username).toBe("jkim");
+    await store.delete(live!.id);
+    expect(await store.get("phone")).toBeNull();
+  });
+});
+
+describe("what the sessions database holds", () => {
+  const dir = mkdtempSync(join(tmpdir(), "sessions-"));
+
+  test("neither the cookie nor the Gitea token is stored as it is", async () => {
+    const path = join(dir, "sealed.db");
+    const store = new SessionStore(path, "secret-one");
+    await store.put(
+      makeSession({ id: "cookie-value", giteaToken: "tok_live" }),
+    );
+
+    const raw = new Database(path)
+      .query("SELECT id, gitea_token FROM sessions")
+      .all() as { id: string; gitea_token: string }[];
+    expect(raw).toHaveLength(1);
+    expect(raw[0]!.id).not.toContain("cookie-value");
+    expect(raw[0]!.gitea_token).not.toContain("tok_live");
+
+    expect((await store.get("cookie-value"))?.giteaToken).toBe("tok_live");
+  });
+
+  test("a session sealed with another key is no session", async () => {
+    const path = join(dir, "rotated.db");
+    await new SessionStore(path, "old-secret").put(
+      makeSession({ id: "kept-cookie" }),
+    );
+    expect(
+      await new SessionStore(path, "new-secret").get("kept-cookie"),
+    ).toBeNull();
+  });
+
+  test("rows from before sealing are sealed in place, still signed in", async () => {
+    const path = join(dir, "legacy.db");
+    // Create the table, then write a row the way the old store did.
+    new SessionStore(path, "secret");
+    new Database(path)
+      .query(
+        "INSERT INTO sessions (id, username, gitea_token, gitea_token_name, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        "legacy-cookie",
+        "jkim",
+        "tok_old",
+        "n",
+        Date.now(),
+        Date.now() + 60_000,
+      );
+
+    const store = new SessionStore(path, "secret");
+    expect((await store.get("legacy-cookie"))?.giteaToken).toBe("tok_old");
+    const raw = new Database(path)
+      .query("SELECT id, gitea_token FROM sessions")
+      .get() as { id: string; gitea_token: string };
+    expect(raw.id).not.toBe("legacy-cookie");
+    expect(raw.gitea_token).not.toContain("tok_old");
   });
 });

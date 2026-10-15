@@ -33,6 +33,7 @@ The browser only receives a Bindersnap session cookie. Gitea access tokens stay 
 - `BINDERSNAP_ALLOWED_ORIGINS`: Optional comma-separated override for multiple allowed origins.
 - `STRIPE_SECRET_KEY`: Stripe secret key used to create Checkout and Customer Portal sessions.
 - `STRIPE_WEBHOOK_SECRET`: Stripe webhook signing secret used to verify `/stripe/webhook`.
+- `BINDERSNAP_SESSION_SECRET`: the key that seals each session's Gitea token in the sessions database (AES-256-GCM), where session IDs are kept only as SHA-256 hashes. Required in production; elsewhere a fixed development key. `infra/secrets/put-secrets.sh` generates the SSM leaf `bindersnap_session_secret`. Rotating it signs everybody out.
 - `SIGNUP_TURNSTILE_SECRET_KEY`: the signup form's Turnstile secret. Required in production, where a signup without a token Turnstile accepts is refused (`403`, `code: "turnstile_failed"`) before Gitea creates anything. Unset elsewhere, which skips the check. `infra/edge/put-signup-turnstile-secret.sh` writes it to SSM.
 - `ERROR_REPORT_URL`, `ERROR_REPORT_SECRET`: where every `logger.error` line goes as a scrubbed error report (`errorReporter.ts`), and the bearer the feedback Worker knows the API by. Unset, nothing is sent. `BINDERSNAP_RELEASE` names the build in each report; production sets the deployed commit.
 - `STRIPE_PRICE_ID`: the per-unit seat price (one unit per writer) the API checks out, and whose quantity it keeps equal to the organization's paid seats. See `docs/payments-plan.md`, "Seat billing".

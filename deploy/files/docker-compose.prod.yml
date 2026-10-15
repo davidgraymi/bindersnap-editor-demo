@@ -141,6 +141,8 @@ services:
       - STRIPE_PRICE_ID=${STRIPE_PRICE_ID:?set in the generated env file}
       # The signup form's Turnstile check (infra/edge/put-signup-turnstile-secret.sh).
       - SIGNUP_TURNSTILE_SECRET_KEY=${SIGNUP_TURNSTILE_SECRET_KEY:?set in the generated env file}
+      # Seals each session's Gitea token at rest; SSM leaf bindersnap_session_secret.
+      - BINDERSNAP_SESSION_SECRET=${BINDERSNAP_SESSION_SECRET:?set in the generated env file}
       # Every logged error, scrubbed, to the feedback Worker's /errors (ADR 0006,
       # "Error Reports"). Optional: until the SSM leaf `error_report_secret`
       # exists, the secret is empty and nothing is sent.

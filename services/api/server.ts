@@ -75,7 +75,7 @@ import {
 } from "./gitea-client/request-gate";
 import { GITEA_CALL_TIMEOUT_MS } from "./gitea-client/client";
 import { runSessionReaper } from "./session-reaper";
-import { sessionStore, type SessionRecord } from "./sessions";
+import { sessionReference, sessionStore, type SessionRecord } from "./sessions";
 import {
   subscriptionStore,
   organizationHasAccess,
@@ -6449,7 +6449,8 @@ async function handlePublishWorkspaceChange(
         subject,
         plan,
         createdBy: session.username,
-        sessionId: session.id,
+        // Never the cookie itself: the jobs table is not where that lives.
+        sessionId: sessionReference(session.id),
         idempotencyKey: req.headers.get("Idempotency-Key"),
       });
 
@@ -13738,7 +13739,7 @@ async function handleCreateWorkspace(
           openToOrganization: payload?.openToOrganization !== false,
         },
         createdBy: auth.session.username,
-        sessionId: auth.session.id,
+        sessionId: sessionReference(auth.session.id),
         idempotencyKey: req.headers.get("Idempotency-Key"),
       });
 
