@@ -7,6 +7,7 @@ import {
   corsHeaders,
   createApiServer,
   downloadHeaders,
+  serializeSessionCookie,
   responseFromError,
 } from "./server";
 import { GiteaApiError } from "./gitea-client/client";
@@ -1122,6 +1123,68 @@ describe("stripe webhook transport security", () => {
       config.nodeEnv = originalNodeEnv;
       config.isProduction = originalIsProduction;
       config.enforceHttps = originalEnforceHttps;
+      server.stop(true);
+    }
+  });
+});
+
+describe("a Host header of localhost in production", () => {
+  test("does not skip the HTTPS check or take Secure off the cookie", async () => {
+    const server = createApiServer();
+    const original = {
+      nodeEnv: config.nodeEnv,
+      isProduction: config.isProduction,
+      enforceHttps: config.enforceHttps,
+    };
+    config.nodeEnv = "production";
+    config.isProduction = true;
+    config.enforceHttps = true;
+
+    try {
+      const plain = await server.fetch(
+        new Request("http://localhost/auth/me", {
+          headers: { Origin: "http://localhost:5173" },
+        }),
+      );
+      expect(plain.status).toBe(400);
+      expect(
+        serializeSessionCookie(new Request("http://localhost/"), "x"),
+      ).toContain("Secure");
+    } finally {
+      Object.assign(config, original);
+      server.stop(true);
+    }
+  });
+});
+
+describe("guessing at one account from many addresses", () => {
+  test("is held after ten failures, whatever address they come from", async () => {
+    const server = createApiServer();
+    const original = config.authRateLimitEnabled;
+    config.authRateLimitEnabled = true;
+    const target = `target-${randomUUID()}`;
+    const attempt = (n: number) =>
+      server.fetch(
+        new Request("http://localhost/auth/login", {
+          method: "POST",
+          headers: {
+            Origin: "http://localhost:5173",
+            "Content-Type": "application/json",
+            "X-Forwarded-For": `198.51.100.${n}`,
+          },
+          body: JSON.stringify({ identifier: target, password: "wrong" }),
+        }),
+      );
+
+    try {
+      for (let n = 1; n <= 10; n += 1) {
+        expect((await attempt(n)).status).toBe(401);
+      }
+      const held = await attempt(11);
+      expect(held.status).toBe(429);
+      expect(held.headers.get("Retry-After")).not.toBeNull();
+    } finally {
+      config.authRateLimitEnabled = original;
       server.stop(true);
     }
   });

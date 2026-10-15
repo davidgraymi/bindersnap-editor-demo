@@ -34,6 +34,28 @@ test("the same idempotency key hands back the same job", () => {
   expect(store.create(base).id).not.toBe(store.create(base).id);
 });
 
+test("somebody else's idempotency key is not a way to their job", () => {
+  const store = freshStore();
+  const alices = store.create({ ...base, idempotencyKey: "click-1" });
+  const mallorys = store.create({
+    ...base,
+    createdBy: "mallory",
+    idempotencyKey: "click-1",
+  });
+  expect(mallorys.id).not.toBe(alices.id);
+  // Nor is the same key on another binder, or for another kind of job.
+  expect(
+    store.create({
+      ...base,
+      groupKey: "mercy-health/hr",
+      idempotencyKey: "click-1",
+    }).id,
+  ).not.toBe(alices.id);
+  expect(
+    store.create({ ...base, kind: "provision", idempotencyKey: "click-1" }).id,
+  ).not.toBe(alices.id);
+});
+
 test("a claimed job cannot be claimed again until its lease lapses", () => {
   const store = freshStore();
   const job = store.create(base);

@@ -594,7 +594,15 @@ function mergeHeaders(base: Headers, extra?: HeadersInit): Headers {
   return headers;
 }
 
+/**
+ * A request to this machine, for the local stack's plain-HTTP conveniences.
+ *
+ * Never in production: the host name comes from the request's own `Host`
+ * header, so `Host: localhost` would otherwise skip the HTTPS check and take
+ * `Secure` off the session cookie for anybody who sent it.
+ */
 function isLocalRequest(req: Request): boolean {
+  if (config.isProduction) return false;
   const { hostname } = new URL(req.url);
   return hostname === "localhost" || hostname === "127.0.0.1";
 }
@@ -753,6 +761,50 @@ function consumeAuthRateLimit(
   }
 
   return { limited: false, retryAfterSeconds: 0 };
+}
+
+/**
+ * Failed sign-ins against one account, from anywhere.
+ *
+ * The per-address limit above stops one machine guessing; it does nothing
+ * against a list of passwords spread across many. This counts failures for
+ * the account itself. Only failures count and a success clears it, so a person
+ * who knows their password is never held up by it — but somebody guessing at
+ * their account can make them wait out the window, which is the price of
+ * slowing the guessing at all.
+ */
+const ACCOUNT_LOGIN_FAILURES_MAX = 10;
+
+function accountLoginKey(identifier: string): string {
+  return `login-account:${identifier.trim().toLowerCase()}`;
+}
+
+function accountLoginLimited(identifier: string): number | null {
+  if (!config.authRateLimitEnabled) return null;
+  const entry = authAttempts.get(accountLoginKey(identifier));
+  const now = Date.now();
+  if (!entry || entry.resetAt <= now) return null;
+  if (entry.count < ACCOUNT_LOGIN_FAILURES_MAX) return null;
+  return Math.max(1, Math.ceil((entry.resetAt - now) / 1000));
+}
+
+function recordAccountLoginFailure(identifier: string): void {
+  if (!config.authRateLimitEnabled) return;
+  const key = accountLoginKey(identifier);
+  const now = Date.now();
+  const entry = authAttempts.get(key);
+  if (!entry || entry.resetAt <= now) {
+    authAttempts.set(key, {
+      count: 1,
+      resetAt: now + config.authRateLimitWindowMs,
+    });
+    return;
+  }
+  entry.count += 1;
+}
+
+function clearAccountLoginFailures(identifier: string): void {
+  authAttempts.delete(accountLoginKey(identifier));
 }
 
 function resetAuthRateLimit(req: Request, action: AuthRateLimitAction): void {
@@ -2716,6 +2768,19 @@ async function handleLogin(
     );
   }
 
+  const accountWait = accountLoginLimited(identifier);
+  if (accountWait !== null) {
+    logger.warn("Account sign-in limit hit", {
+      clientIp,
+      retryAfterSeconds: accountWait,
+    });
+    return json(
+      429,
+      { error: "Too many login attempts. Please try again shortly." },
+      mergeHeaders(baseHeaders, { "Retry-After": String(accountWait) }),
+    );
+  }
+
   logger.debug("Credential verification attempt", {
     // Log the identifier type (email or username) but never the value itself
     identifierType: looksLikeEmailAddress(identifier) ? "email" : "username",
@@ -2739,6 +2804,7 @@ async function handleLogin(
   }
 
   if (resolution.kind !== "authenticated") {
+    recordAccountLoginFailure(identifier);
     logger.debug("Login credential verification failed", { clientIp });
     return json(
       401,
@@ -2762,6 +2828,7 @@ async function handleLogin(
   );
   if (response.ok) {
     resetAuthRateLimit(req, "login");
+    clearAccountLoginFailures(identifier);
     // An owner signing in can finish invitations that were waiting for one.
     void completeWaitingInvitations().catch(() => undefined);
     logger.debug("Session created after login", {
@@ -3391,6 +3458,9 @@ async function handleResetPassword(
   }
 
   resets.retireAll(record.username);
+  // Whoever was guessing at it, the owner has just proved who they are.
+  clearAccountLoginFailures(record.username);
+  clearAccountLoginFailures(record.email);
   // The link went to this address, so whoever used it owns it.
   emailVerificationStore().confirm(record.username, record.email);
   await endOtherSessions(record.username);

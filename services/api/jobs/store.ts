@@ -83,7 +83,19 @@ export class JobStore {
     now?: number;
   }): JobRecord<Plan> {
     const now = params.now ?? Date.now();
-    const key = params.idempotencyKey ?? null;
+    // **A key is the caller's, for one act.** Matched across everybody, a
+    // key somebody else had used handed back their job — and ran its plan
+    // with this caller's token. So it is stored with who sent it, of what
+    // kind, on what, and only that finds it again.
+    const key =
+      params.idempotencyKey != null
+        ? JSON.stringify([
+            params.createdBy,
+            params.kind,
+            params.groupKey,
+            params.idempotencyKey,
+          ])
+        : null;
     if (key !== null) {
       const existing = this.byIdempotencyKey(key);
       if (existing) return existing as JobRecord<Plan>;
