@@ -1188,6 +1188,55 @@ describe("guessing at one account from many addresses", () => {
       server.stop(true);
     }
   });
+  const login = (
+    server: ReturnType<typeof createApiServer>,
+    n: number,
+    body: Record<string, string>,
+  ) =>
+    server.fetch(
+      new Request("http://localhost/auth/login", {
+        method: "POST",
+        headers: {
+          Origin: "http://localhost:5173",
+          "Content-Type": "application/json",
+          "X-Forwarded-For": `198.51.100.${n}`,
+        },
+        body: JSON.stringify({ password: "wrong", ...body }),
+      }),
+    );
+
+  test("a request naming two accounts is refused, not counted under one", async () => {
+    const server = createApiServer();
+    try {
+      const response = await login(server, 1, {
+        identifier: `decoy-${randomUUID()}`,
+        email: "victim@example.com",
+      });
+      expect(response.status).toBe(400);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("a burst at once is counted before any password is checked", async () => {
+    const server = createApiServer();
+    const original = config.authRateLimitEnabled;
+    config.authRateLimitEnabled = true;
+    const target = `burst-${randomUUID()}`;
+    try {
+      const statuses = await Promise.all(
+        Array.from({ length: 15 }, (_, n) =>
+          Promise.resolve(login(server, n + 1, { identifier: target })).then(
+            (response) => response.status,
+          ),
+        ),
+      );
+      expect(statuses.filter((status) => status !== 429)).toHaveLength(10);
+    } finally {
+      config.authRateLimitEnabled = original;
+      server.stop(true);
+    }
+  });
 });
 
 describe("billing Stripe webhook recovery", () => {

@@ -764,33 +764,31 @@ function consumeAuthRateLimit(
 }
 
 /**
- * Failed sign-ins against one account, from anywhere.
+ * Sign-in attempts against one account, from anywhere.
  *
  * The per-address limit above stops one machine guessing; it does nothing
- * against a list of passwords spread across many. This counts failures for
- * the account itself. Only failures count and a success clears it, so a person
- * who knows their password is never held up by it — but somebody guessing at
- * their account can make them wait out the window, which is the price of
- * slowing the guessing at all.
+ * against a list of passwords spread across many. This counts attempts on the
+ * name being signed in as. The slot is taken **before** the password is
+ * checked, synchronously, so a burst of concurrent requests cannot all pass
+ * the check before any is counted; a success clears it, so a person who knows
+ * their password is never held up by it. Somebody guessing at an account can
+ * make its owner wait out the window — the price of slowing the guessing.
+ *
+ * Keyed on the name as typed. An account has two (its login and its address),
+ * so it allows two windows' worth, not one: bounded, without an admin lookup
+ * on every attempt. `handleLogin` refuses a request naming two different
+ * accounts, so the name counted is always the name checked.
  */
-const ACCOUNT_LOGIN_FAILURES_MAX = 10;
+const ACCOUNT_LOGIN_ATTEMPTS_MAX = 10;
 
-function accountLoginKey(identifier: string): string {
-  return `login-account:${identifier.trim().toLowerCase()}`;
+function accountLoginKey(name: string): string {
+  return `login-account:${name.trim().toLowerCase()}`;
 }
 
-function accountLoginLimited(identifier: string): number | null {
+/** Take a slot for this name, or answer how many seconds until one frees. */
+function reserveAccountLoginAttempt(name: string): number | null {
   if (!config.authRateLimitEnabled) return null;
-  const entry = authAttempts.get(accountLoginKey(identifier));
-  const now = Date.now();
-  if (!entry || entry.resetAt <= now) return null;
-  if (entry.count < ACCOUNT_LOGIN_FAILURES_MAX) return null;
-  return Math.max(1, Math.ceil((entry.resetAt - now) / 1000));
-}
-
-function recordAccountLoginFailure(identifier: string): void {
-  if (!config.authRateLimitEnabled) return;
-  const key = accountLoginKey(identifier);
+  const key = accountLoginKey(name);
   const now = Date.now();
   const entry = authAttempts.get(key);
   if (!entry || entry.resetAt <= now) {
@@ -798,13 +796,23 @@ function recordAccountLoginFailure(identifier: string): void {
       count: 1,
       resetAt: now + config.authRateLimitWindowMs,
     });
-    return;
+    return null;
+  }
+  if (entry.count >= ACCOUNT_LOGIN_ATTEMPTS_MAX) {
+    return Math.max(1, Math.ceil((entry.resetAt - now) / 1000));
   }
   entry.count += 1;
+  return null;
 }
 
-function clearAccountLoginFailures(identifier: string): void {
-  authAttempts.delete(accountLoginKey(identifier));
+/** Give a slot back: the attempt never reached a password check. */
+function releaseAccountLoginAttempt(name: string): void {
+  const entry = authAttempts.get(accountLoginKey(name));
+  if (entry && entry.count > 0) entry.count -= 1;
+}
+
+function clearAccountLoginFailures(name: string): void {
+  authAttempts.delete(accountLoginKey(name));
 }
 
 function resetAuthRateLimit(req: Request, action: AuthRateLimitAction): void {
@@ -2768,7 +2776,27 @@ async function handleLogin(
     );
   }
 
-  const accountWait = accountLoginLimited(identifier);
+  // One account per request. The form sends a username or an email; a request
+  // naming two different ones would be counted under one and checked as the
+  // other, which is a way around the per-account limit.
+  const named = new Set(
+    [
+      typeof payload?.identifier === "string" ? payload.identifier : "",
+      username,
+      email,
+    ]
+      .map((name) => name.trim().toLowerCase())
+      .filter((name) => name !== ""),
+  );
+  if (named.size > 1) {
+    return json(
+      400,
+      { error: "Sign in with one username or email address." },
+      baseHeaders,
+    );
+  }
+
+  const accountWait = reserveAccountLoginAttempt(identifier);
   if (accountWait !== null) {
     logger.warn("Account sign-in limit hit", {
       clientIp,
@@ -2795,6 +2823,7 @@ async function handleLogin(
   );
 
   if (resolution.kind === "unavailable") {
+    releaseAccountLoginAttempt(identifier);
     logger.warn("Login resolution unavailable", {
       status: resolution.status,
       error: resolution.error,
@@ -2804,7 +2833,6 @@ async function handleLogin(
   }
 
   if (resolution.kind !== "authenticated") {
-    recordAccountLoginFailure(identifier);
     logger.debug("Login credential verification failed", { clientIp });
     return json(
       401,
