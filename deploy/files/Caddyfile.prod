@@ -20,6 +20,10 @@
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "same-origin"
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# The API answers with JSON and files, never a page, so nothing it
+		# serves may run a script, load anything or be framed. `?` keeps a
+		# stricter policy the API set itself (a downloaded document's).
+		?Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; sandbox"
 		-Server
 	}
 }

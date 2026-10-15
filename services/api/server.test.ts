@@ -2202,6 +2202,42 @@ describe("a document's bytes and the browser's cache", () => {
   });
 });
 
+describe("a document's bytes and the API's origin", () => {
+  const svg = () =>
+    new Response("<svg><script>alert(1)</script></svg>", {
+      headers: {
+        "content-type": "image/svg+xml",
+        "content-disposition": 'inline; filename="evil.svg"',
+        "content-security-policy":
+          "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+      },
+    });
+
+  test("every file is an attachment, keeping Gitea's file name", () => {
+    const headers = downloadHeaders(new Headers(), svg(), "main");
+    expect(headers.get("content-disposition")).toBe(
+      'attachment; filename="evil.svg"',
+    );
+  });
+
+  test("every file is sandboxed and never sniffed", () => {
+    const headers = downloadHeaders(new Headers(), svg(), "main");
+    expect(headers.get("content-security-policy")).toBe(
+      "default-src 'none'; sandbox",
+    );
+    expect(headers.get("x-content-type-options")).toBe("nosniff");
+  });
+
+  test("a file Gitea named nothing is still an attachment", () => {
+    const headers = downloadHeaders(
+      new Headers(),
+      new Response("x", { headers: { "content-type": "text/plain" } }),
+      "main",
+    );
+    expect(headers.get("content-disposition")).toBe("attachment");
+  });
+});
+
 test("a failed Gitea read never reaches the browser as a success", async () => {
   // Gitea answered 200 with no body; `unwrap` refused it with that status.
   const empty = responseFromError(
