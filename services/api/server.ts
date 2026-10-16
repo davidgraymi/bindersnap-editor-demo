@@ -2194,6 +2194,8 @@ async function establishSession(
     };
   }
 
+  void hideOwnEmail(username, token);
+
   const lifetime = buildSessionLifetime(rememberMe);
   const session = await createSession(
     username,
@@ -2276,6 +2278,32 @@ async function createLoginSession(
     baseHeaders,
     rememberMe,
   );
+}
+
+/**
+ * Keep the person's address to themselves and the service account.
+ *
+ * Gitea shows an account's email to every signed-in account unless it is
+ * kept private, and accounts made before `DEFAULT_KEEP_EMAIL_PRIVATE` was set
+ * are not. Asked on every sign-in, with their own token, so an older account
+ * is covered the next time its owner signs in. Never fails the sign-in.
+ */
+async function hideOwnEmail(username: string, token: string): Promise<void> {
+  const response = await giteaFetch("/api/v1/user/settings", {
+    method: "PATCH",
+    headers: {
+      Authorization: buildTokenAuthHeader(token),
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ hide_email: true }),
+  }).catch(() => null);
+  if (!response?.ok) {
+    logger.warn("Could not keep an account's email private", {
+      username,
+      status: response?.status ?? null,
+    });
+  }
 }
 
 async function createUserToken(
@@ -5173,17 +5201,74 @@ async function handleSearchUsersRoute(
   }
 
   try {
-    const result = await searchUsers({
-      client,
-      query,
-      page,
-      limit,
-    });
-
-    return json(200, result, baseHeaders);
+    return json(
+      200,
+      await searchSharedPeople(client, query, page, limit),
+      baseHeaders,
+    );
   } catch (err) {
     return responseFromError(err, baseHeaders, "Unable to search users.");
   }
+}
+
+/**
+ * The people the caller shares an organization with whose login or name
+ * matches, one page of them — and never their email.
+ *
+ * **Not Gitea's user search.** Every account is visible to every signed-in
+ * one, so that answered with every customer's people, and their addresses
+ * with them: anybody who signed up for a trial could list who works where.
+ * The people a reviewer can be asked from are the caller's own colleagues, so
+ * those are the only ones searched.
+ */
+async function searchSharedPeople(
+  client: GiteaClient,
+  query: string,
+  page: number,
+  limit: number,
+): Promise<{
+  users: RepoUserSummary[];
+  page: number;
+  limit: number;
+  hasMore: boolean;
+}> {
+  const wanted = query.toLowerCase();
+  const organizations = await listSessionOrganizations(client);
+  const memberLists = await Promise.all(
+    organizations.map((organization) =>
+      listOrganizationMembers({ client, org: organization.name }),
+    ),
+  );
+
+  const matches = new Map<string, RepoUserSummary>();
+  for (const member of memberLists.flat()) {
+    const login = member.login.toLowerCase();
+    if (!login || matches.has(login)) continue;
+    if (
+      !login.includes(wanted) &&
+      !member.fullName.toLowerCase().includes(wanted)
+    ) {
+      continue;
+    }
+    matches.set(login, {
+      id: member.id,
+      login: member.login,
+      full_name: member.fullName,
+      email: "",
+      avatar_url: "",
+    });
+  }
+
+  const sorted = [...matches.values()].sort((a, b) =>
+    a.login.localeCompare(b.login),
+  );
+  const start = (page - 1) * limit;
+  return {
+    users: sorted.slice(start, start + limit),
+    page,
+    limit,
+    hasMore: sorted.length > start + limit,
+  };
 }
 
 function serializeSubscriptionOverride(
