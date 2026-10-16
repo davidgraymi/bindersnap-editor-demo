@@ -22,6 +22,12 @@ export interface ApiConfig {
   // Turnstile's secret for the signup form's widget. Empty outside production,
   // which skips the check: the local stack and CI sign up with no widget.
   signupTurnstileSecret: string;
+  /**
+   * Seals each session's Gitea token in the sessions database. Required in
+   * production; elsewhere a fixed development key, so a stack that restarts
+   * keeps its sessions.
+   */
+  sessionSecret: string;
   defaultAppOrigin: string;
   appOrigin: string;
   // Where the API itself is reached from outside — for links that must hit
@@ -80,6 +86,9 @@ type BoolSpec = {
 
 // Aliases (PORT → API_PORT, BUN_PUBLIC_GITEA_URL → GITEA_INTERNAL_URL, etc.) are
 // resolved to canonical names in initializeConfig before these registries are consulted.
+/** Outside production only: production refuses to start without its own. */
+const DEV_SESSION_SECRET = "bindersnap-development-session-secret";
+
 const STRING_ENV: Record<string, StringSpec> = {
   GITEA_ADMIN_USER: { default: "" },
   GITEA_ADMIN_PASS: { default: "" },
@@ -92,6 +101,9 @@ const STRING_ENV: Record<string, StringSpec> = {
   STRIPE_RUN_TAG: { default: "" },
   // infra/edge/put-signup-turnstile-secret.sh writes it to SSM.
   SIGNUP_TURNSTILE_SECRET_KEY: { requiredInProduction: true, default: "" },
+  // The key that seals each session's Gitea token at rest (`sessions.ts`).
+  // put-secrets.sh generates the SSM leaf `bindersnap_session_secret`.
+  BINDERSNAP_SESSION_SECRET: { requiredInProduction: true, default: "" },
   BINDERSNAP_ALLOWED_ORIGINS: { default: "" },
   BINDERSNAP_APP_ORIGIN: { default: "" },
   BINDERSNAP_API_ORIGIN: { default: "" },
@@ -419,6 +431,9 @@ export function initializeConfig(
     ),
     stripePriceId: parseString(resolvedEnv, "STRIPE_PRICE_ID", isProduction),
     stripeRunTag: parseString(resolvedEnv, "STRIPE_RUN_TAG", isProduction),
+    sessionSecret:
+      parseString(resolvedEnv, "BINDERSNAP_SESSION_SECRET", isProduction) ||
+      DEV_SESSION_SECRET,
     signupTurnstileSecret: parseString(
       resolvedEnv,
       "SIGNUP_TURNSTILE_SECRET_KEY",

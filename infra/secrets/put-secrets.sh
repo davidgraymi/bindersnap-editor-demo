@@ -8,7 +8,8 @@
 #                               hold the previous values)
 #
 # What it sets:
-#   gitea_secret_key, gitea_internal_token   generated (openssl rand)
+#   gitea_secret_key, gitea_internal_token,
+#   bindersnap_session_secret                generated (openssl rand)
 #   gitea_admin_pass                         generated; read it back from SSM when needed
 #   gitea_service_token, gitea_admin_token   the bootstrap placeholder; the first
 #                                            deploy mints the real tokens
@@ -58,7 +59,9 @@ needs() {
 
 echo "Secrets under ${SSM_PATH} ($([ "${rotate}" -eq 1 ] && echo rotating all || echo only missing ones)):"
 
-for name in gitea_secret_key gitea_internal_token; do
+# bindersnap_session_secret seals each session's Gitea token at rest. Rotating
+# it signs everybody out: a session whose token no longer opens is refused.
+for name in gitea_secret_key gitea_internal_token bindersnap_session_secret; do
   if needs "${name}"; then put "${name}" "$(openssl rand -base64 48 | tr -d '\n')"; fi
 done
 
