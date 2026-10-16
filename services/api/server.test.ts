@@ -7,6 +7,7 @@ import {
   corsHeaders,
   createApiServer,
   downloadHeaders,
+  serializeSessionCookie,
   responseFromError,
 } from "./server";
 import { GiteaApiError } from "./gitea-client/client";
@@ -1162,6 +1163,136 @@ describe("stripe webhook transport security", () => {
       config.nodeEnv = originalNodeEnv;
       config.isProduction = originalIsProduction;
       config.enforceHttps = originalEnforceHttps;
+      server.stop(true);
+    }
+  });
+});
+
+describe("a Host header of localhost in production", () => {
+  test("does not skip the HTTPS check or take Secure off the cookie", async () => {
+    const server = createApiServer();
+    const original = {
+      nodeEnv: config.nodeEnv,
+      isProduction: config.isProduction,
+      enforceHttps: config.enforceHttps,
+    };
+    config.nodeEnv = "production";
+    config.isProduction = true;
+    config.enforceHttps = true;
+
+    try {
+      const plain = await server.fetch(
+        new Request("http://localhost/auth/me", {
+          headers: { Origin: "http://localhost:5173" },
+        }),
+      );
+      expect(plain.status).toBe(400);
+      expect(
+        serializeSessionCookie(new Request("http://localhost/"), "x"),
+      ).toContain("Secure");
+    } finally {
+      Object.assign(config, original);
+      server.stop(true);
+    }
+  });
+});
+
+describe("guessing at one account from many addresses", () => {
+  test("is held after ten failures, whatever address they come from", async () => {
+    const server = createApiServer();
+    const original = config.authRateLimitEnabled;
+    config.authRateLimitEnabled = true;
+    const target = `target-${randomUUID()}`;
+    const attempt = (n: number) =>
+      server.fetch(
+        new Request("http://localhost/auth/login", {
+          method: "POST",
+          headers: {
+            Origin: "http://localhost:5173",
+            "Content-Type": "application/json",
+            "X-Forwarded-For": `198.51.100.${n}`,
+          },
+          body: JSON.stringify({ identifier: target, password: "wrong" }),
+        }),
+      );
+
+    try {
+      for (let n = 1; n <= 10; n += 1) {
+        expect((await attempt(n)).status).toBe(401);
+      }
+      const held = await attempt(11);
+      expect(held.status).toBe(429);
+      expect(held.headers.get("Retry-After")).not.toBeNull();
+    } finally {
+      config.authRateLimitEnabled = original;
+      server.stop(true);
+    }
+  });
+  const login = (
+    server: ReturnType<typeof createApiServer>,
+    n: number,
+    body: Record<string, string>,
+  ) =>
+    server.fetch(
+      new Request("http://localhost/auth/login", {
+        method: "POST",
+        headers: {
+          Origin: "http://localhost:5173",
+          "Content-Type": "application/json",
+          "X-Forwarded-For": `198.51.100.${n}`,
+        },
+        body: JSON.stringify({ password: "wrong", ...body }),
+      }),
+    );
+
+  test("a request naming two accounts is refused, not counted under one", async () => {
+    const server = createApiServer();
+    try {
+      const response = await login(server, 1, {
+        identifier: `decoy-${randomUUID()}`,
+        email: "victim@example.com",
+      });
+      expect(response.status).toBe(400);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("an email sign-in counts even when the address cannot be looked up", async () => {
+    // The password is tried against the name as typed before the lookup can
+    // fail, so a failed lookup is still a guess.
+    const server = createApiServer();
+    const original = config.authRateLimitEnabled;
+    config.authRateLimitEnabled = true;
+    const target = `victim-${randomUUID()}@example.com`;
+    try {
+      for (let n = 1; n <= 10; n += 1) {
+        const response = await login(server, n, { email: target });
+        expect(response.status).not.toBe(429);
+      }
+      expect((await login(server, 11, { email: target })).status).toBe(429);
+    } finally {
+      config.authRateLimitEnabled = original;
+      server.stop(true);
+    }
+  });
+
+  test("a burst at once is counted before any password is checked", async () => {
+    const server = createApiServer();
+    const original = config.authRateLimitEnabled;
+    config.authRateLimitEnabled = true;
+    const target = `burst-${randomUUID()}`;
+    try {
+      const statuses = await Promise.all(
+        Array.from({ length: 15 }, (_, n) =>
+          Promise.resolve(login(server, n + 1, { identifier: target })).then(
+            (response) => response.status,
+          ),
+        ),
+      );
+      expect(statuses.filter((status) => status !== 429)).toHaveLength(10);
+    } finally {
+      config.authRateLimitEnabled = original;
       server.stop(true);
     }
   });

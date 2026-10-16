@@ -594,7 +594,15 @@ function mergeHeaders(base: Headers, extra?: HeadersInit): Headers {
   return headers;
 }
 
+/**
+ * A request to this machine, for the local stack's plain-HTTP conveniences.
+ *
+ * Never in production: the host name comes from the request's own `Host`
+ * header, so `Host: localhost` would otherwise skip the HTTPS check and take
+ * `Secure` off the session cookie for anybody who sent it.
+ */
 function isLocalRequest(req: Request): boolean {
+  if (config.isProduction) return false;
   const { hostname } = new URL(req.url);
   return hostname === "localhost" || hostname === "127.0.0.1";
 }
@@ -753,6 +761,52 @@ function consumeAuthRateLimit(
   }
 
   return { limited: false, retryAfterSeconds: 0 };
+}
+
+/**
+ * Sign-in attempts against one account, from anywhere.
+ *
+ * The per-address limit above stops one machine guessing; it does nothing
+ * against a list of passwords spread across many. This counts attempts on the
+ * name being signed in as. The slot is taken **before** the password is
+ * checked, synchronously, so a burst of concurrent requests cannot all pass
+ * the check before any is counted; a success clears it, so a person who knows
+ * their password is never held up by it. Somebody guessing at an account can
+ * make its owner wait out the window — the price of slowing the guessing.
+ *
+ * Keyed on the name as typed. An account has two (its login and its address),
+ * so it allows two windows' worth, not one: bounded, without an admin lookup
+ * on every attempt. `handleLogin` refuses a request naming two different
+ * accounts, so the name counted is always the name checked.
+ */
+const ACCOUNT_LOGIN_ATTEMPTS_MAX = 10;
+
+function accountLoginKey(name: string): string {
+  return `login-account:${name.trim().toLowerCase()}`;
+}
+
+/** Take a slot for this name, or answer how many seconds until one frees. */
+function reserveAccountLoginAttempt(name: string): number | null {
+  if (!config.authRateLimitEnabled) return null;
+  const key = accountLoginKey(name);
+  const now = Date.now();
+  const entry = authAttempts.get(key);
+  if (!entry || entry.resetAt <= now) {
+    authAttempts.set(key, {
+      count: 1,
+      resetAt: now + config.authRateLimitWindowMs,
+    });
+    return null;
+  }
+  if (entry.count >= ACCOUNT_LOGIN_ATTEMPTS_MAX) {
+    return Math.max(1, Math.ceil((entry.resetAt - now) / 1000));
+  }
+  entry.count += 1;
+  return null;
+}
+
+function clearAccountLoginFailures(name: string): void {
+  authAttempts.delete(accountLoginKey(name));
 }
 
 function resetAuthRateLimit(req: Request, action: AuthRateLimitAction): void {
@@ -2756,6 +2810,39 @@ async function handleLogin(
     );
   }
 
+  // One account per request. The form sends a username or an email; a request
+  // naming two different ones would be counted under one and checked as the
+  // other, which is a way around the per-account limit.
+  const named = new Set(
+    [
+      typeof payload?.identifier === "string" ? payload.identifier : "",
+      username,
+      email,
+    ]
+      .map((name) => name.trim().toLowerCase())
+      .filter((name) => name !== ""),
+  );
+  if (named.size > 1) {
+    return json(
+      400,
+      { error: "Sign in with one username or email address." },
+      baseHeaders,
+    );
+  }
+
+  const accountWait = reserveAccountLoginAttempt(identifier);
+  if (accountWait !== null) {
+    logger.warn("Account sign-in limit hit", {
+      clientIp,
+      retryAfterSeconds: accountWait,
+    });
+    return json(
+      429,
+      { error: "Too many login attempts. Please try again shortly." },
+      mergeHeaders(baseHeaders, { "Retry-After": String(accountWait) }),
+    );
+  }
+
   logger.debug("Credential verification attempt", {
     // Log the identifier type (email or username) but never the value itself
     identifierType: looksLikeEmailAddress(identifier) ? "email" : "username",
@@ -2770,6 +2857,8 @@ async function handleLogin(
   );
 
   if (resolution.kind === "unavailable") {
+    // Not given back: by the time the email lookup can fail, the password
+    // has already been tried against the name as typed.
     logger.warn("Login resolution unavailable", {
       status: resolution.status,
       error: resolution.error,
@@ -2802,6 +2891,7 @@ async function handleLogin(
   );
   if (response.ok) {
     resetAuthRateLimit(req, "login");
+    clearAccountLoginFailures(identifier);
     // An owner signing in can finish invitations that were waiting for one.
     void completeWaitingInvitations().catch(() => undefined);
     logger.debug("Session created after login", {
@@ -3431,6 +3521,9 @@ async function handleResetPassword(
   }
 
   resets.retireAll(record.username);
+  // Whoever was guessing at it, the owner has just proved who they are.
+  clearAccountLoginFailures(record.username);
+  clearAccountLoginFailures(record.email);
   // The link went to this address, so whoever used it owns it.
   emailVerificationStore().confirm(record.username, record.email);
   await endOtherSessions(record.username);
