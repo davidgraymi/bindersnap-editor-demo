@@ -1193,6 +1193,44 @@ function requestOrganization(req: Request): string | null {
   }
 }
 
+/**
+ * The organization a paywalled request is judged by.
+ *
+ * The one the path names, and only that one — whether or not the caller is
+ * a member of it. A person who can write to another organization's binder
+ * without being in it is judged by **that** organization's subscription, not
+ * their own. One the caller cannot see answers `"missing"`: a 404, as for any
+ * organization a session cannot see, and never a 402 that would confirm it
+ * exists. Null when there is nothing to judge by, or Gitea could not say.
+ */
+async function paywallOrganization(
+  auth: { client: GiteaClient; session: SessionRecord },
+  req: Request,
+): Promise<{ id: number; name: string } | null | "missing"> {
+  const named = requestOrganization(req);
+  const mine = await resolveSessionOrganization(
+    auth.client,
+    auth.session,
+    named,
+  );
+  if (mine || !named) return mine;
+  try {
+    const visible = await findOrganization({ client: auth.client, org: named });
+    if (!visible) return "missing";
+    return visible.id > 0 ? { id: visible.id, name: visible.name } : null;
+  } catch (err) {
+    logger.warn("Could not read the organization a write names", {
+      organization: named,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
+function noSuchOrganization(baseHeaders: Headers): Response {
+  return json(404, { error: "No such organization." }, baseHeaders);
+}
+
 async function requireSubscription(
   req: Request,
   baseHeaders: Headers,
@@ -1210,13 +1248,15 @@ async function requireSubscription(
   // The organization is what owes us money, so it is what gets checked. A
   // delinquent org blocks everyone in it — its reviewers included, because the
   // org is delinquent, not them.
-  const organization = await resolveSessionOrganization(
-    auth.client,
-    auth.session,
-    requestOrganization(req),
-  );
+  // The organization the path names, and only that one: a writer who is not
+  // in it is not covered by whichever organization they are in.
+  const organization = await paywallOrganization(auth, req);
+  if (organization === "missing") return noSuchOrganization(baseHeaders);
   if (!organization || !(await organizationHasAccess(organization.id))) {
-    return paymentRequired(baseHeaders, organization?.name ?? null);
+    return paymentRequired(
+      baseHeaders,
+      organization?.name ?? requestOrganization(req),
+    );
   }
 
   return auth;
@@ -1270,12 +1310,12 @@ async function requireSubscriptionOrAdmin(
     return auth;
   }
 
-  const organization = await resolveSessionOrganization(
-    auth.client,
-    auth.session,
-    requestOrganization(req),
-  );
-  if (organization && (await organizationHasAccess(organization.id))) {
+  const organization = await paywallOrganization(auth, req);
+  if (
+    organization &&
+    organization !== "missing" &&
+    (await organizationHasAccess(organization.id))
+  ) {
     return auth;
   }
 
@@ -1284,7 +1324,11 @@ async function requireSubscriptionOrAdmin(
     return auth;
   }
 
-  return paymentRequired(baseHeaders, organization?.name ?? null);
+  if (organization === "missing") return noSuchOrganization(baseHeaders);
+  return paymentRequired(
+    baseHeaders,
+    organization?.name ?? requestOrganization(req),
+  );
 }
 
 type SubscriptionAccessSource =

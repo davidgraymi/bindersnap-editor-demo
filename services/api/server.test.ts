@@ -193,6 +193,24 @@ beforeEach(() => {
       });
     }
 
+    // One organization by name: every seeded one is visible to every caller
+    // here, as an organization a direct collaborator can see would be.
+    const orgMatch = url.pathname.match(/^\/api\/v1\/orgs\/([^/]+)$/);
+    if (orgMatch) {
+      const wanted = decodeURIComponent(orgMatch[1]!).toLowerCase();
+      const organization = [
+        ...giteaOrgsByUsername.values(),
+        ...[...giteaExtraOrgsByUsername.values()].flat(),
+      ].find((entry) => entry.username.toLowerCase() === wanted);
+      return new Response(
+        JSON.stringify(organization ?? { message: "Not found" }),
+        {
+          status: organization ? 200 : 404,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+
     if (url.pathname === "/api/v1/user/orgs") {
       const authHeader = headers.get("Authorization") ?? "";
       const token = authHeader.startsWith("token ")
@@ -781,6 +799,48 @@ describe("billing is per organization", () => {
     // And the other way round: paying for the second opens it.
     await activate(second.id);
     expect((await rename(second.username)).status).not.toBe(402);
+  });
+
+  test("a write into an organization the writer is not in is judged by that one", async () => {
+    const server = createApiServer();
+    const username = `outsider-${randomUUID()}`;
+    const sessionId = await seedSession(username);
+    // Their own organization is paid for; the one they write into is not.
+    await activate(orgIdFor(username));
+    const owner = `owner-${randomUUID()}`;
+    seedOrganizationFor(owner);
+    const theirs = `${owner}-org`;
+
+    const rename = () =>
+      server.fetch(
+        makeSessionRequest(
+          `/api/app/binders/${theirs}/handbook/name`,
+          sessionId,
+          { method: "POST", body: { name: "Handbook" } },
+        ),
+      );
+
+    const refused = await rename();
+    expect(refused.status).toBe(402);
+    expect(await refused.json()).toMatchObject({ organization: theirs });
+
+    // Paid for by its own organization, it is not refused for money.
+    await activate(orgIdFor(owner));
+    expect((await rename()).status).not.toBe(402);
+  });
+
+  test("a write into an organization nobody can see is a 404, not a 402", async () => {
+    const server = createApiServer();
+    const sessionId = await seedSession(`nowhere-${randomUUID()}`);
+
+    const response = await server.fetch(
+      makeSessionRequest(
+        `/api/app/binders/no-such-org-${randomUUID().slice(0, 8)}/handbook/name`,
+        sessionId,
+        { method: "POST", body: { name: "Handbook" } },
+      ),
+    );
+    expect(response.status).toBe(404);
   });
 });
 
