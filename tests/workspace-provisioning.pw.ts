@@ -148,14 +148,15 @@ test("an account with no organization has no binders, and is not an error", asyn
   expect(await listWorkspaces(sessionCookie)).toEqual([]);
 
   // The URL names an organization, so this is no longer "which organization
-  // did they mean" — it is a person with no subscription asking to create a
-  // binder somewhere they do not belong.
+  // did they mean" — it is a person asking to create a binder in one they
+  // cannot see: a 404, as for any organization a session cannot see, and
+  // not a 402 that would say it exists.
   const attempt = await createWorkspace(
     sessionCookie,
     "some-other-organization",
     "Clinical Policies",
   );
-  expect(attempt.status).toBe(402);
+  expect(attempt.status).toBe(404);
 });
 
 test("a member creates the binder, and it belongs to the organization", async () => {
