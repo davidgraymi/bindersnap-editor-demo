@@ -122,36 +122,73 @@ phases:
 
 ## 3. Who to sell to
 
-Unchanged from #388, and it matches the `/for` pages.
+Revised 2026-10-16 from #388's version, after one fact changed the plan: the
+founder's warm network is inside a large national hospital system. That system
+is a customer type Bindersnap disqualifies. The people one step out from it are
+not, and they decide the order below.
 
-**Segment:** US ambulatory providers with 10–150 staff, accredited or
-preparing for it, no IT department, and no incumbent policy system. In priority
+**Segment:** independently owned US providers with 10–150 staff, accredited or
+preparing for it, no IT department, and no policy management system. They may
+still buy a template manual (see "The real competitor" below). In priority
 order:
 
-1. **Ambulatory surgery centers.** AAAHC, Joint Commission or AAAASF. Sharpest
-   survey moment, one decision maker, 100–300 policies on a shared drive.
-2. **Home health and hospice.** CHAP, ACHC or Joint Commission. High turnover,
-   so "who approved this?" breaks constantly.
-3. **Behavioral health and SUD programs.** CARF or Joint Commission.
-4. **Rural health clinics, FQHCs, urgent care.**
+1. **Home health and hospice agencies.** CHAP, ACHC or Joint Commission. A
+   hospital's discharge planners deal with them every day, and their community
+   liaisons visit the hospital to win referrals. That makes them the shortest
+   warm path from the founder's network. High turnover means "who approved
+   this?" breaks constantly.
+2. **Physician-owned ambulatory surgery centers.** AAAHC, Joint Commission or
+   AAAASF. The surgeons who own them usually also operate at the local
+   hospital. Sharpest survey moment, 100–300 policies on a shared drive.
+3. **Small management companies running 3–10 independent sites** (ASC or home
+   health). One buyer, many writers and one manual reused across sites: the
+   best fit for per-writer pricing. Treat each as its own deal.
+4. **Behavioral health and SUD programs.** CARF or Joint Commission.
+5. **Rural health clinics and FQHCs.**
+6. **Experiment: independent and physician-office clinical labs.** CLIA, and
+   CAP if accredited, require the lab director to approve procedures and review
+   them on a schedule. Check the current CAP checklist before the first email.
+   Run ten conversations, and keep going only if three or more score 3+.
 
 **Buyer:** the administrator, DON, or quality/QAPI coordinator. One person is
 champion, buyer and daily user, and $39–$117 a month fits on their card without
 asking anyone. That fact is the whole reason this segment is winnable.
 
-**Disqualify fast:** hospitals and health systems; anyone who wants patient
-data in it or a BAA (decided 2026-10-07: Bindersnap holds no PHI); EHR, SSO or
-on-premise requirements; anyone mid-contract with PolicyStat, PolicyTech or
-PowerDMS unless renewal is within 90 days and they volunteer unhappiness;
-FDA-regulated manufacturers (Part 11).
+**Disqualify fast:**
+
+- Hospitals and health systems, including the founder's household employer
+  (see "The hospital network" in section 4).
+- Sites owned by a chain or a national management company. Their manual comes
+  from corporate, so the local administrator can't buy.
+- Unaccredited physician practices. No surveyor means no deadline and weak
+  pain. Keep `/for/medical-practices` for search traffic, but spend no calls
+  on them.
+- Anyone who wants patient data in it or a BAA (decided 2026-10-07: Bindersnap
+  holds no PHI); EHR, SSO or on-premise requirements; FDA-regulated
+  manufacturers (Part 11).
+- Anyone mid-contract with PolicyStat, PolicyTech or PowerDMS, unless renewal
+  is within 90 days and they volunteer unhappiness.
+
+**The best predictor is what they already do.** The strongest qualifier is that
+they already keep some record of approval by hand: a signature page, an annual
+review log, a sign-off sheet at the front of the binder. They value the record
+and are doing Bindersnap's job on paper. Ask about it on every call (section 6).
+
+**The real competitor is a template manual, not nothing.** Check this on the
+first calls: many small agencies and surgery centers buy a ready-made policy
+manual from a template vendor or consultant, then update it in Word once a
+year. Bindersnap doesn't replace the template. It's where the template lives
+once it has been adopted and approved. Template vendors belong in Tier 1 with
+the consultants.
 
 **Rank prospects by trigger**, strongest first:
 
 1. A survey in the next 3–9 months
 2. A recent deficiency citation (CMS statements of deficiency are public for
    many provider types)
-3. A new administrator or DON in the last six months (LinkedIn job-change
-   alerts)
+3. A new administrator or DON in the last six months, especially one who has
+   just left a hospital: they're used to a policy system and now have a shared
+   drive (LinkedIn job-change alerts)
 4. A new site opening, which is a manual built from nothing, with no migration
 5. An incumbent's price increase at renewal
 
@@ -161,17 +198,45 @@ FDA-regulated manufacturers (Part 11).
 
 Ranked by cost per first customer.
 
-### Tier 0: your wife's network (customer #1)
+### Tier 0: one step out from the hospital (customer #1)
 
-The founding story is literally true, and her network is the ICP.
+Her colleagues aren't customers. A national system has procurement, a vendor
+security review and probably a policy system already. But a hospital sits at
+the center of exactly the small providers Bindersnap is for, and she can see
+that system from the inside. Use the network in three ways.
 
-- Write down **20 named people** with her: colleagues, former colleagues, the
-  compliance lead at her last workplace, the consultant who ran their last
-  survey prep.
-- Ask her for **five introductions**, spent on the five with the strongest
-  triggers.
-- Ask her to share `bindersnap.com/pricing` once, in her own words, in a peer
-  group chat or association forum.
+**1. Her as the expert, before anyone else.** An hour with her is worth five
+discovery calls. Ask her: how does a policy get approved where she works, and
+what does the system they use do badly? What do surveyors ask the hospital for?
+Which nurses and managers left for a surgery center, an agency or a clinic? Her
+answers sharpen the demo and the objections. Don't use her employer's policies
+as demo content, and don't use anything she learned at work that isn't public
+(vendor pricing, contracts, internal documents).
+
+**2. The 20 names, one step out.** Write them with her, from these groups:
+
+- **Former colleagues who moved to small providers.** Nurses often leave
+  hospitals to become the DON or administrator of an ASC, home health agency or
+  hospice. They know what a policy system does, and now they have a shared
+  drive. This is trigger 3, warm.
+- **Discharge planners and case managers she knows.** They know every local
+  home health and hospice agency by name, and which ones are well run.
+- **Home health and hospice community liaisons** who visit the hospital to win
+  referrals. They want to do the hospital's staff a favor, and an introduction
+  to their administrator costs them nothing.
+- **Surgeons and anesthesiologists who own part of an ASC.** Ask them for an
+  introduction to their center's administrator, not for a sale.
+- **The consultants or surveyors** the hospital used. Some also work with small
+  providers (Tier 1).
+
+Ask her for **five introductions**, spent on the five with the strongest
+triggers.
+
+**3. Keep her clear of her employer.** Before she makes introductions, she
+should check her employer's outside-activity and conflict-of-interest policy,
+especially if she gets anything from Bindersnap. Introductions happen on her
+own time and her own phone, never through work email or work systems. Never
+name her employer or its policy vendor in outreach or on the site.
 
 ### Tier 1: accreditation consultants (customers #2–#10, and Phase 2)
 
@@ -288,18 +353,21 @@ ever the thing keeping you up before a survey").
 1. Walk me through the last policy that got approved. Who wrote it?
 2. Where does it live now? What's the file called?
 3. How does staff know it's the current one?
-4. Who signed off, and how would you show me?
+4. Who signed off, and how would you show me? Is there a signature page or a
+   review log?
 5. When was the last survey? What did they ask for on policies? Was anything
    cited?
 6. How many policies, and in what format?
 7. Who writes them, and who approves them? (This tells you the seat count:
    writers pay, approvers don't.)
-8. What have you already paid for to fix this?
+8. Where did the manual come from: written in-house, a template you bought,
+   or a consultant? What have you paid to keep it current?
 9. Who else is involved in a decision like this?
 
 Never ask "would you use this?" or "would you pay for this?"
 
-**Score it, one point each, and pursue at 3 or more:** survey within 9 months;
+**Score it, one point each, and pursue at 3 or more:** already keeps a
+signature page or review log by hand; survey within 9 months;
 cited or nearly cited on policies; more than 50 policies; already paid for a
 fix; can spend $100 a month without asking anyone.
 
@@ -403,9 +471,10 @@ Week 1 starts Monday, 2026-10-19.
 
 - Apply `infra/email` and request SES production access. Fill in the legal
   placeholders and send the documents to counsel. Request an insurance quote.
-- Write the 20 warm names; ask for five introductions.
-- Pull the CMS file for your state plus two neighbors, filter to ASCs, and
-  enrich 50 contacts.
+- Spend an hour with her as the expert (section 4, Tier 0), then write the 20
+  names one step out from the hospital. Ask for five introductions.
+- Pull the CMS home health and hospice files for your state plus two
+  neighbors, drop chain-owned agencies, and enrich 50 contacts.
 - Find 10 accreditation consultants.
 - Send 5 warm requests, 10 consultant emails and 25 cold emails.
 - **Target: 5 discovery calls booked.**
@@ -495,5 +564,7 @@ After 15 calls with the right titles:
 3. **Counsel.** Who reviews the Terms, Privacy and DPA, and for what fixed fee?
 4. **Insurance.** Whether to carry E&O and cyber before the first customer.
    Recommended: yes.
-5. **Demo before cutover.** Whether to screen-share from the local stack in
+5. **Her employer's rules.** Whether her outside-activity policy allows
+   introductions, and whether she takes any role or payment from Bindersnap.
+6. **Demo before cutover.** Whether to screen-share from the local stack in
    week 2, or hold every demo until production is live.
