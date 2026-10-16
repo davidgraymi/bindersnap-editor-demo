@@ -1,0 +1,6 @@
+# Copy to terraform.tfvars and fill in real values.
+# terraform.tfvars is gitignored — never commit it (this repository is public).
+
+aws_region         = "us-east-1"
+alert_email        = "you@example.com" # confirm the SNS subscription email it sends
+monthly_budget_usd = 75

@@ -4,31 +4,53 @@ import {
   buildRemoteBootstrapCommands,
   buildPutParameterArgs,
   DEFAULT_SERVICE_ACCOUNT_USERNAME,
+  DEFAULT_ADMIN_TOKEN_NAME,
   DEFAULT_SERVICE_TOKEN_NAME,
   renderDockerEnvFromSsmPayload,
+  resolveAdminTokenScopes,
   resolveBootstrapConfig,
   resolveServiceTokenScopes,
+  tokenSpec,
   resolveSsmParameterName,
 } from "../deploy/files/scripts/bootstrap-gitea-service-account";
 
 describe("bootstrap-gitea-service-account", () => {
-  test("defaults to the minimum admin scope required by the API", () => {
+  test("the service token reads; only the admin token can write, and only accounts", () => {
     expect(resolveServiceTokenScopes()).toEqual([
-      "write:admin",
+      "read:admin",
       "read:issue",
       "read:organization",
       "read:repository",
       "read:user",
     ]);
-    expect(
-      resolveServiceTokenScopes("write:admin,write:admin,read:user"),
-    ).toEqual([
-      "write:admin",
+    expect(resolveAdminTokenScopes()).toEqual(["write:admin"]);
+    expect(resolveServiceTokenScopes("read:user,read:user,read:misc")).toEqual([
       "read:user",
+      "read:misc",
+      "read:admin",
       "read:issue",
       "read:organization",
       "read:repository",
     ]);
+  });
+
+  test("a host with no admin token parameter yet mints the old combined token", () => {
+    const config = resolveBootstrapConfig({
+      GITEA_ADMIN_USER: "gitea-admin",
+      GITEA_ADMIN_PASS: "break-glass",
+    });
+    expect(tokenSpec(config, "service")).toEqual({
+      name: DEFAULT_SERVICE_TOKEN_NAME,
+      scopes: resolveServiceTokenScopes(),
+    });
+    expect(tokenSpec(config, "admin")).toEqual({
+      name: DEFAULT_ADMIN_TOKEN_NAME,
+      scopes: ["write:admin"],
+    });
+    expect(tokenSpec(config, "combined")).toEqual({
+      name: DEFAULT_SERVICE_TOKEN_NAME,
+      scopes: [...resolveServiceTokenScopes(), "write:admin"],
+    });
   });
 
   test("builds the expected SSM parameter name", () => {
@@ -37,6 +59,9 @@ describe("bootstrap-gitea-service-account", () => {
     );
     expect(resolveSsmParameterName("/custom/path/")).toBe(
       "/custom/path/gitea_service_token",
+    );
+    expect(resolveSsmParameterName(undefined, "gitea_admin_token")).toBe(
+      "/bindersnap/prod/gitea_admin_token",
     );
   });
 
@@ -57,15 +82,14 @@ describe("bootstrap-gitea-service-account", () => {
       `${DEFAULT_SERVICE_ACCOUNT_USERNAME}@users.bindersnap.com`,
     );
     expect(config.serviceTokenName).toBe(DEFAULT_SERVICE_TOKEN_NAME);
-    expect(config.serviceTokenScopes).toEqual([
-      "write:admin",
-      "read:issue",
-      "read:organization",
-      "read:repository",
-      "read:user",
-    ]);
+    expect(config.serviceTokenScopes).toEqual(resolveServiceTokenScopes());
     expect(config.ssmParameterName).toBe(
       "/bindersnap/prod/gitea_service_token",
+    );
+    expect(config.adminTokenName).toBe(DEFAULT_ADMIN_TOKEN_NAME);
+    expect(config.adminTokenScopes).toEqual(["write:admin"]);
+    expect(config.adminSsmParameterName).toBe(
+      "/bindersnap/prod/gitea_admin_token",
     );
   });
 
@@ -142,6 +166,42 @@ describe("bootstrap-gitea-service-account", () => {
     );
     expect(rendered).not.toContain("GITEA_ADMIN_USER=");
     expect(rendered).not.toContain("GITEA_ADMIN_PASS=");
+  });
+
+  test("keeps the admin creds while the admin token still waits to be minted", () => {
+    const parameters = (adminToken: string) => ({
+      Parameters: [
+        { Name: "/bindersnap/prod/gitea_admin_pass", Value: "break-glass" },
+        { Name: "/bindersnap/prod/gitea_admin_token", Value: adminToken },
+        { Name: "/bindersnap/prod/gitea_admin_user", Value: "gitea-admin" },
+        { Name: "/bindersnap/prod/gitea_service_token", Value: "real-token" },
+      ],
+    });
+
+    const waiting = renderDockerEnvFromSsmPayload(
+      parameters(BOOTSTRAP_SERVICE_TOKEN_PLACEHOLDER),
+      "/bindersnap/prod",
+    );
+    expect(waiting).toContain("GITEA_ADMIN_USER=gitea-admin");
+    expect(waiting).toContain("GITEA_ADMIN_PASS=break-glass");
+
+    const minted = renderDockerEnvFromSsmPayload(
+      parameters("real-admin-token"),
+      "/bindersnap/prod",
+    );
+    expect(minted).toContain("GITEA_ADMIN_TOKEN=real-admin-token");
+    expect(minted).not.toContain("GITEA_ADMIN_USER=");
+    expect(minted).not.toContain("GITEA_ADMIN_PASS=");
+  });
+
+  test("the remote bootstrap mints both tokens, and the old combined one only without an admin parameter", () => {
+    const script = buildRemoteBootstrapCommands("ZHVtbXk=").join("\n");
+    expect(script).toContain("mint-token --kind");
+    expect(script).toContain(
+      'if [ -z "$ADMIN_TOKEN" ]; then SERVICE_KIND=combined; else SERVICE_KIND=service; fi',
+    );
+    expect(script).toContain("$PARAMETER_PATH/gitea_service_token");
+    expect(script).toContain("$PARAMETER_PATH/gitea_admin_token");
   });
 
   test("builds remote bootstrap commands without embedding inline python", () => {

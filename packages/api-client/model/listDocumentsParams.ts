@@ -6,15 +6,5 @@
  */
 
 export type ListDocumentsParams = {
-owner?: string;
-member?: string;
 q?: string;
-/**
- * @nullable
- */
-page?: number | null;
-/**
- * @nullable
- */
-limit?: number | null;
 };

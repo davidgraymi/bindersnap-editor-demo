@@ -8,13 +8,10 @@ import {
 } from "./client";
 
 type Repository = components["schemas"]["Repository"];
-type Tag = components["schemas"]["Tag"];
 type BranchProtection = components["schemas"]["BranchProtection"];
 type User = components["schemas"]["User"];
 type RepoCollaboratorPermission =
   components["schemas"]["RepoCollaboratorPermission"];
-type CreateBranchProtectionOption =
-  components["schemas"]["CreateBranchProtectionOption"];
 type AddCollaboratorOption = components["schemas"]["AddCollaboratorOption"];
 type RepoFileContent = {
   sha?: string;
@@ -41,13 +38,6 @@ export interface CreatePrivateCurrentUserRepoParams {
   client: GiteaClient;
   name: string;
   description?: string;
-}
-
-export interface CreateMainBranchProtectionParams {
-  client: GiteaClient;
-  owner: string;
-  repo: string;
-  requiredApprovals?: number;
 }
 
 export interface BootstrapEmptyMainBranchParams {
@@ -189,149 +179,6 @@ function formatRepoCollaboratorPermissionLabel(
   }
 }
 
-function normalizeRepoCollaboratorPermission(
-  raw: RepoCollaboratorPermission,
-): RepoCollaboratorPermissionSummary {
-  const permission = raw.permission ?? "";
-  const access = normalizeRepoCollaboratorAccess(permission);
-
-  return {
-    permission,
-    access,
-    permissionLabel: formatRepoCollaboratorPermissionLabel(access),
-    roleName: raw.role_name ?? "",
-    user: normalizeUser(raw.user),
-  };
-}
-
-function parseDocTagVersion(tagName: string): number | null {
-  const match = /^doc\/v(\d{4})$/.exec(tagName);
-  if (!match) {
-    return null;
-  }
-
-  const version = Number.parseInt(match[1] ?? "", 10);
-  return Number.isFinite(version) && version > 0 ? version : null;
-}
-
-function normalizeDocTag(tag: Tag): DocTag | null {
-  const name = tag.name ?? "";
-  const version = parseDocTagVersion(name);
-
-  if (version === null) {
-    return null;
-  }
-
-  return {
-    name,
-    version,
-    sha: tag.commit?.sha ?? "",
-    created: tag.commit?.created ?? "",
-  };
-}
-
-export async function listWorkspaceRepos(
-  client: GiteaClient,
-): Promise<WorkspaceRepo[]> {
-  const result = await unwrap(
-    client.GET("/repos/search", {
-      params: { query: { limit: 100 } },
-    }),
-  );
-
-  return result.data?.map(normalizeWorkspaceRepo) ?? [];
-}
-
-export interface SearchWorkspaceReposParams {
-  client: GiteaClient;
-  /** Free-text keyword to filter repository names/descriptions. */
-  q?: string;
-  /** If set, return only repos owned by this username (exclusive owner filter). */
-  ownerUsername?: string;
-  /** If set, return repos where this username is a member (owner or collaborator). */
-  memberUsername?: string;
-  /** 1-based page of results. Defaults to the first page. */
-  page?: number;
-  /** How many repos one page holds. */
-  limit?: number;
-}
-
-export interface SearchWorkspaceReposResult {
-  repos: WorkspaceRepo[];
-  page: number;
-  limit: number;
-  /**
-   * Gitea's repo search reports no total, so a full page is taken as the sign
-   * that another one may exist. The cost of guessing wrong is one empty fetch.
-   */
-  hasMore: boolean;
-}
-
-/** One page of matching repos, for a caller that pages through results. */
-export async function searchWorkspaceReposPage(
-  params: SearchWorkspaceReposParams,
-): Promise<SearchWorkspaceReposResult> {
-  const { client, q, ownerUsername, memberUsername } = params;
-  const page = params.page ?? 1;
-  const limit = params.limit ?? 100;
-
-  const filterUsername = ownerUsername ?? memberUsername;
-  const exclusive = !!ownerUsername;
-
-  let uid: number | undefined;
-  if (filterUsername) {
-    const user = await unwrap(
-      client.GET("/users/{username}", {
-        params: { path: { username: filterUsername } },
-      }),
-    );
-    uid = user.id;
-  }
-
-  const result = await unwrap(
-    client.GET("/repos/search", {
-      params: {
-        query: {
-          page,
-          limit,
-          ...(q ? { q } : {}),
-          ...(uid !== undefined ? { uid } : {}),
-          ...(exclusive ? { exclusive: true } : {}),
-        },
-      },
-    }),
-  );
-
-  const repos = result.data?.map(normalizeWorkspaceRepo) ?? [];
-
-  return { repos, page, limit, hasMore: repos.length === limit };
-}
-
-export async function searchWorkspaceRepos(
-  params: SearchWorkspaceReposParams,
-): Promise<WorkspaceRepo[]> {
-  const { repos } = await searchWorkspaceReposPage(params);
-  return repos;
-}
-
-export async function createPrivateCurrentUserRepo(
-  params: CreatePrivateCurrentUserRepoParams,
-): Promise<Repository> {
-  const { client, name, description } = params;
-
-  return await unwrap(
-    client.POST("/user/repos", {
-      body: {
-        name,
-        description,
-        private: true,
-        auto_init: true,
-        default_branch: "main",
-      },
-    }),
-  );
-}
-
 async function loadRepoCollaboratorPermission(
   client: GiteaClient,
   owner: string,
@@ -391,60 +238,53 @@ export async function listRepoCollaborators(
   };
 }
 
-export async function getRepoCollaboratorPermission(
-  params: GetRepoCollaboratorPermissionParams,
-): Promise<RepoCollaboratorPermissionSummary> {
-  const { client, owner, repo, collaborator } = params;
-  return await loadRepoCollaboratorPermission(
-    client,
-    owner,
-    repo,
-    collaborator,
-  );
+function normalizeRepoCollaboratorPermission(
+  raw: RepoCollaboratorPermission,
+): RepoCollaboratorPermissionSummary {
+  const permission = raw.permission ?? "";
+  const access = normalizeRepoCollaboratorAccess(permission);
+
+  return {
+    permission,
+    access,
+    permissionLabel: formatRepoCollaboratorPermissionLabel(access),
+    roleName: raw.role_name ?? "",
+    user: normalizeUser(raw.user),
+  };
 }
+
+export interface SearchWorkspaceReposParams {
+  client: GiteaClient;
+  /** Free-text keyword to filter repository names/descriptions. */
+  q?: string;
+  /** If set, return only repos owned by this username (exclusive owner filter). */
+  ownerUsername?: string;
+  /** If set, return repos where this username is a member (owner or collaborator). */
+  memberUsername?: string;
+  /** 1-based page of results. Defaults to the first page. */
+  page?: number;
+  /** How many repos one page holds. */
+  limit?: number;
+}
+
+export interface SearchWorkspaceReposResult {
+  repos: WorkspaceRepo[];
+  page: number;
+  limit: number;
+  /**
+   * Gitea's repo search reports no total, so a full page is taken as the sign
+   * that another one may exist. The cost of guessing wrong is one empty fetch.
+   */
+  hasMore: boolean;
+}
+
+/** One page of matching repos, for a caller that pages through results. */
 
 export async function getCurrentUserRepoPermission(
   params: GetCurrentUserRepoPermissionParams,
 ): Promise<RepoCollaboratorPermissionSummary> {
   const { client, owner, repo, username } = params;
   return await loadRepoCollaboratorPermission(client, owner, repo, username);
-}
-
-export async function addRepoCollaborator(
-  params: AddRepoCollaboratorParams,
-): Promise<void> {
-  const { client, owner, repo, collaborator, permission } = params;
-
-  const { error, response } = await client.PUT(
-    "/repos/{owner}/{repo}/collaborators/{collaborator}",
-    {
-      params: { path: { owner, repo, collaborator } },
-      body: {
-        permission,
-      } satisfies AddCollaboratorOption,
-    },
-  );
-
-  if (error !== undefined || !response.ok) {
-    throw toGiteaApiError(response.status, error);
-  }
-}
-
-export async function removeRepoCollaborator(
-  params: RemoveRepoCollaboratorParams,
-): Promise<void> {
-  const { client, owner, repo, collaborator } = params;
-
-  const { error, response } = await client.DELETE(
-    "/repos/{owner}/{repo}/collaborators/{collaborator}",
-    {
-      params: { path: { owner, repo, collaborator } },
-    },
-  );
-
-  if (error !== undefined || !response.ok) {
-    throw toGiteaApiError(response.status, error);
-  }
 }
 
 export async function searchUsers(
@@ -474,21 +314,33 @@ export async function searchUsers(
   };
 }
 
-export async function repoExists(
-  client: GiteaClient,
-  owner: string,
-  repo: string,
-): Promise<boolean> {
+/**
+ * One account by login, or `null` when there is none.
+ *
+ * ADR 0004 ships without invitations, so an organization adds people who
+ * already have an account — which makes "there is no such account" a sentence
+ * a customer will actually meet, the first time an owner reaches for a
+ * colleague who has not signed up yet. Asking here is what lets the refusal
+ * name that cause. Letting `addTeamMember` answer instead gives a bare 404,
+ * which every layer above reads as "no such organization" and sends the owner
+ * hunting the wrong thing.
+ */
+export async function findUser(params: {
+  client: GiteaClient;
+  username: string;
+}): Promise<RepoUserSummary | null> {
+  const { client, username } = params;
+
   try {
-    await unwrap(
-      client.GET("/repos/{owner}/{repo}", {
-        params: { path: { owner, repo } },
+    const user = await unwrap(
+      client.GET("/users/{username}", {
+        params: { path: { username } },
       }),
     );
-    return true;
+    return normalizeUser(user);
   } catch (err) {
     if (err instanceof GiteaApiError && err.status === 404) {
-      return false;
+      return null;
     }
     throw err;
   }
@@ -506,33 +358,15 @@ function normalizeBranchProtection(
     mergeWhitelistUsernames: raw.merge_whitelist_usernames ?? [],
     mergeWhitelistTeams: raw.merge_whitelist_teams ?? [],
     blockOnRejectedReviews: raw.block_on_rejected_reviews ?? false,
+    blockOnOfficialReviewRequests:
+      raw.block_on_official_review_requests ?? false,
+    // `false` means "no per-folder gate": sign-off rules are not being
+    // enforced on this binder.
+    blockOnCodeownerReviews: raw.block_on_codeowner_reviews ?? false,
     dismissStaleApprovals: raw.dismiss_stale_approvals ?? false,
+    ignoreStaleApprovals: raw.ignore_stale_approvals ?? false,
+    enablePush: raw.enable_push ?? false,
   };
-}
-
-export async function createMainBranchProtection(
-  params: CreateMainBranchProtectionParams,
-): Promise<RepoBranchProtection> {
-  const { client, owner, repo, requiredApprovals = 0 } = params;
-
-  const protection = await unwrap(
-    client.POST("/repos/{owner}/{repo}/branch_protections", {
-      params: { path: { owner, repo } },
-      body: {
-        rule_name: "main",
-        required_approvals: requiredApprovals,
-        enable_approvals_whitelist: false,
-        enable_merge_whitelist: false,
-        block_on_rejected_reviews: true,
-        block_on_outdated_branch: true,
-        dismiss_stale_approvals: false,
-        enable_force_push: false,
-        enable_push: false,
-      } satisfies CreateBranchProtectionOption,
-    }),
-  );
-
-  return normalizeBranchProtection(protection);
 }
 
 export async function bootstrapEmptyMainBranch(
@@ -576,54 +410,6 @@ export async function bootstrapEmptyMainBranch(
   );
 }
 
-export async function getLatestDocTag(
-  client: GiteaClient,
-  owner: string,
-  repo: string,
-): Promise<DocTag | null> {
-  const tags = await unwrap(
-    client.GET("/repos/{owner}/{repo}/tags", {
-      params: {
-        path: { owner, repo },
-        query: { limit: 100 },
-      },
-    }),
-  );
-
-  const docTags = tags
-    .map(normalizeDocTag)
-    .filter((tag): tag is DocTag => tag !== null);
-
-  if (docTags.length === 0) {
-    return null;
-  }
-
-  docTags.sort((a, b) => b.version - a.version);
-  return docTags[0] ?? null;
-}
-
-export async function listDocTags(
-  client: GiteaClient,
-  owner: string,
-  repo: string,
-): Promise<DocTag[]> {
-  const tags = await unwrap(
-    client.GET("/repos/{owner}/{repo}/tags", {
-      params: {
-        path: { owner, repo },
-        query: { limit: 100 },
-      },
-    }),
-  );
-
-  const docTags = tags
-    .map(normalizeDocTag)
-    .filter((tag): tag is DocTag => tag !== null);
-
-  docTags.sort((a, b) => b.version - a.version);
-  return docTags;
-}
-
 export interface RepoBranchProtection {
   requiredApprovals: number;
   enableApprovalsWhitelist: boolean;
@@ -634,11 +420,35 @@ export interface RepoBranchProtection {
   mergeWhitelistTeams: string[];
   blockOnRejectedReviews: boolean;
   /**
+   * The 1.27 gate: a merge is blocked while an *official* review request is
+   * outstanding. It was only ever on to make CODEOWNERS block, which it never
+   * did for a team code owner — Gitea writes a team request and then clears
+   * its own `official` flag, a bug still present on 28.0.0.
+   */
+  blockOnOfficialReviewRequests: boolean;
+  /**
+   * The 28.0.0 gate, and the one that makes per-folder sign-off mean anything:
+   * for every CODEOWNERS rule matching a changed file, one of *that rule's*
+   * owners must have approved. It ignores officialness entirely, which is why
+   * a team code owner enforces under this gate and only under this gate.
+   */
+  blockOnCodeownerReviews: boolean;
+  /**
    * When true, Gitea discards every existing approval as soon as a new commit
    * lands on the pull request's head branch, forcing re-review of the version
    * that actually gets published.
    */
   dismissStaleApprovals: boolean;
+  /** Stale approvals stop counting without being dismissed. */
+  ignoreStaleApprovals: boolean;
+  /**
+   * Whether anybody may push straight to the protected branch.
+   *
+   * False is the product's core claim — nothing but a merged, approved change
+   * reaches the record — so it is worth being able to show a customer rather
+   * than only asserting it.
+   */
+  enablePush: boolean;
 }
 
 export async function getRepoBranchProtection(
@@ -657,39 +467,6 @@ export async function getRepoBranchProtection(
   const rule = exact ?? rules[0] ?? null;
 
   return rule ? normalizeBranchProtection(rule) : null;
-}
-
-export interface CreateDocTagParams {
-  client: GiteaClient;
-  owner: string;
-  repo: string;
-  version: number;
-  target: string;
-}
-
-export async function createDocTag(
-  params: CreateDocTagParams,
-): Promise<DocTag> {
-  const { client, owner, repo, version, target } = params;
-  const versionStr = version.toString().padStart(4, "0");
-  const tagName = `doc/v${versionStr}`;
-
-  const tag = await unwrap(
-    client.POST("/repos/{owner}/{repo}/tags", {
-      params: { path: { owner, repo } },
-      body: {
-        tag_name: tagName,
-        target,
-        message: `Published version ${versionStr}`,
-      },
-    }),
-  );
-
-  const docTag = normalizeDocTag(tag);
-  if (!docTag) {
-    throw new GiteaApiError(0, `Failed to parse created tag: ${tagName}`);
-  }
-  return docTag;
 }
 
 export interface UpdateRepoBranchProtectionParams {
@@ -737,21 +514,6 @@ export interface UpdateRepoVisibilityParams {
   owner: string;
   repo: string;
   isPrivate: boolean;
-}
-
-export async function updateRepoVisibility(
-  params: UpdateRepoVisibilityParams,
-): Promise<void> {
-  const { client, owner, repo, isPrivate } = params;
-  const { error, response } = await client.PATCH("/repos/{owner}/{repo}", {
-    params: { path: { owner, repo } },
-    body: {
-      private: isPrivate,
-    } as import("./spec/gitea").components["schemas"]["EditRepoOption"],
-  });
-  if (error !== undefined || !response.ok) {
-    throw toGiteaApiError(response.status, error);
-  }
 }
 
 export interface GetRepoInfoParams {

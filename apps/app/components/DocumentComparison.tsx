@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { Columns2, Download, FileText, Layers } from "lucide-react";
+import { Download, FileText } from "lucide-react";
 
 import { sanitizeHtml } from "../../../packages/utils/sanitizer";
 import { downloadDocument } from "../api";
 import { blocksToHtml, blocksToText, htmlToText } from "../documentBlocks";
-import type { ComparisonBase, DiffSegment } from "../documentComparison";
+import type { ChangeScope } from "../changeScope";
+import type {
+  ComparisonBase,
+  ComparisonSummary,
+  DiffSegment,
+} from "../documentComparison";
 import {
   diffRenderedHtml,
   diffWords,
@@ -12,13 +17,14 @@ import {
 } from "../documentComparison";
 import { classifyDocumentFile, describeFileKind } from "../documentFile";
 import { docxToHtml } from "../docxHtml";
+import { editorDocumentToHtml } from "../editorDocumentHtml";
 import { markdownToHtml } from "../markdown";
 import { extractPdfBlocks } from "../pdfText";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 interface DocumentComparisonProps {
-  owner: string;
-  repo: string;
+  /** Which repository this change lives in — a document's, or a binder. */
+  scope: ChangeScope;
   /** The version being compared against — the one this change replaces. */
   base: ComparisonBase;
   /** The ref holding the proposed file. */
@@ -28,6 +34,21 @@ interface DocumentComparisonProps {
   fileName: string | null;
   /** Save one side of the comparison. */
   onDownload: (gitRef: string) => void;
+  /**
+   * How two images are shown. The toggle lives in the file's bar with every
+   * other control on it, so the page owns the choice and this only draws it.
+   */
+  imageMode?: ImageMode;
+  /**
+   * How much moved, reported upwards once both sides have been read.
+   *
+   * The all-documents screen puts these counts beside each document in its
+   * rail and adds them into one line at the top, and only the comparison can
+   * know them: the words are inside two files nobody has opened until it
+   * opens them. Null for a file a browser cannot read inside, which is a
+   * different thing from "nothing changed" and has to stay tellable apart.
+   */
+  onSummary?: (summary: ComparisonSummary | null) => void;
 }
 
 /** Same ceiling the single-file preview uses: a browser is not a log viewer. */
@@ -40,7 +61,7 @@ const MAX_INLINE_TEXT_BYTES = 500_000;
  * everything that moved lights up. It is the only honest highlight for a
  * picture — there are no words in it to mark up.
  */
-type ImageMode = "side-by-side" | "difference";
+export type ImageMode = "side-by-side" | "difference";
 
 type ComparisonState =
   | { status: "loading" }
@@ -54,10 +75,10 @@ type ComparisonState =
       status: "rendered";
       html: string;
       segments: DiffSegment[];
-      /** Set for a PDF: both originals, for reading side by side. */
-      originals: { beforeUrl: string; afterUrl: string } | null;
       /** A scanned PDF has no text layer, so there is nothing to compare. */
       empty: boolean;
+      /** Both sides as rendered, and their diff, for what words miss. */
+      markup: { before: string; after: string; diffed: string };
     }
   | { status: "text"; segments: DiffSegment[]; truncated: boolean }
   | { status: "image"; beforeUrl: string; afterUrl: string }
@@ -68,6 +89,23 @@ function describeLoadFailure(message: string): string {
   return /not found|404/i.test(message)
     ? "One of these two versions has no file at that point in the record, so there is nothing to compare."
     : message;
+}
+
+/** Two rendered sides, diffed as markup and made safe to draw. */
+function renderedComparison(
+  before: string,
+  after: string,
+  segments: DiffSegment[],
+  empty = false,
+): ComparisonState {
+  const diffed = diffRenderedHtml(before, after);
+  return {
+    status: "rendered",
+    html: sanitizeHtml(diffed),
+    segments,
+    empty,
+    markup: { before, after, diffed },
+  };
 }
 
 async function readText(blob: Blob): Promise<{ text: string; cut: boolean }> {
@@ -87,16 +125,16 @@ async function readText(blob: Blob): Promise<{ text: string; cut: boolean }> {
  * is the only thing lit.
  */
 export function DocumentComparison({
-  owner,
-  repo,
+  scope,
   base,
   headRef,
   headLabel,
   fileName,
   onDownload,
+  imageMode = "side-by-side",
+  onSummary,
 }: DocumentComparisonProps) {
   const [state, setState] = useState<ComparisonState>({ status: "loading" });
-  const [imageMode, setImageMode] = useState<ImageMode>("side-by-side");
   const kind = classifyDocumentFile(fileName);
 
   useEffect(() => {
@@ -112,8 +150,8 @@ export function DocumentComparison({
       setState({ status: "loading" });
       try {
         const [before, after] = await Promise.all([
-          downloadDocument(owner, repo, base.ref),
-          downloadDocument(owner, repo, headRef),
+          downloadDocument(scope, base.ref),
+          downloadDocument(scope, headRef),
         ]);
         if (cancelled) return;
 
@@ -123,18 +161,19 @@ export function DocumentComparison({
             readText(after),
           ]);
           if (cancelled) return;
-          setState({
-            status: "rendered",
-            html: sanitizeHtml(
-              diffRenderedHtml(
-                markdownToHtml(left.text),
-                markdownToHtml(right.text),
-              ),
+          // Words as they read, not as they are typed: `**hands**` is the
+          // same word as `hands`, made bold.
+          const [leftHtml, rightHtml] = [
+            markdownToHtml(left.text),
+            markdownToHtml(right.text),
+          ];
+          setState(
+            renderedComparison(
+              leftHtml,
+              rightHtml,
+              diffWords(htmlToText(leftHtml), htmlToText(rightHtml)),
             ),
-            segments: diffWords(left.text, right.text),
-            originals: null,
-            empty: false,
-          });
+          );
           return;
         }
 
@@ -144,6 +183,29 @@ export function DocumentComparison({
             readText(after),
           ]);
           if (cancelled) return;
+
+          // Two versions of a policy written in the editor are compared as
+          // the policy — rendered, then diffed as markup like a Word file —
+          // rather than as two walls of JSON with the braces marked.
+          const [leftHtml, rightHtml] =
+            left.cut || right.cut
+              ? [null, null]
+              : await Promise.all([
+                  editorDocumentToHtml(left.text),
+                  editorDocumentToHtml(right.text),
+                ]);
+          if (cancelled) return;
+          if (leftHtml !== null && rightHtml !== null) {
+            setState(
+              renderedComparison(
+                leftHtml,
+                rightHtml,
+                diffWords(htmlToText(leftHtml), htmlToText(rightHtml)),
+              ),
+            );
+            return;
+          }
+
           setState({
             status: "text",
             segments: diffWords(left.text, right.text),
@@ -158,13 +220,14 @@ export function DocumentComparison({
             docxToHtml(after),
           ]);
           if (cancelled) return;
-          setState({
-            status: "rendered",
-            html: sanitizeHtml(diffRenderedHtml(leftHtml, rightHtml)),
-            segments: diffWords(htmlToText(leftHtml), htmlToText(rightHtml)),
-            originals: null,
-            empty: leftHtml.trim() === "" && rightHtml.trim() === "",
-          });
+          setState(
+            renderedComparison(
+              leftHtml,
+              rightHtml,
+              diffWords(htmlToText(leftHtml), htmlToText(rightHtml)),
+              leftHtml.trim() === "" && rightHtml.trim() === "",
+            ),
+          );
           return;
         }
 
@@ -174,24 +237,17 @@ export function DocumentComparison({
             extractPdfBlocks(after),
           ]);
           if (cancelled) return;
-          const beforeUrl = URL.createObjectURL(before);
-          const afterUrl = URL.createObjectURL(after);
-          objectUrls.push(beforeUrl, afterUrl);
-          setState({
-            status: "rendered",
-            html: sanitizeHtml(
-              diffRenderedHtml(
-                blocksToHtml(leftBlocks),
-                blocksToHtml(rightBlocks),
-              ),
+          // **No object URLs for a PDF any more.** They existed to feed two
+          // `<iframe>`s side by side, and two PDF viewers in half a column
+          // each are two documents nobody can read.
+          setState(
+            renderedComparison(
+              blocksToHtml(leftBlocks),
+              blocksToHtml(rightBlocks),
+              diffWords(blocksToText(leftBlocks), blocksToText(rightBlocks)),
+              leftBlocks.length === 0 && rightBlocks.length === 0,
             ),
-            segments: diffWords(
-              blocksToText(leftBlocks),
-              blocksToText(rightBlocks),
-            ),
-            originals: { beforeUrl, afterUrl },
-            empty: leftBlocks.length === 0 && rightBlocks.length === 0,
-          });
+          );
           return;
         }
 
@@ -217,7 +273,7 @@ export function DocumentComparison({
       cancelled = true;
       for (const url of objectUrls) URL.revokeObjectURL(url);
     };
-  }, [owner, repo, base.ref, headRef, kind]);
+  }, [scope, base.ref, headRef, kind]);
 
   // A scan has no words in it, so a word count would report "nothing changed"
   // about two files nobody has actually compared. It gets no summary and says
@@ -225,10 +281,19 @@ export function DocumentComparison({
   const summary = useMemo(() => {
     if (state.status === "text") return summarizeSegments(state.segments);
     if (state.status === "rendered" && !state.empty) {
-      return summarizeSegments(state.segments);
+      return summarizeSegments(state.segments, state.markup);
     }
     return null;
   }, [state]);
+
+  // Only once the comparison has settled. Reporting during `loading` would
+  // have the page above announce "no wording changed" about two files it has
+  // not finished reading, and then quietly correct itself.
+  const settled = state.status !== "loading";
+  useEffect(() => {
+    if (!settled) return;
+    onSummary?.(summary);
+  }, [settled, summary, onSummary]);
 
   if (kind === "unsupported" || state.status === "unsupported") {
     return (
@@ -246,7 +311,7 @@ export function DocumentComparison({
         </span>
         <span className="doc-compare-fallback-actions">
           <button
-            className="bs-btn bs-btn-secondary doc-preview-download"
+            className="bs-btn bs-btn--sm bs-btn-secondary doc-preview-download"
             type="button"
             onClick={() => onDownload(base.ref)}
           >
@@ -254,7 +319,7 @@ export function DocumentComparison({
             {base.label}
           </button>
           <button
-            className="bs-btn bs-btn-secondary doc-preview-download"
+            className="bs-btn bs-btn--sm bs-btn-secondary doc-preview-download"
             type="button"
             onClick={() => onDownload(headRef)}
           >
@@ -285,66 +350,22 @@ export function DocumentComparison({
     );
   }
 
+  /**
+   * **Two versions that read the same draw nothing.** The file's bar already
+   * says what happened — a rename shows the old path struck out beside the new
+   * one — and a box announcing that nothing changed was a sentence to read
+   * about the absence of anything to read.
+   */
+  if (summary?.identical) return null;
+
+  /* No toolbar of its own: the versions, the counts and the image toggle all
+     sit in the file's one bar above this, so every control on a comparison is
+     in the same place. */
   return (
     <section
       className="doc-compare"
       aria-label={`${fileName ?? "Document"} compared with ${base.label}`}
     >
-      <header className="doc-compare-toolbar">
-        <span className="doc-compare-versions">
-          <span className="doc-compare-chip doc-compare-chip--base">
-            {base.label}
-          </span>
-          <span aria-hidden="true">→</span>
-          <span className="doc-compare-chip doc-compare-chip--head">
-            {headLabel}
-          </span>
-        </span>
-        <span className="doc-preview-toolbar-spacer" />
-        {summary ? (
-          <span className="doc-compare-summary">{summary.headline}</span>
-        ) : null}
-        {state.status === "image" ? (
-          <span
-            className="doc-compare-modes"
-            role="group"
-            aria-label="How to compare"
-          >
-            <button
-              className={`doc-compare-mode${imageMode === "side-by-side" ? " doc-compare-mode--on" : ""}`}
-              type="button"
-              aria-pressed={imageMode === "side-by-side"}
-              onClick={() => setImageMode("side-by-side")}
-            >
-              <Columns2 size={13} strokeWidth={1.75} aria-hidden="true" />
-              Side by side
-            </button>
-            <button
-              className={`doc-compare-mode${imageMode === "difference" ? " doc-compare-mode--on" : ""}`}
-              type="button"
-              aria-pressed={imageMode === "difference"}
-              onClick={() => setImageMode("difference")}
-            >
-              <Layers size={13} strokeWidth={1.75} aria-hidden="true" />
-              Difference
-            </button>
-          </span>
-        ) : null}
-      </header>
-
-      {summary && !summary.identical ? (
-        <p className="doc-compare-legend">
-          <span className="doc-compare-key doc-compare-key--added">Added</span>
-          <span className="doc-compare-key doc-compare-key--removed">
-            Removed
-          </span>
-          <span className="doc-compare-key-note">
-            A rewritten passage shows as both: the old wording struck through,
-            the new wording beside it.
-          </span>
-        </p>
-      ) : null}
-
       <div className="doc-compare-body">
         {state.status === "loading" ? (
           <SkeletonGroup
@@ -357,9 +378,11 @@ export function DocumentComparison({
             <SkeletonLine width="full" />
             <SkeletonLine width="short" />
           </SkeletonGroup>
-        ) : summary?.identical ? (
-          <p className="doc-compare-identical">{summary.headline}</p>
         ) : state.status === "rendered" && !state.empty ? (
+          /* **Only the document inside the frame.** A formatting-only change
+             drew a sentence about itself above the policy, in the sheet —
+             where it read as a paragraph the change had added. The file's bar
+             already says "Formatting", which is where a status belongs. */
           <article
             className="doc-preview-sheet doc-preview-prose doc-compare-prose"
             // Every side of this went through a renderer of ours that escapes
@@ -411,7 +434,7 @@ export function DocumentComparison({
         {state.status === "rendered" && state.empty ? (
           <p className="doc-preview-note">
             {kind === "pdf"
-              ? "Neither of these PDFs carries a text layer — they are scans of paper. Both files are below, side by side."
+              ? "Neither of these PDFs carries a text layer — they are scans of paper, so there are no words to mark up. Save them to read them."
               : "Neither version has any text in it to compare."}
           </p>
         ) : null}
@@ -419,32 +442,10 @@ export function DocumentComparison({
         {state.status === "text" && state.truncated ? (
           <p className="doc-preview-note">
             These files are long, so the comparison covers their first 500 KB.
-            Download both to check the rest.
+            Download the file to check the rest.
           </p>
         ) : null}
       </div>
-
-      {state.status === "rendered" && state.originals ? (
-        <details className="doc-compare-originals">
-          <summary>Read both PDFs side by side</summary>
-          <div className="doc-compare-columns">
-            <figure>
-              <figcaption>{base.label}</figcaption>
-              <iframe
-                src={state.originals.beforeUrl}
-                title={`${base.label} of ${fileName ?? "the document"}`}
-              />
-            </figure>
-            <figure>
-              <figcaption>{headLabel}</figcaption>
-              <iframe
-                src={state.originals.afterUrl}
-                title={`This change to ${fileName ?? "the document"}`}
-              />
-            </figure>
-          </div>
-        </details>
-      ) : null}
     </section>
   );
 }

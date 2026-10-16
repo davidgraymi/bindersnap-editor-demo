@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
 
 import {
-  buildProposedVersionFacts,
   describeChangeBody,
   buildReviewTimeline,
   buildThreadFacts,
@@ -118,52 +117,6 @@ test("a description that says something new is kept", () => {
 
 // --- the proposed version card --------------------------------------------
 
-test("one update needs no update count", () => {
-  const facts = buildProposedVersionFacts({
-    fileName: "vendor-agreement.docx",
-    branchName: "upload/v4",
-    submittedAt: "2026-08-20T09:14:00Z",
-    updates: [update(1, "aaa", "2026-08-20T09:14:00Z")],
-  });
-
-  expect(facts.updateLabel).toBeNull();
-  expect(facts.hasHistory).toBe(false);
-  expect(facts.fileName).toBe("vendor-agreement.docx");
-  expect(facts.date).toBe("Aug 20");
-});
-
-test("a corrected change says which update is on show", () => {
-  const facts = buildProposedVersionFacts({
-    fileName: "vendor-agreement.docx",
-    branchName: "upload/v4",
-    submittedAt: "2026-08-20T09:14:00Z",
-    updates: [
-      update(1, "aaa", "2026-08-20T09:14:00Z"),
-      update(2, "bbb", "2026-08-21T15:00:00Z"),
-    ],
-  });
-
-  expect(facts.updateLabel).toBe("update 2 of 2");
-  expect(facts.hasHistory).toBe(true);
-  expect(facts.date).toBe("Aug 21");
-});
-
-test("with no updates loaded the card still names the file and the date", () => {
-  const facts = buildProposedVersionFacts({
-    fileName: null,
-    branchName: "upload/v4",
-    submittedAt: "2026-08-20T09:14:00Z",
-    updates: [],
-  });
-
-  expect(facts.fileName).toBe("The submitted file");
-  expect(facts.updateLabel).toBeNull();
-  expect(facts.date).toBe("Aug 20");
-  expect(facts.ref).toBe("upload/v4");
-});
-
-// --- threads ---------------------------------------------------------------
-
 test("a lone comment is not collapsible — there is nothing to hide", () => {
   const facts = buildThreadFacts(thread(), false);
 
@@ -248,7 +201,20 @@ test("the timeline opens with the change being opened", () => {
 
 test("update 1 is the opening, not an update event", () => {
   const entries = buildReviewTimeline({
-    change: change(),
+    change: change({
+      // Carol approved the first version; the second one cleared it.
+      reviewers: [
+        {
+          login: "carol",
+          fullName: "Carol",
+          avatarUrl: "",
+          status: "approved",
+          reviewedAt: "2026-08-20T12:00:00Z",
+          stale: true,
+          requested: true,
+        },
+      ],
+    }),
     threads: [],
     updates: [
       update(1, "aaa", "2026-08-20T09:14:00Z"),
@@ -260,7 +226,9 @@ test("update 1 is the opening, not an update event", () => {
   const updates = entries.filter((entry) => entry.kind === "update");
   expect(updates).toHaveLength(1);
   expect(updates[0]?.event?.tag).toBe("(update 2)");
-  expect(updates[0]?.event?.note).toBe("earlier approvals were reset");
+  expect(updates[0]?.event?.note).toBe(
+    "the approvals given before this were cleared",
+  );
   expect(updates[0]?.event?.updateSha).toBe("bbb");
 });
 
@@ -446,6 +414,52 @@ test("an approved change can still be objected to by someone who cannot publish"
   ).toBe("review");
 });
 
+test("a button somebody cannot use is shown dimmed, not hidden", () => {
+  const reading = { open: true, isAnonymous: false, ownSubmission: false };
+
+  // Asked to look, but not somebody whose approval counts here.
+  expect(
+    resolveReviewDecision({
+      ...reading,
+      mergeReady: false,
+      canReview: false,
+      canMerge: false,
+    }),
+  ).toBe("review-locked");
+
+  // Ready to publish, by somebody else.
+  expect(
+    resolveReviewDecision({
+      ...reading,
+      mergeReady: true,
+      canReview: false,
+      canMerge: false,
+    }),
+  ).toBe("publish-locked");
+
+  // A reviewer whose approval is in, on a change somebody else publishes.
+  expect(
+    resolveReviewDecision({
+      ...reading,
+      mergeReady: true,
+      canReview: true,
+      canMerge: false,
+      hasApproved: true,
+    }),
+  ).toBe("publish-locked");
+
+  // Their own approved change, which they cannot publish themselves.
+  expect(
+    resolveReviewDecision({
+      ...reading,
+      ownSubmission: true,
+      mergeReady: true,
+      canReview: false,
+      canMerge: false,
+    }),
+  ).toBe("publish-locked");
+});
+
 test("a closed change has no decision left, and neither has a visitor", () => {
   const settled = {
     ownSubmission: false,
@@ -466,4 +480,34 @@ test("a closed change has no decision left, and neither has a visitor", () => {
 test("an unparseable date renders as nothing rather than 'Invalid Date'", () => {
   expect(formatEventDate("not-a-date")).toBe("");
   expect(formatEventDate("")).toBe("");
+});
+
+test("the timeline and the opening line name people, not logins", () => {
+  const names: Record<string, string> = { maya: "Maya Okafor" };
+  const nameOf = (login: string) => names[login] ?? login;
+
+  const entries = buildReviewTimeline({
+    change: change(),
+    threads: [],
+    updates: [],
+    resetsApprovals: false,
+    nameOf,
+  });
+  expect(entries[0]?.event?.actor).toBe("Maya Okafor");
+  expect(describeChangeOpening(change(), 4, nameOf).who).toBe("Maya Okafor");
+});
+
+test("an update on a change nobody had approved says nothing about approvals", () => {
+  const entries = buildReviewTimeline({
+    change: change(),
+    threads: [],
+    updates: [
+      update(1, "aaa", "2026-08-20T09:14:00Z"),
+      update(2, "bbb", "2026-08-21T15:00:00Z"),
+    ],
+    resetsApprovals: true,
+  });
+  expect(
+    entries.find((entry) => entry.kind === "update")?.event?.note,
+  ).toBeNull();
 });

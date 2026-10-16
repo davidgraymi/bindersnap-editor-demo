@@ -4,15 +4,26 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { ListDocuments200DocumentsItemLatestTag } from './listDocuments200DocumentsItemLatestTag.ts';
-import type { ListDocuments200DocumentsItemPendingPRsItem } from './listDocuments200DocumentsItemPendingPRsItem.ts';
-import type { ListDocuments200DocumentsItemRepo } from './listDocuments200DocumentsItemRepo.ts';
+import type { ListDocuments200DocumentsItemLastChange } from './listDocuments200DocumentsItemLastChange.ts';
+import type { ListDocuments200DocumentsItemLatestVersion } from './listDocuments200DocumentsItemLatestVersion.ts';
+import type { ListDocuments200DocumentsItemState } from './listDocuments200DocumentsItemState.ts';
 
 export type ListDocuments200DocumentsItem = {
-  repo: ListDocuments200DocumentsItemRepo;
+  path: string;
+  slugPath: string;
+  name: string;
   /** @nullable */
-  latestTag: ListDocuments200DocumentsItemLatestTag;
-  pendingPRs: ListDocuments200DocumentsItemPendingPRsItem[];
+  uid: string | null;
+  folder: string;
+  size: number;
+  sha: string;
+  state: ListDocuments200DocumentsItemState;
+  openChangeCount: number;
   /** @nullable */
-  error: string | null;
+  latestVersion: ListDocuments200DocumentsItemLatestVersion;
+  /** @nullable */
+  lastChange: ListDocuments200DocumentsItemLastChange;
+  organization: string;
+  binder: string;
+  binderDescription: string;
 };

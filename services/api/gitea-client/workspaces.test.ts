@@ -9,6 +9,7 @@ interface Handlers {
   POST?: Record<string, Handler>;
   PUT?: Record<string, Handler>;
   PATCH?: Record<string, Handler>;
+  DELETE?: Record<string, Handler>;
 }
 
 /** A handler returning this answers 404, the way a real Gitea would. */
@@ -38,6 +39,7 @@ function createMockClient(handlers: Handlers) {
   const mockPost = method("POST");
   const mockPut = method("PUT");
   const mockPatch = method("PATCH");
+  const mockDelete = method("DELETE");
 
   return {
     client: {
@@ -45,13 +47,14 @@ function createMockClient(handlers: Handlers) {
       POST: mockPost,
       PUT: mockPut,
       PATCH: mockPatch,
-      DELETE: mock(),
+      DELETE: mockDelete,
       use: mock(),
     } as unknown as GiteaClient,
     mockGet,
     mockPost,
     mockPut,
     mockPatch,
+    mockDelete,
   };
 }
 
@@ -91,11 +94,37 @@ test("protectWorkspaceMain whitelists the role teams so a free reviewer's approv
   // The product's core claim: nothing reaches main except a merged, approved
   // change.
   expect(body.enable_push).toBe(false);
-  expect(body.required_approvals).toBe(1);
-  // CODEOWNERS is enforcement only when a merge is blocked on the outstanding
-  // request it creates.
-  expect(body.block_on_official_review_requests).toBe(true);
+  // None by default: a customer moving in alone must be able to publish.
+  expect(body.required_approvals).toBe(0);
+  // The per-folder gate is on and the review-request gate is off, in the one
+  // write: a manually requested review must not hold up a publish.
+  expect(body.block_on_codeowner_reviews).toBe(true);
+  expect(body.block_on_official_review_requests).toBe(false);
   expect(body.dismiss_stale_approvals).toBe(true);
+});
+
+test("the gates are written, not probed for", async () => {
+  // Gitea 28.0.0 is the floor in dev and production alike, so provisioning
+  // makes one write and asks nothing back.
+  const { client, mockPatch } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/branch_protections/{name}": () => NOT_FOUND,
+    },
+    POST: {
+      "/repos/{owner}/{repo}/branch_protections": (init: {
+        body: Record<string, unknown>;
+      }) => init.body,
+    },
+  });
+
+  const { protectWorkspaceMain } = await import("./workspaces");
+  await protectWorkspaceMain({
+    client,
+    org: "mercy-health",
+    workspace: "clinical-policies",
+  });
+
+  expect(mockPatch.mock.calls).toHaveLength(0);
 });
 
 test("protectWorkspaceMain updates an existing rule instead of failing on it", async () => {
@@ -126,15 +155,22 @@ test("protectWorkspaceMain updates an existing rule instead of failing on it", a
   expect(bodyOf(mockPatch.mock.calls[0]).required_approvals).toBe(2);
 });
 
-test("provisionWorkspace creates the repo, grants all three teams, then protects main", async () => {
+test("provisionWorkspace makes no role teams, and opens the binder to staff", async () => {
   const order: string[] = [];
   let nextTeamId = 10;
+  const createdTeams: string[] = [];
+  let whitelist: string[] = [];
+  let protectedWith: string[] = [];
 
   const { client, mockPut } = createMockClient({
     GET: {
       "/repos/{owner}/{repo}": () => NOT_FOUND,
       "/orgs/{org}/teams": () => [],
+      "/repos/{owner}/{repo}/teams": () => [
+        { id: 10, name: "staff", permission: "read" },
+      ],
       "/repos/{owner}/{repo}/branch_protections/{name}": () => NOT_FOUND,
+      "/repos/{owner}/{repo}/contents/{filepath}": () => NOT_FOUND,
     },
     POST: {
       "/orgs/{org}/repos": (init: { body: { name: string } }) => {
@@ -148,10 +184,23 @@ test("provisionWorkspace creates the repo, grants all three teams, then protects
       },
       "/orgs/{org}/teams": (init: { body: { name: string } }) => {
         order.push(`team:${init.body.name}`);
+        createdTeams.push(init.body.name);
         return { id: nextTeamId++, name: init.body.name };
       },
-      "/repos/{owner}/{repo}/branch_protections": () => {
+      "/repos/{owner}/{repo}/branch_protections": (init: {
+        body: { approvals_whitelist_teams?: string[] };
+      }) => {
         order.push("protect");
+        protectedWith = init.body.approvals_whitelist_teams ?? [];
+        return {};
+      },
+    },
+    PATCH: {
+      "/repos/{owner}/{repo}/branch_protections/{name}": (init: {
+        body: { approvals_whitelist_teams?: string[] };
+      }) => {
+        order.push("whitelist");
+        whitelist = init.body.approvals_whitelist_teams ?? [];
         return {};
       },
     },
@@ -171,16 +220,87 @@ test("provisionWorkspace creates the repo, grants all three teams, then protects
   });
 
   expect(result.workspace.name).toBe("clinical-policies");
-  expect(Object.keys(result.teams)).toEqual(["admins", "authors", "reviewers"]);
-  expect(mockPut.mock.calls).toHaveLength(3);
 
-  // Protection has to come last: the teams must exist before they can be
-  // whitelisted on the rule.
+  // In Gitea a team is an organization object that a repository adopts, so
+  // three teams per binder inverts the model: two of them stay empty forever,
+  // and a group that reviews three binders becomes three membership lists a
+  // human keeps in step by hand. The only team made here is the org's own.
+  expect(createdTeams).toEqual(["staff"]);
+  expect(mockPut.mock.calls).toHaveLength(1);
+
+  // A new binder is open to the organization, which is the decided default:
+  // the common case is a manual everybody must read in order to attest to it.
+  expect(result.staff.name).toBe("staff");
+
   expect(order[0]).toBe("repo");
+  // Protection last: the team has to exist before it can be whitelisted.
   expect(order.at(-1)).toBe("protect");
-  expect(order.indexOf("grant")).toBeGreaterThan(
-    order.indexOf("team:clinical-policies-admins"),
-  );
+  expect(order.indexOf("grant")).toBeGreaterThan(order.indexOf("team:staff"));
+
+  // And `Owners` is on the list although it is never granted — Gitea gives it
+  // admin over the whole organization implicitly, so a whitelist that omits it
+  // silently stops counting an owner's approval.
+  expect(whitelist).toEqual([]);
+  expect(protectedWith).toEqual(["staff", "Owners"]);
+});
+
+test("the approvals whitelist always names Owners, granted or not", async () => {
+  // The sharpest failure in this design, and a silent one. `Owners` is never
+  // granted onto a repository — Gitea gives it admin over the whole
+  // organization implicitly — so a whitelist derived from the granted teams
+  // alone omits it, and an owner's approval is recorded, displayed, and counts
+  // nothing. It presents as "publishing is mysteriously blocked".
+  let whitelist: string[] = [];
+
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/teams": () => [
+        { id: 10, name: "staff", permission: "read" },
+        { id: 11, name: "quality-committee", permission: "read" },
+      ],
+    },
+    PATCH: {
+      "/repos/{owner}/{repo}/branch_protections/{name}": (init: {
+        body: { approvals_whitelist_teams?: string[] };
+      }) => {
+        whitelist = init.body.approvals_whitelist_teams ?? [];
+        return {};
+      },
+    },
+  });
+
+  const { recomputeApprovalsWhitelist } = await import("./workspaces");
+  const names = await recomputeApprovalsWhitelist({
+    client,
+    org: "mercy-health",
+    workspace: "clinical-policies",
+  });
+
+  expect(names).toEqual(["staff", "quality-committee", "Owners"]);
+  expect(whitelist).toEqual(["staff", "quality-committee", "Owners"]);
+});
+
+test("a team already named Owners is not whitelisted twice", async () => {
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/teams": () => [
+        { id: 1, name: "Owners", permission: "owner" },
+        { id: 10, name: "staff", permission: "read" },
+      ],
+    },
+    PATCH: {
+      "/repos/{owner}/{repo}/branch_protections/{name}": () => ({}),
+    },
+  });
+
+  const { recomputeApprovalsWhitelist } = await import("./workspaces");
+  expect(
+    await recomputeApprovalsWhitelist({
+      client,
+      org: "mercy-health",
+      workspace: "clinical-policies",
+    }),
+  ).toEqual(["Owners", "staff"]);
 });
 
 test("provisionWorkspace reuses a repository that already exists", async () => {
@@ -193,9 +313,10 @@ test("provisionWorkspace reuses a repository that already exists", async () => {
         owner: { login: "mercy-health" },
       }),
       "/orgs/{org}/teams": () => [
-        { id: 10, name: "clinical-policies-admins", permission: "admin" },
-        { id: 11, name: "clinical-policies-authors", permission: "write" },
-        { id: 12, name: "clinical-policies-reviewers", permission: "read" },
+        { id: 10, name: "staff", permission: "read" },
+      ],
+      "/repos/{owner}/{repo}/teams": () => [
+        { id: 10, name: "staff", permission: "read" },
       ],
       "/repos/{owner}/{repo}/branch_protections/{name}": () => ({
         rule_name: "main",
@@ -244,4 +365,120 @@ test("createWorkspaceRepo makes a private, initialized binder", async () => {
   // main has to exist before it can be protected.
   expect(body.auto_init).toBe(true);
   expect(body.default_branch).toBe("main");
+});
+
+test("listOrganizationWorkspaces returns the org's binders in the app's shape", async () => {
+  const { client } = createMockClient({
+    GET: {
+      "/orgs/{org}/repos": () => [
+        {
+          id: 7,
+          name: "clinical-policies",
+          full_name: "mercy-health/clinical-policies",
+          owner: { login: "mercy-health" },
+          description: "Nursing and clinical practice",
+          open_pr_counter: 3,
+          updated_at: "2026-09-20T10:00:00Z",
+          permissions: { admin: false, push: true, pull: true },
+        },
+        {
+          id: 9,
+          name: "hr",
+          full_name: "mercy-health/hr",
+          owner: { login: "mercy-health" },
+        },
+      ],
+    },
+  });
+
+  const { listOrganizationWorkspaces } = await import("./workspaces");
+  const workspaces = await listOrganizationWorkspaces({
+    client,
+    org: "mercy-health",
+  });
+
+  expect(workspaces).toEqual([
+    {
+      id: 7,
+      name: "clinical-policies",
+      fullName: "mercy-health/clinical-policies",
+      owner: "mercy-health",
+      description: "Nursing and clinical practice",
+      openChangeCount: 3,
+      updatedAt: "2026-09-20T10:00:00Z",
+      // Gitea answers the caller's permissions on the same read.
+      access: { push: true, admin: false },
+    },
+    // A binder with no description is an ordinary binder, not a broken one.
+    {
+      id: 9,
+      name: "hr",
+      fullName: "mercy-health/hr",
+      owner: "mercy-health",
+      description: "",
+      openChangeCount: 0,
+      updatedAt: "",
+      access: { push: false, admin: false },
+    },
+  ]);
+});
+
+test("listOrganizationWorkspaces treats an org with no binders as empty", async () => {
+  const { client } = createMockClient({
+    GET: { "/orgs/{org}/repos": () => [] },
+  });
+
+  const { listOrganizationWorkspaces } = await import("./workspaces");
+  expect(
+    await listOrganizationWorkspaces({ client, org: "mercy-health" }),
+  ).toEqual([]);
+});
+
+test("a new binder starts empty, without the README Gitea generates", async () => {
+  const deleted: string[] = [];
+
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}": () => NOT_FOUND,
+      "/orgs/{org}/teams": () => [],
+      "/repos/{owner}/{repo}/branch_protections/{name}": () => NOT_FOUND,
+      // `auto_init` is the only way to get a `main` to protect, and it writes
+      // this.
+      "/repos/{owner}/{repo}/contents/{filepath}": () => ({
+        sha: "readme-sha",
+        path: "README.md",
+      }),
+    },
+    POST: {
+      "/orgs/{org}/repos": (init: { body: { name: string } }) => ({
+        id: 1,
+        name: init.body.name,
+        full_name: `mercy-health/${init.body.name}`,
+        owner: { login: "mercy-health" },
+      }),
+      "/orgs/{org}/teams": (init: { body: { name: string } }) => ({
+        id: 1,
+        name: init.body.name,
+      }),
+      "/repos/{owner}/{repo}/branch_protections": () => ({}),
+    },
+    PUT: { "/teams/{id}/repos/{org}/{repo}": () => ({}) },
+    DELETE: {
+      "/repos/{owner}/{repo}/contents/{filepath}": () => {
+        deleted.push("README.md");
+        return {};
+      },
+    },
+  });
+
+  const { provisionWorkspace } = await import("./workspaces");
+  await provisionWorkspace({
+    client,
+    org: "mercy-health",
+    name: "clinical",
+  });
+
+  // A binder holds policies. A generated README is not one, and left in place
+  // it lists as a document called "README" in front of a surveyor.
+  expect(deleted).toEqual(["README.md"]);
 });

@@ -631,227 +631,6 @@ function buildConflictResolutionHandlers() {
   return { handlers, getPutCallCount: () => putCallCount };
 }
 
-test("mergeOrResolveConflicts skips initial merge when mergeable=false and succeeds after rebase", async () => {
-  const { handlers } = buildConflictResolutionHandlers();
-  let mergeCallCount = 0;
-
-  const { client, mockGet, mockPut } = createMockClient(handlers);
-
-  // Since mergeable=false, the initial attemptMerge is skipped entirely.
-  // After resolveConflictsByRebase, the merge should succeed on the first try.
-  client.POST = mock(
-    async (path: string, init?: { params?: unknown; body?: unknown }) => {
-      if (path === "/repos/{owner}/{repo}/pulls/{index}/merge") {
-        mergeCallCount += 1;
-        return {
-          data: {},
-          error: undefined,
-          response: new Response(null, { status: 200 }),
-        };
-      }
-      const handler = handlers.POST?.[path];
-      if (handler) {
-        const data = await handler(init);
-        return {
-          data,
-          error: undefined,
-          response: new Response(null, { status: 200 }),
-        };
-      }
-      return {
-        data: undefined,
-        error: { message: "not found" },
-        response: new Response(null, { status: 404 }),
-      };
-    },
-  );
-
-  const { mergeOrResolveConflicts } = await import("./pullRequests");
-
-  await mergeOrResolveConflicts({
-    client,
-    owner: "alice",
-    repo: "quarterly-report",
-    pullNumber: 2,
-    mergeStyle: "squash",
-  });
-
-  // Only one merge attempt — after conflict resolution
-  expect(mergeCallCount).toBe(1);
-  expect(mockGet).toHaveBeenCalled();
-  // PUT is called twice: once to overwrite with main, once to restore uploaded content
-  expect(mockPut).toHaveBeenCalled();
-});
-
-test("mergeOrResolveConflicts handles transient 405 after rebase and eventually succeeds", async () => {
-  const { handlers } = buildConflictResolutionHandlers();
-  let mergeCallCount = 0;
-
-  const { client, mockGet, mockPut } = createMockClient(handlers);
-
-  // After rebase, first merge attempt gets a transient 405 (Gitea still recalculating),
-  // second attempt succeeds.
-  client.POST = mock(
-    async (path: string, init?: { params?: unknown; body?: unknown }) => {
-      if (path === "/repos/{owner}/{repo}/pulls/{index}/merge") {
-        mergeCallCount += 1;
-        if (mergeCallCount === 1) {
-          return {
-            data: undefined,
-            error: { message: "Please try again later" },
-            response: new Response(null, { status: 405 }),
-          };
-        }
-        return {
-          data: {},
-          error: undefined,
-          response: new Response(null, { status: 200 }),
-        };
-      }
-
-      const handler = handlers.POST?.[path];
-      if (handler) {
-        const data = await handler(init);
-        return {
-          data,
-          error: undefined,
-          response: new Response(null, { status: 200 }),
-        };
-      }
-      return {
-        data: undefined,
-        error: { message: "not found" },
-        response: new Response(null, { status: 404 }),
-      };
-    },
-  );
-
-  const { mergeOrResolveConflicts } = await import("./pullRequests");
-
-  await mergeOrResolveConflicts({
-    client,
-    owner: "alice",
-    repo: "quarterly-report",
-    pullNumber: 2,
-    mergeStyle: "squash",
-    message: "Merge after approvals",
-  });
-
-  expect(mergeCallCount).toBe(2);
-  expect(mockGet).toHaveBeenCalled();
-  expect(mockPut).toHaveBeenCalled();
-});
-
-test("mergeOrResolveConflicts tolerates an already up-to-date branch during rebase", async () => {
-  const { handlers } = buildConflictResolutionHandlers();
-  let mergeCallCount = 0;
-
-  const { client, mockGet, mockPut } = createMockClient(handlers);
-
-  client.POST = mock(
-    async (path: string, init?: { params?: unknown; body?: unknown }) => {
-      if (path === "/repos/{owner}/{repo}/pulls/{index}/merge") {
-        mergeCallCount += 1;
-        return {
-          data: {},
-          error: undefined,
-          response: new Response(null, { status: 200 }),
-        };
-      }
-
-      if (path === "/repos/{owner}/{repo}/pulls/{index}/update") {
-        return {
-          data: undefined,
-          error: { message: "HeadBranch of PR 2 is up to date" },
-          response: new Response(null, { status: 422 }),
-        };
-      }
-
-      const handler = handlers.POST?.[path];
-      if (handler) {
-        const data = await handler(init);
-        return {
-          data,
-          error: undefined,
-          response: new Response(null, { status: 200 }),
-        };
-      }
-
-      return {
-        data: undefined,
-        error: { message: "not found" },
-        response: new Response(null, { status: 404 }),
-      };
-    },
-  );
-
-  const { mergeOrResolveConflicts } = await import("./pullRequests");
-
-  await mergeOrResolveConflicts({
-    client,
-    owner: "alice",
-    repo: "quarterly-report",
-    pullNumber: 2,
-    mergeStyle: "squash",
-  });
-
-  expect(mergeCallCount).toBe(1);
-  expect(mockGet).toHaveBeenCalled();
-  expect(mockPut).toHaveBeenCalled();
-});
-
-test("mergeOrResolveConflicts throws if 409 persists after conflict resolution", async () => {
-  const { handlers } = buildConflictResolutionHandlers();
-
-  const { client } = createMockClient(handlers);
-
-  // Override POST to always return 409 for merge endpoint
-  client.POST = mock(
-    async (path: string, init?: { params?: unknown; body?: unknown }) => {
-      if (path === "/repos/{owner}/{repo}/pulls/{index}/merge") {
-        return {
-          data: undefined,
-          error: { message: "Merge conflict" },
-          response: new Response(null, { status: 409 }),
-        };
-      }
-
-      const handler = handlers.POST?.[path];
-      if (handler) {
-        const data = await handler(init);
-        return {
-          data,
-          error: undefined,
-          response: new Response(null, { status: 200 }),
-        };
-      }
-      return {
-        data: undefined,
-        error: { message: "not found" },
-        response: new Response(null, { status: 404 }),
-      };
-    },
-  );
-
-  const { mergeOrResolveConflicts } = await import("./pullRequests");
-
-  try {
-    await mergeOrResolveConflicts({
-      client,
-      owner: "alice",
-      repo: "quarterly-report",
-      pullNumber: 2,
-      mergeStyle: "squash",
-      message: "Merge after approvals",
-    });
-    throw new Error("Should have thrown GiteaApiError");
-  } catch (error) {
-    expect(error).toBeInstanceOf(GiteaApiError);
-    expect((error as GiteaApiError).status).toBe(409);
-    expect((error as GiteaApiError).message).toContain("persisted");
-  }
-});
-
 test("getPullRequestWithReviews returns one change and its reviews", async () => {
   const { client } = createMockClient({
     GET: {
@@ -1069,4 +848,188 @@ test("an approval withdrawn by a later request for changes still blocks", async 
   });
 
   expect(pullRequest?.approvalState).toBe("changes_requested");
+});
+
+test("a stale approval does not make a change approved", async () => {
+  // The publish gate and the approval meter were answering the same question
+  // by two different rules. `countApprovals` has always skipped stale reviews,
+  // because Gitea does at merge time — an approval overtaken by a new upload is
+  // not a signature on the version being published. `approvalState` did not, so
+  // a change read as approved beside an approval count of zero, and offered a
+  // publish that Gitea refuses with "does not have enough approvals". That is
+  // the same shape as the `isRejected` defect: two rules for one question.
+  const handlers = buildDefaultHandlers(
+    [
+      {
+        number: 33,
+        title: "Approved, then a new version landed",
+        head: { ref: "feature/overtaken", label: "" },
+        state: "open",
+      },
+    ],
+    {},
+  );
+
+  handlers.GET["/repos/{owner}/{repo}/pulls/{index}/reviews"] = () => [
+    {
+      id: 1,
+      state: "APPROVED",
+      body: "Looks right.",
+      user: { login: "bob" },
+      submitted_at: "2026-08-21T07:38:00Z",
+      stale: true,
+    },
+  ];
+
+  const { client } = createMockClient(handlers);
+  const { getPullRequestForBranch } = await import("./pullRequests");
+
+  const pullRequest = await getPullRequestForBranch({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+    branch: "feature/overtaken",
+  });
+
+  expect(pullRequest?.approvalState).toBe("in_review");
+});
+
+test("a stale request for changes still blocks the change", async () => {
+  // Deliberately not symmetrical with the case above, and the asymmetry is the
+  // safe direction. `dismiss_stale_approvals` dismisses approvals on a push and
+  // leaves rejections standing, so a rejection Gitea marks stale is still a
+  // rejection Gitea blocks on. Showing it as cleared would be the one error
+  // that lets something reach the record.
+  const handlers = buildDefaultHandlers(
+    [
+      {
+        number: 34,
+        title: "Rejected, then a new version landed",
+        head: { ref: "feature/still-rejected", label: "" },
+        state: "open",
+      },
+    ],
+    {},
+  );
+
+  handlers.GET["/repos/{owner}/{repo}/pulls/{index}/reviews"] = () => [
+    {
+      id: 1,
+      state: "REQUEST_CHANGES",
+      body: "Section 4.2 is still wrong.",
+      user: { login: "bob" },
+      submitted_at: "2026-08-21T07:38:00Z",
+      stale: true,
+    },
+  ];
+
+  const { client } = createMockClient(handlers);
+  const { getPullRequestForBranch } = await import("./pullRequests");
+
+  const pullRequest = await getPullRequestForBranch({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+    branch: "feature/still-rejected",
+  });
+
+  expect(pullRequest?.approvalState).toBe("changes_requested");
+});
+
+test("describeMergeRefusal speaks the publisher's language", async () => {
+  const { describeMergeRefusal } = await import("./pullRequests");
+
+  const outdated = describeMergeRefusal(
+    "The head branch is behind the base branch",
+  );
+  expect(outdated).toBe(
+    "The binder has moved on since this change was made. Bring the change up to date, then publish it.",
+  );
+
+  const fallback = describeMergeRefusal("something nobody has mapped");
+  for (const sentence of [outdated, fallback]) {
+    expect(sentence).not.toMatch(/branch|merge|head|base/i);
+  }
+});
+
+test("readMergeCommitSha answers the merge commit, and null for an unmerged change", async () => {
+  const { readMergeCommitSha } = await import("./pullRequests");
+
+  const merged = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/pulls/{index}": () => ({
+        number: 12,
+        merged: true,
+        merge_commit_sha: "9f1c2e",
+      }),
+    },
+  });
+  expect(
+    await readMergeCommitSha({
+      client: merged.client,
+      owner: "mercy-health",
+      repo: "clinical",
+      pullNumber: 12,
+    }),
+  ).toBe("9f1c2e");
+
+  // An open change has no merge commit. Tagging would have to guess, and the
+  // guess the old code made — `main` — is the wrong one.
+  const open = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/pulls/{index}": () => ({
+        number: 12,
+        merged: false,
+        merge_commit_sha: null,
+      }),
+    },
+  });
+  expect(
+    await readMergeCommitSha({
+      client: open.client,
+      owner: "mercy-health",
+      repo: "clinical",
+      pullNumber: 12,
+    }),
+  ).toBeNull();
+});
+
+test("listPullRequestsWithoutReviews reads the changes and none of their reviews", async () => {
+  const { listPullRequestsWithoutReviews, attachReviews } =
+    await import("./pullRequests");
+  const reviewReads: number[] = [];
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/pulls": () => [
+        { number: 1, head: { ref: "upload/a/1" }, state: "open" },
+        { number: 2, head: { ref: "sign-off/rules" }, state: "open" },
+      ],
+      "/repos/{owner}/{repo}/pulls/{index}/reviews": (init: unknown) => {
+        reviewReads.push(
+          (init as { params: { path: { index: number } } }).params.path.index,
+        );
+        return [{ id: 1, state: "APPROVED", user: { login: "bob" } }];
+      },
+    },
+  });
+
+  const open = await listPullRequestsWithoutReviews({
+    client,
+    owner: "mercy-health",
+    repo: "clinical",
+    state: "open",
+  });
+  expect(open.map((pull) => pull.number)).toEqual([1, 2]);
+  expect(reviewReads).toEqual([]);
+
+  // Narrowed first, then reviewed: only the change that survives costs a read.
+  const withReviews = await attachReviews({
+    client,
+    owner: "mercy-health",
+    repo: "clinical",
+    pullRequests: open.filter((pull) => pull.number === 1),
+  });
+  expect(withReviews).toHaveLength(1);
+  expect(withReviews[0]!.reviews).toHaveLength(1);
+  expect(reviewReads).toEqual([1]);
 });

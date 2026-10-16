@@ -464,9 +464,27 @@ does not:
 - **Patterns are anchored regexes, not globs.** `ParseCodeOwnersLine` compiles
   `^<pattern>$`. A folder rule is `policies/nursing/.*`; the `policies/nursing/`
   a GitHub habit produces matches nothing at all.
-- **Folder names must be regex-escaped.** A folder called `Q1 (2026)` contains
-  regex metacharacters. Unescaped, the rule silently matches the wrong files or
-  nothing. This is the defect nobody finds until an audit.
+- **Folder names must be escaped twice, and this is where the design was
+  wrong.** It said "regex-escaped", which is half of it and the half that does
+  not work on its own. A line goes through `TokenizeCodeOwnersLine` _before_
+  `ParseCodeOwnersLine` compiles it, and the tokenizer **consumes backslashes**:
+  `\x` becomes a bare `x`, whatever `x` is. It also splits on spaces and
+  truncates at an unescaped `#`.
+
+  So a backslash written to escape a regex metacharacter never reaches the
+  regex. A folder called `Q1 (2026)`, escaped once, is written
+  `Q1 \(2026\)/.*` — the space splits the line, the pattern becomes `Q1`, and
+  everything after it is read as an owner. Escaped once _without_ the space
+  problem, `(2026)` would still arrive at the regex as a **capture group**
+  rather than as literal parentheses.
+
+  The escaping is therefore regex-escape first, then tokenizer-escape the
+  result: `escapeRegex` then `escapeForTokenizer`, composed only by
+  `codeownersToken` in `packages/utils/codeowners.ts`. Every assertion about
+  matching runs through a port of Gitea's tokenizer, because checking the raw
+  line passes exactly this class of bug. This is the defect nobody finds until
+  an audit, and it is one layer deeper than it looked.
+
 - **The file is read from the base branch**, so a CODEOWNERS change never governs
   its own change. Correct for an approval control, and it means the _existing_
   approvers of `main` approve a change to the rules — which is the right
@@ -494,8 +512,12 @@ permissive policy_ so that a corrupt byte turns off a control.
 But we generate the file, so a generator bug becomes a binder that cannot publish
 at all. The generator therefore owes three things before it commits:
 
-1. Compile every pattern it emits, and refuse to commit a file with one that does
-   not compile.
+1. Compile every pattern it emits **as Gitea will see it** — after tokenizing —
+   and refuse to commit a file with one that does not compile. Compiling the raw
+   line instead would miss the double-escaping bug above entirely. And because a
+   pattern that compiles can still match the wrong paths, each one must also be
+   shown to match inside its own folder and to leave a sibling alone; nothing
+   anywhere reports a rule that is merely wrong.
 2. Refuse to commit a file above a conservative size ceiling.
 3. Verify every referenced team exists in the org, because a rule naming a deleted
    team is a rule nobody can satisfy.

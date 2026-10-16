@@ -1,0 +1,1403 @@
+import { z } from "zod";
+
+import {
+  ChangeReviewerSchema,
+  ChangeUserSchema,
+  PullRequestWithApprovalStateSchema,
+  VersionReviewSchema,
+} from "./documents";
+
+/**
+ * ADR 0004's second level: the binder.
+ *
+ * A workspace is a Gitea repository owned by the organization — "everything a
+ * workspace has to be, a repository already is". It carries the rules
+ * (branch protection on `main`), the people (the three role teams granted onto
+ * it), and eventually the documents (files in its tree).
+ *
+ * Organizations no longer arrive with one. Naming the container a customer's
+ * records live in is the owner's decision, so making a workspace is something a
+ * member does — which is what these two operations are for.
+ */
+
+export const WorkspaceSummarySchema = z.object({
+  /** The Gitea repository id. The only stable identifier: repos get renamed. */
+  id: z.number(),
+  /** The repository name — a URL segment, slugified from what they typed. */
+  name: z.string(),
+  /** The owning organization's Gitea username. */
+  owner: z.string(),
+  /** `owner/name`, as Gitea addresses it. */
+  fullName: z.string(),
+  description: z.string(),
+  /**
+   * Open change requests — every open pull request, the same count the
+   * binder's own Changes tab carries. Free on Gitea's repository object.
+   */
+  openChangeCount: z.number(),
+  /** When anything last moved in it (ISO); "" when Gitea does not say. */
+  updatedAt: z.string(),
+});
+export type WorkspaceSummary = z.infer<typeof WorkspaceSummarySchema>;
+
+export const WorkspaceListPayloadSchema = z.object({
+  workspaces: z.array(WorkspaceSummarySchema),
+});
+export type WorkspaceListPayload = z.infer<typeof WorkspaceListPayloadSchema>;
+
+export const NewWorkspaceBodySchema = z.object({
+  /** What to call it. Slugified server-side into the repository name. */
+  name: z.string().min(1),
+  description: z.string().optional(),
+  /**
+   * Whether the whole organization can read it. **Asked at creation, and
+   * preselected to open.**
+   *
+   * The moment somebody is naming a binder is the moment they know whether it
+   * is the staff handbook or HR investigations, and it is far cheaper to ask
+   * then than to discover the wrong answer a week later. Open is the default
+   * because the common case is a policy manual everybody must be able to read
+   * in order to attest to it — a default, not an assumption.
+   *
+   * Absent means open, so a client that does not ask gets the answer the
+   * product would have given anyway.
+   */
+  openToOrganization: z.boolean().optional(),
+});
+export type NewWorkspaceBody = z.infer<typeof NewWorkspaceBodySchema>;
+
+export const CreatedWorkspacePayloadSchema = z.object({
+  workspace: WorkspaceSummarySchema,
+});
+export type CreatedWorkspacePayload = z.infer<
+  typeof CreatedWorkspacePayloadSchema
+>;
+
+/**
+ * Where a document landed, and the change that will publish it.
+ *
+ * ADR 0004's step 2: the document is a file at a path inside the binder, not a
+ * repository of its own. `slugPath` is that path without the extension or the
+ * identity segment — the address a person links to. What the version tags are
+ * namespaced under is the identity inside the filename (ADR 0005).
+ */
+export const CreatedWorkspaceDocumentPayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  /** `clinical/infection-control.01J8XZ4K7M….pdf` — where the file is. */
+  documentPath: z.string(),
+  /** `clinical/infection-control` — the address the document answers to. */
+  slugPath: z.string(),
+  branch: z.string(),
+  pullRequestNumber: z.number().nullable(),
+});
+export type CreatedWorkspaceDocumentPayload = z.infer<
+  typeof CreatedWorkspaceDocumentPayloadSchema
+>;
+
+/**
+ * What an act that changes a binder's shape answers with.
+ *
+ * A change request number, not a success: making a folder or renaming one has
+ * not happened yet. `main` is protected and a binder's shape is part of its
+ * record, so it waits on a decision like a policy does.
+ *
+ * **Null when the act went into a draft**, which is not the same as failing.
+ * A draft has no change request by definition — that is what makes it a draft
+ * — so there is no number to give, and a caller that shows one has to tell the
+ * two apart rather than printing `#0`.
+ */
+export const BinderShapeChangePayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  branch: z.string(),
+  changeNumber: z.number().nullable(),
+});
+export type BinderShapeChangePayload = z.infer<
+  typeof BinderShapeChangePayloadSchema
+>;
+
+/** A document as the binder holds it: a file at a path. */
+export const WorkspaceDocumentEntrySchema = z.object({
+  /** `clinical/infection-control.01J8XZ4K7M….pdf` — where the file is. */
+  path: z.string(),
+  /**
+   * `clinical/infection-control` — the document's **address**: where it is
+   * filed and what it is called, with neither the identity nor the extension.
+   * What a URL carries. It may change over a document's life; `uid` may not.
+   */
+  slugPath: z.string(),
+  name: z.string(),
+  /**
+   * The document's identity (ADR 0005), or null for a file this product did
+   * not write. What its version tags are named after, and what survives a
+   * rename — which is the whole reason it is not the path.
+   */
+  uid: z.string().nullable(),
+  /** `clinical`, or "" at the binder's root. */
+  folder: z.string(),
+  size: z.number(),
+  sha: z.string(),
+});
+export type WorkspaceDocumentEntry = z.infer<
+  typeof WorkspaceDocumentEntrySchema
+>;
+
+/**
+ * A published version.
+ *
+ * The tag is the evidence: tag → commit → pull request → reviews is what makes
+ * "who approved v4" answerable exactly.
+ */
+export const DocumentVersionSchema = z.object({
+  tag: z.string(),
+  version: z.number(),
+  commitSha: z.string(),
+  /**
+   * When the commit this tag points at was made — when the change that
+   * published it was merged. Empty when Gitea did not say, which a reader is
+   * told rather than shown a date we invented.
+   */
+  publishedAt: z.string(),
+});
+export type DocumentVersion = z.infer<typeof DocumentVersionSchema>;
+
+/**
+ * Whether the binder actually holds this document yet.
+ *
+ * `main` is the record, so a policy somebody uploaded an hour ago is not in
+ * it — and a binder that silently omits what you just added looks broken in
+ * the one moment you are watching. `proposed` is that document: real, filed
+ * at a real address, waiting on a decision.
+ */
+export const WorkspaceDocumentStateSchema = z.enum(["published", "proposed"]);
+export type WorkspaceDocumentState = z.infer<
+  typeof WorkspaceDocumentStateSchema
+>;
+
+/**
+ * A document as the binder's list shows it.
+ *
+ * The published version is here because a list of policies that does not say
+ * which version each one is at answers none of the questions a list is opened
+ * to answer. It costs one tags call for the whole binder — the tags are
+ * repository-global — rather than one per document.
+ *
+ * Not an extension of `WorkspaceDocumentEntrySchema`, because that describes a
+ * file that exists and this list also carries documents that do not exist on
+ * `main` yet. What a row needs is its identity, and it has that either way.
+ */
+export const WorkspaceDocumentListEntrySchema = z.object({
+  /** `clinical/infection-control.01J8XZ4K7M….pdf` — where the file is. */
+  path: z.string(),
+  /** `clinical/infection-control` — the address a link carries. */
+  slugPath: z.string(),
+  name: z.string(),
+  /**
+   * The document's identity (ADR 0005), or null for a file this product did
+   * not write — a `README.md` Gitea made with the repository, say.
+   *
+   * **Here because edit mode has to know what it may offer.** A file with no
+   * identity cannot be renamed or moved: the version tags are named after the
+   * identity, so a rename would orphan a history it never had, and the server
+   * refuses it. Without this the tree drew a pencil and a move button on every
+   * row and found out which ones were real by being told off after the click.
+   */
+  uid: z.string().nullable(),
+  /** `clinical`, or "" at the binder's root. */
+  folder: z.string(),
+  size: z.number(),
+  sha: z.string(),
+  /**
+   * Always `published`, and kept as a field rather than dropped.
+   *
+   * A binder lists what is on `main`, so every row here is on the record. The
+   * document's *own page* still answers `proposed` — a link into a policy that
+   * is in review has to resolve — and the two payloads share a reader, so the
+   * field stays rather than becoming a thing one screen has and the other does
+   * not.
+   */
+  state: WorkspaceDocumentStateSchema,
+  /** Open changes touching this document. Decides a badge, nothing more. */
+  openChangeCount: z.number(),
+  /** The version on record, or null for a document nobody has published. */
+  latestVersion: DocumentVersionSchema.nullable(),
+  /**
+   * The change that published that version — its number, its subject and when
+   * it was merged — which is what a file list is opened to find out: what last
+   * changed this, and how long ago.
+   *
+   * Read off the version tag's stamp, so it is null for a version written
+   * without one, and null on a list that did not ask for it (the library,
+   * which reads every binder and does not show it).
+   */
+  lastChange: z
+    .object({
+      number: z.number(),
+      title: z.string(),
+      publishedAt: z.string(),
+    })
+    .nullable(),
+});
+export type WorkspaceDocumentListEntry = z.infer<
+  typeof WorkspaceDocumentListEntrySchema
+>;
+
+/**
+ * One row of the library: a document, and the binder it is filed in.
+ *
+ * The library used to be a list of *repositories*, because a document was one —
+ * so a row carried an owner and a repo name. Under ADR 0004 the organization
+ * owns everything and nobody owns a document, so what identifies a row is where
+ * it is filed: which organization, which binder, which folder.
+ */
+export const LibraryDocumentSchema = WorkspaceDocumentListEntrySchema.extend({
+  organization: z.string(),
+  binder: z.string(),
+  binderDescription: z.string(),
+});
+export type LibraryDocument = z.infer<typeof LibraryDocumentSchema>;
+
+export const LibraryPayloadSchema = z.object({
+  documents: z.array(LibraryDocumentSchema),
+  /** Every binder the reader can reach, so the page can offer them as a filter. */
+  binders: z.array(
+    z.object({
+      organization: z.string(),
+      name: z.string(),
+      description: z.string(),
+    }),
+  ),
+  /** Whether the answer was capped. Quick find asks for a few; the page does not. */
+  hasMore: z.boolean(),
+});
+export type LibraryPayload = z.infer<typeof LibraryPayloadSchema>;
+
+export const LibrarySearchPayloadSchema = z.object({
+  documents: z.array(LibraryDocumentSchema),
+  limit: z.number(),
+  hasMore: z.boolean(),
+});
+export type LibrarySearchPayload = z.infer<typeof LibrarySearchPayloadSchema>;
+
+export const WorkspaceDocumentListPayloadSchema = z.object({
+  organization: z.string().optional(),
+  workspace: z.string(),
+  documents: z.array(WorkspaceDocumentListEntrySchema),
+  /**
+   * Every folder in the binder, nested ones included, whether or not anything
+   * is filed in them.
+   *
+   * **Derived from the documents would be wrong**, which is the bug this
+   * closes: a folder somebody made and had published holds a `.gitkeep` and no
+   * document, so reading the folders off the document rows made it invisible.
+   * "Folders are real, empty or not" is only true if the list says so.
+   */
+  folders: z.array(z.string()),
+  /**
+   * The draft this list was read at, or null for the record on `main`.
+   *
+   * Echoed back so edit mode can tell "the binder as you have edited it" from
+   * "the binder as it stands" without trusting what it asked for. A draft
+   * discarded in another tab answers 409 and this never arrives; a stale
+   * `?draft=` that the server declined to honour would otherwise be indis-
+   * tinguishable from one it did.
+   */
+  draft: z.string().nullable().optional(),
+  /**
+   * How many policies this binder has taken off the record.
+   *
+   * A count rather than the list, because the names of archived documents live
+   * in tag messages this read has no reason to parse. It is here so the binder
+   * can offer a way into the archive without a fourth call on every page load
+   * — and it is free, since the same tag read already answers every row's
+   * version.
+   */
+  archivedCount: z.number().optional(),
+});
+export type WorkspaceDocumentListPayload = z.infer<
+  typeof WorkspaceDocumentListPayloadSchema
+>;
+
+export const WorkspaceDocumentDetailPayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  document: WorkspaceDocumentEntrySchema,
+  state: WorkspaceDocumentStateSchema,
+  /**
+   * The git ref the document's file is readable at.
+   *
+   * `main` for a published document. For one that is only proposed it is the
+   * change's own branch — which is the whole reason this field exists: without
+   * it the page would have to guess, and `main` has nothing to give it.
+   */
+  ref: z.string(),
+  /** Newest first. */
+  versions: z.array(DocumentVersionSchema),
+  latestVersion: DocumentVersionSchema.nullable(),
+  /**
+   * The binder's folders, so filing this somewhere else is a choice.
+   *
+   * Offered from the page that acts on it rather than fetched separately: the
+   * tree is already read to resolve the document, so the list is in hand.
+   */
+  folders: z.array(z.string()),
+  /**
+   * The open changes touching this document, newest first.
+   *
+   * The same shape the per-document workspace uses, deliberately: a change is
+   * a change wherever it is shown, and a second type for it would mean a
+   * second set of status wording to keep in step.
+   */
+  openChanges: z.array(PullRequestWithApprovalStateSchema),
+});
+export type WorkspaceDocumentDetailPayload = z.infer<
+  typeof WorkspaceDocumentDetailPayloadSchema
+>;
+
+/**
+ * One document a change touches, and what publishing would make of it.
+ *
+ * The version is per document because a binder's documents do not advance in
+ * lockstep: one change publishing three documents writes `v4`, `v2` and `v7`
+ * onto the same commit, which is ordinary git and is what ADR 0004 means by
+ * "the unit of approval is the change, not the document".
+ */
+export const WorkspaceChangedDocumentSchema =
+  WorkspaceDocumentEntrySchema.extend({
+    /** The version this document reaches if the change is published. */
+    nextVersion: z.number(),
+    /** The version on record now, or null for a document being added. */
+    currentVersion: DocumentVersionSchema.nullable(),
+    /**
+     * Every published version, newest first.
+     *
+     * The comparison needs the one *below* the version a published change
+     * became — reading a published change against today's record would be
+     * comparing it with itself.
+     */
+    versions: z.array(DocumentVersionSchema),
+    /**
+     * Where this document is filed on the branch the change would land on,
+     * when that is somewhere else.
+     *
+     * **A rename is a change even when not a word of the document changed**,
+     * and the comparison could not say so: the identity survives a rename and
+     * the address does not (ADR 0005), so two versions of a renamed policy
+     * read identically and the page reported "nothing changed" about a change
+     * that plainly did something.
+     *
+     * Null when it is filed where it always was, and for a document being
+     * added — which has no "was".
+     */
+    previousSlugPath: z.string().nullable(),
+    /**
+     * Whether this change brings it back out of the archive.
+     *
+     * A restore writes the file back under the identity it always had, so it
+     * has versions and a diff like any revision — and read like one, which
+     * hid the one fact a reviewer most needs about it. Read off the tags: the
+     * last thing that happened to this identity before the change was an
+     * archiving.
+     */
+    restored: z.boolean(),
+  });
+export type WorkspaceChangedDocument = z.infer<
+  typeof WorkspaceChangedDocumentSchema
+>;
+
+/**
+ * A document a change takes **off** the record.
+ *
+ * The other half of {@link WorkspaceChangedDocumentSchema}, and the reason the
+ * comparison screen can claim to show everything a change does. A removal is
+ * not a version step — nothing is published — so it carries what the document
+ * *was* rather than what it becomes, and the screen offers the last version on
+ * record to read instead of a diff.
+ *
+ * A rename is never in here. Gitea reports one as a delete plus an add, so the
+ * server subtracts the UIDs that came back on the other side; only a document
+ * absent from the merged tree entirely was archived.
+ */
+export const WorkspaceRemovedDocumentSchema =
+  WorkspaceDocumentEntrySchema.extend({
+    /** The last version it published, or null if it never published one. */
+    lastVersion: DocumentVersionSchema.nullable(),
+  });
+export type WorkspaceRemovedDocument = z.infer<
+  typeof WorkspaceRemovedDocumentSchema
+>;
+
+/**
+ * One change in a binder, as its page reads it.
+ *
+ * A change is the unit of approval, so this is a question about the change
+ * rather than about any one document — which is why it names the documents it
+ * touches rather than sitting under one of them.
+ */
+export const WorkspaceChangeDetailPayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  change: PullRequestWithApprovalStateSchema,
+  /**
+   * What its author called the draft this change was proposed from, or null
+   * when the branch is not a named draft.
+   *
+   * The branch chip under the title reads it in place of "Bob's draft".
+   */
+  branchLabel: z.string().nullable(),
+  /** Every document this change would version, in path order. */
+  documents: z.array(WorkspaceChangedDocumentSchema),
+  /**
+   * Every document this change takes off the record, in path order.
+   *
+   * Separate from `documents` rather than a `kind` on one list, because the
+   * two are not the same question: `documents` is what publishing would tag,
+   * and a tag on a file that is no longer in the tree is the bug the publish
+   * guard exists to prevent.
+   */
+  removedDocuments: z.array(WorkspaceRemovedDocumentSchema),
+  /**
+   * Whether `main` has moved on since this change branched off it.
+   *
+   * A binder protects `main` with `block_on_outdated_branch`, so a change that
+   * is behind cannot be merged however many approvals it has — which is
+   * correct (approvals should be against the content that lands) but is a dead
+   * end unless the page says so and offers the way out.
+   *
+   * Read from the pull request Gitea already returned: its merge base is the
+   * base branch's head exactly when the change is up to date.
+   */
+  isBehind: z.boolean(),
+  /**
+   * Behind, and not mergeable: documents both sides changed since the change
+   * began, which "Bring up to date" cannot merge on its own. The page offers
+   * the conflict resolver instead.
+   *
+   * Gitea's `mergeable`, which it recomputes after every push — so for a few
+   * seconds after the binder moves this can still read false.
+   */
+  hasConflicts: z.boolean(),
+  /**
+   * Whether publishing is held while a discussion thread is open.
+   *
+   * Gitea has no equivalent, so the BFF enforces it at publish time — the page
+   * shows it so the refusal is not a surprise.
+   */
+  blockOnUnresolvedThreads: z.boolean(),
+  /** Open threads on this change right now. */
+  unresolvedThreadCount: z.number(),
+  /**
+   * Whether this caller may write in the binder — which is what decides
+   * whether they are offered the reviewer list to edit.
+   *
+   * Gitea's own check still refuses the act; this only keeps the buttons
+   * honest.
+   */
+  canManage: z.boolean(),
+  /**
+   * The reviewers this binder's sign-off rules **hold the publish for**.
+   *
+   * Gitea writes a review request for every rule in `.gitea/CODEOWNERS`
+   * matching a changed file, read from the base branch — so a sign-off rule
+   * puts its owners on a change the moment it opens. Whether that request
+   * blocks is the part the interface has to read rather than assume:
+   *
+   * - a **user** code owner is an official request and blocks the merge;
+   * - a **team** code owner has its own `official` flag cleared by Gitea
+   *   (`AddTeamReviewRequest`, still true on 28.0.0), so under the
+   *   officialness gate it blocks nothing;
+   * - on 28.0.0 `block_on_codeowner_reviews` ignores officialness entirely,
+   *   and under that gate a team code owner does block.
+   *
+   * Both flags are on `RepoBranchProtection`, so this is read rather than
+   * guessed. **A required marker that is wrong on a compliance product is
+   * worse than no marker**, which is why nobody is named here when the flags
+   * cannot be read.
+   */
+  requiredReviewers: z.object({
+    users: z.array(z.string()),
+    teams: z.array(z.string()),
+  }),
+  /**
+   * What the person reading may do with this change, by Gitea's own rules:
+   * publishing takes write access, and an approval counts only from somebody
+   * in the binder's approval teams. The page dims what they cannot use.
+   */
+  viewer: z.object({
+    canApprove: z.boolean(),
+    canPublish: z.boolean(),
+  }),
+  /** How a decided change ended; null while it is open. */
+  outcome: z.enum(["published", "declined", "withdrawn"]).nullable(),
+  /**
+   * Whether an approval stops counting once what the change proposes moves
+   * on: the binder's "A new version clears the approvals already collected".
+   */
+  clearsApprovalsOnEdit: z.boolean(),
+});
+export type WorkspaceChangeDetailPayload = z.infer<
+  typeof WorkspaceChangeDetailPayloadSchema
+>;
+
+/**
+ * What publishing a change wrote.
+ *
+ * One tag per document the change touched, all pointing at the same merge
+ * commit — several tags on one commit is ordinary git, and it is what makes
+ * "who approved v4 of infection control" answerable as tag → commit → pull
+ * request → reviews.
+ */
+export const PublishedWorkspaceChangePayloadSchema = z.object({
+  ok: z.boolean(),
+  tags: z.array(DocumentVersionSchema),
+});
+export type PublishedWorkspaceChangePayload = z.infer<
+  typeof PublishedWorkspaceChangePayloadSchema
+>;
+
+/**
+ * The binder as its own page reads it: what it is called, what it is for, and
+ * how much is in it.
+ *
+ * The header of a repository page, in GitHub's terms — the two counts are what
+ * the tab bar puts beside "Documents" and "Change requests", so they belong
+ * here rather than in each tab's own payload. Neither tab can be trusted for
+ * them: a person on Documents still needs to see that three changes are
+ * waiting.
+ */
+export const WorkspaceOverviewPayloadSchema = z.object({
+  workspace: WorkspaceSummarySchema,
+  documentCount: z.number(),
+  openChangeCount: z.number(),
+});
+export type WorkspaceOverviewPayload = z.infer<
+  typeof WorkspaceOverviewPayloadSchema
+>;
+
+/** Where a change stands, or how it ended. */
+export const WorkspaceChangeOutcomeSchema = z.enum([
+  "open",
+  "published",
+  "declined",
+  "withdrawn",
+]);
+export type WorkspaceChangeOutcome = z.infer<
+  typeof WorkspaceChangeOutcomeSchema
+>;
+
+/**
+ * A change as the binder's list shows it.
+ *
+ * One shape for open and closed alike, because the list shows them in one
+ * place and a row reads the same either way — `outcome: "open"` is just the
+ * outcome it has not reached yet. Two shapes meant two mappings into the same
+ * UI record, which is how `isRejected` came to be missing from one of them.
+ */
+export const WorkspaceChangeSummarySchema = z.object({
+  number: z.number(),
+  title: z.string(),
+  body: z.string(),
+  /** The branch the submitted file lives on. Empty once Gitea prunes it. */
+  branchName: z.string(),
+  submittedBy: z.string(),
+  submittedAt: z.string(),
+  /**
+   * When it last moved — a commit, a review, a comment.
+   *
+   * A list of changes is read for "what has happened lately", and a row
+   * reporting only when something opened cannot answer it. Equal to
+   * `submittedAt` on a change nobody has touched since, which is how the row
+   * knows to say "opened" rather than "updated".
+   */
+  updatedAt: z.string(),
+  /**
+   * How many comments are on it.
+   *
+   * Gitea counts them on the pull request itself, so a list of changes carries
+   * this without a call per row.
+   */
+  commentCount: z.number(),
+  /** Null while it is open. */
+  closedAt: z.string().nullable(),
+  outcome: WorkspaceChangeOutcomeSchema,
+  /** Who published it, or who asked for work it never came back from. */
+  decidedBy: z.string().nullable(),
+  approvalState: z.string(),
+  approvalCount: z.number(),
+  /** Null means the policy could not be read; 0 means none are required. */
+  requiredApprovals: z.number().nullable(),
+  isApproved: z.boolean(),
+  isRejected: z.boolean(),
+  reviews: z.array(VersionReviewSchema),
+  reviewers: z.array(ChangeReviewerSchema),
+  assignee: ChangeUserSchema.nullable(),
+  /**
+   * The documents this change is about.
+   *
+   * From the upload branch while it is open, and from the version tags on its
+   * merge commit once it is published — so neither costs a call per change.
+   * Empty for a change made outside Bindersnap, which the row simply does not
+   * describe rather than guessing at.
+   */
+  documents: z.array(
+    z.object({
+      slugPath: z.string(),
+      name: z.string(),
+      /** The version it published, or null while it is open. */
+      version: z.number().nullable(),
+    }),
+  ),
+});
+export type WorkspaceChangeSummary = z.infer<
+  typeof WorkspaceChangeSummarySchema
+>;
+
+export const WorkspaceChangeListPayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  state: z.enum(["open", "closed"]),
+  changes: z.array(WorkspaceChangeSummarySchema),
+});
+export type WorkspaceChangeListPayload = z.infer<
+  typeof WorkspaceChangeListPayloadSchema
+>;
+
+/**
+ * One published version, as the binder's history reads it.
+ *
+ * ADR 0004: "who approved v4 of infection control is answered by tag → commit
+ * → pull request → reviews. The record is exact." This is that chain walked
+ * once for the whole binder and put on a page — the tags name the versions,
+ * and the merge commit each one points at names the change that published it
+ * and everyone who signed it off.
+ */
+export const WorkspaceHistoryEntrySchema = z.object({
+  /**
+   * What the change did to this document.
+   *
+   * A change can take a policy off the record as well as publish one, and the
+   * `<uid>/archived-<n>` tag that records it is written in the same pass as
+   * the version tags on the same merge commit.
+   */
+  kind: z.enum(["version", "archived"]),
+  /**
+   * `clinical/infection-control` — where it was filed.
+   *
+   * From the binder's tree for a document still on the record, and from the
+   * tag's own stamp for one that has been archived, which is point-in-time
+   * evidence of what it was called then.
+   */
+  slugPath: z.string(),
+  name: z.string(),
+  /** `clinical`, or "" at the binder's root. */
+  folder: z.string(),
+  /** The version published, or null when the change archived the document. */
+  version: z.number().nullable(),
+  tag: z.string(),
+  commitSha: z.string(),
+  /** When the change was merged. Empty when Gitea did not say. */
+  publishedAt: z.string(),
+  /**
+   * The change that published it, or null for a tag written outside the app.
+   *
+   * Null is not a fault: a binder is a git repository and somebody may tag it
+   * themselves. The row simply cannot lead anywhere.
+   */
+  changeNumber: z.number().nullable(),
+  changeTitle: z.string(),
+  submittedBy: z.string(),
+  /** Everyone whose approval stood when it was published. */
+  approvers: z.array(z.string()),
+});
+export type WorkspaceHistoryEntry = z.infer<typeof WorkspaceHistoryEntrySchema>;
+
+export const WorkspaceHistoryPayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  /** Newest first. */
+  versions: z.array(WorkspaceHistoryEntrySchema),
+});
+export type WorkspaceHistoryPayload = z.infer<
+  typeof WorkspaceHistoryPayloadSchema
+>;
+
+/** One person who can act in a binder, through a team granted onto it. */
+export const WorkspacePersonSchema = z.object({
+  login: z.string(),
+  fullName: z.string(),
+});
+export type WorkspacePerson = z.infer<typeof WorkspacePersonSchema>;
+
+/**
+ * A team granted onto the binder, and who is in it.
+ *
+ * `access` is the effective permission on `repo.code`, which is what ADR 0004
+ * counts as a paid seat — write or better is an author, read is a reviewer and
+ * is free. Reported as Gitea has it rather than as a name we chose, because
+ * the permission is the thing that is enforced.
+ */
+export const WorkspaceTeamSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  description: z.string(),
+  /** `admin`, `write`, `read`, or `none`. */
+  access: z.string(),
+  members: z.array(WorkspacePersonSchema),
+});
+export type WorkspaceTeam = z.infer<typeof WorkspaceTeamSchema>;
+
+/**
+ * The rules a binder is governed by.
+ *
+ * Branch protection is Gitea's and is enforced at the merge;
+ * `blockOnUnresolvedThreads` has no Gitea equivalent and is enforced by the
+ * BFF at publish. Shown together because a customer does not care which of us
+ * enforces what — they care what has to be true before a policy changes.
+ */
+export const WorkspaceRulesSchema = z.object({
+  /** Null when the rule could not be read at all. */
+  requiredApprovals: z.number().nullable(),
+  /** A new version clears the approvals the last one collected. */
+  dismissStaleApprovals: z.boolean(),
+  /** Nothing but an approved change reaches the record. */
+  pushBlocked: z.boolean(),
+  blockOnUnresolvedThreads: z.boolean(),
+});
+export type WorkspaceRules = z.infer<typeof WorkspaceRulesSchema>;
+
+/** Something in a binder, and who has to sign off on a change to it. */
+export const SignOffRuleSchema = z.object({
+  /**
+   * How much a rule covers.
+   *
+   * Three are the answers a customer gives to "what has to be signed off?":
+   * everything here, this drawer, this policy. `rules` is the fourth and is
+   * about the rules themselves — without it, anybody who can open a change
+   * request can propose rewriting who signs things off, and a gate with a door
+   * beside it is not a gate.
+   */
+  scope: z.enum(["binder", "folder", "document", "rules"]),
+  /**
+   * What the scope names: "" for the binder and "" for the rules, a folder path
+   * for a folder, and for a document its **identity** rather than its path
+   * (ADR 0005) — so the rule follows the policy through a retitle or a move
+   * instead of silently ceasing to apply.
+   */
+  target: z.string(),
+  /** Group handles. The preferred form: a group's membership can change
+   * without touching the binder, which is the whole reason Gitea 28.0.0 is
+   * worth the upgrade. */
+  teams: z.array(z.string()),
+  /** Named individuals. Supported by Gitea, rarely the right answer. */
+  users: z.array(z.string()),
+});
+export type SignOffRuleView = z.infer<typeof SignOffRuleSchema>;
+
+/** A document a rule may name, as the picker and the rule list need it. */
+export const SignOffDocumentSchema = z.object({
+  /** The identity a rule is written against. */
+  uid: z.string(),
+  /** `nursing/hand-hygiene` — its address, for a link and for sorting. */
+  slugPath: z.string(),
+  /** `hand-hygiene` — what it is called, before the screen title-cases it. */
+  name: z.string(),
+  /** `nursing`, or "" at the binder's root. Said beside the name in a picker,
+   * because two binders' worth of policies are not all uniquely named. */
+  folder: z.string(),
+});
+export type SignOffDocumentView = z.infer<typeof SignOffDocumentSchema>;
+
+/**
+ * A binder's sign-off rules, as the Settings tab needs it.
+ *
+ * `enforced` is the field to read first. The rules are a file in the binder;
+ * whether Gitea will actually hold a merge for them depends on
+ * `block_on_codeowner_reviews` being on for the binder's `main`. Provisioning
+ * turns it on, so this reads false only for a binder whose protection is
+ * missing or was changed outside Bindersnap. Rules that are listed but not
+ * enforced are worse than no rules at all, so the page has to be able to say
+ * which it is.
+ */
+export const WorkspaceSignOffSchema = z.object({
+  enforced: z.boolean(),
+  /** Whether the binder has a sign-off file at all, as against an empty one. */
+  exists: z.boolean(),
+  rules: z.array(SignOffRuleSchema),
+  /**
+   * Lines Gitea would drop with nothing but a log warning — a hand-written
+   * pattern, or one that does not compile. Surfaced because a rule the screen
+   * omits is a rule somebody believes is not there.
+   */
+  unreadable: z.array(z.object({ line: z.number(), text: z.string() })),
+  /** The folders this binder actually has, for the picker. */
+  folders: z.array(z.string()),
+  /**
+   * The documents this binder holds, for the picker and for naming a rule.
+   *
+   * A document rule carries an identity, and an identity is not something to
+   * put in front of a customer — this is how the screen turns one back into
+   * "Hand Hygiene". A rule whose identity is not in this list names a document
+   * the binder no longer holds, which the screen says rather than hides.
+   */
+  documents: z.array(SignOffDocumentSchema),
+  /**
+   * How many of this binder's files a rule cannot name on its own.
+   *
+   * A document rule is keyed on the identity in the filename (ADR 0005), so a
+   * file that has none cannot be named individually — which is every document
+   * in a binder filed before that existed. Counted rather than listed, because
+   * the only useful thing to say about them is that they are there and why the
+   * picker is short.
+   *
+   * Silently returning an empty `documents` was a screen offering a feature
+   * with no way to reach it and no explanation, which is the same failure as a
+   * rule that is listed but not enforced.
+   */
+  unnameableDocuments: z.number(),
+  /** The groups a rule may name. */
+  groups: z.array(z.string()),
+  /**
+   * Groups named by a rule that have nobody in them.
+   *
+   * **Verified against a running Gitea on 2026-09-10: a rule whose owners are
+   * an empty team enforces nothing.** There is no owner to wait for, so the
+   * gate finds nothing outstanding and the merge goes through — silently,
+   * while the page says that folder requires sign-off. Same shape as a rule
+   * Gitea cannot compile, and it gets the same treatment: said out loud rather
+   * than left to be discovered.
+   *
+   * Not refused when the rules are proposed, because "make the group, set the
+   * rule, then add people to it" is a legitimate order to do things in.
+   */
+  emptyGroups: z.array(z.string()),
+  /**
+   * An open sign-off change, if there is one. Two at once would leave
+   * competing versions of the rules in review, and whichever merged last would
+   * silently win.
+   */
+  pendingChange: z.number().nullable(),
+});
+export type WorkspaceSignOff = z.infer<typeof WorkspaceSignOffSchema>;
+
+/**
+ * Changing a binder's rules.
+ *
+ * Immediate, unlike a sign-off rule, and any one of them on its own. The
+ * approval count and whether a new version clears approvals are Gitea branch
+ * protection; whether discussions must be resolved is ours. Every change is
+ * recorded — `settings_events` says who changed what, and when.
+ */
+export const BinderRulesRequestSchema = z.object({
+  blockOnUnresolvedThreads: z.boolean().optional(),
+  requiredApprovals: z
+    .number()
+    .int()
+    .min(0)
+    .max(Number.MAX_SAFE_INTEGER)
+    .optional(),
+  dismissStaleApprovals: z.boolean().optional(),
+});
+export type BinderRulesRequest = z.infer<typeof BinderRulesRequestSchema>;
+
+export const BinderRulesPayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  blockOnUnresolvedThreads: z.boolean(),
+  /** Null when the rule could not be read back. */
+  requiredApprovals: z.number().nullable(),
+  dismissStaleApprovals: z.boolean().nullable(),
+});
+export type BinderRulesPayload = z.infer<typeof BinderRulesPayloadSchema>;
+
+export const WorkspaceSettingsPayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  teams: z.array(WorkspaceTeamSchema),
+  rules: WorkspaceRulesSchema,
+  signOff: WorkspaceSignOffSchema,
+  /** Whether this caller may change any of it. */
+  canManage: z.boolean(),
+  /** Whether this caller may delete the binder: an owner of the organization. */
+  canDelete: z.boolean(),
+});
+export type WorkspaceSettingsPayload = z.infer<
+  typeof WorkspaceSettingsPayloadSchema
+>;
+
+/**
+ * One person in the organization.
+ *
+ * Two rungs, and only two: owner and member. Every third org-level role anyone
+ * proposes turns out to be a binder role wearing a costume — "compliance lead"
+ * is a manager of the binders they run, "auditor" is a reviewer on everything —
+ * and a rung above the binder is the expensive kind, because Gitea will not
+ * enforce a distinction we invent.
+ */
+/**
+ * Proposing new sign-off rules.
+ *
+ * The whole set, not a patch: the file is regenerated from what is sent, so a
+ * caller that omitted a rule would silently delete it. Sending everything makes
+ * that impossible to do by accident.
+ */
+export const SignOffRulesRequestSchema = z.object({
+  rules: z.array(SignOffRuleSchema),
+});
+export type SignOffRulesRequest = z.infer<typeof SignOffRulesRequestSchema>;
+
+/**
+ * What proposing them produced: **a change, not a change of the rules.**
+ *
+ * `main` is protected, so nothing has taken effect yet. Returning the number
+ * rather than a success is what stops a caller reporting otherwise.
+ */
+export const ProposedSignOffChangeSchema = z.object({
+  changeNumber: z.number(),
+  branch: z.string(),
+});
+export type ProposedSignOffChangeView = z.infer<
+  typeof ProposedSignOffChangeSchema
+>;
+
+export const OrganizationPersonSchema = z.object({
+  login: z.string(),
+  fullName: z.string(),
+  isOwner: z.boolean(),
+  /** The groups they are in, which is where their binder access comes from. */
+  teams: z.array(z.string()),
+});
+export type OrganizationPerson = z.infer<typeof OrganizationPersonSchema>;
+
+/**
+ * A group the organization has, and what it grants wherever it is adopted.
+ *
+ * A Gitea team carries one unit map, so a group's level is a property of the
+ * group rather than of the grant: "Quality Committee" cannot be an editor in
+ * one binder and a reviewer in another. That is why a group is named and
+ * levelled together, and why the level travels with the name everywhere it
+ * appears.
+ */
+export const OrganizationGroupSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  description: z.string(),
+  /** `owner`, `admin`, `write`, `read` or `none` on `repo.code`. */
+  access: z.string(),
+  memberCount: z.number(),
+  /**
+   * Who is in it. Carried on the group rather than fetched per group when
+   * somebody opens one: the handler has already read every team's membership
+   * to answer "which groups is this person in", so sending it costs nothing and
+   * saves a call per group the moment anybody manages one.
+   */
+  members: z.array(WorkspacePersonSchema),
+  /**
+   * The binders this group reaches, which is the question an owner has while
+   * they are looking at the group rather than at a binder — and the one that
+   * decides whether changing it is safe, because a level or membership change
+   * lands on every binder in this list at once.
+   *
+   * For the built-in Owners team this is every binder in the organization, and
+   * always will be: Gitea gives it admin org-wide rather than by a grant.
+   */
+  binders: z.array(z.string()),
+});
+export type OrganizationGroup = z.infer<typeof OrganizationGroupSchema>;
+
+/** Naming a group and levelling it, which is one act. */
+export const CreateOrganizationGroupRequestSchema = z.object({
+  /** What the customer typed. Slugified into the handle Gitea stores. */
+  name: z.string(),
+  /** `admin`, `editor` or `reviewer`. Fixed at creation — see the group. */
+  level: z.string(),
+});
+export type CreateOrganizationGroupRequest = z.infer<
+  typeof CreateOrganizationGroupRequestSchema
+>;
+
+export const CreatedOrganizationGroupPayloadSchema = z.object({
+  organization: z.string(),
+  group: OrganizationGroupSchema,
+});
+export type CreatedOrganizationGroupPayload = z.infer<
+  typeof CreatedOrganizationGroupPayloadSchema
+>;
+
+/**
+ * Promoting somebody to owner, or demoting them back to member.
+ *
+ * Two rungs and only two. An owner is a member of Gitea's built-in `Owners`
+ * team, so this is one team membership either way and nothing is stored —
+ * billing keeps reading the same team it always did.
+ */
+/**
+ * Adding somebody to the organization.
+ *
+ * The account has to exist already: Gitea cannot hold a pending invitation and
+ * this product cannot yet send an email, so an owner adds a person who has
+ * signed up. The invitations issue, 426, is the rest of that story.
+ */
+export const AddOrganizationPersonRequestSchema = z.object({
+  username: z.string(),
+  /** Land them as an owner rather than a member. Defaults to a member. */
+  owner: z.boolean().optional(),
+});
+export type AddOrganizationPersonRequest = z.infer<
+  typeof AddOrganizationPersonRequestSchema
+>;
+
+export const OrganizationPersonRoleRequestSchema = z.object({
+  owner: z.boolean(),
+});
+export type OrganizationPersonRoleRequest = z.infer<
+  typeof OrganizationPersonRoleRequestSchema
+>;
+
+export const OrganizationGroupMemberRequestSchema = z.object({
+  username: z.string(),
+});
+export type OrganizationGroupMemberRequest = z.infer<
+  typeof OrganizationGroupMemberRequestSchema
+>;
+
+/**
+ * Composing a group onto a binder, and what that did to the approvals
+ * whitelist.
+ *
+ * The whitelist comes back because it is the half of the act that fails
+ * silently: `enable_approvals_whitelist` is what makes a free reviewer's
+ * approval count, and a team missing from the list has its members' approvals
+ * recorded, displayed, and satisfying nothing. Returning it makes the recompute
+ * assertable rather than assumed.
+ */
+export const BinderGroupRequestSchema = z.object({
+  /** The group's handle, as Gitea holds it. */
+  group: z.string(),
+});
+export type BinderGroupRequest = z.infer<typeof BinderGroupRequestSchema>;
+
+/**
+ * One person in a binder, and where their access comes from.
+ *
+ * **One row per person, not a matrix and not a list per role.** The roles are a
+ * ladder Gitea enforces as one, so a grid of checkboxes would let somebody try
+ * "can approve but cannot read", which is not a thing and the screen would have
+ * to refuse. And grouping by role answers "who are the editors" when the
+ * question a compliance manager actually asks is "what can Jane do" — which one
+ * row answers by being read.
+ *
+ * `through` is the whole reason this is not a simple list. A person here
+ * because they are in a shared group cannot have their role changed on this
+ * binder, because the group is one object across every binder it reaches. The
+ * row names the group instead of offering a control that would have to refuse
+ * — and the consolation is that "why can Aisha approve here" is answered on the
+ * row that raised the question.
+ */
+export const BinderPersonSchema = z.object({
+  login: z.string(),
+  fullName: z.string(),
+  /** Effective access on `repo.code`: `owner`, `admin`, `write` or `read`. */
+  access: z.string(),
+  /** The team that grants it — the highest-ranking one they are in here. */
+  through: z.string(),
+  /**
+   * Whether that team is this binder's own role team, and therefore whether
+   * their role here can be changed without changing another binder.
+   */
+  individual: z.boolean(),
+  /**
+   * The **groups** granted here that they are in — this binder's own role teams
+   * are left out, because naming them would tell the reader that "Priya is in
+   * clinical-authors", which is our bookkeeping rather than an answer to
+   * anything they asked. What is left is the part that explains the row and
+   * reaches other binders.
+   */
+  groups: z.array(z.string()),
+  /** Write or better on `repo.code`, which is what ADR 0004 bills for. */
+  seat: z.boolean(),
+});
+export type BinderPerson = z.infer<typeof BinderPersonSchema>;
+
+export const BinderPeoplePayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  people: z.array(BinderPersonSchema),
+  /** The teams granted here — the groups half of the same question. */
+  groups: z.array(WorkspaceTeamSchema),
+  /**
+   * Whether the whole organization can read this binder, derived by asking
+   * whether `staff` is granted. Nothing is stored: a copy could disagree with
+   * the grant Gitea is the one enforcing.
+   */
+  openToOrganization: z.boolean(),
+  /** Everyone in the organization, so somebody can be added from a picker. */
+  organizationMembers: z.array(WorkspacePersonSchema),
+  /** Whether this caller may change any of it. */
+  canManage: z.boolean(),
+});
+export type BinderPeoplePayload = z.infer<typeof BinderPeoplePayloadSchema>;
+
+/**
+ * Who can see this binder — one switch over one primitive.
+ *
+ * `staff` granted onto the repository, or not. Nothing is stored: the answer is
+ * derived by asking Gitea which teams are granted here, because a stored copy
+ * could disagree with the grant Gitea is the one enforcing.
+ */
+export const BinderVisibilityRequestSchema = z.object({
+  openToOrganization: z.boolean(),
+});
+export type BinderVisibilityRequest = z.infer<
+  typeof BinderVisibilityRequestSchema
+>;
+
+/** Adding somebody to this binder, or moving them between its roles. */
+export const BinderPersonRequestSchema = z.object({
+  username: z.string(),
+  /** `admin`, `editor` or `reviewer` — the same three levels a group has. */
+  level: z.string(),
+});
+export type BinderPersonRequest = z.infer<typeof BinderPersonRequestSchema>;
+
+export const BinderGroupsPayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  /** Every team granted onto this binder, after the change. */
+  teams: z.array(WorkspaceTeamSchema),
+  /** Every team whose members' approvals now count. */
+  approvalsWhitelist: z.array(z.string()),
+});
+export type BinderGroupsPayload = z.infer<typeof BinderGroupsPayloadSchema>;
+
+export const OrganizationPeoplePayloadSchema = z.object({
+  organization: z.string(),
+  people: z.array(OrganizationPersonSchema),
+  groups: z.array(OrganizationGroupSchema),
+  /**
+   * Every binder in the organization, so a group can be composed onto one from
+   * the group's own row. The names alone: this list exists to fill a picker,
+   * and the binder's own page is where anything else about it is answered.
+   */
+  binders: z.array(z.string()),
+  /** Whether the caller owns the organization, and may change any of it. */
+  canManage: z.boolean(),
+  /**
+   * Who is asking. Their own row offers no "remove", because leaving an
+   * organization is a different act from removing somebody else and deserves
+   * its own wording rather than a menu item that reads like an accident.
+   */
+  viewer: z.string(),
+});
+export type OrganizationPeoplePayload = z.infer<
+  typeof OrganizationPeoplePayloadSchema
+>;
+
+/**
+ * A document this binder has taken off the record.
+ *
+ * **Read from its tags, because nothing else remembers it.** An archived
+ * document is not in the tree, so the name and the folder it had are
+ * point-in-time facts only the version stamp recorded. Fields are nullable
+ * where the answer genuinely may not exist — a policy archived before the
+ * `archived-<n>` tag existed has no date and no count, and saying so is better
+ * than inventing one.
+ */
+export const ArchivedDocumentSchema = z.object({
+  /** The identity its version tags are named after. Also how it is restored. */
+  uid: z.string(),
+  /** What it was called when it left — or the identity, if no tag says. */
+  title: z.string(),
+  /** Where it was filed when it left, if a stamp recorded it. */
+  slugPath: z.string().nullable(),
+  /** The last version it published. Its versions are all still readable. */
+  lastVersion: z.number(),
+  lastPublishedAt: z.string().nullable(),
+  /** When it was archived, if an `archived-<n>` tag recorded it. */
+  archivedAt: z.string().nullable(),
+  /** How many times it has been archived. Null for one that left before the tag. */
+  archivings: z.number().nullable(),
+});
+export type ArchivedDocument = z.infer<typeof ArchivedDocumentSchema>;
+
+/**
+ * The binder's archive.
+ *
+ * Derived at read time from two things that already exist — every UID with a
+ * version tag, minus every UID on `main` — rather than stored. ADR 0004 allows
+ * a derived index only if it is rebuildable from Gitea and droppable without
+ * loss, and a set difference over two live reads is both by construction.
+ */
+export const BinderArchivePayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  documents: z.array(ArchivedDocumentSchema),
+});
+export type BinderArchivePayload = z.infer<typeof BinderArchivePayloadSchema>;
+
+/**
+ * One act on a draft.
+ *
+ * A commit, described the way the person who made it would: "Make the folder
+ * nursing", "Rename Hand Hygiene to Hand Hygiene and PPE". The planners write
+ * these subjects, so a draft reads back as the list of things you did to it —
+ * which is also what prefills the change request's description.
+ */
+export const DraftActSchema = z.object({
+  summary: z.string(),
+  sha: z.string(),
+  at: z.string().nullable(),
+  /** The files this act touched, for a draft that wants to show its shape. */
+  paths: z.array(z.string()),
+});
+export type DraftAct = z.infer<typeof DraftActSchema>;
+
+/** Somebody else's unproposed work: that it exists, and nothing more. */
+export const OtherDraftSchema = z.object({
+  branch: z.string(),
+  owner: z.string(),
+  updatedAt: z.string().nullable(),
+  lastAct: z.string().nullable(),
+});
+export type OtherDraft = z.infer<typeof OtherDraftSchema>;
+
+/**
+ * Your draft in a binder, and whose else is open.
+ *
+ * `draft` is null when you are not editing, which is the ordinary state rather
+ * than a missing thing. Other people's drafts are listed without their
+ * contents: knowing somebody is editing is what stops two people making the
+ * same folder twice, and reading unproposed work is not what a draft offers.
+ */
+/**
+ * One of your drafts, as the picker lists it.
+ *
+ * Its name, how much is in it and when it was last touched — "Reorganise
+ * nursing · 3 changes · edited 4 minutes ago". The acts themselves are only on
+ * the draft you are in, because only one is on screen at a time.
+ */
+export const OwnDraftSchema = z.object({
+  branch: z.string(),
+  /** What its author called it, or its date when it was made before names. */
+  name: z.string(),
+  updatedAt: z.string().nullable(),
+  /** How many acts are in it. What the picker's "3 changes" counts. */
+  actCount: z.number(),
+  lastAct: z.string().nullable(),
+  /**
+   * The change request open on it, once proposed. Still yours, still
+   * editable — a save into it is a save that change's reviewers see.
+   */
+  changeNumber: z.number().nullable(),
+});
+export type OwnDraft = z.infer<typeof OwnDraftSchema>;
+
+export const BinderDraftPayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  draft: z
+    .object({
+      branch: z.string(),
+      name: z.string(),
+      /**
+       * Whether a person wrote the name, or it took the date it was started.
+       *
+       * The propose screen prefills its title from the name only when somebody
+       * wrote one: a draft called "Reorganise nursing" has already said what
+       * the work is for, and "Draft of 19 September" has said nothing.
+       */
+      named: z.boolean(),
+      owner: z.string(),
+      updatedAt: z.string().nullable(),
+      /** The change request open on it, once proposed. */
+      changeNumber: z.number().nullable(),
+      acts: z.array(DraftActSchema),
+    })
+    .nullable(),
+  /**
+   * Every draft of yours in this binder, newest first.
+   *
+   * What the picker picks between. One per person was the old model; the
+   * customer asked for several, because two unrelated reorganisations should
+   * not have to be approved or refused together just because the same person
+   * did both.
+   */
+  drafts: z.array(OwnDraftSchema),
+  others: z.array(OtherDraftSchema),
+});
+export type BinderDraftPayload = z.infer<typeof BinderDraftPayloadSchema>;
+
+/** Where a proposed draft went: the change request it is now waiting in. */
+export const ProposedDraftPayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  branch: z.string(),
+  changeNumber: z.number(),
+});
+export type ProposedDraftPayload = z.infer<typeof ProposedDraftPayloadSchema>;
+
+/** One side of a conflicting file: where it is, how big, and its bytes. */
+export const ConflictSideSchema = z.object({
+  path: z.string(),
+  size: z.number(),
+  /** Base64. Null past the size a page is sent inline; download it instead. */
+  content: z.string().nullable(),
+});
+
+export const ConflictingFileSchema = z.object({
+  /** The document's identity, or its path when it has none. */
+  key: z.string(),
+  /** Where the resolved file goes. */
+  path: z.string(),
+  /** How the page can show it: rendered, as text, or only as a choice. */
+  kind: z.enum(["editor", "text", "binary"]),
+  /**
+   * The answer when there is one without asking — a document moved on one
+   * side and edited on the other. Null: a person decides.
+   */
+  automatic: z.enum(["ours", "theirs"]).nullable(),
+  /** Where the change began. Null: the file did not exist then. */
+  base: ConflictSideSchema.nullable(),
+  /** The change's version. Null: the change removed it. */
+  ours: ConflictSideSchema.nullable(),
+  /** The version published since. Null: the binder removed it. */
+  theirs: ConflictSideSchema.nullable(),
+});
+export type ConflictingFilePayload = z.infer<typeof ConflictingFileSchema>;
+
+export const ChangeConflictsPayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  changeNumber: z.number(),
+  open: z.boolean(),
+  /** Nothing has been published since the change began. */
+  upToDate: z.boolean(),
+  /** The heads the files were read at; a resolution names them back. */
+  headSha: z.string(),
+  baseSha: z.string(),
+  /** Whether this caller may write to the change's branch. */
+  canResolve: z.boolean(),
+  files: z.array(ConflictingFileSchema),
+});
+export type ChangeConflictsPayload = z.infer<
+  typeof ChangeConflictsPayloadSchema
+>;
+
+export const ConflictResolutionSchema = z.object({
+  key: z.string(),
+  take: z.enum(["ours", "theirs", "none", "content"]),
+  /** With `content`: the resolved file, base64. */
+  base64Content: z.string().optional(),
+});
+
+export const ResolveConflictsBodySchema = z.object({
+  headSha: z.string(),
+  baseSha: z.string(),
+  resolutions: z.array(ConflictResolutionSchema),
+});
+
+/** Deleting a binder, confirmed by its name typed out. */
+export const DeleteBinderBodySchema = z.object({
+  confirm: z.string().min(1),
+});
+export type DeleteBinderBody = z.infer<typeof DeleteBinderBodySchema>;

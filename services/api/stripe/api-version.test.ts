@@ -4,8 +4,9 @@ import { STRIPE_API_VERSION, extractCurrentPeriodEnd } from "./api-version";
 
 describe("STRIPE_API_VERSION", () => {
   it("is pinned to 2025-06-30.basil", () => {
-    // If this changes, update the webhook endpoint API version in the Stripe
-    // Dashboard (test + live) AND docs/payments-plan.md in the same change.
+    // If this changes, follow "Changing the API version" in
+    // infra/billing/README.md (live), update the test-mode endpoint in the
+    // Dashboard, and docs/payments-plan.md, in the same change.
     expect(STRIPE_API_VERSION).toBe("2025-06-30.basil");
   });
 });

@@ -1,4 +1,6 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useIsReadOnly } from "../readOnlyContext";
 import {
   ArrowRightToLine,
   Check,
@@ -10,23 +12,25 @@ import {
 } from "lucide-react";
 
 import type { ChangeUpdate, DiscussionSummary, ReactionKind } from "../api";
+import type { ChangeScope } from "../changeScope";
+import { changeDiscussionsQuery } from "../data/queries";
 import {
-  createDocumentDiscussion,
-  listDocumentDiscussions,
-  replyToDocumentDiscussion,
-  resolveDocumentDiscussion,
+  createChangeDiscussion,
+  replyToChangeDiscussion,
+  resolveChangeDiscussion,
   setDiscussionCommentReaction,
 } from "../api";
 import { applyReactionLocally } from "../reactions";
 import type { TimelineEntry, TimelineEntryKind } from "../changeReview";
 import { buildReviewTimeline } from "../changeReview";
+import { nameFor, usePeopleNames } from "../usePeopleNames";
 import type { ChangeRecord } from "../documentDisplay";
 import { ReviewThread } from "./ReviewThread";
 import { SkeletonGroup, SkeletonLine, SkeletonShape } from "./Skeleton";
 
 interface ReviewTimelineProps {
-  owner: string;
-  repo: string;
+  /** Which repository this change lives in — a document's, or a binder. */
+  scope: ChangeScope;
   change: ChangeRecord;
   /** Every version this change has proposed, for the update events. */
   updates: ChangeUpdate[];
@@ -111,68 +115,66 @@ function TimelineEvent({
  * them. The dots are fully opaque so the hairline never shows through one.
  */
 export function ReviewTimeline({
-  owner,
-  repo,
+  scope,
   change,
   updates,
   resetsApprovals,
-  canParticipate,
+  canParticipate: canParticipateProp,
   currentUsername,
   blockOnUnresolvedThreads,
   onSummaryChange,
   onOpenUpdate,
 }: ReviewTimelineProps) {
-  const [summary, setSummary] = useState<DiscussionSummary | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Commenting is a mutation, and the API refuses it for a delinquent
+  // organization like any other — reviewers included, because the org is
+  // delinquent rather than the person. Folded into the flag that already
+  // decides whether the composer exists, so a comment cannot be typed and
+  // then lost to a 402.
+  const isReadOnly = useIsReadOnly();
+  const canParticipate = canParticipateProp && !isReadOnly;
+  const names = usePeopleNames(scope.org);
+  const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const [newThreadBody, setNewThreadBody] = useState("");
   const [composing, setComposing] = useState(false);
 
   const pullNumber = change.number;
 
-  // Held in a ref so `apply` stays referentially stable. Callers pass an
-  // inline arrow, and letting that identity reach the load effect's
-  // dependencies would refetch the discussion on every parent render.
+  const discussion = changeDiscussionsQuery(
+    scope.org,
+    scope.binder,
+    pullNumber,
+  );
+  const read = useQuery(discussion);
+  const summary: DiscussionSummary | null = read.data ?? null;
+  const loading = read.isPending;
+  const error =
+    actionError ??
+    (read.error
+      ? read.error.message || "Unable to load the discussion."
+      : null);
+
+  // Held in a ref so a caller passing an inline arrow does not re-run this
+  // on every parent render.
   const onSummaryChangeRef = useRef(onSummaryChange);
   useEffect(() => {
     onSummaryChangeRef.current = onSummaryChange;
   }, [onSummaryChange]);
-
-  const apply = useCallback((next: DiscussionSummary) => {
-    setSummary(next);
-    onSummaryChangeRef.current?.(next);
-  }, []);
-
   useEffect(() => {
-    let cancelled = false;
+    if (read.data) onSummaryChangeRef.current?.(read.data);
+  }, [read.data]);
 
-    async function load() {
-      setLoading(true);
-      try {
-        const next = await listDocumentDiscussions(owner, repo, pullNumber);
-        if (!cancelled) {
-          apply(next);
-          setError(null);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Unable to load the discussion.",
-          );
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [owner, repo, pullNumber, apply]);
+  /** Every answer to a write is the whole discussion; it replaces the cache. */
+  const discussionKey = discussion.queryKey;
+  const apply = useCallback(
+    (next: DiscussionSummary) => {
+      queryClient.setQueryData(discussionKey, next);
+    },
+    // The key is rebuilt each render with the same contents.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [queryClient, scope.org, scope.binder, pullNumber],
+  );
 
   async function run(
     action: () => Promise<DiscussionSummary>,
@@ -214,8 +216,7 @@ export function ReviewTimeline({
     setError(null);
 
     void setDiscussionCommentReaction(
-      owner,
-      repo,
+      scope,
       pullNumber,
       threadId,
       commentId,
@@ -235,7 +236,7 @@ export function ReviewTimeline({
     const body = newThreadBody.trim();
     if (!body) return;
     const posted = await run(() =>
-      createDocumentDiscussion(owner, repo, pullNumber, body),
+      createChangeDiscussion(scope, pullNumber, body),
     );
     if (!posted) return;
     setNewThreadBody("");
@@ -247,6 +248,7 @@ export function ReviewTimeline({
     threads: summary?.threads ?? [],
     updates,
     resetsApprovals,
+    nameOf: (login) => nameFor(names, login),
   });
   const unresolved = summary?.unresolvedCount ?? 0;
 
@@ -280,9 +282,8 @@ export function ReviewTimeline({
                   onReact={react}
                   onReply={(threadId, body) =>
                     run(() =>
-                      replyToDocumentDiscussion(
-                        owner,
-                        repo,
+                      replyToChangeDiscussion(
+                        scope,
                         pullNumber,
                         threadId,
                         body,
@@ -291,9 +292,8 @@ export function ReviewTimeline({
                   }
                   onToggleResolved={async (threadId, resolved) => {
                     await run(() =>
-                      resolveDocumentDiscussion(
-                        owner,
-                        repo,
+                      resolveChangeDiscussion(
+                        scope,
                         pullNumber,
                         threadId,
                         resolved,

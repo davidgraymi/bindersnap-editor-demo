@@ -1,11 +1,10 @@
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useIsReadOnly } from "../readOnlyContext";
 import { Check, Clock, MessageSquare, Plus, X } from "lucide-react";
 
-import {
-  listDocumentCollaborators,
-  searchWorkspaceUsers,
-  updateChangeAssignments,
-} from "../api";
+import { updateChangeAssignments } from "../api";
+import { binderCollaboratorsQuery, searchUsersQuery } from "../data/queries";
 import type { ChangeReviewer } from "../api";
 import type { ReviewerDisplayStatus } from "../documentDisplay";
 import {
@@ -14,16 +13,20 @@ import {
   getReviewerStatusLabel,
   resolveReviewerDisplayStatus,
 } from "../documentDisplay";
+import type { ChangeScope } from "../changeScope";
 import { PersonAvatar } from "./PersonAvatar";
 
 const SEARCH_DEBOUNCE_MS = 250;
 const SEARCH_PAGE_SIZE = 6;
 /** Enough names to pick from without the popover becoming a page of its own. */
 const SUGGESTION_LIMIT = 8;
+/** How wide the floating picker is, and how much room it needs below. */
+const PICKER_WIDTH = 320;
+const PICKER_MAX_HEIGHT = 320;
 
 interface ChangeReviewersProps {
-  owner: string;
-  repo: string;
+  /** Which repository this change lives in — a document's, or a binder. */
+  scope: ChangeScope;
   pullNumber: number;
   /** Who submitted the change. They can never be one of its reviewers. */
   submittedBy: string;
@@ -36,16 +39,33 @@ interface ChangeReviewersProps {
    * change in the list, so the page that already loaded it says so.
    */
   openThreadAuthors: ReadonlySet<string>;
+  /**
+   * The reviewers this change is actually held for.
+   *
+   * **Only "Required" is marked.** A reviewer with no marker is one nothing is
+   * waiting on, which is what optional means; printing the word on every other
+   * row is labelling the absence of a constraint.
+   */
+  requiredReviewers?: readonly string[];
+  /**
+   * Open the binder's sign-off rules.
+   *
+   * The caveat under "+ Reviewer" and the button itself share one panel foot,
+   * the way the mockup draws them: the answer to "why is Priya on this" is one
+   * click from the row that raises it. Null where there is no page to open.
+   */
+  onOpenSignOffRules?: (() => void) | null;
   /** Whether this reader may change who has to sign the change off. */
   canManage: boolean;
   /** Refetch the change: reviewers are server state, not local state. */
   onChanged: () => void | Promise<void>;
+  /** The change has been published or closed: nobody will be asked now. */
+  decided?: boolean;
 }
 
 interface UserOption {
   login: string;
   fullName: string;
-  avatarUrl: string;
 }
 
 /**
@@ -77,69 +97,71 @@ function readError(err: unknown, fallback: string): string {
  * is still waiting on.
  */
 export function ChangeReviewers({
-  owner,
-  repo,
+  scope,
   pullNumber,
   submittedBy,
   reviewers,
   currentUser,
   openThreadAuthors,
-  canManage,
+  requiredReviewers = [],
+  onOpenSignOffRules = null,
+  canManage: canManageProp,
   onChanged,
+  decided = false,
 }: ChangeReviewersProps) {
+  // Folded here rather than at each call site, so the binder's change page
+  // and the per-document workspace cannot disagree about it.
+  const isReadOnly = useIsReadOnly();
+  const canManage = canManageProp && !isReadOnly;
   const [picking, setPicking] = useState(false);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [results, setResults] = useState<UserOption[]>([]);
-  const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** The people already on this document, offered before anyone types. */
-  const [collaborators, setCollaborators] = useState<UserOption[]>([]);
-  const searchRequestId = useRef(0);
   const sectionRef = useRef<HTMLDivElement | null>(null);
+  const addRef = useRef<HTMLButtonElement | null>(null);
+  /**
+   * Where the picker sits on the page, in viewport coordinates.
+   *
+   * **It floats rather than being laid out.** The picker lives inside the
+   * Approvals panel, and a panel is a squircle — `overflow: hidden` is what
+   * rounds its corners, and it cut the search box down to the few pixels of
+   * panel below the button. A menu that is clipped by the thing it belongs to
+   * is unusable, so this one is `position: fixed` and measured from the
+   * button, the way every other popover on the page behaves.
+   */
+  const [at, setAt] = useState<{ left: number; top: number } | null>(null);
 
   const reviewerLogins = useMemo(
     () => new Set(reviewers.map((reviewer) => reviewer.login)),
     [reviewers],
   );
 
+  const required = useMemo(
+    () => new Set(requiredReviewers.map((login) => login.toLowerCase())),
+    [requiredReviewers],
+  );
+
   // The people who can review this are overwhelmingly the people already on
   // the document, so the popover opens with them listed. Making someone type
-  // two letters to reach a colleague they picked yesterday is the clunk.
-  useEffect(() => {
-    let cancelled = false;
-    if (!canManage) return;
-
-    void (async () => {
-      try {
-        const payload = await listDocumentCollaborators(
-          owner,
-          repo,
-          1,
-          SUGGESTION_LIMIT,
-        );
-        if (cancelled) return;
-        setCollaborators(
-          payload.collaborators
-            .map((entry) => ({
-              login: entry.user.login ?? "",
-              fullName: entry.user.full_name ?? "",
-              avatarUrl: entry.user.avatar_url ?? "",
-            }))
-            .filter((user) => user.login),
-        );
-      } catch {
-        // A missing suggestion list is not worth an error banner: the search
-        // box below it still reaches everyone in the workspace.
-        if (!cancelled) setCollaborators([]);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [owner, repo, canManage]);
+  // two letters to reach a colleague they picked yesterday is the clunk. A
+  // missing suggestion list is not worth an error banner: the search box
+  // below it still reaches everyone in the workspace.
+  const suggested = useQuery({
+    ...binderCollaboratorsQuery(scope.org, scope.binder, 1, SUGGESTION_LIMIT),
+    enabled: canManage,
+  });
+  const collaborators: UserOption[] = useMemo(
+    () =>
+      (suggested.data?.collaborators ?? [])
+        .map((entry) => ({
+          login: entry.user.login ?? "",
+          fullName: entry.user.full_name ?? "",
+        }))
+        .filter((user) => user.login),
+    [suggested.data],
+  );
 
   useEffect(() => {
     const handle = window.setTimeout(() => {
@@ -148,42 +170,31 @@ export function ChangeReviewers({
     return () => window.clearTimeout(handle);
   }, [query]);
 
-  useEffect(() => {
-    const requestId = ++searchRequestId.current;
-
-    if (!picking || debouncedQuery.length < 2) {
-      setResults([]);
-      setSearching(false);
-      return;
-    }
-
-    setSearching(true);
-    void (async () => {
-      try {
-        const payload = await searchWorkspaceUsers(
-          debouncedQuery,
-          1,
-          SEARCH_PAGE_SIZE,
-        );
-        if (requestId !== searchRequestId.current) return;
-        setResults(
-          payload.users
+  const asking = picking && debouncedQuery.length >= 2;
+  const found = useQuery({
+    ...searchUsersQuery(debouncedQuery, SEARCH_PAGE_SIZE),
+    enabled: asking,
+  });
+  const searching = asking && found.isFetching;
+  const results: UserOption[] = useMemo(
+    () =>
+      asking
+        ? (found.data?.users ?? [])
             .map((user) => ({
               login: user.login ?? "",
               fullName: user.full_name ?? "",
-              avatarUrl: user.avatar_url ?? "",
             }))
-            .filter((user) => user.login),
-        );
-      } catch (err) {
-        if (requestId !== searchRequestId.current) return;
-        setResults([]);
-        setError(readError(err, "Unable to search for people right now."));
-      } finally {
-        if (requestId === searchRequestId.current) setSearching(false);
-      }
-    })();
-  }, [debouncedQuery, picking]);
+            .filter((user) => user.login)
+        : [],
+    [asking, found.data],
+  );
+  useEffect(() => {
+    if (asking && found.error) {
+      setError(
+        readError(found.error, "Unable to search for people right now."),
+      );
+    }
+  }, [asking, found.error]);
 
   // A popover that only closes via the button that opened it is a trap; every
   // other menu on the page closes on Escape and on a click elsewhere.
@@ -212,18 +223,54 @@ export function ChangeReviewers({
     };
   }, [picking]);
 
+  /**
+   * Keep the floating picker on its button.
+   *
+   * A fixed element does not move with the page, and the rail it is anchored
+   * to is sticky inside a scrolling column — so without this the menu would
+   * stay where it opened while the button slid away underneath it. Capture,
+   * because the column that scrolls is not the window.
+   */
+  useEffect(() => {
+    if (!picking) return;
+
+    const place = () => {
+      const button = addRef.current;
+      if (!button) return;
+      const rect = button.getBoundingClientRect();
+      const width = Math.min(PICKER_WIDTH, window.innerWidth - 16);
+      // Below the button, unless the bottom of the window is nearer than the
+      // menu is tall — then above it, so it is never half off the screen.
+      const below = window.innerHeight - rect.bottom;
+      setAt({
+        left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
+        top:
+          below < PICKER_MAX_HEIGHT && rect.top > below
+            ? Math.max(8, rect.top - PICKER_MAX_HEIGHT - 8)
+            : rect.bottom + 8,
+      });
+    };
+
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [picking]);
+
   function closePicker() {
     setPicking(false);
     setQuery("");
     setDebouncedQuery("");
-    setResults([]);
   }
 
   async function save(next: string[]) {
     setBusy(true);
     setError(null);
     try {
-      await updateChangeAssignments(owner, repo, pullNumber, {
+      await updateChangeAssignments(scope, pullNumber, {
         reviewers: next,
       });
       closePicker();
@@ -249,14 +296,14 @@ export function ChangeReviewers({
 
   return (
     <div className="rev-reviewers" ref={sectionRef}>
-      <h3 className="rev-reviewers-label">Reviewers</h3>
-
       {reviewers.length === 0 ? (
-        <p className="rev-reviewers-empty">
-          Nobody has been asked to review this yet.
+        <p className="bs-empty">
+          {decided
+            ? "Nobody was asked to review this."
+            : "Nobody has been asked to review this yet."}
         </p>
       ) : (
-        <ul className="rev-reviewer-list">
+        <ul className="bs-row-list rev-reviewer-list">
           {reviewers.map((reviewer) => {
             const status = resolveReviewerDisplayStatus(
               reviewer,
@@ -269,9 +316,14 @@ export function ChangeReviewers({
                 : getReviewerDisplayName(reviewer);
 
             return (
-              <li className="rev-reviewer" key={reviewer.login}>
-                <PersonAvatar person={reviewer} size="md" />
-                <span className="rev-reviewer-name">{name}</span>
+              <li className="bs-row rev-reviewer" key={reviewer.login}>
+                <PersonAvatar person={reviewer} size="sm" />
+                <span className="bs-row-body">
+                  <span className="bs-row-name">{name}</span>
+                  {required.has(reviewer.login.toLowerCase()) ? (
+                    <span className="bs-required">Required</span>
+                  ) : null}
+                </span>
                 <span
                   className={`rev-reviewer-mark rev-reviewer-mark--${status}`}
                   title={getReviewerStatusLabel(status)}
@@ -309,22 +361,52 @@ export function ChangeReviewers({
         </ul>
       )}
 
-      {canManage ? (
-        <div className="rev-reviewers-anchor">
-          <button
-            className="rev-btn rev-btn--pill"
-            type="button"
-            disabled={busy}
-            aria-expanded={picking}
-            aria-haspopup="true"
-            onClick={() => (picking ? closePicker() : setPicking(true))}
-          >
-            <Plus size={11} strokeWidth={2} aria-hidden="true" />
-            Add reviewer
-          </button>
+      {/* **The button and its caveat share one panel foot**, the way the
+          mockup draws them. It used to sit on the reviewer row itself, flush
+          against the panel's right edge with nothing around it. */}
+      {canManage || (requiredReviewers.length > 0 && onOpenSignOffRules) ? (
+        <div className="bs-panel-foot rev-reviewers-foot">
+          {canManage ? (
+            <button
+              className="bs-btn bs-btn--sm bs-btn--quiet rev-reviewers-add"
+              type="button"
+              ref={addRef}
+              disabled={busy}
+              aria-expanded={picking}
+              aria-haspopup="true"
+              onClick={() => (picking ? closePicker() : setPicking(true))}
+            >
+              <Plus size={13} strokeWidth={2} aria-hidden="true" />
+              Reviewer
+            </button>
+          ) : null}
+
+          {/* The answer to "why is Priya on this" is one click from the row
+              that raises it, rather than a sentence saying the rules exist. */}
+          {requiredReviewers.length > 0 && onOpenSignOffRules ? (
+            <p className="bs-panel-foot-note">
+              Required reviewers come from this binder&rsquo;s{" "}
+              <button
+                type="button"
+                className="bs-linkbtn"
+                onClick={onOpenSignOffRules}
+              >
+                sign-off rules
+              </button>
+              .
+            </p>
+          ) : null}
 
           {picking ? (
-            <div className="rev-picker" role="group">
+            <div
+              className="rev-picker"
+              role="group"
+              style={
+                at
+                  ? { left: `${at.left}px`, top: `${at.top}px` }
+                  : { visibility: "hidden" }
+              }
+            >
               <label className="sr-only" htmlFor="rev-reviewer-search">
                 Search for a reviewer
               </label>
@@ -387,10 +469,14 @@ export function ChangeReviewers({
         </div>
       ) : null}
 
+      {/* Inside the panel's own body, so it is padded like everything else in
+          it rather than running to the border. */}
       {error ? (
-        <p className="vault-pr-error" role="alert">
-          {error}
-        </p>
+        <div className="bs-panel-body">
+          <p className="bs-note bs-note--danger" role="alert">
+            {error}
+          </p>
+        </div>
       ) : null}
     </div>
   );

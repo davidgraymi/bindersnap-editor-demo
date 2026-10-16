@@ -1,5 +1,6 @@
 export type LogLevel = "debug" | "info" | "warn" | "error";
 export type SessionCookieSameSite = "Strict" | "Lax" | "None";
+export type MailTransportName = "ses" | "mailpit" | "off";
 
 // The complete configuration of the API server.
 export interface ApiConfig {
@@ -11,11 +12,27 @@ export interface ApiConfig {
   giteaAdminUsername: string;
   giteaAdminPassword: string;
   giteaServiceToken: string;
+  giteaAdminToken: string;
   stripeSecretKey: string;
   stripeWebhookSecret: string;
   stripePriceId: string;
+  // Set only where several stacks share one Stripe account (CI). See
+  // stripe/run-tag.ts.
+  stripeRunTag: string;
+  // Turnstile's secret for the signup form's widget. Empty outside production,
+  // which skips the check: the local stack and CI sign up with no widget.
+  signupTurnstileSecret: string;
+  /**
+   * Seals each session's Gitea token in the sessions database. Required in
+   * production; elsewhere a fixed development key, so a stack that restarts
+   * keeps its sessions.
+   */
+  sessionSecret: string;
   defaultAppOrigin: string;
   appOrigin: string;
+  // Where the API itself is reached from outside — for links that must hit
+  // the API rather than the app, like an email's one-click unsubscribe.
+  apiOrigin: string;
   configuredAllowedOrigins: Set<string>;
   hasExplicitBrowserOrigins: boolean;
   emailDomain: string;
@@ -33,6 +50,17 @@ export interface ApiConfig {
   sessionCookieSameSite: SessionCookieSameSite;
   sessionsDbPath: string;
   logLevel: LogLevel;
+  // Email (issue #665): how the outbox delivers, and as whom.
+  mailTransport: MailTransportName;
+  mailFrom: string;
+  mailpitUrl: string;
+  awsRegion: string;
+  // Error reports (errorReporter.ts): the feedback Worker's /errors, and the
+  // bearer it knows the API by. Both set, or nothing is sent.
+  errorReportUrl: string;
+  errorReportSecret: string;
+  // Which build this is: the deployed commit, for an error report.
+  release: string;
 }
 
 const REQUIRED_GITEA_TOKEN_SCOPES = [
@@ -44,6 +72,8 @@ const REQUIRED_GITEA_TOKEN_SCOPES = [
   // the grants onto the workspace repo all sit behind Gitea's organization
   // scope, so a session token without it cannot provision anything.
   "write:organization",
+  // The bell reads and clears the user's own Gitea notifications.
+  "write:notification",
 ] as const;
 
 // Spec types — every env var must have an entry in one of the three registries below.
@@ -56,16 +86,27 @@ type BoolSpec = {
 
 // Aliases (PORT → API_PORT, BUN_PUBLIC_GITEA_URL → GITEA_INTERNAL_URL, etc.) are
 // resolved to canonical names in initializeConfig before these registries are consulted.
+/** Outside production only: production refuses to start without its own. */
+const DEV_SESSION_SECRET = "bindersnap-development-session-secret";
+
 const STRING_ENV: Record<string, StringSpec> = {
   GITEA_ADMIN_USER: { default: "" },
   GITEA_ADMIN_PASS: { default: "" },
   GITEA_INTERNAL_URL: { default: "http://localhost:3000" },
   BINDERSNAP_GITEA_SERVICE_TOKEN: { requiredInProduction: true, default: "" },
+  BINDERSNAP_GITEA_ADMIN_TOKEN: { default: "" },
   STRIPE_SECRET_KEY: { requiredInProduction: true, default: "" },
   STRIPE_WEBHOOK_SECRET: { requiredInProduction: true, default: "" },
   STRIPE_PRICE_ID: { requiredInProduction: true, default: "" },
+  STRIPE_RUN_TAG: { default: "" },
+  // infra/edge/put-signup-turnstile-secret.sh writes it to SSM.
+  SIGNUP_TURNSTILE_SECRET_KEY: { requiredInProduction: true, default: "" },
+  // The key that seals each session's Gitea token at rest (`sessions.ts`).
+  // put-secrets.sh generates the SSM leaf `bindersnap_session_secret`.
+  BINDERSNAP_SESSION_SECRET: { requiredInProduction: true, default: "" },
   BINDERSNAP_ALLOWED_ORIGINS: { default: "" },
   BINDERSNAP_APP_ORIGIN: { default: "" },
+  BINDERSNAP_API_ORIGIN: { default: "" },
   BINDERSNAP_USER_EMAIL_DOMAIN: { default: "users.bindersnap.local" },
   BINDERSNAP_SESSION_COOKIE_NAME: { default: "bindersnap_session" },
   BINDERSNAP_GITEA_TOKEN_SCOPES: { default: "" },
@@ -75,6 +116,20 @@ const STRING_ENV: Record<string, StringSpec> = {
   BINDERSNAP_SESSION_COOKIE_SAME_SITE: { default: "Lax" },
   BINDERSNAP_SESSIONS_DB_PATH: { default: "/var/lib/bindersnap/sessions.db" },
   LOG_LEVEL: { default: "" },
+  // `ses` in production, `mailpit` in the local stack, `off` otherwise —
+  // emails are still queued while off, just never sent.
+  BINDERSNAP_MAIL_TRANSPORT: { default: "" },
+  // The one address infra/email lets the instance role send as.
+  BINDERSNAP_MAIL_FROM: {
+    default: "Bindersnap <notifications@bindersnap.com>",
+  },
+  BINDERSNAP_MAILPIT_URL: { default: "http://mailpit:8025" },
+  AWS_REGION: { default: "us-east-1" },
+  // Optional: unset, the API reports no errors. The secret is the SSM leaf
+  // `error_report_secret` (services/feedback/README.md).
+  ERROR_REPORT_URL: { default: "" },
+  ERROR_REPORT_SECRET: { default: "" },
+  BINDERSNAP_RELEASE: { default: "dev" },
 };
 
 const INT_ENV: Record<string, IntSpec> = {
@@ -271,6 +326,27 @@ function resolveLogLevel(
   }
 }
 
+function resolveMailTransport(
+  env: NodeJS.ProcessEnv,
+  isProduction: boolean,
+): MailTransportName {
+  const raw = parseString(env, "BINDERSNAP_MAIL_TRANSPORT", isProduction);
+  switch (raw.toLowerCase()) {
+    case "ses":
+      return "ses";
+    case "mailpit":
+      return "mailpit";
+    case "off":
+      return "off";
+    case "":
+      return isProduction ? "ses" : "off";
+    default:
+      throw new Error(
+        "BINDERSNAP_MAIL_TRANSPORT must be one of ses, mailpit, or off.",
+      );
+  }
+}
+
 function validateProductionOrigins(
   isProduction: boolean,
   allowedOriginsRaw: string,
@@ -338,6 +414,11 @@ export function initializeConfig(
       "BINDERSNAP_GITEA_SERVICE_TOKEN",
       isProduction,
     ),
+    giteaAdminToken: parseString(
+      resolvedEnv,
+      "BINDERSNAP_GITEA_ADMIN_TOKEN",
+      isProduction,
+    ),
     stripeSecretKey: parseString(
       resolvedEnv,
       "STRIPE_SECRET_KEY",
@@ -349,6 +430,15 @@ export function initializeConfig(
       isProduction,
     ),
     stripePriceId: parseString(resolvedEnv, "STRIPE_PRICE_ID", isProduction),
+    stripeRunTag: parseString(resolvedEnv, "STRIPE_RUN_TAG", isProduction),
+    sessionSecret:
+      parseString(resolvedEnv, "BINDERSNAP_SESSION_SECRET", isProduction) ||
+      DEV_SESSION_SECRET,
+    signupTurnstileSecret: parseString(
+      resolvedEnv,
+      "SIGNUP_TURNSTILE_SECRET_KEY",
+      isProduction,
+    ),
     defaultAppOrigin,
     appOrigin: resolvePrimaryAppOrigin(
       allowedOriginsRaw,
@@ -361,6 +451,10 @@ export function initializeConfig(
       defaultAppOrigin,
     ),
     hasExplicitBrowserOrigins: allowedOriginsRaw !== "" || appOriginRaw !== "",
+    apiOrigin:
+      resolveOrigin(
+        parseString(resolvedEnv, "BINDERSNAP_API_ORIGIN", isProduction),
+      ) ?? `http://localhost:${apiPort}`,
     emailDomain: parseString(
       resolvedEnv,
       "BINDERSNAP_USER_EMAIL_DOMAIN",
@@ -425,6 +519,21 @@ export function initializeConfig(
       isProduction,
     ),
     logLevel: resolveLogLevel(resolvedEnv, isProduction),
+    mailTransport: resolveMailTransport(resolvedEnv, isProduction),
+    mailFrom: parseString(resolvedEnv, "BINDERSNAP_MAIL_FROM", isProduction),
+    mailpitUrl: parseString(
+      resolvedEnv,
+      "BINDERSNAP_MAILPIT_URL",
+      isProduction,
+    ),
+    awsRegion: parseString(resolvedEnv, "AWS_REGION", isProduction),
+    errorReportUrl: parseString(resolvedEnv, "ERROR_REPORT_URL", isProduction),
+    errorReportSecret: parseString(
+      resolvedEnv,
+      "ERROR_REPORT_SECRET",
+      isProduction,
+    ),
+    release: parseString(resolvedEnv, "BINDERSNAP_RELEASE", isProduction),
   };
 }
 

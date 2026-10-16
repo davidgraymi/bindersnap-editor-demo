@@ -1,8 +1,10 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import {
+  formatAge,
   closedChangeToRecord,
   describeApprovalProgress,
+  describeSubmission,
   describeChangeOutcome,
   formatDocumentName,
   getChangeStateBadgeClass,
@@ -12,17 +14,45 @@ import {
   getReviewerDisplayName,
   getReviewerStatusLabel,
   getReviewStateLabel,
+  describeChangeStanding,
   hasEnoughApprovals,
+  isReadyToPublish,
+  parseChangeTitle,
   parseSubmissionSummary,
   resolveDocumentStatus,
   resolveReviewerDisplayStatus,
   resolveWorkspaceDocumentStatus,
   toChangeRecord,
 } from "./documentDisplay";
+import type { ReviewerStatus } from "../../packages/api-schema/schemas/documents";
 
 test("formatDocumentName turns a repo slug into a title", () => {
   expect(formatDocumentName("quarterly-report")).toBe("Quarterly Report");
   expect(formatDocumentName("resume")).toBe("Resume");
+});
+
+test("formatDocumentName keeps an initialism upper-case", () => {
+  // "Hipaa Training Policy" is a machine guessing at the name of a regulation
+  // on a page whose job is to be trustworthy.
+  expect(formatDocumentName("hipaa-training-policy")).toBe(
+    "HIPAA Training Policy",
+  );
+  expect(formatDocumentName("ppe-and-hand-hygiene")).toBe(
+    "PPE and Hand Hygiene",
+  );
+  expect(formatDocumentName("hr")).toBe("HR");
+});
+
+test("formatDocumentName only upper-cases words that are on the list", () => {
+  expect(formatDocumentName("phishing-response")).toBe("Phishing Response");
+  expect(formatDocumentName("hipaas-cousin")).toBe("Hipaas Cousin");
+
+  // The known cost of matching on the word alone: "it" is far more often
+  // Information Technology than the pronoun in a policy manual's filing, so
+  // the list takes it — and this is what that decision looks like when the
+  // pronoun does turn up. Pinned so the trade-off is visible rather than a
+  // surprise, and so a stored title (the real fix) has a test to delete.
+  expect(formatDocumentName("it-is-policy")).toBe("IT Is Policy");
 });
 
 test("resolveDocumentStatus reports the most urgent open state first", () => {
@@ -123,7 +153,7 @@ test("parseSubmissionSummary keeps a body a person wrote", () => {
   expect(parseSubmissionSummary(null)).toBeNull();
 });
 
-test("a generated upload is named after the file, not its submitter", () => {
+test("a generated upload is named after the document it adds, not its submitter or its file", () => {
   const change = toChangeRecord({
     number: 4,
     body: "Automated upload from Bindersnap file vault. Source file: CHANGELOG.md Document: changelog Uploaded by: bob",
@@ -135,7 +165,7 @@ test("a generated upload is named after the file, not its submitter", () => {
 
   // The row already says "submitted by Bob on 1 Feb"; a title that repeats it
   // is the same sentence twice.
-  expect(change.summary).toBe("New version of CHANGELOG.md");
+  expect(change.summary).toBe("Add Changelog");
 });
 
 test("getInitials handles one and two part names", () => {
@@ -156,7 +186,7 @@ test("an open change keeps its approval state as its badge", () => {
 
   expect(change.open).toBe(true);
   expect(change.summary).toBe("Adds the 2026 retention clause.");
-  expect(getChangeStateLabel(change)).toBe("Awaiting Approval");
+  expect(getChangeStateLabel(change)).toBe("Awaiting approval");
   expect(describeChangeOutcome(change)).toBeNull();
 });
 
@@ -258,14 +288,67 @@ test("approval progress counts sign-offs instead of saying 'awaiting'", () => {
   );
 });
 
-test("a document that demands no approvals gets no counter", () => {
+test("a document that demands no approvals gets no counter, and has enough", () => {
   // "0 of 0 approvals" is a number that answers nothing; the badge is better.
   expect(
     describeApprovalProgress({ approvalCount: 0, requiredApprovals: 0 }),
   ).toBeNull();
+  // Nothing to collect is everything collected: Gitea merges at once.
   expect(hasEnoughApprovals({ approvalCount: 0, requiredApprovals: 0 })).toBe(
-    false,
+    true,
   );
+});
+
+describe("ready to publish, by Gitea's rules", () => {
+  // Each case was checked against Gitea itself, on a branch protected the way
+  // a binder's `main` is (`block_on_rejected_reviews`,
+  // `block_on_official_review_requests`), with no approvals required.
+  const ready = (
+    requiredApprovals: number | null,
+    statuses: ReviewerStatus[],
+    approvalCount = 0,
+  ) =>
+    isReadyToPublish({
+      open: true,
+      approvalCount,
+      requiredApprovals,
+      reviewers: statuses.map((status) => ({ status })),
+    });
+
+  test("no approvals needed and nobody asked: ready at once", () => {
+    expect(ready(0, [])).toBe(true);
+  });
+
+  test("a reviewer asked and not yet heard from holds it", () => {
+    expect(ready(0, ["awaiting"])).toBe(false);
+  });
+
+  test("a comment is an answer; an approval more so", () => {
+    expect(ready(0, ["commented"])).toBe(true);
+    expect(ready(0, ["approved"], 1)).toBe(true);
+  });
+
+  test("changes requested holds it, whatever the count", () => {
+    expect(ready(0, ["changes_requested"])).toBe(false);
+    expect(ready(1, ["approved", "changes_requested"], 1)).toBe(false);
+  });
+
+  test("short of the binder's number is not ready", () => {
+    expect(ready(2, ["approved"], 1)).toBe(false);
+    expect(ready(2, ["approved", "approved"], 2)).toBe(true);
+  });
+
+  test("an unknown requirement, or a closed change, is never ready", () => {
+    expect(ready(null, [])).toBe(false);
+    expect(
+      isReadyToPublish({
+        open: false,
+        approvalCount: 0,
+        requiredApprovals: 0,
+        reviewers: [],
+      }),
+    ).toBe(false);
+  });
 });
 
 test("an unknown approval requirement is not a requirement of none", () => {
@@ -310,4 +393,119 @@ test("a reviewer is named as a person, falling back to their username", () => {
     getReviewerDisplayName({ login: "dana", fullName: "Dana Reyes" }),
   ).toBe("Dana Reyes");
   expect(getReviewerDisplayName({ login: "bob", fullName: "  " })).toBe("Bob");
+});
+
+test("a change body with detail keeps its first line as the title", () => {
+  // A binder's sign-off change is the first with a body worth more than one
+  // line. Before this the whole blob became the page's heading, which read as
+  // a paragraph where a title should be.
+  const body = [
+    "Change who signs off on each folder",
+    "",
+    "These rules decide who has to approve a change to each folder.",
+  ].join("\n");
+
+  expect(parseChangeTitle(body, "alice")).toBe(
+    "Change who signs off on each folder",
+  );
+  expect(describeSubmission(body)).toBe(
+    "These rules decide who has to approve a change to each folder.",
+  );
+});
+
+test("a one-line body is the title and leaves no description", () => {
+  // The common case, and it has to keep behaving exactly as it did — a
+  // description equal to the title would say the same sentence twice.
+  expect(parseChangeTitle("Tighten hand hygiene auditing", "alice")).toBe(
+    "Tighten hand hygiene auditing",
+  );
+  expect(describeSubmission("Tighten hand hygiene auditing")).toBe("");
+});
+
+test("a file list says how long ago, at any age", () => {
+  const now = Date.parse("2026-09-17T12:00:00Z");
+  const ago = (ms: number) => new Date(now - ms).toISOString();
+  const MINUTE = 60_000;
+  const DAY = 24 * 60 * MINUTE;
+
+  expect(formatAge(ago(20_000), now)).toBe("just now");
+  expect(formatAge(ago(1 * MINUTE), now)).toBe("1 minute ago");
+  expect(formatAge(ago(2 * 60 * MINUTE), now)).toBe("2 hours ago");
+  expect(formatAge(ago(1 * DAY), now)).toBe("yesterday");
+  expect(formatAge(ago(4 * DAY), now)).toBe("4 days ago");
+  expect(formatAge(ago(21 * DAY), now)).toBe("3 weeks ago");
+  expect(formatAge(ago(150 * DAY), now)).toBe("5 months ago");
+  expect(formatAge(ago(800 * DAY), now)).toBe("2 years ago");
+  expect(formatAge("", now)).toBe("");
+});
+
+test("a generated new version says which document, in the product's words", () => {
+  const change = toChangeRecord({
+    number: 5,
+    body: "Update nursing/hand-hygiene\n\nA new version proposed from Bindersnap.\n\nSource file: hygiene-v4.docx\nDocument: nursing/hand-hygiene",
+    branchName: "upload/v4",
+    created_at: "2026-02-01T00:00:00Z",
+    approvalState: "in_review",
+    user: { login: "bob" },
+  });
+  expect(change.summary).toBe("New version of Hand Hygiene");
+});
+
+describe("where a change stands when the binder needs no approvals", () => {
+  const reviewer = (login: string, status: ReviewerStatus) => ({
+    login,
+    fullName: "",
+    avatarUrl: "",
+    status,
+    reviewedAt: "",
+    stale: false,
+    requested: true,
+  });
+
+  test("nobody holding it reads ready, with no counter", () => {
+    expect(
+      describeChangeStanding({
+        open: true,
+        approvalCount: 0,
+        requiredApprovals: 0,
+        reviewers: [],
+      }),
+    ).toEqual({ tone: "ready", progress: null, reason: "Ready to publish" });
+  });
+
+  test("a reviewer not yet heard from is named", () => {
+    expect(
+      describeChangeStanding({
+        open: true,
+        approvalCount: 0,
+        requiredApprovals: 0,
+        reviewers: [reviewer("bob", "awaiting")],
+      }),
+    ).toEqual({ tone: "progress", progress: null, reason: "Waiting on Bob" });
+  });
+
+  test("a binder that does not hold for requests is ready, by the server's word", () => {
+    // Gitea 28 binders turn `block_on_official_review_requests` off; only the
+    // server can read that, and says so as `isApproved`.
+    expect(
+      describeChangeStanding({
+        open: true,
+        approvalCount: 0,
+        requiredApprovals: 0,
+        reviewers: [reviewer("bob", "awaiting")],
+        isApproved: true,
+      })?.reason,
+    ).toBe("Ready to publish");
+  });
+
+  test("a full count still waits on somebody asked and silent", () => {
+    expect(
+      describeChangeStanding({
+        open: true,
+        approvalCount: 1,
+        requiredApprovals: 1,
+        reviewers: [reviewer("bob", "approved"), reviewer("carol", "awaiting")],
+      })?.reason,
+    ).toBe("Waiting on Carol");
+  });
 });

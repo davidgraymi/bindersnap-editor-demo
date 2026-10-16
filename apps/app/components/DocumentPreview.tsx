@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download, FileText } from "lucide-react";
 
 import { sanitizeHtml } from "../../../packages/utils/sanitizer";
-import { downloadDocument } from "../api";
 import {
   classifyDocumentFile,
   describeFileKind,
@@ -10,11 +9,22 @@ import {
 } from "../documentFile";
 import { docxToHtml } from "../docxHtml";
 import { markdownToHtml } from "../markdown";
+import { editorDocumentToHtml } from "../editorDocumentHtml";
+import { wireContentsLinks } from "../contentsLinks";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 interface DocumentPreviewProps {
-  owner: string;
-  repo: string;
+  /**
+   * Fetch the file at a ref.
+   *
+   * A callback rather than an owner and a repo because the same preview now
+   * serves two shapes of document — one that is a repository of its own, and
+   * one that is a file inside a binder — and where the bytes come from is the
+   * only thing that differs. Callers must keep it stable (`useCallback`): it
+   * is a dependency of the load, so a new function each render would refetch
+   * the file on every render.
+   */
+  loadFile: (gitRef: string) => Promise<Blob>;
   /** Git ref to read: "main" for the current version, or a version tag. */
   gitRef: string;
   /** File name as stored in the repo, or null when it could not be resolved. */
@@ -25,6 +35,20 @@ interface DocumentPreviewProps {
    */
   onDownload: (loaded: Blob | null) => void;
   downloading: boolean;
+  /**
+   * Save a policy written in Bindersnap as a PDF or a Word document.
+   *
+   * Its stored file is the editor's JSON, which nobody outside the product
+   * can open — so for one of those, these replace Download rather than sit
+   * beside it.
+   */
+  onExport?: (format: "pdf" | "docx") => void;
+  /**
+   * Draw the document without its own name-and-download bar, for a screen
+   * whose own bar already carries both — the change comparison, where every
+   * control on a file sits in the one header above it.
+   */
+  bare?: boolean;
 }
 
 type PreviewState =
@@ -60,14 +84,31 @@ function describePreviewFailure(message: string): string {
  * offers the file.
  */
 export function DocumentPreview({
-  owner,
-  repo,
+  loadFile,
   gitRef,
   fileName,
   onDownload,
   downloading,
+  onExport,
+  bare = false,
 }: DocumentPreviewProps) {
   const [state, setState] = useState<PreviewState>({ status: "idle" });
+  const proseHtml = state.status === "richText" ? state.html : null;
+
+  // The contents list, followed: see `contentsLinks.ts`. Wired to whichever
+  // element the prose is drawn into, every time one is — not on the HTML
+  // changing. The page can draw the same document twice, once from what it
+  // already had and again when a fresh read lands, and the second element
+  // had the same HTML and no links.
+  const unwireContents = useRef<(() => void) | null>(null);
+  const proseRef = useCallback(
+    (root: HTMLElement | null) => {
+      unwireContents.current?.();
+      unwireContents.current =
+        root && proseHtml !== null ? wireContentsLinks(root) : null;
+    },
+    [proseHtml],
+  );
   // Kept so the Download button can save what is already on screen.
   const [loadedBlob, setLoadedBlob] = useState<Blob | null>(null);
   const kind = classifyDocumentFile(fileName);
@@ -91,7 +132,7 @@ export function DocumentPreview({
     async function load() {
       setState({ status: "loading" });
       try {
-        const blob = await downloadDocument(owner, repo, gitRef);
+        const blob = await loadFile(gitRef);
         if (cancelled) return;
         setLoadedBlob(blob);
 
@@ -113,6 +154,24 @@ export function DocumentPreview({
               : blob;
           const text = await slice.text();
           if (cancelled) return;
+
+          // A policy written in the editor is stored as its JSON. Show the
+          // policy, not the file: headings, paragraphs and lists, the way a
+          // Word file renders. Anything else stays the text it is.
+          const editorHtml =
+            kind === "text" && blob.size <= MAX_INLINE_TEXT_BYTES
+              ? await editorDocumentToHtml(text)
+              : null;
+          if (cancelled) return;
+          if (editorHtml !== null) {
+            setState({
+              status: "richText",
+              html: sanitizeHtml(editorHtml),
+              size: blob.size,
+            });
+            return;
+          }
+
           setState({
             status: "text",
             text,
@@ -147,7 +206,7 @@ export function DocumentPreview({
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [owner, repo, gitRef, fileName, kind]);
+  }, [loadFile, gitRef, fileName, kind]);
 
   const markdownHtml = useMemo(() => {
     if (state.status !== "text" || !state.markdown) return null;
@@ -190,42 +249,51 @@ export function DocumentPreview({
               : `${describeFileKind(fileName)} — this file type doesn’t preview in the browser.`}
           </span>
         </span>
-        <button
-          className="bs-btn bs-btn-secondary doc-preview-download"
-          type="button"
-          disabled={downloading || !fileName}
-          onClick={() => onDownload(loadedBlob)}
-        >
-          <Download size={14} strokeWidth={1.5} aria-hidden="true" />
-          {downloading ? "Downloading…" : "Download"}
-        </button>
+        <DownloadButtons
+          fileName={fileName}
+          downloading={downloading}
+          onDownload={() => onDownload(loadedBlob)}
+          onExport={onExport}
+        />
       </div>
     );
   }
 
   return (
     <section className="doc-preview" aria-label="Document preview">
-      <header className="doc-preview-toolbar">
-        <span className="doc-preview-filename">
-          <FileText size={14} strokeWidth={1.5} aria-hidden="true" />
-          {fileName ?? "No file"}
-        </span>
-        <span className="doc-preview-toolbar-spacer" />
-        {state.status === "text" ||
-        state.status === "object" ||
-        state.status === "richText" ? (
-          <span className="doc-preview-size">{formatFileSize(state.size)}</span>
-        ) : null}
-        <button
-          className="bs-btn bs-btn-secondary doc-preview-download"
-          type="button"
-          disabled={downloading || !fileName}
-          onClick={() => onDownload(loadedBlob)}
-        >
-          <Download size={14} strokeWidth={1.5} aria-hidden="true" />
-          {downloading ? "Downloading…" : "Download"}
-        </button>
-      </header>
+      {bare ? null : (
+        <header className="doc-preview-toolbar">
+          <span className="doc-preview-filename">
+            <FileText size={14} strokeWidth={1.5} aria-hidden="true" />
+            <span
+              className={`doc-preview-filename-text${
+                isWrittenHere(fileName)
+                  ? " doc-preview-filename-text--words"
+                  : ""
+              }`}
+              title={fileName ?? undefined}
+            >
+              {isWrittenHere(fileName)
+                ? "Written in Bindersnap"
+                : (fileName ?? "No file")}
+            </span>
+          </span>
+          <span className="doc-preview-toolbar-spacer" />
+          {state.status === "text" ||
+          state.status === "object" ||
+          state.status === "richText" ? (
+            <span className="doc-preview-size">
+              {formatFileSize(state.size)}
+            </span>
+          ) : null}
+          <DownloadButtons
+            fileName={fileName}
+            downloading={downloading}
+            onDownload={() => onDownload(loadedBlob)}
+            onExport={onExport}
+          />
+        </header>
+      )}
 
       <div className="doc-preview-body">
         {state.status === "loading" || state.status === "idle" ? (
@@ -256,6 +324,7 @@ export function DocumentPreview({
           </div>
         ) : state.status === "richText" ? (
           <article
+            ref={proseRef}
             className="doc-preview-sheet doc-preview-prose"
             // Mammoth emits a small semantic subset of HTML, and the result is
             // sanitized before it lands here.
@@ -282,5 +351,69 @@ export function DocumentPreview({
         ) : null}
       </div>
     </section>
+  );
+}
+
+/** Whether a file is a document written in Bindersnap, stored as the editor's JSON. */
+export function isWrittenHere(fileName: string | null): boolean {
+  return fileName?.toLowerCase().endsWith(".json") ?? false;
+}
+
+function DownloadButtons({
+  fileName,
+  downloading,
+  onDownload,
+  onExport,
+}: {
+  fileName: string | null;
+  downloading: boolean;
+  onDownload: () => void;
+  onExport?: (format: "pdf" | "docx") => void;
+}) {
+  if (onExport && isWrittenHere(fileName)) {
+    return (
+      <span
+        className="doc-preview-exports"
+        role="group"
+        aria-label="Download as"
+      >
+        <button
+          className="bs-btn bs-btn--sm bs-btn-secondary doc-preview-download"
+          type="button"
+          title="Download as a PDF"
+          disabled={downloading}
+          onClick={() => onExport("pdf")}
+        >
+          <Download size={14} strokeWidth={1.5} aria-hidden="true" />
+          <span className="doc-preview-download-label">
+            {downloading ? "Preparing…" : "PDF"}
+          </span>
+        </button>
+        <button
+          className="bs-btn bs-btn--sm bs-btn-secondary doc-preview-download"
+          type="button"
+          title="Download as a Word document"
+          disabled={downloading}
+          onClick={() => onExport("docx")}
+        >
+          <Download size={14} strokeWidth={1.5} aria-hidden="true" />
+          <span className="doc-preview-download-label">Word</span>
+        </button>
+      </span>
+    );
+  }
+  return (
+    <button
+      className="bs-btn bs-btn--sm bs-btn-secondary doc-preview-download"
+      title="Download"
+      type="button"
+      disabled={downloading || !fileName}
+      onClick={onDownload}
+    >
+      <Download size={14} strokeWidth={1.5} aria-hidden="true" />
+      <span className="doc-preview-download-label">
+        {downloading ? "Downloading…" : "Download"}
+      </span>
+    </button>
   );
 }

@@ -7,7 +7,13 @@
  */
 
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -21,7 +27,9 @@ import {
   parseEnv,
   portsForSlot,
   pruneMissing,
+  readRegistry,
   renderEnv,
+  seedPassword,
   stackNameFor,
   withLock,
 } from "./stack";
@@ -216,6 +224,47 @@ describe("ensureStackEnv", () => {
     for (const key of PORT_KEYS) {
       expect(env[key]).toBe(String(stack.ports[key]));
     }
+  });
+
+  test("a worktree does not inherit the main checkout's password", async () => {
+    // It used to be copied into each new worktree, so a password set once in
+    // the main checkout quietly became every stack's, and nobody knew it was
+    // not `dev`.
+    const { main, worktrees } = makeRepoWithWorktrees(1);
+    writeFileSync(
+      join(main, ".env"),
+      "GITEA_ADMIN_PASS=hunter2\nGITEA_ADMIN_USER=alice\n",
+    );
+
+    const mainStack = await ensureStackEnv(main);
+    const worktree = await ensureStackEnv(worktrees[0]!);
+
+    expect(seedPassword(mainStack)).toBe("hunter2");
+    const worktreeEnv = parseEnv(
+      readFileSync(join(worktrees[0]!, ".env"), "utf8"),
+    );
+    expect(worktreeEnv.GITEA_ADMIN_USER).toBe("alice");
+    expect(worktreeEnv.GITEA_ADMIN_PASS).toBeUndefined();
+    expect(seedPassword(worktree)).toBe("dev");
+  });
+
+  test("drops a port that has left the block from an old registry record", async () => {
+    // Records written while Hocuspocus was in the stack carry its port.
+    const { worktrees } = makeRepoWithWorktrees(1);
+    const stack = await ensureStackEnv(worktrees[0]!);
+    const registry = readRegistryFile();
+    for (const record of registry.stacks) {
+      (record.ports as Record<string, number>).HOCUSPOCUS_PORT = 21234;
+    }
+    writeFileSync(join(stackHome, "stacks.json"), JSON.stringify(registry));
+
+    const loaded = readRegistry().stacks.find((r) => r.slot === stack.slot);
+    expect(Object.keys(loaded!.ports).sort()).toEqual([...PORT_KEYS].sort());
+
+    const again = await ensureStackEnv(worktrees[0]!);
+    expect(again.ports).toEqual(stack.ports);
+    const env = parseEnv(readFileSync(join(worktrees[0]!, ".env"), "utf8"));
+    expect(env.HOCUSPOCUS_PORT).toBeUndefined();
   });
 
   test("a second clone does not also claim slot 0", async () => {

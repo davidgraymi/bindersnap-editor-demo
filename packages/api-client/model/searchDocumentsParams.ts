@@ -7,6 +7,5 @@
 
 export type SearchDocumentsParams = {
 q: string;
-page?: string;
 limit?: string;
 };

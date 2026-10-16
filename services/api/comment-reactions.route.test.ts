@@ -13,7 +13,8 @@ import {
 } from "./subscriptions";
 
 const TEST_GITEA_ORG_ID = 4004;
-const TEST_ORG_NAME = "adr0004-test-org";
+// The organization the routes below write into: the paywall judges that one.
+const TEST_ORG_NAME = "alice";
 
 /**
  * End-to-end coverage for reacting to a review comment.
@@ -212,7 +213,7 @@ async function seedSession(username: string): Promise<string> {
 }
 
 function reactionUrl(threadId: string, commentId: number): string {
-  return `/api/app/documents/alice/contract/pull-requests/3/discussions/${threadId}/comments/${commentId}/reactions`;
+  return `/api/app/binders/alice/contract/changes/3/discussions/${threadId}/comments/${commentId}/reactions`;
 }
 
 function request(

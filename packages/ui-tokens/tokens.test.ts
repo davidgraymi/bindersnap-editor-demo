@@ -14,7 +14,14 @@ import { join, relative } from "node:path";
 const REPO_ROOT = join(import.meta.dir, "..", "..");
 const TOKENS_CSS_REL = "packages/ui-tokens/css/bindersnap-tokens.css";
 const TOKENS_CSS_PATH = join(REPO_ROOT, TOKENS_CSS_REL);
-const AGENTS_MD_PATH = join(REPO_ROOT, "AGENTS.md");
+// Every guide that names tokens: the root one, each directory's own, and
+// the design-system skill the root one points to.
+const AGENTS_MD_PATHS = [
+  "AGENTS.md",
+  "apps/app/AGENTS.md",
+  "apps/site/AGENTS.md",
+  ".claude/skills/design-system/SKILL.md",
+].map((p) => join(REPO_ROOT, p));
 
 const tokensCss = readFileSync(TOKENS_CSS_PATH, "utf8");
 
@@ -24,10 +31,13 @@ const LITERAL_ALLOWLIST: ReadonlyArray<{ file: string; literal: string }> = [
   // .doc-compare-blend: mix-blend-mode: difference requires a true black
   // ground, not the warm-ink --brand-ink.
   { file: "apps/app/app.css", literal: "#000" },
-  // resolveCssColor()'s static fallback for --brand-coral: TipTap needs a
-  // resolved colour string, so the token is read at runtime and this is
-  // what it falls back to if the stylesheet has not loaded.
-  { file: "packages/editor/Editor.tsx", literal: "#E85D26" },
+  // <meta name="theme-color">: the browser chrome around the page, read from
+  // an attribute that cannot take var(). These are --bs-page-bg, light and
+  // dark.
+  { file: "apps/app/index.html", literal: "#fafaf7" },
+  { file: "apps/app/index.html", literal: "#1c1917" },
+  { file: "apps/site/index.html", literal: "#fafaf7" },
+  { file: "apps/site/index.html", literal: "#1c1917" },
 ];
 
 // Files exempt from the literal rule entirely, with the reason. Not a
@@ -38,17 +48,20 @@ const LITERAL_EXEMPT_FILES: ReadonlyArray<{ file: string; why: string }> = [
     file: "apps/app/auditRecord.ts",
     why: "a self-contained print stylesheet — black on white paper, deliberately not theme-reactive",
   },
+  {
+    file: "packages/editor/ribbon/options.ts",
+    why: "the text and highlight colours an author can give their words — written into the document itself, so they must be literal and must not change with the reader's theme",
+  },
+  {
+    file: "packages/editor/ribbon/options.test.ts",
+    why: "the tests of those same document colours, which have to name them",
+  },
 ];
 
 // Custom properties set at runtime via an inline style (React `style={{}}`),
-// not declared with `--name: value;` anywhere — packages/editor/Editor.tsx
-// positions the selection menu and sidebar this way. Each has a static
-// fallback (`var(--x, 0px)`) so the CSS reads correctly on its own too.
-const RUNTIME_DEFINED_TOKENS = new Set([
-  "bs-selection-x",
-  "bs-selection-y",
-  "bs-editor-sidebar-width",
-]);
+// not declared with `--name: value;` anywhere. None today; each would need a
+// static fallback (`var(--x, 0px)`) so the CSS reads correctly on its own.
+const RUNTIME_DEFINED_TOKENS = new Set<string>([]);
 
 const EXCLUDED_DIRS = new Set(["node_modules", "dist", ".git", "img"]);
 
@@ -75,17 +88,24 @@ function walk(dir: string, extensions: string[]): string[] {
  */
 const STYLE_FILES = [
   ...walk(join(REPO_ROOT, "apps/app"), [".css", ".html", ".ts", ".tsx"]),
-  ...walk(join(REPO_ROOT, "packages/editor"), [".ts", ".tsx"]),
-  join(REPO_ROOT, "packages/editor/assets/bindersnap-editor.css"),
+  // The landing page and its stylesheet, which moved to the site (#718).
+  join(REPO_ROOT, "apps/site/index.html"),
+  join(REPO_ROOT, "apps/site/landing.css"),
+  ...walk(join(REPO_ROOT, "packages/editor"), [".css", ".ts", ".tsx"]),
 ].filter(
   (f) =>
     f !== TOKENS_CSS_PATH &&
     !LITERAL_EXEMPT_FILES.some((e) => relative(REPO_ROOT, f) === e.file),
 );
 
-/** Everywhere a token could reasonably be referenced: CSS, HTML, TS/TSX. */
+/**
+ * Everywhere a token could reasonably be referenced: CSS, HTML, TS/TSX —
+ * including the public site's bar and footer (`apps/site/chrome.css`), which
+ * the landing page shares.
+ */
 const SOURCE_FILES = [
   ...walk(join(REPO_ROOT, "apps/app"), [".css", ".html", ".ts", ".tsx"]),
+  ...walk(join(REPO_ROOT, "apps/site"), [".css", ".html", ".ts", ".tsx"]),
   ...walk(join(REPO_ROOT, "packages/editor"), [".css", ".tsx", ".ts"]),
   TOKENS_CSS_PATH,
 ];
@@ -112,6 +132,11 @@ describe("design tokens (docs/design/design-system-audit.md, Task 6)", () => {
       const allowed = LITERAL_ALLOWLIST.filter((a) => a.file === rel).map(
         (a) => a.literal,
       );
+      // Note for whoever this catches next: the hex pattern also matches a
+      // pull-request reference written as `#392` in a comment, because that
+      // is six hex digits' worth of nothing. The offender line names the file
+      // and the literal, so read it before assuming a colour crept in — and
+      // write "PR 392" in prose rather than allowlisting it.
       const found = [
         ...(text.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []),
         ...(text.match(/rgba?\([^)]*\)/g) ?? []),
@@ -126,11 +151,9 @@ describe("design tokens (docs/design/design-system-audit.md, Task 6)", () => {
   });
 
   test("every var(--…) reference resolves to a defined token", () => {
-    // A handful of files run their own self-contained, locally-scoped
-    // custom-property system on top of the shared one: the editor's --e-*
-    // aliases and .bs-editor-only --bs-* names (packages/editor/assets/
-    // bindersnap-editor.css), and the audit-record print stylesheet's
-    // --ink/--rule family (apps/app/auditRecord.ts). A reference resolves
+    // A file may run its own self-contained, locally-scoped custom-property
+    // system on top of the shared one — the audit-record print stylesheet's
+    // --ink/--rule family (apps/app/auditRecord.ts) does. A reference resolves
     // if it names a token from bindersnap-tokens.css OR one defined
     // anywhere else in that same file.
     const unresolved = new Set<string>();
@@ -159,9 +182,12 @@ describe("design tokens (docs/design/design-system-audit.md, Task 6)", () => {
   });
 
   test("every token name mentioned in AGENTS.md exists", () => {
-    const agentsMd = readFileSync(AGENTS_MD_PATH, "utf8");
+    const agentsMd = AGENTS_MD_PATHS.map((p) => readFileSync(p, "utf8")).join(
+      "\n",
+    );
+    // Only our two prefixes: AGENTS.md also documents CLI flags (`--json`).
     const mentioned = [
-      ...agentsMd.matchAll(/(?<![a-zA-Z0-9-])--[a-zA-Z0-9][a-zA-Z0-9-]*/g),
+      ...agentsMd.matchAll(/(?<![a-zA-Z0-9-])--(?:bs|brand)-[a-zA-Z0-9-]*/g),
     ].map((m) => m[0].slice(2));
     // A name ending in "-" is a family mention ("--bs-status-warn-*"
     // written without the asterisk our regex can't match), not a literal

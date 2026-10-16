@@ -46,7 +46,10 @@ export const PORT_KEYS = [
   "API_PORT",
   "API_PROXY_PORT",
   "GITEA_PORT",
-  "HOCUSPOCUS_PORT",
+  "MAILPIT_PORT",
+  // The public site (bindersnap.com in production): the landing page, the
+  // marketing pages, help and legal. The app is APP_PORT (app.bindersnap.com).
+  "SITE_PORT",
 ] as const;
 
 export type PortKey = (typeof PORT_KEYS)[number];
@@ -55,7 +58,7 @@ export type Ports = Record<PortKey, number>;
 /**
  * Slot 0 is the main checkout and keeps the historical ports, so a developer
  * who has been typing `localhost:5173` for a year keeps typing it. Every other
- * worktree gets a contiguous block of five ports well clear of the defaults —
+ * worktree gets a block of ports well clear of the defaults —
  * one block per slot, so a slot number is the only thing that has to be
  * unique.
  */
@@ -64,7 +67,8 @@ export const LEGACY_PORTS: Ports = {
   API_PORT: 8787,
   API_PROXY_PORT: 8788,
   GITEA_PORT: 3000,
-  HOCUSPOCUS_PORT: 1234,
+  MAILPIT_PORT: 8025,
+  SITE_PORT: 5174,
 };
 
 const SLOT_PORT_BASE = 21000;
@@ -76,18 +80,20 @@ const SLOT_OFFSETS: Record<PortKey, number> = {
   API_PORT: 1,
   API_PROXY_PORT: 2,
   GITEA_PORT: 3,
-  HOCUSPOCUS_PORT: 4,
+  // 4 was Hocuspocus. Left empty so that no existing worktree's ports move.
+  MAILPIT_PORT: 5,
+  SITE_PORT: 6,
 };
 
 /**
  * Keys worth inheriting from the main checkout's `.env` when a worktree is
  * first set up. Deliberately excludes anything carrying a port or an origin:
  * those are derived per stack, and a copied one would silently point a
- * worktree's app at another worktree's API.
+ * worktree's app at another worktree's API. `GITEA_ADMIN_PASS` is left out
+ * too: the seeded password is `dev` unless a checkout sets its own.
  */
 const INHERITED_KEYS = [
   "GITEA_ADMIN_USER",
-  "GITEA_ADMIN_PASS",
   "BINDERSNAP_GITEA_TOKEN_SCOPES",
   "STRIPE_SECRET_KEY",
   "STRIPE_PRICE_ID",
@@ -153,7 +159,22 @@ export function readRegistry(): Registry {
     if (!parsed || !Array.isArray(parsed.stacks)) {
       return { ...EMPTY_REGISTRY, stacks: [] };
     }
-    return parsed;
+    // A record written before a port joined the block lacks it. The slot
+    // decides every port, so fill the gap from the slot rather than hand
+    // compose an "undefined" — or the shared default. A port that has since
+    // left the block (HOCUSPOCUS_PORT) is dropped.
+    return {
+      ...parsed,
+      stacks: parsed.stacks.map((record) => {
+        const ports = { ...portsForSlot(record.slot), ...record.ports };
+        return {
+          ...record,
+          ports: Object.fromEntries(
+            PORT_KEYS.map((key) => [key, ports[key]]),
+          ) as Ports,
+        };
+      }),
+    };
   } catch {
     // A truncated registry is recoverable: every record is re-derivable from
     // the worktree it names, and losing it costs at most a re-allocation.
@@ -596,30 +617,30 @@ async function waitForUrl(
 
 export interface StackUrls {
   app: string;
+  site: string;
   api: string;
   apiProxy: string;
   gitea: string;
-  hocuspocus: string;
+  mail: string;
 }
 
 export function urlsFor(config: StackConfig): StackUrls {
   const p = config.ports;
   return {
     app: `http://localhost:${p.APP_PORT}`,
+    site: `http://localhost:${p.SITE_PORT}`,
     api: `http://localhost:${p.API_PORT}`,
     apiProxy: `http://localhost:${p.API_PROXY_PORT}`,
     gitea: `http://localhost:${p.GITEA_PORT}`,
-    hocuspocus: `ws://localhost:${p.HOCUSPOCUS_PORT}`,
+    mail: `http://localhost:${p.MAILPIT_PORT}`,
   };
 }
 
 /**
- * The password the seed job gave every demo account.
- *
- * It is `GITEA_ADMIN_PASS`, not the `dev` that the docs assume: a worktree
- * inherits that key from the main checkout, where it is often something else,
- * and an agent that reports the wrong one sends the next session hunting a
- * login failure that is not a bug.
+ * The password the seed job gave every demo account: `dev`, unless this
+ * checkout's own `.env` sets `GITEA_ADMIN_PASS`. A worktree no longer inherits
+ * that key from the main checkout, so an override is always one somebody made
+ * in this checkout on purpose.
  */
 export function seedPassword(config: StackConfig): string {
   const envPath = join(config.path, ".env");
@@ -651,7 +672,9 @@ function reportFailure(config: StackConfig): void {
     .split("\n")
     .map((s) => s.trim())
     .filter(Boolean);
-  for (const service of services.length > 0 ? services : ["seed", "api"]) {
+  for (const service of services.length > 0
+    ? services
+    : ["seed-accounts", "seed", "api"]) {
     const logs = compose(
       config,
       ["logs", "--no-color", "--tail", "60", service],
@@ -700,6 +723,8 @@ async function cmdUp(args: string[]): Promise<void> {
   await waitForUrl(`${urls.apiProxy}/auth/me`);
   log(`waiting for the app at ${urls.app} ...`);
   await waitForUrl(urls.app, { ok: (r) => r.ok });
+  log(`waiting for the site at ${urls.site} ...`);
+  await waitForUrl(urls.site, { ok: (r) => r.ok });
 
   process.stdout.write(
     [
@@ -707,10 +732,11 @@ async function cmdUp(args: string[]): Promise<void> {
       `  Stack ready: ${config.stackName}`,
       "",
       `    App        ${urls.app}`,
+      `    Site       ${urls.site} (landing, marketing, help, legal)`,
       `    API        ${urls.api}`,
       `    API proxy  ${urls.apiProxy}`,
       `    Gitea      ${urls.gitea}`,
-      `    Hocuspocus ${urls.hocuspocus}`,
+      `    Mail       ${urls.mail} (Mailpit — every email the stack sends)`,
       "",
       `    Sign in as alice, bob, carol or dan — password \`${seedPassword(config)}\`.`,
       "",
@@ -770,8 +796,10 @@ async function cmdStatus(args: string[]): Promise<void> {
       `  path    ${config.path}`,
       `  state   ${running ? "running" : "stopped"}`,
       `  app     ${urls.app}`,
+      `  site    ${urls.site}`,
       `  api     ${urls.api} (proxy ${urls.apiProxy})`,
       `  gitea   ${urls.gitea}`,
+      `  mail    ${urls.mail}`,
       `  login   alice / bob / carol / dan — password \`${seedPassword(config)}\``,
       "",
     ].join("\n"),

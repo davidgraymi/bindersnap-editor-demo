@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
-import { ArrowRightToLine, Check, Clock, X } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { type ReactNode, useMemo } from "react";
 
-import { getHomeChanges, type HomeOpenDocument } from "../api";
+import { type HomeOpenDocument } from "../api";
+import { homeChangesQuery } from "../data/queries";
 import {
   buildDecidedChangeRows,
   buildOpenChangeRows,
@@ -13,7 +14,11 @@ import {
   type HomeChangeRow,
   type HomeDecidedRow,
 } from "../homeChanges";
-import { SkeletonGroup, SkeletonLine } from "./Skeleton";
+import { followInApp } from "../appLink";
+import { buildBinderUrl } from "../binderShell";
+import { routeToPath } from "../routes";
+import { ChangeRowView } from "./ChangeRow";
+import { SkeletonPanel } from "./Skeleton";
 
 interface HomePageProps {
   currentUsername: string;
@@ -21,7 +26,10 @@ interface HomePageProps {
   /** Open one change request — the only thing a row on this page links to. */
   onOpenChange: (owner: string, repo: string, changeNumber: number) => void;
   onBrowseDocuments: () => void;
-  onNewDocument: () => void;
+  /** The organization's binders, where a document is added. */
+  onOpenBinders: (() => void) | null;
+  /** The getting-started guide, first thing on the page while it has steps left. */
+  guide?: ReactNode;
 }
 
 /**
@@ -31,63 +39,50 @@ interface HomePageProps {
  * path from here into the library is the "Browse documents" link, because a
  * list of documents answers a question nobody arrives with.
  */
+const EMPTY_OPEN: HomeOpenDocument[] = [];
+
 export function HomePage({
   currentUsername,
   currentUserFullName = "",
   onOpenChange,
   onBrowseDocuments,
-  onNewDocument,
+  onOpenBinders,
+  guide = null,
 }: HomePageProps) {
-  const [documents, setDocuments] = useState<HomeOpenDocument[]>([]);
-  const [decided, setDecided] = useState<HomeDecidedRow[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // One request. Home is a query — "the changes I am part of" — and the
+  // server answers it against every document at once, so the page does not
+  // walk the workspace or ask each document for its own history. The review
+  // queue asks the same question and shares the answer.
+  const home = useQuery(homeChangesQuery());
+  const isLoading = home.isPending;
+  const error = home.error
+    ? home.error.message || "Unable to load your change requests."
+    : null;
+  const documents = home.data?.open ?? EMPTY_OPEN;
 
-  const load = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      // One request. Home is a query — "the changes I am part of" — and the
-      // server answers it against every document at once, so the page no
-      // longer walks the workspace or asks each document for its own history.
-      const { open, decided: decidedDocuments } = await getHomeChanges();
-      setDocuments(open);
-
-      const ownedRepos = new Set(
-        [
-          ...open.map((document) => ({
-            owner: document.repo.owner.login,
-            repo: document.repo.name,
-          })),
-          ...decidedDocuments.map((document) => ({
-            owner: document.owner,
-            repo: document.repo,
-          })),
-        ]
-          .filter((ref) => ref.owner === currentUsername)
-          .map((ref) => `${ref.owner}/${ref.repo}`),
-      );
-
-      setDecided(
-        buildDecidedChangeRows(decidedDocuments, currentUsername, ownedRepos),
-      );
-    } catch (loadError) {
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Unable to load your change requests.",
-      );
-      setDocuments([]);
-      setDecided([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentUsername]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const decided = useMemo(() => {
+    if (!home.data) return [];
+    const { open, decided: decidedDocuments } = home.data;
+    const ownedRepos = new Set(
+      [
+        ...open.map((document) => ({
+          owner: document.repo.owner.login,
+          repo: document.repo.name,
+        })),
+        ...decidedDocuments.map((document) => ({
+          owner: document.owner,
+          repo: document.repo,
+        })),
+      ]
+        .filter((ref) => ref.owner === currentUsername)
+        .map((ref) => `${ref.owner}/${ref.repo}`),
+    );
+    return buildDecidedChangeRows(
+      decidedDocuments,
+      currentUsername,
+      ownedRepos,
+    );
+  }, [home.data, currentUsername]);
 
   const openRows = buildOpenChangeRows(documents, currentUsername);
   const waitingOnYou = selectWaitingOnYou(openRows);
@@ -95,129 +90,146 @@ export function HomePage({
   const hasAnything =
     waitingOnYou.length > 0 || submissions.length > 0 || decided.length > 0;
 
+  // "Browse documents" is a place, so it is a link: it opens in a new tab and
+  // shows where it goes, which a button that moved the address bar did not.
+  const browseLink = (
+    <a
+      className="home-section-link"
+      href={routeToPath({ kind: "documents" })}
+      onClick={(event) => followInApp(event, onBrowseDocuments)}
+    >
+      Browse documents →
+    </a>
+  );
+
   return (
-    <div className="home-page">
-      <h1 className="home-greeting">
-        {getGreeting()}, {getGreetingName(currentUsername, currentUserFullName)}
-        .
-      </h1>
-      <p className="home-subtitle">
-        {isLoading
-          ? "Gathering the change requests you are part of."
-          : describeWaitingCount(waitingOnYou.length)}
-      </p>
+    <div className="docw-page home-page">
+      <div className="bs-pagehead">
+        <div className="bs-pagehead-body">
+          <h1 className="bs-title">
+            {getGreeting()},{" "}
+            {getGreetingName(currentUsername, currentUserFullName)}.
+          </h1>
+          <p className="bs-subtitle">
+            {isLoading
+              ? "Gathering the change requests you are part of."
+              : describeWaitingCount(waitingOnYou.length)}
+          </p>
+        </div>
+      </div>
+
+      {guide}
 
       {error ? (
-        <section className="home-section">
-          <div className="home-section-head">
-            <span className="home-section-label">Something went wrong</span>
+        <section className="bs-panel">
+          <div className="bs-panel-bar">
+            <h2 className="bs-panel-bar-title">Something went wrong</h2>
           </div>
           <div className="home-empty">
             <p>{error}</p>
             <button
               type="button"
-              className="home-row-action"
-              onClick={() => void load()}
+              className="bs-btn bs-btn-secondary bs-btn--sm"
+              onClick={() => void home.refetch()}
             >
               Try again
             </button>
           </div>
         </section>
       ) : isLoading ? (
-        <section className="home-section">
-          <div className="home-section-head">
-            <span className="home-section-label">Waiting on you</span>
-          </div>
-          <HomeSkeletonRows count={2} />
-        </section>
+        <SkeletonPanel
+          label="Loading your change requests"
+          rows={3}
+          bar
+          right
+        />
       ) : !hasAnything ? (
-        <section className="home-section">
-          <div className="home-section-head">
-            <span className="home-section-label">Waiting on you</span>
-            <span className="home-section-spacer" />
-            <button
-              type="button"
-              className="home-section-link"
-              onClick={onBrowseDocuments}
-            >
-              Browse documents →
-            </button>
+        <section className="bs-panel">
+          <div className="bs-panel-bar">
+            <h2 className="bs-panel-bar-title">Waiting on you</h2>
+            <span className="bs-panel-bar-spacer" />
+            {browseLink}
           </div>
           <div className="home-empty">
             <p>
               No change requests yet. Submit a new version of a document and it
               will show up here the moment someone has to look at it.
             </p>
-            <button
-              type="button"
-              className="home-row-action"
-              onClick={onNewDocument}
-            >
-              New document
-            </button>
+            {/* A document is added on its binder's page, where the binder and
+                its rules are already on screen. */}
+            {onOpenBinders ? (
+              <button
+                type="button"
+                className="bs-btn bs-btn-secondary bs-btn--sm"
+                onClick={onOpenBinders}
+              >
+                Open your binders
+              </button>
+            ) : null}
           </div>
         </section>
       ) : (
         <>
           {waitingOnYou.length > 0 ? (
-            <section className="home-section">
-              <div className="home-section-head">
-                <span className="home-section-label home-section-label--urgent">
-                  Waiting on you
-                </span>
-                <span className="home-section-count">
+            <section className="bs-panel">
+              <div className="bs-panel-bar">
+                <h2 className="bs-panel-bar-title">Waiting on you</h2>
+                <span className="bs-section-count bs-section-count--attention">
                   {waitingOnYou.length}
                 </span>
               </div>
-              {waitingOnYou.map((row) => (
-                <HomeChangeRowItem
-                  key={row.key}
-                  row={row}
-                  onOpen={onOpenChange}
-                />
-              ))}
+              <ul className="bs-row-list">
+                {waitingOnYou.map((row) => (
+                  <HomeChangeRowItem
+                    key={row.key}
+                    row={row}
+                    onOpen={onOpenChange}
+                  />
+                ))}
+              </ul>
             </section>
           ) : null}
 
           {submissions.length > 0 ? (
-            <section className="home-section">
-              <div className="home-section-head">
-                <span className="home-section-label">Your submissions</span>
+            <section className="bs-panel">
+              <div className="bs-panel-bar">
+                <h2 className="bs-panel-bar-title">Your submissions</h2>
+                {/* Counted like the section above it, in the quiet colour:
+                    these are waiting on somebody else, not on you. */}
+                <span className="bs-section-count">{submissions.length}</span>
               </div>
-              {submissions.map((row) => (
-                <HomeChangeRowItem
-                  key={row.key}
-                  row={row}
-                  onOpen={onOpenChange}
-                />
-              ))}
+              <ul className="bs-row-list">
+                {submissions.map((row) => (
+                  <HomeChangeRowItem
+                    key={row.key}
+                    row={row}
+                    onOpen={onOpenChange}
+                  />
+                ))}
+              </ul>
             </section>
           ) : null}
 
-          <section className="home-section">
-            <div className="home-section-head">
-              <span className="home-section-label">Recently decided</span>
-              <span className="home-section-spacer" />
-              <button
-                type="button"
-                className="home-section-link"
-                onClick={onBrowseDocuments}
-              >
-                Browse documents →
-              </button>
+          <section className="bs-panel">
+            <div className="bs-panel-bar">
+              <h2 className="bs-panel-bar-title">Recently decided</h2>
+              <span className="bs-panel-bar-spacer" />
+              {browseLink}
             </div>
             {decided.length === 0 ? (
               <div className="home-empty">
                 <p>Nothing has been decided yet.</p>
               </div>
             ) : (
-              decided.map((row) => (
-                <HomeDecidedRowItem
-                  key={row.key}
-                  row={row}
-                  onOpen={onOpenChange}
-                />
-              ))
+              <ul className="bs-row-list">
+                {decided.map((row) => (
+                  <HomeDecidedRowItem
+                    key={row.key}
+                    row={row}
+                    onOpen={onOpenChange}
+                  />
+                ))}
+              </ul>
             )}
           </section>
         </>
@@ -226,20 +238,23 @@ export function HomePage({
   );
 }
 
-function HomeSkeletonRows({ count }: { count: number }) {
-  return (
-    <SkeletonGroup label="Loading your change requests">
-      {Array.from({ length: count }, (_, index) => (
-        <div className="home-row home-row--skeleton" key={index}>
-          <div className="home-row-icon home-row-icon--quiet" />
-          <span className="bs-skeleton-lines">
-            <SkeletonLine width="medium" />
-            <SkeletonLine width="short" />
-          </span>
-        </div>
-      ))}
-    </SkeletonGroup>
-  );
+/**
+ * One change request on Home — the same row every other list draws.
+ *
+ * Home used to draw its own: a tinted icon tile, the document in bold, and a
+ * Review button that did exactly what clicking the row did. Three lists, three
+ * rows, one object. What Home knows that the others do not is which document
+ * the change is about and whose turn it is; the first leads the meta line, the
+ * second is the section the row is in.
+ */
+/** Where a row on Home goes: the change, on its binder. */
+function changeHref(row: { owner: string; repo: string; number: number }) {
+  return buildBinderUrl({
+    org: row.owner,
+    binder: row.repo,
+    tab: "changes",
+    change: row.number,
+  });
 }
 
 function HomeChangeRowItem({
@@ -249,61 +264,17 @@ function HomeChangeRowItem({
   row: HomeChangeRow;
   onOpen: (owner: string, repo: string, changeNumber: number) => void;
 }) {
-  const open = () => onOpen(row.owner, row.repo, row.number);
-
   return (
-    <div
-      className="home-row"
-      role="button"
-      tabIndex={0}
-      onClick={open}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          open();
-        }
-      }}
-    >
-      <span
-        className={`home-row-icon home-row-icon--${row.kind === "needs_review" ? "urgent" : row.kind === "ready_to_publish" ? "done" : "quiet"}`}
-        aria-hidden="true"
-      >
-        {row.kind === "needs_review" ? (
-          <ArrowRightToLine size={16} strokeWidth={1.5} />
-        ) : row.kind === "ready_to_publish" ? (
-          <Check size={16} strokeWidth={1.6} />
-        ) : (
-          <Clock size={16} strokeWidth={1.4} />
-        )}
-      </span>
-
-      <span className="home-row-body">
-        <span className="home-row-title">{row.title}</span>
-        <span className="home-row-meta">
-          <span className="home-row-docref">{row.documentName}</span> ·{" "}
-          {row.meta}
-        </span>
-      </span>
-
-      <span
-        className={`home-pill home-pill--${row.kind === "needs_review" ? "review" : row.kind === "ready_to_publish" ? "approved" : "waiting"}`}
-      >
-        {row.pillLabel}
-      </span>
-
-      {row.action ? (
-        <button
-          type="button"
-          className="home-row-action"
-          onClick={(event) => {
-            event.stopPropagation();
-            open();
-          }}
-        >
-          {row.action}
-        </button>
-      ) : null}
-    </div>
+    <ChangeRowView
+      title={row.title}
+      context={row.documentName}
+      meta={row.meta}
+      tone={row.tone}
+      standing={row.standing}
+      commentCount={row.commentCount}
+      href={changeHref(row)}
+      onOpen={() => onOpen(row.owner, row.repo, row.number)}
+    />
   );
 }
 
@@ -314,45 +285,16 @@ function HomeDecidedRowItem({
   row: HomeDecidedRow;
   onOpen: (owner: string, repo: string, changeNumber: number) => void;
 }) {
-  const open = () => onOpen(row.owner, row.repo, row.number);
-
   return (
-    <div
-      className="home-row"
-      role="button"
-      tabIndex={0}
-      onClick={open}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          open();
-        }
-      }}
-    >
-      <span
-        className={`home-row-icon home-row-icon--${row.outcome === "published" ? "done" : "quiet"}`}
-        aria-hidden="true"
-      >
-        {row.outcome === "published" ? (
-          <Check size={16} strokeWidth={1.6} />
-        ) : (
-          <X size={16} strokeWidth={1.5} />
-        )}
-      </span>
-
-      <span className="home-row-body">
-        <span className="home-row-title">{row.title}</span>
-        <span className="home-row-meta">
-          <span className="home-row-docref">{row.documentName}</span> ·{" "}
-          {row.meta}
-        </span>
-      </span>
-
-      <span
-        className={`home-pill home-pill--${row.outcome === "published" ? "approved" : "waiting"}`}
-      >
-        {row.pillLabel}
-      </span>
-    </div>
+    <ChangeRowView
+      title={row.title}
+      context={row.documentName}
+      meta={row.meta}
+      tone={row.tone}
+      standing={row.standing}
+      outcome={row.outcome === "published" ? "published" : "declined"}
+      href={changeHref(row)}
+      onOpen={() => onOpen(row.owner, row.repo, row.number)}
+    />
   );
 }

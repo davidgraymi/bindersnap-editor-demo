@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Binder · Editing — Bindersnap design</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" />
+    <link rel="stylesheet" href="./binder.css" />
+    <script src="./shell.js"></script>
+  </head>
+  <body>
+    <script>
+      /*
+       * The binder, being edited — the screen the customer's whole brief is
+       * about: "an edit button that puts the user in edit mode … save
+       * everything continuously and when they are ready open a CR."
+       *
+       * The tree is quiet here on purpose. Versions, open-change counts and
+       * "moved here from" notes are all gone: while you are rearranging a
+       * binder the only state that matters is what you have touched, and
+       * everything else competing for the same line is noise you have to read
+       * past to see your own work. A touched row carries a coral dot and
+       * nothing else; what actually happened to it is in the draft bar, once,
+       * and on the propose page, once.
+       *
+       * Two things this adds that were not reachable before: which draft you
+       * are in (several, now — see the spec's D8), and the archive, which was
+       * a page of its own reachable only from the reading view, so the one
+       * place somebody can act on what they find had no way in.
+       */
+      const page = shell({ binder: 'Clinical', section: 'documents' });
+      const I = window.bsIcon;
+
+      const acts = `
+        <span class="bs-rowacts">
+          <button type="button" class="bs-rowact" aria-label="Rename" title="Rename">
+            <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 2.8a1.7 1.7 0 0 1 2.4 2.4L6 13.8l-3.2.8.8-3.2 8.6-8.6Z"/></svg>
+          </button>
+          <button type="button" class="bs-rowact" aria-label="Move" title="Move">
+            <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5a1 1 0 0 1 1-1h3.4l1.3 1.6H15a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5Z"/><path d="M7 10h5m-2-2 2 2-2 2"/></svg>
+          </button>
+          <button type="button" class="bs-rowact bs-rowact--danger" aria-label="Archive" title="Archive">
+            <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 4h14v3H2V4Zm1 3v8h12V7M7 10h4"/></svg>
+          </button>
+        </span>`;
+
+      const folderIcon = `<svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 5a1 1 0 0 1 1-1h3.4l1.3 1.6H15a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5Z"/></svg>`;
+      const docIcon = `<svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M5 2h5l3 3v11H5V2Z"/><path d="M10 2v3h3"/></svg>`;
+
+      const row = ({ depth = 0, kind, name, right = '', cls = '' }) => `
+        <div class="bs-row bs-tree-row ${kind === 'folder' ? 'bs-tree-row--folder' : ''} ${cls}" data-depth="${depth}" draggable="true">
+          <span class="bs-twisty">${kind === 'folder' ? I('chevron', 14) : ''}</span>
+          <span class="bs-row-icon">${kind === 'folder' ? folderIcon : docIcon}</span>
+          <span class="bs-row-body"><span class="bs-row-name">${name}</span></span>
+          <span class="bs-row-right">${right}</span>
+          ${acts}
+        </div>`;
+
+      page.innerHTML = `
+        <div class="bs-pagehead">
+          <div class="bs-pagehead-body">
+            <h1 class="bs-title">Clinical</h1>
+            <p class="bs-subtitle">
+              Rename in place, drag to refile, make a folder. Everything you do
+              is saved to your draft and nobody is asked to look until you
+              propose it.
+            </p>
+          </div>
+          <!-- One button, and it is the way out. "Add a policy" was up here as
+               well as in the bar over the tree it acts on; two of the same
+               control on one screen is one of them in the wrong place, and the
+               wrong one is the one that is not next to the thing it adds to. -->
+          <div class="bs-pagehead-actions">
+            <button type="button" class="bs-btn bs-btn-secondary">Done</button>
+          </div>
+        </div>
+
+        <div class="bs-panel">
+          <div class="bs-panel-bar">
+            <!-- ── Which draft you are in ──────────────────────────────────
+                 A draft is a branch, and there can be more than one: two
+                 unrelated reorganisations should not have to be proposed
+                 together just because one person did both. -->
+            <button type="button" class="bs-draftpick">
+              ${I('change', 14)}
+              Reorganise nursing
+              <span class="bs-draftpick-count">· 3 changes</span>
+              ${I('chevron', 13)}
+            </button>
+
+            <button type="button" class="bs-btn bs-btn--sm bs-btn-secondary">
+              ${I('plus', 14)} New folder
+            </button>
+            <button type="button" class="bs-btn bs-btn--sm bs-btn-secondary">
+              ${I('doc', 14)} Add a policy
+            </button>
+            <span class="bs-panel-bar-spacer"></span>
+            <span class="bs-saved">
+              <svg width="13" height="13" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5 7.5 13 14 5"/></svg>
+              Saved
+            </span>
+          </div>
+
+          ${row({ kind: 'folder', name: 'Administrative' })}
+          ${row({ depth: 1, kind: 'doc', name: 'Patient Grievance Policy' })}
+
+          <!-- A folder being renamed. The field IS the row: no dialog, no page
+               move, Enter commits and Escape cancels — which is what "as
+               simple as Finder" means. -->
+          <div class="bs-row bs-tree-row bs-tree-row--folder">
+            <span class="bs-twisty">${I('chevron', 14)}</span>
+            <span class="bs-row-icon">${folderIcon}</span>
+            <input class="bs-rename" value="Nursing and Midwifery" autofocus />
+            <span class="bs-rename-hint">Enter to save · Esc to cancel</span>
+          </div>
+
+          ${row({ depth: 1, kind: 'doc', name: 'Infection Control Policy', cls: 'bs-row--demo-hover' })}
+          ${row({ depth: 1, kind: 'doc', name: 'Medication Administration Policy', cls: 'bs-row--dirty' })}
+
+          ${row({ kind: 'folder', name: 'Training' })}
+
+          <div class="bs-drop">Drop here to file it at the top level of the binder</div>
+
+          <!-- ── The archive, in the tree ────────────────────────────────
+               Restoring is an ordinary change, not an undo: the policy comes
+               back at the filename it left with, so it keeps its identity and
+               returns as its next version rather than as a new policy at v1.
+               The button says which, so the effect on the history is not a
+               surprise. -->
+          <div class="bs-archived">
+            <button type="button" class="bs-disclose" aria-expanded="true">
+              ${I('chevron', 14)}
+              <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 4h14v3H2V4Zm1 3v8h12V7M7 10h4"/></svg>
+              Archived · 2 policies
+            </button>
+
+            <div class="bs-row bs-tree-row" data-depth="1">
+              <span class="bs-twisty"></span>
+              <span class="bs-row-icon">${docIcon}</span>
+              <span class="bs-row-body">
+                <span class="bs-row-name">Visitor Screening Policy</span>
+              </span>
+              <span class="bs-row-when">Archived 4 months ago · was in Nursing</span>
+              <span class="bs-rowacts bs-rowacts--always">
+                <button type="button" class="bs-btn bs-btn--sm bs-btn-secondary">
+                  Restore as v3
+                </button>
+              </span>
+            </div>
+
+            <div class="bs-row bs-tree-row" data-depth="1">
+              <span class="bs-twisty"></span>
+              <span class="bs-row-icon">${docIcon}</span>
+              <span class="bs-row-body">
+                <span class="bs-row-name">Paper Chart Retention Policy</span>
+              </span>
+              <!-- Archiving the only policy in a folder empties it, and an
+                   empty folder stops existing — so "its folder is gone" is
+                   the common case rather than the edge one, and the row says
+                   where it will land instead. -->
+              <span class="bs-row-when">Archived 1 year ago · its folder is gone</span>
+              <span class="bs-rowacts bs-rowacts--always">
+                <button type="button" class="bs-btn bs-btn--sm bs-btn-secondary">
+                  Restore as v2
+                </button>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- The draft bar: sticky to the bottom of the viewport, so it is
+             reachable at any scroll depth and never between you and the tree.
+             Propose is the filled button because it is the only control that
+             finishes the work. -->
+        <div class="bs-draftbar">
+          <span class="bs-draftbar-mark">
+            <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 2.8a1.7 1.7 0 0 1 2.4 2.4L6 13.8l-3.2.8.8-3.2 8.6-8.6Z"/></svg>
+          </span>
+          <span class="bs-draftbar-body">
+            <p class="bs-draftbar-title">3 changes in “Reorganise nursing”</p>
+            <p class="bs-draftbar-note">
+              Rename Nursing to Nursing and Midwifery · Move Medication
+              Administration Policy to Nursing and Midwifery · Add the folder
+              Training
+            </p>
+          </span>
+          <button type="button" class="bs-draftbar-toggle">Show all</button>
+          <button type="button" class="bs-btn bs-btn--sm bs-btn--quiet">Discard</button>
+          <button type="button" class="bs-btn bs-btn--sm bs-btn-primary">Propose these changes</button>
+        </div>`;
+    </script>
+  </body>
+</html>

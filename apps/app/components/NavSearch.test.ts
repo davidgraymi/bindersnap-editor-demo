@@ -63,26 +63,31 @@ inputPrototype.detachEvent = () => {};
 
 type SearchResponse = {
   documents: {
-    id: number;
+    path: string | null;
+    slugPath: string;
     name: string;
-    full_name: string;
-    description: string;
-    updated_at: string;
-    owner: { login: string };
+    folder: string;
+    size: number | null;
+    sha: string | null;
+    state: "published" | "proposed";
+    openChangeCount: number;
+    latestVersion: null;
+    organization: string;
+    binder: string;
+    binderDescription: string;
   }[];
-  page: number;
   limit: number;
   hasMore: boolean;
 };
 
-let pages: SearchResponse[] = [];
-let searchCalls: { query: string; page: number }[] = [];
+let response: SearchResponse | null = null;
+let searchCalls: { query: string; limit: number }[] = [];
 let searchFails = false;
 
-const mockSearchDocuments = mock(async (query: string, page = 1) => {
-  searchCalls.push({ query, page });
+const mockSearchDocuments = mock(async (query: string, limit = 8) => {
+  searchCalls.push({ query, limit });
   if (searchFails) throw new Error("search is down");
-  return pages[page - 1] ?? { documents: [], page, limit: 8, hasMore: false };
+  return response ?? { documents: [], limit, hasMore: false };
 });
 
 // Spread the real module: every test file in this directory mocks the same
@@ -100,11 +105,13 @@ const { act, createElement } = require("react") as typeof import("react");
 const { createRoot } =
   require("react-dom/client") as typeof import("react-dom/client");
 const { NavSearch } = require("./NavSearch") as typeof import("./NavSearch");
+const { withQueryClient } =
+  require("../data/testing") as typeof import("../data/testing");
 
 type ReactElement = ReturnType<typeof createElement>;
 
 beforeEach(() => {
-  pages = [];
+  response = null;
   searchCalls = [];
   searchFails = false;
   document.body.innerHTML = "";
@@ -116,21 +123,23 @@ afterEach(async () => {
   await new Promise((resolve) => setTimeout(resolve, 20));
 });
 
-function page(
-  names: string[],
-  pageNumber: number,
-  hasMore: boolean,
-): SearchResponse {
+/** A search answer: policies in a binder, which is what a row now names. */
+function found(names: string[], hasMore = false): SearchResponse {
   return {
-    documents: names.map((name, index) => ({
-      id: pageNumber * 100 + index,
+    documents: names.map((name) => ({
+      path: `nursing/${name}.docx`,
+      slugPath: `nursing/${name}`,
       name,
-      full_name: `alice/${name}`,
-      description: "",
-      updated_at: "2026-08-25T10:00:00Z",
-      owner: { login: "alice" },
+      folder: "nursing",
+      size: 10,
+      sha: "abc",
+      state: "published" as const,
+      openChangeCount: 0,
+      latestVersion: null,
+      organization: "riverside-health",
+      binder: "clinical",
+      binderDescription: "",
     })),
-    page: pageNumber,
     limit: 8,
     hasMore,
   };
@@ -141,7 +150,7 @@ async function render(element: ReactElement) {
   document.body.appendChild(container);
   const root = createRoot(container);
   await act(async () => {
-    root.render(element);
+    root.render(withQueryClient(element));
   });
 
   return {
@@ -158,6 +167,10 @@ async function render(element: ReactElement) {
 function props(overrides: Record<string, unknown> = {}) {
   return {
     currentUsername: "bob",
+    // Null by default: these tests are about the panel's behaviour, and a
+    // named organization would make every one of them fetch binders and
+    // people as well as documents.
+    org: null as string | null,
     initialQuery: "",
     onNavigate: (_route: AppRoute) => {},
     onSearchLibrary: (_query: string) => {},
@@ -212,6 +225,13 @@ async function type(container: HTMLElement, value: string) {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 250));
   });
+  // The debounce settles the question in one render; the search it asks is
+  // started by the next, and answered in the one after that.
+  for (let step = 0; step < 2; step += 1) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+  }
 
   return input;
 }
@@ -312,7 +332,7 @@ test("clicking the dimmed page closes the search", async () => {
 });
 
 test("typing lists matching documents without a submit", async () => {
-  pages = [page(["vendor-agreement", "nda"], 1, false)];
+  response = found(["Vendor Agreement", "NDA"]);
   const view = await render(createElement(NavSearch, props()));
   await openOverlay(view.container);
 
@@ -320,8 +340,8 @@ test("typing lists matching documents without a submit", async () => {
 
   expect(rows()).toHaveLength(2);
   expect(overlay()!.textContent).toContain("Vendor Agreement");
-  expect(overlay()!.textContent).toContain("Alice owns");
-  expect(searchCalls).toEqual([{ query: "ven", page: 1 }]);
+  expect(overlay()!.textContent).toContain("Clinical · nursing");
+  expect(searchCalls).toEqual([{ query: "ven", limit: 8 }]);
 
   await view.unmount();
 });
@@ -339,7 +359,7 @@ test("a query too short to be a question is not asked", async () => {
 });
 
 test("arrow down then Enter opens the highlighted document", async () => {
-  pages = [page(["vendor-agreement", "nda"], 1, false)];
+  response = found(["Vendor Agreement", "NDA"]);
   const opened: AppRoute[] = [];
   const view = await render(
     createElement(
@@ -355,7 +375,12 @@ test("arrow down then Enter opens the highlighted document", async () => {
   await submit(input);
 
   expect(opened).toEqual([
-    { kind: "document", owner: "alice", repo: "nda", tab: "overview" },
+    {
+      kind: "binderDocument",
+      org: "riverside-health",
+      binder: "clinical",
+      documentPath: "nursing/NDA",
+    },
   ]);
   // Opening a document closes the search behind it.
   expect(overlay()).toBeNull();
@@ -364,7 +389,7 @@ test("arrow down then Enter opens the highlighted document", async () => {
 });
 
 test("arrow up from nothing highlighted reaches the last result", async () => {
-  pages = [page(["vendor-agreement", "nda"], 1, false)];
+  response = found(["Vendor Agreement", "NDA"]);
   const opened: AppRoute[] = [];
   const view = await render(
     createElement(
@@ -378,13 +403,13 @@ test("arrow up from nothing highlighted reaches the last result", async () => {
   await press(input, "ArrowUp");
   await submit(input);
 
-  expect(opened[0]).toMatchObject({ repo: "nda" });
+  expect(opened[0]).toMatchObject({ documentPath: "nursing/NDA" });
 
   await view.unmount();
 });
 
 test("Enter with nothing highlighted searches the library", async () => {
-  pages = [page(["vendor-agreement"], 1, false)];
+  response = found(["Vendor Agreement"]);
   const searched: string[] = [];
   const view = await render(
     createElement(
@@ -403,7 +428,7 @@ test("Enter with nothing highlighted searches the library", async () => {
 });
 
 test("clicking a result opens it", async () => {
-  pages = [page(["vendor-agreement"], 1, false)];
+  response = found(["Vendor Agreement"]);
   const opened: AppRoute[] = [];
   const view = await render(
     createElement(
@@ -425,66 +450,24 @@ test("clicking a result opens it", async () => {
 
   expect(opened).toEqual([
     {
-      kind: "document",
-      owner: "alice",
-      repo: "vendor-agreement",
-      tab: "overview",
+      kind: "binderDocument",
+      org: "riverside-health",
+      binder: "clinical",
+      documentPath: "nursing/Vendor Agreement",
     },
   ]);
 
   await view.unmount();
 });
 
-test("scrolling to the bottom of the list loads the next page", async () => {
-  pages = [page(["a-one", "a-two"], 1, true), page(["a-three"], 2, false)];
-  const view = await render(createElement(NavSearch, props()));
-  await openOverlay(view.container);
-
-  await type(view.container, "agreement");
-  expect(rows()).toHaveLength(2);
-
-  const list = document.querySelector(".quick-find-results") as HTMLElement;
-  await act(async () => {
-    list.dispatchEvent(new dom.window.Event("scroll", { bubbles: true }));
-  });
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
-
-  expect(searchCalls).toEqual([
-    { query: "agreement", page: 1 },
-    { query: "agreement", page: 2 },
-  ]);
-  expect(rows()).toHaveLength(3);
-
-  await view.unmount();
-});
-
-test("a last page is not asked for twice", async () => {
-  pages = [page(["a-one"], 1, false)];
-  const view = await render(createElement(NavSearch, props()));
-  await openOverlay(view.container);
-
-  await type(view.container, "agreement");
-  const list = document.querySelector(".quick-find-results") as HTMLElement;
-  await act(async () => {
-    list.dispatchEvent(new dom.window.Event("scroll", { bubbles: true }));
-    list.dispatchEvent(new dom.window.Event("scroll", { bubbles: true }));
-  });
-
-  expect(searchCalls).toHaveLength(1);
-
-  await view.unmount();
-});
-
 test("nothing matching says so", async () => {
-  pages = [page([], 1, false)];
+  response = found([]);
   const view = await render(createElement(NavSearch, props()));
   await openOverlay(view.container);
 
   await type(view.container, "zzz");
 
-  expect(overlay()!.textContent).toContain("No documents match “zzz”");
+  expect(overlay()!.textContent).toContain("Nothing matches “zzz”");
 
   await view.unmount();
 });

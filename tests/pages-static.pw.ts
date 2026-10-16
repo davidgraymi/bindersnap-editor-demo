@@ -1,10 +1,16 @@
 import { expect, test } from "@playwright/test";
 
-test.describe("GitHub Pages static artifact", () => {
-  test("renders the landing content from the built HTML shell", async ({
+import { APP_BASE_URL, SITE_BASE_URL } from "./helpers";
+
+/**
+ * Two origins (issue #718): the public site, bindersnap.com, and the app,
+ * app.bindersnap.com. The local stack serves them on SITE_PORT and APP_PORT.
+ */
+test.describe("the site and the app", () => {
+  test("the site's home is the landing page, and its links lead to the app", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto(`${SITE_BASE_URL}/`);
 
     await expect(
       page.getByRole("heading", { name: /which version you approved/i }),
@@ -12,14 +18,28 @@ test.describe("GitHub Pages static artifact", () => {
     await expect(
       page.getByRole("button", { name: /Create Your Account/i }).first(),
     ).toBeVisible();
+    await expect(
+      page.locator(".site-header").getByRole("link", { name: "Sign in" }),
+    ).toHaveAttribute("href", `${APP_BASE_URL}/-/login`);
   });
 
-  test("boots the SPA from 404.html for deep links", async ({ page }) => {
-    await page.goto("/login");
+  test("the app's home asks a signed-out visitor to sign in", async ({
+    page,
+  }) => {
+    await page.goto(`${APP_BASE_URL}/`);
 
-    await expect(page).toHaveURL(/\/login$/);
+    await expect(page).toHaveURL(`${APP_BASE_URL}/-/login`);
     await expect(
       page.getByRole("heading", { name: "Step into the clean version." }),
     ).toBeVisible();
+  });
+
+  test("an app address on the site goes on to the app", async ({ page }) => {
+    await page.goto(`${SITE_BASE_URL}/-/login`);
+    await expect(page).toHaveURL(`${APP_BASE_URL}/-/login`);
+
+    // An organization's address, from before the move: the 404 page forwards.
+    await page.goto(`${SITE_BASE_URL}/riverside-health/policies?tab=people`);
+    await expect(page).toHaveURL(new RegExp(`^${APP_BASE_URL}/`));
   });
 });
