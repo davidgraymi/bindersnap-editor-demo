@@ -1640,6 +1640,19 @@ async function readMultipartBody(req: Request): Promise<FormData | null> {
   }
 }
 
+/** Nothing a downloaded file asks for runs, loads or frames. */
+const DOWNLOAD_CSP = "default-src 'none'; sandbox";
+
+/**
+ * Gitea's `Content-Disposition` with `inline` made `attachment`, keeping the
+ * file name it gave. With none, a bare `attachment`.
+ */
+function attachmentDisposition(response: Response): string {
+  const given = response.headers.get("content-disposition")?.trim() ?? "";
+  const params = given.replace(/^[^;]*/, "");
+  return `attachment${params}`;
+}
+
 /** A commit id: the one kind of ref whose files can never change. */
 const COMMIT_REF = /^[0-9a-f]{40}$/i;
 
@@ -1655,6 +1668,14 @@ const COMMIT_REF = /^[0-9a-f]{40}$/i;
  * showed a document as edited with nothing in it to see. A branch, `main` and
  * a tag can all move, so only a commit id keeps Gitea's answer; everything
  * else is asked again each time.
+ *
+ * **A document is never a page on this origin.** Anybody who can upload can
+ * upload an SVG with a script in it, and Gitea serves one inline, relying on a
+ * sandboxing `Content-Security-Policy` this copy used to drop. Opened from a
+ * link, it ran on the API's own origin with the reader's cookie, and could read
+ * everything they can. So every file is an attachment, sandboxed, and never
+ * sniffed into something else. The app reads these bytes with `fetch`, which
+ * none of the three affects.
  */
 export function downloadHeaders(
   baseHeaders: Headers,
@@ -1665,7 +1686,6 @@ export function downloadHeaders(
   for (const key of [
     "content-type",
     "content-length",
-    "content-disposition",
     "cache-control",
     "etag",
     "last-modified",
@@ -1675,6 +1695,9 @@ export function downloadHeaders(
       headers.set(key, value);
     }
   }
+  headers.set("content-disposition", attachmentDisposition(response));
+  headers.set("content-security-policy", DOWNLOAD_CSP);
+  headers.set("x-content-type-options", "nosniff");
   if (!COMMIT_REF.test(ref)) {
     headers.set("cache-control", "no-store");
     headers.delete("etag");
