@@ -73,6 +73,21 @@ test("accepted but not yet joined waits; joined is done", () => {
   expect(invitationStatus(store.get(invitation.id)!)).toBe("joined");
 });
 
+test("withdrawn before anybody joins, accepted or not, it waits no longer", () => {
+  const store = freshStore();
+  const accepted = store.create(base, 0).invitation;
+  store.accept(accepted.id, "priya", 1);
+  expect(store.withdrawUnjoined(accepted.id, 2)).toBe(true);
+  expect(store.waitingToJoin()).toEqual([]);
+  expect(invitationStatus(store.get(accepted.id)!)).toBe("revoked");
+
+  const joined = store.create(base, 0).invitation;
+  store.accept(joined.id, "priya", 1);
+  store.markJoined(joined.id, 2);
+  expect(store.withdrawUnjoined(joined.id, 3)).toBe(false);
+  expect(invitationStatus(store.get(joined.id)!)).toBe("joined");
+});
+
 test("resend retires the old link and gives two more weeks", () => {
   const store = freshStore();
   const { invitation, token } = store.create(base, 0);
