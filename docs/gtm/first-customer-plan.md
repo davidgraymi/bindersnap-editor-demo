@@ -205,13 +205,23 @@ security review and probably a policy system already. But a hospital sits at
 the center of exactly the small providers Bindersnap is for, and she can see
 that system from the inside. Use the network in three ways.
 
-**1. Her as the expert, before anyone else.** An hour with her is worth five
-discovery calls. Ask her: how does a policy get approved where she works, and
-what does the system they use do badly? What do surveyors ask the hospital for?
-Which nurses and managers left for a surgery center, an agency or a clinic? Her
-answers sharpen the demo and the objections. Don't use her employer's policies
-as demo content, and don't use anything she learned at work that isn't public
-(vendor pricing, contracts, internal documents).
+**1. Her as the expert, before anyone else.** She is a nursing leader who
+manages policies for a hospital system, which makes her the primary user of
+this kind of software at the largest scale it's sold. An hour with her is worth
+five discovery calls, and she should see the demo before any prospect does.
+Ask her:
+
+- How does a policy get approved, reviewed and retired where she works? What
+  does the system they use do well, and what does it do badly?
+- What do surveyors ask her for, and what took longest to produce last time?
+- Run the 7-minute demo (section 6) for her. Where did she get lost, and what
+  did she expect that wasn't there?
+- Which nurses and managers she worked with left for a surgery center, an
+  agency or a clinic?
+
+Don't use her employer's policies as demo content or as a source for the site's
+templates. Don't use anything she learned at work that isn't public (vendor
+pricing, contracts, internal documents).
 
 **2. The 20 names, one step out.** Write them with her, from these groups:
 
@@ -232,11 +242,22 @@ as demo content, and don't use anything she learned at work that isn't public
 Ask her for **five introductions**, spent on the five with the strongest
 triggers.
 
-**3. Keep her clear of her employer.** Before she makes introductions, she
-should check her employer's outside-activity and conflict-of-interest policy,
-especially if she gets anything from Bindersnap. Introductions happen on her
-own time and her own phone, never through work email or work systems. Never
-name her employer or its policy vendor in outreach or on the site.
+**3. Keep her clear of her employer.** Her job is managing policies, and
+Bindersnap is policy management software, so a household business in her own
+field is the kind of interest a hospital's conflict-of-interest policy
+usually asks staff to disclose. Bindersnap never sells to hospitals, so the
+conflict is small, but the disclosure should come before the first
+introduction. She should disclose it in writing, to her employer's compliance
+office, and ask whether introductions or any advisory role need approval. Even
+when nobody asks, disclosing protects her job, and it protects the story
+Bindersnap tells. Beyond that:
+
+- Introductions happen on her own time and her own phone, never through work
+  email, work systems or work contact lists.
+- She takes no part in her employer's choice of policy software that could
+  involve Bindersnap.
+- Never name her employer or its policy vendor in outreach, on the site, or in
+  this repository, which is public.
 
 ### Tier 1: accreditation consultants (customers #2–#10, and Phase 2)
 
@@ -473,8 +494,8 @@ Week 1 starts Monday, 2026-10-19.
   placeholders and send the documents to counsel. Request an insurance quote.
 - Spend an hour with her as the expert (section 4, Tier 0), then write the 20
   names one step out from the hospital. Ask for five introductions.
-- Pull the CMS home health and hospice files for your state plus two
-  neighbors, drop chain-owned agencies, and enrich 50 contacts.
+- Pull the CMS home health and hospice files for the states her employer
+  operates in, where her network is, drop chain-owned agencies, and enrich 50 contacts.
 - Find 10 accreditation consultants.
 - Send 5 warm requests, 10 consultant emails and 25 cold emails.
 - **Target: 5 discovery calls booked.**
@@ -564,7 +585,9 @@ After 15 calls with the right titles:
 3. **Counsel.** Who reviews the Terms, Privacy and DPA, and for what fixed fee?
 4. **Insurance.** Whether to carry E&O and cyber before the first customer.
    Recommended: yes.
-5. **Her employer's rules.** Whether her outside-activity policy allows
-   introductions, and whether she takes any role or payment from Bindersnap.
+5. **Her disclosure.** She discloses the household business to her
+   employer's compliance office before the first introduction, and you decide
+   together whether she takes any formal role (advisor, equity, pay), since a
+   formal role may need her employer's approval.
 6. **Demo before cutover.** Whether to screen-share from the local stack in
    week 2, or hold every demo until production is live.
