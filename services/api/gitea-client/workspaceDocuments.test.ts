@@ -15,7 +15,9 @@ import {
   toDocumentEntry,
   treeRefCandidates,
   isRestoredFromArchive,
+  readBinderTimeline,
 } from "./workspaceDocuments";
+import { buildVersionStamp } from "../version-stamp";
 
 /** Real identities, so the tests exercise the validation the product does. */
 const HANDOVER = "01J8XZ4K7MQ9V3B0RN7YHS2E1D";
@@ -836,4 +838,39 @@ test("an upload branch nobody proposed does not hold its address", async () => {
       slugPath: "nursing/admissions",
     }),
   ).toBe("upload/nursing/admissions/20260902-alice");
+});
+
+test("the timeline names who published a version, from its stamp", () => {
+  // Paige wrote the change and Alice published it. The history said Paige,
+  // because it read the change's author; the tag had recorded Alice all along.
+  const uid = "01J8XZ4K7MQ9V3B0RN7YHS2E1D";
+  const stamp = buildVersionStamp({
+    title: "Hand Hygiene",
+    slugPath: "hand-hygiene",
+    path: `hand-hygiene.${uid}.json`,
+    version: 1,
+    requiredApprovals: 1,
+    approvedBy: ["alice"],
+    blockOnUnresolvedThreads: false,
+    signOffEnforced: true,
+    publishedBy: "Alice Nguyen (alice)",
+    changeNumber: 1,
+  });
+  const tag = (name: string, message: string) => ({
+    name,
+    message,
+    commit: { sha: "m1", created: "2026-10-21T13:03:25Z" },
+  });
+
+  const [stamped, handMade] = readBinderTimeline(
+    [
+      tag(`${uid}/v1`, stamp),
+      // A tag somebody wrote by hand names nobody, rather than a guess.
+      tag(`${uid}/v2`, "Hand Hygiene v2"),
+    ],
+    [{ uid, slugPath: "hand-hygiene" } as never],
+  );
+
+  expect(stamped!.publishedBy).toBe("alice");
+  expect(handMade!.publishedBy).toBeNull();
 });

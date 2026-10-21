@@ -96,8 +96,8 @@ export function BinderLatestChange({
     <section className="bs-panel binder-latest" aria-label="Latest change">
       <PersonAvatar
         person={{
-          login: latest.submittedBy,
-          fullName: nameOf(latest.submittedBy),
+          login: latest.publishedBy || latest.submittedBy,
+          fullName: nameOf(latest.publishedBy || latest.submittedBy),
         }}
         size="md"
       />

@@ -349,11 +349,11 @@ function ChangeEntry({
         </ul>
 
         <div className="bs-panel-foot">
-          {change.submittedBy ? (
+          {change.publishedBy ? (
             <PersonAvatar
               person={{
-                login: change.submittedBy,
-                fullName: nameOf(change.submittedBy),
+                login: change.publishedBy,
+                fullName: nameOf(change.publishedBy),
               }}
             />
           ) : null}

@@ -7,7 +7,11 @@ import {
   versionFromTag,
 } from "../../../packages/utils/documentPath";
 
-import { readStampedChange, readVersionStamp } from "../version-stamp";
+import {
+  readStampedChange,
+  readStampedPublisher,
+  readVersionStamp,
+} from "../version-stamp";
 import {
   GiteaApiError,
   readAllPages,
@@ -873,6 +877,8 @@ export interface BinderTimelineTag {
   tag: string;
   commitSha: string;
   publishedAt: string;
+  /** Who published it, or archived it, by its stamp. Null on a hand-made tag. */
+  publishedBy: string | null;
 }
 
 /**
@@ -927,6 +933,7 @@ export function readBinderTimeline(
       tag: name,
       commitSha: tag.commit?.sha ?? "",
       publishedAt: tag.commit?.created ?? "",
+      publishedBy: readStampedPublisher(tag.message ?? ""),
     });
   }
 

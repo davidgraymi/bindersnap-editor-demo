@@ -25,6 +25,8 @@ export interface HistoryChange {
   changeNumber: number | null;
   title: string;
   submittedBy: string;
+  /** Who published it, which is often not who wrote it. Empty when unknown. */
+  publishedBy: string;
   /** Everyone whose approval stood when it was published. */
   approvers: string[];
   /** When the change was merged. */
@@ -70,6 +72,7 @@ export function groupHistoryByChange(
       changeNumber: entry.changeNumber,
       title: entry.changeTitle,
       submittedBy: entry.submittedBy,
+      publishedBy: entry.publishedBy,
       approvers: entry.approvers,
       publishedAt: entry.publishedAt,
       rows: [entry],
@@ -172,11 +175,13 @@ export function describeApprovers(approvers: readonly string[]): string {
  * `carol` and merely better than nothing for `jsmith`.
  */
 export function describePublication(
-  change: Pick<HistoryChange, "submittedBy" | "approvers">,
+  change: Pick<HistoryChange, "publishedBy" | "approvers">,
   nameOf: (login: string) => string = capitalizeLogin,
 ): string {
-  const publisher = change.submittedBy
-    ? `Published by ${nameOf(change.submittedBy)} · `
+  // The publisher, never the author: crediting whoever wrote the change put
+  // the wrong name on the record whenever somebody else published it.
+  const publisher = change.publishedBy
+    ? `Published by ${nameOf(change.publishedBy)} · `
     : "";
   const sentence = `${publisher}${describeApprovers(change.approvers.map(nameOf))}`;
   // Capitalized as a whole: with no publisher, it starts at "no recorded…".

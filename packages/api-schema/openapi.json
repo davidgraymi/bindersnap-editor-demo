@@ -9200,6 +9200,9 @@
                           "submittedBy": {
                             "type": "string"
                           },
+                          "publishedBy": {
+                            "type": "string"
+                          },
                           "approvers": {
                             "type": "array",
                             "items": {
@@ -9219,6 +9222,7 @@
                           "changeNumber",
                           "changeTitle",
                           "submittedBy",
+                          "publishedBy",
                           "approvers"
                         ]
                       }

@@ -232,6 +232,28 @@ export function readStampedChange(message: string): number | null {
   return match ? Number(match[1]) : null;
 }
 
+/**
+ * Who published a version, or archived a document, read back out of its stamp.
+ *
+ * **Not the change's author.** A change one person wrote and another published
+ * was credited to its author in the binder's history, which is the page a
+ * surveyor is shown to prove who put a version on the record. The stamp
+ * recorded the publisher all along, from the session that clicked Publish, and
+ * Gitea's list of pull requests leaves out `merged_by`, so the tag already in
+ * hand is the place to read it.
+ *
+ * Answers the login: "Jordan Kim (jkim)" is `jkim`, and a person with no name
+ * on their account was stamped as the login alone. Null for a tag written
+ * without the line.
+ */
+export function readStampedPublisher(message: string): string | null {
+  const value =
+    labelled(message, "Published by") ?? labelled(message, "Archived by");
+  if (value === null) return null;
+  const login = value.match(/\(([^()\s]+)\)$/);
+  return login ? login[1]! : value;
+}
+
 function labelled(message: string, label: string): string | null {
   for (const line of message.split("\n")) {
     const trimmed = line.trim();

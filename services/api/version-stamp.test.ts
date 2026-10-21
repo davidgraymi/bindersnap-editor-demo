@@ -4,6 +4,7 @@ import {
   buildArchiveStamp,
   buildVersionStamp,
   readStampedChange,
+  readStampedPublisher,
   readVersionStamp,
   type ArchivedDocument,
   type PublishedPolicy,
@@ -155,6 +156,26 @@ describe("reading a stamp back", () => {
     );
     // A tag somebody wrote by hand has no such line, and says so with null.
     expect(readStampedChange("Published nursing/handover v1")).toBeNull();
+  });
+
+  test("a version stamp says who published it, not who wrote the change", () => {
+    // The history credited the change's author until it read this line.
+    expect(
+      readStampedPublisher(
+        buildVersionStamp(policy({ publishedBy: "Alice Nguyen (alice)" })),
+      ),
+    ).toBe("alice");
+    // An account with no name on it was stamped as the login alone.
+    expect(readStampedPublisher(buildVersionStamp(policy()))).toBe("alice");
+    expect(readStampedPublisher("Published nursing/handover v1")).toBeNull();
+  });
+
+  test("an archive stamp says who took the document off the record", () => {
+    expect(
+      readStampedPublisher(
+        buildArchiveStamp(archived({ archivedBy: "Dan Reyes (dan)" })),
+      ),
+    ).toBe("dan");
   });
 
   test("an archive stamp round-trips the same two facts", () => {

@@ -24,6 +24,7 @@ function entry(
     changeNumber: 3,
     changeTitle: "Move the infection policies into Nursing",
     submittedBy: "alice",
+    publishedBy: "alice",
     approvers: ["bob"],
     ...overrides,
   };
@@ -155,4 +156,13 @@ test("approvers are named, and nobody is said rather than shown blank", () => {
   expect(describeApprovers(["Bob Okafor", "Priya Raman"])).toBe(
     "approved by Bob Okafor and Priya Raman",
   );
+});
+
+test("a change keeps who published it apart from who wrote it", () => {
+  const [change] = groupHistoryByChange([
+    entry({ slugPath: "hand-hygiene", tag: "a/v1", publishedBy: "carol" }),
+  ]);
+
+  expect(change!.submittedBy).toBe("alice");
+  expect(change!.publishedBy).toBe("carol");
 });

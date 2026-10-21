@@ -9,6 +9,7 @@ function change(overrides: Partial<HistoryChange> = {}): HistoryChange {
     changeNumber: 20,
     title: "Retire the 2019 supplier terms",
     submittedBy: "bob",
+    publishedBy: "bob",
     approvers: ["carol"],
     publishedAt: "2026-09-23T21:35:00Z",
     rows: [],
@@ -22,6 +23,14 @@ test("names who published it and who approved it", () => {
   );
 });
 
+test("names who published it, not who wrote the change", () => {
+  // Paige wrote it and Alice published it. The record says Alice, and so must
+  // the history: it is the page that proves who put a version on the record.
+  expect(
+    describePublication(change({ submittedBy: "paige", publishedBy: "alice" })),
+  ).toBe("Published by Alice · approved by Carol");
+});
+
 test("names every approver, the way the history does", () => {
   expect(
     describePublication(change({ approvers: ["carol", "dan", "priya"] })),
@@ -29,7 +38,7 @@ test("names every approver, the way the history does", () => {
 });
 
 test("a tag written outside the app says only what it can", () => {
-  expect(describePublication(change({ submittedBy: "", approvers: [] }))).toBe(
+  expect(describePublication(change({ publishedBy: "", approvers: [] }))).toBe(
     "No recorded approval",
   );
 });

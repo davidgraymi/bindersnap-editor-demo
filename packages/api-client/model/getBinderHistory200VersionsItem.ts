@@ -20,5 +20,6 @@ export type GetBinderHistory200VersionsItem = {
   changeNumber: number | null;
   changeTitle: string;
   submittedBy: string;
+  publishedBy: string;
   approvers: string[];
 };

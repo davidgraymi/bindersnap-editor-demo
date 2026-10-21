@@ -7815,6 +7815,9 @@ async function handleWorkspaceHistory(
           changeNumber: change?.pullRequest.number ?? null,
           changeTitle: change?.pullRequest.title ?? "",
           submittedBy: change?.pullRequest.user?.login ?? "",
+          // The publisher, who is often not the author. The stamp recorded
+          // them at the merge; Gitea's list of changes leaves `merged_by` out.
+          publishedBy: row.publishedBy ?? "",
           // Whose approval actually stood. A dismissed or stale review is
           // not a sign-off, and this is the page somebody proves that on.
           approvers: change

@@ -706,7 +706,13 @@ export const WorkspaceHistoryEntrySchema = z.object({
    */
   changeNumber: z.number().nullable(),
   changeTitle: z.string(),
+  /** Who wrote the change. Not who published it: see `publishedBy`. */
   submittedBy: z.string(),
+  /**
+   * Who published the version, or archived the document, as its tag's stamp
+   * records it. Empty for a tag written outside the app.
+   */
+  publishedBy: z.string(),
   /** Everyone whose approval stood when it was published. */
   approvers: z.array(z.string()),
 });
