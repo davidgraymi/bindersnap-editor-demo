@@ -6,7 +6,7 @@
 #   - zone settings: HTTPS only, TLS 1.2+
 #   - a www → apex redirect and a rate limit on the sign-in endpoints
 #   - inbound mail: Email Routing forwards privacy@, security@, team@,
-#     notifications@ and anything else @bindersnap.com to one inbox
+#     notifications@, david@ and anything else @bindersnap.com to one inbox
 #   - the R2 bucket that holds the restic backups, and the lock that keeps any
 #     credential from deleting a snapshot younger than 35 days
 #   - the SES sending records (DKIM, MAIL FROM, DMARC), read from infra/email's
@@ -234,10 +234,11 @@ resource "cloudflare_email_routing_address" "inbox" {
 }
 
 locals {
-  # Every address the product or the legal pages publish. The catch-all below
-  # forwards anything else too; these are listed so each one keeps working if
-  # the catch-all is ever turned off.
-  routed_addresses = toset(["privacy", "security", "team", "notifications", "dmarc"])
+  # Every address the product or the legal pages publish, and `david@`, the
+  # one person's mailbox (it replaced Zoho Mail). The catch-all below forwards
+  # anything else too; these are listed so each one keeps working if the
+  # catch-all is ever turned off.
+  routed_addresses = toset(["privacy", "security", "team", "notifications", "dmarc", "david"])
 }
 
 resource "cloudflare_email_routing_rule" "published" {

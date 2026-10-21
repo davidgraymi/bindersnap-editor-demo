@@ -61,6 +61,12 @@ apply, delete in Cloudflare → DNS:
   SPF, `_dmarc`), and any MX records left over from the old registrar's mail
   forwarding. This module recreates the SES records from `infra/email`'s
   state, and Email Routing refuses to start while other MX records exist.
+- Zoho Mail's records, which `david@` used before Email Routing took it over:
+  the three `*.zoho.com` MX records, the apex `v=spf1 include:zohomail.com`
+  TXT, `zmail._domainkey` and the `zoho-verification` TXT. Two SPF records on
+  the apex make both invalid.
+- the `_dmarc` TXT that Cloudflare's DMARC Management wrote. This module writes
+  its own from `infra/email`, and two DMARC records make both invalid.
 
 Apply `infra/email` first: this module reads its outputs.
 
