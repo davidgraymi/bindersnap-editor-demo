@@ -2,26 +2,49 @@
 
 What it owns: the `bindersnap-prod` tunnel and its route, the `api` and `www`
 DNS records, HTTPS-only and TLS settings, the www → apex redirect, the rate
-limit on sign-in, Email Routing for every `@bindersnap.com` address, and the
-SES sending records. See `main.tf` for what it deliberately does not own.
+limit on sign-in, Email Routing for every `@bindersnap.com` address, the SES
+sending records, and the `bindersnap-backup` R2 bucket and its lock. See
+`main.tf` for what it deliberately does not own.
 
 ## The API token
 
 Create one in Cloudflare → My Profile → API Tokens → Custom token, used only
 for Terraform:
 
-| Scope   | Permission                       |
-| ------- | -------------------------------- |
-| Account | Cloudflare Tunnel: Edit          |
-| Zone    | DNS: Edit                        |
-| Zone    | Zone Settings: Edit              |
-| Zone    | Dynamic Redirect: Edit           |
-| Zone    | Zone WAF: Edit (for rate limits) |
-| Zone    | Email Routing Rules: Edit        |
-| Account | Email Routing Addresses: Edit    |
+| Scope   | Permission                                   |
+| ------- | -------------------------------------------- |
+| Account | Cloudflare Tunnel: Edit                      |
+| Account | Email Routing Addresses: Edit                |
+| Account | Workers R2 Storage: Edit (the backup bucket) |
+| Account | Turnstile: Edit (optional, see below)        |
+| Zone    | DNS: Edit                                    |
+| Zone    | Zone Settings: Edit                          |
+| Zone    | Single Redirect: Edit (the www → apex rule)  |
+| Zone    | Zone WAF: Edit (for rate limits)             |
+| Zone    | Email Routing Rules: Edit                    |
 
 Limit it to the Bindersnap account and the `bindersnap.com` zone. Never use
-the Global API Key.
+the Global API Key. Cloudflare renamed Dynamic Redirects to Single Redirects;
+the API calls the permission `Dynamic URL Redirects Write`.
+
+Turnstile: Edit is only for `put-signup-turnstile-secret.sh`. Add it here, or
+give that script a token of its own with nothing else.
+
+The daily drift check (`terraform-drift.yml`) uses a second token with every
+permission above at Read, in the `drift-check` environment's
+`CLOUDFLARE_API_TOKEN`.
+
+**Keep this token in your password manager, not in GitHub, SSM, `.env` or a
+shell profile.** Nothing in CI applies this module, so only the machine
+running `apply-all.sh` or the `put-*.sh` scripts needs it, and only for that
+run:
+
+```bash
+export CLOUDFLARE_API_TOKEN="$(security find-generic-password -s bindersnap-cloudflare-terraform -w)"
+```
+
+(That reads it from the macOS Keychain; `op read …` does the same from
+1Password.) Close the shell when the apply is done.
 
 ## Cutover, once
 
