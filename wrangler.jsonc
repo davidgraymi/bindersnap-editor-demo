@@ -12,9 +12,10 @@
   "compatibility_date": "2026-09-01",
   "assets": {
     "directory": "./dist/site",
-    // A path with no file gets 404.html, with a 404. That page forwards an
-    // address that is not the site's, such as `/{org}/...` from before the
-    // app moved, to the app; `_redirects` sends `/-/...` there with a 301.
+    // A path with no file gets 404.html, with a 404. For an address that is
+    // not the site's, such as `/{org}/...` from before the app moved, that
+    // page links to the same address on the app; `_redirects` sends `/-/...`
+    // there with a 301.
     "not_found_handling": "404-page",
     // `/pricing` → `/pricing/`, the redirect GitHub Pages also made.
     "html_handling": "auto-trailing-slash",

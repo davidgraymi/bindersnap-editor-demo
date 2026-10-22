@@ -97,7 +97,7 @@ const publicFiles = publicFilesIn(join(import.meta.dir, "apps/app/public"));
 /**
  * What the site's Worker does with an address it has no file for: `/-/` goes
  * to the app with a 301 (`apps/site/public/_redirects`), and anything else
- * gets the 404 page, which forwards an organization's address to the app.
+ * gets the 404 page, which links an organization's address to the app.
  */
 function siteNotFound(req: Request): Response {
   const { pathname, search } = new URL(req.url);

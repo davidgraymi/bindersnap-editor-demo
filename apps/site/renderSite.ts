@@ -528,23 +528,20 @@ export function renderCollectionIndex(
 }
 
 /**
- * The site's 404, which is also how an app address that reached this origin
- * finds the app. Before issue #718 the app lived here, at `/{org}/...`, so a
- * link shared then names bindersnap.com. Every address whose first segment is
- * not one of the site's own `sections` goes, with its query and fragment, to
- * the same path on the app; `_redirects` already sends `/-/` there with a 301.
- * A static host cannot tell an organization from a typo, so a mistyped
- * marketing address ends at the app's own "not found".
+ * The site's 404. Before issue #718 the app lived here, at `/{org}/...`, so a
+ * link shared then names bindersnap.com. A static host cannot tell an
+ * organization from a typo, so the page never sends anyone to the app on its
+ * own: an address whose first segment is not one of the site's own `sections`
+ * shows a link to the same path on the app, with its query and fragment.
+ * `_redirects` already sends `/-/` and `/auth/` there with a 301.
  */
 export function renderNotFoundPage(
   sections: readonly string[],
   pages: readonly SitePage[],
 ): string {
-  const forward = `(function(){var sections=${JSON.stringify(
-    [...sections].sort(),
-  )};var first=location.pathname.split("/")[1]||"";if(first&&sections.indexOf(first)===-1){location.replace(${JSON.stringify(
-    appOrigin(),
-  )}+location.pathname+location.search+location.hash);}})();`;
+  // Constant code: what it needs is in the paragraph's attributes, which
+  // `escape` makes safe, so no value is ever spliced into the script.
+  const offer = `(function(){var offer=document.getElementById("not-found-app");var first=location.pathname.split("/")[1]||"";if(!first||offer.dataset.sections.split(" ").indexOf(first)!==-1)return;offer.querySelector("a").href=offer.dataset.app+location.pathname+location.search+location.hash;offer.hidden=false;})();`;
   return shell({
     title: pageTitle("Page not found"),
     description: "There is no page at this address.",
@@ -557,7 +554,8 @@ export function renderNotFoundPage(
       title: "There is no page here.",
       lede: `It may have moved. Your documents are in <a href="${escape(appUrl("/"))}">the app</a>; everything else starts at <a href="/">the home page</a>.`,
     },
-    body: `<script>${forward}</script>`,
+    body: `<p id="not-found-app" hidden data-sections="${escape([...sections].sort().join(" "))}" data-app="${escape(appOrigin())}">Looking for one of your binders? <a href="${escape(appUrl("/"))}">Open this address in the app</a>.</p>
+<script>${offer}</script>`,
   });
 }
 

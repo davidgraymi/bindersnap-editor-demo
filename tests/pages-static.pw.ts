@@ -37,9 +37,24 @@ test.describe("the site and the app", () => {
   test("an app address on the site goes on to the app", async ({ page }) => {
     await page.goto(`${SITE_BASE_URL}/-/login`);
     await expect(page).toHaveURL(`${APP_BASE_URL}/-/login`);
+  });
 
-    // An organization's address, from before the move: the 404 page forwards.
-    await page.goto(`${SITE_BASE_URL}/riverside-health/policies?tab=people`);
-    await expect(page).toHaveURL(new RegExp(`^${APP_BASE_URL}/`));
+  test("an organization's address on the site is a 404 that links to the app", async ({
+    page,
+  }) => {
+    // From before the move. The site cannot tell it from a typo, so it stays.
+    const response = await page.goto(
+      `${SITE_BASE_URL}/riverside-health/policies?tab=people`,
+    );
+    expect(response?.status()).toBe(404);
+    await expect(page).toHaveURL(
+      `${SITE_BASE_URL}/riverside-health/policies?tab=people`,
+    );
+    await expect(
+      page.getByRole("link", { name: "Open this address in the app" }),
+    ).toHaveAttribute(
+      "href",
+      `${APP_BASE_URL}/riverside-health/policies?tab=people`,
+    );
   });
 });
