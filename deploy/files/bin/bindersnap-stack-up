@@ -1,33 +1,51 @@
 #!/usr/bin/env bash
-# Bring the Docker Compose stack up, force-recreating only when this deploy
-# actually changed the env file or a config file. Replaces the boot-time
-# bindersnap-compose.service + bindersnap-refresh-and-restart.service from
-# infra/compute/user-data.sh.tftpl (epic #302, phase #304); pyinfra now drives
-# the change detection and signals it through the state-dir markers below.
+# Bring the Docker Compose stack up, recreating only what this deploy changed.
+#
+# Compose already recreates a service whose definition changed: its image, its
+# environment (including anything interpolated from .env.prod), its ports or
+# its volumes. What Compose cannot see is the *contents* of a file a service
+# bind-mounts, so pyinfra drops a marker per changed config file
+# (${STATE_DIR}/changed-<file>) and this script recreates just the service that
+# reads it. A change to Caddy's config no longer restarts Gitea.
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-/opt/bindersnap}"
 ENV_FILE="${ENV_FILE:-${APP_DIR}/.env.prod}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 STATE_DIR="${STATE_DIR:-/run/bindersnap}"
+DATA_MOUNT="${DATA_MOUNT:-/data}"
 
-changed=0
-
-# pyinfra drops these markers when an uploaded config file or the SSM-rendered
-# env file actually changed this run (via `_if=op.did_change`). Either one means
-# the stack must be force-recreated rather than just reconciled.
-[ -f "${STATE_DIR}/config-changed" ] && changed=1
-[ -f "${STATE_DIR}/env-changed" ] && changed=1
-
-cd "${APP_DIR}"
-docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" pull
-
-if [ "${changed}" -eq 1 ]; then
-  echo "Env or config changed — recreating the stack"
-  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --build --force-recreate
-else
-  echo "Env and config unchanged — reconciling without recreate"
-  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d
+# Every volume lives under Docker's data-root on the EBS data volume. If it is
+# not mounted, `up` would start Gitea on an empty database and Litestream would
+# replicate that over the real backup. Stop instead.
+if ! mountpoint -q "${DATA_MOUNT}"; then
+  echo "${DATA_MOUNT} is not mounted — refusing to start the stack" >&2
+  exit 1
 fi
 
-docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" ps
+changed() { [ -f "${STATE_DIR}/changed-$1" ]; }
+
+compose() {
+  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" "$@"
+}
+
+cd "${APP_DIR}"
+compose pull --ignore-buildable
+
+up_args=(up -d)
+# Rebuild the custom Caddy image only when its Dockerfile changed.
+if changed Dockerfile.caddy; then
+  up_args+=(--build)
+fi
+compose "${up_args[@]}"
+
+# Bind-mounted config file → the one service that reads it.
+recreate=()
+changed Caddyfile.prod && recreate+=(caddy)
+changed litestream.yml && recreate+=(litestream)
+if [ "${#recreate[@]}" -gt 0 ]; then
+  echo "Config changed for: ${recreate[*]} — recreating only those"
+  compose up -d --force-recreate --no-deps "${recreate[@]}"
+fi
+
+compose ps

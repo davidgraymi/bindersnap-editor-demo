@@ -34,6 +34,18 @@ const ALLOWED_TAGS = [
   "th",
   "td",
   "input",
+  // What the editor formats with — a coloured or resized run is a span, a
+  // highlight is a mark, a page break is a div. Without them a reader saw a
+  // policy with its emphasis stripped out that its author never wrote.
+  "span",
+  "mark",
+  "sub",
+  "sup",
+  "hr",
+  "br",
+  "div",
+  "colgroup",
+  "col",
 ];
 
 const ALLOWED_ATTR = [
@@ -46,6 +58,10 @@ const ALLOWED_ATTR = [
   "colspan",
   "rowspan",
   "rel",
+  // A picture's size, in whole pixels only — see the hook below.
+  "width",
+  // Filtered to a handful of typographic properties by `safeStyle` below.
+  "style",
 ];
 
 const ALLOWED_NODE_TYPES = new Set([
@@ -67,6 +83,8 @@ const ALLOWED_NODE_TYPES = new Set([
   "tableHeader",
   "taskList",
   "taskItem",
+  "pageBreak",
+  "tableOfContents",
   "conflict",
 ]);
 
@@ -98,6 +116,17 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 function hasForbiddenScheme(value: string): boolean {
   return /^\s*(?:javascript|vbscript|data):/i.test(value);
+}
+
+/**
+ * A picture embedded in a document by the editor: raster kinds only, base64.
+ * SVG stays out, because an SVG can carry script.
+ */
+const EMBEDDED_PICTURE =
+  /^data:image\/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
+
+export function isSafeImageSrc(value: string): boolean {
+  return EMBEDDED_PICTURE.test(value.trim()) || isSafeUrl(value);
 }
 
 function isSafeUrl(value: string): boolean {
@@ -206,7 +235,7 @@ function sanitizeNodeOrFragment(value: unknown): JSONContent[] {
     const attrs: Record<string, unknown> = isPlainObject(value.attrs)
       ? { ...value.attrs }
       : {};
-    if (typeof attrs.src !== "string" || !isSafeUrl(attrs.src)) {
+    if (typeof attrs.src !== "string" || !isSafeImageSrc(attrs.src)) {
       return [];
     }
     sanitizedNode.attrs = attrs;
@@ -241,18 +270,73 @@ function sanitizeNodeOrFragment(value: unknown): JSONContent[] {
   return [sanitizedNode as JSONContent];
 }
 
+/**
+ * The inline style properties a document may carry, and the shape each value
+ * has to have.
+ *
+ * **An allowlist of values, not only of names.** `style` is how the editor
+ * writes a colour, a font, a size, an alignment, a line spacing and an indent,
+ * so dropping it wholesale showed readers a policy without the emphasis its
+ * author gave it. But a style attribute is also where `url(...)` and
+ * `expression(...)` live, so each property keeps only a value that could not
+ * be anything but typography: a colour, a length, a number, a keyword, or a
+ * font name.
+ */
+const SAFE_STYLE_VALUES: Record<string, RegExp> = {
+  color: /^(#[0-9a-f]{3,8}|rgba?\([\d\s.,%]+\)|var\(--[\w-]+\)|[a-z]+)$/i,
+  "background-color":
+    /^(#[0-9a-f]{3,8}|rgba?\([\d\s.,%]+\)|var\(--[\w-]+\)|[a-z]+)$/i,
+  "font-size": /^\d+(\.\d+)?(px|pt|em|rem|%)$/,
+  "font-family": /^[\w\s,"'-]+$|^var\(--[\w-]+\)$/,
+  "text-align": /^(left|right|center|justify)$/,
+  "line-height": /^\d+(\.\d+)?$/,
+  "margin-left": /^\d+(\.\d+)?(in|px|pt|em|rem)$/,
+  width: /^\d+(\.\d+)?(px|%)$/,
+  "min-width": /^\d+(\.\d+)?px$/,
+};
+
+/** The declarations of a style attribute that are typography, re-serialized. */
+export function safeStyle(style: string): string {
+  const kept: string[] = [];
+  for (const declaration of style.split(";")) {
+    const colon = declaration.indexOf(":");
+    if (colon === -1) continue;
+    const property = declaration.slice(0, colon).trim().toLowerCase();
+    const value = declaration.slice(colon + 1).trim();
+    const shape = SAFE_STYLE_VALUES[property];
+    if (!shape || value === "" || value.length > 200) continue;
+    if (/[\\<>]|url\s*\(|expression\s*\(/i.test(value)) continue;
+    if (shape.test(value)) kept.push(`${property}: ${value}`);
+  }
+  return kept.join("; ");
+}
+
 export function sanitizeHtml(html: string): string {
   const DOMPurify = createDOMPurify(window);
 
-  DOMPurify.addHook("uponSanitizeAttribute", (_node, data) => {
+  DOMPurify.addHook("uponSanitizeAttribute", (node, data) => {
     const attrName = data.attrName.toLowerCase();
 
-    if (
-      attrName.startsWith("on") ||
-      attrName.startsWith("data-") ||
-      attrName === "style"
-    ) {
+    if (attrName.startsWith("on") || attrName.startsWith("data-")) {
       data.keepAttr = false;
+      return;
+    }
+
+    if (attrName === "width") {
+      if (
+        typeof data.attrValue !== "string" ||
+        !/^\d{1,4}$/.test(data.attrValue.trim())
+      ) {
+        data.keepAttr = false;
+      }
+      return;
+    }
+
+    if (attrName === "style") {
+      const kept =
+        typeof data.attrValue === "string" ? safeStyle(data.attrValue) : "";
+      if (kept === "") data.keepAttr = false;
+      else data.attrValue = kept;
       return;
     }
 
@@ -260,7 +344,11 @@ export function sanitizeHtml(html: string): string {
       (attrName === "href" || attrName === "src") &&
       typeof data.attrValue === "string"
     ) {
-      if (!isSafeUrl(data.attrValue)) {
+      const safe =
+        attrName === "src" && node.nodeName.toLowerCase() === "img"
+          ? isSafeImageSrc(data.attrValue)
+          : isSafeUrl(data.attrValue);
+      if (!safe) {
         data.keepAttr = false;
       }
     }
@@ -277,7 +365,6 @@ export function sanitizeHtml(html: string): string {
     ALLOWED_ATTR,
     ALLOW_DATA_ATTR: false,
     ALLOW_UNKNOWN_PROTOCOLS: false,
-    FORBID_ATTR: ["style"],
   });
 }
 

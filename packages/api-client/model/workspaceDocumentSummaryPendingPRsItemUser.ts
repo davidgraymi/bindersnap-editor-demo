@@ -10,4 +10,5 @@
  */
 export type WorkspaceDocumentSummaryPendingPRsItemUser = {
   login: string;
+  full_name?: string;
 } | null;

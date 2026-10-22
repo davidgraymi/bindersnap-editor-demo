@@ -7,7 +7,8 @@ import { defineConfig, devices } from "@playwright/test";
 const ROOT = dirname(fileURLToPath(import.meta.url));
 
 /**
- * Resolve this worktree's port block before Playwright reads `baseURL`.
+ * Resolve this worktree's port block before Playwright reads `baseURL`: the
+ * app's port, and the public site's, which is a second origin.
  *
  * This config file is evaluated before `globalSetup` runs, so it cannot await
  * the allocator directly — it shells out to the same script instead. Without
@@ -15,7 +16,7 @@ const ROOT = dirname(fileURLToPath(import.meta.url));
  * *main* checkout's stack, which is how integration runs used to trample a
  * developer's running app.
  */
-function resolveAppPort(): string {
+function resolvePorts(): { app: string; site: string } {
   const result = spawnSync(
     "bun",
     [resolve(ROOT, "scripts/stack.ts"), "ensure", "--json"],
@@ -24,18 +25,37 @@ function resolveAppPort(): string {
   if (result.status === 0 && result.stdout) {
     try {
       const parsed = JSON.parse(result.stdout) as {
-        ports?: { APP_PORT?: number };
+        ports?: { APP_PORT?: number; SITE_PORT?: number };
       };
-      if (parsed.ports?.APP_PORT) return String(parsed.ports.APP_PORT);
+      if (parsed.ports?.APP_PORT && parsed.ports.SITE_PORT) {
+        return {
+          app: String(parsed.ports.APP_PORT),
+          site: String(parsed.ports.SITE_PORT),
+        };
+      }
     } catch {
       // Fall through to the environment.
     }
   }
-  return process.env.APP_PORT ?? "5173";
+  return {
+    app: process.env.APP_PORT ?? "5173",
+    site: process.env.SITE_PORT ?? "5174",
+  };
 }
 
-const APP_PORT = resolveAppPort();
+function resolveWorkers(): number | string | undefined {
+  const configured = process.env.PLAYWRIGHT_WORKERS?.trim();
+  if (configured) {
+    return /^\d+$/.test(configured) ? Number(configured) : configured;
+  }
+  return process.env.CI ? 4 : undefined;
+}
+
+const ports = resolvePorts();
+const APP_PORT = ports.app;
 process.env.APP_PORT = APP_PORT;
+// The public site's origin; tests/helpers.ts reads it as SITE_BASE_URL.
+process.env.SITE_PORT = ports.site;
 const baseURL =
   process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${APP_PORT}`;
 
@@ -44,6 +64,12 @@ export default defineConfig({
   testMatch: "**/*.pw.ts",
   timeout: 10_000,
   retries: process.env.CI ? 2 : 1,
+
+  // Playwright's default is half the cores: two on a 4-vCPU CI runner, which
+  // left the suite at ~18 minutes. The specs spend their time waiting on
+  // Gitea and the API rather than on the CPU, so CI runs four. Override with
+  // PLAYWRIGHT_WORKERS (a count or a percentage) on a smaller machine.
+  workers: resolveWorkers(),
 
   // globalSetup starts the Docker Compose stack before any test runs.
   // globalTeardown shuts it down afterwards.
@@ -56,7 +82,10 @@ export default defineConfig({
     headless: true,
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
-    video: "retain-on-failure",
+    // Video encodes every test, pass or fail, on the same four cores that run
+    // the stack. In CI the retained trace already carries a screencast and a
+    // DOM snapshot per action, which is what a failure is debugged from.
+    video: process.env.CI ? "off" : "retain-on-failure",
   },
 
   // Write all artefacts under the repo-root test-results/ directory so they

@@ -12,4 +12,6 @@ export type AuthMe200User = {
   username: string;
   fullName?: string;
   isAdmin?: boolean;
+  emailVerified?: boolean;
+  pendingEmail?: string;
 } | null;

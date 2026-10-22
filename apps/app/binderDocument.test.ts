@@ -1,0 +1,262 @@
+import { expect, test } from "bun:test";
+
+import {
+  buildDocumentCrumbs,
+  buildDocumentUrl,
+  describeVersionState,
+  downloadFileName,
+  parseRequestedVersion,
+  pickPolicyToWrite,
+  resolveDocumentRef,
+} from "./binderDocument";
+
+const documentInFolder = {
+  path: "nursing/hand-hygiene.01J8XZ4K7MQ9V3B0RN7YHS2E1D.pdf",
+  slugPath: "nursing/hand-hygiene",
+  name: "hand-hygiene",
+  uid: "01J8XZ4K7MQ9V3B0RN7YHS2E1D",
+  folder: "nursing",
+  size: 1024,
+  sha: "abc123",
+};
+
+const rootDocument = {
+  path: "handover.01J9A0B1C2D3E4F5G6H7J8K9M0.md",
+  slugPath: "handover",
+  name: "handover",
+  uid: "01J9A0B1C2D3E4F5G6H7J8K9M0",
+  folder: "",
+  size: 512,
+  sha: "def456",
+};
+
+const versions = [
+  {
+    tag: "nursing/hand-hygiene/v3",
+    version: 3,
+    commitSha: "ccc",
+    publishedAt: "",
+  },
+  {
+    tag: "nursing/hand-hygiene/v2",
+    version: 2,
+    commitSha: "bbb",
+    publishedAt: "",
+  },
+  {
+    tag: "nursing/hand-hygiene/v1",
+    version: 1,
+    commitSha: "aaa",
+    publishedAt: "",
+  },
+];
+
+// ── buildDocumentCrumbs ────────────────────────────────────────────
+
+test("the trail is the folders and the document, not the binder above it", () => {
+  // The binder's own header names the organization and the binder already.
+  expect(buildDocumentCrumbs(documentInFolder)).toEqual([
+    { label: "nursing", isDocument: false },
+    { label: "Hand Hygiene", isDocument: true },
+  ]);
+});
+
+test("a document at the binder's root is its own whole trail", () => {
+  expect(buildDocumentCrumbs(rootDocument)).toEqual([
+    { label: "Handover", isDocument: true },
+  ]);
+});
+
+test("nested folders each get their own step", () => {
+  expect(
+    buildDocumentCrumbs({
+      folder: "clinical/nursing/infection",
+      name: "policy",
+    }).map((crumb) => crumb.label),
+  ).toEqual(["clinical", "nursing", "infection", "Policy"]);
+});
+
+// ── resolveDocumentRef ─────────────────────────────────────────────
+
+test("no version asked for reads the record, not the newest tag", () => {
+  expect(resolveDocumentRef({ versions, requestedVersion: null })).toEqual({
+    ref: "main",
+    version: versions[0]!,
+    missing: false,
+  });
+});
+
+test("asking for the newest version still reads the record", () => {
+  // The tag and `main` are the same commit, and `main` stays right if somebody
+  // publishes while the page is open.
+  expect(resolveDocumentRef({ versions, requestedVersion: 3 })).toEqual({
+    ref: "main",
+    version: versions[0]!,
+    missing: false,
+  });
+});
+
+test("an older version is read at its own tag", () => {
+  expect(resolveDocumentRef({ versions, requestedVersion: 1 })).toEqual({
+    ref: "nursing/hand-hygiene/v1",
+    version: versions[2]!,
+    missing: false,
+  });
+});
+
+test("a version that was never published is reported missing", () => {
+  expect(resolveDocumentRef({ versions, requestedVersion: 9 })).toEqual({
+    ref: "main",
+    version: versions[0]!,
+    missing: true,
+  });
+});
+
+test("a document with no versions is not a missing version", () => {
+  expect(resolveDocumentRef({ versions: [], requestedVersion: null })).toEqual({
+    ref: "main",
+    version: null,
+    missing: false,
+  });
+});
+
+// ── describeVersionState / downloadFileName ────────────────────────
+
+test("the version state names the version on record", () => {
+  expect(describeVersionState(versions[0]!)).toBe("Version 3 on record");
+});
+
+test("an unpublished document says so rather than showing nothing", () => {
+  expect(describeVersionState(null)).toBe("No published version yet");
+});
+
+test("a download lands under the file's own name, not its path", () => {
+  expect(downloadFileName(documentInFolder)).toBe("hand-hygiene.pdf");
+  expect(downloadFileName(rootDocument)).toBe("handover.md");
+});
+
+test("a download does not carry the identity segment", () => {
+  // It is in the repository so a document survives a rename. It has no
+  // business in somebody's Downloads folder, in the middle of a filename they
+  // have to read.
+  expect(downloadFileName(documentInFolder)).not.toContain("01J8XZ4K7M");
+});
+
+// ── the version in the address bar ─────────────────────────────────
+
+test("no version in the query means the version on record", () => {
+  expect(parseRequestedVersion("")).toBeNull();
+  expect(parseRequestedVersion("?people=alice")).toBeNull();
+});
+
+test("a version in the query is read as a number", () => {
+  expect(parseRequestedVersion("?version=2")).toBe(2);
+});
+
+test("a version that is not a positive whole number is ignored", () => {
+  for (const search of [
+    "?version=0",
+    "?version=-1",
+    "?version=x",
+    "?version=1.5",
+  ]) {
+    expect(parseRequestedVersion(search)).toBeNull();
+  }
+});
+
+test("the record's URL carries no version", () => {
+  expect(
+    buildDocumentUrl({
+      org: "riverside-health",
+      binder: "clinical-policies",
+      documentPath: "nursing/hand-hygiene",
+      version: null,
+    }),
+  ).toBe(
+    "/riverside-health/clinical-policies/-/blob/main/nursing/hand-hygiene",
+  );
+});
+
+test("an earlier version's URL names it, so it can be linked to", () => {
+  expect(
+    buildDocumentUrl({
+      org: "riverside-health",
+      binder: "clinical-policies",
+      documentPath: "nursing/hand-hygiene",
+      version: 2,
+    }),
+  ).toBe(
+    "/riverside-health/clinical-policies/-/blob/main/nursing/hand-hygiene?version=2",
+  );
+});
+
+// ── a document that only exists inside a change ────────────────────
+
+test("with nothing published the file is read from the change's branch", () => {
+  // `main` has nothing to give a proposed document, so the page would render
+  // "not found" over a file that is right there in the change.
+  expect(
+    resolveDocumentRef({
+      versions: [],
+      requestedVersion: null,
+      recordRef: "upload/nursing/hand-hygiene/20260905/120000Z-alice-abc12345",
+    }),
+  ).toEqual({
+    ref: "upload/nursing/hand-hygiene/20260905/120000Z-alice-abc12345",
+    version: null,
+    missing: false,
+  });
+});
+
+test("a proposed document is in review, not missing a version", () => {
+  expect(describeVersionState(null, "proposed")).toBe("In review");
+  expect(describeVersionState(null, "published")).toBe(
+    "No published version yet",
+  );
+});
+
+test("a published version still wins over the proposed wording", () => {
+  expect(
+    describeVersionState(
+      {
+        tag: "nursing/hand-hygiene/v2",
+        version: 2,
+        commitSha: "b",
+        publishedAt: "",
+      },
+      "proposed",
+    ),
+  ).toBe("Version 2 on record");
+});
+
+test("Edit on a binder opens the policy last written in the draft", () => {
+  const documents = [
+    { path: "code-of-conduct.A.json", slugPath: "code-of-conduct" },
+    { path: "nursing/hand-hygiene.B.json", slugPath: "nursing/hand-hygiene" },
+    { path: "nursing/gloves.C.json", slugPath: "nursing/gloves" },
+    { path: "admin/leave.D.docx", slugPath: "admin/leave" },
+  ];
+  const acts = [
+    { at: "2026-09-27T10:00:00Z", paths: ["nursing/gloves.C.json"] },
+    { at: "2026-09-27T11:00:00Z", paths: ["nursing/hand-hygiene.B.json"] },
+    // Newest, but a Word file: not the editor's to open.
+    { at: "2026-09-27T12:00:00Z", paths: ["admin/leave.D.docx"] },
+  ];
+  expect(pickPolicyToWrite(documents, acts)).toBe("nursing/hand-hygiene");
+});
+
+test("with nothing written yet, Edit opens the binder's first policy", () => {
+  expect(
+    pickPolicyToWrite(
+      [
+        { path: "nursing/a.B.json", slugPath: "nursing/a" },
+        { path: "zeta.A.json", slugPath: "zeta" },
+      ],
+      [],
+    ),
+  ).toBe("zeta");
+  // Nothing the editor writes: the tree is the place.
+  expect(
+    pickPolicyToWrite([{ path: "leave.D.pdf", slugPath: "leave" }], []),
+  ).toBeNull();
+});

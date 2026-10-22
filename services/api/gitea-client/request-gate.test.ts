@@ -109,4 +109,75 @@ describe("createRequestGate", () => {
     expect(peak).toBe(4);
     expect(gate.inFlight).toBe(0);
   });
+  it("takes turns between lanes, so one request's burst does not starve another", async () => {
+    const gate = createRequestGate(1);
+    const order: string[] = [];
+    const hold = deferred();
+
+    // Occupy the only slot, then queue a burst in one lane before a single
+    // call in another arrives.
+    const first = gate.run(() => hold.promise, { lane: "library" });
+    await tick();
+    const runs = [
+      ...["l1", "l2", "l3"].map((name) =>
+        gate.run(
+          async () => {
+            order.push(name);
+          },
+          { lane: "library" },
+        ),
+      ),
+      gate.run(
+        async () => {
+          order.push("detail");
+        },
+        { lane: "change-detail" },
+      ),
+    ];
+
+    hold.resolve("done");
+    await Promise.all([first, ...runs]);
+    // Strict FIFO would have been l1, l2, l3, detail.
+    expect(order).toEqual(["l1", "detail", "l2", "l3"]);
+    expect(gate.queued).toBe(0);
+  });
+
+  it("drops a waiter whose request was abandoned", async () => {
+    const gate = createRequestGate(1);
+    const hold = deferred();
+    const first = gate.run(() => hold.promise);
+    await tick();
+
+    const controller = new AbortController();
+    let ran = false;
+    const abandoned = gate.run(
+      async () => {
+        ran = true;
+      },
+      { lane: "gone", signal: controller.signal },
+    );
+    await tick();
+    expect(gate.queued).toBe(1);
+
+    controller.abort(new Error("the browser left"));
+    await expect(abandoned).rejects.toThrow("the browser left");
+    expect(gate.queued).toBe(0);
+
+    hold.resolve("done");
+    await first;
+    expect(ran).toBe(false);
+    expect(gate.inFlight).toBe(0);
+    // And the slot it never took is still usable.
+    await expect(gate.run(async () => "after")).resolves.toBe("after");
+  });
+
+  it("refuses at once a task whose signal has already aborted", async () => {
+    const gate = createRequestGate(4);
+    const controller = new AbortController();
+    controller.abort(new Error("too late"));
+    await expect(
+      gate.run(async () => "never", { signal: controller.signal }),
+    ).rejects.toThrow("too late");
+    expect(gate.inFlight).toBe(0);
+  });
 });

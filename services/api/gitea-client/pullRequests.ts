@@ -1,6 +1,11 @@
 import type { components } from "./spec/gitea";
 
-import { toGiteaApiError, unwrap, type GiteaClient } from "./client";
+import {
+  readAllPages,
+  toGiteaApiError,
+  unwrap,
+  type GiteaClient,
+} from "./client";
 import { latestReviewByUser } from "../change-assignments";
 
 type PullRequest = components["schemas"]["PullRequest"];
@@ -121,14 +126,26 @@ function resolveApprovalState(
   // list, so the page showed a red badge beside a full approval count and the
   // publish button never came back. Gitea merges on the latest review per
   // person, and this now agrees with it.
-  const reviewStates = [...latestReviewByUser(reviews).values()].map(
-    toApprovalStateFromReview,
-  );
-  if (reviewStates.includes("changes_requested")) {
+  const latest = [...latestReviewByUser(reviews).values()];
+
+  if (latest.map(toApprovalStateFromReview).includes("changes_requested")) {
     return "changes_requested";
   }
 
-  if (reviewStates.includes("approved")) {
+  // **A stale approval is not an approval**, and this is the second rule in
+  // the codebase for the same question — `countApprovals` has always skipped
+  // stale ones, because Gitea does at merge time. This did not, so a change
+  // whose approval had been overtaken by a new upload read as `isApproved`
+  // beside an approval count of zero, and the page offered a publish that
+  // Gitea answers with "does not have enough approvals". Same shape as the
+  // `isRejected` defect: two rules, one of them wrong.
+  if (
+    latest.some(
+      (review) =>
+        toApprovalStateFromReview(review) === "approved" &&
+        review.stale !== true,
+    )
+  ) {
     return "approved";
   }
 
@@ -179,25 +196,15 @@ async function listPullReviews(
   repo: string,
   pullNumber: number,
 ): Promise<PullReview[]> {
-  const allReviews: PullReview[] = [];
-  const limit = 100;
-
-  for (let page = 1; page < 100; page += 1) {
-    const reviews = await unwrap(
+  // `limit: 100` used to answer with 50, which read as a short page, so a
+  // change with more than 50 reviews lost the rest — approvals included.
+  const allReviews: PullReview[] = await readAllPages((query) =>
+    unwrap(
       client.GET("/repos/{owner}/{repo}/pulls/{index}/reviews", {
-        params: {
-          path: { owner, repo, index: pullNumber },
-          query: { limit, page },
-        },
+        params: { path: { owner, repo, index: pullNumber }, query },
       }),
-    );
-
-    allReviews.push(...reviews);
-
-    if (reviews.length < limit) {
-      break;
-    }
-  }
+    ),
+  );
 
   return allReviews;
 }
@@ -549,53 +556,289 @@ export async function mergePullRequest(
  * - If not mergeable: resolves conflicts by syncing the head branch with
  *   main, then retries the merge (slower path, up to 15 retries).
  */
-export async function mergeOrResolveConflicts(
-  params: MergePullRequestParams,
-): Promise<void> {
-  const { client, owner, repo, pullNumber, mergeStyle, message } = params;
-
-  // Check if the PR has merge conflicts before attempting.
-  const pr = await unwrap(
-    client.GET("/repos/{owner}/{repo}/pulls/{index}", {
-      params: { path: { owner, repo, index: pullNumber } },
-    }),
-  );
-
-  if (pr.mergeable !== false) {
-    // No known conflict — try normal merge.
-    const result = await attemptMerge(
-      client,
-      owner,
-      repo,
-      pullNumber,
-      mergeStyle,
-      message,
-    );
-    if (result === "ok") return;
-    // Still failed — fall through to conflict resolution.
-  }
-
-  await resolveConflictsByRebase(client, owner, repo, pullNumber);
-
-  // Retry after resolution with more attempts — Gitea needs time to
-  // recalculate mergeability after the branch update.
-  const POST_RESOLVE_ATTEMPTS = 15;
-  const retryResult = await attemptMerge(
+/**
+ * Merge a change in a binder, without the single-document rescue.
+ *
+ * `mergeOrResolveConflicts` falls back to rebasing and re-applying *the*
+ * document file when a merge fails — a rescue that only makes sense when a
+ * repository holds exactly one document, which is the model ADR 0004
+ * supersedes. In a binder it cannot work, and worse, it masks every ordinary
+ * merge failure as "Could not find document file on head branch".
+ *
+ * A conflict in a binder is a real conflict between people editing the same
+ * policy. It is theirs to resolve, so it is reported rather than guessed at.
+ */
+export async function mergeWorkspaceChange(params: {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  pullNumber: number;
+  mergeStyle: "merge" | "squash" | "rebase";
+  message?: string;
+  maxAttempts?: number;
+}): Promise<void> {
+  const {
     client,
     owner,
     repo,
     pullNumber,
     mergeStyle,
     message,
-    POST_RESOLVE_ATTEMPTS,
+    maxAttempts = 10,
+  } = params;
+  const RETRY_DELAY_MS = 2000;
+
+  let lastError = "";
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const { response, error } = await client.POST(
+      "/repos/{owner}/{repo}/pulls/{index}/merge",
+      {
+        params: { path: { owner, repo, index: pullNumber } },
+        body: {
+          // The spec's own spelling. `Do` works too — Go matches JSON field
+          // names case-insensitively — but only the lowercase form typechecks.
+          do: mergeStyle,
+          ...(message ? { MergeMessageField: message } : {}),
+        },
+      },
+    );
+
+    if (response.status >= 200 && response.status < 300) return;
+
+    lastError = toGiteaApiError(response.status, error).message;
+    const lowered = lastError.toLowerCase();
+
+    // Gitea recomputes mergeability asynchronously, and says so — under 405
+    // when the check has not finished or an approval is not yet indexed, and
+    // under 409 when a commit landed on the branch moments earlier. Both are
+    // "ask again", and neither is the branch being unmergeable.
+    const isTransient =
+      lowered.includes("please try again later") ||
+      lowered.includes("not have enough approvals") ||
+      lowered.includes("is being checked");
+
+    if (!isTransient || attempt === maxAttempts) break;
+
+    await new Promise<void>((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+  }
+
+  // The reader gets the plain sentence; the log keeps Gitea's own words.
+  const refusal = toGiteaApiError(409, describeMergeRefusal(lastError));
+  refusal.cause = lastError;
+  throw refusal;
+}
+
+/**
+ * Gitea's reasons for refusing a merge, in the words of the person publishing.
+ *
+ * Gitea speaks git — "head branch", "base branch", "status checks" — and the
+ * person pressing Publish writes policies, not code. Each reason still gets its
+ * own sentence: a conflict and an unmet protection rule are different problems
+ * with different ways out, and flattening them into one message is what once
+ * sent three failures chasing the wrong cause. Gitea's words ride along as
+ * the error's `cause`, so the log still says exactly what was refused.
+ */
+const MERGE_REFUSALS: ReadonlyArray<readonly [string, string]> = [
+  [
+    "behind the base branch",
+    "The binder has moved on since this change was made. Bring the change up to date, then publish it.",
+  ],
+  [
+    "conflict",
+    "This change edits the same content as something published since it was made. Resolve the overlap, then publish it.",
+  ],
+  [
+    "enough approvals",
+    "This change does not have enough approvals to be published yet.",
+  ],
+  [
+    "requested changes",
+    "A reviewer has asked for changes. Address them before publishing.",
+  ],
+  [
+    "official review request",
+    "A requested review has not been given yet. Wait for it before publishing.",
+  ],
+  ["status check", "The required checks on this change have not passed yet."],
+  ["work in progress", "This change is marked as a draft."],
+  ["already been merged", "This change has already been published."],
+  [
+    "not allowed to merge",
+    "You do not have permission to publish this change.",
+  ],
+];
+
+export function describeMergeRefusal(giteaMessage: string): string {
+  const lowered = giteaMessage.toLowerCase();
+  for (const [needle, sentence] of MERGE_REFUSALS) {
+    if (lowered.includes(needle)) return sentence;
+  }
+  return "This change could not be published. Try again in a moment, and if it keeps happening, contact your administrator.";
+}
+
+/**
+ * Bring a change's branch up to date with the branch it would be merged into.
+ *
+ * A binder protects `main` with `block_on_outdated_branch`, so a change that
+ * branched off before another one merged is refused however many approvals it
+ * has. This is the way out, and it is a merge rather than a rebase on purpose:
+ * a rebase replays the change's commit onto the new head, which git cannot do
+ * for the binary files most policies are — Word documents and PDFs — and it
+ * fails with "your local changes would be overwritten by merge". A merge
+ * commit keeps both sides and always applies.
+ *
+ * It moves the branch, so a binder with `dismiss_stale_approvals` will drop
+ * the approvals collected so far. That is correct — the approvals were for
+ * different content — and it is why this is an explicit act rather than
+ * something publish does quietly on the caller's behalf.
+ */
+export async function updateChangeBranch(params: {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  pullNumber: number;
+  maxAttempts?: number;
+  /**
+   * True once Gitea reports the change as up to date. False means the push
+   * went through and Gitea is still catching up — worth saying, never worth
+   * failing an operation that succeeded.
+   */
+}): Promise<boolean> {
+  const { client, owner, repo, pullNumber, maxAttempts = 10 } = params;
+  const POLL_DELAY_MS = 500;
+
+  const { response, error } = await client.POST(
+    "/repos/{owner}/{repo}/pulls/{index}/update",
+    {
+      params: {
+        path: { owner, repo, index: pullNumber },
+        query: { style: "merge" },
+      },
+    },
   );
 
-  if (retryResult !== "ok") {
+  if (response.status < 200 || response.status >= 300) {
+    // Gitea's own words again: a conflict here is the author's to resolve and
+    // names the file, which an invented sentence would throw away.
     throw toGiteaApiError(
-      409,
-      "Merge conflict persisted after conflict resolution.",
+      response.status,
+      `This change could not be brought up to date: ${toGiteaApiError(response.status, error).message}`,
     );
   }
+
+  // Gitea accepts the push and recomputes the merge base afterwards, so for a
+  // second or two it still reports the change as behind. Returning on the 200
+  // makes the caller redraw the very state it just fixed — so this waits for
+  // the answer it is claiming, and the endpoint's success means "it is up to
+  // date" rather than "I asked".
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const pullRequest = await unwrap(
+      client.GET("/repos/{owner}/{repo}/pulls/{index}", {
+        params: { path: { owner, repo, index: pullNumber } },
+      }),
+    );
+
+    const mergeBase = pullRequest.merge_base ?? "";
+    const baseHead = pullRequest.base?.sha ?? "";
+    // Unknown either way is not worth waiting on: the merge is the authority,
+    // and a missing field should not turn into a hang.
+    if (mergeBase === "" || baseHead === "" || mergeBase === baseHead) {
+      return true;
+    }
+
+    if (attempt < maxAttempts) {
+      await new Promise<void>((resolve) => setTimeout(resolve, POLL_DELAY_MS));
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Some closed changes' numbers and titles, found by number or by merge commit.
+ *
+ * **Titles only, and no reviews.** The binder's list says which change last
+ * touched each policy; it needs a subject line per row, not an approval state,
+ * and {@link listPullRequests} reads every change's reviews to derive one.
+ *
+ * Pages through closed changes, most recently updated first, and stops as soon
+ * as everything asked for is found — which for the usual list, where most
+ * policies were last touched recently, is the first page.
+ */
+export async function findClosedChanges(params: {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  numbers: readonly number[];
+  mergeCommits: readonly string[];
+}): Promise<{
+  byNumber: Map<number, string>;
+  byMergeCommit: Map<string, { number: number; title: string }>;
+}> {
+  const { client, owner, repo } = params;
+  const numbers = new Set(params.numbers);
+  const commits = new Set(params.mergeCommits.filter((sha) => sha !== ""));
+  const byNumber = new Map<number, string>();
+  const byMergeCommit = new Map<string, { number: number; title: string }>();
+  const done = () =>
+    byNumber.size >= numbers.size && byMergeCommit.size >= commits.size;
+  if (done()) return { byNumber, byMergeCommit };
+
+  // Gitea's ceiling per page, and a stop no real binder reaches that keeps a
+  // Gitea which ignores `page` from looping.
+  const PAGE_SIZE = 50;
+  const MAX_PAGES = 40;
+
+  // Page 1 alone — the change asked about is usually recent — then three at a
+  // time. This runs on every binder page, and a document last changed long
+  // ago used to cost up to forty round trips one after another.
+  const WAVE = 3;
+  const readPage = (page: number) =>
+    unwrap(
+      client.GET("/repos/{owner}/{repo}/pulls", {
+        params: {
+          path: { owner, repo },
+          query: {
+            state: "closed",
+            sort: "recentupdate",
+            page,
+            limit: PAGE_SIZE,
+          },
+        },
+      }),
+    );
+  const take = (batch: Awaited<ReturnType<typeof readPage>> | undefined) => {
+    for (const pullRequest of batch ?? []) {
+      const number = pullRequest.number;
+      if (number === undefined) continue;
+      const title = pullRequest.title ?? "";
+      if (numbers.has(number)) byNumber.set(number, title);
+      const sha = pullRequest.merge_commit_sha ?? "";
+      if (commits.has(sha)) byMergeCommit.set(sha, { number, title });
+    }
+    return (batch ?? []).length === PAGE_SIZE;
+  };
+
+  if (!take(await readPage(1))) return { byNumber, byMergeCommit };
+
+  for (let page = 2; page <= MAX_PAGES && !done(); page += WAVE) {
+    const wave = Array.from(
+      { length: Math.min(WAVE, MAX_PAGES - page + 1) },
+      (_, offset) => page + offset,
+    );
+    const batches = await Promise.all(wave.map(readPage));
+    let more = true;
+    for (const batch of batches) {
+      if (!take(batch)) {
+        more = false;
+        break;
+      }
+    }
+    if (!more) break;
+  }
+
+  return { byNumber, byMergeCommit };
 }
 
 /**
@@ -609,17 +852,53 @@ export async function mergeOrResolveConflicts(
 export async function listPullRequestsWithReviews(
   params: ListPullRequestsParams,
 ): Promise<PullRequestWithReviews[]> {
+  return attachReviews({
+    ...params,
+    pullRequests: await listPullRequestsWithoutReviews(params),
+  });
+}
+
+/**
+ * The changes themselves — number, branch, title, state — and not their
+ * reviews.
+ *
+ * {@link listPullRequestsWithReviews} reads every change's reviews, one call or
+ * more each, and most callers then keep only the number or the branch: a
+ * binder's document counts, the sign-off check, "is this change open". On a
+ * list page that was a third of every Gitea call made. Take this, narrow to
+ * the changes that matter, and {@link attachReviews} to those.
+ */
+export async function listPullRequestsWithoutReviews(
+  params: ListPullRequestsParams,
+): Promise<PullRequest[]> {
   const { client, owner, repo, state, page } = params;
 
-  const pullRequests = await unwrap(
-    client.GET("/repos/{owner}/{repo}/pulls", {
-      params: {
-        path: { owner, repo },
-        query: { state, page },
-      },
-    }),
-  );
+  // One page when the caller asked for one; otherwise all of them. Unpaged,
+  // Gitea answers with 30, and an open-changes list, a binder's "N in review"
+  // and Home all stopped at the thirtieth change.
+  return page === undefined
+    ? await readAllPages((query) =>
+        unwrap(
+          client.GET("/repos/{owner}/{repo}/pulls", {
+            params: { path: { owner, repo }, query: { state, ...query } },
+          }),
+        ),
+      )
+    : await unwrap(
+        client.GET("/repos/{owner}/{repo}/pulls", {
+          params: { path: { owner, repo }, query: { state, page } },
+        }),
+      );
+}
 
+/** Read the reviews of changes already listed, and derive their approval state. */
+export async function attachReviews(params: {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  pullRequests: readonly PullRequest[];
+}): Promise<PullRequestWithReviews[]> {
+  const { client, owner, repo, pullRequests } = params;
   return Promise.all(
     pullRequests.map(async (pullRequest) => {
       const reviews = pullRequest.number
@@ -638,6 +917,69 @@ export async function listPullRequests(
 }
 
 /** One change and its reviews, for the pages that show a single change. */
+/**
+ * A change's head: its branch, and the commit it is at now.
+ *
+ * Publish records the commit in its plan, so a change pushed to after it was
+ * checked is not merged on the strength of approvals for something else.
+ */
+export async function getPullRequestHead(
+  params: PullRequestRef,
+): Promise<{ ref: string; sha: string }> {
+  const { client, owner, repo, pullNumber } = params;
+
+  const pullRequest = await unwrap(
+    client.GET("/repos/{owner}/{repo}/pulls/{index}", {
+      params: { path: { owner, repo, index: pullNumber } },
+    }),
+  );
+
+  return { ref: pullRequest.head?.ref ?? "", sha: pullRequest.head?.sha ?? "" };
+}
+
+/**
+ * A change's head branch, and nothing else.
+ *
+ * The branch is what tells the shapes of change apart —
+ * `upload/<slugPath>/…` is a document, `sign-off/…` is a rules change — so
+ * this is asked for on paths that need to know which one they are holding and
+ * do not need the reviews that come with the fuller read.
+ */
+export async function getPullRequestHeadBranch(
+  params: PullRequestRef,
+): Promise<string> {
+  const { client, owner, repo, pullNumber } = params;
+
+  const pullRequest = await unwrap(
+    client.GET("/repos/{owner}/{repo}/pulls/{index}", {
+      params: { path: { owner, repo, index: pullNumber } },
+    }),
+  );
+
+  return pullRequest.head?.ref ?? "";
+}
+
+/**
+ * The commit a merged change landed as on its base branch, or null.
+ *
+ * What a version tag has to point at. `main` is not the same thing: a second
+ * change published a moment later moves `main`, and a tag aimed at the branch
+ * name after that lands on the other change's merge — a wrong git coordinate
+ * in the evidence, and one nothing would ever notice.
+ */
+export async function readMergeCommitSha(
+  params: PullRequestRef,
+): Promise<string | null> {
+  const { client, owner, repo, pullNumber } = params;
+  const pullRequest = (await unwrap(
+    client.GET("/repos/{owner}/{repo}/pulls/{index}", {
+      params: { path: { owner, repo, index: pullNumber } },
+    }),
+  )) as { merged?: boolean; merge_commit_sha?: string | null };
+  if (!pullRequest?.merged) return null;
+  return pullRequest.merge_commit_sha || null;
+}
+
 export async function getPullRequestWithReviews(
   params: PullRequestRef,
 ): Promise<PullRequestWithReviews> {
@@ -725,6 +1067,32 @@ export async function setPullRequestAssignees(
     client.PATCH("/repos/{owner}/{repo}/pulls/{index}", {
       params: { path: { owner, repo, index: pullNumber } },
       body: { assignees },
+    }),
+  );
+}
+
+/**
+ * Rewrite what a change is asking for.
+ *
+ * A change request is open for days, and the first thing a reviewer's question
+ * produces is a better title. Once it is published the title is on the merge
+ * commit and in the version tag, which are the record — so this is an edit to
+ * a request, never to evidence.
+ */
+export async function setPullRequestSubject(params: {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  pullNumber: number;
+  title: string;
+  body: string;
+}): Promise<void> {
+  const { client, owner, repo, pullNumber, title, body } = params;
+
+  await unwrap(
+    client.PATCH("/repos/{owner}/{repo}/pulls/{index}", {
+      params: { path: { owner, repo, index: pullNumber } },
+      body: { title, body },
     }),
   );
 }

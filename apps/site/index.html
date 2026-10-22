@@ -1,0 +1,1309 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Never inside another site's frame (clickjacking). Cloudflare sends
+      X-Frame-Options and frame-ancestors for this page (apps/site/public/_headers),
+      and the page also says it itself, in case it is ever served without
+      them (a local build, another host): framed, it hides before it
+      draws anything. It also asks to take over the whole tab, which browsers
+      usually refuse a cross-site frame, so hiding is the part that counts.
+      First in <head> so it runs before any paint. A frame sandboxed against scripts stops this,
+      but it stops the app too, so there is nothing in it to click.
+    -->
+    <script>
+      if (window.self !== window.top) {
+        document.documentElement.style.display = "none";
+        try {
+          window.top.location.replace(window.self.location.href);
+        } catch (e) {
+          // A sandboxed frame may not navigate its parent; hidden is enough.
+        }
+      }
+    </script>
+    <title>
+      Bindersnap — Policy &amp; Procedure Management for Small Healthcare
+      Providers
+    </title>
+    <meta
+      name="description"
+      content="Every policy with its current approved version and the record of who signed off on it — for clinics, surgery centers, home health agencies, and behavioral health programs."
+    />
+    <!--
+      Icons and the link preview, drawn from the logo mark by
+      scripts/brand-images.ts. The <link> hrefs are relative so Bun bundles
+      them; the build also copies apps/app/public to the site root, where
+      crawlers look for /favicon.ico and the og:image lives at a fixed URL.
+      Link previews need absolute URLs, so those name bindersnap.com.
+    -->
+    <link rel="icon" href="../app/public/favicon.ico" sizes="48x48" />
+    <link rel="icon" href="../app/public/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="../app/public/apple-touch-icon.png" />
+    <link rel="manifest" href="../app/public/site.webmanifest" />
+    <meta
+      name="theme-color"
+      content="#fafaf7"
+      media="(prefers-color-scheme: light)"
+    />
+    <meta
+      name="theme-color"
+      content="#1c1917"
+      media="(prefers-color-scheme: dark)"
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Bindersnap" />
+    <meta property="og:url" content="https://bindersnap.com/" />
+    <meta
+      property="og:title"
+      content="Bindersnap — Policy &amp; Procedure Management for Small Healthcare Providers"
+    />
+    <meta
+      property="og:description"
+      content="Every policy with its current approved version and the record of who signed off on it — for clinics, surgery centers, home health agencies, and behavioral health programs."
+    />
+    <meta property="og:image" content="https://bindersnap.com/og-image.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Bindersnap: The surveyor asks which version you approved. Show them."
+    />
+    <meta property="og:locale" content="en_US" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="canonical" href="https://bindersnap.com/" />
+    <link
+      rel="alternate"
+      type="text/plain"
+      href="/llms.txt"
+      title="The whole site, for AI agents"
+    />
+    <!--
+      What search engines and AI assistants read about Bindersnap. The same
+      organization node is on every public-site page (apps/site/renderSite.ts).
+      The offer is $39 per writer per month; a test keeps it matching the
+      price in /pricing's front matter.
+    -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://bindersnap.com/#organization",
+            "name": "Bindersnap",
+            "legalName": "Solid Gray LLC",
+            "url": "https://bindersnap.com/",
+            "logo": "https://bindersnap.com/icon-512.png"
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://bindersnap.com/#website",
+            "name": "Bindersnap",
+            "url": "https://bindersnap.com/",
+            "publisher": { "@id": "https://bindersnap.com/#organization" }
+          },
+          {
+            "@type": "SoftwareApplication",
+            "name": "Bindersnap",
+            "applicationCategory": "BusinessApplication",
+            "operatingSystem": "Web",
+            "url": "https://bindersnap.com/",
+            "description": "Policy and procedure management for small healthcare providers: every policy with its current approved version and the record of who signed off on it.",
+            "publisher": { "@id": "https://bindersnap.com/#organization" },
+            "offers": {
+              "@type": "Offer",
+              "name": "Bindersnap Pro",
+              "price": "39",
+              "priceCurrency": "USD",
+              "url": "https://bindersnap.com/pricing",
+              "priceSpecification": {
+                "@type": "UnitPriceSpecification",
+                "price": "39",
+                "priceCurrency": "USD",
+                "unitText": "per writer per month",
+                "unitCode": "MON"
+              }
+            }
+          }
+        ]
+      }
+    </script>
+    <!--
+      Our own copy of the fonts, not Google's: see public/fonts/fonts.css. An
+      @import, so the bundler leaves it alone instead of inlining every font
+      file into the app's stylesheet.
+    -->
+    <style>
+      @import url("/fonts/fonts.css");
+    </style>
+    <link
+      rel="preload"
+      as="style"
+      href="@ui/css"
+      onload="
+        this.onload = null;
+        this.rel = 'stylesheet';
+      "
+    />
+    <noscript>
+      <link rel="stylesheet" href="@ui/css" />
+    </noscript>
+    <link
+      rel="preload"
+      as="style"
+      href="./landing.css"
+      onload="
+        this.onload = null;
+        this.rel = 'stylesheet';
+      "
+    />
+    <noscript>
+      <link rel="stylesheet" href="./landing.css" />
+    </noscript>
+    <style>
+      #landing-content {
+        opacity: 0;
+        transition: opacity 0.15s;
+      }
+
+      /*
+        Failure fallbacks. The page below the hero is hidden until
+        landing-inline.ts reveals #landing-content and the IntersectionObserver
+        adds .in to each .reveal, so anything that stops that module leaves a
+        blank page. Two nets:
+          - data-landing-fallback: set by the timer below when the module has
+            not reported ready, covering a slow, blocked, or broken bundle.
+          - <noscript>: covers JS being off entirely.
+        Both selectors are written to outrank the bare `.reveal` rule on
+        specificity, which is what makes them independent of load order: the
+        bundler injects the compiled stylesheet after this <head>, so a rule
+        here that merely ties on specificity loses to it.
+      */
+      html[data-landing-fallback] #landing-content {
+        opacity: 1;
+      }
+
+      html[data-landing-fallback] .reveal {
+        opacity: 1;
+        transform: none;
+      }
+    </style>
+    <noscript>
+      <style>
+        /* `html` prefixes are load-bearing, not decoration — see above. The
+           compiled stylesheet's own `.reveal { opacity: 0 }` is injected after
+           this block, so a bare `.reveal` here ties on specificity and loses,
+           leaving the whole page below the hero invisible with JS off. */
+        html #landing-content {
+          opacity: 1;
+        }
+
+        html .reveal {
+          opacity: 1;
+          transform: none;
+        }
+      </style>
+    </noscript>
+    <script>
+      (function () {
+        var s = localStorage.getItem("bs-theme");
+        var p = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.setAttribute(
+          "data-theme",
+          s || (p ? "dark" : "light"),
+        );
+
+        // Classic (non-module) script, so it still runs when the module bundle
+        // fails to parse or never arrives. landing-inline.ts sets
+        // data-landing-ready as soon as it has taken over.
+        window.setTimeout(function () {
+          if (!document.documentElement.hasAttribute("data-landing-ready")) {
+            document.documentElement.setAttribute("data-landing-fallback", "");
+          }
+        }, 2000);
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="landing-content">
+      <!-- NAV: the same bar as every public page (apps/site/chrome.ts) -->
+      <header class="site-header">
+        <div class="site-header-inner">
+          <a class="site-logo" href="/"
+            ><span class="site-logo-mark"
+              ><svg
+                viewBox="0 0 18 18"
+                fill="none"
+                aria-hidden="true"
+                width="18"
+                height="18"
+              >
+                <rect
+                  x="2"
+                  y="1"
+                  width="9"
+                  height="13"
+                  rx="1.5"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                />
+                <rect
+                  x="6"
+                  y="4"
+                  width="9"
+                  height="13"
+                  rx="1.5"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                /></svg></span
+            ><span class="site-logo-name">Bindersnap</span></a
+          >
+          <nav class="site-header-nav" aria-label="Site">
+            <a class="site-header-link site-header-secondary" href="/for"
+              >Who it's for</a
+            ><a class="site-header-link site-header-secondary" href="/templates"
+              >Templates</a
+            ><a class="site-header-link site-header-secondary" href="/pricing"
+              >Pricing</a
+            ><a class="site-header-link site-header-secondary" href="/help"
+              >Help</a
+            ><a
+              class="site-header-link"
+              href="https://app.bindersnap.com/-/login"
+              >Sign in</a
+            ><a
+              class="site-header-cta"
+              href="https://app.bindersnap.com/-/signup"
+              >Sign up</a
+            >
+          </nav>
+        </div>
+      </header>
+
+      <main id="main-content">
+        <!-- HERO -->
+        <section class="hero">
+          <div class="hero-inner">
+            <div class="chaos-pill">
+              <span
+                class="landing-lucide-icon chaos-pill-icon"
+                data-lucide-icon="file-text"
+                data-lucide-size="14"
+                data-lucide-stroke-width="1.75"
+                aria-hidden="true"
+              ></span>
+              <span class="chaos-file"
+                >Infection_Control_Policy_rev3_FINAL(2).docx</span
+              >
+              <span class="chaos-pill-text">Which one is current?</span>
+            </div>
+
+            <h1 class="hero-h1">
+              The surveyor asks which<br />
+              version you <span class="accent">approved.</span><br />
+              <span class="underline-word">Show them.</span>
+            </h1>
+
+            <p class="hero-sub">
+              Bindersnap is where your policy manual lives &mdash; for clinics,
+              surgery centers, home health agencies, and behavioral health
+              programs. Every policy keeps
+              <strong>its own approval record</strong>: who signed off, when,
+              and on exactly which version.
+            </p>
+
+            <div class="hero-form-wrap" id="hero-area">
+              <div class="email-row" id="hero-form">
+                <input
+                  type="email"
+                  id="hero-email"
+                  placeholder="your@company.com"
+                  autocomplete="email"
+                />
+                <button type="button" id="hero-signup-btn">
+                  Create Your Account &rarr;
+                </button>
+              </div>
+              <p class="form-hint">
+                <span
+                  class="landing-lucide-icon"
+                  data-lucide-icon="clock-3"
+                  data-lucide-size="12"
+                  data-lucide-stroke-width="1.75"
+                  aria-hidden="true"
+                ></span>
+                No demo call, no implementation project &middot; Cancel anytime
+              </p>
+            </div>
+
+            <div class="hero-mockup">
+              <div class="mockup-chrome">
+                <div class="mockup-dots">
+                  <span></span><span></span><span></span>
+                </div>
+                <div class="mockup-bar">
+                  Infection Control Policy &middot; v3 &middot; Approved
+                </div>
+              </div>
+              <div class="mockup-audit" aria-label="Approval trail example">
+                <div class="audit-main">
+                  <div class="audit-label">Version history</div>
+                  <ol class="version-track">
+                    <li class="version-step">
+                      <span class="version-node" aria-hidden="true"></span>
+                      <span class="version-id">v1</span>
+                      <span class="version-desc"
+                        >Annual review draft &mdash; Renee Alvarez</span
+                      >
+                      <span class="version-time">Oct 02 &middot; 09:14</span>
+                      <span class="version-state">Superseded</span>
+                    </li>
+                    <li class="version-step">
+                      <span class="version-node" aria-hidden="true"></span>
+                      <span class="version-id">v2</span>
+                      <span class="version-desc"
+                        >Isolation section rewritten &mdash; Renee Alvarez</span
+                      >
+                      <span class="version-time">Oct 09 &middot; 14:37</span>
+                      <span class="version-state">Superseded</span>
+                    </li>
+                    <li class="version-step is-current">
+                      <span class="version-node" aria-hidden="true"></span>
+                      <span class="version-id">v3</span>
+                      <span class="version-desc"
+                        >Medical Director edits accepted &mdash; Renee
+                        Alvarez</span
+                      >
+                      <span class="version-time">Oct 14 &middot; 16:02</span>
+                      <span class="version-state is-approved">
+                        <span
+                          class="landing-lucide-icon"
+                          data-lucide-icon="lock"
+                          data-lucide-size="12"
+                          data-lucide-stroke-width="1.75"
+                          aria-hidden="true"
+                        ></span>
+                        Approved &middot; Locked
+                      </span>
+                    </li>
+                  </ol>
+                  <div class="audit-threads">
+                    <span class="audit-chip is-resolved">
+                      <span
+                        class="landing-lucide-icon"
+                        data-lucide-icon="check"
+                        data-lucide-size="12"
+                        data-lucide-stroke-width="2"
+                        aria-hidden="true"
+                      ></span>
+                      3 discussion threads resolved
+                    </span>
+                    <span class="audit-chip">0 open</span>
+                  </div>
+                </div>
+
+                <div class="audit-side">
+                  <div class="audit-label">Approvals</div>
+                  <ul class="approver-list">
+                    <li class="approver">
+                      <span class="approver-avatar" aria-hidden="true">TL</span>
+                      <span class="approver-id">
+                        <span class="approver-name">Tomas Lang</span>
+                        <span class="approver-role"
+                          >Quality &middot; designated reviewer</span
+                        >
+                      </span>
+                      <span class="approver-mark">
+                        <span
+                          class="landing-lucide-icon"
+                          data-lucide-icon="badge-check"
+                          data-lucide-size="14"
+                          data-lucide-stroke-width="1.75"
+                          aria-hidden="true"
+                        ></span>
+                        <span class="approver-time">Oct 14 &middot; 16:41</span>
+                      </span>
+                    </li>
+                    <li class="approver">
+                      <span class="approver-avatar" aria-hidden="true">AP</span>
+                      <span class="approver-id">
+                        <span class="approver-name">Dr. Alan Petrie</span>
+                        <span class="approver-role"
+                          >Medical Director &middot; designated reviewer</span
+                        >
+                      </span>
+                      <span class="approver-mark">
+                        <span
+                          class="landing-lucide-icon"
+                          data-lucide-icon="badge-check"
+                          data-lucide-size="14"
+                          data-lucide-stroke-width="1.75"
+                          aria-hidden="true"
+                        ></span>
+                        <span class="approver-time">Oct 14 &middot; 17:08</span>
+                      </span>
+                    </li>
+                  </ul>
+                  <div class="audit-gate">
+                    <button class="audit-approve-btn" type="button" disabled>
+                      Approve v3
+                    </button>
+                    <p class="audit-gate-note">
+                      <span
+                        class="landing-lucide-icon"
+                        data-lucide-icon="lock"
+                        data-lucide-size="12"
+                        data-lucide-stroke-width="1.75"
+                        aria-hidden="true"
+                      ></span>
+                      Only designated reviewers can approve. You have view
+                      access.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- CHAOS STRIP -->
+        <section class="chaos-strip">
+          <div class="chaos-inner">
+            <div class="chaos-left reveal">
+              <div class="overline">The Problem</div>
+              <h2>A shared drive is not<br /><em>an approval record.</em></h2>
+              <p>
+                The policies sit in a folder nobody owns. The sign-offs sit in
+                somebody's inbox &mdash; sometimes one belonging to a person who
+                left two years ago. And when the survey window opens, the
+                question is always the same:
+                <em style="color: var(--brand-on-dark-quote)"
+                  >"Who approved this one, and when?"</em
+                >
+                <br /><br />
+                You should not have to spend a weekend reconstructing that.
+              </p>
+            </div>
+
+            <div class="email-thread reveal reveal-d2">
+              <div class="thread-header">
+                <div class="thread-dots">
+                  <span></span><span></span><span></span>
+                </div>
+                <span class="thread-subject"
+                  >Re: Re: Re: Re: IC policy for survey
+                  <span class="reply-badge">+14</span></span
+                >
+              </div>
+              <div class="thread-body">
+                <div class="email-msg">
+                  <div class="email-meta">
+                    <span class="email-from">Renee (Nursing)</span>
+                    <span class="email-time">Mon 9:12 AM</span>
+                  </div>
+                  <div class="email-body">
+                    Attaching the revised infection control policy. Please use
+                    THIS one on the floor.
+                  </div>
+                  <div class="email-attach">
+                    <span
+                      class="landing-lucide-icon"
+                      data-lucide-icon="file-text"
+                      data-lucide-size="10"
+                      data-lucide-stroke-width="1.6"
+                      aria-hidden="true"
+                    ></span>
+                    IC_Policy_2026_rev3_RA.docx
+                  </div>
+                </div>
+                <div class="email-msg">
+                  <div class="email-meta">
+                    <span class="email-from">Tomas (Quality)</span>
+                    <span class="email-time">Mon 11:43 AM</span>
+                  </div>
+                  <div class="email-body">
+                    Wait &mdash; did the Medical Director ever sign off on the
+                    isolation section? There are two versions in the shared
+                    drive.
+                  </div>
+                </div>
+                <div class="email-msg">
+                  <div class="email-meta">
+                    <span class="email-from">Dr. Petrie (Med Dir)</span>
+                    <span class="email-time">Tue 8:05 AM</span>
+                  </div>
+                  <div class="email-body">
+                    I approved something in March. Was that this one? Can
+                    someone send me what I actually signed?
+                  </div>
+                  <div class="email-attach">
+                    <span
+                      class="landing-lucide-icon"
+                      data-lucide-icon="file-text"
+                      data-lucide-size="10"
+                      data-lucide-stroke-width="1.6"
+                      aria-hidden="true"
+                    ></span>
+                    IC_Policy_FINAL_APPROVED_Mar14.docx
+                  </div>
+                </div>
+                <div
+                  class="email-msg"
+                  style="background: var(--brand-mockup-highlight)"
+                >
+                  <div class="email-meta">
+                    <span class="email-from">James (Administrator)</span>
+                    <span class="email-time">Tue 8:41 AM</span>
+                  </div>
+                  <div
+                    class="email-body"
+                    style="color: var(--brand-coral-dark); font-weight: 500"
+                  >
+                    Survey window opens Monday. Which version do we hand them?
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!--
+          FEATURES / THE SOLUTION
+
+          Not a card grid. This section and The Review used to be the same
+          three-across row of bordered cards, with the chain diagram and the
+          before/after boxes between them — four consecutive sections of
+          "centred header, then a row of boxes." The eye pattern-matches that
+          by the second one and starts skimming, which is the wrong thing to
+          happen on the half of the page that leads to the CTA.
+
+          So each of those four now has a shape of its own, and this is the
+          airy one: the pitch holds the left column while the three claims run
+          down the right as plain rows on hairlines. No card, no fill, no
+          shadow — the weight builds in the sections below it instead.
+        -->
+        <section>
+          <div class="section-features">
+            <div class="features-lede reveal">
+              <div class="eyebrow-tag">The Solution</div>
+              <h2 class="features-title">
+                You already have the policies. What you need is the proof.
+              </h2>
+              <p class="features-subtitle">
+                Word, PDF, whatever the last person left behind &mdash;
+                Bindersnap versions and approves your files exactly as they are.
+              </p>
+            </div>
+
+            <ol class="features-list">
+              <li class="feat reveal reveal-d1">
+                <span class="feat-num" aria-hidden="true">01</span>
+                <div class="feat-body">
+                  <div class="feat-tag">Store</div>
+                  <h3>Every Policy, One Place</h3>
+                  <p>
+                    Every policy gets its own page, its own version history, and
+                    its own approval record. Point your staff at one link
+                    instead of a folder they have to guess their way through. No
+                    migration project, no consultant.
+                  </p>
+                </div>
+              </li>
+
+              <li class="feat reveal reveal-d2">
+                <span class="feat-num" aria-hidden="true">02</span>
+                <div class="feat-body">
+                  <div class="feat-tag">Approve</div>
+                  <h3>Sign-Off That Cannot Be Back-Dated</h3>
+                  <p>
+                    Every approval is stamped with the person, the date, and the
+                    version they actually read. Approved versions lock &mdash; a
+                    revision arrives as a new version with its own review, never
+                    as a quiet edit to the one already signed.
+                  </p>
+                </div>
+              </li>
+
+              <li class="feat reveal reveal-d3">
+                <span class="feat-num" aria-hidden="true">03</span>
+                <div class="feat-body">
+                  <div class="feat-tag">Produce</div>
+                  <h3>Evidence While They Wait</h3>
+                  <p>
+                    Asked who approved the current version and when? It is on
+                    the page, in front of you, while the surveyor is still in
+                    the room. Asked for the whole history? Every version is
+                    there in order, each with the sign-offs it collected &mdash;
+                    no support ticket, no vendor in the middle.
+                  </p>
+                </div>
+              </li>
+            </ol>
+          </div>
+        </section>
+
+        <!--
+          THE RECORD
+
+          This section used to be a third consecutive 3-card grid, immediately
+          after The Solution and immediately before The Review. By the third
+          one the eye pattern-matches the layout and skims — which was exactly
+          the wrong thing to happen on the page's most differentiated claim.
+
+          So the mechanism is drawn instead of described: three entries of one
+          policy's approval record, each showing the fingerprint it carries
+          forward from the entry before it and the fingerprint it seals itself
+          with. The repeated hash strings are the whole point — `sealed` on one
+          entry is `carries` on the next, so the chain is legible without
+          reading a word of the copy around it.
+
+          The hashes are illustrative, not real, but they are consistent: read
+          left to right and each `carries` matches the previous `sealed`. Keep
+          that true if you ever change them.
+
+          The three claims that were the card headings survive underneath as a
+          compact row. Same substance, a quarter of the visual weight, and the
+          section no longer looks like the two either side of it.
+        -->
+        <section class="section-record section-band">
+          <div class="review-inner">
+            <div class="review-header reveal">
+              <div class="eyebrow-tag">The Record</div>
+              <h2>
+                An approval nobody can<br />quietly edit &mdash;
+                <em>including us.</em>
+              </h2>
+              <p>
+                Most policy systems keep an approval as a row in their database.
+                A row can be changed by anyone with the right access, and you
+                would never know. Change ours and everyone can see it.
+              </p>
+            </div>
+
+            <figure class="chain reveal">
+              <figcaption class="chain-caption">
+                Infection Control Policy &mdash; every version, in order
+              </figcaption>
+
+              <ol class="chain-track">
+                <li class="chain-entry">
+                  <div class="chain-entry-head">
+                    <span class="chain-entry-version">Version 1</span>
+                    <span class="chain-entry-state">
+                      <span
+                        class="landing-lucide-icon"
+                        data-lucide-icon="check"
+                        data-lucide-size="12"
+                        data-lucide-stroke-width="2.5"
+                        aria-hidden="true"
+                      ></span>
+                      Approved
+                    </span>
+                  </div>
+                  <p class="chain-entry-who">R. Alvarez, RN &middot; 4 Mar</p>
+                  <dl class="chain-fields">
+                    <div class="chain-field">
+                      <dt>carries</dt>
+                      <dd class="chain-hash is-first">first entry</dd>
+                    </div>
+                    <div class="chain-field">
+                      <dt>sealed</dt>
+                      <dd class="chain-hash">a91f04c</dd>
+                    </div>
+                  </dl>
+                </li>
+
+                <li class="chain-entry">
+                  <div class="chain-entry-head">
+                    <span class="chain-entry-version">Version 2</span>
+                    <span class="chain-entry-state">
+                      <span
+                        class="landing-lucide-icon"
+                        data-lucide-icon="check"
+                        data-lucide-size="12"
+                        data-lucide-stroke-width="2.5"
+                        aria-hidden="true"
+                      ></span>
+                      Approved
+                    </span>
+                  </div>
+                  <p class="chain-entry-who">
+                    Dr. E. Whitfield &middot; 19 Jun
+                  </p>
+                  <dl class="chain-fields">
+                    <div class="chain-field">
+                      <dt>carries</dt>
+                      <dd class="chain-hash">a91f04c</dd>
+                    </div>
+                    <div class="chain-field">
+                      <dt>sealed</dt>
+                      <dd class="chain-hash">7c3e8b2</dd>
+                    </div>
+                  </dl>
+                </li>
+
+                <li class="chain-entry">
+                  <div class="chain-entry-head">
+                    <span class="chain-entry-version">Version 3</span>
+                    <span class="chain-entry-state">
+                      <span
+                        class="landing-lucide-icon"
+                        data-lucide-icon="check"
+                        data-lucide-size="12"
+                        data-lucide-stroke-width="2.5"
+                        aria-hidden="true"
+                      ></span>
+                      Approved
+                    </span>
+                  </div>
+                  <p class="chain-entry-who">R. Alvarez, RN &middot; 2 Dec</p>
+                  <dl class="chain-fields">
+                    <div class="chain-field">
+                      <dt>carries</dt>
+                      <dd class="chain-hash">7c3e8b2</dd>
+                    </div>
+                    <div class="chain-field">
+                      <dt>sealed</dt>
+                      <dd class="chain-hash">e5d19af</dd>
+                    </div>
+                  </dl>
+                </li>
+              </ol>
+
+              <p class="chain-note">
+                <span
+                  class="landing-lucide-icon"
+                  data-lucide-icon="unlink"
+                  data-lucide-size="16"
+                  data-lucide-stroke-width="1.8"
+                  aria-hidden="true"
+                ></span>
+                <span>
+                  Go back and change one word of version 2 and its fingerprint
+                  is no longer <code>7c3e8b2</code> &mdash; but version 3 still
+                  carries that. A step cannot be removed, re-dated, or slipped
+                  in without breaking every link that follows.
+                </span>
+              </p>
+            </figure>
+
+            <ul class="record-claims reveal">
+              <li class="record-claim">
+                <span class="record-claim-tag">Sealed</span>
+                <p>
+                  The fingerprint is calculated from the version's exact
+                  contents. There is no quiet edit.
+                </p>
+              </li>
+              <li class="record-claim">
+                <span class="record-claim-tag">Linked</span>
+                <p>
+                  Every entry carries the fingerprint of the entry before it, so
+                  the order is part of the record too.
+                </p>
+              </li>
+              <li class="record-claim">
+                <span class="record-claim-tag">Open</span>
+                <p>
+                  Kept as ordinary commits and plain files &mdash; not a private
+                  schema that only we know how to read.
+                </p>
+              </li>
+            </ul>
+
+            <a class="review-link reveal" href="#signup"
+              >Start a record that cannot be quietly edited &rarr;</a
+            >
+          </div>
+        </section>
+
+        <!--
+          BEFORE / AFTER
+
+          One ledger, not two boxes side by side. The pairs are the argument —
+          each line of the shared drive answered on the same row — and reading
+          them across is a shorter trip than cross-referencing two lists.
+
+          The cells are flat children of the grid rather than wrapped in row
+          elements, which is what lets the layout regroup below 900px: `order`
+          collapses the interleaved pairs back into two labelled runs, because
+          alternating complaint/answer down a single column reads as one
+          contradictory list once they are no longer side by side.
+        -->
+        <section class="section-compare">
+          <div class="compare-inner">
+            <div class="compare-header reveal">
+              <h2>The shared drive.<br />Or a record that holds up.</h2>
+              <p>
+                Same policies, same people &mdash; a very different survey week.
+              </p>
+            </div>
+            <div class="ledger">
+              <div class="ledger-cell is-head before reveal">
+                <span class="col-dot" aria-hidden="true"></span>
+                <span>Shared drive, email, and a SharePoint nobody owns</span>
+              </div>
+              <div class="ledger-cell is-head after reveal">
+                <span class="col-dot" aria-hidden="true"></span>
+                <span>With Bindersnap</span>
+              </div>
+
+              <div class="ledger-cell before reveal reveal-d1">
+                <span class="ledger-mark" aria-hidden="true">
+                  <span
+                    class="landing-lucide-icon"
+                    data-lucide-icon="x"
+                    data-lucide-size="16"
+                    data-lucide-stroke-width="1.75"
+                    aria-hidden="true"
+                  ></span>
+                </span>
+                <span
+                  >Three files in the policy folder that all look final</span
+                >
+              </div>
+
+              <div class="ledger-cell after reveal reveal-d1">
+                <span class="ledger-mark" aria-hidden="true">
+                  <span
+                    class="landing-lucide-icon"
+                    data-lucide-icon="check"
+                    data-lucide-size="16"
+                    data-lucide-stroke-width="1.75"
+                    aria-hidden="true"
+                  ></span>
+                </span>
+                <span>One policy, one page, one current approved version</span>
+              </div>
+
+              <div class="ledger-cell before reveal reveal-d2">
+                <span class="ledger-mark" aria-hidden="true">
+                  <span
+                    class="landing-lucide-icon"
+                    data-lucide-icon="x"
+                    data-lucide-size="16"
+                    data-lucide-stroke-width="1.75"
+                    aria-hidden="true"
+                  ></span>
+                </span>
+                <span
+                  >Sign-offs in an inbox, sometimes a former
+                  employee&rsquo;s</span
+                >
+              </div>
+
+              <div class="ledger-cell after reveal reveal-d2">
+                <span class="ledger-mark" aria-hidden="true">
+                  <span
+                    class="landing-lucide-icon"
+                    data-lucide-icon="check"
+                    data-lucide-size="16"
+                    data-lucide-stroke-width="1.75"
+                    aria-hidden="true"
+                  ></span>
+                </span>
+                <span>Every sign-off dated, named, and tied to a version</span>
+              </div>
+
+              <div class="ledger-cell before reveal reveal-d3">
+                <span class="ledger-mark" aria-hidden="true">
+                  <span
+                    class="landing-lucide-icon"
+                    data-lucide-icon="x"
+                    data-lucide-size="16"
+                    data-lucide-stroke-width="1.75"
+                    aria-hidden="true"
+                  ></span>
+                </span>
+                <span>IC_Policy_2026_rev3_FINAL_APPROVED(2).docx</span>
+              </div>
+
+              <div class="ledger-cell after reveal reveal-d3">
+                <span class="ledger-mark" aria-hidden="true">
+                  <span
+                    class="landing-lucide-icon"
+                    data-lucide-icon="check"
+                    data-lucide-size="16"
+                    data-lucide-stroke-width="1.75"
+                    aria-hidden="true"
+                  ></span>
+                </span>
+                <span>Version history instead of filename archaeology</span>
+              </div>
+
+              <div class="ledger-cell before reveal reveal-d3">
+                <span class="ledger-mark" aria-hidden="true">
+                  <span
+                    class="landing-lucide-icon"
+                    data-lucide-icon="x"
+                    data-lucide-size="16"
+                    data-lucide-stroke-width="1.75"
+                    aria-hidden="true"
+                  ></span>
+                </span>
+                <span>Staff working from a copy somebody saved locally</span>
+              </div>
+
+              <div class="ledger-cell after reveal reveal-d3">
+                <span class="ledger-mark" aria-hidden="true">
+                  <span
+                    class="landing-lucide-icon"
+                    data-lucide-icon="check"
+                    data-lucide-size="16"
+                    data-lucide-stroke-width="1.75"
+                    aria-hidden="true"
+                  ></span>
+                </span>
+                <span>Nothing reaches the approved copy but a new version</span>
+              </div>
+
+              <div class="ledger-cell before reveal reveal-d3">
+                <span class="ledger-mark" aria-hidden="true">
+                  <span
+                    class="landing-lucide-icon"
+                    data-lucide-icon="x"
+                    data-lucide-size="16"
+                    data-lucide-stroke-width="1.75"
+                    aria-hidden="true"
+                  ></span>
+                </span>
+                <span>Survey week starts with a weekend of reconstruction</span>
+              </div>
+
+              <div class="ledger-cell after reveal reveal-d3">
+                <span class="ledger-mark" aria-hidden="true">
+                  <span
+                    class="landing-lucide-icon"
+                    data-lucide-icon="check"
+                    data-lucide-size="16"
+                    data-lucide-stroke-width="1.75"
+                    aria-hidden="true"
+                  ></span>
+                </span>
+                <span>Every version and sign-off on one page, on demand</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- REVIEW DISCUSSIONS -->
+        <section class="section-review section-band">
+          <div class="review-inner">
+            <div class="review-header reveal">
+              <div class="eyebrow-tag">The Review</div>
+              <h2>The review happens on the policy.<br />Not in your inbox.</h2>
+              <p>
+                Questions get raised on the version they are about, and the
+                answer stays attached to it. What has to happen before a version
+                reaches the floor is your call &mdash; and once you set it, the
+                system holds the line instead of the person who remembers to.
+              </p>
+            </div>
+
+            <div class="review-strip">
+              <div class="review-point reveal reveal-d1">
+                <div class="review-point-icon">
+                  <span
+                    class="landing-lucide-icon"
+                    data-lucide-icon="users"
+                    data-lucide-size="16"
+                    data-lucide-stroke-width="1.8"
+                    aria-hidden="true"
+                  ></span>
+                </div>
+                <div class="review-point-tag">Threaded</div>
+                <h3>Every question stays with its version</h3>
+                <p>
+                  The Medical Director raises a point, the author replies
+                  underneath, and the whole exchange stays attached to the
+                  version it was raised against. Six months later it still reads
+                  in order.
+                </p>
+              </div>
+
+              <div class="review-point reveal reveal-d2">
+                <div class="review-point-icon">
+                  <span
+                    class="landing-lucide-icon"
+                    data-lucide-icon="check"
+                    data-lucide-size="16"
+                    data-lucide-stroke-width="1.8"
+                    aria-hidden="true"
+                  ></span>
+                </div>
+                <div class="review-point-tag">Enforced</div>
+                <h3>Set the rule once. It holds.</h3>
+                <p>
+                  Require two approvals, or the Medical Director specifically.
+                  Refuse to publish while a question is still open. Clear old
+                  sign-offs whenever a new version arrives. You pick which rules
+                  apply; after that nobody has to remember them.
+                </p>
+              </div>
+
+              <div class="review-point reveal reveal-d3">
+                <div class="review-point-icon">
+                  <span
+                    class="landing-lucide-icon"
+                    data-lucide-icon="shield"
+                    data-lucide-size="16"
+                    data-lucide-stroke-width="1.8"
+                    aria-hidden="true"
+                  ></span>
+                </div>
+                <div class="review-point-tag">Recorded</div>
+                <h3>The publish gate keeps its own history</h3>
+                <p>
+                  The rule that holds a version back while a question is open is
+                  stored as a committed file, not a checkbox in a database. Turn
+                  it on or off and that change is a commit, with a name and a
+                  date on it.
+                </p>
+              </div>
+            </div>
+
+            <a class="review-link reveal" href="#signup"
+              >Set the rules your accreditor asks for &rarr;</a
+            >
+          </div>
+        </section>
+
+        <!--
+          FOUNDER NOTE
+          The page's remaining objection down here is trust, not fit: nothing
+          else on it names a human. Deliberately quiet — no coral, no card
+          shadow — so the CTA below keeps the only emphasis in this region.
+
+          The copy is David's own founding story, written up from how he tells
+          it. Two things about it are deliberate and should survive editing:
+
+            1. His wife is "my wife" — not named, not pictured, and her
+               employer is not identified. She is the reason the product
+               exists, but she did not sign up to be marketing. She gets the
+               final say on this paragraph before launch; if she would rather
+               not be here at all, the story still works in the first person
+               ("the policy system I kept hearing about").
+            2. The incumbent product is described, not named. The complaint is
+               real and specific, but naming a competitor to disparage it on a
+               public page buys a legal argument we have no reason to want.
+
+          Still true of the note: no customer, traction, credential, or
+          HIPAA/BAA claim anywhere in it.
+        -->
+        <section class="section-founder">
+          <div class="founder-eyebrow reveal">A Note From the Founder</div>
+          <div class="founder-inner reveal">
+            <div class="founder-note">
+              <p class="founder-body">
+                My wife came home frustrated with her policy system often enough
+                that I started asking questions. Reviewing a document meant
+                opening it in Word, which not everyone had. Getting one approved
+                meant a meeting, then an email chain, then keeping track of who
+                had signed off on which draft.
+              </p>
+              <p class="founder-body">
+                I build software for a living, and I kept thinking: isn't this
+                just a pull request? A change, the people who reviewed it, and
+                the exact version they approved, all in one record. Engineers
+                have worked this way for decades and stopped noticing it was
+                ever hard. She did not need more software. She needed the thing
+                my industry takes for granted.
+              </p>
+              <p class="founder-body">So I built it for her.</p>
+            </div>
+            <div class="founder-signoff">
+              <img
+                class="founder-portrait"
+                src="../../packages/ui-tokens/img/founder-profile.jpg"
+                width="480"
+                height="640"
+                loading="lazy"
+                decoding="async"
+                alt="David Gray, founder of Bindersnap"
+              />
+              <p class="founder-signature">
+                <span class="founder-name">David Gray</span>
+                <span class="founder-role">Founder, Bindersnap</span>
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- FINAL CTA -->
+        <section class="section-cta" id="signup">
+          <div class="cta-inner reveal">
+            <div class="cta-tag">Get Started</div>
+            <h2>Be ready for the next survey.<br /><em>Starting today.</em></h2>
+            <p>
+              Load the policies you already have, name the people who approve
+              them, and let the record build itself from there. The other
+              systems want a demo call, a quote, and a quarter of
+              implementation. This one wants an afternoon.
+            </p>
+            <div class="cta-form-wrap" id="cta-area">
+              <div class="cta-email-row" id="cta-form">
+                <input
+                  type="email"
+                  id="cta-email"
+                  placeholder="your@company.com"
+                  autocomplete="email"
+                />
+                <button type="button" id="cta-signup-btn">
+                  Create Your Account
+                </button>
+              </div>
+              <p class="form-hint">
+                <span
+                  class="landing-lucide-icon"
+                  data-lucide-icon="clock-3"
+                  data-lucide-size="12"
+                  data-lucide-stroke-width="1.75"
+                  aria-hidden="true"
+                ></span>
+                No demo call, no implementation project &middot; Cancel anytime
+              </p>
+            </div>
+
+            <!--
+              The security facts a first-time buyer checks before handing over
+              a policy manual. They sit beside the form rather than in a
+              section of their own — nobody is persuaded by encryption, but
+              plenty of people look for it before they sign up.
+              TODO: link to a security posture page once one exists.
+            -->
+            <ul class="trust-strip">
+              <li class="trust-item">
+                <span
+                  class="landing-lucide-icon trust-icon"
+                  data-lucide-icon="lock"
+                  data-lucide-size="14"
+                  data-lucide-stroke-width="1.8"
+                  aria-hidden="true"
+                ></span>
+                <strong>Encrypted at rest</strong>
+                <span class="trust-detail">AES-256 storage</span>
+              </li>
+              <li class="trust-item">
+                <span
+                  class="landing-lucide-icon trust-icon"
+                  data-lucide-icon="shield"
+                  data-lucide-size="14"
+                  data-lucide-stroke-width="1.8"
+                  aria-hidden="true"
+                ></span>
+                <strong>Encrypted in transit</strong>
+                <span class="trust-detail">HTTPS, browser to server</span>
+              </li>
+              <li class="trust-item">
+                <span
+                  class="landing-lucide-icon trust-icon"
+                  data-lucide-icon="users"
+                  data-lucide-size="14"
+                  data-lucide-stroke-width="1.8"
+                  aria-hidden="true"
+                ></span>
+                <strong>Named approvers</strong>
+                <span class="trust-detail">Limit who can sign off</span>
+              </li>
+            </ul>
+          </div>
+        </section>
+      </main>
+
+      <!-- FOOTER: the same as every public page (apps/site/chrome.ts) -->
+      <footer class="site-footer">
+        <div class="site-footer-inner">
+          <div class="site-footer-brand">
+            <a class="site-logo" href="/"
+              ><span class="site-logo-mark"
+                ><svg
+                  viewBox="0 0 18 18"
+                  fill="none"
+                  aria-hidden="true"
+                  width="18"
+                  height="18"
+                >
+                  <rect
+                    x="2"
+                    y="1"
+                    width="9"
+                    height="13"
+                    rx="1.5"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                  />
+                  <rect
+                    x="6"
+                    y="4"
+                    width="9"
+                    height="13"
+                    rx="1.5"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                  /></svg></span
+              ><span class="site-logo-name">Bindersnap</span></a
+            >
+            <p>
+              Policy software is
+              <strong
+                >priced for health systems with a compliance department.</strong
+              >
+              You do not have one. That is exactly who we built this for.
+            </p>
+          </div>
+          <nav class="site-footer-columns" aria-label="Footer">
+            <div>
+              <h2>Product</h2>
+              <ul>
+                <li><a href="/pricing">Pricing</a></li>
+                <li><a href="/for">Who it's for</a></li>
+                <li><a href="/help">Help and guides</a></li>
+                <li>
+                  <a href="https://app.bindersnap.com/-/login">Sign in</a>
+                </li>
+                <li>
+                  <a href="https://app.bindersnap.com/-/signup"
+                    >Create an account</a
+                  >
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h2>Resources</h2>
+              <ul>
+                <li><a href="/templates">Policy templates</a></li>
+                <li><a href="/requirements">Requirements, answered</a></li>
+                <li>
+                  <a href="/tools/required-policies-checklist"
+                    >Required policies checklist</a
+                  >
+                </li>
+                <li><a href="/compare">Compare</a></li>
+                <li><a href="/glossary">Glossary</a></li>
+              </ul>
+            </div>
+            <div>
+              <h2>Legal</h2>
+              <ul>
+                <li><a href="/legal/terms">Terms</a></li>
+                <li><a href="/legal/privacy">Privacy</a></li>
+                <li><a href="/legal/security">Security</a></li>
+                <li><a href="/legal/subprocessors">Subprocessors</a></li>
+                <li><a href="/legal/dpa">DPA</a></li>
+              </ul>
+            </div>
+          </nav>
+        </div>
+        <div class="site-footer-bottom">
+          <span>© 2026 Solid Gray LLC</span>
+          <span>For policies and procedures — never patient records</span>
+        </div>
+      </footer>
+    </div>
+
+    <script type="module" src="./landing-inline.ts"></script>
+  </body>
+</html>

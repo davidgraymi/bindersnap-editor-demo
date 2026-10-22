@@ -2,9 +2,9 @@
 
 Monorepo with one unified frontend app and supporting services:
 
-- `apps/app`: GitHub Pages SPA with a pre-rendered landing page and authenticated workspace shell
+- `apps/app`: SPA (static, on Cloudflare) with a pre-rendered landing page and authenticated workspace shell
 - `services/api`: auth/BFF API for the product SPA
-- `services/hocuspocus`: collaboration websocket service
+- `services/hocuspocus`: a collaboration websocket server, not run by any stack (the app has no real-time editing yet)
 
 ## Quick Start
 
@@ -46,7 +46,6 @@ This is the complete environment variable reference used by repo code, scripts, 
 | --------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `STACK_NAME`                            | `bindersnap`                              | `docker-compose.yml`, Playwright global setup/teardown                   | Compose project name, container name prefix, and network name. Change it per worktree to run several stacks side by side.                                                  |
 | `GITEA_PORT`                            | `3000`                                    | `docker-compose.yml`, `tests/seed.ts`, `tests/helpers.ts`                | Gitea HTTP port, published on the host and used inside the compose network.                                                                                                |
-| `HOCUSPOCUS_PORT`                       | `1234`                                    | `services/hocuspocus/server.ts`, compose                                 | Port for the Yjs collaboration websocket server.                                                                                                                           |
 | `API_PROXY_PORT`                        | `8788`                                    | `docker-compose.yml` (`caddy`), `tests/Caddyfile.integration`, tests     | Port for the local Caddy proxy that fronts the API.                                                                                                                        |
 | `APP_PORT`                              | `5173`                                    | `server.ts`, compose, Playwright config, seed script, integration script | Port for the app web server and base URL construction in local/test flows.                                                                                                 |
 | `API_PORT`                              | `8787`                                    | `services/api/server.ts`, compose                                        | Port for the Bun API service. The browser does not use it — it calls whatever `BUN_PUBLIC_API_BASE_URL` was built with (the Caddy proxy port in the local stack).          |
@@ -60,7 +59,7 @@ This is the complete environment variable reference used by repo code, scripts, 
 | `BUN_PUBLIC_GITEA_URL`                  | `http://localhost:3000`                   | `services/api/server.ts`, compose                                        | Optional Gitea URL fallback source for API service config.                                                                                                                 |
 | `VITE_GITEA_URL`                        | `http://localhost:3000`                   | `services/api/server.ts`, smoke tests, integration tests                 | Gitea URL for test clients and optional API fallback source.                                                                                                               |
 | `GITEA_ADMIN_USER`                      | `alice`                                   | seed/tests, bootstrap script                                             | Break-glass admin username for local seeding and one-time service-account bootstrap.                                                                                       |
-| `GITEA_ADMIN_PASS`                      | `dev`                                     | seed/tests, bootstrap script                                             | Password for every seeded local account, and for the one-time service-account bootstrap.                                                                                   |
+| `GITEA_ADMIN_PASS`                      | `dev`                                     | seed/tests, bootstrap script                                             | Password for every seeded local account (`dev` unless set; a worktree does not inherit the main checkout's), and for the one-time service-account bootstrap.               |
 | `GITEA_URL`                             | `http://localhost:3000`                   | `tests/seed.ts`                                                          | Seed script base URL for Gitea API.                                                                                                                                        |
 | `USER_UID`                              | `1000`                                    | `docker-compose.yml` (`gitea`)                                           | Linux UID used by the Gitea container for file ownership.                                                                                                                  |
 | `USER_GID`                              | `1000`                                    | `docker-compose.yml` (`gitea`)                                           | Linux GID used by the Gitea container for file ownership.                                                                                                                  |
@@ -77,7 +76,8 @@ This is the complete environment variable reference used by repo code, scripts, 
 | `BINDERSNAP_APP_ORIGIN`                 | `http://localhost:${APP_PORT}`            | `services/api/server.ts`, compose                                        | Primary allowed browser origin for auth/session API requests. Production should be `https://bindersnap.com`.                                                               |
 | `BINDERSNAP_ALLOWED_ORIGINS`            | none                                      | `services/api/server.ts`                                                 | Comma-separated override for multiple allowed origins.                                                                                                                     |
 | `BINDERSNAP_USER_EMAIL_DOMAIN`          | `users.bindersnap.local`                  | `services/api/server.ts`                                                 | Domain used when creating signup email addresses in Gitea.                                                                                                                 |
-| `BINDERSNAP_GITEA_SERVICE_TOKEN`        | none                                      | `services/api/server.ts`, prod compose                                   | Dedicated Gitea service-account token used by the API for signup, email lookup, and token cleanup.                                                                         |
+| `BINDERSNAP_GITEA_SERVICE_TOKEN`        | none                                      | `services/api/server.ts`, prod compose                                   | The Gitea service account's read-only token, for privileged reads: branch protection, teams, avatars, the email lookup at sign-in.                                         |
+| `BINDERSNAP_GITEA_ADMIN_TOKEN`          | none                                      | `services/api/server.ts`, prod compose                                   | The service account's `write:admin` token, used only for signup, password changes, account deletion and token revocation. Falls back to the service token while unset.     |
 | `BINDERSNAP_SESSION_COOKIE_NAME`        | `bindersnap_session`                      | `services/api/server.ts`                                                 | Session cookie name used by API auth.                                                                                                                                      |
 | `BINDERSNAP_SESSION_TTL_MS`             | `604800000`                               | `services/api/server.ts`                                                 | Server-side expiry for non-remembered sessions in milliseconds.                                                                                                            |
 | `BINDERSNAP_REMEMBER_ME_SESSION_TTL_MS` | `2592000000`                              | `services/api/server.ts`, prod compose                                   | Server-side expiry and persistent cookie lifetime for remembered sessions.                                                                                                 |
@@ -92,14 +92,18 @@ This is the complete environment variable reference used by repo code, scripts, 
 | `STRIPE_SECRET_KEY`                     | none                                      | `services/api/server.ts`, compose, Stripe checkout tests                 | Stripe test-mode secret key used by the API to create checkout and billing portal sessions.                                                                                |
 | `STRIPE_WEBHOOK_SECRET`                 | none                                      | `services/api/server.ts`, compose, Stripe checkout tests                 | Webhook signing secret used to verify `stripe/webhook` events in local dev and tests.                                                                                      |
 | `STRIPE_PRICE_ID`                       | none                                      | `services/api/server.ts`, compose, Stripe checkout tests                 | Subscription price ID used when the API creates Stripe Checkout Sessions.                                                                                                  |
+| `BINDERSNAP_SESSION_SECRET`             | dev key outside production                | `services/api/sessions.ts`, prod compose                                 | Seals each session's Gitea token at rest. Required in production. Generated into SSM by `infra/secrets/put-secrets.sh`.                                                    |
+| `SIGNUP_TURNSTILE_SECRET_KEY`           | none                                      | `services/api/server.ts`, prod compose                                   | The signup form's Turnstile secret. Required in production; unset skips the check. Written to SSM by `infra/edge/put-signup-turnstile-secret.sh`.                          |
+| `ERROR_REPORT_URL`                      | none                                      | `services/api/errorReporter.ts`, prod compose                            | Where the API sends a scrubbed report of each logged error: the feedback Worker's `/errors`. Unset sends nothing.                                                          |
+| `ERROR_REPORT_SECRET`                   | none                                      | `services/api/errorReporter.ts`, prod compose                            | The API's bearer for `/errors`; the Worker holds the same value. Unset sends nothing. SSM leaf `error_report_secret` (`services/feedback/README.md`).                      |
+| `BINDERSNAP_RELEASE`                    | `dev`                                     | `services/api/errorReporter.ts`, prod compose                            | Which build an error report came from; production sets the deployed commit.                                                                                                |
 | `GITEA_SERVICE_TOKEN`                   | none                                      | `docker-compose.prod.yml`, `.env.prod.example`, bootstrap script         | SSM-backed source value that prod compose maps into `BINDERSNAP_GITEA_SERVICE_TOKEN` for the API.                                                                          |
+| `GITEA_ADMIN_TOKEN`                     | none                                      | `docker-compose.prod.yml`, bootstrap script                              | SSM-backed source value that prod compose maps into `BINDERSNAP_GITEA_ADMIN_TOKEN` for the API.                                                                            |
 | `API_TAG`                               | `latest`                                  | `docker-compose.prod.yml`, GitHub Actions deploys                        | API image tag to pull from GHCR; pin to a prior commit SHA for rollback.                                                                                                   |
 | `AWS_REGION`                            | `us-east-1`                               | `docker-compose.prod.yml`, `litestream.yml`, Terraform backups module    | AWS region used by the Litestream container and backup infrastructure.                                                                                                     |
 | `LITESTREAM_S3_BUCKET`                  | none                                      | `docker-compose.prod.yml`, `litestream.yml`, `scripts/restore.sh`        | Required S3 bucket for continuous SQLite replication and restores.                                                                                                         |
 | `PLAYWRIGHT_BASE_URL`                   | `http://localhost:${APP_PORT}`            | Playwright config, integration script                                    | Base URL for integration browser tests.                                                                                                                                    |
 | `VITE_GITEA_TOKEN`                      | none                                      | smoke/integration tests                                                  | Optional pre-existing token for direct Gitea API assertions.                                                                                                               |
-| `BUN_PUBLIC_HOCUSPOCUS_URL`             | `ws://localhost:1234`                     | `docker-compose.yml`                                                     | Websocket URL passed to the app container. Collaboration is not wired into the SPA yet, so no app code reads it.                                                           |
-| `VITE_HOCUSPOCUS_URL`                   | `ws://localhost:1234`                     | `docker-compose.yml`                                                     | Vite-style alias of the above; no app code reads it.                                                                                                                       |
 | `BUN_PUBLIC_GITEA_OAUTH_CLIENT_ID`      | none                                      | `apps/app/` auth flow                                                    | Public OAuth2 client ID for PKCE login — printed by seed script on first `bun run up`.                                                                                     |
 | `BUN_PUBLIC_GITEA_OAUTH_REDIRECT_URI`   | `http://localhost:5173/auth/callback`     | `apps/app/` auth flow                                                    | Redirect URI registered with the Gitea OAuth2 app.                                                                                                                         |
 | `BUN_PUBLIC_PANDOC_SERVICE_URL`         | `http://localhost:3001`                   | `apps/app/` import/export                                                | Base URL for the Pandoc conversion service.                                                                                                                                |
@@ -146,7 +150,6 @@ APP_PORT=5273
 API_PORT=8887
 API_PROXY_PORT=8888
 GITEA_PORT=3100
-HOCUSPOCUS_PORT=1334
 ```
 
 `STACK_NAME` sets the Compose project name, the container name prefix, the
@@ -159,10 +162,10 @@ See [`tests/README.md`](tests/README.md) for full workflow details.
 
 Two surfaces, both triggered by a push to `main`:
 
-| What                                      | Where                     | Workflow                                                     |
-| ----------------------------------------- | ------------------------- | ------------------------------------------------------------ |
-| SPA                                       | GitHub Pages              | [`pages.yml`](.github/workflows/pages.yml)                   |
-| API, Gitea, Hocuspocus, Caddy, Litestream | One EC2 host, via Compose | [`deploy-pyinfra.yml`](.github/workflows/deploy-pyinfra.yml) |
+| What                          | Where                      | Workflow                                                     |
+| ----------------------------- | -------------------------- | ------------------------------------------------------------ |
+| Public site + SPA             | Cloudflare Worker (static) | [`static-site.yml`](.github/workflows/static-site.yml)       |
+| API, Gitea, Caddy, Litestream | One EC2 host, via Compose  | [`deploy-pyinfra.yml`](.github/workflows/deploy-pyinfra.yml) |
 
 The backend is a single EC2 instance, not a serverless stack. Its entire
 configuration lives in [`deploy/`](deploy/README.md) as a
@@ -202,12 +205,26 @@ as the schema for the generated file only. The committed example keeps
 placeholders for the SSM-backed values and documents the non-secret runtime
 overrides that can still be passed at deploy time.
 
-The production API now expects `GITEA_SERVICE_TOKEN` in that generated env file.
-On the first deploy against a fresh host, the pyinfra run detects the
-placeholder value, starts Gitea with the first-boot admin credentials from SSM,
-runs `scripts/bootstrap-gitea-service-account.ts` in a throwaway Bun container,
-writes the real token back to `/bindersnap/prod/gitea_service_token`, refreshes
-`/opt/bindersnap/.env.prod`, and only then starts the API.
+The production API expects two tokens for the `bindersnap-service` account in
+that generated env file:
+
+- `GITEA_SERVICE_TOKEN` — read scopes only. Every privileged read uses it, on
+  nearly every request.
+- `GITEA_ADMIN_TOKEN` — `write:admin` alone, for signup, password changes,
+  account deletion and token revocation.
+
+The service account is a Gitea site admin, so scopes are what keep the hot
+read paths from holding root-equivalent power. When either SSM value is the
+bootstrap placeholder, the pyinfra run starts Gitea with the first-boot admin
+credentials from SSM, runs `scripts/bootstrap-gitea-service-account.ts` in a
+throwaway Bun container to mint **both**, writes them back to
+`/bindersnap/prod/gitea_service_token` and `/bindersnap/prod/gitea_admin_token`,
+refreshes `/opt/bindersnap/.env.prod`, and only then starts the API.
+
+A host that predates the split has one token with both scope sets. Applying the
+secrets Terraform creates `gitea_admin_token` as a placeholder; the next deploy
+then re-mints the service token read-only and mints the admin token. Until that
+deploy, the API uses the one token for both.
 
 To support that flow, set these secrets in `infra/secrets/terraform.tfvars`
 before `infra/apply-all.sh apply`:
@@ -228,9 +245,10 @@ bun scripts/bootstrap-gitea-service-account.ts
 ```
 
 The bootstrap script uses `GITEA_ADMIN_USER` and `GITEA_ADMIN_PASS` only long
-enough to ensure the `bindersnap-service` account exists, grant admin, mint a
-`write:admin` PAT, and write it to `/bindersnap/prod/gitea_service_token`.
-After the token is real, the env render stops writing those admin
+enough to ensure the `bindersnap-service` account exists, grant admin, mint the
+read-only and `write:admin` PATs, and write them to
+`/bindersnap/prod/gitea_service_token` and `/bindersnap/prod/gitea_admin_token`.
+After both tokens are real, the env render stops writing those admin
 credentials into `/opt/bindersnap/.env.prod`, so the steady-state compose stack
 does not keep them in its runtime env file.
 

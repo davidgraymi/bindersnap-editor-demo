@@ -1,0 +1,292 @@
+/**
+ * What the binder's document page shows, decided away from the rendering.
+ *
+ * ADR 0004 made a document a file at a path inside a binder, so everything the
+ * old per-document page derived from `owner/repo` now comes from a path and a
+ * set of version tags. Kept out of the component so the wording of a version,
+ * a trail, or an address is settled in one place and can be tested without
+ * rendering anything.
+ */
+
+import type {
+  DocumentVersion,
+  WorkspaceDocumentEntry,
+  WorkspaceDocumentState,
+} from "../../packages/api-schema/schemas/workspaces";
+import { parseDocumentFilename } from "../../packages/utils/documentPath";
+import { formatDocumentName } from "./documentDisplay";
+
+/** One step of the trail down to the document, inside its binder. */
+export interface BinderCrumb {
+  label: string;
+  /** Whether this step is the document itself rather than a folder above it. */
+  isDocument: boolean;
+}
+
+/**
+ * `nursing / Hand Hygiene` — where in the binder this document is filed.
+ *
+ * The organization and the binder are not steps here: the binder's own header
+ * is above this, naming both, and repeating them would be the same two words
+ * twice on one screen. What the shell cannot say is which folder you are in.
+ *
+ * Folders are steps rather than one joined label because a folder is a real
+ * directory a customer made to find things in. They carry no link yet — they
+ * have no page of their own, and a link that goes nowhere is worse than plain
+ * text.
+ */
+export function buildDocumentCrumbs(
+  document: Pick<WorkspaceDocumentEntry, "folder" | "name">,
+): BinderCrumb[] {
+  const folders = document.folder === "" ? [] : document.folder.split("/");
+
+  return [
+    ...folders.map((segment) => ({ label: segment, isDocument: false })),
+    { label: formatDocumentName(document.name), isDocument: true },
+  ];
+}
+
+/**
+ * Which git ref the page is reading, given the version asked for in the URL.
+ *
+ * `main` is the version on record rather than a tag, deliberately: it is what
+ * a reader wants by default, and it stays right when a new version is
+ * published while the page is open. An older version is read at its own tag,
+ * which is the evidence rather than a copy of it.
+ */
+export function resolveDocumentRef(params: {
+  versions: DocumentVersion[];
+  /** The version the URL asks for, or null for the one on record. */
+  requestedVersion: number | null;
+  /**
+   * Where the document's file is when nothing is published: the change's own
+   * branch, from the server. `main` has nothing to give a proposed document,
+   * so without this the page would render "not found" over a file that is
+   * right there in the change somebody just opened.
+   */
+  recordRef?: string;
+}): { ref: string; version: DocumentVersion | null; missing: boolean } {
+  const { versions, requestedVersion, recordRef = "main" } = params;
+  const latest = versions[0] ?? null;
+
+  if (requestedVersion === null || requestedVersion === latest?.version) {
+    return { ref: recordRef, version: latest, missing: false };
+  }
+
+  const asked = versions.find((entry) => entry.version === requestedVersion);
+  if (!asked) {
+    return { ref: recordRef, version: latest, missing: true };
+  }
+
+  return { ref: asked.tag, version: asked, missing: false };
+}
+
+/**
+ * "Version 4 on record", or what is true of it so far.
+ *
+ * A document with no published version is not broken — it is one somebody has
+ * uploaded and nobody has approved yet, which is the ordinary state of every
+ * document for a while.
+ */
+export function describeVersionState(
+  latestVersion: DocumentVersion | null,
+  state: WorkspaceDocumentState = "published",
+): string {
+  if (latestVersion) return `Version ${latestVersion.version} on record`;
+  // A document that has never reached `main` is waiting on a decision, not
+  // missing one. "No published version" reads like a fault; this does not.
+  return state === "proposed" ? "In review" : "No published version yet";
+}
+
+/**
+ * The file name a download should land under: `hand-hygiene.pdf`.
+ *
+ * The name and the extension, with the identity segment left out. It is in the
+ * repository because a document has to be recognisable across a rename (ADR
+ * 0005); it has no business in somebody's Downloads folder, where it would be
+ * 26 characters of noise in the middle of a filename they have to read.
+ */
+export function downloadFileName(document: WorkspaceDocumentEntry): string {
+  const lastSlash = document.path.lastIndexOf("/");
+  const filename =
+    lastSlash === -1 ? document.path : document.path.slice(lastSlash + 1);
+
+  const { name, extension } = parseDocumentFilename(filename);
+  return extension === "" ? name : `${name}.${extension}`;
+}
+
+/**
+ * Which version the address bar is asking for, or null for the record.
+ *
+ * The version rides in the query rather than in the path because the path is
+ * already the document — a `/version/2` suffix would be indistinguishable from
+ * a policy filed in a folder called `version`. It is in the URL at all because
+ * an earlier version is a thing people link to, quote in a ticket, and send to
+ * a surveyor.
+ */
+export function parseRequestedVersion(search: string): number | null {
+  return parsePositiveIntParam(search, "version");
+}
+
+/**
+ * One positive whole number out of the query string, or null.
+ *
+ * Shared with the change page, which reads `?change=` the same way and for the
+ * same reason. Anything that is not a counting number is treated as absent
+ * rather than as an error: a mangled link should show the page, not a fault.
+ */
+export function parsePositiveIntParam(
+  search: string,
+  key: string,
+): number | null {
+  const raw = new URLSearchParams(search).get(key);
+  if (raw === null) return null;
+
+  const value = Number(raw);
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+/**
+ * `/{org}/{binder}/-/blob/{ref}/{path}` — the file at the branch it is read
+ * on, `main` when that is the record. The version rides in the query only
+ * when one is being read.
+ */
+export function buildDocumentUrl(params: {
+  org: string;
+  binder: string;
+  documentPath: string;
+  version: number | null;
+  /**
+   * Read it on a change request's branch.
+   *
+   * A change request is a branch, and a document on it has an address. Never
+   * with `version`: one asks for a version on the record and the other for
+   * what a change proposes, and an address claiming both is a question with
+   * no answer.
+   */
+  change?: number | null;
+  /**
+   * The branch to read it on.
+   *
+   * **A file lives on a branch, and that is the address it should have.** A
+   * change request is one thing that happens to a branch; the branch is the
+   * thing the file is on, which is why every code host addresses a file by
+   * ref. `change` rides along when there is one, so a reader who arrived from
+   * a change has the way back — it says where you came from, not what to read.
+   */
+  ref?: string | null;
+  /**
+   * Opened from the tree while editing, so it is read in your draft — where a
+   * policy renamed a moment ago actually has the name it was clicked under.
+   */
+  edit?: boolean;
+  /**
+   * Read it in one of your drafts: the binder in edit mode, on that draft,
+   * where Edit carries on in it. Wins over everything else, because a draft is
+   * a place you work rather than a version you look at.
+   */
+  draft?: string | null;
+}): string {
+  const {
+    org,
+    binder,
+    documentPath,
+    version,
+    change = null,
+    ref = null,
+    edit = false,
+    draft = null,
+  } = params;
+  const base = `/${org}/${binder}/-/blob/${encodeURIComponent(
+    ref ?? "main",
+  )}/${documentPath}`;
+  if (draft) {
+    return `${base}?${new URLSearchParams({ edit: "1", draft }).toString()}`;
+  }
+
+  const query = new URLSearchParams();
+  if (edit) query.set("edit", "1");
+  // Only with no branch named: then it is how the server finds the branch. A
+  // branch named is the whole address — nothing on it is a way back.
+  if (!ref && change !== null) query.set("change", String(change));
+  // A version is about the record, so it never travels with a branch: one
+  // asks for what was published and the other for what is proposed, and an
+  // address claiming both is a question with no answer.
+  if (!ref && change === null && version !== null) {
+    query.set("version", String(version));
+  }
+
+  const search = query.toString();
+  return search === "" ? base : `${base}?${search}`;
+}
+
+/**
+ * Whether a document is one the editor writes — its file is the editor's JSON.
+ *
+ * By extension, which is what the file is on disk: a policy written here is
+ * `hand-hygiene.<uid>.json`, and a Word file or a PDF is edited in the program
+ * that made it. The editor still checks the contents when it opens one.
+ */
+export function isEditorDocumentFile(path: string): boolean {
+  return /\.json$/i.test(path);
+}
+
+/**
+ * Which policy Edit on a binder opens in the editor.
+ *
+ * **The one you were last writing**, from the draft's own acts — Edit on a
+ * binder you were halfway through a policy in picks up there, as Word opens on
+ * the file you had last. Otherwise the first the binder lists: at its root
+ * before inside a folder, then by name. Null when nothing in the binder is
+ * one the editor writes — all Word files and PDFs — and the tree is the only
+ * place to be.
+ */
+export function pickPolicyToWrite(
+  documents: readonly { path: string; slugPath: string }[],
+  acts: readonly { at: string | null; paths: readonly string[] }[],
+): string | null {
+  const writable = documents.filter((entry) =>
+    isEditorDocumentFile(entry.path),
+  );
+  const newestFirst = [...acts].sort(
+    (a, b) => Date.parse(b.at ?? "") - Date.parse(a.at ?? "") || 0,
+  );
+  for (const act of newestFirst) {
+    for (const path of act.paths) {
+      const hit = writable.find((entry) => entry.path === path);
+      if (hit) return hit.slugPath;
+    }
+  }
+  const depth = (slugPath: string) => slugPath.split("/").length;
+  const first = [...writable].sort(
+    (a, b) =>
+      depth(a.slugPath) - depth(b.slugPath) ||
+      a.slugPath.localeCompare(b.slugPath),
+  )[0];
+  return first?.slugPath ?? null;
+}
+
+/**
+ * A document open in the editor: `/{org}/{binder}/-/blob/main/{path}?edit=write&draft=…`.
+ *
+ * The document's own address, in edit mode, naming the draft the editor saves
+ * into — so a reload lands back in the same words in the same draft, and the
+ * way out is the address without `edit`.
+ */
+export function buildDocumentEditUrl(params: {
+  org: string;
+  binder: string;
+  documentPath: string;
+  draft: string | null;
+  /**
+   * An open change request to save into instead of a draft: the author
+   * answering a reviewer, in the words under review. Wins over `draft`.
+   */
+  change?: number | null;
+}): string {
+  const { org, binder, documentPath, draft, change = null } = params;
+  const query = new URLSearchParams({ edit: "write" });
+  if (change !== null) query.set("change", String(change));
+  else if (draft) query.set("draft", draft);
+  return `${buildDocumentUrl({ org, binder, documentPath, version: null })}?${query.toString()}`;
+}

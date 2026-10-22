@@ -1,4 +1,5 @@
-FROM oven/bun:1 AS builder
+# Pinned to .bun-version by digest; bump together.
+FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS builder
 WORKDIR /app
 COPY package.json bun.lock ./
 COPY services/api ./services/api
@@ -14,7 +15,7 @@ COPY packages/utils ./packages/utils
 COPY packages/api-schema/schemas ./packages/api-schema/schemas
 RUN bun install --frozen-lockfile --production
 
-FROM oven/bun:1-slim
+FROM oven/bun:1.3.14-slim@sha256:d56a2534ffd262e92c12fd3249d3924d296d97086da773f821d7d0477435ea04
 
 ENV PORT=8787
 

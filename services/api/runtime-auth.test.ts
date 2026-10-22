@@ -5,6 +5,10 @@ import { initializeConfig } from "./config";
 
 const configSource = readFileSync("services/api/config.ts", "utf8");
 const serverSource = readFileSync("services/api/server.ts", "utf8");
+const devTokenSource = readFileSync(
+  "services/api/dev-service-token.ts",
+  "utf8",
+);
 
 describe("API runtime Gitea auth", () => {
   test("uses the dedicated service token for production Gitea calls", () => {
@@ -12,7 +16,11 @@ describe("API runtime Gitea auth", () => {
     // All privileged call sites must go through the wrapper, not directly to the
     // service-token helper, so the dev fallback is applied consistently.
     expect(serverSource).toContain("buildGiteaPrivilegedHeaders");
-    expect(serverSource).toContain("config.giteaServiceToken");
+    // The configured token wins; a dev stack's self-minted one is only ever a
+    // stand-in for it, and never minted in production.
+    expect(serverSource).toContain("serviceToken()");
+    expect(devTokenSource).toContain("config.giteaServiceToken || minted");
+    expect(devTokenSource).toContain("config.isProduction");
   });
 
   test("admin credentials are guarded by a non-production check", () => {

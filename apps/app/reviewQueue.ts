@@ -1,0 +1,250 @@
+/**
+ * Every change in flight, across every binder, in one list.
+ *
+ * Home answers "what is waiting on me" and answers it well, but it is a to-do
+ * list: it drops the changes that are moving without the reader, it cannot be
+ * sorted or filtered, and it shows a fixed handful. Until this page existed the
+ * only way to see a change was to remember which binder it was in and open
+ * that binder's own tab, which is a question nobody arrives with.
+ *
+ * The queue is the other half. Same data, no dropping, four counters that are
+ * also filters.
+ *
+ * **Where the rows come from.** `GET /api/app/home/changes` already returns
+ * every open change on every binder the reader is involved in — Home filters
+ * that payload down to two sections rather than the server sending a narrower
+ * one. So this needs no new endpoint, and cannot disagree with Home about the
+ * state of a change, because there is one source.
+ *
+ * **What that scoping does and does not cover.** "Involved in" is the unit: a
+ * binder reaches this list once the reader has a change of their own in it, is
+ * a requested reviewer on one, or owns the document. A binder they can see but
+ * have never been part of does not appear. That is the right shape for a review
+ * queue — this is the work that concerns you, not a feed of the organization —
+ * but it is a real limit, and the day the product wants "every change I have
+ * permission to see" it needs a server-side search rather than a wider filter
+ * here.
+ */
+
+import type { HomeOpenDocument } from "./api";
+import {
+  describeChangeStanding,
+  formatDocumentName,
+  parseChangeTitle,
+  type ChangeStanding,
+} from "./documentDisplay";
+import type { ChangeStandingTone } from "./changeRow";
+import { describeChangeMeta, describeChangeStandingWord } from "./changeRow";
+
+/**
+ * Where a change stands. Mutually exclusive, and between them they cover every
+ * open change — which is what lets the counters be read as a breakdown.
+ */
+export type QueueStatus = "blocked" | "ready" | "in_review";
+
+export interface QueueRow {
+  key: string;
+  owner: string;
+  repo: string;
+  number: number;
+  /** What the change is called, as its submitter wrote it. */
+  title: string;
+  /** The binder it is filed in — "Clinical". */
+  binderName: string;
+  /**
+   * "#4 · Alice opened 2 hours ago" — the line under the title.
+   *
+   * The document it touches is not on it: a change can touch three, and
+   * naming one of them is a claim about the other two.
+   */
+  meta: string;
+  status: QueueStatus;
+  /** Where it stands, in one word. */
+  standing: string;
+  tone: ChangeStandingTone;
+  /**
+   * A decision of the reader's is outstanding. Cuts across `status` rather
+   * than being one of its values: a change can be both blocked and waiting on
+   * you, and hiding either fact would be the wrong one to hide.
+   */
+  waitingOnYou: boolean;
+  /**
+   * How many comments are on it — the count Home and a binder's own list put
+   * beside the same change. A row that showed it in two lists and not the
+   * third read as a change nobody had discussed.
+   */
+  commentCount: number;
+  /** Sort key. Not rendered. */
+  movedAt: number;
+}
+
+/** The filters, in the order they appear across the top of the page. */
+export const QUEUE_FILTERS = [
+  "waiting",
+  "in_review",
+  "ready",
+  "blocked",
+] as const;
+export type QueueFilter = (typeof QUEUE_FILTERS)[number] | "all";
+
+export const QUEUE_FILTER_LABELS: Record<QueueFilter, string> = {
+  all: "All changes",
+  waiting: "Waiting on you",
+  in_review: "In review",
+  ready: "Ready to publish",
+  blocked: "Blocked",
+};
+
+function toTime(timestamp: string | null | undefined): number {
+  if (!timestamp) return 0;
+  const parsed = new Date(timestamp).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+/**
+ * Is a decision of this reader's outstanding?
+ *
+ * Two ways for that to be true, and they are different questions. Either they
+ * are a requested reviewer who has not answered — or every approval is in and
+ * they are the one who can publish it, which is the submitter or the person
+ * who owns the document.
+ */
+function isWaitingOnReader(
+  document: HomeOpenDocument,
+  change: HomeOpenDocument["pendingPRs"][number],
+  username: string,
+  status: QueueStatus,
+): boolean {
+  const login = username.toLowerCase();
+
+  // Asked and not yet answered is waiting on them whatever the status says:
+  // a binder that needs no approvals is "ready" with a request still open.
+  const asked = change.reviewers.some(
+    (reviewer) =>
+      reviewer.login.toLowerCase() === login && reviewer.status === "awaiting",
+  );
+  if (asked) return true;
+
+  if (status === "ready") {
+    const isMine = change.user?.login?.toLowerCase() === login;
+    const ownsDocument = document.repo.owner.login.toLowerCase() === login;
+    return isMine || ownsDocument;
+  }
+
+  return false;
+}
+
+function statusFromStanding(standing: ChangeStanding | null): QueueStatus {
+  if (!standing) return "in_review";
+  if (standing.tone === "blocked") return "blocked";
+  if (standing.tone === "ready") return "ready";
+  return "in_review";
+}
+
+/** Every open change the reader is part of, most recently moved first. */
+export function buildQueueRows(
+  documents: HomeOpenDocument[],
+  username: string,
+  now: number = Date.now(),
+): QueueRow[] {
+  const rows: QueueRow[] = [];
+
+  for (const document of documents) {
+    for (const change of document.pendingPRs) {
+      // One vocabulary for where a change stands, shared with the binder's own
+      // change list. "Carol Mendes asked for changes" beats "Blocked".
+      const standing = describeChangeStanding({
+        open: true,
+        approvalCount: change.approvalCount,
+        requiredApprovals: change.requiredApprovals,
+        reviewers: change.reviewers,
+        isApproved: change.isApproved,
+      });
+      const status = statusFromStanding(standing);
+      const movedAt = toTime(
+        change.updated_at ?? change.created_at ?? change.created,
+      );
+
+      rows.push({
+        key: `${document.repo.owner.login}/${document.repo.name}#${change.number}`,
+        owner: document.repo.owner.login,
+        repo: document.repo.name,
+        number: change.number,
+        title: parseChangeTitle(change.body, change.user?.login ?? ""),
+        binderName: formatDocumentName(document.repo.name),
+        meta: describeChangeMeta(
+          {
+            number: change.number,
+            submittedBy: change.user?.login ?? "",
+            // Your own change says "You", as "you approved" does: your name
+            // on every row of your own work is noise.
+            submittedByName:
+              change.user?.login === username ? "You" : change.user?.full_name,
+            submittedAt: change.created_at ?? change.created ?? "",
+            updatedAt: change.updated_at ?? undefined,
+            approvalCount: change.approvalCount,
+            requiredApprovals: change.requiredApprovals,
+          },
+          now,
+        ),
+        status,
+        ...describeChangeStandingWord({
+          number: change.number,
+          submittedBy: change.user?.login ?? "",
+          submittedAt: change.created_at ?? change.created ?? "",
+          approvalCount: change.approvalCount,
+          requiredApprovals: change.requiredApprovals,
+          isRejected: standing?.tone === "blocked",
+          isApproved: change.isApproved,
+        }),
+        waitingOnYou: isWaitingOnReader(document, change, username, status),
+        // Gitea's own count on the pull request, passed through as Home reads it.
+        commentCount: (change as { comments?: number }).comments ?? 0,
+        movedAt,
+      });
+    }
+  }
+
+  return rows.sort((a, b) => b.movedAt - a.movedAt);
+}
+
+/** How many rows each filter would show. */
+export function countQueueRows(rows: QueueRow[]): Record<QueueFilter, number> {
+  return {
+    all: rows.length,
+    waiting: rows.filter((row) => row.waitingOnYou).length,
+    in_review: rows.filter((row) => row.status === "in_review").length,
+    ready: rows.filter((row) => row.status === "ready").length,
+    blocked: rows.filter((row) => row.status === "blocked").length,
+  };
+}
+
+export function filterQueueRows(
+  rows: QueueRow[],
+  filter: QueueFilter,
+): QueueRow[] {
+  if (filter === "all") return rows;
+  if (filter === "waiting") return rows.filter((row) => row.waitingOnYou);
+  return rows.filter((row) => row.status === filter);
+}
+
+/** The sentence under the page title. */
+export function describeQueue(counts: Record<QueueFilter, number>): string {
+  if (counts.all === 0) return "Nothing is in flight right now.";
+
+  const changes = counts.all === 1 ? "1 change" : `${counts.all} changes`;
+  if (counts.waiting === 0) {
+    return `${changes} in flight. None of them is waiting on you.`;
+  }
+  return `${changes} in flight · ${counts.waiting} waiting on you.`;
+}
+
+/** Which filter a page should open on, given what is in the queue. */
+export function initialQueueFilter(
+  counts: Record<QueueFilter, number>,
+): QueueFilter {
+  // Land on the reader's own work when there is any — it is why they came —
+  // and on everything when there is not, because an empty list under a filter
+  // reads as an empty product.
+  return counts.waiting > 0 ? "waiting" : "all";
+}

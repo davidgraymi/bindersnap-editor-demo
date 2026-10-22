@@ -8,7 +8,6 @@ import type { SearchDocuments200DocumentsItem } from './searchDocuments200Docume
 
 export type SearchDocuments200 = {
   documents: SearchDocuments200DocumentsItem[];
-  page: number;
   limit: number;
   hasMore: boolean;
 };

@@ -1,0 +1,36 @@
+// The uptime check: every minute, request the API's /healthz through
+// Cloudflare and email once when it stops answering and once when it is back.
+// ADR 0006 is why this is a Worker, and why it alone may keep a KV key.
+// `.github/workflows/uptime-worker.yml` deploys it on every push to `main`
+// that touches it; nothing else does.
+//
+// Secret, set once by hand and never in this file (see README.md):
+//   ALERT_TO — a verified Email Routing destination address
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "bindersnap-uptime",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-09-01",
+  "vars": {
+    "HEALTHZ_URL": "https://api.bindersnap.com/healthz",
+    // Any address on bindersnap.com sends; Email Routing is on for the zone
+    // (infra/edge). Replies land in the catch-all.
+    "ALERT_FROM": "uptime@bindersnap.com",
+  },
+  "triggers": { "crons": ["* * * * *"] },
+  // The last result, one key. No id: wrangler creates the namespace
+  // (`bindersnap-uptime-state`) on the first deploy and reuses it after.
+  "kv_namespaces": [{ "binding": "STATE" }],
+  // Email Routing only delivers to verified destination addresses, so the
+  // binding can reach nobody else. ALERT_TO picks which one.
+  "send_email": [
+    {
+      "name": "ALERT_EMAIL",
+      "allowed_sender_addresses": ["uptime@bindersnap.com"],
+    },
+  ],
+  "observability": { "enabled": true },
+  // Nothing calls it: no route, no workers.dev address.
+  "workers_dev": false,
+  "preview_urls": false,
+}

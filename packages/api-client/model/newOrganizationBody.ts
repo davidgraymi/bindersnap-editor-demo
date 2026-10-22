@@ -8,4 +8,6 @@
 export interface NewOrganizationBody {
   /** @minLength 1 */
   name: string;
+  /** @minLength 1 */
+  acceptedTerms: string;
 }

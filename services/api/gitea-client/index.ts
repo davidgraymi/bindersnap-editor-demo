@@ -2,12 +2,14 @@ export * from "./client";
 export * from "./auth";
 export * from "./discussions";
 export * from "./documents";
+export * from "./drafts";
 export * from "./orgs";
 export * from "./pullRequests";
 export * from "./reactions";
-export * from "./reviewSettings";
 export * from "./repos";
+export * from "./signOff";
 export * from "./uploads";
+export * from "./usage";
 export * from "./workspaces";
 
 // Re-export generated types for consumers that need raw Gitea API types

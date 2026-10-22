@@ -18,4 +18,5 @@ export type DocumentPermissionsPayloadBranchProtection = {
   mergeWhitelistTeams: string[];
   blockOnRejectedReviews: boolean;
   dismissStaleApprovals: boolean;
+  enablePush: boolean;
 } | null;

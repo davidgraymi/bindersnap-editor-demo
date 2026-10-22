@@ -11,6 +11,8 @@
  * Default: "info" in production (NODE_ENV=production), "debug" otherwise.
  */
 
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import { config, type LogLevel } from "./config";
 
 const LEVEL_RANK: Record<LogLevel, number> = {
@@ -24,6 +26,22 @@ const activeLevelRank: number = LEVEL_RANK[config.logLevel];
 
 export type LogMeta = Record<string, unknown>;
 
+/**
+ * Fields every line logged inside one request carries — its `requestId`.
+ *
+ * The API returns the same ID as `X-Request-Id`, and the SPA puts the IDs of
+ * recent calls into a feedback report. A report that says "request 3f2a…
+ * failed" finds its log lines with one CloudWatch filter, including the lines
+ * a handler logged deep inside, which is why this is carried by
+ * `AsyncLocalStorage` and not passed to each call.
+ */
+const context = new AsyncLocalStorage<LogMeta>();
+
+/** Run `fn` so that every line it logs carries `fields`. */
+export function withLogContext<T>(fields: LogMeta, fn: () => T): T {
+  return context.run({ ...context.getStore(), ...fields }, fn);
+}
+
 function emit(level: LogLevel, message: string, meta?: LogMeta): void {
   if (LEVEL_RANK[level] < activeLevelRank) {
     return;
@@ -33,6 +51,7 @@ function emit(level: LogLevel, message: string, meta?: LogMeta): void {
     timestamp: new Date().toISOString(),
     level,
     message,
+    ...context.getStore(),
     ...meta,
   };
 
@@ -40,6 +59,32 @@ function emit(level: LogLevel, message: string, meta?: LogMeta): void {
   // We keep everything on stdout so a single log stream is captured by Docker /
   // CloudWatch without mixing channels.
   process.stdout.write(JSON.stringify(entry) + "\n");
+}
+
+/**
+ * Hears every `error` line, with the request's context, after it is written.
+ * The error reporter (`errorReporter.ts`) is the only listener.
+ */
+export type ErrorListener = (message: string, meta: LogMeta) => void;
+
+let errorListener: ErrorListener | null = null;
+let inListener = false;
+
+export function setErrorListener(listener: ErrorListener | null): void {
+  errorListener = listener;
+}
+
+/** A listener that throws, or logs an error itself, is not heard again. */
+function tellErrorListener(message: string, meta?: LogMeta): void {
+  if (!errorListener || inListener) return;
+  inListener = true;
+  try {
+    errorListener(message, { ...context.getStore(), ...meta });
+  } catch {
+    // Reporting an error must never become one.
+  } finally {
+    inListener = false;
+  }
 }
 
 export const logger = {
@@ -57,5 +102,6 @@ export const logger = {
 
   error(message: string, meta?: LogMeta): void {
     emit("error", message, meta);
+    tellErrorListener(message, meta);
   },
 };

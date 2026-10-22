@@ -377,3 +377,37 @@ test("grantTeamOnRepo and addTeamMember address the right Gitea routes", async (
   expect(mockPut.mock.calls[0]?.[0]).toBe("/teams/{id}/repos/{org}/{repo}");
   expect(mockPut.mock.calls[1]?.[0]).toBe("/teams/{id}/members/{username}");
 });
+
+test("listBillableSeats counts a team past Gitea's 50-per-page ceiling", async () => {
+  // Gitea answers `limit=100` with 50. Before every page was read, a team of
+  // 60 authors was billed as 50.
+  const authors = Array.from({ length: 60 }, (_, index) =>
+    user(`author-${String(index).padStart(2, "0")}`, index + 10),
+  );
+
+  const { client } = createMockClient({
+    GET: {
+      "/orgs/{org}/teams": (): Team[] => [
+        {
+          id: 3,
+          name: "clinical-policies-authors",
+          permission: "write",
+          units_map: { "repo.code": "write" },
+        },
+      ],
+      "/teams/{id}/members": (init: {
+        params: { query: { page: number; limit: number } };
+      }) => {
+        const { page, limit } = init.params.query;
+        return authors.slice(
+          (page - 1) * Math.min(limit, 50),
+          page * Math.min(limit, 50),
+        );
+      },
+      "/teams/{id}/repos": () => [{ id: 1, name: "clinical-policies" }],
+    },
+  });
+
+  const { countBillableSeats } = await import("./orgs");
+  expect(await countBillableSeats({ client, org: "mercy-health" })).toBe(60);
+});

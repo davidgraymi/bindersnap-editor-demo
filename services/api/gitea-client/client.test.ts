@@ -68,3 +68,71 @@ test("toGiteaApiError extracts message from various error shapes", async () => {
   const err4 = toGiteaApiError(503, { unexpected: true });
   expect(err4.message).toBe("Gitea request failed.");
 });
+
+test("readAllPages reads 50 at a time until a short page", async () => {
+  const { readAllPages } = await import("./client");
+  const rows = Array.from({ length: 120 }, (_, index) => index);
+  const asked: Array<{ page: number; limit: number }> = [];
+
+  const all = await readAllPages(async (query) => {
+    asked.push(query);
+    return rows.slice((query.page - 1) * query.limit, query.page * query.limit);
+  });
+
+  expect(all).toEqual(rows);
+  expect(asked).toEqual([
+    { page: 1, limit: 50 },
+    { page: 2, limit: 50 },
+    { page: 3, limit: 50 },
+  ]);
+});
+
+test("readAllPages stops at maxPages when Gitea ignores page", async () => {
+  const { readAllPages } = await import("./client");
+  let calls = 0;
+
+  // A full page every time, as a Gitea that ignored `page` would answer.
+  const all = await readAllPages(
+    async () => {
+      calls += 1;
+      return Array.from({ length: 50 }, () => 0);
+    },
+    { maxPages: 3 },
+  );
+
+  expect(calls).toBe(3);
+  expect(all).toHaveLength(150);
+});
+
+test("readAllPages reads one page alone, then the rest in waves", async () => {
+  const { readAllPages } = await import("./client");
+
+  const short = Array.from({ length: 12 }, (_, index) => index);
+  let calls = 0;
+  const one = await readAllPages(
+    async () => {
+      calls += 1;
+      return short;
+    },
+    { parallel: 3 },
+  );
+  // A list that fits on one page costs one call, however wide the waves.
+  expect(one).toEqual(short);
+  expect(calls).toBe(1);
+
+  const rows = Array.from({ length: 180 }, (_, index) => index);
+  const inFlight: number[] = [];
+  let running = 0;
+  const all = await readAllPages(
+    async ({ page, limit }) => {
+      running += 1;
+      inFlight.push(running);
+      await Bun.sleep(1);
+      running -= 1;
+      return rows.slice((page - 1) * limit, page * limit);
+    },
+    { parallel: 3 },
+  );
+  expect(all).toEqual(rows);
+  expect(Math.max(...inFlight)).toBe(3);
+});

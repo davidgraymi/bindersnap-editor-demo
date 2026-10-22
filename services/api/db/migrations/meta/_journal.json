@@ -22,6 +22,76 @@
       "when": 1788234293834,
       "tag": "0002_bill_the_organization",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1788893891756,
+      "tag": "0003_workspace_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1789852507589,
+      "tag": "0004_binder_drafts",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1790959968710,
+      "tag": "0005_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1791338187438,
+      "tag": "0006_email_outbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1791338561899,
+      "tag": "0007_password_resets",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1791339125808,
+      "tag": "0008_email_preferences",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1791339890260,
+      "tag": "0009_organization_invitations",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1791378446714,
+      "tag": "0010_email_verifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1791398112229,
+      "tag": "0011_legal_agreements",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1791413295888,
+      "tag": "0012_legal_agreement_parties",
+      "breakpoints": true
     }
   ]
 }

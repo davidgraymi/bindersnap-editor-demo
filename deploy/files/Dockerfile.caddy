@@ -1,5 +1,7 @@
-FROM caddy:2-builder AS builder
-RUN xcaddy build --with github.com/mholt/caddy-ratelimit
+# Pinned by digest, as is the rate-limit module's commit: a floating tag let a
+# TLS-proxy upgrade ride along with any deploy, untested. Bump deliberately.
+FROM caddy:2.11.4-builder@sha256:369218c81ca6d6af249981221b3a5c764d886dd5b058f51d144066de13f2418d AS builder
+RUN xcaddy build --with github.com/mholt/caddy-ratelimit@5625512f24f6f59d6f64fb3aafe5eecff0b286db
 
-FROM caddy:2-alpine
+FROM caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy

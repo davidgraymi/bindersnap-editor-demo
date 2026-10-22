@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Binder · Which draft — Bindersnap design</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" />
+    <link rel="stylesheet" href="./binder.css" />
+    <script src="./shell.js"></script>
+  </head>
+  <body>
+    <script>
+      /*
+       * Several drafts at once — the picker open.
+       *
+       * The shipped model is one draft per person per binder: pressing Edit
+       * twice resumes rather than forks, deliberately. The customer has asked
+       * for more than one, and the reason is good: two unrelated
+       * reorganisations should not have to be proposed in one change request
+       * just because the same person did both.
+       *
+       * It is a small change to make and a real one to decide — see D8 in the
+       * spec. A draft is already `draft/<username>/<stamp>`, so several per
+       * person are representable without changing what a draft is. What has to
+       * change is that `openDraft` stops resuming the first one it finds, and
+       * that a draft gets a name its author wrote — which it needs anyway,
+       * because "resume the one from Tuesday" is unanswerable when both are
+       * called `draft/alice/…`.
+       *
+       * Somebody else's draft is listed and inert. Knowing it exists is what
+       * stops two people making the same folder twice; reading unproposed work
+       * is not something a draft offers.
+       */
+      const page = shell({ binder: 'Clinical', section: 'documents' });
+      // The menu is a popover; a panel with overflow:hidden would clip it.
+      page.style.position = 'relative';
+      const I = window.bsIcon;
+
+      const docIcon = `<svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M5 2h5l3 3v11H5V2Z"/><path d="M10 2v3h3"/></svg>`;
+      const folderIcon = `<svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 5a1 1 0 0 1 1-1h3.4l1.3 1.6H15a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5Z"/></svg>`;
+
+      const draft = ({ name, meta, on = false, muted = false, who }) => `
+        <div class="bs-row ${on ? 'bs-row--on' : ''} ${muted ? 'bs-row--muted' : ''}">
+          <span class="bs-row-icon">
+            ${
+              on
+                ? `<svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5 7.5 13 14 5"/></svg>`
+                : who
+                  ? `<span class="bs-avatar bs-avatar--sm bs-avatar--violet">${who}</span>`
+                  : I('change', 15)
+            }
+          </span>
+          <span class="bs-row-body">
+            <span class="bs-row-name">${name}</span>
+            <span class="bs-row-meta">${meta}</span>
+          </span>
+        </div>`;
+
+      page.innerHTML = `
+        <div class="bs-pagehead">
+          <div class="bs-pagehead-body">
+            <h1 class="bs-title">Clinical</h1>
+            <p class="bs-subtitle">
+              Rename in place, drag to refile, make a folder. Everything you do
+              is saved to your draft and nobody is asked to look until you
+              propose it.
+            </p>
+          </div>
+          <div class="bs-pagehead-actions">
+            <button type="button" class="bs-btn bs-btn-secondary">Done</button>
+          </div>
+        </div>
+
+        <div class="bs-panel">
+          <div class="bs-panel-bar">
+            <span>
+              <button type="button" class="bs-draftpick" aria-expanded="true">
+                ${I('change', 14)}
+                Reorganise nursing
+                <span class="bs-draftpick-count">· 3 changes</span>
+                ${I('chevron', 13)}
+              </button>
+                          </span>
+
+            <button type="button" class="bs-btn bs-btn--sm bs-btn-secondary">${I('plus', 14)} New folder</button>
+            <button type="button" class="bs-btn bs-btn--sm bs-btn-secondary">${I('doc', 14)} Add a policy</button>
+            <span class="bs-panel-bar-spacer"></span>
+            <span class="bs-saved">
+              <svg width="13" height="13" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5 7.5 13 14 5"/></svg>
+              Saved
+            </span>
+          </div>
+
+          <div class="bs-row bs-tree-row bs-tree-row--folder">
+            <span class="bs-twisty">${I('chevron', 14)}</span>
+            <span class="bs-row-icon">${folderIcon}</span>
+            <span class="bs-row-body"><span class="bs-row-name">Administrative</span></span>
+          </div>
+          <div class="bs-row bs-tree-row" data-depth="1">
+            <span class="bs-twisty"></span>
+            <span class="bs-row-icon">${docIcon}</span>
+            <span class="bs-row-body"><span class="bs-row-name">Patient Grievance Policy</span></span>
+          </div>
+          <div class="bs-row bs-tree-row bs-tree-row--folder">
+            <span class="bs-twisty">${I('chevron', 14)}</span>
+            <span class="bs-row-icon">${folderIcon}</span>
+            <span class="bs-row-body"><span class="bs-row-name">Nursing and Midwifery</span></span>
+          </div>
+          <div class="bs-row bs-tree-row" data-depth="1">
+            <span class="bs-twisty"></span>
+            <span class="bs-row-icon">${docIcon}</span>
+            <span class="bs-row-body"><span class="bs-row-name">Infection Control Policy</span></span>
+          </div>
+        </div>
+
+        <span class="bs-draftmenu" role="menu"
+                    style="position: absolute; top: 178px; left: 12px; z-index: 60; display: block">
+                <span class="bs-panel-bar" style="min-height: 38px">
+                  <span class="bs-section-title" style="font-size: var(--brand-text-ui-md)">Your drafts</span>
+                </span>
+                ${draft({ name: 'Reorganise nursing', meta: '3 changes · edited 4 minutes ago', on: true })}
+                ${draft({ name: 'Retire the paper forms', meta: '1 change · edited yesterday' })}
+                <span class="bs-panel-bar" style="min-height: 38px; border-top: 1px solid var(--bs-rule-warm)">
+                  <span class="bs-section-title" style="font-size: var(--brand-text-ui-md)">Also being edited</span>
+                </span>
+                ${draft({ name: 'Carol Mendes', meta: 'Editing this binder — you cannot see her draft', muted: true, who: 'CM' })}
+                <span class="bs-panel-foot">
+                  <button type="button" class="bs-btn bs-btn--sm bs-btn--quiet" style="padding: 0; min-height: 22px">
+                    ${I('plus', 13)} Start another draft
+                  </button>
+                </span>
+              </span>
+
+        <div class="bs-draftbar">
+          <span class="bs-draftbar-mark">
+            <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 2.8a1.7 1.7 0 0 1 2.4 2.4L6 13.8l-3.2.8.8-3.2 8.6-8.6Z"/></svg>
+          </span>
+          <span class="bs-draftbar-body">
+            <p class="bs-draftbar-title">3 changes in “Reorganise nursing”</p>
+            <p class="bs-draftbar-note">
+              Rename Nursing to Nursing and Midwifery · Move Medication
+              Administration Policy to Nursing and Midwifery · Add the folder
+              Training
+            </p>
+          </span>
+          <button type="button" class="bs-draftbar-toggle">Show all</button>
+          <button type="button" class="bs-btn bs-btn--sm bs-btn--quiet">Discard</button>
+          <button type="button" class="bs-btn bs-btn--sm bs-btn-primary">Propose these changes</button>
+        </div>`;
+    </script>
+  </body>
+</html>

@@ -2,4 +2,7 @@
 
 instance_id = "i-0123456789abcdef0"  # from: cd ../compute && terraform output instance_id
 alert_email = "alerts@bindersnap.com"
+# Backup alarms. `apply-all.sh` passes this itself; set it here too so
+# `apply-all.sh plan` does not show the alarms as destroyed.
+dlm_policy_id = "policy-0123456789abcdef0" # from: cd ../backups && terraform output dlm_policy_id
 # aws_region = "us-east-1"

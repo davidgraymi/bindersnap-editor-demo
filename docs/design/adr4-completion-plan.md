@@ -11,11 +11,15 @@ This file is the sequencing and the decisions. It is short on purpose.
 
 ## Where ADR 0004 actually is
 
-Step 1 (organization and billing) is merged bar #393. Step 2 (documents as files)
-is six stacked pull requests, all green, none merged — the API is complete and the
-SPA browses it read-only. What is left, per the implementation status, is team
-management, writing from the binder UI, deleting the old one-repo-per-document
-model, and four smaller items.
+**Updated 2026-09-07.** Step 1 (organization and billing) is merged, #393
+included. Steps 2 and 3 are built and green but live on
+`feat/adr4-documents-as-files`, not on `main` — binders, the document page, the
+change page, History, Settings, org and binder people, groups, and read-only
+mode. What is left is invitations, deleting the old one-repo-per-document
+model, and the pieces behind the Gitea 28.0.0 upgrade.
+
+Originally, when this plan was written: step 1 was merged bar #393, and step 2
+was six stacked pull requests, all green, none merged.
 
 **This plan covers the first of those and the org half nobody has designed yet.** It
 does not cover "writing from the binder UI" or "delete the old model" — those are
@@ -72,25 +76,76 @@ reversal visible instead of quietly deleting it.
 Backend and screens interleave, because each screen needs its endpoint and neither
 is worth shipping alone.
 
-| Order | Piece                                                    | Half              | Needs 28.0.0 |
-| ----- | -------------------------------------------------------- | ----------------- | ------------ |
-| 0     | Land the step-2 stack (#398 → #404)                      | shipped           | no           |
-| 0     | Writing from the binder UI; delete the old model         | already specified | no           |
-| 1     | Membership read model; `staff`; stop provisioning teams  | backend           | no           |
-| 2     | Breadcrumb shell and scope tabs                          | screens           | no           |
-| 3     | Organization page                                        | screens           | no           |
-| 4     | Groups: create, grant onto a binder, whitelist recompute | backend           | no           |
-| 5     | Managing binder people; the visibility switch            | backend           | no           |
-| 6     | Managing org people; last-owner rule                     | backend           | no           |
-| 7     | People and groups screens                                | screens           | no           |
-| 8     | Invitations — table, routes, email                       | backend           | no           |
-| 9     | Invite screens and pending state                         | screens           | no           |
-| 10    | Read-only mode — typed 402 and the banner                | both              | no           |
-| —     | **Gitea 28.0.0 upgrade**, its own PR, no feature         | ops               | —            |
-| 11    | The CODEOWNERS generator                                 | backend           | **yes**      |
-| 12    | Sign-off rules page                                      | screens           | **yes**      |
+| Order | Piece                                                    | Half    | State                |
+| ----- | -------------------------------------------------------- | ------- | -------------------- |
+| 0     | Land the step-2 stack (#398 → #404)                      | shipped | **done**             |
+| 0     | Writing from the binder UI                               | screens | **done** (#409–#415) |
+| 0     | Delete the old model                                     | both    | **done**             |
+| 1     | Membership read model; `staff`; stop provisioning teams  | backend | **done** (#416)      |
+| 2     | Breadcrumb shell and scope tabs                          | screens | **done**             |
+| 3     | Organization page                                        | screens | **done**             |
+| 4     | Groups: create, grant onto a binder, whitelist recompute | backend | **done** (#417)      |
+| 5     | Managing binder people; the visibility switch            | backend | **done** (#421)      |
+| 6     | Managing org people; last-owner rule                     | backend | **done** (#421)      |
+| 7     | People and groups screens                                | screens | **done**             |
+| 8     | ~~Invitations — table, routes, email~~                   | backend | **descoped**         |
+| 9     | ~~Invite screens and pending state~~                     | screens | **descoped**         |
+| 10    | Read-only mode — typed 402 and the banner                | both    | **done** (#424)      |
+| —     | **Gitea 28.0.0 upgrade**, its own PR, no feature         | ops     | **done**             |
+| 11    | The CODEOWNERS generator                                 | backend | **done**             |
+| 12    | Sign-off rules page                                      | screens | **done**             |
 
-Eleven of the thirteen are unblocked. That is deliberate: the upgrade sits late so
+**Updated 2026-09-08.** Twelve of the thirteen are done, and the thirteenth is
+not being built.
+
+**Invitations are descoped**, on the product owner's call. Gitea can neither
+hold a pending invitation nor send an email, and this repository has no mail
+infrastructure at all — so finishing them needs a delivery decision and
+credentials only a human can create. Instead, an organization adds a person who
+already has an account: one route, one search-based form, and two costs written
+down rather than rediscovered — somebody with no account cannot be added at
+all, and nobody consents to being added. The rest is
+[issue 426](https://github.com/davidgraymi/bindersnap-editor-demo/issues/426).
+
+**The Gitea upgrade happened**, digest-pinned to a `main-nightly` in dev with
+production left on 1.27.3, and its verification turned up one claim the design
+had backwards — a CODEOWNERS pattern that does not compile is dropped silently
+rather than failing closed. That became a requirement on the generator before
+the generator existed. On 2026-10-06 both environments moved to the released
+28.0.0. Production started again from an empty database rather than migrating.
+
+**The old model is deleted too** — 20,000 lines out, the library rebuilt on
+binders in the same change because it would otherwise have gone blank, and two
+things named that would have disappeared silently: the regulator export, which
+is now a binder's rather than one document's, and anonymous document viewing,
+which has no surface at all until #364's one-time links exist
+([issue 430](https://github.com/davidgraymi/bindersnap-editor-demo/issues/430)).
+
+**Per-workspace settings landed too**, which finishes ADR 0004's own migration
+list: the `bindersnap-config` branch is retired, and the policy in force at a
+publish is stamped into that version's annotated tag.
+
+**Nothing is left.** Two items were deliberately not built, each with the
+reasoning recorded rather than left as a gap:
+
+- The **approvals whitelist on a binder's change page**. With the old model gone
+  there is no way to reach a binder except through a team the whitelist already
+  names, so the state that screen would explain cannot happen.
+- The **`document_versions` derived index**. Measured rather than assumed: the
+  cross-binder library answers in ~400 ms for twelve binders, and the ADR's own
+  rule — the index serves browsing, Gitea serves proving — means it can only
+  ever buy latency. There is no latency problem to buy off. The investigation
+  found three real version-reading bugs instead, which an index would have
+  papered over.
+
+Piece 10 went early, out of order, exactly as the note below predicted it
+could.
+
+Everything up to and including piece 10 lives on `feat/adr4-documents-as-files`
+rather than on `main`. Landing that branch is its own act and is the largest
+open risk in the series.
+
+Originally: eleven of the thirteen were unblocked. That is deliberate: the upgrade sits late so
 it can slip without stalling anything, and if 28.0.0 lands early it can be pulled
 forward without reordering a thing.
 

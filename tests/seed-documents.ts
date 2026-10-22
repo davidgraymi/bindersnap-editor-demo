@@ -225,11 +225,53 @@ async function renderSeedPdf(document: SeedDocument): Promise<Uint8Array> {
 }
 
 /** The bytes for one version of a document, ready for the contents API. */
-export async function renderSeedDocumentFile(
+/**
+ * Render a document, at its path inside the binder.
+ *
+ * The path used to be `document.<ext>` at the root of a repository that held
+ * one document. A binder holds many, so the document's own address and its
+ * identity are what distinguish them —
+ * `nursing/infection-control.01J8XZ4K7M….docx`.
+ */
+/**
+ * The tail of the render queue. Every render waits for the one before it.
+ *
+ * `withSeedClock` swaps the global `Date` across an await, and the seed
+ * applies its binders concurrently, so without this a PDF render could run
+ * inside a Word render's window (and fail pdf-lib's `instanceof Date` check),
+ * or two Word renders could interleave and put the pinned `Date` back as if
+ * it were the real one — freezing the clock for the rest of the process.
+ * Rendering is CPU-only and takes milliseconds; the Gitea round trips, which
+ * are the seed's real cost, stay concurrent.
+ */
+let renderQueue: Promise<unknown> = Promise.resolve();
+
+export function renderSeedDocumentFile(
   document: SeedDocument,
   format: SeedDocumentFormat,
+  slugPath: string,
+  uid: string,
 ): Promise<SeedDocumentFile> {
-  const path = canonicalFileNameFor(format);
+  const rendered = renderQueue.then(() =>
+    renderSeedDocumentFileNow(document, format, slugPath, uid),
+  );
+  // A failed render rejects its own caller and must not stall the ones after.
+  renderQueue = rendered.catch(() => undefined);
+  return rendered;
+}
+
+async function renderSeedDocumentFileNow(
+  document: SeedDocument,
+  format: SeedDocumentFormat,
+  slugPath: string,
+  uid: string,
+): Promise<SeedDocumentFile> {
+  // `nursing/hand-hygiene.01J8XZ4K7M….md` — the address, then the identity,
+  // then the extension (ADR 0005). The identity is what the version tags are
+  // named after, so a seeded document written without one would publish
+  // nothing at all: the publish guard refuses a content file that has none.
+  const extension = canonicalFileNameFor(format).replace(/^document/, "");
+  const path = `${slugPath}.${uid}${extension}`;
 
   switch (format) {
     case "prosemirror":

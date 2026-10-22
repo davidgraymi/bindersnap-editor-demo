@@ -1,0 +1,95 @@
+name: Terraform drift check
+
+# Every day, plan every Terraform module with the same output wiring as
+# `infra/apply-all.sh` and fail if the AWS account, the Cloudflare zone or the
+# Stripe account no longer matches the code: a console or Dashboard edit, or a
+# merged change nobody applied (#620 M3). Changes nothing. A failed scheduled
+# run emails the repository owner.
+#
+# Runs in the `drift-check` environment (main only), which holds:
+#   variable BINDERSNAP_DRIFT_ROLE_ARN   output drift_role_arn of infra/ci
+#   variable TF_STATE_BUCKET, TF_LOCK_TABLE  the values in infra/state/backend.hcl
+#   secret   CLOUDFLARE_API_TOKEN        a READ-only token: the edge module's
+#                                        permissions, each at Read
+#   secret   STRIPE_API_KEY              a READ-only restricted live key: the
+#                                        billing module's permissions, each at
+#                                        Read (infra/billing/README.md)
+#   secret   STRIPE_TEST_API_KEY         the same, in test mode, for
+#                                        billing-test
+#   secret   TFVARS_<MODULE>             each module's terraform.tfvars, verbatim
+#                                        (ACCOUNT_BASELINE, COMPUTE, SECRETS, BACKUPS,
+#                                        EMAIL, MONITORING, CI, EDGE; billing
+#                                        and billing-test have no tfvars)
+
+on:
+  schedule:
+    - cron: "17 13 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: terraform-drift
+  cancel-in-progress: true
+
+jobs:
+  drift:
+    runs-on: ubuntu-24.04
+    environment: drift-check
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          # 1.11+: infra/billing's catalog sets a write-only argument.
+          terraform_version: "1.11.4"
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials (read-only)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.BINDERSNAP_DRIFT_ROLE_ARN }}
+          aws-region: us-east-1
+          role-session-name: bindersnap-drift-${{ github.run_id }}
+
+      - name: Write backend config and tfvars
+        env:
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+          TF_LOCK_TABLE: ${{ vars.TF_LOCK_TABLE }}
+          TFVARS_ACCOUNT_BASELINE: ${{ secrets.TFVARS_ACCOUNT_BASELINE }}
+          TFVARS_COMPUTE: ${{ secrets.TFVARS_COMPUTE }}
+          TFVARS_SECRETS: ${{ secrets.TFVARS_SECRETS }}
+          TFVARS_BACKUPS: ${{ secrets.TFVARS_BACKUPS }}
+          TFVARS_EMAIL: ${{ secrets.TFVARS_EMAIL }}
+          TFVARS_MONITORING: ${{ secrets.TFVARS_MONITORING }}
+          TFVARS_CI: ${{ secrets.TFVARS_CI }}
+          TFVARS_EDGE: ${{ secrets.TFVARS_EDGE }}
+        run: |
+          set -euo pipefail
+          cat > infra/state/backend.hcl <<HCL
+          bucket         = "${TF_STATE_BUCKET}"
+          region         = "us-east-1"
+          dynamodb_table = "${TF_LOCK_TABLE}"
+          encrypt        = true
+          HCL
+          for module in account-baseline compute secrets backups email monitoring ci edge; do
+            var="TFVARS_$(echo "${module}" | tr 'a-z-' 'A-Z_')"
+            value="${!var:-}"
+            if [ -z "${value}" ]; then
+              echo "::error title=Missing tfvars::secret ${var} is not set"
+              exit 1
+            fi
+            printf '%s\n' "${value}" > "infra/${module}/terraform.tfvars"
+          done
+
+      - name: Plan every module
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
+          STRIPE_TEST_API_KEY: ${{ secrets.STRIPE_TEST_API_KEY }}
+        run: infra/apply-all.sh drift

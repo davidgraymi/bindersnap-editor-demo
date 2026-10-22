@@ -180,7 +180,7 @@ function closedPR(
 test("a merged change reports the version it became and who published it", () => {
   const [change] = buildClosedChanges(
     [mergedPR(7, "sha-one")],
-    [tag(3, "sha-one", "2026-01-02T00:00:00Z")],
+    new Map([["sha-one", 3]]),
   );
 
   expect(change?.outcome).toBe("published");
@@ -200,7 +200,7 @@ test("a change closed after changes were requested was declined, by name", () =>
         },
       ] as unknown as PullRequestWithReviews["reviews"]),
     ],
-    [],
+    new Map(),
   );
 
   expect(change?.outcome).toBe("declined");
@@ -219,7 +219,7 @@ test("a dismissed request for changes no longer decides the outcome", () => {
         },
       ] as unknown as PullRequestWithReviews["reviews"]),
     ],
-    [],
+    new Map(),
   );
 
   expect(change?.outcome).toBe("withdrawn");
@@ -227,17 +227,39 @@ test("a dismissed request for changes no longer decides the outcome", () => {
 });
 
 test("a change closed with no decision on it was withdrawn", () => {
-  const [change] = buildClosedChanges([closedPR(4)], []);
+  const [change] = buildClosedChanges([closedPR(4)], new Map());
 
   expect(change?.outcome).toBe("withdrawn");
   expect(change?.publishedVersion).toBeNull();
   expect(change?.branchName).toBe("upload/v4");
 });
 
+test("a closed change names the document its upload branch was for", () => {
+  const [change] = buildClosedChanges(
+    [
+      closedPR(4, {
+        head: { ref: "upload/nursing/hand-hygiene/20260909/101500Z-alice" },
+      }),
+    ],
+    new Map(),
+  );
+
+  expect(change?.documentSlugPath).toBe("nursing/hand-hygiene");
+});
+
+test("a closed change on no document's branch names no document", () => {
+  const [change] = buildClosedChanges(
+    [closedPR(4, { head: { ref: "sign-off/rules" } })],
+    new Map(),
+  );
+
+  expect(change?.documentSlugPath).toBeNull();
+});
+
 test("closed changes come back newest first", () => {
   const changes = buildClosedChanges(
     [closedPR(2), closedPR(11), closedPR(7)],
-    [],
+    new Map(),
   );
 
   expect(changes.map((change) => change.number)).toEqual([11, 7, 2]);

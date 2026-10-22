@@ -1,11 +1,6 @@
 import { unwrap, type GiteaClient } from "./client";
 import { createPullRequest } from "./pullRequests";
 import type { PullRequestWithApprovalState } from "./pullRequests";
-import {
-  bootstrapEmptyMainBranch,
-  createMainBranchProtection,
-  createPrivateCurrentUserRepo,
-} from "./repos";
 
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25 MiB
 
@@ -21,6 +16,12 @@ export interface UploadCommitMessageParams {
   uploadBranch: string;
   uploaderSlug: string;
   fileHashSha256: string;
+  /**
+   * The commit's first line, when the file name is not what happened. A
+   * policy saved in the editor arrives as `document.json`, a name nobody
+   * chose, and "Edit Hand Hygiene" is what the draft should read back.
+   */
+  subject?: string;
 }
 
 export interface CreateUploadBranchParams {
@@ -139,6 +140,26 @@ export function buildUploadBranchName(
   return `upload/${docSlug}/${date}/${time}-${uploaderSlug}-${contentHash8}`;
 }
 
+/**
+ * The document an upload branch is about, or null if it is not one of ours.
+ *
+ * The inverse of `buildUploadBranchName`. A binder's document identity carries
+ * slashes — `nursing/hand-hygiene` — so this strips the `upload/` prefix and
+ * the two trailing segments the builder appends rather than splitting on the
+ * separator, which would stop at the folder.
+ *
+ * This is what lets a binder's document list include what is proposed but not
+ * yet published without asking Gitea which files each open change touches:
+ * the branch name already carries the answer, and the list exists to stop
+ * paying per document.
+ */
+export function documentSlugPathFromUploadBranch(
+  branch: string,
+): string | null {
+  const match = branch.match(/^upload\/(.+)\/\d{8}\/\d{6}Z-[^/]+$/);
+  return match ? match[1]! : null;
+}
+
 export function buildUploadCommitMessage(
   params: UploadCommitMessageParams,
 ): string {
@@ -149,9 +170,10 @@ export function buildUploadCommitMessage(
     uploadBranch,
     uploaderSlug,
     fileHashSha256,
+    subject,
   } = params;
   return [
-    `Upload: ${sourceFilename}`,
+    subject ?? `Upload: ${sourceFilename}`,
     "",
     `Bindersnap-Document-Id: ${docSlug}`,
     `Bindersnap-Canonical-File: ${canonicalFile}`,
@@ -249,128 +271,6 @@ export async function commitBinaryFile(
   return { sha: result.commit?.sha ?? "" };
 }
 
-export async function createInitialDocumentUpload(
-  params: InitialDocumentUploadParams,
-): Promise<InitialDocumentUploadResult> {
-  const {
-    client,
-    repoName,
-    file,
-    uploaderSlug,
-    nextVersion,
-    requiredApprovals = 1,
-    description,
-    onProgress,
-  } = params;
-
-  const validation = validateUploadFile(file);
-  if (!validation.valid) {
-    const { GiteaApiError } = await import("./client");
-    throw new GiteaApiError(0, validation.reason ?? "Invalid file.");
-  }
-
-  onProgress?.("hashing");
-  const fullHash = await computeFileHash(file);
-  const contentHash8 = fullHash.slice(0, 8);
-  const base64Content = await readFileAsBase64(file);
-  const extension = getFileExtension(file.name);
-  const canonicalFile = buildCanonicalDocumentFileName(extension);
-  const branchName = buildUploadBranchName(
-    repoName,
-    uploaderSlug,
-    contentHash8,
-  );
-
-  onProgress?.("creating-repo");
-  const createdRepo = await createPrivateCurrentUserRepo({
-    client,
-    name: repoName,
-    description,
-  });
-
-  const owner = createdRepo.owner?.login ?? "";
-  if (owner.trim() === "") {
-    throw new Error(
-      "Gitea did not return an owner for the created repository.",
-    );
-  }
-
-  onProgress?.("bootstrapping");
-  await bootstrapEmptyMainBranch({
-    client,
-    owner,
-    repo: repoName,
-  });
-
-  onProgress?.("protecting");
-  await createMainBranchProtection({
-    client,
-    owner,
-    repo: repoName,
-    requiredApprovals,
-  });
-
-  onProgress?.("creating-branch");
-  await createUploadBranch({
-    client,
-    owner,
-    repo: repoName,
-    branchName,
-    from: "main",
-  });
-
-  const commitMessage = buildUploadCommitMessage({
-    docSlug: repoName,
-    canonicalFile,
-    sourceFilename: file.name,
-    uploadBranch: branchName,
-    uploaderSlug,
-    fileHashSha256: fullHash,
-  });
-
-  onProgress?.("committing");
-  const { sha: commitSha } = await commitBinaryFile({
-    client,
-    owner,
-    repo: repoName,
-    branch: branchName,
-    filePath: canonicalFile,
-    base64Content,
-    message: commitMessage,
-  });
-
-  const prTitle = `Upload v${nextVersion}: ${humanizeRepositoryName(repoName)}`;
-  const prBody = [
-    `Automated upload from Bindersnap file vault.`,
-    ``,
-    `Source file: ${file.name}`,
-    `Document: ${repoName}`,
-    `Uploaded by: ${uploaderSlug}`,
-    `File hash (SHA-256): ${fullHash}`,
-  ].join("\n");
-
-  onProgress?.("opening-pr");
-  const pr = await createPullRequest({
-    client,
-    owner,
-    repo: repoName,
-    title: prTitle,
-    head: branchName,
-    base: "main",
-    body: prBody,
-  });
-
-  return {
-    owner,
-    repo: repoName,
-    canonicalFile,
-    prNumber: pr.number ?? 0,
-    prTitle,
-    branchName,
-    commitSha,
-  };
-}
-
 async function readFileAsBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -384,101 +284,4 @@ async function readFileAsBase64(file: File): Promise<string> {
     };
     reader.readAsDataURL(file);
   });
-}
-
-export async function uploadFile(
-  params: UploadFileParams,
-): Promise<UploadResult> {
-  const {
-    client,
-    owner,
-    repo,
-    file,
-    docSlug,
-    uploaderSlug,
-    nextVersion,
-    baseBranch = "main",
-  } = params;
-
-  // Client-side validation
-  const validation = validateUploadFile(file);
-  if (!validation.valid) {
-    const { GiteaApiError } = await import("./client");
-    throw new GiteaApiError(0, validation.reason ?? "Invalid file.");
-  }
-
-  // Compute hash
-  const fullHash = await computeFileHash(file);
-  const contentHash8 = fullHash.slice(0, 8);
-
-  // Read as base64
-  const base64Content = await readFileAsBase64(file);
-
-  // Build names
-  const branchName = buildUploadBranchName(docSlug, uploaderSlug, contentHash8);
-  const ext = file.name.split(".").pop()!.toLowerCase();
-  const canonicalFile = `${docSlug}.${ext}`;
-
-  // Build commit message with ADR 0001 trailers
-  const commitMessage = buildUploadCommitMessage({
-    docSlug,
-    canonicalFile,
-    sourceFilename: file.name,
-    uploadBranch: branchName,
-    uploaderSlug,
-    fileHashSha256: fullHash,
-  });
-
-  // Create branch
-  await createUploadBranch({
-    client,
-    owner,
-    repo,
-    branchName,
-    from: baseBranch,
-  });
-
-  // Commit file
-  const { sha: commitSha } = await commitBinaryFile({
-    client,
-    owner,
-    repo,
-    branch: branchName,
-    filePath: canonicalFile,
-    base64Content,
-    message: commitMessage,
-  });
-
-  // Build PR title/body
-  const docTitle = docSlug
-    .split("-")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-  const prTitle = `Upload v${nextVersion}: ${docTitle}`;
-  const prBody = [
-    `Automated upload from Bindersnap file vault.`,
-    ``,
-    `Source file: ${file.name}`,
-    `Document: ${docSlug}`,
-    `Uploaded by: ${uploaderSlug}`,
-    `File hash (SHA-256): ${fullHash}`,
-  ].join("\n");
-
-  // Open PR
-  const pr = await createPullRequest({
-    client,
-    owner,
-    repo,
-    title: prTitle,
-    head: branchName,
-    base: baseBranch,
-    body: prBody,
-  });
-
-  return {
-    prNumber: pr.number ?? 0,
-    prTitle,
-    branchName,
-    commitSha,
-  };
 }

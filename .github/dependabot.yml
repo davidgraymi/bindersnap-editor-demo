@@ -1,0 +1,36 @@
+# Keeps the digest-pinned images and the Actions current (S10).
+# The dev-only Dockerfiles (root, services/hocuspocus) float on tags and are left out.
+version: 2
+updates:
+  - package-ecosystem: docker
+    directories:
+      - /deploy/files
+      - /services/api
+    schedule:
+      interval: weekly
+    groups:
+      docker:
+        patterns: ["*"]
+
+  - package-ecosystem: docker-compose
+    directories:
+      - /
+      - /deploy/files
+    schedule:
+      interval: weekly
+    ignore:
+      # A Gitea major can change the permission model that
+      # tests/gitea-permission-model.pw.ts pins down. Bump it by hand.
+      - dependency-name: gitea/gitea
+        update-types: ["version-update:semver-major"]
+    groups:
+      docker-compose:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]

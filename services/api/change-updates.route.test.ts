@@ -198,7 +198,7 @@ async function seedSession(username: string): Promise<string> {
 
 const OWNER = "alice";
 const REPO = "contract";
-const UPDATES = `/api/app/documents/${OWNER}/${REPO}/pull-requests/3/updates`;
+const UPDATES = `/api/app/binders/${OWNER}/${REPO}/changes/3/updates`;
 
 function request(sessionId: string): Request {
   return new Request(`http://localhost${UPDATES}`, {

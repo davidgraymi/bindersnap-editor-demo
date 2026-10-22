@@ -10,20 +10,6 @@
       ],
       "port": 5173,
       "autoPort": false
-    },
-    {
-      "name": "app-dev",
-      "runtimeExecutable": "bun",
-      "runtimeArgs": [
-        "run",
-        "dev:app"
-      ],
-      "port": 5174,
-      "autoPort": false,
-      "env": {
-        "PORT": "5174",
-        "APP_PORT": "5174"
-      }
     }
   ]
 }
