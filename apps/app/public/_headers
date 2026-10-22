@@ -15,3 +15,24 @@
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
   X-Robots-Tag: noindex, nofollow
+
+# The fonts the sign-in page draws (its heading is Lora, the rest Geist),
+# asked for with the page instead of after the script has drawn it. On the
+# app's own pages only, `/` and `/-/...`, where no file is ever served:
+# index.html's <link> hrefs are bundled, and these must stay at /fonts/.
+/
+  Link: </fonts/fonts.css>; rel=preload; as=style, </fonts/lora-latin-wght-normal.woff2>; rel=preload; as=font; type="font/woff2"; crossorigin, </fonts/geist-latin-wght-normal.woff2>; rel=preload; as=font; type="font/woff2"; crossorigin
+
+/-/*
+  Link: </fonts/fonts.css>; rel=preload; as=style, </fonts/lora-latin-wght-normal.woff2>; rel=preload; as=font; type="font/woff2"; crossorigin, </fonts/geist-latin-wght-normal.woff2>; rel=preload; as=font; type="font/woff2"; crossorigin
+
+# Cloudflare's default is max-age=0, so a phone asks again for every file on
+# every visit. The bundler writes everything it builds to /_assets/ under a
+# name taken from its content (scripts/build.ts), so a new build gets new
+# names and these can be kept for good.
+/_assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# The fonts keep their names from build to build, so a month, not forever.
+/fonts/*
+  Cache-Control: public, max-age=2592000, stale-while-revalidate=86400

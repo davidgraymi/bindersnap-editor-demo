@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { JSDOM } from "jsdom";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import {
   bindSignupEnterKeys,
   buildSignupUrl,
   routeLandingSignup,
-  showLandingContent,
 } from "./landing";
 
 let originalWindow: typeof globalThis.window | undefined;
@@ -49,16 +50,6 @@ afterEach(() => {
   });
 });
 
-test("the landing page reveals its pre-rendered content", () => {
-  installDom();
-  const landingContent = document.getElementById("landing-content");
-
-  showLandingContent(landingContent);
-  expect(landingContent?.style.display).toBe("");
-  expect(landingContent?.style.opacity).toBe("1");
-  expect(landingContent?.hasAttribute("aria-hidden")).toBe(false);
-});
-
 test("buildSignupUrl opens the app's signup and preserves a typed email", () => {
   expect(buildSignupUrl(" team@bindersnap.com ")).toBe(
     "https://app.bindersnap.com/-/signup?email=team%40bindersnap.com",
@@ -95,4 +86,20 @@ test("pressing Enter in a landing email field routes to signup", () => {
     );
 
   expect(submittedSources).toEqual(["cta"]);
+});
+
+test("the landing page draws without waiting for its script", () => {
+  // Lighthouse, mobile: hiding the page until a React bundle had drawn its
+  // icons kept a phone on a blank screen for seconds. The icons are SVG in
+  // the markup, the stylesheets are ordinary ones, and nothing hides the page.
+  const html = readFileSync(join(import.meta.dir, "index.html"), "utf8");
+  const script = readFileSync(
+    join(import.meta.dir, "landing-inline.ts"),
+    "utf8",
+  );
+
+  expect(html).not.toContain("data-lucide-icon");
+  expect(html).not.toMatch(/#landing-content\s*\{[^}]*opacity:\s*0/);
+  expect(html).not.toMatch(/rel="preload"\s+as="style"/);
+  expect(script).not.toMatch(/from "(react|react-dom|lucide-react)/);
 });
