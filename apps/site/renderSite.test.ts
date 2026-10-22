@@ -416,27 +416,36 @@ describe("the landing page's links into the public site", () => {
 describe("the 404 page", () => {
   const notFound = () => files.get("/404")!;
 
-  test("forwards an address that is not the site's to the app", () => {
+  test("never leaves the site on its own", () => {
+    expect(notFound()).not.toContain("location.replace");
+    expect(notFound()).not.toContain("location.href=");
+  });
+
+  test("offers an address that is not the site's on the app", () => {
     const script = notFound().match(
       /<script>(\(function\(\)\{var sections[\s\S]*?)<\/script>/,
     )?.[1];
     expect(script).toBeDefined();
     const run = (pathname: string) => {
-      const replaced: string[] = [];
-      new Function("location", script!)({
-        pathname,
-        search: "?x=1",
-        hash: "#h",
-        replace: (url: string) => replaced.push(url),
-      });
-      return replaced;
+      const link = { href: "" };
+      const paragraph = { hidden: true };
+      const document = {
+        getElementById: (id: string) =>
+          id === "not-found-app-link" ? link : paragraph,
+      };
+      new Function("location", "document", script!)(
+        { pathname, search: "?x=1", hash: "#h" },
+        document,
+      );
+      return paragraph.hidden ? null : link.href;
     };
-    expect(run("/riverside-health/policies")).toEqual([
+    expect(run("/riverside-health/policies")).toBe(
       "https://app.bindersnap.com/riverside-health/policies?x=1#h",
-    ]);
-    // The site's own sections stay, and say "not found".
-    expect(run("/templates/no-such-template")).toEqual([]);
-    expect(run("/help/no-such-guide")).toEqual([]);
-    expect(run("/pricing")).toEqual([]);
+    );
+    // The site's own sections say "not found" and offer nothing more.
+    expect(run("/templates/no-such-template")).toBeNull();
+    expect(run("/help/no-such-guide")).toBeNull();
+    expect(run("/pricing")).toBeNull();
+    expect(notFound()).toContain('<p id="not-found-app" hidden>');
   });
 });

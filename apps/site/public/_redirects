@@ -1,6 +1,6 @@
 # The app's own pages lived here until it moved to app.bindersnap.com (issue
 # #718). A sign-in, signup or invitation link that names bindersnap.com goes
 # on with a permanent redirect. Addresses of organizations, `/{org}/...`, can't
-# be listed: 404.html forwards those.
+# be listed: 404.html links those to the app.
 /-/*    https://app.bindersnap.com/-/:splat    301
 /auth/* https://app.bindersnap.com/auth/:splat 301
