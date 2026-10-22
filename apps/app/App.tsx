@@ -3,6 +3,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { organizationsQuery, queryKeys } from "./data/queries";
 import {
   type FormEvent,
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -12,7 +14,6 @@ import {
 
 import "./app.css";
 
-import { AppShell } from "./components/AppShell";
 import { BillingPage } from "./components/BillingPage";
 import { PaywallDialog } from "./components/PaywallDialog";
 import type { OfferedPlan } from "./components/PlanOffer";
@@ -69,6 +70,16 @@ import { AcceptTermsPage } from "./components/AcceptTermsPage";
 import { useTurnstile } from "./turnstile";
 import { siteUrl } from "./siteLink";
 import type { LegalStatusPayload } from "../../packages/api-schema/schemas/legal";
+
+// The signed-in workspace, and nearly every screen with it, in a chunk of its
+// own: the sign-in page a phone lands on draws without it, and without
+// sharing the line with it (Lighthouse, mobile). Fetched once a session says
+// someone is signed in, and kept for good after that (public/_headers).
+const AppShell = lazy(() =>
+  import("./components/AppShell").then((module) => ({
+    default: module.AppShell,
+  })),
+);
 
 type AuthView =
   | "loading"
@@ -1113,65 +1124,69 @@ export function App() {
             // The same offer every other way in makes.
             onManageBilling={() => setPaywallOpen(true)}
           />
-          <AppShell
-            user={user}
-            route={asShellRoute(route)}
-            billing={
-              <BillingPage
-                subscriptionStatus={subscriptionStatus ?? "loading"}
-                accessSource={accessSource}
-                hasBillingStatusError={hasBillingStatusError}
-                currentPeriodEnd={currentPeriodEnd}
-                cancelAtPeriodEnd={cancelAtPeriodEnd}
-                cancelAt={cancelAt}
-                trialEndsAt={trialEndsAt}
-                organization={
-                  route.kind === "billing" && route.org
-                    ? route.org
-                    : billingOrganizationName
-                }
-                plan={plan}
-                onSubscribe={async () => {
-                  const { url } = await createCheckoutSession(
-                    billingOrganizationName,
-                  );
-                  window.location.href = url;
-                }}
-                onManage={async () => {
-                  const { url } = await createPortalSession(
-                    billingOrganizationName,
-                  );
-                  window.location.href = url;
-                }}
-                onCancel={async () => {
-                  const { url } = await createPortalSession(
-                    billingOrganizationName,
-                    "cancel",
-                  );
-                  window.location.href = url;
-                }}
-                canManageBilling={canManageBilling}
-                hasBillingAccount={hasBillingAccount}
-                onSubscriptionConfirmed={handleSubscriptionConfirmed}
-                onRetryBillingStatus={async () => {
-                  await refreshSession();
-                }}
-              />
-            }
-            onNavigate={navigateTo}
-            // Just the person, not the whole session: a full refresh draws the
-            // loading screen, which would take the settings page with it.
-            onAccountChanged={async () => {
-              const next = await fetchSessionUser();
-              if (next?.user) setUser(next.user);
-            }}
-            onSignOut={async () => {
-              await logoutSession();
-              setUser(null);
-              setCallbackError(null);
-              navigateTo({ kind: "home" }, true);
-            }}
-          />
+          <Suspense
+            fallback={<WorkspaceSkeleton label="Opening your workspace" />}
+          >
+            <AppShell
+              user={user}
+              route={asShellRoute(route)}
+              billing={
+                <BillingPage
+                  subscriptionStatus={subscriptionStatus ?? "loading"}
+                  accessSource={accessSource}
+                  hasBillingStatusError={hasBillingStatusError}
+                  currentPeriodEnd={currentPeriodEnd}
+                  cancelAtPeriodEnd={cancelAtPeriodEnd}
+                  cancelAt={cancelAt}
+                  trialEndsAt={trialEndsAt}
+                  organization={
+                    route.kind === "billing" && route.org
+                      ? route.org
+                      : billingOrganizationName
+                  }
+                  plan={plan}
+                  onSubscribe={async () => {
+                    const { url } = await createCheckoutSession(
+                      billingOrganizationName,
+                    );
+                    window.location.href = url;
+                  }}
+                  onManage={async () => {
+                    const { url } = await createPortalSession(
+                      billingOrganizationName,
+                    );
+                    window.location.href = url;
+                  }}
+                  onCancel={async () => {
+                    const { url } = await createPortalSession(
+                      billingOrganizationName,
+                      "cancel",
+                    );
+                    window.location.href = url;
+                  }}
+                  canManageBilling={canManageBilling}
+                  hasBillingAccount={hasBillingAccount}
+                  onSubscriptionConfirmed={handleSubscriptionConfirmed}
+                  onRetryBillingStatus={async () => {
+                    await refreshSession();
+                  }}
+                />
+              }
+              onNavigate={navigateTo}
+              // Just the person, not the whole session: a full refresh draws the
+              // loading screen, which would take the settings page with it.
+              onAccountChanged={async () => {
+                const next = await fetchSessionUser();
+                if (next?.user) setUser(next.user);
+              }}
+              onSignOut={async () => {
+                await logoutSession();
+                setUser(null);
+                setCallbackError(null);
+                navigateTo({ kind: "home" }, true);
+              }}
+            />
+          </Suspense>
           {paywallOpen ? (
             <PaywallDialog
               organization={billingOrganizationName}
