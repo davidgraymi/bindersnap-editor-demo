@@ -13,8 +13,12 @@ test("the build tells React it is in production", () => {
 });
 
 test("what the bundler names for its content is cached for good, on both origins", () => {
-  expect(build).toContain('"--chunk-naming=_assets/[name]-[hash].[ext]"');
-  expect(build).toContain('"--asset-naming=_assets/[name]-[hash].[ext]"');
+  expect(build).toContain('const ASSETS = "_assets";');
+  expect(build).toContain("`--public-path=/${ASSETS}/`");
+  // Not in the naming: Bun 1.3 drops a naming directory from the imports
+  // between chunks, and app.bindersnap.com drew nothing (#812).
+  expect(build).toContain('"--chunk-naming=[name]-[hash].[ext]"');
+  expect(build).toContain('"--asset-naming=[name]-[hash].[ext]"');
   for (const origin of ["apps/app", "apps/site"]) {
     const headers = readFileSync(join(ROOT, origin, "public/_headers"), "utf8");
     expect(headers, origin).toMatch(
