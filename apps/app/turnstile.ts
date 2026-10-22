@@ -32,6 +32,14 @@ const TURNSTILE_SCRIPT =
 
 let loading: Promise<Turnstile> | null = null;
 
+/**
+ * The widget each container holds. Turnstile allows one per container and
+ * answers a second render with the first widget's id, so an effect that runs
+ * again on the same element (React may clean up and re-run one at any time)
+ * would get a widget the earlier run then removes, leaving no check at all.
+ */
+const widgets = new WeakMap<HTMLElement, string>();
+
 /** Turnstile's script, loaded the first time a form needs it and kept. */
 function loadTurnstile(): Promise<Turnstile> {
   const ready = (window as { turnstile?: Turnstile }).turnstile;
@@ -70,6 +78,8 @@ export async function mountTurnstile(
   onToken: (token: string | null) => void,
 ): Promise<TurnstileHandle> {
   const turnstile = await loadTurnstile();
+  const earlier = widgets.get(container);
+  if (earlier !== undefined) turnstile.remove(earlier);
   const id = turnstile.render(container, {
     sitekey: siteKey,
     appearance: "interaction-only",
@@ -78,12 +88,18 @@ export async function mountTurnstile(
     "expired-callback": () => onToken(null),
     "error-callback": () => onToken(null),
   });
+  widgets.set(container, id);
   return {
     reset: () => {
       onToken(null);
       turnstile.reset(id);
     },
-    remove: () => turnstile.remove(id),
+    // A later mount in the same container has already replaced this one.
+    remove: () => {
+      if (widgets.get(container) !== id) return;
+      widgets.delete(container);
+      turnstile.remove(id);
+    },
   };
 }
 
