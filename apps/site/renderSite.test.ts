@@ -422,22 +422,33 @@ describe("the 404 page", () => {
   });
 
   test("offers an address that is not the site's on the app", () => {
-    const script = notFound().match(
-      /<script>(\(function\(\)\{var sections[\s\S]*?)<\/script>/,
+    const html = notFound();
+    const script = html.match(
+      /<script>(\(function\(\)\{var offer[\s\S]*?)<\/script>/,
     )?.[1];
     expect(script).toBeDefined();
+    const attribute = (name: string) =>
+      html
+        .match(new RegExp(`<p id="not-found-app"[^>]* ${name}="([^"]*)"`))?.[1]
+        ?.replace(/&quot;/g, '"')
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&amp;/g, "&");
     const run = (pathname: string) => {
       const link = { href: "" };
-      const paragraph = { hidden: true };
-      const document = {
-        getElementById: (id: string) =>
-          id === "not-found-app-link" ? link : paragraph,
+      const offer = {
+        hidden: true,
+        dataset: {
+          sections: attribute("data-sections"),
+          app: attribute("data-app"),
+        },
+        querySelector: () => link,
       };
       new Function("location", "document", script!)(
         { pathname, search: "?x=1", hash: "#h" },
-        document,
+        { getElementById: () => offer },
       );
-      return paragraph.hidden ? null : link.href;
+      return offer.hidden ? null : link.href;
     };
     expect(run("/riverside-health/policies")).toBe(
       "https://app.bindersnap.com/riverside-health/policies?x=1#h",
@@ -446,6 +457,9 @@ describe("the 404 page", () => {
     expect(run("/templates/no-such-template")).toBeNull();
     expect(run("/help/no-such-guide")).toBeNull();
     expect(run("/pricing")).toBeNull();
-    expect(notFound()).toContain('<p id="not-found-app" hidden>');
+    expect(html).toContain('<p id="not-found-app" hidden ');
+    // Nothing from the build is spliced into the script.
+    expect(script).not.toContain("bindersnap.com");
+    expect(script).not.toContain("templates");
   });
 });

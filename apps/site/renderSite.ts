@@ -539,11 +539,9 @@ export function renderNotFoundPage(
   sections: readonly string[],
   pages: readonly SitePage[],
 ): string {
-  const offer = `(function(){var sections=${JSON.stringify(
-    [...sections].sort(),
-  )};var first=location.pathname.split("/")[1]||"";if(!first||sections.indexOf(first)!==-1)return;var link=document.getElementById("not-found-app-link");link.href=${JSON.stringify(
-    appOrigin(),
-  )}+location.pathname+location.search+location.hash;document.getElementById("not-found-app").hidden=false;})();`;
+  // Constant code: what it needs is in the paragraph's attributes, which
+  // `escape` makes safe, so no value is ever spliced into the script.
+  const offer = `(function(){var offer=document.getElementById("not-found-app");var first=location.pathname.split("/")[1]||"";if(!first||offer.dataset.sections.split(" ").indexOf(first)!==-1)return;offer.querySelector("a").href=offer.dataset.app+location.pathname+location.search+location.hash;offer.hidden=false;})();`;
   return shell({
     title: pageTitle("Page not found"),
     description: "There is no page at this address.",
@@ -556,7 +554,7 @@ export function renderNotFoundPage(
       title: "There is no page here.",
       lede: `It may have moved. Your documents are in <a href="${escape(appUrl("/"))}">the app</a>; everything else starts at <a href="/">the home page</a>.`,
     },
-    body: `<p id="not-found-app" hidden>Looking for one of your binders? <a id="not-found-app-link" href="${escape(appUrl("/"))}">Open this address in the app</a>.</p>
+    body: `<p id="not-found-app" hidden data-sections="${escape([...sections].sort().join(" "))}" data-app="${escape(appOrigin())}">Looking for one of your binders? <a href="${escape(appUrl("/"))}">Open this address in the app</a>.</p>
 <script>${offer}</script>`,
   });
 }
