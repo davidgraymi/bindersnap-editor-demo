@@ -10,7 +10,7 @@
 
 services:
   gitea-init:
-    image: alpine:3.22.6@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
+    image: alpine:3.24.0@sha256:a2d49ea686c2adfe3c992e47dc3b5e7fa6e6b5055609400dc2acaeb241c829f4
     container_name: bindersnap-gitea-init-prod
     user: "0:0"
     command: ["sh", "-c", "chown -R 1000:1000 /data"]
@@ -23,7 +23,7 @@ services:
     # change both in one commit. A Gitea upgrade migrates `gitea.db` on start
     # and cannot be reverted by reverting this line — see docs/ops/deploy.md,
     # "Gitea version changes are not covered by a git revert".
-    image: gitea/gitea:28.0.0@sha256:a9dc25679ebdd33356242d2e0667cc220043745e8339922879f187c20329a42e
+    image: gitea/gitea:28.2.0@sha256:30777c91280d973fa02be48b1ade735bd6859e8f6f7af3b4444d519437852504
     container_name: bindersnap-gitea-prod
     restart: unless-stopped
     depends_on:
@@ -199,7 +199,7 @@ services:
   # Cloudflare (infra/edge). The token is the SSM leaf `cloudflare_tunnel_token`,
   # written by infra/edge/put-tunnel-token.sh, never by Terraform.
   cloudflared:
-    image: cloudflare/cloudflared:2026.9.3@sha256:072c067d25ccbe61d46e18f0d0723255f2bb5304f7317caa95b27031520ff92c
+    image: cloudflare/cloudflared:2026.10.1@sha256:a15a3b50b8dabd57ac2090e9484c0247dba9dfa1f0df4d298d4317f9d69eb2d5
     container_name: bindersnap-cloudflared-prod
     restart: unless-stopped
     depends_on:
@@ -219,7 +219,7 @@ services:
   litestream:
     # Pinned: a floating tag let a backup-agent upgrade ride along with any
     # deploy. scripts/restore.sh restores with the same image; bump both.
-    image: litestream/litestream:0.3.14@sha256:c5a1e1b01916b3a110f6600820ef176d048d9b9c2411ef0a680de0caa68934a5
+    image: litestream/litestream:0.5.17@sha256:4b02b9859a6b6b4087d8b8944e15f7e984bd7957cba322bbeee38b0e27b9656a
     container_name: bindersnap-litestream-prod
     restart: unless-stopped
     depends_on:

@@ -34,7 +34,7 @@ services:
     # cannot, so every developer, CI run and the production host boot the same
     # bytes. Docker uses the digest and treats the tag as a label for humans.
     # To upgrade, change both here and in production in one commit.
-    image: gitea/gitea:28.0.0@sha256:a9dc25679ebdd33356242d2e0667cc220043745e8339922879f187c20329a42e
+    image: gitea/gitea:28.2.0@sha256:30777c91280d973fa02be48b1ade735bd6859e8f6f7af3b4444d519437852504
     container_name: ${STACK_NAME:-bindersnap}-gitea
     restart: unless-stopped
     depends_on:
@@ -100,7 +100,7 @@ services:
   # machine. The Playwright suite reads messages back through its API
   # (tests/mailpit.ts); people read them at the stack's `mail` URL.
   mailpit:
-    image: axllent/mailpit:v1.27
+    image: axllent/mailpit:v1.31
     container_name: ${STACK_NAME:-bindersnap}-mailpit
     environment:
       - MP_MAX_MESSAGES=2000
