@@ -12,3 +12,21 @@
   Referrer-Policy: same-origin
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+
+# The landing page's fonts, asked for with the page instead of after
+# fonts.css arrives through its @import: the headline (Lora) and the body
+# (Geist), the two faces a phone draws first. Here and not in index.html,
+# whose <link> hrefs the bundler insists on resolving and copying.
+/
+  Link: </fonts/fonts.css>; rel=preload; as=style, </fonts/lora-latin-wght-normal.woff2>; rel=preload; as=font; type="font/woff2"; crossorigin, </fonts/geist-latin-wght-normal.woff2>; rel=preload; as=font; type="font/woff2"; crossorigin
+
+# Cloudflare's default is max-age=0, so a phone asks again for every file on
+# every visit. The bundler writes everything it builds to /_assets/ under a
+# name taken from its content (scripts/build.ts), so a new build gets new
+# names and these can be kept for good.
+/_assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# The fonts keep their names from build to build, so a month, not forever.
+/fonts/*
+  Cache-Control: public, max-age=2592000, stale-while-revalidate=86400

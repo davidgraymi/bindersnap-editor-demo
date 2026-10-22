@@ -24,6 +24,9 @@
 export const RESERVED_ORGANIZATION_NAMES: ReadonlySet<string> = new Set([
   "-",
   "auth",
+  // What the bundler builds (scripts/build.ts), cached for good by _headers.
+  // Gitea refuses a name that starts with "_" anyway; this says it here too.
+  "_assets",
   // apps/app/public, at the root of app.bindersnap.com.
   "apple-touch-icon.png",
   "favicon.ico",

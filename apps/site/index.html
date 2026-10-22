@@ -139,41 +139,18 @@
     <style>
       @import url("/fonts/fonts.css");
     </style>
-    <link
-      rel="preload"
-      as="style"
-      href="@ui/css"
-      onload="
-        this.onload = null;
-        this.rel = 'stylesheet';
-      "
-    />
-    <noscript>
-      <link rel="stylesheet" href="@ui/css" />
-    </noscript>
-    <link
-      rel="preload"
-      as="style"
-      href="./landing.css"
-      onload="
-        this.onload = null;
-        this.rel = 'stylesheet';
-      "
-    />
-    <noscript>
-      <link rel="stylesheet" href="./landing.css" />
-    </noscript>
+    <!--
+      Ordinary stylesheets, and the page is drawn as soon as they arrive. It
+      used to stay hidden until the script below had run, which on a phone
+      meant a blank screen for seconds (Lighthouse, mobile).
+    -->
+    <link rel="stylesheet" href="@ui/css" />
+    <link rel="stylesheet" href="./landing.css" />
     <style>
-      #landing-content {
-        opacity: 0;
-        transition: opacity 0.15s;
-      }
-
       /*
-        Failure fallbacks. The page below the hero is hidden until
-        landing-inline.ts reveals #landing-content and the IntersectionObserver
-        adds .in to each .reveal, so anything that stops that module leaves a
-        blank page. Two nets:
+        Failure fallbacks. The sections below the hero are hidden until the
+        IntersectionObserver in landing-inline.ts adds .in to each .reveal, so
+        anything that stops that module leaves them blank. Two nets:
           - data-landing-fallback: set by the timer below when the module has
             not reported ready, covering a slow, blocked, or broken bundle.
           - <noscript>: covers JS being off entirely.
@@ -182,10 +159,6 @@
         bundler injects the compiled stylesheet after this <head>, so a rule
         here that merely ties on specificity loses to it.
       */
-      html[data-landing-fallback] #landing-content {
-        opacity: 1;
-      }
-
       html[data-landing-fallback] .reveal {
         opacity: 1;
         transform: none;
@@ -196,11 +169,7 @@
         /* `html` prefixes are load-bearing, not decoration — see above. The
            compiled stylesheet's own `.reveal { opacity: 0 }` is injected after
            this block, so a bare `.reveal` here ties on specificity and loses,
-           leaving the whole page below the hero invisible with JS off. */
-        html #landing-content {
-          opacity: 1;
-        }
-
+           leaving every section below the hero invisible with JS off. */
         html .reveal {
           opacity: 1;
           transform: none;
@@ -290,10 +259,28 @@
             <div class="chaos-pill">
               <span
                 class="landing-lucide-icon chaos-pill-icon"
-                data-lucide-icon="file-text"
-                data-lucide-size="14"
-                data-lucide-stroke-width="1.75"
                 aria-hidden="true"
+                ><svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.75"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="lucide lucide-file-text"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path
+                    d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+                  ></path>
+                  <path d="M14 2v5a1 1 0 0 0 1 1h5"></path>
+                  <path d="M10 9H8"></path>
+                  <path d="M16 13H8"></path>
+                  <path d="M16 17H8"></path></svg
               ></span>
               <span class="chaos-file"
                 >Infection_Control_Policy_rev3_FINAL(2).docx</span
@@ -328,12 +315,23 @@
                 </button>
               </div>
               <p class="form-hint">
-                <span
-                  class="landing-lucide-icon"
-                  data-lucide-icon="clock-3"
-                  data-lucide-size="12"
-                  data-lucide-stroke-width="1.75"
-                  aria-hidden="true"
+                <span class="landing-lucide-icon" aria-hidden="true"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.75"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-clock-3"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M12 6v6h4"></path></svg
                 ></span>
                 No demo call, no implementation project &middot; Cancel anytime
               </p>
@@ -379,12 +377,30 @@
                       >
                       <span class="version-time">Oct 14 &middot; 16:02</span>
                       <span class="version-state is-approved">
-                        <span
-                          class="landing-lucide-icon"
-                          data-lucide-icon="lock"
-                          data-lucide-size="12"
-                          data-lucide-stroke-width="1.75"
-                          aria-hidden="true"
+                        <span class="landing-lucide-icon" aria-hidden="true"
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.75"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-lock"
+                            aria-hidden="true"
+                            focusable="false"
+                          >
+                            <rect
+                              width="18"
+                              height="11"
+                              x="3"
+                              y="11"
+                              rx="2"
+                              ry="2"
+                            ></rect>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg
                         ></span>
                         Approved &middot; Locked
                       </span>
@@ -392,12 +408,22 @@
                   </ol>
                   <div class="audit-threads">
                     <span class="audit-chip is-resolved">
-                      <span
-                        class="landing-lucide-icon"
-                        data-lucide-icon="check"
-                        data-lucide-size="12"
-                        data-lucide-stroke-width="2"
-                        aria-hidden="true"
+                      <span class="landing-lucide-icon" aria-hidden="true"
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-check"
+                          aria-hidden="true"
+                          focusable="false"
+                        >
+                          <path d="M20 6 9 17l-5-5"></path></svg
                       ></span>
                       3 discussion threads resolved
                     </span>
@@ -417,12 +443,25 @@
                         >
                       </span>
                       <span class="approver-mark">
-                        <span
-                          class="landing-lucide-icon"
-                          data-lucide-icon="badge-check"
-                          data-lucide-size="14"
-                          data-lucide-stroke-width="1.75"
-                          aria-hidden="true"
+                        <span class="landing-lucide-icon" aria-hidden="true"
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.75"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-badge-check lucide-verified"
+                            aria-hidden="true"
+                            focusable="false"
+                          >
+                            <path
+                              d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"
+                            ></path>
+                            <path d="m16 9-5.5 5.5L8 12"></path></svg
                         ></span>
                         <span class="approver-time">Oct 14 &middot; 16:41</span>
                       </span>
@@ -436,12 +475,25 @@
                         >
                       </span>
                       <span class="approver-mark">
-                        <span
-                          class="landing-lucide-icon"
-                          data-lucide-icon="badge-check"
-                          data-lucide-size="14"
-                          data-lucide-stroke-width="1.75"
-                          aria-hidden="true"
+                        <span class="landing-lucide-icon" aria-hidden="true"
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.75"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-badge-check lucide-verified"
+                            aria-hidden="true"
+                            focusable="false"
+                          >
+                            <path
+                              d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"
+                            ></path>
+                            <path d="m16 9-5.5 5.5L8 12"></path></svg
                         ></span>
                         <span class="approver-time">Oct 14 &middot; 17:08</span>
                       </span>
@@ -452,12 +504,30 @@
                       Approve v3
                     </button>
                     <p class="audit-gate-note">
-                      <span
-                        class="landing-lucide-icon"
-                        data-lucide-icon="lock"
-                        data-lucide-size="12"
-                        data-lucide-stroke-width="1.75"
-                        aria-hidden="true"
+                      <span class="landing-lucide-icon" aria-hidden="true"
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.75"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-lock"
+                          aria-hidden="true"
+                          focusable="false"
+                        >
+                          <rect
+                            width="18"
+                            height="11"
+                            x="3"
+                            y="11"
+                            rx="2"
+                            ry="2"
+                          ></rect>
+                          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg
                       ></span>
                       Only designated reviewers can approve. You have view
                       access.
@@ -509,12 +579,28 @@
                     THIS one on the floor.
                   </div>
                   <div class="email-attach">
-                    <span
-                      class="landing-lucide-icon"
-                      data-lucide-icon="file-text"
-                      data-lucide-size="10"
-                      data-lucide-stroke-width="1.6"
-                      aria-hidden="true"
+                    <span class="landing-lucide-icon" aria-hidden="true"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="10"
+                        height="10"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-file-text"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <path
+                          d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+                        ></path>
+                        <path d="M14 2v5a1 1 0 0 0 1 1h5"></path>
+                        <path d="M10 9H8"></path>
+                        <path d="M16 13H8"></path>
+                        <path d="M16 17H8"></path></svg
                     ></span>
                     IC_Policy_2026_rev3_RA.docx
                   </div>
@@ -540,12 +626,28 @@
                     someone send me what I actually signed?
                   </div>
                   <div class="email-attach">
-                    <span
-                      class="landing-lucide-icon"
-                      data-lucide-icon="file-text"
-                      data-lucide-size="10"
-                      data-lucide-stroke-width="1.6"
-                      aria-hidden="true"
+                    <span class="landing-lucide-icon" aria-hidden="true"
+                      ><svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="10"
+                        height="10"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="lucide lucide-file-text"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <path
+                          d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+                        ></path>
+                        <path d="M14 2v5a1 1 0 0 0 1 1h5"></path>
+                        <path d="M10 9H8"></path>
+                        <path d="M16 13H8"></path>
+                        <path d="M16 17H8"></path></svg
                     ></span>
                     IC_Policy_FINAL_APPROVED_Mar14.docx
                   </div>
@@ -693,12 +795,22 @@
                   <div class="chain-entry-head">
                     <span class="chain-entry-version">Version 1</span>
                     <span class="chain-entry-state">
-                      <span
-                        class="landing-lucide-icon"
-                        data-lucide-icon="check"
-                        data-lucide-size="12"
-                        data-lucide-stroke-width="2.5"
-                        aria-hidden="true"
+                      <span class="landing-lucide-icon" aria-hidden="true"
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-check"
+                          aria-hidden="true"
+                          focusable="false"
+                        >
+                          <path d="M20 6 9 17l-5-5"></path></svg
                       ></span>
                       Approved
                     </span>
@@ -720,12 +832,22 @@
                   <div class="chain-entry-head">
                     <span class="chain-entry-version">Version 2</span>
                     <span class="chain-entry-state">
-                      <span
-                        class="landing-lucide-icon"
-                        data-lucide-icon="check"
-                        data-lucide-size="12"
-                        data-lucide-stroke-width="2.5"
-                        aria-hidden="true"
+                      <span class="landing-lucide-icon" aria-hidden="true"
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-check"
+                          aria-hidden="true"
+                          focusable="false"
+                        >
+                          <path d="M20 6 9 17l-5-5"></path></svg
                       ></span>
                       Approved
                     </span>
@@ -749,12 +871,22 @@
                   <div class="chain-entry-head">
                     <span class="chain-entry-version">Version 3</span>
                     <span class="chain-entry-state">
-                      <span
-                        class="landing-lucide-icon"
-                        data-lucide-icon="check"
-                        data-lucide-size="12"
-                        data-lucide-stroke-width="2.5"
-                        aria-hidden="true"
+                      <span class="landing-lucide-icon" aria-hidden="true"
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-check"
+                          aria-hidden="true"
+                          focusable="false"
+                        >
+                          <path d="M20 6 9 17l-5-5"></path></svg
                       ></span>
                       Approved
                     </span>
@@ -774,12 +906,31 @@
               </ol>
 
               <p class="chain-note">
-                <span
-                  class="landing-lucide-icon"
-                  data-lucide-icon="unlink"
-                  data-lucide-size="16"
-                  data-lucide-stroke-width="1.8"
-                  aria-hidden="true"
+                <span class="landing-lucide-icon" aria-hidden="true"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-unlink"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <path
+                      d="m18.84 12.25 1.72-1.71h-.02a5.004 5.004 0 0 0-.12-7.07 5.006 5.006 0 0 0-6.95 0l-1.72 1.71"
+                    ></path>
+                    <path
+                      d="m5.17 11.75-1.71 1.71a5.004 5.004 0 0 0 .12 7.07 5.006 5.006 0 0 0 6.95 0l1.71-1.71"
+                    ></path>
+                    <line x1="8" x2="8" y1="2" y2="5"></line>
+                    <line x1="2" x2="5" y1="8" y2="8"></line>
+                    <line x1="16" x2="16" y1="19" y2="22"></line>
+                    <line x1="19" x2="22" y1="16" y2="16"></line></svg
                 ></span>
                 <span>
                   Go back and change one word of version 2 and its fingerprint
@@ -853,12 +1004,23 @@
 
               <div class="ledger-cell before reveal reveal-d1">
                 <span class="ledger-mark" aria-hidden="true">
-                  <span
-                    class="landing-lucide-icon"
-                    data-lucide-icon="x"
-                    data-lucide-size="16"
-                    data-lucide-stroke-width="1.75"
-                    aria-hidden="true"
+                  <span class="landing-lucide-icon" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.75"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-x"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path d="M18 6 6 18"></path>
+                      <path d="m6 6 12 12"></path></svg
                   ></span>
                 </span>
                 <span
@@ -868,12 +1030,22 @@
 
               <div class="ledger-cell after reveal reveal-d1">
                 <span class="ledger-mark" aria-hidden="true">
-                  <span
-                    class="landing-lucide-icon"
-                    data-lucide-icon="check"
-                    data-lucide-size="16"
-                    data-lucide-stroke-width="1.75"
-                    aria-hidden="true"
+                  <span class="landing-lucide-icon" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.75"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-check"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path d="M20 6 9 17l-5-5"></path></svg
                   ></span>
                 </span>
                 <span>One policy, one page, one current approved version</span>
@@ -881,12 +1053,23 @@
 
               <div class="ledger-cell before reveal reveal-d2">
                 <span class="ledger-mark" aria-hidden="true">
-                  <span
-                    class="landing-lucide-icon"
-                    data-lucide-icon="x"
-                    data-lucide-size="16"
-                    data-lucide-stroke-width="1.75"
-                    aria-hidden="true"
+                  <span class="landing-lucide-icon" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.75"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-x"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path d="M18 6 6 18"></path>
+                      <path d="m6 6 12 12"></path></svg
                   ></span>
                 </span>
                 <span
@@ -897,12 +1080,22 @@
 
               <div class="ledger-cell after reveal reveal-d2">
                 <span class="ledger-mark" aria-hidden="true">
-                  <span
-                    class="landing-lucide-icon"
-                    data-lucide-icon="check"
-                    data-lucide-size="16"
-                    data-lucide-stroke-width="1.75"
-                    aria-hidden="true"
+                  <span class="landing-lucide-icon" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.75"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-check"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path d="M20 6 9 17l-5-5"></path></svg
                   ></span>
                 </span>
                 <span>Every sign-off dated, named, and tied to a version</span>
@@ -910,12 +1103,23 @@
 
               <div class="ledger-cell before reveal reveal-d3">
                 <span class="ledger-mark" aria-hidden="true">
-                  <span
-                    class="landing-lucide-icon"
-                    data-lucide-icon="x"
-                    data-lucide-size="16"
-                    data-lucide-stroke-width="1.75"
-                    aria-hidden="true"
+                  <span class="landing-lucide-icon" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.75"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-x"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path d="M18 6 6 18"></path>
+                      <path d="m6 6 12 12"></path></svg
                   ></span>
                 </span>
                 <span>IC_Policy_2026_rev3_FINAL_APPROVED(2).docx</span>
@@ -923,12 +1127,22 @@
 
               <div class="ledger-cell after reveal reveal-d3">
                 <span class="ledger-mark" aria-hidden="true">
-                  <span
-                    class="landing-lucide-icon"
-                    data-lucide-icon="check"
-                    data-lucide-size="16"
-                    data-lucide-stroke-width="1.75"
-                    aria-hidden="true"
+                  <span class="landing-lucide-icon" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.75"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-check"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path d="M20 6 9 17l-5-5"></path></svg
                   ></span>
                 </span>
                 <span>Version history instead of filename archaeology</span>
@@ -936,12 +1150,23 @@
 
               <div class="ledger-cell before reveal reveal-d3">
                 <span class="ledger-mark" aria-hidden="true">
-                  <span
-                    class="landing-lucide-icon"
-                    data-lucide-icon="x"
-                    data-lucide-size="16"
-                    data-lucide-stroke-width="1.75"
-                    aria-hidden="true"
+                  <span class="landing-lucide-icon" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.75"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-x"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path d="M18 6 6 18"></path>
+                      <path d="m6 6 12 12"></path></svg
                   ></span>
                 </span>
                 <span>Staff working from a copy somebody saved locally</span>
@@ -949,12 +1174,22 @@
 
               <div class="ledger-cell after reveal reveal-d3">
                 <span class="ledger-mark" aria-hidden="true">
-                  <span
-                    class="landing-lucide-icon"
-                    data-lucide-icon="check"
-                    data-lucide-size="16"
-                    data-lucide-stroke-width="1.75"
-                    aria-hidden="true"
+                  <span class="landing-lucide-icon" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.75"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-check"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path d="M20 6 9 17l-5-5"></path></svg
                   ></span>
                 </span>
                 <span>Nothing reaches the approved copy but a new version</span>
@@ -962,12 +1197,23 @@
 
               <div class="ledger-cell before reveal reveal-d3">
                 <span class="ledger-mark" aria-hidden="true">
-                  <span
-                    class="landing-lucide-icon"
-                    data-lucide-icon="x"
-                    data-lucide-size="16"
-                    data-lucide-stroke-width="1.75"
-                    aria-hidden="true"
+                  <span class="landing-lucide-icon" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.75"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-x"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path d="M18 6 6 18"></path>
+                      <path d="m6 6 12 12"></path></svg
                   ></span>
                 </span>
                 <span>Survey week starts with a weekend of reconstruction</span>
@@ -975,12 +1221,22 @@
 
               <div class="ledger-cell after reveal reveal-d3">
                 <span class="ledger-mark" aria-hidden="true">
-                  <span
-                    class="landing-lucide-icon"
-                    data-lucide-icon="check"
-                    data-lucide-size="16"
-                    data-lucide-stroke-width="1.75"
-                    aria-hidden="true"
+                  <span class="landing-lucide-icon" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.75"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-check"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path d="M20 6 9 17l-5-5"></path></svg
                   ></span>
                 </span>
                 <span>Every version and sign-off on one page, on demand</span>
@@ -1006,12 +1262,27 @@
             <div class="review-strip">
               <div class="review-point reveal reveal-d1">
                 <div class="review-point-icon">
-                  <span
-                    class="landing-lucide-icon"
-                    data-lucide-icon="users"
-                    data-lucide-size="16"
-                    data-lucide-stroke-width="1.8"
-                    aria-hidden="true"
+                  <span class="landing-lucide-icon" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-users"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"
+                      ></path>
+                      <path d="M16 3.128a4 4 0 0 1 0 7.744"></path>
+                      <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                      <circle cx="9" cy="7" r="4"></circle></svg
                   ></span>
                 </div>
                 <div class="review-point-tag">Threaded</div>
@@ -1026,12 +1297,22 @@
 
               <div class="review-point reveal reveal-d2">
                 <div class="review-point-icon">
-                  <span
-                    class="landing-lucide-icon"
-                    data-lucide-icon="check"
-                    data-lucide-size="16"
-                    data-lucide-stroke-width="1.8"
-                    aria-hidden="true"
+                  <span class="landing-lucide-icon" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-check"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path d="M20 6 9 17l-5-5"></path></svg
                   ></span>
                 </div>
                 <div class="review-point-tag">Enforced</div>
@@ -1046,12 +1327,24 @@
 
               <div class="review-point reveal reveal-d3">
                 <div class="review-point-icon">
-                  <span
-                    class="landing-lucide-icon"
-                    data-lucide-icon="shield"
-                    data-lucide-size="16"
-                    data-lucide-stroke-width="1.8"
-                    aria-hidden="true"
+                  <span class="landing-lucide-icon" aria-hidden="true"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-shield"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+                      ></path></svg
                   ></span>
                 </div>
                 <div class="review-point-tag">Recorded</div>
@@ -1156,12 +1449,23 @@
                 </button>
               </div>
               <p class="form-hint">
-                <span
-                  class="landing-lucide-icon"
-                  data-lucide-icon="clock-3"
-                  data-lucide-size="12"
-                  data-lucide-stroke-width="1.75"
-                  aria-hidden="true"
+                <span class="landing-lucide-icon" aria-hidden="true"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.75"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-clock-3"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M12 6v6h4"></path></svg
                 ></span>
                 No demo call, no implementation project &middot; Cancel anytime
               </p>
@@ -1176,34 +1480,77 @@
             -->
             <ul class="trust-strip">
               <li class="trust-item">
-                <span
-                  class="landing-lucide-icon trust-icon"
-                  data-lucide-icon="lock"
-                  data-lucide-size="14"
-                  data-lucide-stroke-width="1.8"
-                  aria-hidden="true"
+                <span class="landing-lucide-icon trust-icon" aria-hidden="true"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-lock"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <rect
+                      width="18"
+                      height="11"
+                      x="3"
+                      y="11"
+                      rx="2"
+                      ry="2"
+                    ></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg
                 ></span>
                 <strong>Encrypted at rest</strong>
                 <span class="trust-detail">AES-256 storage</span>
               </li>
               <li class="trust-item">
-                <span
-                  class="landing-lucide-icon trust-icon"
-                  data-lucide-icon="shield"
-                  data-lucide-size="14"
-                  data-lucide-stroke-width="1.8"
-                  aria-hidden="true"
+                <span class="landing-lucide-icon trust-icon" aria-hidden="true"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-shield"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <path
+                      d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+                    ></path></svg
                 ></span>
                 <strong>Encrypted in transit</strong>
                 <span class="trust-detail">HTTPS, browser to server</span>
               </li>
               <li class="trust-item">
-                <span
-                  class="landing-lucide-icon trust-icon"
-                  data-lucide-icon="users"
-                  data-lucide-size="14"
-                  data-lucide-stroke-width="1.8"
-                  aria-hidden="true"
+                <span class="landing-lucide-icon trust-icon" aria-hidden="true"
+                  ><svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="lucide lucide-users"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                    <path d="M16 3.128a4 4 0 0 1 0 7.744"></path>
+                    <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                    <circle cx="9" cy="7" r="4"></circle></svg
                 ></span>
                 <strong>Named approvers</strong>
                 <span class="trust-detail">Limit who can sign off</span>
