@@ -69,7 +69,8 @@ The names, as the token file defines them:
 --brand-text-h1, --brand-text-h2, --brand-text-h3
 --brand-text-body-lg, --brand-text-body, --brand-text-sm, --brand-text-xs
 --brand-text-label
---brand-text-ui-xs, --brand-text-ui-sm, --brand-text-ui-md  /* dense UI */
+--brand-text-ui-xs, --brand-text-ui-sm, --brand-text-ui-md  /* dense UI: 12/13/14px */
+--brand-text-ui-lg                   /* 15px: the name a row is about */
 
 /* Spacing (--brand-space-*): the number × 4px, so -6 is 24px */
 --brand-space-0-5, --brand-space-1, --brand-space-1-5, --brand-space-2,
@@ -106,7 +107,7 @@ Each font has one job:
 | Font           | Role                                                           | Rule                                                                                      |
 | -------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | **Lora**       | All headlines (H1–H3), pull quotes, display text               | Warm, literary, serif. Use Bold or SemiBold. Italic for `<em>` accent phrases in coral.   |
-| **Geist**      | All body copy, UI labels, buttons, navigation                  | Clean, modern. Light (300) for hero subtext, Regular (400) for body, Medium (500) for UI. |
+| **Geist**      | All body copy, UI labels, buttons, navigation                  | Clean, modern. Regular (400) for body and subtext, Medium (500) for UI. Never Light.      |
 | **Geist Mono** | Section eyebrow tags, code, filenames, timestamps, data labels | Fixed-width, technical. Always uppercase + wide letter-spacing for section labels.        |
 
 Never mix fonts within a heading level. Never use Lora for body copy, or Geist
@@ -133,8 +134,11 @@ for a main headline.
 - **Ink (`--bs-text-primary`, `#1C1917` in light mode)** is primary text, a warm
   charcoal, not black. Backgrounds that stay dark in both themes (the chaos
   strip, the footer) use `--brand-ink`.
-- **`--bs-text-muted`** is secondary body text. **`--bs-text-faint`** is the
-  floor — placeholders and hints only; nothing readable goes lighter.
+- **`--bs-text-secondary`** is paragraph text, on the landing page as in the
+  app. **`--bs-text-muted`** is metadata and short secondary lines — on
+  `--bs-surface-2` it measures 4.23:1, so nothing readable in muted sits on
+  beige. **`--bs-text-faint`** (3.0:1) is the floor — placeholders,
+  separators, icons and disabled items only; never text a person reads.
 - **Green (`--brand-green`, `#16A34A`)** means success and nothing else:
   success states, compliance badges, the "after" column in comparisons.
 - **The status ramp** (`--bs-status-warn-*`, `-info-*`, `-danger-*`, `-ok-*`,

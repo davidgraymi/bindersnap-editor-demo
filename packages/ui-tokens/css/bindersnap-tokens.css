@@ -253,7 +253,6 @@
   --brand-font-mono: "Geist Mono", "Fira Code", Consolas, monospace;
 
   /* ── Font weights ── */
-  --brand-weight-light: 300;
   --brand-weight-regular: 400;
   --brand-weight-medium: 500;
   --brand-weight-semibold: 600;
@@ -273,11 +272,14 @@
   --brand-text-xs: 0.75rem;
   --brand-text-label: 0.6875rem; /* Section tags — font-mono medium */
 
-  /* Dense-UI steps — fills the gap between --brand-text-xs (12px) and
-     --brand-text-sm (14px). Tables, chips and metadata rows. */
-  --brand-text-ui-xs: 0.6875rem; /* 11px */
-  --brand-text-ui-sm: 0.75rem; /* 12px */
-  --brand-text-ui-md: 0.8125rem; /* 13px */
+  /* Dense-UI steps — the app's own scale. Tables, chips, metadata rows,
+     and (ui-lg) the name a row is about. The people reading these are
+     compliance leads, not engineers: nothing a person reads goes below
+     12px, and the line a row is about sits at 15px. */
+  --brand-text-ui-xs: 0.75rem; /* 12px */
+  --brand-text-ui-sm: 0.8125rem; /* 13px */
+  --brand-text-ui-md: 0.875rem; /* 14px */
+  --brand-text-ui-lg: 0.9375rem; /* 15px */
 
   /* ── Icon sizes / stroke widths ──
      Lucide icons via <AppIcon> (apps/app/components/AppIcon.tsx). Fixed —

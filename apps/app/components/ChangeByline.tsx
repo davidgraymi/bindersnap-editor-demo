@@ -77,7 +77,9 @@ export function ChangeByline({
               onClick={(event) => followInApp(event, onOpenBranch)}
             >
               <GitBranch size={12} strokeWidth={1.75} aria-hidden="true" />
-              {branchLabel ?? describeBranch(branch, nameOf)}
+              <span className="cmp-branch-label">
+                {branchLabel ?? describeBranch(branch, nameOf)}
+              </span>
             </a>
           </>
         ) : null}

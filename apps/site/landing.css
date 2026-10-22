@@ -226,10 +226,10 @@ body::after {
 }
 
 .hero-sub {
-  font-size: 18px;
-  font-weight: var(--brand-weight-light);
+  font-size: var(--brand-text-body-lg);
+  font-weight: var(--brand-weight-regular);
   line-height: var(--brand-leading-relaxed);
-  color: var(--bs-text-muted);
+  color: var(--bs-text-secondary);
   text-align: center;
   max-width: var(--brand-max-width-narrow);
   margin-bottom: var(--brand-space-12);
@@ -478,7 +478,7 @@ body::after {
 .version-desc {
   flex: 1 1 200px;
   font-size: var(--brand-text-sm);
-  font-weight: var(--brand-weight-light);
+  font-weight: var(--brand-weight-regular);
   line-height: var(--brand-leading-normal);
   color: var(--bs-text-secondary);
 }
@@ -582,7 +582,7 @@ body::after {
 
 .approver-role {
   font-size: var(--brand-text-label);
-  font-weight: var(--brand-weight-light);
+  font-weight: var(--brand-weight-regular);
   color: var(--bs-text-muted);
 }
 
@@ -713,7 +713,7 @@ body::after {
 
 .chaos-left p {
   font-size: var(--brand-text-body);
-  font-weight: var(--brand-weight-light);
+  font-weight: var(--brand-weight-regular);
   line-height: var(--brand-leading-relaxed);
   color: var(--brand-on-dark-secondary);
 }
@@ -902,8 +902,8 @@ body::after {
 
 .features-subtitle {
   font-size: var(--brand-text-body);
-  font-weight: var(--brand-weight-light);
-  color: var(--bs-text-muted);
+  font-weight: var(--brand-weight-regular);
+  color: var(--bs-text-secondary);
   max-width: 420px;
   line-height: var(--brand-leading-relaxed);
 }
@@ -965,9 +965,9 @@ body::after {
 
 .feat p {
   font-size: var(--brand-text-sm);
-  font-weight: var(--brand-weight-light);
+  font-weight: var(--brand-weight-regular);
   line-height: var(--brand-leading-relaxed);
-  color: var(--bs-text-muted);
+  color: var(--bs-text-secondary);
 }
 
 /* ─────────────────────────────────────
@@ -1005,8 +1005,8 @@ body::after {
 
 .compare-header p {
   font-size: var(--brand-text-body);
-  font-weight: var(--brand-weight-light);
-  color: var(--bs-text-muted);
+  font-weight: var(--brand-weight-regular);
+  color: var(--bs-text-secondary);
   line-height: var(--brand-leading-normal);
 }
 
@@ -1142,9 +1142,9 @@ body::after {
 
 .review-header p {
   font-size: var(--brand-text-body);
-  font-weight: var(--brand-weight-light);
+  font-weight: var(--brand-weight-regular);
   line-height: var(--brand-leading-relaxed);
-  color: var(--bs-text-muted);
+  color: var(--bs-text-secondary);
   max-width: var(--brand-max-width-text);
   margin: 0 auto;
 }
@@ -1207,9 +1207,9 @@ body::after {
 
 .review-point p {
   font-size: var(--brand-text-sm);
-  font-weight: var(--brand-weight-light);
+  font-weight: var(--brand-weight-regular);
   line-height: var(--brand-leading-relaxed);
-  color: var(--bs-text-muted);
+  color: var(--bs-text-secondary);
 }
 
 /* Secondary CTA. One shared treatment for every mid-page call to action so
@@ -1500,9 +1500,9 @@ body::after {
 
 .record-claim p {
   font-size: var(--brand-text-sm);
-  font-weight: var(--brand-weight-light);
+  font-weight: var(--brand-weight-regular);
   line-height: var(--brand-leading-relaxed);
-  color: var(--bs-text-muted);
+  color: var(--bs-text-secondary);
   margin: 0;
 }
 
@@ -1612,7 +1612,7 @@ body::after {
 .founder-role {
   font-family: var(--brand-font-mono);
   font-size: var(--brand-text-label);
-  font-weight: var(--brand-weight-light);
+  font-weight: var(--brand-weight-regular);
   letter-spacing: var(--brand-tracking-wide);
   text-transform: uppercase;
   color: var(--bs-text-secondary);
@@ -1710,8 +1710,8 @@ body::after {
 
 .cta-inner > p {
   font-size: var(--brand-text-body);
-  font-weight: var(--brand-weight-light);
-  color: var(--bs-text-muted);
+  font-weight: var(--brand-weight-regular);
+  color: var(--bs-text-secondary);
   line-height: var(--brand-leading-relaxed);
   max-width: 420px;
   margin: 0 auto var(--brand-space-10);
@@ -1772,7 +1772,7 @@ body::after {
 .trust-detail {
   font-family: var(--brand-font-mono);
   font-size: var(--brand-text-label);
-  font-weight: var(--brand-weight-light);
+  font-weight: var(--brand-weight-regular);
   letter-spacing: var(--brand-tracking-wide);
   /* muted, not faint: faint on the CTA card's dark surface lands at ~3.2:1,
      under AA for 11px text. */
