@@ -47,7 +47,15 @@ function bundle(entry: string, outDir: string): void {
     "--minify",
     "--splitting",
     "--public-path=/",
-    `--define:process.env.NODE_ENV="production"`,
+    // Everything the bundler writes is named for its content and goes under
+    // /_assets/, which each origin's _headers caches for good; only the HTML
+    // keeps its own name at the root.
+    "--entry-naming=[dir]/[name].[ext]",
+    "--chunk-naming=_assets/[name]-[hash].[ext]",
+    "--asset-naming=_assets/[name]-[hash].[ext]",
+    // `=`, not `:`. Bun ignores `--define:` without a word, and the app
+    // shipped React's development build for as long as it said that.
+    `--define=process.env.NODE_ENV="production"`,
     "--env=BUN_PUBLIC_*",
   ]);
 }

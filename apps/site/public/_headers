@@ -21,10 +21,10 @@
   Link: </fonts/fonts.css>; rel=preload; as=style, </fonts/lora-latin-wght-normal.woff2>; rel=preload; as=font; type="font/woff2"; crossorigin, </fonts/geist-latin-wght-normal.woff2>; rel=preload; as=font; type="font/woff2"; crossorigin
 
 # Cloudflare's default is max-age=0, so a phone asks again for every file on
-# every visit. What the bundler writes at the root is named for its content
-# (index-<hash>.js, index-<hash>.css), so a new build gets a new name and the
-# old one can be kept for good.
-/index-*
+# every visit. The bundler writes everything it builds to /_assets/ under a
+# name taken from its content (scripts/build.ts), so a new build gets new
+# names and these can be kept for good.
+/_assets/*
   Cache-Control: public, max-age=31536000, immutable
 
 # The fonts keep their names from build to build, so a month, not forever.
