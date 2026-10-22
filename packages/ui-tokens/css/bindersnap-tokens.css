@@ -500,7 +500,8 @@ body::after {
   font-weight: var(--brand-weight-medium);
   letter-spacing: var(--brand-tracking-wider);
   text-transform: uppercase;
-  color: var(--brand-coral);
+  /* Text, so the coral that stays legible: --brand-coral is 3.48:1 on white. */
+  color: var(--bs-coral-text);
 }
 
 /* ═════════════════════════════════════════════════════════════
