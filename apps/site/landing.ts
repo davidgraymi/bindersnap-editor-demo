@@ -10,18 +10,6 @@ function getStorage(): Storage | null {
   }
 }
 
-export function showLandingContent(
-  landingContent: HTMLElement | null | undefined,
-): void {
-  if (!landingContent) {
-    return;
-  }
-
-  landingContent.style.display = "";
-  landingContent.style.opacity = "1";
-  landingContent.removeAttribute("aria-hidden");
-}
-
 export function restoreTheme(doc: Document = document): string {
   const storage = getStorage();
   const savedTheme = storage?.getItem("bs-theme");
