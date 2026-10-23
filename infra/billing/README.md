@@ -80,7 +80,7 @@ so the API sells the new price.
 ## Cutover, once: test mode
 
 Test mode already had a "Bindersnap Pro Test" product with a $39 per-writer
-price, which CI buys through the `STRIPE_TEST_PRICE_ID` secret.
+price, which CI bought through a `STRIPE_TEST_PRICE_ID` secret.
 `infra/billing-test/main.tf` imports the product, that price and the portal,
 so the price keeps its ID: its amount, currency and interval already match,
 and its tax behavior, lookup key and nickname change in place.
@@ -93,9 +93,8 @@ STRIPE_API_KEY="$STRIPE_TEST_API_KEY" terraform apply
 ```
 
 CI (`pr-verify.yml`, "Find the Stripe test price") then finds the price by its
-lookup key, `bindersnap_writer_seat_monthly`, and stops using
-`STRIPE_TEST_PRICE_ID`. Delete that secret once a run's log shows no
-"Falling back" warning.
+lookup key, `bindersnap_writer_seat_monthly`. The `STRIPE_TEST_PRICE_ID`
+secret and its fallback are gone.
 
 Left alone, and safe to archive or delete in the Dashboard: the test product's
 old $90 price, the `myproduct` objects the Stripe CLI made, and a disabled

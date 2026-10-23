@@ -39,7 +39,7 @@ module "catalog" {
 }
 
 # Made in the Dashboard as "Bindersnap Pro Test", with a $39 per-writer price
-# that CI already buys (STRIPE_TEST_PRICE_ID). Adopted, so that price keeps its
+# that CI bought by its ID before the lookup key. Adopted, so that price keeps its
 # ID: its amount, currency and interval match the catalog, and what differs
 # (tax behavior, lookup key, nickname) changes in place.
 import {

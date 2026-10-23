@@ -143,11 +143,8 @@ jobs:
 
       # The price is infra/billing-test's, found by the lookup key in
       # infra/billing/catalog/main.tf, so its ID is never copied into a secret.
-      # STRIPE_TEST_PRICE_ID is a fallback until that module is applied.
       - name: Find the Stripe test price
         if: ${{ env.STRIPE_SECRET_KEY != '' }}
-        env:
-          STRIPE_TEST_PRICE_ID: ${{ secrets.STRIPE_TEST_PRICE_ID }}
         run: |
           set -euo pipefail
           price_id="$(
@@ -157,8 +154,8 @@ jobs:
               jq -r '.data[0].id // empty'
           )" || price_id=""
           if [[ -z "${price_id}" ]]; then
-            echo "::warning title=Stripe test price::No active price has lookup key bindersnap_writer_seat_monthly; apply infra/billing-test. Falling back to STRIPE_TEST_PRICE_ID."
-            price_id="${STRIPE_TEST_PRICE_ID}"
+            echo "::error title=Stripe test price::No active price has lookup key bindersnap_writer_seat_monthly; apply infra/billing-test."
+            exit 1
           fi
           echo "STRIPE_PRICE_ID=${price_id}" >> "${GITHUB_ENV}"
 
