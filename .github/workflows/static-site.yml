@@ -61,8 +61,8 @@ jobs:
           # Each origin links to the other (issue #718).
           BUN_PUBLIC_APP_URL: https://app.bindersnap.com
           BUN_PUBLIC_SITE_URL: https://bindersnap.com
-          # The Google tag on the public site's pages only (apps/site), never
-          # the app. Unset, there is no tag.
+          # The Google tag on every page of bindersnap.com (apps/site/analytics.ts),
+          # never the app. Unset, there is no tag.
           BINDERSNAP_GA_MEASUREMENT_ID: ${{ vars.GA_MEASUREMENT_ID }}
           # Which build a feedback report came from (apps/app/feedbackTrace.ts).
           BUN_PUBLIC_APP_COMMIT: ${{ github.sha }}

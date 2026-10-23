@@ -21,8 +21,11 @@ import {
   readFileSync,
   renameSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+
+import { withAnalyticsTag } from "../apps/site/analytics";
 
 const ROOT = join(import.meta.dir, "..");
 const DIST = join(ROOT, "dist");
@@ -116,6 +119,15 @@ cpSync(SHARED_PUBLIC, APP, { recursive: true });
 // The site: the landing page, then the icons and fonts it shares with the
 // app, its own headers and redirects, and the pages the renderers write.
 bundle("./apps/site/index.html", SITE);
+// The Google tag, as on every page of bindersnap.com (apps/site/analytics.ts).
+const landing = join(SITE, "index.html");
+writeFileSync(
+  landing,
+  withAnalyticsTag(
+    readFileSync(landing, "utf8"),
+    process.env.BINDERSNAP_GA_MEASUREMENT_ID,
+  ),
+);
 for (const entry of readdirSync(SHARED_PUBLIC)) {
   if (APP_ONLY.has(entry)) continue;
   cpSync(join(SHARED_PUBLIC, entry), join(SITE, entry), { recursive: true });

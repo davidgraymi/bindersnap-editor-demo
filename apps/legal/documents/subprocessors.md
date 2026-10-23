@@ -20,9 +20,9 @@ Customer Content (your organization's documents, versions, approvals, reviews, c
 
 These companies are not subprocessors, because they never receive Customer Content or account data. We list them so you know every company your browser talks to when you use Bindersnap.
 
-| Name       | What they do for us                                                                                                        | What they see                                                                                                                        | Location |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------- |
-| Google LLC | Website analytics (Google Analytics) on our public marketing pages only, such as /pricing and /templates; never in the app | IP address, browser and device details, and the pages visited, for people who read those pages. No Customer Content or account data. | USA      |
+| Name       | What they do for us                                                                                                              | What they see                                                                                                                        | Location |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------- |
+| Google LLC | Website analytics (Google Analytics) on our public website, bindersnap.com, including its help and legal pages; never in the app | IP address, browser and device details, and the pages visited, for people who read those pages. No Customer Content or account data. | USA      |
 
 Our fonts and profile pictures come from Bindersnap itself, not from Google Fonts, Gravatar or any other outside service. Our Privacy Policy at [/legal/privacy](/legal/privacy) explains this in more detail.
 

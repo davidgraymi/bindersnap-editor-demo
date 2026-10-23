@@ -1,6 +1,7 @@
 import { stripTags } from "../../packages/utils/stripTags";
 import { markdownToHtml } from "../app/markdown";
 import { renderHelpCss } from "../help/renderHelp";
+import { analyticsTag } from "../site/analytics";
 import { linkCard, pageHero, siteFooter, siteHeader } from "../site/chrome";
 import type { LegalDocument } from "./legalDocuments";
 
@@ -81,6 +82,7 @@ ${
 <link rel="stylesheet" href="${FONTS}">
 <link rel="stylesheet" href="/legal/legal.css">
 <script>${THEME_SCRIPT}</script>
+${analyticsTag(process.env.BINDERSNAP_GA_MEASUREMENT_ID)}
 </head>
 <body>
 <a class="help-skip" href="#content">Skip to the text</a>
