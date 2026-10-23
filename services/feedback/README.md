@@ -44,12 +44,15 @@ every report answers 502 and nothing else is affected.
    read is added for you). Install it on the feedback repository **only**.
    Note the App ID and generate a private key (a `.pem` download).
 3. **The App's secrets.** From the repository root, with a Cloudflare token
-   that can edit Workers:
+   that can edit Workers. GitHub's key is PKCS#1 and the Worker's JWT library
+   accepts only PKCS#8, so convert it on the way in; uploaded as it comes,
+   every report answers 502:
 
    ```bash
    cd services/feedback
    echo -n "<app id>" | bunx wrangler@4.149.0 secret put GITHUB_APP_ID
-   bunx wrangler@4.149.0 secret put GITHUB_APP_PRIVATE_KEY < ~/Downloads/bindersnap-feedback.*.private-key.pem
+   openssl pkcs8 -topk8 -nocrypt -in ~/Downloads/bindersnap-feedback.*.private-key.pem |
+     bunx wrangler@4.149.0 secret put GITHUB_APP_PRIVATE_KEY
    rm ~/Downloads/bindersnap-feedback.*.private-key.pem
    ```
 
