@@ -1,7 +1,7 @@
 # Privacy Policy
 
-Last updated: October 13, 2026
-Version: 2026-10-13
+Last updated: October 22, 2026
+Version: 2026-10-22
 
 This policy explains what personal information Bindersnap collects, why we collect it, who else receives it, how long we keep it, and what you can do about it.
 
@@ -68,7 +68,7 @@ When we rely on legitimate interests, those interests are: keeping Bindersnap se
 
 ## 4. Cookies and browser storage
 
-**One cookie.** When you sign in, we set a single cookie called `bindersnap_session`. It keeps you signed in. It is marked HttpOnly, so scripts on the page cannot read it. It is strictly necessary: Bindersnap cannot work without it. That's why we don't show a cookie banner. Signing out ends your session on our server.
+**One cookie.** When you sign in, we set a single cookie called `__Host-bindersnap_session`. It keeps you signed in. It is marked HttpOnly, so scripts on the page cannot read it. It is strictly necessary: Bindersnap cannot work without it. That's why we don't show a cookie banner. Signing out ends your session on our server.
 
 In the app we set no other cookies. We don't use analytics cookies, advertising cookies, or social-media trackers there.
 
