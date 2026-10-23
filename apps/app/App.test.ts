@@ -708,9 +708,13 @@ test("App sends the signup form's Turnstile token, and asks for a new one after"
   installDom("/-/signup");
   process.env.BUN_PUBLIC_SIGNUP_TURNSTILE_SITE_KEY = "1x00000000000000000000AA";
   let resets = 0;
+  let tokens = 0;
   (window as { turnstile?: unknown }).turnstile = {
     render: (_: HTMLElement, options: { callback: (t: string) => void }) => {
-      queueMicrotask(() => options.callback("signup-token"));
+      queueMicrotask(() => {
+        options.callback("signup-token");
+        tokens += 1;
+      });
       return "widget-1";
     },
     reset: () => {
@@ -727,8 +731,11 @@ test("App sends the signup form's Turnstile token, and asks for a new one after"
   const { container, unmount } = mountApp(App);
 
   try {
+    // The box renders before Turnstile has answered; a click before the token
+    // arrives is refused with "Still checking", which a slow runner hits.
     await waitFor(() => {
       expect(container.querySelector(".app-login-check")).not.toBeNull();
+      expect(tokens).toBeGreaterThan(0);
     });
     const inputs = [
       ...container.querySelectorAll<HTMLInputElement>(".app-form input"),
@@ -758,7 +765,7 @@ test("App sends the signup form's Turnstile token, and asks for a new one after"
       expect(container.querySelector(".app-inline-error")?.textContent).toBe(
         "That username is taken.",
       );
-    });
+    }, 3000);
   } finally {
     unmount();
     delete process.env.BUN_PUBLIC_SIGNUP_TURNSTILE_SITE_KEY;
