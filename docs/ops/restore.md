@@ -23,7 +23,9 @@ its own is only for a broken database while the repositories are intact.
    Write**, limited to the `bindersnap-backup` bucket. Note its Access Key ID
    and Secret Access Key.
 3. Generate a repository password and keep it **in your password manager as
-   well as SSM**. Without it the backups cannot be read, by anyone.
+   well as SSM**. Without it the backups cannot be read, by anyone. Keep the
+   repository URL and the R2 token there too: SSM is in AWS, and this copy is
+   for when AWS is not there.
 4. Put all four in SSM; the next deploy renders them into `.env.prod`:
 
    ```bash
@@ -87,8 +89,11 @@ export RESTIC_REPOSITORY=s3:https://<account>.r2.cloudflarestorage.com/bindersna
 export RESTIC_PASSWORD=... AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_DEFAULT_REGION=auto
 docker run --rm -e RESTIC_REPOSITORY -e RESTIC_PASSWORD -e AWS_ACCESS_KEY_ID \
   -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION -v "$PWD/restore:/restore" \
-  restic/restic:0.19.1 restore latest --target /restore
+  restic/restic:0.19.1 restore latest --target /restore --exclude-xattr 'security.*'
 ```
+
+`--exclude-xattr` skips the host's SELinux labels. Without it, a restore onto a
+Mac or any host without SELinux writes every file, then fails on the labels.
 
 `restore/backup/gitea-data/` is the `gitea-data` volume without its database;
 copy `restore/backup/databases/gitea.db` into it as `gitea.db`. That pair is one
@@ -101,6 +106,12 @@ Before the first customer, and every quarter: restore each copy into a
 scratch instance, sign in, open a document, check its history and approvals.
 Write the wall-clock time here.
 
-| Date | Copy | Time to working app | Notes |
-| ---- | ---- | ------------------- | ----- |
-|      |      |                     |       |
+Each drill so far started Gitea alone on the restored copy, with mail, cron
+and webhooks off and nothing that reaches production: no tunnel, no
+Litestream, no backup timer, no API. Signing in to Gitea is signing in with
+the Bindersnap password.
+
+| Date       | Copy                                        | Time to working app                                               | Notes                                                                                                                                                                                                                                                                                                                                           |
+| ---------- | ------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-24 | EBS snapshot `snap-0d95dae5c234d8b68` (DLM) | 2 min to a healthy Gitea; 7.5 min to signed in                    | Scratch `t4g.small` from the prod AMI, a role allowed only Session Manager, no inbound rules; reached by SSM port forward. The database and repositories came back together. Production held one binder, two commits and no documents, so there were no changes, approvals or version tags to check yet. Everything the drill made was deleted. |
+| 2026-10-24 | restic snapshot `afb3b697` (R2), on a Mac   | 12 s from starting the restore to a healthy Gitea; 2.6 MiB in 1 s | The first try failed on SELinux labels; `--exclude-xattr` above fixes it. The repository URL, password and R2 token were read from SSM, so this did not prove the copy works without AWS: put them in the password manager (setup, step 3). Same data as the EBS copy.                                                                          |
