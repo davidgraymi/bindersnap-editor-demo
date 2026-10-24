@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import { publicSiteFiles } from "./publicSite";
 import { REQUIRED_POLICIES, SITUATIONS } from "./requiredPolicies";
+import { analyticsTag, withAnalyticsTag } from "./analytics";
 import {
-  analyticsTag,
   extractFaqs,
   pageSections,
   pageTitle,
@@ -353,11 +353,35 @@ describe("the Google tag", () => {
     expect(tag).toContain("allow_ad_personalization_signals:false");
   });
 
-  test("is never on the landing page, which signed-in customers load", async () => {
-    const landing = await Bun.file(
-      new URL("./index.html", import.meta.url),
-    ).text();
-    expect(landing).not.toContain("googletagmanager");
+  test("is written into the landing page's head, and only for a real ID", () => {
+    const page =
+      "<html><head><title>Bindersnap</title></head><body></body></html>";
+    expect(withAnalyticsTag(page, undefined)).toBe(page);
+    const tagged = withAnalyticsTag(page, "G-ABC123XYZ");
+    expect(tagged).toContain("gtag/js?id=G-ABC123XYZ");
+    expect(tagged.indexOf("gtag/js")).toBeLessThan(tagged.indexOf("</head>"));
+  });
+
+  test("is on the help and legal pages when the build names an ID", async () => {
+    const before = process.env.BINDERSNAP_GA_MEASUREMENT_ID;
+    process.env.BINDERSNAP_GA_MEASUREMENT_ID = "G-ABC123XYZ";
+    try {
+      const { helpFiles } = await import("../help/renderHelp");
+      const { legalFiles } = await import("../legal/renderLegal");
+      const { HELP_GUIDES } = await import("../app/helpGuides");
+      const { readLegalDocuments } = await import("../legal/legalDocuments");
+      for (const [path, html] of [
+        ...helpFiles(HELP_GUIDES),
+        ...legalFiles(readLegalDocuments()),
+      ]) {
+        if (!path.endsWith(".md") && html.startsWith("<!doctype html>")) {
+          expect(html, path).toContain("gtag/js?id=G-ABC123XYZ");
+        }
+      }
+    } finally {
+      if (before === undefined) delete process.env.BINDERSNAP_GA_MEASUREMENT_ID;
+      else process.env.BINDERSNAP_GA_MEASUREMENT_ID = before;
+    }
   });
 });
 

@@ -1,7 +1,7 @@
 # Data Processing Addendum
 
-Last updated: October 13, 2026
-Version: 2026-10-13
+Last updated: October 22, 2026
+Version: 2026-10-22
 
 This Data Processing Addendum ("DPA") is part of the Terms of Service (the "Terms") between Solid Gray LLC, a [STATE] limited liability company that operates Bindersnap ("Bindersnap," "we"), and the Customer. It applies when we process Personal Data on the Customer's behalf through the Service.
 
@@ -236,7 +236,7 @@ Our measures are described in full at [/legal/security](/legal/security). In sum
 - **Access control.** No inbound SSH. Administrator access only through AWS Systems Manager, using short-lived keys. Secrets are kept in AWS Parameter Store, not in source code. Deployments use short-lived CI credentials.
 - **Application security.** Server-side sessions with an HttpOnly cookie. Service credentials stay on the server and never reach the browser. Sessions are revoked at sign-out. Passwords are hashed. Reset and verification tokens are hashed. Authentication is rate-limited. Standard security headers are set.
 - **In-product controls.** Roles for administrators, authors, and reviewers. Branch protection so changes reach the published record only with the approvals the binder requires. Approved versions cannot be edited, only superseded.
-- **Resilience.** Continuous database replication to a private, versioned bucket, with old versions expiring after 30 days. Daily disk snapshots, with the latest 7 kept.
+- **Resilience.** Continuous database replication to a private, versioned bucket, with old versions expiring after 30 days. Hourly disk snapshots kept for 2 days, and daily ones for 35 days, with a copy in a second AWS region. Hourly encrypted backups off AWS, in Cloudflare R2, locked against deletion for 35 days.
 - **Monitoring.** Alarms for host health, CPU, disk, and memory. Logs are kept for 30 days.
 - **Certifications.** None. We do not claim SOC 2, ISO 27001, or HITRUST.
 

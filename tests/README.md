@@ -169,8 +169,7 @@ Stripe billing coverage only when the `STRIPE_TEST_SECRET_KEY` GitHub Actions
 secret is set and Stripe has a test price for it to buy. That price is
 Terraform's (`infra/billing-test`, the same catalog as production), and the
 job finds it by its lookup key, `bindersnap_writer_seat_monthly`, so no price
-ID is copied into a secret. Until `infra/billing-test` is applied, it falls
-back to the `STRIPE_TEST_PRICE_ID` secret.
+ID is copied into a secret. Without that price, the job fails and says so.
 
 When both are found, the workflow installs the Stripe CLI, `globalSetup`
 starts `stripe listen`, and the runtime webhook signing secret is generated on

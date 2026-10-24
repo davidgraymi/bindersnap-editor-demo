@@ -3,7 +3,7 @@
 # (apps/app/public/_headers). Caddy sends the same set for api.bindersnap.com.
 #
 # No Content-Security-Policy script-src yet: the landing page and the Google
-# tag on the marketing pages use inline scripts, so a script policy needs
+# tag on every page use inline scripts, so a script policy needs
 # hashes first. frame-ancestors, object-src and base-uri cost nothing.
 /*
   X-Frame-Options: DENY
