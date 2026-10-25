@@ -6,6 +6,7 @@ import { join } from "node:path";
 import {
   bindSignupEnterKeys,
   buildSignupUrl,
+  installScrollReveal,
   routeLandingSignup,
 } from "./landing";
 
@@ -139,5 +140,37 @@ test("the landing page names every kind of provider it is for", () => {
     "rural health clinics",
   ]) {
     expect(words).toContain(kind);
+  }
+});
+
+test("a section skipped over by a jump is shown at once, without a fade", async () => {
+  // An observer that never fires: a jump past a section never makes it
+  // intersect, so the observer alone would leave it blank.
+  const dom = new JSDOM(
+    `<div class="reveal" id="above"></div><div class="reveal" id="below"></div>`,
+    { url: "https://bindersnap.com/#signup", pretendToBeVisual: true },
+  );
+  const win = dom.window as unknown as Window & typeof globalThis;
+  (win as { IntersectionObserver?: unknown }).IntersectionObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+  const above = win.document.getElementById("above")!;
+  const below = win.document.getElementById("below")!;
+  above.getBoundingClientRect = () => ({ top: -900, bottom: -400 }) as DOMRect;
+  below.getBoundingClientRect = () => ({ top: 2000, bottom: 2400 }) as DOMRect;
+
+  const previous = globalThis.IntersectionObserver;
+  globalThis.IntersectionObserver = win.IntersectionObserver;
+  try {
+    installScrollReveal(win.document);
+    await new Promise((resolve) => win.requestAnimationFrame(resolve));
+
+    expect(above.className).toBe("reveal reveal-instant in");
+    expect(below.classList.contains("in")).toBe(false);
+  } finally {
+    globalThis.IntersectionObserver = previous;
+    dom.window.close();
   }
 });

@@ -89,7 +89,7 @@ The names, as the token file defines them:
 
 /* Transitions (--brand-*) */
 --brand-transition-fast (0.15s), --brand-transition-base (0.2s)
---brand-transition-slow (0.3s), --brand-transition-reveal (0.7s)
+--brand-transition-slow (0.3s), --brand-transition-reveal (0.45s)
 
 /* Icons (--brand-*) */
 --brand-icon-xs, --brand-icon-sm, --brand-icon-md, --brand-icon-lg

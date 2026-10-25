@@ -339,7 +339,7 @@
   --brand-transition-fast: 0.15s ease;
   --brand-transition-base: 0.2s ease;
   --brand-transition-slow: 0.3s ease;
-  --brand-transition-reveal: 0.7s ease;
+  --brand-transition-reveal: 0.45s ease;
 
   /* ── Z-index scale ── */
   --brand-z-raised: 10;

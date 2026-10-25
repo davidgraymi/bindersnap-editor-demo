@@ -1736,8 +1736,9 @@ body::after {
   z-index: var(--brand-z-raised);
 }
 
-/* The answer to lock-in, beside the form where the decision is made. */
-.cta-promise {
+/* The answer to lock-in, beside the form where the decision is made.
+   Scoped under .cta-inner to outrank the section's own `> p` paragraph rule. */
+.cta-inner > .cta-promise {
   max-width: var(--brand-max-width-narrow);
   margin: var(--brand-space-6) auto 0;
   font-size: var(--brand-text-ui-sm);
@@ -1747,7 +1748,7 @@ body::after {
   z-index: var(--brand-z-raised);
 }
 
-.cta-promise strong {
+.cta-inner > .cta-promise strong {
   color: var(--bs-text-secondary);
   font-weight: var(--brand-weight-medium);
 }
@@ -2162,13 +2163,18 @@ body::after {
   transform: none;
 }
 .reveal-d1 {
-  transition-delay: 0.1s;
+  transition-delay: 0.06s;
 }
 .reveal-d2 {
-  transition-delay: 0.2s;
+  transition-delay: 0.12s;
 }
 .reveal-d3 {
-  transition-delay: 0.3s;
+  transition-delay: 0.18s;
+}
+/* Already scrolled past — a jump to #signup, say. It appears where it is,
+   with no fade: nobody should scroll back up into blank space. */
+.reveal.in.reveal-instant {
+  transition: none;
 }
 
 /* ─────────────────────────────────────
