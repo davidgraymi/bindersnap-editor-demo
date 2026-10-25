@@ -1,9 +1,9 @@
 # Data Processing Addendum
 
-Last updated: October 22, 2026
-Version: 2026-10-22
+Last updated: October 25, 2026
+Version: 2026-10-25
 
-This Data Processing Addendum ("DPA") is part of the Terms of Service (the "Terms") between Solid Gray LLC, a [STATE] limited liability company that operates Bindersnap ("Bindersnap," "we"), and the Customer. It applies when we process Personal Data on the Customer's behalf through the Service.
+This Data Processing Addendum ("DPA") is part of the Terms of Service (the "Terms") between Solid Gray LLC, a Missouri limited liability company that operates Bindersnap ("Bindersnap," "we"), and the Customer. It applies when we process Personal Data on the Customer's behalf through the Service.
 
 The Customer accepts this DPA by accepting the Terms. No separate signature is needed. The Customer can request a countersigned copy at [privacy@bindersnap.com](mailto:privacy@bindersnap.com).
 
@@ -187,7 +187,7 @@ We may update this DPA as described in Section 18 of the Terms, for example to r
 
 ## 17. Contact
 
-Privacy questions, countersigned copies, objections, and Data Subject requests: [privacy@bindersnap.com](mailto:privacy@bindersnap.com). Security reports: [security@bindersnap.com](mailto:security@bindersnap.com). Our mailing address is [MAILING ADDRESS].
+Privacy questions, countersigned copies, objections, and Data Subject requests: [privacy@bindersnap.com](mailto:privacy@bindersnap.com). Security reports: [security@bindersnap.com](mailto:security@bindersnap.com). Our mailing address is 117 S Lexington St, Ste 100, Harrisonville, MO 64701-2444.
 
 ---
 

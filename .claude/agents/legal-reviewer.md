@@ -29,8 +29,9 @@ for the owner and their lawyer to decide. You never change files.
   BAAs, so never "HIPAA compliant"; the liability cap is 2× the last twelve
   months' fees; Google Analytics only on marketing pages, never in the app;
   seats and proration are as Terms §9 defines them.
-- The texts still carry placeholders (`[STATE]`, `[MAILING ADDRESS]`,
-  `[LEGAL NOTICES EMAIL]`) until the owner fills them. List any that remain.
+- Solid Gray LLC is a Missouri LLC; its mailing address is its registered
+  agent's, in Harrisonville, MO, and legal notices go to
+  `legal@bindersnap.com`. Flag any bracketed placeholder that is left.
 
 ## Check code against text
 

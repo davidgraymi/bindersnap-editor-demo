@@ -1,13 +1,13 @@
 # Terms of Service
 
-Last updated: October 9, 2026
-Version: 2026-10-22
+Last updated: October 25, 2026
+Version: 2026-10-25
 
 These Terms of Service ("Terms") are the agreement for using Bindersnap. Please read them. They are written to be readable, but they are a binding contract.
 
 ## 1. Who this agreement is with
 
-Bindersnap is operated by Solid Gray LLC, a [STATE] limited liability company ("Bindersnap," "we," "us"). Our mailing address is [MAILING ADDRESS].
+Bindersnap is operated by Solid Gray LLC, a Missouri limited liability company ("Bindersnap," "we," "us"). Our mailing address is 117 S Lexington St, Ste 100, Harrisonville, MO 64701-2444.
 
 The agreement is between Solid Gray LLC and the organization that creates or uses a Bindersnap account (the "Customer"). If you accept these Terms for an organization, you confirm that:
 
@@ -253,14 +253,14 @@ If you do not agree, you can cancel before the change takes effect. If you conti
 
 ## 19. Governing law and disputes
 
-These Terms are governed by the laws of the State of [STATE], without regard to conflict-of-law rules. The parties will first try to resolve a dispute informally: write to us at the address in Section 20, and we will work with you in good faith for 30 days. If that fails, the courts located in [STATE] have exclusive jurisdiction, and each party consents to them. Either party may seek an injunction in any court of competent jurisdiction to protect its intellectual property or Confidential Information.
+These Terms are governed by the laws of the State of Missouri, without regard to conflict-of-law rules. The parties will first try to resolve a dispute informally: write to us at the address in Section 20, and we will work with you in good faith for 30 days. If that fails, the courts located in Missouri have exclusive jurisdiction, and each party consents to them. Either party may seek an injunction in any court of competent jurisdiction to protect its intellectual property or Confidential Information.
 
 **Jury waiver.** To the extent the law allows, each party waives any right to a jury trial in any dispute arising out of or relating to these Terms.
 
 ## 20. Notices and contact
 
 - We will send notices to the email address of the organization's owners and may also post them in the Service. The Customer is responsible for keeping owner email addresses current.
-- Notices to us go to [LEGAL NOTICES EMAIL], and to Solid Gray LLC, [MAILING ADDRESS]. Privacy and DPA requests go to [privacy@bindersnap.com](mailto:privacy@bindersnap.com), and security reports go to [security@bindersnap.com](mailto:security@bindersnap.com).
+- Notices to us go to [legal@bindersnap.com](mailto:legal@bindersnap.com), and to Solid Gray LLC, 117 S Lexington St, Ste 100, Harrisonville, MO 64701-2444. Privacy and DPA requests go to [privacy@bindersnap.com](mailto:privacy@bindersnap.com), and security reports go to [security@bindersnap.com](mailto:security@bindersnap.com).
 - Email notices are treated as received 24 hours after sending, unless the sender gets a bounce.
 
 ## 21. General
