@@ -5,6 +5,7 @@ import { REQUIRED_POLICIES, SITUATIONS } from "./requiredPolicies";
 import { analyticsTag, withAnalyticsTag } from "./analytics";
 import {
   extractFaqs,
+  INDEXNOW_KEY,
   pageSections,
   pageTitle,
   renderSitePage,
@@ -211,6 +212,11 @@ describe("the files crawlers and agents read", () => {
     const robots = files.get("/robots.txt")!;
     expect(robots).toContain("User-agent: *\nAllow: /");
     expect(robots).toContain("Sitemap: https://bindersnap.com/sitemap.xml");
+  });
+
+  test("the IndexNow key is served at /{key}.txt and holds only the key", () => {
+    expect(INDEXNOW_KEY).toMatch(/^[a-f0-9]{32}$/);
+    expect(files.get(`/${INDEXNOW_KEY}.txt`)).toBe(INDEXNOW_KEY);
   });
 
   test("llms.txt says what Bindersnap is and lists every page's Markdown", () => {

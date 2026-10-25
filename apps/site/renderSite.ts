@@ -37,6 +37,14 @@ import {
 
 export const SITE = "https://bindersnap.com";
 
+/**
+ * Our IndexNow key (https://www.indexnow.org). Not a secret: a search engine
+ * proves we own the host by fetching it from `/{key}.txt`, and
+ * `scripts/indexnow.ts` names it when it tells them a page changed. A new key
+ * is only a new value here; the old file stops being served with it.
+ */
+export const INDEXNOW_KEY = "d4b96929a40564eed43a0ffbe2f43e28";
+
 /** Not an organization's address: no organization name can start with `_`. */
 export const SITE_CSS_PATH = "/_site/site.css";
 
@@ -658,8 +666,8 @@ Sitemap: ${SITE}/sitemap.xml
 
 /**
  * Every file the public site serves, by path: the pages and their Markdown,
- * each collection's index, the stylesheet, the sitemap, robots.txt and the
- * llms files. Help and legal pages are passed in to be listed, not rendered.
+ * each collection's index, the stylesheet, the sitemap, robots.txt, the
+ * IndexNow key and the llms files. Help and legal pages are passed in to be listed, not rendered.
  */
 export function siteFiles(
   pages: readonly SitePage[],
@@ -675,6 +683,7 @@ export function siteFiles(
       `${renderHelpCss()}\n${readFileSync(join(import.meta.dir, "site.css"), "utf8")}`,
     ],
     ["/robots.txt", renderRobotsTxt()],
+    [`/${INDEXNOW_KEY}.txt`, INDEXNOW_KEY],
     ["/llms.txt", renderLlmsTxt(pages, others)],
     ["/llms-full.txt", renderLlmsFullTxt(pages, others.helpMarkdown)],
   ]);
