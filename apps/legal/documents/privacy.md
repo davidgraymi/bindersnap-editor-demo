@@ -1,7 +1,7 @@
 # Privacy Policy
 
-Last updated: October 22, 2026
-Version: 2026-10-22
+Last updated: October 25, 2026
+Version: 2026-10-25
 
 This policy explains what personal information Bindersnap collects, why we collect it, who else receives it, how long we keep it, and what you can do about it.
 
@@ -9,10 +9,10 @@ The short version: we collect what we need to run Bindersnap and nothing more. I
 
 ## 1. Who we are
 
-Bindersnap (bindersnap.com) is run by Solid Gray LLC, a [STATE] limited liability company in the United States. In this policy, "Bindersnap," "we," "us," and "our" mean Solid Gray LLC.
+Bindersnap (bindersnap.com) is run by Solid Gray LLC, a Missouri limited liability company in the United States. In this policy, "Bindersnap," "we," "us," and "our" mean Solid Gray LLC.
 
 - Email: [privacy@bindersnap.com](mailto:privacy@bindersnap.com)
-- Mail: Solid Gray LLC, [MAILING ADDRESS]
+- Mail: Solid Gray LLC, 117 S Lexington St, Ste 100, Harrisonville, MO 64701-2444
 
 Bindersnap is offered to organizations based in the United States.
 
@@ -227,4 +227,4 @@ When we change this policy, we will post the new version here and update the dat
 
 Questions, requests or concerns: [privacy@bindersnap.com](mailto:privacy@bindersnap.com)
 
-Solid Gray LLC, [MAILING ADDRESS]
+Solid Gray LLC, 117 S Lexington St, Ste 100, Harrisonville, MO 64701-2444
