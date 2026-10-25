@@ -577,7 +577,7 @@ export function renderLlmsTxt(
   const lines = [
     "# Bindersnap",
     "",
-    "> Bindersnap is policy and procedure management software for small healthcare providers — clinics, ambulatory surgery centers, home health agencies and behavioral health programs. Every policy keeps its current approved version, every earlier version, and the record of who approved each one and when, so the organization can answer a surveyor or accreditor in minutes.",
+    "> Bindersnap is policy and procedure management software for small healthcare providers — clinics, ambulatory surgery centers, home health agencies, hospices, behavioral health programs and rural health clinics. Every policy keeps its current approved version, every earlier version, and the record of who approved each one and when, so the organization can answer a surveyor or accreditor in minutes.",
     "",
     "- Pricing: $39 a month per paid seat — the owners, admins and editors who write and publish policies. Reviewers who approve and staff who only read are free, in any number. Every organization starts with a 14-day free trial, no card required. See the pricing page.",
     "- Not for patient health information: Bindersnap holds an organization's policies and procedures, never patient records.",

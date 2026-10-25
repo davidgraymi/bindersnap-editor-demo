@@ -16,7 +16,9 @@ test.describe("the site and the app", () => {
       page.getByRole("heading", { name: /which version you approved/i }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: /Create Your Account/i }).first(),
+      page
+        .getByRole("button", { name: /Start your 14-day free trial/i })
+        .first(),
     ).toBeVisible();
     await expect(
       page.locator(".site-header").getByRole("link", { name: "Sign in" }),
