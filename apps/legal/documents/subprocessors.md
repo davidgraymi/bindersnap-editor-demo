@@ -1,6 +1,6 @@
 # Subprocessors
 
-Last updated: October 13, 2026
+Last updated: October 22, 2026
 Version: 2026-10-22
 
 A subprocessor is a company we use to run Bindersnap that may handle personal information on our behalf. We keep the list short and use each company only for what's listed here.

@@ -85,7 +85,7 @@ This section describes how data leaves the Service. It matches how the Service w
 
 **10.1 Account deletion.** A person can delete their own account in settings.
 
-- Gitea deletes the account.
+- We delete the account.
 - Everything in the record that refers to the person, including reviews, comments, and published versions, stays on the record, because it is the organization's evidence.
 - Their drafts that were never proposed are retired: they are moved out of the draft area so nobody can pick them up.
 - Their sessions are revoked, and their email-verification record is removed.
@@ -123,22 +123,27 @@ We do not restore deleted data from backups to the live Service for the purpose 
 
 We will give the Customer the information reasonably needed to show that we comply with this DPA, and we will allow and contribute to audits as follows.
 
-- **First step: documents.** We will answer reasonable security and privacy questionnaires and make available our written policies and relevant documentation, including [/legal/security](/legal/security). We will not provide documents that would compromise the security of other customers.
-- **Further audit.** If that information is not enough to show compliance, or a Supervisory Authority requires it, the Customer may audit us. It must:
+**First step: documents.** We will answer reasonable security and privacy questionnaires and make available our written policies and relevant documentation, including [/legal/security](/legal/security). We will not provide documents that would compromise the security of other customers.
+
+**Further audit.** If that information is not enough to show compliance, or a Supervisory Authority requires it, the Customer may audit us. It must:
+
 - give at least 30 days' written notice;
 - agree on scope, timing, and a confidentiality undertaking in advance;
 - audit no more than once in any 12 months, except after a Personal Data Breach or as required by law; and
 - avoid unreasonable disruption.
-- **Costs.** The Customer bears its own costs and ours for time beyond a reasonable amount.
-- We may satisfy the right by having a qualified independent party audit and giving the Customer the report. We do not hold third-party certifications, and nothing in this DPA requires us to obtain one. Our Subprocessors are audited through the reports and certifications they publish.
+
+**Costs.** The Customer bears its own costs and ours for time beyond a reasonable amount.
+
+We may satisfy the right by having a qualified independent party audit and giving the Customer the report. We do not hold third-party certifications, and nothing in this DPA requires us to obtain one. Our Subprocessors are audited through the reports and certifications they publish.
 
 ## 12. International transfers
 
-**Hosting location.** The Service is offered to organizations based in the United States. We host Customer Personal Data in the United States, in AWS region us-east-1 (N. Virginia). Our Subprocessors are in the United States.
+**Hosting location.** The Service is offered to organizations based in the United States. We host Customer Personal Data in the United States, in AWS region us-east-1 (N. Virginia), with backup copies in AWS region us-west-2 (Oregon) and in Cloudflare R2 in North America. Our Subprocessors are U.S. companies. Requests to the Service pass through the Cloudflare data center nearest the user, which may be outside the United States, so Customer Personal Data in transit may pass through that data center.
 
-**EU, UK, and Swiss data.** The Service is not offered to organizations outside the United States. Even so, a Customer may hold Personal Data of people in Europe, such as staff working abroad. If the Customer sends us Personal Data subject to the GDPR, the UK GDPR, or the Swiss FADP, which we process in the United States, the following apply:
+**EU, UK, and Swiss data.** The Service is not offered to organizations outside the United States. Even so, a Customer may hold Personal Data of people in Europe, such as staff working abroad. If the Customer sends us Personal Data subject to the GDPR, the UK GDPR, or the Swiss FADP, which we process in the United States, the following apply.
 
-- **EU Standard Contractual Clauses.** The parties agree to the EU Standard Contractual Clauses (Commission Implementing Decision (EU) 2021/914), which are incorporated by reference and completed as follows:
+**EU Standard Contractual Clauses.** The parties agree to the EU Standard Contractual Clauses (Commission Implementing Decision (EU) 2021/914), which are incorporated by reference and completed as follows:
+
 - Module Two (controller to processor) applies where the Customer is a controller. Module Three (processor to processor) applies where the Customer is a processor.
 - Clause 7 (docking clause) applies.
 - In Clause 9(a), Option 2 (general written authorization) applies, with the notice period in Section 6 above.
@@ -147,9 +152,12 @@ We will give the Customer the information reasonably needed to show that we comp
 - In Clause 18, the courts of Ireland resolve disputes.
 - Annex I is Annex 1 of this DPA, with the Customer as "data exporter" and Bindersnap as "data importer." The competent Supervisory Authority is the one that applies to the Customer under Clause 13.
 - Annex II is Annex 2 of this DPA. Annex III is Annex 3.
-- **UK.** For transfers from the UK, the UK International Data Transfer Addendum to the EU SCCs, issued by the UK Information Commissioner under section 119A of the Data Protection Act 2018 (version B1.0), is incorporated by reference. Its tables are completed with the information in this DPA, and neither party may end the Addendum under its Section 19 except as that Section permits.
-- **Switzerland.** For transfers from Switzerland, the SCCs apply with references to the GDPR read as references to the FADP, and with the Swiss Federal Data Protection and Information Commissioner as the competent authority.
-- **Priority.** If this DPA conflicts with the SCCs, the SCCs control.
+
+**UK.** For transfers from the UK, the UK International Data Transfer Addendum to the EU SCCs, issued by the UK Information Commissioner under section 119A of the Data Protection Act 2018 (version B1.0), is incorporated by reference. Its tables are completed with the information in this DPA, and neither party may end the Addendum under its Section 19 except as that Section permits.
+
+**Switzerland.** For transfers from Switzerland, the SCCs apply with references to the GDPR read as references to the FADP, and with the Swiss Federal Data Protection and Information Commissioner as the competent authority.
+
+**Priority.** If this DPA conflicts with the SCCs, the SCCs control.
 
 **Data Privacy Framework.** We have not self-certified to the EU-U.S. Data Privacy Framework. We rely on the SCCs. If we later certify, we will tell the Customer, and the Framework may also serve as a transfer basis.
 
