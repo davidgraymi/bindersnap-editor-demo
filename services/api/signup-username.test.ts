@@ -60,7 +60,7 @@ describe("usernameFromName", () => {
 
 describe("usernameCandidates", () => {
   test("tries the plain name, then numbered ones, then random digits", () => {
-    const candidates = usernameCandidates("jordan.kim", () => 0.5);
+    const candidates = usernameCandidates("jordan.kim", () => 5500);
     expect(candidates).toHaveLength(MAX_USERNAME_ATTEMPTS);
     expect(candidates.slice(0, 5)).toEqual([
       "jordan.kim",

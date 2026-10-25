@@ -637,7 +637,7 @@ async function getAuthoringHttpStatus(
 }
 
 function uniqueCredentials() {
-  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const suffix = `${Date.now()}-${randomUUID().slice(0, 4)}`;
   return {
     // What the signup form's "Stripe" / suffix name becomes as a login.
     username: `stripe.${suffix}`,

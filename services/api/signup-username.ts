@@ -1,3 +1,5 @@
+import { randomInt } from "node:crypto";
+
 /**
  * The Gitea login a new account gets when the signup form does not ask for
  * one.
@@ -60,12 +62,12 @@ export function usernameFromName(
  */
 export function usernameCandidates(
   base: string,
-  random: () => number = Math.random,
+  fourDigits: () => number = () => randomInt(1000, 10000),
 ): string[] {
   const numbered = [2, 3, 4, 5].map((n) => `${base}${n}`);
   const randomized = Array.from(
     { length: MAX_USERNAME_ATTEMPTS - 1 - numbered.length },
-    () => `${base}${1000 + Math.floor(random() * 9000)}`,
+    () => `${base}${fourDigits()}`,
   );
   return [base, ...numbered, ...randomized];
 }
