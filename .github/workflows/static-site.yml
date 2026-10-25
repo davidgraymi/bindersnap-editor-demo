@@ -86,6 +86,7 @@ jobs:
           test -f dist/site/_headers
           test -f dist/site/_redirects
           test -f dist/site/404.html
+          test -f dist/site/sitemap.xml
 
       # The app first: a site that links to an app not there yet sends
       # people to an error, an app the site doesn't link to yet harms no one.
@@ -95,8 +96,25 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
         run: bunx wrangler@4.149.0 deploy --config apps/app/wrangler.jsonc
 
+      # What search engines were last told, to compare with this build's
+      # sitemap after the deploy. None (a first deploy) means every page.
+      - name: Save the live sitemap
+        run: curl -fsS https://bindersnap.com/sitemap.xml -o "$RUNNER_TEMP/live-sitemap.xml" || true
+
       - name: Deploy bindersnap.com
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
         run: bunx wrangler@4.149.0 deploy
+
+      # IndexNow (scripts/indexnow.ts): Bing and the engines that share with
+      # it hear of a new or updated page now instead of on their next crawl.
+      # A refusal is worth a red mark but never undoes a deploy.
+      - name: Tell search engines which pages changed
+        continue-on-error: true
+        run: |
+          if [ -s "$RUNNER_TEMP/live-sitemap.xml" ]; then
+            bun scripts/indexnow.ts "$RUNNER_TEMP/live-sitemap.xml" dist/site/sitemap.xml
+          else
+            bun scripts/indexnow.ts --all dist/site/sitemap.xml
+          fi
