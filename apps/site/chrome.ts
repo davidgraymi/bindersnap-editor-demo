@@ -35,9 +35,11 @@ export const SIGN_IN: ChromeLink = {
   href: appUrl("/-/login"),
   label: "Sign in",
 };
+// The same promise as every call to action on the site, so what the bar
+// offers is what the signup page says it is.
 export const SIGN_UP: ChromeLink = {
   href: appUrl("/-/signup"),
-  label: "Sign up",
+  label: "Start free trial",
 };
 
 export const FOOTER_COLUMNS: readonly {

@@ -1593,6 +1593,18 @@ body::after {
   transition: color var(--brand-transition-base);
 }
 
+.founder-contact a {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+  text-decoration-color: var(--bs-coral-border);
+  text-underline-offset: var(--brand-space-0-5);
+  transition: text-decoration-color var(--brand-transition-base);
+}
+
+.founder-contact a:hover {
+  text-decoration-color: currentColor;
+}
+
 .founder-signoff {
   display: flex;
   align-items: center;

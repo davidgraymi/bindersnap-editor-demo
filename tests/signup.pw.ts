@@ -47,7 +47,7 @@ async function openSignupForm(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/signup$/);
   await expect(
     page.getByRole("heading", {
-      name: "Create your Bindersnap workspace.",
+      name: "Start your 14-day free trial.",
     }),
   ).toBeVisible();
   // The answer to "will this cost me?", where she decides.
@@ -273,7 +273,7 @@ test.describe("signup flow", () => {
     expect(new URL(page.url()).searchParams.get("email")).toBe(email);
     await expect(
       page.getByRole("heading", {
-        name: "Create your Bindersnap workspace.",
+        name: "Start your 14-day free trial.",
       }),
     ).toBeVisible();
     await expect(page.getByLabel("Email")).toHaveValue(email);
@@ -373,6 +373,23 @@ test.describe("signup flow", () => {
       "email-auth",
       credentials.username,
     );
+  });
+
+  test("a session check that cannot reach the API leaves the form clean, and a failed submit says why in words", async ({
+    page,
+  }) => {
+    // What a reviewer's browser did: the request never answered.
+    await page.route("**/auth/me", (route) => route.abort("failed"));
+    await openSignupForm(page);
+    await expect(page.locator(".app-inline-error")).toHaveCount(0);
+
+    await page.route("**/auth/signup", (route) => route.abort("failed"));
+    await fillSignupForm(page, buildUniqueSignupCredentials());
+    await submitSignupForm(page);
+    await expect(page.locator(".app-inline-error")).toHaveText(
+      "We couldn't reach Bindersnap. Check your connection and try again.",
+    );
+    await expect(page.getByText(/Failed to fetch/)).toHaveCount(0);
   });
 
   test("asks only for a name, an email and a password", async ({ page }) => {

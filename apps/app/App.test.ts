@@ -799,6 +799,9 @@ test("App draws the signup form at once, without waiting on the session check", 
     expect(container.querySelector(".app-login-trial")?.textContent).toBe(
       "14 days free. No card.",
     );
+    expect(container.querySelector("h1")?.textContent).toBe(
+      "Start your 14-day free trial.",
+    );
   } finally {
     answer(null);
     unmount();

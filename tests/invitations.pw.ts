@@ -148,6 +148,9 @@ test("somebody with no account signs up from the email and lands in the binder",
     .getByLabel("Password", { exact: true })
     .fill("Bindersnap-invitee-1!");
   // Joining starts no trial of their own, so none is promised.
+  await expect(
+    page.getByRole("heading", { name: "Create your Bindersnap account." }),
+  ).toBeVisible();
   await expect(page.getByText("14 days free. No card.")).toHaveCount(0);
   await agreeToTerms(page);
   await page.getByRole("button", { name: "Create account" }).click();

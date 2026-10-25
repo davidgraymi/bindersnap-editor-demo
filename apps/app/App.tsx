@@ -250,9 +250,14 @@ function LoginPage({
         </a>
         <div className="app-login-panel bs-card">
           <h1>
+            {/* The promise every button on the site made, kept on arrival.
+                Somebody joining from an invitation gets no trial, so is not
+                promised one. */}
             {mode === "signin"
               ? "Step into the clean version."
-              : "Create your Bindersnap workspace."}
+              : promisesTrial
+                ? "Start your 14-day free trial."
+                : "Create your Bindersnap account."}
           </h1>
 
           <form className="app-form" onSubmit={handleSubmit}>
@@ -578,10 +583,18 @@ export function App() {
       setCancelAtPeriodEnd(false);
       setCancelAt(null);
       setPlan(null);
+      // On the sign-in and signup forms, a check that failed says nothing:
+      // whoever is there is almost certainly signed out, and an error under a
+      // form they have not touched reads as broken. Submitting reports a real
+      // problem if there is one. Anywhere else they were expecting to be in,
+      // so they are told why they are not.
+      const checkedFrom = getRoute(window.location.pathname).kind;
       setCallbackError(
-        sessionError instanceof Error
-          ? sessionError.message
-          : "Unable to check your session right now.",
+        checkedFrom === "login" || checkedFrom === "signup"
+          ? null
+          : sessionError instanceof Error
+            ? sessionError.message
+            : "Unable to check your session right now.",
       );
       return null;
     } finally {
