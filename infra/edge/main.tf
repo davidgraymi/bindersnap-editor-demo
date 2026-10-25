@@ -5,7 +5,7 @@
 #   - the DNS records this module owns: api (→ the tunnel) and www
 #   - zone settings: HTTPS only, TLS 1.2+
 #   - a www → apex redirect and a rate limit on the sign-in endpoints
-#   - inbound mail: Email Routing forwards privacy@, security@, team@,
+#   - inbound mail: Email Routing forwards legal@, privacy@, security@, team@,
 #     notifications@, david@ and anything else @bindersnap.com to one inbox
 #   - the R2 bucket that holds the restic backups, and the lock that keeps any
 #     credential from deleting a snapshot younger than 35 days
@@ -238,7 +238,7 @@ locals {
   # one person's mailbox (it replaced Zoho Mail). The catch-all below forwards
   # anything else too; these are listed so each one keeps working if the
   # catch-all is ever turned off.
-  routed_addresses = toset(["privacy", "security", "team", "notifications", "dmarc", "david"])
+  routed_addresses = toset(["legal", "privacy", "security", "team", "notifications", "dmarc", "david"])
 }
 
 resource "cloudflare_email_routing_rule" "published" {
