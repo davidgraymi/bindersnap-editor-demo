@@ -722,9 +722,9 @@ test("App sends the signup form's Turnstile token, and asks for a new one after"
     },
     remove: () => {},
   };
-  // The username is taken, say: the API has still spent the token.
+  // The email is taken, say: the API has still spent the token.
   mockSignup.mockImplementationOnce(async () => {
-    throw new Error("That username is taken.");
+    throw new Error("That email is taken.");
   });
 
   const { App } = await import("./App");
@@ -745,7 +745,6 @@ test("App sends the signup form's Turnstile token, and asks for a new one after"
     flushSync(() => {
       typeInto(byAutocomplete("given-name")[0]!, "Jordan");
       typeInto(byAutocomplete("family-name")[0]!, "Kim");
-      typeInto(byAutocomplete("username")[0]!, "jkim");
       typeInto(byAutocomplete("email")[0]!, "jordan@example.com");
       for (const password of byAutocomplete("new-password")) {
         typeInto(password, "correct horse battery");
@@ -760,15 +759,51 @@ test("App sends the signup form's Turnstile token, and asks for a new one after"
 
     await waitFor(() => {
       expect(mockSignup).toHaveBeenCalledTimes(1);
-      expect((mockSignup.mock.calls[0] as unknown[])[4]).toBe("signup-token");
+      expect((mockSignup.mock.calls[0] as unknown[])[3]).toBe("signup-token");
       expect(resets).toBe(1);
       expect(container.querySelector(".app-inline-error")?.textContent).toBe(
-        "That username is taken.",
+        "That email is taken.",
       );
     }, 3000);
   } finally {
     unmount();
     delete process.env.BUN_PUBLIC_SIGNUP_TURNSTILE_SITE_KEY;
     delete (window as { turnstile?: unknown }).turnstile;
+  }
+});
+
+test("App draws the signup form at once, without waiting on the session check", async () => {
+  installDom("/-/signup");
+  // A check that has not answered yet: a first visit from the site has no
+  // session to wait for, and a blank "Opening your workspace" reads as broken.
+  let answer: (user: null) => void = () => {};
+  mockFetchSessionUser.mockImplementationOnce(
+    () => new Promise((resolve) => (answer = resolve)) as never,
+  );
+
+  const { App } = await import("./App");
+  const { container, unmount } = mountApp(App);
+
+  try {
+    await waitFor(() => {
+      expect(container.querySelector(".app-form")).not.toBeNull();
+    });
+    const autocompletes = [
+      ...container.querySelectorAll<HTMLInputElement>(".app-form input"),
+    ].map((input) => input.autocomplete);
+    // A name, an email and one password; no username, no second password.
+    expect(autocompletes).not.toContain("username");
+    expect(autocompletes.filter((value) => value === "new-password")).toEqual([
+      "new-password",
+    ]);
+    expect(container.querySelector(".app-login-trial")?.textContent).toBe(
+      "14 days free. No card.",
+    );
+    expect(container.querySelector("h1")?.textContent).toBe(
+      "Start your 14-day free trial.",
+    );
+  } finally {
+    answer(null);
+    unmount();
   }
 });

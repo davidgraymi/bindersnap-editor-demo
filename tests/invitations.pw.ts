@@ -138,14 +138,20 @@ test("somebody with no account signs up from the email and lands in the binder",
   await expect(page).toHaveURL(/\/-\/signup/);
   await expect(page.getByLabel("Email")).toHaveValue(address);
 
-  const username = `invitee-${randomUUID().slice(0, 8)}`;
+  // No username on the form: the API makes one from the name, so a unique
+  // last name is a known login.
+  const lastName = `invitee-${randomUUID().slice(0, 8)}`;
+  const username = `priya.${lastName}`;
   await page.getByLabel("First name").fill("Priya");
-  await page.getByLabel("Last name").fill("Raman");
-  await page.getByLabel("Username").fill(username);
+  await page.getByLabel("Last name").fill(lastName);
   await page
     .getByLabel("Password", { exact: true })
     .fill("Bindersnap-invitee-1!");
-  await page.getByLabel("Confirm Password").fill("Bindersnap-invitee-1!");
+  // Joining starts no trial of their own, so none is promised.
+  await expect(
+    page.getByRole("heading", { name: "Create your Bindersnap account." }),
+  ).toBeVisible();
+  await expect(page.getByText("14 days free. No card.")).toHaveCount(0);
   await agreeToTerms(page);
   await page.getByRole("button", { name: "Create account" }).click();
 

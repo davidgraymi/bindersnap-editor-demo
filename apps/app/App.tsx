@@ -107,7 +107,6 @@ interface LoginPageProps {
   ) => Promise<void>;
   onSignup: (
     name: { first: string; last: string },
-    username: string,
     email: string,
     password: string,
     turnstileToken: string | null,
@@ -153,18 +152,19 @@ function LoginPage({
 }: LoginPageProps) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [username, setUsername] = useState("");
   const [identifier, setIdentifier] = useState(
     mode === "signup" ? prefilledEmail : "",
   );
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string | null>(callbackError);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Signup only: it is the form that makes something for whoever asks.
   const signupCheckKey = mode === "signup" ? signupTurnstileSiteKey() : "";
   const turnstile = useTurnstile(signupCheckKey);
+  // Joining someone else's organization starts no trial of their own, so the
+  // promise is only made to somebody who will get one.
+  const promisesTrial = mode === "signup" && !pendingInvitationToken();
 
   useEffect(() => {
     setError(callbackError);
@@ -173,7 +173,6 @@ function LoginPage({
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const normalizedUsername = username.trim();
     const normalizedIdentifier = identifier.trim();
 
     if (mode === "signup") {
@@ -182,20 +181,8 @@ function LoginPage({
         setError(nameError);
         return;
       }
-      if (
-        !normalizedUsername ||
-        !normalizedIdentifier ||
-        !password ||
-        !confirmPassword
-      ) {
-        setError(
-          "Enter a username, email, password, and password confirmation.",
-        );
-        return;
-      }
-
-      if (password !== confirmPassword) {
-        setError("Passwords do not match.");
+      if (!normalizedIdentifier || !password) {
+        setError("Enter your email and a password.");
         return;
       }
 
@@ -229,7 +216,6 @@ function LoginPage({
         try {
           await onSignup(
             { first: firstName, last: lastName },
-            normalizedUsername,
             normalizedIdentifier,
             password,
             turnstile.token,
@@ -264,9 +250,14 @@ function LoginPage({
         </a>
         <div className="app-login-panel bs-card">
           <h1>
+            {/* The promise every button on the site made, kept on arrival.
+                Somebody joining from an invitation gets no trial, so is not
+                promised one. */}
             {mode === "signin"
               ? "Step into the clean version."
-              : "Create your Bindersnap workspace."}
+              : promisesTrial
+                ? "Start your 14-day free trial."
+                : "Create your Bindersnap account."}
           </h1>
 
           <form className="app-form" onSubmit={handleSubmit}>
@@ -295,20 +286,6 @@ function LoginPage({
                   />
                 </label>
               </div>
-            ) : null}
-
-            {mode === "signup" ? (
-              <label className="app-field">
-                <span className="bs-label">Username</span>
-                <input
-                  className="bs-input"
-                  type="text"
-                  value={username}
-                  onChange={(event) => setUsername(event.target.value)}
-                  placeholder="Choose a username"
-                  autoComplete="username"
-                />
-              </label>
             ) : null}
 
             <label className="app-field">
@@ -358,20 +335,6 @@ function LoginPage({
             ) : null}
 
             {mode === "signup" ? (
-              <label className="app-field">
-                <span className="bs-label">Confirm Password</span>
-                <input
-                  className="bs-input"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  placeholder="Confirm your password"
-                  autoComplete="new-password"
-                />
-              </label>
-            ) : null}
-
-            {mode === "signup" ? (
               <AgreementCheckbox
                 scope="person"
                 checked={agreed}
@@ -382,6 +345,12 @@ function LoginPage({
             {signupCheckKey ? (
               // Turnstile draws itself here only when it needs a click.
               <div ref={turnstile.box} className="app-login-check" />
+            ) : null}
+
+            {promisesTrial ? (
+              // Where she decides whether this will cost her: the answer, on
+              // the form itself.
+              <p className="app-login-trial">14 days free. No card.</p>
             ) : null}
 
             <button
@@ -614,10 +583,18 @@ export function App() {
       setCancelAtPeriodEnd(false);
       setCancelAt(null);
       setPlan(null);
+      // On the sign-in and signup forms, a check that failed says nothing:
+      // whoever is there is almost certainly signed out, and an error under a
+      // form they have not touched reads as broken. Submitting reports a real
+      // problem if there is one. Anywhere else they were expecting to be in,
+      // so they are told why they are not.
+      const checkedFrom = getRoute(window.location.pathname).kind;
       setCallbackError(
-        sessionError instanceof Error
-          ? sessionError.message
-          : "Unable to check your session right now.",
+        checkedFrom === "login" || checkedFrom === "signup"
+          ? null
+          : sessionError instanceof Error
+            ? sessionError.message
+            : "Unable to check your session right now.",
       );
       return null;
     } finally {
@@ -821,6 +798,18 @@ export function App() {
     // Until the account opens the link its signup emailed, the API refuses
     // the app's routes — so this is the page, wherever they were going.
     const unconfirmed = user?.emailVerified === false;
+
+    // The sign-in and signup forms draw at once rather than behind "Opening
+    // your workspace": a first-time visitor from the site has no session to
+    // wait for, and a blank screen at the moment of signing up reads as
+    // broken. Somebody who turns out to be signed in moves on when the check
+    // answers.
+    if (
+      isCheckingSession &&
+      (route.kind === "login" || route.kind === "signup")
+    ) {
+      return "login";
+    }
 
     if (isCheckingSession) {
       return "loading";
@@ -1072,10 +1061,9 @@ export function App() {
           }
           navigateTo({ kind: "home" }, true);
         }}
-        onSignup={async (name, username, email, password, turnstileToken) => {
+        onSignup={async (name, email, password, turnstileToken) => {
           const authenticatedSession = await signup(
             name,
-            username,
             email,
             password,
             turnstileToken,

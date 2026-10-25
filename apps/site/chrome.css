@@ -419,7 +419,7 @@
 }
 
 /* The section links are all in the footer; a phone's bar keeps the mark,
-   Sign in and Sign up. */
+   Sign in and Start free trial. */
 @media (max-width: 680px) {
   .site-header-secondary {
     display: none;
@@ -434,6 +434,20 @@
   .site-header-cta {
     padding: 8px 16px;
     font-size: var(--brand-text-ui-sm);
+  }
+}
+
+/* The smallest phones cannot fit the name, Sign in and "Start free trial"
+   in one bar. The mark stays, and still links home; the promise is not cut. */
+@media (max-width: 374px) {
+  /* Hidden from sight only: it is still the link's name for a screen reader. */
+  .site-header .site-logo-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }
 

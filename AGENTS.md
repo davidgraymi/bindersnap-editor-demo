@@ -101,7 +101,7 @@ bun run build         # Build the app and the site to dist/
 
 # Tests
 bun run test          # All unit tests (test:app + test:ops + test:seed)
-bun run test:app      # apps/app, apps/help, apps/legal, apps/site, packages/editor, packages/utils, packages/ui-tokens
+bun run test:app      # apps/app, apps/help, apps/legal, apps/site, packages/api-client, packages/editor, packages/utils, packages/ui-tokens
 bun run test:ops      # services/api, services/feedback, services/uptime, scripts, infra/backups
 bun run test:seed     # The seed scenario and its documents
 bun run test:integration  # Playwright — starts and stops its own stack

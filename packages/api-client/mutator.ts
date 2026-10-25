@@ -18,6 +18,15 @@ export class ApiRequestError extends Error {
   }
 }
 
+/**
+ * What a person reads when the API did not answer at all — offline, a dropped
+ * connection, an extension that blocked the request. The browser's own words
+ * for it ("Failed to fetch", "Load failed", "NetworkError when attempting to
+ * fetch resource") say nothing anyone can act on.
+ */
+export const API_UNREACHABLE_MESSAGE =
+  "We couldn't reach Bindersnap. Check your connection and try again.";
+
 /** One finished call to the API, as the feedback trace records it. */
 export interface ApiCallRecord {
   method: string;
@@ -63,7 +72,12 @@ export const customFetch = async <T>(
       durationMs: performance.now() - startedAt,
       requestId: null,
     });
-    throw error;
+    // An abort is the caller's own doing, and keeps its name so it can tell.
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw error;
+    }
+    // Status 0: there was no answer. The browser's error rides along as data.
+    throw new ApiRequestError(0, API_UNREACHABLE_MESSAGE, error);
   }
   observeApiCall?.({
     method,

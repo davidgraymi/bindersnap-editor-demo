@@ -93,6 +93,11 @@ import {
 } from "./session-organization";
 import { claimLegacyBillingForOrganization } from "./legacy-billing-claim";
 import { provisionSignup } from "./signup-provisioning";
+import {
+  createWithFreeUsername,
+  usernameCandidates,
+  usernameFromName,
+} from "./signup-username";
 import { slugifyOrganizationName } from "../../packages/utils/organizationName";
 import { verifyTurnstile } from "../../packages/utils/turnstile";
 import { slugifyGroupName } from "../../packages/utils/groupName";
@@ -2646,8 +2651,10 @@ async function handleSignup(
     acceptedTerms?: unknown;
     turnstileToken?: unknown;
   }>(req);
-  const username =
-    typeof payload?.username === "string" ? payload.username : "";
+  // Optional: the signup form no longer asks for one (`signup-username.ts`).
+  // The seed and API callers that name one still get exactly that name.
+  const requestedUsername =
+    typeof payload?.username === "string" ? payload.username.trim() : "";
   const email = typeof payload?.email === "string" ? payload.email : "";
   const password =
     typeof payload?.password === "string" ? payload.password : "";
@@ -2660,10 +2667,10 @@ async function handleSignup(
   const invitationToken =
     typeof payload?.invitation === "string" ? payload.invitation : "";
 
-  if (!username || !email || !password) {
+  if (!email || !password) {
     return json(
       400,
-      { error: "Username, email and password are required." },
+      { error: "Email and password are required." },
       baseHeaders,
     );
   }
@@ -2690,13 +2697,17 @@ async function handleSignup(
   );
   if (botCheck) return botCheck;
 
-  logger.debug("Attempting Gitea user creation", { username, clientIp });
+  logger.debug("Attempting Gitea user creation", {
+    username: requestedUsername || null,
+    clientIp,
+  });
 
-  const created = await createGiteaUser(
-    username,
-    email,
-    password,
-    joinFullName(firstName, lastName),
+  const fullName = joinFullName(firstName, lastName);
+  const { username, result: created } = await createWithFreeUsername(
+    requestedUsername
+      ? [requestedUsername]
+      : usernameCandidates(usernameFromName(firstName, lastName, email)),
+    (candidate) => createGiteaUser(candidate, email, password, fullName),
   );
   if (!("created" in created)) {
     logger.warn("Gitea user creation failed during signup", {

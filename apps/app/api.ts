@@ -256,16 +256,16 @@ export function signupTurnstileSiteKey(): string {
 
 export async function signup(
   name: { first: string; last: string },
-  username: string,
   email: string,
   password: string,
   turnstileToken: string | null,
   invitation?: string | null,
 ): Promise<SessionAuthState> {
+  // No username: the API makes one from the name (`signup-username.ts`), and
+  // she signs in with her email.
   const response = await AuthClient.authSignup({
     firstName: name.first.trim(),
     lastName: name.last.trim(),
-    username: username.trim(),
     email: email.trim(),
     password,
     // The form will not submit until its box is ticked.

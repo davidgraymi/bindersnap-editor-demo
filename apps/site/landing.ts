@@ -86,19 +86,48 @@ export function installScrollReveal(doc: Document = document): void {
     return;
   }
 
+  const view = doc.defaultView;
+  const pending = new Set(doc.querySelectorAll(".reveal"));
+
+  const reveal = (element: Element, instant: boolean) => {
+    if (!pending.delete(element)) return;
+    if (instant) element.classList.add("reveal-instant");
+    element.classList.add("in");
+    observer.unobserve(element);
+    if (pending.size === 0) view?.removeEventListener("scroll", onScroll);
+  };
+
+  // Starts a little below the fold, so a section has begun to appear by the
+  // time it scrolls in rather than arriving blank on a fast scroll.
   const observer = new IntersectionObserver(
     (entries) => {
       for (const entry of entries) {
-        if (entry.isIntersecting) {
-          entry.target.classList.add("in");
-          observer.unobserve(entry.target);
-        }
+        if (entry.isIntersecting) reveal(entry.target, false);
       }
     },
-    { threshold: 0.1 },
+    { rootMargin: "0px 0px 15% 0px", threshold: 0 },
   );
 
-  for (const element of doc.querySelectorAll(".reveal")) {
+  // A jump (an anchor, the End key, a hard flick) can carry a section from
+  // below the viewport to above it without it ever intersecting, and the
+  // observer never hears of it. Anything that has ended up above the fold
+  // is shown on the spot, so scrolling back up never meets blank space.
+  let queued = false;
+  function onScroll() {
+    if (queued) return;
+    queued = true;
+    view?.requestAnimationFrame(() => {
+      queued = false;
+      for (const element of pending) {
+        if (element.getBoundingClientRect().bottom < 0) reveal(element, true);
+      }
+    });
+  }
+
+  for (const element of pending) {
     observer.observe(element);
   }
+  view?.addEventListener("scroll", onScroll, { passive: true });
+  // A page opened at #signup starts below everything before it.
+  onScroll();
 }

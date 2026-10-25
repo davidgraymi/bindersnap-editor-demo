@@ -37,7 +37,11 @@ export const SignupBodySchema = z.object({
   /** Joined into the account's one full name, which the record writes. */
   firstName: z.string().min(1),
   lastName: z.string().min(1),
-  username: z.string().min(1),
+  /**
+   * The Gitea login. The signup form leaves it out, and the API makes one
+   * from the name (`jordan.kim`, then `jordan.kim2` if that is taken).
+   */
+  username: z.string().min(1).optional(),
   email: z.string().email(),
   password: z.string().min(1),
   /**

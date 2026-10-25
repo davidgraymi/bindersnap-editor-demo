@@ -339,6 +339,46 @@ body::after {
   flex-shrink: 0;
 }
 
+/* The hero's smaller step: the free checklist. A quiet text link under the
+   hint, so the trial button stays the hero's one action. */
+.hero-checklist-link {
+  max-width: var(--brand-max-width-form);
+  font-size: var(--brand-text-ui-sm);
+  line-height: var(--brand-leading-normal);
+  text-align: center;
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+  text-decoration-color: var(--bs-coral-border);
+  text-underline-offset: var(--brand-space-0-5);
+  transition:
+    color var(--brand-transition-base),
+    text-decoration-color var(--brand-transition-base);
+}
+
+.hero-checklist-link:hover {
+  text-decoration-color: currentColor;
+}
+
+/* Who it is for, said straight after the ask: the line that tells a small
+   provider this was built for her and not for a health system. */
+.hero-fit {
+  max-width: var(--brand-max-width-narrow);
+  margin-top: var(--brand-space-10);
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-body);
+  font-style: italic;
+  line-height: var(--brand-leading-relaxed);
+  text-align: center;
+  color: var(--bs-text-secondary);
+  animation: fadeUp 0.7s ease 0.45s both;
+  transition: color var(--brand-transition-base);
+}
+
+.hero-fit strong {
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-medium);
+}
+
 /* Hero mockup browser frame */
 .hero-mockup {
   margin-top: var(--brand-space-16);
@@ -600,36 +640,6 @@ body::after {
   font-size: var(--brand-text-label);
   color: var(--bs-text-faint);
   white-space: nowrap;
-}
-
-.audit-gate {
-  margin-top: var(--brand-space-6);
-  padding-top: var(--brand-space-5);
-  border-top: 1px solid var(--bs-rule-warm);
-}
-
-.audit-approve-btn {
-  width: 100%;
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-md);
-  padding: var(--brand-space-2) var(--brand-space-4);
-  background: var(--bs-surface-2);
-  font-family: var(--brand-font-sans);
-  font-size: var(--brand-text-sm);
-  font-weight: var(--brand-weight-medium);
-  color: var(--bs-text-faint);
-  cursor: not-allowed;
-}
-
-.audit-gate-note {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--brand-space-2);
-  margin-top: var(--brand-space-3);
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-label);
-  line-height: var(--brand-leading-normal);
-  color: var(--bs-text-muted);
 }
 
 /* ─────────────────────────────────────
@@ -1583,6 +1593,18 @@ body::after {
   transition: color var(--brand-transition-base);
 }
 
+.founder-contact a {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+  text-decoration-color: var(--bs-coral-border);
+  text-underline-offset: var(--brand-space-0-5);
+  transition: text-decoration-color var(--brand-transition-base);
+}
+
+.founder-contact a:hover {
+  text-decoration-color: currentColor;
+}
+
 .founder-signoff {
   display: flex;
   align-items: center;
@@ -1724,6 +1746,23 @@ body::after {
   gap: var(--brand-space-2);
   position: relative;
   z-index: var(--brand-z-raised);
+}
+
+/* The answer to lock-in, beside the form where the decision is made.
+   Scoped under .cta-inner to outrank the section's own `> p` paragraph rule. */
+.cta-inner > .cta-promise {
+  max-width: var(--brand-max-width-narrow);
+  margin: var(--brand-space-6) auto 0;
+  font-size: var(--brand-text-ui-sm);
+  line-height: var(--brand-leading-relaxed);
+  color: var(--bs-text-muted);
+  position: relative;
+  z-index: var(--brand-z-raised);
+}
+
+.cta-inner > .cta-promise strong {
+  color: var(--bs-text-secondary);
+  font-weight: var(--brand-weight-medium);
 }
 
 /* Trust strip — the security facts, sitting with the form instead of in a
@@ -2136,13 +2175,18 @@ body::after {
   transform: none;
 }
 .reveal-d1 {
-  transition-delay: 0.1s;
+  transition-delay: 0.06s;
 }
 .reveal-d2 {
-  transition-delay: 0.2s;
+  transition-delay: 0.12s;
 }
 .reveal-d3 {
-  transition-delay: 0.3s;
+  transition-delay: 0.18s;
+}
+/* Already scrolled past — a jump to #signup, say. It appears where it is,
+   with no fade: nobody should scroll back up into blank space. */
+.reveal.in.reveal-instant {
+  transition: none;
 }
 
 /* ─────────────────────────────────────
