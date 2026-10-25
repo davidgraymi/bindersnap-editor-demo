@@ -3,6 +3,10 @@
     "playwright-test": {
       "command": "npx",
       "args": ["playwright", "run-test-mcp-server"]
+    },
+    "analytics-mcp": {
+      "command": "uvx",
+      "args": ["--from", "analytics-mcp", "google-analytics-mcp"]
     }
   }
 }
