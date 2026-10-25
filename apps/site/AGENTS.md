@@ -21,7 +21,9 @@ and listed in `/sitemap.xml`, `/llms.txt` and `/llms-full.txt`
 `renderSite.test.ts` is the quality gate: length of titles and descriptions,
 minimum words, no broken internal links, no claims we cannot make (never
 "HIPAA compliant": Bindersnap holds no patient data). Marketing copy may say
-"policy"; the app says "document".
+"policy"; the app says "document". `pageTitles.test.ts` holds every public
+page's `<title>` — landing, marketing, help and legal — to 70 characters, the
+length Bing Webmaster Tools flags.
 
 `chrome.ts` is the bar and footer every public page wears — landing, marketing,
 help and legal — styled by `chrome.css`. The landing page is a static
