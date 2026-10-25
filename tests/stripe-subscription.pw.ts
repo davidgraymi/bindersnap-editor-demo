@@ -639,7 +639,9 @@ async function getAuthoringHttpStatus(
 function uniqueCredentials() {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   return {
-    username: `stripe-${suffix}`,
+    // What the signup form's "Stripe" / suffix name becomes as a login.
+    username: `stripe.${suffix}`,
+    lastName: suffix,
     email: `stripe-${suffix}@users.bindersnap.local`,
     password: `Bindersnap-${suffix}!`,
   };
@@ -1029,15 +1031,11 @@ test.describe("Stripe subscription lifecycle", () => {
 
     try {
       await page.goto("/-/signup");
-      await page.getByLabel("First name").fill("Test");
-      await page.getByLabel("Last name").fill("User");
-      await page.getByLabel("Username").fill(credentials.username);
+      await page.getByLabel("First name").fill("Stripe");
+      await page.getByLabel("Last name").fill(credentials.lastName);
       await page.getByLabel("Email").fill(credentials.email);
       await page
         .getByLabel("Password", { exact: true })
-        .fill(credentials.password);
-      await page
-        .getByLabel("Confirm Password", { exact: true })
         .fill(credentials.password);
       await agreeToTerms(page);
       await page.getByRole("button", { name: "Create account" }).click();

@@ -105,7 +105,6 @@
         "required": [
           "firstName",
           "lastName",
-          "username",
           "email",
           "password",
           "acceptedTerms"
@@ -2819,7 +2818,6 @@
                 "required": [
                   "firstName",
                   "lastName",
-                  "username",
                   "email",
                   "password",
                   "acceptedTerms"

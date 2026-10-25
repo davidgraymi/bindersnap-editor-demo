@@ -1,15 +1,17 @@
 /**
  * Integration coverage for the frontend signup flow.
  *
- * Exercises the real app login page, validates client-side password
- * confirmation, verifies the browser sends username/email/password to the
- * local auth API, and confirms backend validation errors are surfaced in the
- * UI.
+ * Exercises the real app login page, verifies the browser sends the name,
+ * email and password to the local auth API — and no username, which the API
+ * makes from the name — and confirms backend validation errors are surfaced in
+ * the UI.
  */
 
 import { randomUUID } from "node:crypto";
 
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
+
+import { LEGAL_VERSION } from "../packages/utils/legal";
 
 import {
   API_BASE_URL,
@@ -24,10 +26,17 @@ import {
 } from "./helpers";
 import { confirmFromEmail } from "./mailpit";
 
+/**
+ * A unique person. The form asks for no username: the API makes one from the
+ * name, so the last name is the run's suffix and `username` is the login that
+ * name becomes (`signup-username.ts`) — which every test then checks.
+ */
 function buildUniqueSignupCredentials() {
   const suffix = `${Date.now()}-${randomUUID().slice(0, 8)}`;
   return {
-    username: `signup-${suffix}`,
+    firstName: "Signup",
+    lastName: suffix,
+    username: `signup.${suffix}`,
     email: `signup-${suffix}@users.bindersnap.local`,
     password: `Bindersnap-${suffix}!`,
   };
@@ -41,27 +50,24 @@ async function openSignupForm(page: Page): Promise<void> {
       name: "Create your Bindersnap workspace.",
     }),
   ).toBeVisible();
-  await expect(page.getByLabel("Confirm Password")).toBeVisible();
+  // The answer to "will this cost me?", where she decides.
+  await expect(page.getByText("14 days free. No card.")).toBeVisible();
 }
 
 async function fillSignupForm(
   page: Page,
   credentials: {
-    username: string;
+    firstName: string;
+    lastName: string;
     email: string;
     password: string;
   },
-  confirmPassword = credentials.password,
   { agree = true } = {},
 ): Promise<void> {
-  await page.getByLabel("First name").fill("Test");
-  await page.getByLabel("Last name").fill("User");
-  await page.getByLabel("Username").fill(credentials.username);
+  await page.getByLabel("First name").fill(credentials.firstName);
+  await page.getByLabel("Last name").fill(credentials.lastName);
   await page.getByLabel("Email").fill(credentials.email);
   await page.getByLabel("Password", { exact: true }).fill(credentials.password);
-  await page
-    .getByLabel("Confirm Password", { exact: true })
-    .fill(confirmPassword);
   if (agree) await agreeToTerms(page);
 }
 
@@ -159,11 +165,7 @@ async function signUpThroughOrganizationSetup(
 async function signUpAndReturnToLogin(
   page: Page,
   testInfo: TestInfo,
-  credentials: {
-    username: string;
-    email: string;
-    password: string;
-  },
+  credentials: ReturnType<typeof buildUniqueSignupCredentials>,
   screenshotPrefix: string,
 ): Promise<void> {
   await openSignupForm(page);
@@ -178,11 +180,18 @@ async function signUpAndReturnToLogin(
   await submitSignupForm(page);
 
   const signupRequest = await signupRequestPromise;
-  expect(signupRequest.postDataJSON()).toMatchObject({
-    username: credentials.username,
+  const sent = signupRequest.postDataJSON();
+  expect(sent).toMatchObject({
+    firstName: credentials.firstName,
+    lastName: credentials.lastName,
     email: credentials.email,
     password: credentials.password,
     acceptedTerms: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+  });
+  expect(sent).not.toHaveProperty("username");
+  const signupResponse = await signupRequest.response();
+  expect(await signupResponse?.json()).toMatchObject({
+    user: { username: credentials.username },
   });
 
   await signUpThroughOrganizationSetup(
@@ -366,28 +375,34 @@ test.describe("signup flow", () => {
     );
   });
 
-  test("blocks signup in the browser when passwords do not match", async ({
-    page,
-  }) => {
-    const credentials = buildUniqueSignupCredentials();
-    let signupRequestCount = 0;
-
-    page.on("request", (request) => {
-      if (
-        request.url().endsWith("/auth/signup") &&
-        request.method() === "POST"
-      ) {
-        signupRequestCount += 1;
-      }
-    });
-
+  test("asks only for a name, an email and a password", async ({ page }) => {
     await openSignupForm(page);
-    await fillSignupForm(page, credentials, `${credentials.password}-mismatch`);
-    await submitSignupForm(page);
+    await expect(page.getByLabel("Username")).toHaveCount(0);
+    await expect(page.getByLabel("Confirm Password")).toHaveCount(0);
+  });
 
-    await expect(page.getByText("Passwords do not match.")).toBeVisible();
-    await expect(page).toHaveURL(/\/signup$/);
-    expect(signupRequestCount).toBe(0);
+  test("a second person with the same name gets the next free login", async () => {
+    const first = buildUniqueSignupCredentials();
+    const second = {
+      ...buildUniqueSignupCredentials(),
+      firstName: first.firstName,
+      lastName: first.lastName,
+    };
+    const usernames: string[] = [];
+    for (const person of [first, second]) {
+      const { username: _username, ...body } = person;
+      const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
+        body: JSON.stringify({ ...body, acceptedTerms: LEGAL_VERSION }),
+      });
+      expect(response.status).toBe(200);
+      usernames.push(
+        ((await response.json()) as { user: { username: string } }).user
+          .username,
+      );
+    }
+    expect(usernames).toEqual([first.username, `${first.username}2`]);
   });
 
   test("will not sign up until the Terms are agreed to, and links to them", async ({
@@ -405,9 +420,7 @@ test.describe("signup flow", () => {
     });
 
     await openSignupForm(page);
-    await fillSignupForm(page, credentials, credentials.password, {
-      agree: false,
-    });
+    await fillSignupForm(page, credentials, { agree: false });
     await submitSignupForm(page);
 
     await expect(
@@ -434,11 +447,7 @@ test.describe("signup flow", () => {
     const response = await fetch(`${API_BASE_URL}/auth/signup`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
-      body: JSON.stringify({
-        firstName: "Test",
-        lastName: "User",
-        ...credentials,
-      }),
+      body: JSON.stringify(credentials),
     });
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ code: "terms_not_accepted" });

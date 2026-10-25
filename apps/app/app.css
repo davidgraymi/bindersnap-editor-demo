@@ -199,6 +199,16 @@ input {
   color: var(--bs-text-primary);
 }
 
+/* "14 days free. No card." just above Create account: said where the person
+   decides, in the panel's own voice rather than a second accent. */
+.app-login-trial {
+  margin: 0;
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-sm);
+  font-weight: var(--brand-weight-medium);
+  text-align: center;
+}
+
 .app-login-hint {
   margin: 0;
   color: var(--bs-text-muted);
