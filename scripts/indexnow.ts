@@ -4,12 +4,15 @@
  * and the rest, which share what they are sent.
  *
  *   bun scripts/indexnow.ts <old-sitemap.xml> <new-sitemap.xml>
- *   bun scripts/indexnow.ts --all <new-sitemap.xml>
+ *   bun scripts/indexnow.ts --all [sitemap.xml]
+ *   bun run index        (the same as --all on the live sitemap)
  *
  * `static-site.yml` saves the live sitemap before it deploys and runs this
  * after, so only an address that is new, or whose `<lastmod>` moved, is sent.
  * A page with no `<lastmod>` (the landing page) is sent only when it first
- * appears; `--all` sends every address, for a first run or a new key.
+ * appears; `--all` sends every address, for a first run or a new key. With
+ * no file, `--all` reads the live sitemap, so it never names a page that is
+ * not on the site yet.
  *
  * The engine checks the key by fetching `/{key}.txt` from the site
  * (`INDEXNOW_KEY` in apps/site/renderSite.ts), so run this only once that
@@ -86,18 +89,27 @@ function unescapeXml(text: string): string {
     .replaceAll("&amp;", "&");
 }
 
+async function readSitemap(path: string | undefined): Promise<string> {
+  if (path) return readFileSync(path, "utf8");
+  const response = await fetch(`${SITE}/sitemap.xml`);
+  if (!response.ok) {
+    throw new Error(`${SITE}/sitemap.xml answered ${response.status}`);
+  }
+  return response.text();
+}
+
 if (import.meta.main) {
   const args = process.argv.slice(2);
   const all = args[0] === "--all";
   const [previousPath, nextPath] = all ? ["", args[1]] : args;
-  if (!nextPath || (!all && !previousPath)) {
+  if (!all && (!previousPath || !nextPath)) {
     console.error(
       "Usage: bun scripts/indexnow.ts <old-sitemap.xml> <new-sitemap.xml>\n" +
-        "       bun scripts/indexnow.ts --all <new-sitemap.xml>",
+        "       bun scripts/indexnow.ts --all [sitemap.xml]",
     );
     process.exit(2);
   }
-  const next = readFileSync(nextPath, "utf8");
+  const next = await readSitemap(nextPath);
   const previous = all ? "" : readFileSync(previousPath!, "utf8");
   const urls = indexNowBody(changedUrls(previous, next)).urlList;
   if (urls.length === 0) {

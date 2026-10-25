@@ -19,6 +19,7 @@
     "down": "bun scripts/stack.ts down",
     "format": "bunx prettier --write \"**/*.{js,ts,jsx,tsx,html,css,json,yml,yaml,md}\" --ignore-path .gitignore --ignore-path .prettierignore",
     "format:check": "bunx prettier --check \"**/*.{js,ts,jsx,tsx,html,css,json,yml,yaml,md}\" --ignore-path .gitignore --ignore-path .prettierignore",
+    "index": "bun scripts/indexnow.ts --all",
     "generate:gitea-client": "bun run scripts/generate-gitea-api.ts",
     "generate:api-schema": "bun packages/api-schema/generate-openapi.ts",
     "generate:api-client": "bunx orval --config orval.config.ts",
