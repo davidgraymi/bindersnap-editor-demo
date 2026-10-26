@@ -196,6 +196,7 @@ import type { DocumentSearchParams } from "./documentSearch";
 import type { ChangeScope } from "./changeScope";
 import { scopeChangeBase, scopeRepo } from "./changeScope";
 import { LEGAL_VERSION } from "../../packages/utils/legal";
+import { isCommitRef } from "../../packages/utils/gitRef";
 import { publicEnv } from "./publicEnv";
 
 /**
@@ -1976,8 +1977,9 @@ export async function downloadBinderDocument(
     documentPath,
     ref ? { ref } : undefined,
     // A branch moves with every save; a copy the browser kept from before one
-    // showed the words the save replaced. See `downloadHeaders` in the API.
-    { cache: "no-store" },
+    // showed the words the save replaced. A commit cannot move, so a version
+    // read at one is the browser's to keep. See `downloadHeaders` in the API.
+    ref && isCommitRef(ref) ? undefined : { cache: "no-store" },
   );
   return response.data;
 }

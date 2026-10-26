@@ -2537,14 +2537,76 @@ describe("a document's bytes and the browser's cache", () => {
     }
   });
 
-  test("a file at a commit keeps Gitea's caching, since it cannot change", () => {
+  test("a file at a commit is kept for good, since it cannot change", () => {
     const headers = downloadHeaders(
       new Headers(),
       gitea(),
       "0be6a65b18248f5c31eb93afe1f700c9550f4e7f",
     );
-    expect(headers.get("cache-control")).toBe("private, max-age=21600");
+    expect(headers.get("cache-control")).toBe(
+      "private, max-age=31536000, immutable",
+    );
     expect(headers.get("etag")).toBe('"0be6a65b"');
+  });
+
+  test("a version tag is not a commit: tags can be moved", () => {
+    const headers = downloadHeaders(
+      new Headers(),
+      gitea(),
+      "01J8XZ4K7M0000000000000000/v3",
+    );
+    expect(headers.get("cache-control")).toBe("no-store");
+  });
+});
+
+describe("signing out", () => {
+  test("clears the browser's kept copies, for whoever sits down next", async () => {
+    const server = createApiServer();
+    try {
+      const response = await server.fetch(
+        new Request("http://localhost/auth/logout", {
+          method: "POST",
+          headers: { Origin: "http://localhost:5173" },
+        }),
+      );
+      expect(response.status).toBe(200);
+      expect(response.headers.get("Clear-Site-Data")).toBe('"cache"');
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("a session that expired or was revoked clears them too", async () => {
+    const server = createApiServer();
+    try {
+      const response = await server.fetch(
+        new Request("http://localhost/api/app/organizations", {
+          headers: {
+            Origin: "http://localhost:5173",
+            Cookie: "bindersnap_session=no-such-session",
+          },
+        }),
+      );
+      expect(response.status).toBe(401);
+      expect(response.headers.get("Clear-Site-Data")).toBe('"cache"');
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("a request that never had a session clears nothing", async () => {
+    const server = createApiServer();
+    try {
+      const response = await server.fetch(
+        new Request("http://localhost/api/app/organizations", {
+          headers: { Origin: "http://localhost:5173" },
+        }),
+      );
+      expect(response.status).toBe(401);
+      expect(response.headers.get("Clear-Site-Data")).toBeNull();
+    } finally {
+      server.stop(true);
+    }
   });
 });
 

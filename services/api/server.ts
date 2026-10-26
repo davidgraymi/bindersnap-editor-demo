@@ -100,6 +100,7 @@ import {
 } from "./signup-username";
 import { slugifyOrganizationName } from "../../packages/utils/organizationName";
 import { verifyTurnstile } from "../../packages/utils/turnstile";
+import { isCommitRef } from "../../packages/utils/gitRef";
 import { slugifyGroupName } from "../../packages/utils/groupName";
 import {
   joinFullName,
@@ -1166,13 +1167,35 @@ async function resolveDocumentAccess(
   }
 }
 
+/**
+ * What every response that starts or ends a session carries.
+ *
+ * The browser keeps a published version's bytes for good (see
+ * `downloadHeaders`). A clinic's computer is often shared, so when a session
+ * ends — signed out, deleted, expired or revoked — every copy this origin left
+ * behind goes with it rather than staying for whoever sits down next. And a
+ * session that ended without saying so, in a browser closed mid-shift, is
+ * cleared when the next person signs in.
+ */
+const CLEAR_KEPT_COPIES_HEADERS = { "Clear-Site-Data": '"cache"' } as const;
+
 async function requireSession(
   req: Request,
   baseHeaders: Headers,
 ): Promise<{ session: SessionRecord; client: GiteaClient } | Response> {
   const session = await getSessionFromRequest(req);
   if (!session) {
-    return json(401, { error: "Unauthorized." }, baseHeaders);
+    // A cookie that names no live session is one that expired or was
+    // revoked: that session has ended without a sign-out, so its kept copies
+    // go the same way (`handleLogout`).
+    const ended = parseCookies(req).has(config.sessionCookieName);
+    return json(
+      401,
+      { error: "Unauthorized." },
+      ended
+        ? mergeHeaders(baseHeaders, CLEAR_KEPT_COPIES_HEADERS)
+        : baseHeaders,
+    );
   }
 
   return { session, client: createSessionGiteaClient(session) };
@@ -1743,8 +1766,8 @@ function attachmentDisposition(response: Response): string {
   return `attachment${params}`;
 }
 
-/** A commit id: the one kind of ref whose files can never change. */
-const COMMIT_REF = /^[0-9a-f]{40}$/i;
+/** A year, and never revalidated: the most any browser will honour. */
+export const IMMUTABLE_CACHE_CONTROL = "private, max-age=31536000, immutable";
 
 /**
  * The headers a document's bytes go out with.
@@ -1756,8 +1779,23 @@ const COMMIT_REF = /^[0-9a-f]{40}$/i;
  * branch; the document page, and both sides of a change's comparison, went on
  * reading the words from before the save, so an edit looked lost and a change
  * showed a document as edited with nothing in it to see. A branch, `main` and
- * a tag can all move, so only a commit id keeps Gitea's answer; everything
- * else is asked again each time.
+ * a tag can all move, so they are asked again each time.
+ *
+ * **A file at a commit is kept for good.** Its address is its content, so a
+ * copy can never be wrong, and the app reads every published version at its
+ * commit (`versionRef`) so that reopening v3, or comparing against it again,
+ * costs no request at all. `private`, so no shared cache keeps it; a session
+ * that starts or ends clears the browser's copies (`CLEAR_KEPT_COPIES_HEADERS`). Gitea's six
+ * hours bought a revalidation every six hours for bytes that cannot have
+ * changed.
+ *
+ * **This rests on no ref being named like a commit.** Gitea 28 resolves
+ * `?ref=` as a branch, then a tag, then a commit, and lets a branch or a tag be
+ * named with forty hex digits — so such a branch would shadow the commit, and
+ * its bytes would be kept as the commit's. None can exist: Gitea is reachable
+ * only from this API, and every ref it creates carries a prefix (`draft/`,
+ * `upload/`, `<uid>/v4`). A route that ever let a person name a ref freely
+ * must refuse a name `isCommitRef` accepts.
  *
  * **A document is never a page on this origin.** Anybody who can upload can
  * upload an SVG with a script in it, and Gitea serves one inline, relying on a
@@ -1788,7 +1826,9 @@ export function downloadHeaders(
   headers.set("content-disposition", attachmentDisposition(response));
   headers.set("content-security-policy", DOWNLOAD_CSP);
   headers.set("x-content-type-options", "nosniff");
-  if (!COMMIT_REF.test(ref)) {
+  if (isCommitRef(ref)) {
+    headers.set("cache-control", IMMUTABLE_CACHE_CONTROL);
+  } else {
     headers.set("cache-control", "no-store");
     headers.delete("etag");
     headers.delete("last-modified");
@@ -2306,6 +2346,7 @@ async function establishSession(
     "Set-Cookie": serializeSessionCookie(req, session.id, {
       expiresAt: lifetime.cookieExpiresAt,
     }),
+    ...CLEAR_KEPT_COPIES_HEADERS,
   });
 
   return { ok: true, session, headers };
@@ -2920,6 +2961,7 @@ async function handleLogout(
 
   const headers = mergeHeaders(baseHeaders, {
     "Set-Cookie": clearSessionCookie(req),
+    ...CLEAR_KEPT_COPIES_HEADERS,
   });
 
   return json(200, { ok: true }, headers);
@@ -3679,6 +3721,7 @@ async function handleDeleteAccount(
       status: 204,
       headers: mergeHeaders(baseHeaders, {
         "Set-Cookie": clearSessionCookie(req),
+        ...CLEAR_KEPT_COPIES_HEADERS,
       }),
     });
   } catch (err) {

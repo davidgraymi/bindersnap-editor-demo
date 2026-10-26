@@ -13,6 +13,7 @@
  * browser — the same reason `documentComparison.ts` exists.
  */
 
+import { versionRef } from "../../packages/utils/gitRef";
 import { describeMove } from "./binderChange";
 import { downloadFileName } from "./binderDocument";
 import { formatDocumentName } from "./documentDisplay";
@@ -170,7 +171,7 @@ export function buildChangedDocumentRows(params: {
     move: null,
     base: document.lastVersion
       ? {
-          ref: document.lastVersion.tag,
+          ref: versionRef(document.lastVersion),
           label: `v${document.lastVersion.version}`,
         }
       : null,
