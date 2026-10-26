@@ -143,7 +143,7 @@ export function organizationPeopleQuery(org: string) {
 export function organizationBillingQuery(org: string) {
   return queryOptions({
     queryKey: queryKeys.organizationBilling(org),
-    queryFn: () => fetchBillingStatus(org),
+    queryFn: () => fetchBillingStatus(org, { seats: true }),
   });
 }
 

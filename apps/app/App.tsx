@@ -1,6 +1,10 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { organizationsQuery, queryKeys } from "./data/queries";
+import {
+  organizationBillingQuery,
+  organizationsQuery,
+  queryKeys,
+} from "./data/queries";
 import {
   type FormEvent,
   lazy,
@@ -486,9 +490,7 @@ export function App() {
       setCurrentPeriodEnd(billing.currentPeriodEnd);
       setCancelAtPeriodEnd(billing.cancelAtPeriodEnd);
       setCancelAt(billing.cancelAt);
-      setPlan(
-        billing.plan ? { ...billing.plan, seats: billing.seats ?? null } : null,
-      );
+      setPlan(billing.plan ? { ...billing.plan, seats: null } : null);
       setTrialEndsAt(billing.trialEndsAt);
       setCanManageBilling(billing.canManageBilling === true);
       setHasBillingAccount(billing.hasBillingAccount === true);
@@ -627,6 +629,21 @@ export function App() {
     if (!signedIn || isCheckingSession) return;
     void loadBilling();
   }, [billingOrganization, isCheckingSession, loadBilling, signedIn]);
+
+  // **Seats only where a price per writer is shown.** The status above is
+  // read on every load, and counting seats costs the server a Gitea read per
+  // writing group, so it leaves them out; the billing page and the paywall ask
+  // for them here, sharing the People page's read of the same organization.
+  const showsSeats = route.kind === "billing" || paywallOpen;
+  const seatCount = useQuery({
+    ...organizationBillingQuery(billingOrganizationName ?? ""),
+    enabled: signedIn && showsSeats && billingOrganizationName !== null,
+    select: (billing) => billing.seats ?? null,
+  });
+  const pricedPlan = useMemo(
+    () => (plan ? { ...plan, seats: seatCount.data ?? null } : null),
+    [plan, seatCount.data],
+  );
 
   // `/-/billing`, which names no organization: say which one it is showing,
   // in the address bar, once the server has answered.
@@ -1132,7 +1149,7 @@ export function App() {
                       ? route.org
                       : billingOrganizationName
                   }
-                  plan={plan}
+                  plan={pricedPlan}
                   onSubscribe={async () => {
                     const { url } = await createCheckoutSession(
                       billingOrganizationName,
@@ -1185,7 +1202,7 @@ export function App() {
                     ? "lapsed"
                     : "none"
               }
-              plan={plan}
+              plan={pricedPlan}
               canManage={canManageBilling}
               onSubscribe={async () => {
                 // The organization the refusal named, which is the one on

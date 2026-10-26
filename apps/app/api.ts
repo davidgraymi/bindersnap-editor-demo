@@ -2104,14 +2104,19 @@ export async function markNotificationsRead(
 /**
  * One organization's billing. Billing is per organization, so every call
  * names the one it is about; omitting it asks for the session's oldest.
+ *
+ * `seats` asks for the paid-seat count too. Only a screen that shows a price
+ * per writer should: counting costs the server a Gitea read per writing group.
  */
 export async function fetchBillingStatus(
   organization?: string | null,
+  options: { seats?: boolean } = {},
 ): Promise<BillingStatusPayload> {
   try {
-    const response = await BillingClient.getBillingStatus(
-      organization ? { organization } : undefined,
-    );
+    const response = await BillingClient.getBillingStatus({
+      ...(organization ? { organization } : {}),
+      ...(options.seats ? { seats: "true" as const } : {}),
+    });
     return response.data;
   } catch (error) {
     // 402 from the billing endpoint contains billing data (e.g. past_due status),

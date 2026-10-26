@@ -2506,6 +2506,11 @@ registry.registerPath({
     query: z.object({
       /** Which of this person's organizations; their oldest when omitted. */
       organization: z.string().optional(),
+      /**
+       * `true` to count the organization's paid seats. Counting reads every
+       * writing group from Gitea, so it is left out unless asked for.
+       */
+      seats: z.enum(["true", "false"]).optional(),
     }),
   },
   responses: {

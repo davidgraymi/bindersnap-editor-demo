@@ -14517,6 +14517,18 @@
             "required": false,
             "name": "organization",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "required": false,
+            "name": "seats",
+            "in": "query"
           }
         ],
         "responses": {

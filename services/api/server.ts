@@ -14407,12 +14407,20 @@ async function handleBillingStatus(
   if (auth instanceof Response) return auth;
 
   const { username } = auth.session;
+  const query = new URL(req.url).searchParams;
   const organization = await resolveBillingOrganization(
     auth,
-    new URL(req.url).searchParams.get("organization"),
+    query.get("organization"),
     baseHeaders,
   );
   if (organization instanceof Response) return organization;
+
+  // **Seats only when asked.** Counting them reads every writing team's
+  // binders and members — some thirty Gitea calls for an organization of eight
+  // binders, growing with every one — and the app shell asks for this status
+  // on every load to know whether its person may write. Only the screens that
+  // show a price per writer ask for the count.
+  const countSeats = query.get("seats") === "true";
 
   const [priceInfo, accessState, canManageBilling, subscription, seats] =
     await Promise.all([
@@ -14424,7 +14432,7 @@ async function handleBillingStatus(
         : Promise.resolve(null),
       // What the organization pays for: its writers, counted once. Null
       // when Gitea will not say, so the page shows the unit price alone.
-      organization
+      organization && countSeats
         ? countBillableSeats({
             client: createSessionGiteaClient(auth.session),
             org: organization.name,
@@ -14445,7 +14453,7 @@ async function handleBillingStatus(
       accessSource: accessState.source,
       override: serializeSubscriptionOverride(accessState.override),
       plan: priceInfo,
-      seats,
+      ...(countSeats ? { seats } : {}),
       canManageBilling,
       // A Stripe customer exists, so the portal has something to open — true
       // for a lapsed or cancelled subscription too, which is exactly when a

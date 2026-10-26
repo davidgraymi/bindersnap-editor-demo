@@ -644,6 +644,45 @@ describe("billing belongs to the organization's owners", () => {
   });
 });
 
+describe("billing status counts seats only when asked", () => {
+  const teamReads = () =>
+    fetchCalls.filter(
+      (call) =>
+        call.path.startsWith("/api/v1/teams/") ||
+        /\/orgs\/[^/]+\/teams$/.test(call.path),
+    );
+
+  test("the status every page load asks for reads no team from Gitea", async () => {
+    const server = createApiServer();
+    const sessionId = await seedSession(`plain-${randomUUID()}`);
+    fetchCalls.length = 0;
+
+    const body = (await (
+      await server.fetch(
+        makeSessionRequest("/api/app/billing/status", sessionId),
+      )
+    ).json()) as Record<string, unknown>;
+
+    expect("seats" in body).toBe(false);
+    expect(teamReads()).toHaveLength(0);
+  });
+
+  test("a screen that shows a price per writer asks, and is answered", async () => {
+    const server = createApiServer();
+    const sessionId = await seedSession(`priced-${randomUUID()}`);
+    fetchCalls.length = 0;
+
+    const body = (await (
+      await server.fetch(
+        makeSessionRequest("/api/app/billing/status?seats=true", sessionId),
+      )
+    ).json()) as Record<string, unknown>;
+
+    expect("seats" in body).toBe(true);
+    expect(teamReads().length).toBeGreaterThan(0);
+  });
+});
+
 describe("billing is per organization", () => {
   async function activate(giteaOrgId: number) {
     await subscriptionStore.upsert({
@@ -754,7 +793,7 @@ describe("billing is per organization", () => {
 
     // And the Billing page is told the same count before anyone pays.
     const status = await server.fetch(
-      makeSessionRequest("/api/app/billing/status", sessionId),
+      makeSessionRequest("/api/app/billing/status?seats=true", sessionId),
     );
     expect(((await status.json()) as { seats: number }).seats).toBe(3);
   });

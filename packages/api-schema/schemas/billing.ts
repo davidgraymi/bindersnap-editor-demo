@@ -54,7 +54,8 @@ export const BillingStatusPayloadSchema = z.object({
   /**
    * Paid seats: the people who can write in the organization (Owners, Admins
    * and Editors), counted once. Reviewers and readers are free and are not in
-   * it. Null when it could not be counted.
+   * it. Null when it could not be counted; absent unless asked for with
+   * `seats=true`, because counting costs a Gitea read per writing group.
    */
   seats: z.number().int().nullable().optional(),
   /** Whether this session may subscribe, cancel or change the card. */
