@@ -11,6 +11,8 @@
 import { diffWordsWithSpace } from "diff";
 import htmldiff from "node-htmldiff";
 
+import { isCommitRef } from "../../packages/utils/gitRef";
+
 /** One run of text, and whether this change put it there or took it away. */
 export type DiffSegmentKind = "same" | "added" | "removed";
 
@@ -34,6 +36,11 @@ export interface ComparisonBase {
   label: string;
 }
 
+/** A tag's commit when it came with one — a read the browser may keep. */
+function tagRef(tag: { name: string; sha?: string }): string {
+  return tag.sha && isCommitRef(tag.sha) ? tag.sha : tag.name;
+}
+
 export function resolveComparisonBase(params: {
   open: boolean;
   publishedVersion: number | null;
@@ -42,7 +49,7 @@ export function resolveComparisonBase(params: {
    * needs, which is what lets a binder's per-document tags satisfy it as
    * readily as a document repository's — they carry no common date.
    */
-  tags: readonly { name: string; version: number }[];
+  tags: readonly { name: string; version: number; sha?: string }[];
 }): ComparisonBase | null {
   const { open, publishedVersion, tags } = params;
   const newestFirst = [...tags].sort(
@@ -56,12 +63,12 @@ export function resolveComparisonBase(params: {
       (tag) => tag.version === publishedVersion - 1,
     );
     return previous
-      ? { ref: previous.name, label: `v${previous.version}` }
+      ? { ref: tagRef(previous), label: `v${previous.version}` }
       : null;
   }
 
   const latest = newestFirst[0];
-  return latest ? { ref: latest.name, label: `v${latest.version}` } : null;
+  return latest ? { ref: tagRef(latest), label: `v${latest.version}` } : null;
 }
 
 /**

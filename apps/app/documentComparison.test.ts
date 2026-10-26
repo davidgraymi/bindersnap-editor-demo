@@ -40,6 +40,17 @@ test("a published change is read against the version it replaced", () => {
   ).toEqual({ ref: "v3", label: "v3" });
 });
 
+test("a version whose commit is known is read at that commit", () => {
+  const commit = "0be6a65b18248f5c31eb93afe1f700c9550f4e7f";
+  expect(
+    resolveComparisonBase({
+      open: true,
+      publishedVersion: null,
+      tags: [{ ...tag(3), sha: commit }, tag(2)],
+    }),
+  ).toEqual({ ref: commit, label: "v3" });
+});
+
 test("the first version of a document has nothing to be compared against", () => {
   expect(
     resolveComparisonBase({ open: true, publishedVersion: null, tags: [] }),

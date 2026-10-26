@@ -25,11 +25,7 @@ test("every screen asking at once shares one request", async () => {
     return new Response(
       JSON.stringify({
         organization: "riverside",
-        people: [{ login: "carol", fullName: "Carol Mendes" }],
-        groups: [],
-        binders: [],
-        canManage: false,
-        viewer: "alice",
+        people: [{ login: "carol", fullName: "Carol Mendes", isOwner: false }],
       }),
       { headers: { "content-type": "application/json" } },
     );
@@ -60,7 +56,9 @@ test("every screen asking at once shares one request", async () => {
 
     expect(container.textContent).toBe("Carol Mendes".repeat(3));
     expect(asked).toHaveLength(1);
-    expect(asked[0]).toEndWith("/api/app/orgs/riverside/people");
+    // The names alone: the People read answers for every group too, and
+    // costs the server two Gitea calls per group for it.
+    expect(asked[0]).toEndWith("/api/app/orgs/riverside/members");
   } finally {
     flushSync(() => root.unmount());
     container.remove();
