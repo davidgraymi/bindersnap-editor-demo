@@ -6,7 +6,7 @@
 # its volumes. What Compose cannot see is the *contents* of a file a service
 # bind-mounts, so pyinfra drops a marker per changed config file
 # (${STATE_DIR}/changed-<file>) and this script recreates just the service that
-# reads it. A change to Caddy's config no longer restarts Gitea.
+# reads it. A change to Litestream's config no longer restarts Gitea.
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-/opt/bindersnap}"
@@ -32,16 +32,12 @@ compose() {
 cd "${APP_DIR}"
 compose pull --ignore-buildable
 
-up_args=(up -d)
-# Rebuild the custom Caddy image only when its Dockerfile changed.
-if changed Dockerfile.caddy; then
-  up_args+=(--build)
-fi
-compose "${up_args[@]}"
+# --remove-orphans: a service taken out of the compose file (Caddy, #806) is
+# stopped and removed, not left running beside the stack.
+compose up -d --remove-orphans
 
 # Bind-mounted config file → the one service that reads it.
 recreate=()
-changed Caddyfile.prod && recreate+=(caddy)
 changed litestream.yml && recreate+=(litestream)
 if [ "${#recreate[@]}" -gt 0 ]; then
   echo "Config changed for: ${recreate[*]} — recreating only those"

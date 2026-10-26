@@ -61,7 +61,6 @@ function runCli(args: string[], workspace: ReturnType<typeof makeWorkspace>) {
       LOG_PATH: workspace.logPath,
       ENV_FILE: join(workspace.appDir, ".env.prod"),
       COMPOSE_FILE: "docker-compose.prod.yml",
-      CADDY_VALIDATE_IMAGE: "bindersnap-caddy-validate:test",
     },
     stdout: "pipe",
     stderr: "pipe",
@@ -81,35 +80,27 @@ describe("bindersnap host CLI", () => {
     }
   });
 
-  test("stack validate checks compose config and validates the custom Caddy build", () => {
+  test("stack validate checks the compose config", () => {
     const workspace = makeWorkspace();
 
     writeFileSync(
       join(workspace.appDir, "docker-compose.prod.yml"),
       "services: {}\n",
     );
-    writeFileSync(
-      join(workspace.appDir, "Caddyfile.prod"),
-      "example.com {\n\treverse_proxy localhost:3000\n}\n",
-    );
-    writeFileSync(join(workspace.appDir, "Dockerfile.caddy"), "FROM caddy:2\n");
 
     try {
       const result = runCli(["stack", "validate"], workspace);
       expect(result.exitCode).toBe(0);
 
       const log = readFileSync(workspace.logPath, "utf8");
-      expect(log).toContain("docker compose --env-file");
-      expect(log).toContain(
-        "docker build -q -t bindersnap-caddy-validate:test",
-      );
-      expect(log).toContain("caddy validate --config /etc/caddy/Caddyfile");
+      expect(log).toContain("config -q");
+      expect(log).not.toContain("docker build");
     } finally {
       rmSync(workspace.root, { force: true, recursive: true });
     }
   });
 
-  test("stack restart logs into GHCR, refreshes compose, and force-recreates caddy and litestream", () => {
+  test("stack restart logs into GHCR, refreshes compose, and force-recreates litestream", () => {
     const workspace = makeWorkspace();
 
     writeFileSync(
@@ -126,7 +117,9 @@ describe("bindersnap host CLI", () => {
       expect(log).toContain("ghcr-login");
       expect(log).toContain("docker compose --env-file");
       expect(log).toContain("pull api");
-      expect(log).toContain("up -d --build --force-recreate caddy litestream");
+      expect(log).toContain("up -d --remove-orphans");
+      expect(log).toContain("up -d --force-recreate litestream");
+      expect(log).not.toContain("caddy");
       expect(log).toContain("ps");
     } finally {
       rmSync(workspace.root, { force: true, recursive: true });

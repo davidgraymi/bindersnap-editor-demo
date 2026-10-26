@@ -5,7 +5,6 @@ APP_DIR="${APP_DIR:-/opt/bindersnap}"
 ENV_FILE="${ENV_FILE:-${APP_DIR}/.env.prod}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 GHCR_LOGIN_CMD="${GHCR_LOGIN_CMD:-bindersnap-ghcr-login}"
-CADDY_VALIDATE_IMAGE="${CADDY_VALIDATE_IMAGE:-bindersnap-caddy-validate:local}"
 
 # Config lands on the host via the pyinfra deploy (deploy/deploy.py); the old
 # `config sync` from the retired S3 config bucket is gone (#306).
@@ -22,13 +21,6 @@ stack_validate() {
   cd "${APP_DIR}"
 
   docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" config -q
-
-  # Production Caddy uses the rate-limit module, so validate with the custom image.
-  docker build -q -t "${CADDY_VALIDATE_IMAGE}" -f "${APP_DIR}/Dockerfile.caddy" "${APP_DIR}"
-  docker run --rm \
-    -v "${APP_DIR}/Caddyfile.prod:/etc/caddy/Caddyfile:ro" \
-    "${CADDY_VALIDATE_IMAGE}" \
-    caddy validate --config /etc/caddy/Caddyfile
 }
 
 stack_restart() {
@@ -39,8 +31,8 @@ stack_restart() {
   fi
 
   docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" pull api
-  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d
-  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --build --force-recreate caddy litestream
+  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --remove-orphans
+  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --force-recreate litestream
   docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" ps
 }
 

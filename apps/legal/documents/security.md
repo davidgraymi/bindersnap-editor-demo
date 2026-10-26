@@ -1,13 +1,13 @@
 # Security
 
-Last updated: October 22, 2026
-Version: 2026-10-22
+Last updated: October 26, 2026
+Version: 2026-10-26
 
 Your organization trusts Bindersnap with its evidence: every version, approval and review of its documents. This page explains how we protect that record. We also say plainly what we don't have yet. Bindersnap is a small, founder-run company, and we would rather be exact than impressive.
 
 ## Where Bindersnap runs
 
-Bindersnap runs on one Amazon Web Services (AWS) server in the us-east-1 region (Northern Virginia, USA). Everything runs on that server in separate containers: our API, the Gitea server that stores documents as git repositories, a Caddy web server, Cloudflare's connector, and Litestream for database backups.
+Bindersnap runs on one Amazon Web Services (AWS) server in the us-east-1 region (Northern Virginia, USA). Everything runs on that server in separate containers: our API, the Gitea server that stores documents as git repositories, Cloudflare's connector, and Litestream for database backups.
 
 The server accepts no connections from the internet: it has no open ports. Requests reach it only through an encrypted tunnel that the server itself opens to Cloudflare, which runs the network in front of it and hosts our public website and the app's files. The document server (Gitea) has no public address at all; only our API can reach it.
 

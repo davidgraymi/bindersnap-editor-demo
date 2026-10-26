@@ -11,11 +11,11 @@ Pipeline (top to bottom — pyinfra runs operations in definition order):
   2. install the Docker Compose plugin (arch-matched)
   3. format + mount the EBS data volume and point Docker's data-root at it
   4. start + enable Docker on the prepared storage
-  5. upload the runtime config (compose / Caddy / litestream / Dockerfile) and
+  5. upload the runtime config (compose / litestream) and
      the host helper scripts
   6. render `/opt/bindersnap/.env.prod` from SSM Parameter Store (read on the
      control plane via boto3, uploaded with `files.put`)
-  7. validate the compose config + custom Caddy build before any `up` (gate)
+  7. validate the compose config before any `up` (gate)
   8. log in to GHCR (when a token is present on the control plane) and bootstrap
      the Gitea service token on first run
   9. `docker compose up -d`, recreating only the services whose definition,
@@ -96,11 +96,6 @@ COMPOSE_VERSION = "v2.37.3"
 COMPOSE_PLUGIN_DIR = "/usr/local/lib/docker/cli-plugins"
 COMPOSE_PLUGIN_PATH = f"{COMPOSE_PLUGIN_DIR}/docker-compose"
 
-# Local tag for the custom Caddy image built during the pre-`up` validation gate.
-# Production Caddy uses the rate-limit module, so the Caddyfile can only be
-# validated against the custom build, not the stock caddy image.
-CADDY_VALIDATE_IMAGE = "bindersnap-caddy-validate:local"
-
 # Local source tree: `deploy/files/` is the single source of truth for the host.
 _FILES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "files")
 _BIN = os.path.join(_FILES, "bin")
@@ -110,8 +105,13 @@ _SCRIPTS = os.path.join(_FILES, "scripts")
 # `changed-<file>` marker, and stack-up recreates the service that reads it.
 CONFIG_FILES = [
     "docker-compose.prod.yml",
-    "Caddyfile.prod",
     "litestream.yml",
+]
+
+# Config files a past deploy uploaded and nothing reads any more. Caddy was
+# retired (#806): cloudflared reaches the API directly.
+RETIRED_CONFIG_FILES = [
+    "Caddyfile.prod",
     "Dockerfile.caddy",
 ]
 
@@ -396,6 +396,13 @@ config_uploads = {
     for _name in CONFIG_FILES
 }
 
+for _name in RETIRED_CONFIG_FILES:
+    files.file(
+        name=f"Remove retired {_name}",
+        path=f"{APP_DIR}/{_name}",
+        present=False,
+    )
+
 # The Gitea bootstrap mints its token by running this script inside a bun
 # container mounted at APP_DIR, so it must live under APP_DIR/scripts.
 files.put(
@@ -464,17 +471,14 @@ for _name, _upload in config_uploads.items():
 # ---------- 8. Validate config before any compose up ----------
 
 # Pre-`up` gate: abort the deploy before touching the running stack if the
-# compose file (interpolated with the rendered env) or the custom Caddy build is
-# invalid. Folds in the checks the retiring `bindersnap stack validate` host CLI
+# compose file (interpolated with the rendered env) is invalid. Folds in the checks the retiring `bindersnap stack validate` host CLI
 # performed — deploy.py shipped no config validation before this. Runs after the
 # env + config are on the host and Docker is up, but before the first `up` (which
 # happens in the Gitea bootstrap below on a first run).
 #
-# Each half is gated on `did_change` of exactly its inputs: an unchanged deploy
-# skips the gate because the running config was already validated on the run that
-# last changed it (and on a first run everything changed, so it always runs). The
-# Caddy half in particular is a full image build + container run, so skipping it
-# when neither the Dockerfile nor the Caddyfile moved avoids that work every run.
+# Gated on `did_change` of exactly its inputs: an unchanged deploy skips the gate
+# because the running config was already validated on the run that last changed
+# it (and on a first run everything changed, so it always runs).
 server.shell(
     name="Validate compose config",
     commands=[
@@ -482,20 +486,6 @@ server.shell(
         f"-f {COMPOSE_FILE} config -q",
     ],
     _if=lambda: config_uploads[COMPOSE_FILE].did_change() or env_put.did_change(),
-)
-
-server.shell(
-    name="Validate custom Caddy build",
-    commands=[
-        f"docker build -q -t {CADDY_VALIDATE_IMAGE} "
-        f"-f {APP_DIR}/Dockerfile.caddy {APP_DIR}",
-        f"docker run --rm -v {APP_DIR}/Caddyfile.prod:/etc/caddy/Caddyfile:ro "
-        f"{CADDY_VALIDATE_IMAGE} caddy validate --config /etc/caddy/Caddyfile",
-    ],
-    _if=lambda: (
-        config_uploads["Dockerfile.caddy"].did_change()
-        or config_uploads["Caddyfile.prod"].did_change()
-    ),
 )
 
 # ---------- 9. Registry login + Gitea bootstrap ----------

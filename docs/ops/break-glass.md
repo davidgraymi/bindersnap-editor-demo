@@ -117,7 +117,7 @@ deployed commit's `:<sha>`).
 
 ## 5. Roll back the config / full stack definition
 
-If the failure is in config (`docker-compose.prod.yml`, `Caddyfile.prod`, …) or
+If the failure is in config (`docker-compose.prod.yml`, `litestream.yml`, …) or
 in `deploy.py`:
 
 - **Preferred, if CI is healthy:** `git revert` the offending commit on `main`.
@@ -152,7 +152,7 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml down
 - **Secrets/env are owned by SSM.** Any manual `.env.prod` edit is overwritten on
   the next deploy — use step 4 (SSM) for anything that must persist.
 - **`compose up` recreates only on change.** Compose recreates a service whose
-  definition or env changed; stack-up also recreates `caddy` or `litestream`
+  definition or env changed; stack-up also recreates `litestream`
   when this run changed the config file it mounts. A manual `up -d api` after an
   `API_TAG` change (step 3) recreates the API because its env changed.
 - **Data safety.** Gitea, SQLite sessions, and litestream data live on the EBS

@@ -162,10 +162,10 @@ See [`tests/README.md`](tests/README.md) for full workflow details.
 
 Two surfaces, both triggered by a push to `main`:
 
-| What                          | Where                      | Workflow                                                     |
-| ----------------------------- | -------------------------- | ------------------------------------------------------------ |
-| Public site + SPA             | Cloudflare Worker (static) | [`static-site.yml`](.github/workflows/static-site.yml)       |
-| API, Gitea, Caddy, Litestream | One EC2 host, via Compose  | [`deploy-pyinfra.yml`](.github/workflows/deploy-pyinfra.yml) |
+| What                   | Where                      | Workflow                                                     |
+| ---------------------- | -------------------------- | ------------------------------------------------------------ |
+| Public site + SPA      | Cloudflare Worker (static) | [`static-site.yml`](.github/workflows/static-site.yml)       |
+| API, Gitea, Litestream | One EC2 host, via Compose  | [`deploy-pyinfra.yml`](.github/workflows/deploy-pyinfra.yml) |
 
 The backend is a single EC2 instance, not a serverless stack. Its entire
 configuration lives in [`deploy/`](deploy/README.md) as a

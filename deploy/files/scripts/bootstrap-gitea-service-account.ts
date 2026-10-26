@@ -192,10 +192,7 @@ export function buildPutParameterArgs(
   return args;
 }
 
-export function buildRemoteBootstrapCommands(
-  scriptBase64: string,
-  caddyfileBase64?: string,
-): string[] {
+export function buildRemoteBootstrapCommands(scriptBase64: string): string[] {
   return [
     "set -euo pipefail",
     "APP_DIR=/opt/bindersnap",
@@ -208,13 +205,6 @@ export function buildRemoteBootstrapCommands(
     'mkdir -p "$APP_DIR/scripts"',
     `echo "${scriptBase64}" | base64 -d > "$APP_DIR/scripts/bootstrap-gitea-service-account.ts"`,
     'chmod 0644 "$APP_DIR/scripts/bootstrap-gitea-service-account.ts"',
-    ...(caddyfileBase64
-      ? [
-          'if [ -d "$APP_DIR/Caddyfile.prod" ]; then rm -rf "$APP_DIR/Caddyfile.prod"; fi',
-          `echo "${caddyfileBase64}" | base64 -d > "$APP_DIR/Caddyfile.prod"`,
-          'chmod 0644 "$APP_DIR/Caddyfile.prod"',
-        ]
-      : []),
     'TMP_ENV="$(mktemp "$ENV_FILE.XXXXXX")"',
     'TMP_JSON="$(mktemp "$ENV_FILE.json.XXXXXX")"',
     'cleanup() { rm -f "$TMP_ENV" "$TMP_JSON"; }',
@@ -249,7 +239,7 @@ export function buildRemoteBootstrapCommands(
     'aws ssm get-parameters-by-path --path "$PARAMETER_PATH" --recursive --with-decryption --output json > "$TMP_JSON"',
     'docker run --rm -i -v "$APP_DIR:/workspace" -w /workspace oven/bun:1.4.3@sha256:ec06c3b6cea04192ae6770c434f668ca41d343ad19fa6472216c7b48be39c598 bun scripts/bootstrap-gitea-service-account.ts render-env --parameter-path "$PARAMETER_PATH" < "$TMP_JSON" > "$TMP_ENV"',
     'install -m 0600 "$TMP_ENV" "$ENV_FILE"',
-    'docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d api caddy',
+    'docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d api',
   ];
 }
 
@@ -551,12 +541,9 @@ async function main(): Promise<void> {
 
   if (command === "print-ssm-commands") {
     const scriptBase64 = readRequiredOption(args, "--script-b64");
-    const caddyfileIndex = args.indexOf("--caddyfile-b64");
-    const caddyfileBase64 =
-      caddyfileIndex >= 0 ? args[caddyfileIndex + 1] : undefined;
     process.stdout.write(
       JSON.stringify({
-        commands: buildRemoteBootstrapCommands(scriptBase64, caddyfileBase64),
+        commands: buildRemoteBootstrapCommands(scriptBase64),
       }),
     );
     return;

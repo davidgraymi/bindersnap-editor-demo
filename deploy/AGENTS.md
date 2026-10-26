@@ -30,7 +30,7 @@ prunes nothing.
 ## Production security rules
 
 These apply to any change touching `deploy/`, `deploy/files/docker-compose.prod.yml`,
-`deploy/files/Caddyfile.prod`, or EC2 deployment. The Gitea service-token rule
+or EC2 deployment. The Gitea service-token rule
 is in the root `AGENTS.md`, because it governs the API's code as well.
 
 1. **Never hardcode credentials.** All secrets (`GITEA_ADMIN_PASS`, `GITEA_SECRET_KEY`, `BINDERSNAP_GITEA_SERVICE_TOKEN`, etc.) must come from environment variables in `/opt/bindersnap/.env.prod`, which `deploy.py` renders on every run from `/bindersnap/prod/*` in SSM Parameter Store. The SSM read happens on the control plane and the file is uploaded `0600` — secrets are never written to a control-plane disk file, printed, or committed. Never commit an `.env.prod`; it is in `.gitignore`.
