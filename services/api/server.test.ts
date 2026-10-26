@@ -683,6 +683,32 @@ describe("billing status counts seats only when asked", () => {
   });
 });
 
+describe("an organization's members, by name", () => {
+  test("names everybody and marks the owners, without reading a group's binders", async () => {
+    const server = createApiServer();
+    const owner = `names-${randomUUID()}`;
+    const sessionId = await seedSession(owner, { fullName: "Carol Mendes" });
+    giteaOrgOwners.set(`${owner}-org`, [
+      { login: owner, email: `${owner}@${config.emailDomain}` },
+    ]);
+    fetchCalls.length = 0;
+
+    const response = await server.fetch(
+      makeSessionRequest(`/api/app/orgs/${owner}-org/members`, sessionId),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      organization: `${owner}-org`,
+      people: [{ login: owner, fullName: "Carol Mendes", isOwner: true }],
+    });
+    // The People read asks every group for its binders; this never does.
+    expect(
+      fetchCalls.filter((call) => /\/teams\/\d+\/repos$/.test(call.path)),
+    ).toHaveLength(0);
+  });
+});
+
 describe("billing is per organization", () => {
   async function activate(giteaOrgId: number) {
     await subscriptionStore.upsert({

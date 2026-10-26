@@ -32,6 +32,7 @@ import type {
   CreatedOrganizationGroupPayload,
   LibraryPayload,
   LibrarySearchPayload,
+  OrganizationMembersPayload,
   OrganizationPeoplePayload,
   PublishedWorkspaceChangePayload,
   WorkspaceChangeDetailPayload,
@@ -937,6 +938,22 @@ export async function proposeBinderSignOff(
   const response = await BindersClient.proposeBinderSignOffRules(org, binder, {
     rules,
   });
+  return response.data;
+}
+
+/**
+ * Who is in this organization, by name and whether they own it — not its
+ * groups. Cheaper for the server than `fetchOrganizationPeople` by two Gitea
+ * reads per group, so a screen that only names people asks for this.
+ */
+export async function fetchOrganizationMembers(
+  org: string,
+  request?: ReadRequest,
+): Promise<OrganizationMembersPayload> {
+  const response = await OrganizationsClient.getOrganizationMembers(
+    org,
+    request,
+  );
   return response.data;
 }
 

@@ -260,6 +260,7 @@ import {
 import type { ClosedChange } from "../../packages/api-schema/schemas/documents";
 import type {
   BinderPeoplePayload,
+  OrganizationMembersPayload,
   OrganizationPeoplePayload,
   DocumentVersion,
   WorkspaceDocumentListEntry,
@@ -8978,6 +8979,61 @@ async function handleOrganizationPeople(
 }
 
 /**
+ * Who is in the organization, by name — the People page without its groups.
+ *
+ * A binder's history names people from this, and quick find searches it. The
+ * full People read costs two Gitea calls per group (some thirty for an
+ * organization of eight binders) to answer a question these screens never
+ * ask; this is the members and the Owners team. A read, so never gated.
+ */
+async function handleOrganizationMembers(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client, session } = auth;
+
+  try {
+    const organization = await findOrganization({ client, org: orgName });
+    if (!organization) {
+      return json(404, { error: "No such organization." }, baseHeaders);
+    }
+
+    const [members, owners] = await Promise.all([
+      listOrganizationMembers({ client, org: orgName }),
+      // A member who is not an owner cannot list the organization's teams.
+      // That costs them the owner marks, not the names.
+      listOrganizationOwners({ client, org: orgName }).catch(() => []),
+    ]);
+    const ownerLogins = new Set(
+      owners.map((owner) => owner.login.toLowerCase()),
+    );
+
+    const payload: OrganizationMembersPayload = {
+      organization: orgName,
+      people: members
+        .map((member) => ({
+          login: member.login,
+          fullName: member.fullName,
+          isOwner: ownerLogins.has(member.login.toLowerCase()),
+        }))
+        .sort((a, b) => a.login.localeCompare(b.login)),
+    };
+    return json(200, payload, baseHeaders);
+  } catch (err) {
+    logger.error("Failed to read an organization's members", {
+      username: session.username,
+      organization: orgName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to read the people.");
+  }
+}
+
+/**
  * The organization's people and groups, assembled once.
  *
  * Pulled out of the handler because every mutation on this page answers with
@@ -15512,6 +15568,9 @@ async function handleRequest(req: Request): Promise<Response> {
     const organizationPeopleMatch = pathname.match(
       /^\/api\/app\/orgs\/([^/]+)\/people$/,
     );
+    const organizationMembersMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/members$/,
+    );
     const organizationPersonRoleMatch = pathname.match(
       /^\/api\/app\/orgs\/([^/]+)\/people\/([^/]+)\/role$/,
     );
@@ -15624,6 +15683,12 @@ async function handleRequest(req: Request): Promise<Response> {
         req,
         baseHeaders,
         decodeURIComponent(invitationAcceptMatch[1]!),
+      );
+    } else if (organizationMembersMatch && method === "GET") {
+      response = await handleOrganizationMembers(
+        req,
+        baseHeaders,
+        organizationMembersMatch[1]!,
       );
     } else if (organizationPeopleMatch && method === "GET") {
       response = await handleOrganizationPeople(

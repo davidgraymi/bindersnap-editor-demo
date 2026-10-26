@@ -306,6 +306,8 @@ export * from './getOnboarding200.ts';
 export * from './getOnboarding200StepsItem.ts';
 export * from './getOnboarding200StepsItemId.ts';
 export * from './getOrganizationDeletion200.ts';
+export * from './getOrganizationMembers200.ts';
+export * from './getOrganizationMembers200PeopleItem.ts';
 export * from './getOrganizationPeople200.ts';
 export * from './getOrganizationPeople200GroupsItem.ts';
 export * from './getOrganizationPeople200GroupsItemMembersItem.ts';

@@ -20,6 +20,7 @@ import type {
   DeleteOrganizationBody,
   GetInvitation200,
   GetOrganizationDeletion200,
+  GetOrganizationMembers200,
   GetOrganizationPeople200,
   ListOrganizationInvitations200,
   ListOrganizations200,
@@ -234,6 +235,38 @@ export const addOrganizationPerson = async (org: string,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(addOrganizationPersonBody)
+  }
+);}
+
+
+export type getOrganizationMembersResponse200 = {
+  data: GetOrganizationMembers200
+  status: 200
+}
+
+export type getOrganizationMembersResponseSuccess = (getOrganizationMembersResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getOrganizationMembersResponse = (getOrganizationMembersResponseSuccess)
+
+export const getGetOrganizationMembersUrl = (org: string,) => {
+
+
+
+
+  return `/api/app/orgs/${org}/members`
+}
+
+export const getOrganizationMembers = async (org: string, options?: Parameters<typeof customFetch>[1]): Promise<getOrganizationMembersResponse> => {
+
+  return customFetch<getOrganizationMembersResponse>(getGetOrganizationMembersUrl(org),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 

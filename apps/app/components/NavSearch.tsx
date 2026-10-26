@@ -12,7 +12,7 @@ import { CornerDownLeft, Search } from "lucide-react";
 
 import {
   organizationBindersQuery,
-  organizationPeopleQuery,
+  organizationMembersQuery,
   searchQuery,
 } from "../data/queries";
 import type { QuickFindResult } from "../quickFind";
@@ -162,7 +162,9 @@ export function NavSearch({
     enabled: asking && Boolean(org),
   });
   const people = useQuery({
-    ...organizationPeopleQuery(org ?? ""),
+    // Names and owners only: the People page's read answers for every group
+    // too, which quick find never shows.
+    ...organizationMembersQuery(org ?? ""),
     enabled: asking && Boolean(org),
   });
   const ready =

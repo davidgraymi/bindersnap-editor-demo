@@ -91,6 +91,7 @@ import {
   LibrarySearchPayloadSchema,
   BinderRulesPayloadSchema,
   BinderRulesRequestSchema,
+  OrganizationMembersPayloadSchema,
   OrganizationPeoplePayloadSchema,
   ProposedSignOffChangeSchema,
   SignOffRulesRequestSchema,
@@ -859,6 +860,23 @@ registry.registerPath({
       description: "Who is in this organization, and the groups it has",
       content: {
         "application/json": { schema: OrganizationPeoplePayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/orgs/{org}/members",
+  operationId: "getOrganizationMembers",
+  tags: ["organizations"],
+  request: { params: z.object({ org: z.string() }) },
+  responses: {
+    200: {
+      description:
+        "Who is in this organization, by name and whether they own it — without its groups",
+      content: {
+        "application/json": { schema: OrganizationMembersPayloadSchema },
       },
     },
   },

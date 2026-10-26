@@ -6215,6 +6215,67 @@
         }
       }
     },
+    "/api/app/orgs/{org}/members": {
+      "get": {
+        "operationId": "getOrganizationMembers",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Who is in this organization, by name and whether they own it — without its groups",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "people": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "isOwner": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName",
+                          "isOwner"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "people"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/app/orgs/{org}/invitations": {
       "get": {
         "operationId": "listOrganizationInvitations",

@@ -986,6 +986,22 @@ export const OrganizationPersonSchema = z.object({
 export type OrganizationPerson = z.infer<typeof OrganizationPersonSchema>;
 
 /**
+ * Who is in an organization, by name, and nothing else.
+ *
+ * The People payload answers for every group too, which costs the server two
+ * Gitea reads per group. A screen that only needs "what is this login called"
+ * — a binder's history, quick find — asks for this instead: the members and
+ * the Owners team, a handful of reads however many groups there are.
+ */
+export const OrganizationMembersPayloadSchema = z.object({
+  organization: z.string(),
+  people: z.array(OrganizationPersonSchema.omit({ teams: true })),
+});
+export type OrganizationMembersPayload = z.infer<
+  typeof OrganizationMembersPayloadSchema
+>;
+
+/**
  * A group the organization has, and what it grants wherever it is adopted.
  *
  * A Gitea team carries one unit map, so a group's level is a property of the

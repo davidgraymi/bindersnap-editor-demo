@@ -26,6 +26,7 @@ import {
   fetchNotifications,
   fetchOnboarding,
   fetchOrganizationBinders,
+  fetchOrganizationMembers,
   fetchOrganizationPeople,
   fetchOrganizations,
   getHomeChanges,
@@ -57,6 +58,8 @@ export const queryKeys = {
   organization: (org: string) => ["organizations", org] as const,
   organizationPeople: (org: string) =>
     ["organizations", org, "people"] as const,
+  organizationMembers: (org: string) =>
+    ["organizations", org, "members"] as const,
   organizationBilling: (org: string) =>
     ["organizations", org, "billing"] as const,
   organizationBinders: (org: string) =>
@@ -125,6 +128,18 @@ export function organizationsQuery() {
   return queryOptions({
     queryKey: queryKeys.organizations(),
     queryFn: ({ signal }) => fetchOrganizations({ signal }),
+  });
+}
+
+/**
+ * Who is in an organization, by name — for a screen that names people and
+ * does not need their groups. The full People read costs the server two Gitea
+ * reads per group; this costs a handful.
+ */
+export function organizationMembersQuery(org: string) {
+  return queryOptions({
+    queryKey: queryKeys.organizationMembers(org),
+    queryFn: ({ signal }) => fetchOrganizationMembers(org, { signal }),
   });
 }
 
