@@ -163,6 +163,9 @@ services:
       - BINDERSNAP_USER_EMAIL_DOMAIN=${BINDERSNAP_USER_EMAIL_DOMAIN:-users.bindersnap.com}
       - BINDERSNAP_GITEA_TOKEN_SCOPES=${BINDERSNAP_GITEA_TOKEN_SCOPES:-write:user,write:repository,write:issue,write:organization}
       - BINDERSNAP_REQUIRE_HTTPS=true
+      # Rate limits key on CF-Connecting-IP, never on X-Forwarded-For, which a
+      # visitor can write into. True only because the tunnel is the only way in.
+      - BINDERSNAP_BEHIND_CLOUDFLARE=true
       - BINDERSNAP_AUTH_RATE_LIMIT_ENABLED=true
       - BINDERSNAP_SESSIONS_DB_PATH=/var/lib/bindersnap/sessions.db
       # --- Email (issue #665) ---

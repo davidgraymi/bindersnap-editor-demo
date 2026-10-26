@@ -41,6 +41,9 @@ export interface ApiConfig {
   sessionTtlMs: number;
   rememberedSessionTtlMs: number;
   enforceHttps: boolean;
+  // Requests arrive only through the Cloudflare Tunnel, so `CF-Connecting-IP`
+  // is the visitor's address and `X-Forwarded-For` is not (edge.ts).
+  behindCloudflare: boolean;
   authRateLimitEnabled: boolean;
   devFeaturesEnabled: boolean;
   bypassSubscriptionForUsers: string[];
@@ -143,6 +146,9 @@ const INT_ENV: Record<string, IntSpec> = {
 
 const BOOL_ENV: Record<string, BoolSpec> = {
   BINDERSNAP_REQUIRE_HTTPS: { default: (isProduction) => isProduction },
+  BINDERSNAP_BEHIND_CLOUDFLARE: {
+    default: (isProduction) => isProduction,
+  },
   BINDERSNAP_AUTH_RATE_LIMIT_ENABLED: { default: true },
   BINDERSNAP_DEV_FEATURES: { default: false },
 };
@@ -479,6 +485,11 @@ export function initializeConfig(
     enforceHttps: parseBoolean(
       resolvedEnv,
       "BINDERSNAP_REQUIRE_HTTPS",
+      isProduction,
+    ),
+    behindCloudflare: parseBoolean(
+      resolvedEnv,
+      "BINDERSNAP_BEHIND_CLOUDFLARE",
       isProduction,
     ),
     authRateLimitEnabled: parseBoolean(

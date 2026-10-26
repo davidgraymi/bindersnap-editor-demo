@@ -44,7 +44,8 @@ The browser only receives a Bindersnap session cookie. Gitea access tokens stay 
 - `BINDERSNAP_SESSION_COOKIE_DOMAIN`: Optional cookie `Domain` attribute. Leave it empty: a host-only cookie on `api.bindersnap.com` already reaches the API from the SPA at `bindersnap.com`, because the two are the same site. Production also names the cookie `__Host-bindersnap_session`, which a `Domain` would break.
 - `BINDERSNAP_SESSION_COOKIE_SAME_SITE`: Cookie `SameSite` attribute. Default `Lax`; set `None` only when you explicitly need cross-site cookie delivery.
 - `BINDERSNAP_GITEA_TOKEN_SCOPES`: Optional comma-separated extra Gitea token scopes. The API always adds `write:user`, `write:repository`, and `write:issue` so session-minted tokens can create repos, open PRs, and manage collaborators.
-- `BINDERSNAP_REQUIRE_HTTPS`: Enforce HTTPS for non-local requests. Default `true` in production, `false` otherwise.
+- `BINDERSNAP_REQUIRE_HTTPS`: Enforce HTTPS for non-local requests, judged by `X-Forwarded-Proto` (Cloudflare sets it). Default `true` in production, `false` otherwise.
+- `BINDERSNAP_BEHIND_CLOUDFLARE`: Requests arrive only through the Cloudflare Tunnel, so rate limits key on `CF-Connecting-IP` and never on `X-Forwarded-For`, which a visitor can write into. Default `true` in production, `false` otherwise. See `edge.ts`.
 - `BINDERSNAP_AUTH_RATE_LIMIT_ENABLED`: Enable auth endpoint rate limiting. Default `true`.
 - `BINDERSNAP_AUTH_RATE_LIMIT_WINDOW_MS`: Rate-limit window for `/auth/login` and `/auth/signup`. Default `600000` (10 minutes).
 - `BINDERSNAP_AUTH_RATE_LIMIT_MAX`: Max auth attempts per IP per action per window. Default `20`.

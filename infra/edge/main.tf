@@ -64,7 +64,7 @@ variable "zone_name" {
 }
 
 variable "api_hostname" {
-  description = "Public hostname of the API, routed through the tunnel to Caddy"
+  description = "Public hostname of the API, routed through the tunnel to the API container"
   type        = string
   default     = "api.bindersnap.com"
 }
@@ -86,9 +86,9 @@ variable "email_routing_destination" {
 }
 
 variable "origin_service" {
-  description = "Where cloudflared sends api traffic, as seen from inside the Docker network"
+  description = "Where cloudflared sends api traffic, as seen from inside the Docker network. The API sets its own security headers and rate limits (services/api/edge.ts); nothing stands between it and cloudflared."
   type        = string
-  default     = "http://caddy:80"
+  default     = "http://api:8787"
 }
 
 # ---------- Tunnel ----------
