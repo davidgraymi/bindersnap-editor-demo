@@ -1882,6 +1882,114 @@ body::after {
    RESPONSIVE
 ───────────────────────────────────── */
 
+/* ─────────────────────────────────────
+   FAQ
+   After the closing card, on the tinted beat. Its shape is a single column
+   of questions that open in place — nothing above it on the page folds.
+   The first answer starts open, so the section never reads as a wall of
+   closed rows; every answer is in the HTML for search engines either way.
+───────────────────────────────────── */
+
+.section-faq {
+  padding: var(--brand-section-padding-y) var(--brand-page-padding-x);
+}
+
+.faq-inner {
+  max-width: var(--brand-max-width-text);
+  margin: 0 auto;
+}
+
+.faq-header {
+  text-align: center;
+  margin-bottom: var(--brand-space-12);
+}
+
+.faq-header h2 {
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-h2);
+  font-weight: var(--brand-weight-semibold);
+  line-height: var(--brand-leading-snug);
+  color: var(--bs-text-primary);
+  margin: var(--brand-space-4) 0 0;
+  text-wrap: balance;
+  transition: color var(--brand-transition-base);
+}
+
+.faq-list {
+  border-top: 1px solid var(--bs-rule);
+}
+
+.faq-item {
+  border-bottom: 1px solid var(--bs-rule);
+}
+
+.faq-item summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--brand-space-6);
+  min-height: var(--brand-space-12);
+  padding: var(--brand-space-5) 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+/* A plus that turns into a cross: open or closed at a glance. */
+.faq-item summary::after {
+  content: "+";
+  flex-shrink: 0;
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-body-lg);
+  color: var(--bs-text-muted);
+  transition: transform var(--brand-transition-base);
+}
+
+.faq-item[open] summary::after {
+  transform: rotate(45deg);
+}
+
+.faq-item summary:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: var(--brand-space-1);
+  border-radius: var(--brand-radius-sm);
+}
+
+.faq-item h3 {
+  margin: 0;
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-body-lg);
+  font-weight: var(--brand-weight-semibold);
+  line-height: var(--brand-leading-snug);
+  color: var(--bs-text-primary);
+  transition: color var(--brand-transition-base);
+}
+
+.faq-item p,
+.faq-more {
+  font-size: var(--brand-text-body);
+  line-height: var(--brand-leading-relaxed);
+  color: var(--bs-text-secondary);
+}
+
+.faq-item p {
+  margin: 0 0 var(--brand-space-6);
+}
+
+.faq-more {
+  margin: var(--brand-space-10) 0 0;
+  text-align: center;
+}
+
+.faq-item a,
+.faq-more a {
+  color: var(--bs-coral-text);
+  text-underline-offset: var(--brand-space-0-5);
+}
+
 @media (max-width: 1100px) {
   .hero-inner {
     padding: var(--brand-space-16) var(--brand-page-padding-x) 0;
@@ -2081,6 +2189,10 @@ body::after {
 
   .section-founder {
     padding: var(--brand-space-8) var(--brand-page-padding-x) 0;
+  }
+
+  .section-faq {
+    padding: var(--brand-section-padding-y-sm) var(--brand-page-padding-x);
   }
 
   .cta-inner {

@@ -125,7 +125,8 @@ export interface SitePage {
   facilities: string[];
   /**
    * Any other front-matter keys: `crumb` (a short name for the breadcrumb when
-   * the title is long), and whatever a collection's own renderer reads.
+   * the title is long), `published` (the date it first went up, when that is
+   * earlier than `updated`), and whatever a collection's own renderer reads.
    */
   meta: Record<string, string>;
   /** The Markdown after the front matter. */
