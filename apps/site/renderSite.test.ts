@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { JSDOM } from "jsdom";
 
 import { publicSiteFiles } from "./publicSite";
 import { REQUIRED_POLICIES, SITUATIONS } from "./requiredPolicies";
@@ -12,6 +13,7 @@ import {
   splitLede,
   wordCount,
 } from "./renderSite";
+import { ORGANIZATION_LD, WEBSITE_LD } from "./structuredData";
 import {
   parseSitePage,
   readSitePages,
@@ -177,8 +179,23 @@ describe("every page on the public site", () => {
           /<script type="application\/ld\+json">([\s\S]*?)<\/script>/,
         );
         expect(ld).not.toBeNull();
-        const graph = JSON.parse(ld![1]!)["@graph"] as { "@type": string }[];
-        expect(graph.map((node) => node["@type"])).toContain("Article");
+        const graph = JSON.parse(ld![1]!)["@graph"] as Record<
+          string,
+          unknown
+        >[];
+        expect(graph.map((node) => node["@type"])).toContain("WebSite");
+        const article = graph.find((node) => node["@type"] === "Article")!;
+        expect(article.dateModified).toBe(page.updated);
+        expect((article.datePublished as string) <= page.updated).toBe(true);
+        expect(article.image).toBeDefined();
+      });
+
+      test("lets a search engine or an AI answer quote it in full", () => {
+        expect(html).toContain("max-snippet:-1");
+        expect(html).not.toContain("noindex");
+        expect(html).toContain(
+          `<meta property="article:modified_time" content="${page.updated}">`,
+        );
       });
     });
   }
@@ -208,6 +225,31 @@ describe("the files crawlers and agents read", () => {
     );
   });
 
+  test("the 404 page stays out of search results", () => {
+    const html = files.get("/404")!;
+    expect(html).toContain('<meta name="robots" content="noindex, follow">');
+    expect(html).not.toContain('rel="canonical"');
+  });
+
+  test("the glossary is the term set its terms belong to", () => {
+    const graph = JSON.parse(
+      files
+        .get("/glossary")!
+        .match(
+          /<script type="application\/ld\+json">([\s\S]*?)<\/script>/,
+        )![1]!,
+    )["@graph"] as Record<string, unknown>[];
+    const set = graph.find((node) => node["@type"] === "DefinedTermSet")!;
+    expect(set["@id"]).toBe("https://bindersnap.com/glossary");
+    const glossary = pages.filter((page) => page.collection.key === "glossary");
+    expect((set.hasDefinedTerm as unknown[]).length).toBe(glossary.length);
+    for (const page of glossary) {
+      expect(files.get(page.path)).toContain(
+        '"inDefinedTermSet":{"@id":"https://bindersnap.com/glossary"}',
+      );
+    }
+  });
+
   test("robots.txt welcomes crawlers and points at the sitemap", () => {
     const robots = files.get("/robots.txt")!;
     expect(robots).toContain("User-agent: *\nAllow: /");
@@ -228,6 +270,8 @@ describe("the files crawlers and agents read", () => {
       );
     }
     expect(llms).toContain("](https://bindersnap.com/help/approvals.md)");
+    expect(llms).toContain("- [Bindersnap](https://bindersnap.com/): ");
+    expect(llms).toContain("(https://bindersnap.com/pricing.md)");
     const full = files.get("/llms-full.txt")!;
     for (const page of pages) expect(full).toContain(`# ${page.title}`);
   });
@@ -287,6 +331,62 @@ describe("the landing page", () => {
     expect((app.offers as { price?: string } | undefined)?.price).toBe(
       pricing.meta.price,
     );
+  });
+
+  test("names the same organization and website as every other page", async () => {
+    const html = await Bun.file(
+      new URL("./index.html", import.meta.url),
+    ).text();
+    const graph = JSON.parse(
+      html.match(
+        /<script type="application\/ld\+json">([\s\S]*?)<\/script>/,
+      )![1]!,
+    )["@graph"] as Record<string, unknown>[];
+    expect(graph.find((node) => node["@type"] === "Organization")).toEqual(
+      ORGANIZATION_LD,
+    );
+    expect(graph.find((node) => node["@type"] === "WebSite")).toEqual(
+      WEBSITE_LD,
+    );
+    expect(html).toContain("max-snippet:-1");
+  });
+
+  test("its FAQ says on the page what its JSON-LD says", async () => {
+    const html = await Bun.file(
+      new URL("./index.html", import.meta.url),
+    ).text();
+    const graph = JSON.parse(
+      html.match(
+        /<script type="application\/ld\+json">([\s\S]*?)<\/script>/,
+      )![1]!,
+    )["@graph"] as Record<string, unknown>[];
+    const faq = graph.find((node) => node["@type"] === "FAQPage")!;
+    const stated = (
+      faq.mainEntity as {
+        name: string;
+        acceptedAnswer: { text: string };
+      }[]
+    ).map((entry) => ({
+      question: entry.name,
+      answer: entry.acceptedAnswer.text,
+    }));
+    const document = new JSDOM(html).window.document;
+    const shown = [...document.querySelectorAll(".faq-item")].map((item) => ({
+      question: item.querySelector("summary")!.textContent!.trim(),
+      answer: item.querySelector("p")!.textContent!.replace(/\s+/g, " ").trim(),
+    }));
+    expect(shown.length).toBeGreaterThan(0);
+    expect(shown).toEqual(stated);
+    for (const { question, answer } of shown) {
+      for (const claim of FORBIDDEN_CLAIMS) {
+        expect(question).not.toMatch(claim);
+        expect(answer).not.toMatch(claim);
+      }
+    }
+    // Every link in the answers goes to a page that exists.
+    for (const link of document.querySelectorAll(".section-faq a")) {
+      expect(known.has(link.getAttribute("href")!)).toBe(true);
+    }
   });
 });
 

@@ -70,6 +70,10 @@
     />
     <meta property="og:locale" content="en_US" />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="robots"
+      content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"
+    />
     <link rel="canonical" href="https://bindersnap.com/" />
     <link
       rel="alternate"
@@ -93,13 +97,21 @@
             "name": "Bindersnap",
             "legalName": "Solid Gray LLC",
             "url": "https://bindersnap.com/",
-            "logo": "https://bindersnap.com/icon-512.png"
+            "logo": "https://bindersnap.com/icon-512.png",
+            "description": "Policy and procedure management software for small healthcare providers: every policy with its current approved version, every earlier version, and the record of who approved each.",
+            "email": "david@bindersnap.com",
+            "founder": {
+              "@type": "Person",
+              "name": "David Gray",
+              "jobTitle": "Founder"
+            }
           },
           {
             "@type": "WebSite",
             "@id": "https://bindersnap.com/#website",
             "name": "Bindersnap",
             "url": "https://bindersnap.com/",
+            "inLanguage": "en-US",
             "publisher": { "@id": "https://bindersnap.com/#organization" }
           },
           {
@@ -124,6 +136,76 @@
                 "unitCode": "MON"
               }
             }
+          },
+          {
+            "@type": "FAQPage",
+            "@id": "https://bindersnap.com/#faq",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "What is Bindersnap?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Bindersnap is policy and procedure management software for small healthcare providers. Every policy keeps its current approved version, every earlier version, and the record of who approved each one and when. When a surveyor asks which version you approved, the answer is on the page, not buried in an email thread."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Who is Bindersnap for?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Small healthcare providers who keep a policy manual and answer to a surveyor or accreditor: ambulatory surgery centers, physician practices and clinics, rural health clinics, home health agencies, hospices and behavioral health programs. It is built for the person who runs approvals today through Word, email and a shared drive."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "How much does Bindersnap cost?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "$39 a month for each person who writes and publishes policies: owners, admins and editors. Reviewers who approve changes and staff who only read are free, in any number. Every organization starts with a 14-day free trial, and you don’t need a card to start."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "How does a policy get approved?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Someone proposes a change, the approvers you name review it, and only then does it become the current version. Questions are raised on the version they are about, and the answers stay with it. An approved version cannot change without a new version that goes through review."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Can we keep writing our policies in Word?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes. Upload the Word and PDF files you already have, and each new version goes through the same review and approval. Or write policies in Bindersnap’s own editor. Either way, every version and the people who approved it stay on record."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Does Bindersnap store patient information?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "No. Bindersnap holds your organization’s policies and procedures, not patient records or other protected health information. Keep patient information in your clinical systems."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "What happens to our policies if we stop paying?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "They stay. Reading and exporting don’t need a subscription, for as long as your organization keeps its account. Everyone can still open every document, see who approved each version, and download it. Nobody can propose, approve or publish new changes until someone subscribes."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "How long does it take to set up?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "An afternoon for most small providers: create your organization, upload the policies you already have, and name the people who approve them. There is no demo call, quote or implementation project. The getting started guide walks through moving a larger manual in."
+                }
+              }
+            ]
           }
         ]
       }
@@ -1555,6 +1637,123 @@
                 <span class="trust-detail">Limit who can sign off</span>
               </li>
             </ul>
+          </div>
+        </section>
+        <!--
+          FAQ
+          After the closing card, so the founder note still leads straight
+          into the sign-up and nothing here competes with it. The questions
+          are the ones a buyer, or an AI assistant answering one, asks first.
+          The FAQPage JSON-LD in <head> states the same answers as plain
+          text; renderSite.test.ts holds the two together.
+        -->
+        <section class="section-faq section-band" aria-labelledby="faq-heading">
+          <div class="faq-inner">
+            <div class="faq-header reveal">
+              <div class="eyebrow-tag">Questions</div>
+              <h2 id="faq-heading">What people ask before they start.</h2>
+            </div>
+            <div class="faq-list reveal">
+              <details class="faq-item" open>
+                <summary><h3>What is Bindersnap?</h3></summary>
+                <p>
+                  Bindersnap is policy and procedure management software for
+                  small healthcare providers. Every policy keeps its current
+                  approved version, every earlier version, and the record of who
+                  approved each one and when. When a surveyor asks which version
+                  you approved, the answer is on the page, not buried in an
+                  email thread.
+                </p>
+              </details>
+              <details class="faq-item">
+                <summary><h3>Who is Bindersnap for?</h3></summary>
+                <p>
+                  Small healthcare providers who keep a policy manual and answer
+                  to a surveyor or accreditor:
+                  <a href="/for/ambulatory-surgery-centers"
+                    >ambulatory surgery centers</a
+                  >,
+                  <a href="/for/medical-practices"
+                    >physician practices and clinics</a
+                  >,
+                  <a href="/for/rural-health-clinics">rural health clinics</a>,
+                  <a href="/for/home-health-agencies">home health agencies</a>,
+                  <a href="/for/hospices">hospices</a> and
+                  <a href="/for/behavioral-health">behavioral health programs</a
+                  >. It is built for the person who runs approvals today through
+                  Word, email and a shared drive.
+                </p>
+              </details>
+              <details class="faq-item">
+                <summary><h3>How much does Bindersnap cost?</h3></summary>
+                <p>
+                  $39 a month for each person who writes and publishes policies:
+                  owners, admins and editors. Reviewers who approve changes and
+                  staff who only read are free, in any number. Every
+                  organization starts with a 14-day free trial, and you
+                  don&rsquo;t need a card to start.
+                </p>
+              </details>
+              <details class="faq-item">
+                <summary><h3>How does a policy get approved?</h3></summary>
+                <p>
+                  Someone proposes a change, the approvers you name review it,
+                  and only then does it become the current version. Questions
+                  are raised on the version they are about, and the answers stay
+                  with it. An approved version cannot change without a new
+                  version that goes through review.
+                </p>
+              </details>
+              <details class="faq-item">
+                <summary>
+                  <h3>Can we keep writing our policies in Word?</h3>
+                </summary>
+                <p>
+                  Yes. Upload the Word and PDF files you already have, and each
+                  new version goes through the same review and approval. Or
+                  write policies in Bindersnap&rsquo;s own editor. Either way,
+                  every version and the people who approved it stay on record.
+                </p>
+              </details>
+              <details class="faq-item">
+                <summary>
+                  <h3>Does Bindersnap store patient information?</h3>
+                </summary>
+                <p>
+                  No. Bindersnap holds your organization&rsquo;s policies and
+                  procedures, not patient records or other protected health
+                  information. Keep patient information in your clinical
+                  systems.
+                </p>
+              </details>
+              <details class="faq-item">
+                <summary>
+                  <h3>What happens to our policies if we stop paying?</h3>
+                </summary>
+                <p>
+                  They stay. Reading and exporting don&rsquo;t need a
+                  subscription, for as long as your organization keeps its
+                  account. Everyone can still open every document, see who
+                  approved each version, and download it. Nobody can propose,
+                  approve or publish new changes until someone subscribes.
+                </p>
+              </details>
+              <details class="faq-item">
+                <summary><h3>How long does it take to set up?</h3></summary>
+                <p>
+                  An afternoon for most small providers: create your
+                  organization, upload the policies you already have, and name
+                  the people who approve them. There is no demo call, quote or
+                  implementation project. The
+                  <a href="/help/getting-started">getting started guide</a>
+                  walks through moving a larger manual in.
+                </p>
+              </details>
+            </div>
+            <p class="faq-more reveal">
+              More on what you pay and who pays it:
+              <a href="/pricing">pricing in full</a>.
+            </p>
           </div>
         </section>
       </main>
