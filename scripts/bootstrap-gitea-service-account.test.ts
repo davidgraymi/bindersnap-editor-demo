@@ -205,7 +205,7 @@ describe("bootstrap-gitea-service-account", () => {
   });
 
   test("builds remote bootstrap commands without embedding inline python", () => {
-    const commands = buildRemoteBootstrapCommands("ZHVtbXk=", "Y2FkZHk=");
+    const commands = buildRemoteBootstrapCommands("ZHVtbXk=");
 
     expect(commands.some((command) => command.includes("python3 -c"))).toBe(
       false,
@@ -227,8 +227,7 @@ describe("bootstrap-gitea-service-account", () => {
     expect(
       commands.some((command) => command.includes("aws ssm put-parameter")),
     ).toBe(true);
-    expect(
-      commands.some((command) => command.includes('"$APP_DIR/Caddyfile.prod"')),
-    ).toBe(true);
+    expect(commands.some((command) => command.includes("caddy"))).toBe(false);
+    expect(commands.at(-1)).toContain("up -d api");
   });
 });

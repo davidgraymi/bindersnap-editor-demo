@@ -315,7 +315,6 @@ the Gitea-as-NAT plumbing were removed (epic #302). See
 | Site      | Cloudflare     | same workflow; `bindersnap.com`, landing/marketing/help/legal         |
 | API       | EC2 via Docker | `deploy-pyinfra.yml` (pyinfra over SSH-through-SSM) on push to `main` |
 | Gitea     | Same EC2 host  | `docker-compose.prod.yml`, same pyinfra run                           |
-| Caddy     | Same EC2 host  | `docker-compose.prod.yml`, same pyinfra run                           |
 | Feedback  | Cloudflare     | `feedback-worker.yml` (`wrangler deploy`) on push to `main`           |
 
 The app is built with `BUN_PUBLIC_API_BASE_URL=https://api.bindersnap.com`

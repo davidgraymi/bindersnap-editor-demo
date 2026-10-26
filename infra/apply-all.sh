@@ -85,7 +85,6 @@ bootstrap_service_token_via_ssm() {
   local instance_id="$1"
   local commands_file
   local script_b64
-  local caddyfile_b64
   local command_id
   local status
   local stdout
@@ -100,15 +99,11 @@ bootstrap_service_token_via_ssm() {
   script_b64="$(
     base64 <"${SCRIPT_DIR}/../deploy/files/scripts/bootstrap-gitea-service-account.ts" | tr -d '\n'
   )"
-  caddyfile_b64="$(
-    base64 <"${SCRIPT_DIR}/../deploy/files/Caddyfile.prod" | tr -d '\n'
-  )"
   commands_file="$(mktemp)"
 
   bun "${SCRIPT_DIR}/../deploy/files/scripts/bootstrap-gitea-service-account.ts" \
     print-ssm-commands \
     --script-b64 "${script_b64}" \
-    --caddyfile-b64 "${caddyfile_b64}" \
     >"${commands_file}"
 
   echo "--- Bootstrapping Gitea service token on instance ${instance_id} via SSM ---"

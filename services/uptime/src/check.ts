@@ -3,8 +3,8 @@
  * once when it stops answering and once when it answers again.
  *
  * It runs on Cloudflare every minute (`worker.ts`), so it sees what a browser
- * sees: Cloudflare → tunnel → Caddy → API. A healthy instance with a broken
- * API, Caddy or tunnel is exactly what the CloudWatch alarms cannot see.
+ * sees: Cloudflare → tunnel → API. A healthy instance with a broken
+ * API or tunnel is exactly what the CloudWatch alarms cannot see.
  *
  * ADR 0006 lets this one Worker keep one KV key: the last result, so it can
  * tell a new outage from one it already reported. Nothing else is stored.
@@ -151,7 +151,7 @@ export function alertEmail(
           "",
           `Last check: ${state.reason ?? "unknown"}.`,
           "",
-          "Checked from Cloudflare, so the path is Cloudflare → tunnel → Caddy → API.",
+          "Checked from Cloudflare, so the path is Cloudflare → tunnel → API.",
           "A 502 or 530 from Cloudflare usually means the tunnel or the host; a",
           "timeout or 5xx from the API means the API container.",
           "",

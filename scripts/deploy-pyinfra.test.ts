@@ -87,7 +87,7 @@ describe("bindersnap-stack-up change detection", () => {
 
       const log = readFileSync(workspace.logPath, "utf8");
       expect(log).toContain("pull");
-      expect(log).toContain("up -d");
+      expect(log).toContain("up -d --remove-orphans\n");
       expect(log).not.toContain("--force-recreate");
       expect(log).toContain("ps");
     } finally {
@@ -97,7 +97,7 @@ describe("bindersnap-stack-up change detection", () => {
 
   test("refuses to start anything when the data volume is not mounted", () => {
     const workspace = makeWorkspace();
-    writeFileSync(join(workspace.stateDir, "changed-Caddyfile.prod"), "");
+    writeFileSync(join(workspace.stateDir, "changed-litestream.yml"), "");
 
     try {
       const result = runStackUp(workspace, { MOUNTPOINT_EXIT: "1" });
@@ -105,24 +105,6 @@ describe("bindersnap-stack-up change detection", () => {
       expect(result.stderr.toString()).toContain("is not mounted");
       // Not even a pull: nothing may run against a data-root on the root disk.
       expect(readFileSync(workspace.logPath, "utf8")).toBe("");
-    } finally {
-      rmSync(workspace.root, { force: true, recursive: true });
-    }
-  });
-
-  test("recreates only Caddy when its config changed this run", () => {
-    const workspace = makeWorkspace();
-    // pyinfra drops one marker per changed config file.
-    writeFileSync(join(workspace.stateDir, "changed-Caddyfile.prod"), "");
-
-    try {
-      const result = runStackUp(workspace);
-      expect(result.exitCode).toBe(0);
-
-      const log = readFileSync(workspace.logPath, "utf8");
-      expect(log).toContain("up -d --force-recreate --no-deps caddy\n");
-      expect(log).not.toContain("litestream");
-      expect(log).not.toContain("--build");
     } finally {
       rmSync(workspace.root, { force: true, recursive: true });
     }
@@ -138,14 +120,14 @@ describe("bindersnap-stack-up change detection", () => {
 
       const log = readFileSync(workspace.logPath, "utf8");
       expect(log).toContain("up -d --force-recreate --no-deps litestream\n");
-      expect(log).not.toContain("caddy");
     } finally {
       rmSync(workspace.root, { force: true, recursive: true });
     }
   });
 
-  test("rebuilds the Caddy image only when its Dockerfile changed", () => {
+  test("a marker left for a retired Caddy file recreates nothing", () => {
     const workspace = makeWorkspace();
+    writeFileSync(join(workspace.stateDir, "changed-Caddyfile.prod"), "");
     writeFileSync(join(workspace.stateDir, "changed-Dockerfile.caddy"), "");
 
     try {
@@ -153,8 +135,9 @@ describe("bindersnap-stack-up change detection", () => {
       expect(result.exitCode).toBe(0);
 
       const log = readFileSync(workspace.logPath, "utf8");
-      expect(log).toContain("up -d --build\n");
       expect(log).not.toContain("--force-recreate");
+      expect(log).not.toContain("--build");
+      expect(log).not.toContain("caddy");
     } finally {
       rmSync(workspace.root, { force: true, recursive: true });
     }

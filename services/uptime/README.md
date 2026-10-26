@@ -4,9 +4,9 @@ Every minute, `GET https://api.bindersnap.com/healthz` from Cloudflare. After
 two failed checks in a row, one email says the API is down. When it answers
 200 again, one more says it is back. Nothing in between.
 
-It goes the way a browser does (Cloudflare → tunnel → Caddy → API), so it
+It goes the way a browser does (Cloudflare → tunnel → API), so it
 catches what the CloudWatch alarms in `infra/monitoring` cannot: a healthy
-instance whose API, Caddy or tunnel is broken. It costs nothing on the free
+instance whose API or tunnel is broken. It costs nothing on the free
 plan: a cron trigger, one KV read a minute, a KV write only when the result
 changes, and Email Routing's `send_email`.
 

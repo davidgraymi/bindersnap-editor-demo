@@ -58,7 +58,7 @@ What it does on every push to `main`:
 
 `deploy.py` is idempotent: it installs Docker, mounts the EBS data volume,
 uploads the `deploy/files/` runtime config, renders `.env.prod` from SSM
-Parameter Store (read on the control plane), validates the compose + Caddy config,
+Parameter Store (read on the control plane), validates the compose config,
 brings the stack up — force-recreating only when config or secrets changed —
 and configures the CloudWatch agent for disk/memory metrics.
 
@@ -114,13 +114,14 @@ lays down all config on a fresh host. The remaining prerequisites are:
 
 ## Stripe Webhook Verification
 
-Use this runbook whenever you change `Caddyfile.prod`, Stripe webhook handling,
-or the production API deploy path.
+Use this runbook whenever you change Stripe webhook handling, the API's
+request path (`services/api/edge.ts`), or the production API deploy path.
 
 ### How to test the webhook end-to-end in staging
 
-1. Confirm the staging Caddy proxy forwards both headers explicitly:
-   `header_up X-Forwarded-Proto {scheme}` and `header_up X-Forwarded-For {remote}`.
+1. Confirm whatever fronts the staging API sends `X-Forwarded-Proto: https`
+   (Cloudflare does) and, if `BINDERSNAP_BEHIND_CLOUDFLARE` is on,
+   `CF-Connecting-IP`.
 2. Export the staging webhook secret locally:
    `export STRIPE_WEBHOOK_SECRET=whsec_...`
 3. Build a small test payload and signature, then POST it directly to staging:
@@ -131,7 +132,7 @@ or the production API deploy path.
 4. Expect `200` with `{"received":true}` and confirm the staging API logs show
    `Stripe webhook received`.
 5. If the delivery fails with `400 HTTPS is required.`, treat that as a
-   forwarded-proto regression in the Caddy path before looking at Stripe
+   forwarded-proto regression in front of the API before looking at Stripe
    signature or payload handling.
 6. If the delivery fails with `400 Invalid signature.`, re-check that the
    staging webhook secret matches the endpoint configured in Stripe.
@@ -288,8 +289,8 @@ the new stack has been checked.
 
 - A push to `main` deploys `dist/app` to `bindersnap-app` and `dist/site` to `bindersnap-site`.
 - `https://app.bindersnap.com/-/login` loads the SPA shell; `https://bindersnap.com/-/login` is a 301 to it; `curl -I` on either shows `x-frame-options: DENY`.
-- A push to `main` triggers `deploy-pyinfra.yml`, which validates the compose + Caddy config on the host before bringing the stack up.
+- A push to `main` triggers `deploy-pyinfra.yml`, which validates the compose config on the host before bringing the stack up.
 - A forced test failure prevents the pyinfra deploy job from running.
 - `deploy-pyinfra.yml` with `dry_run=true` reports pyinfra changes without applying them.
 - Reverting a commit on `main` re-applies the prior known-good stack via pyinfra.
-- The integration suite includes `tests/stripe-webhook-caddy.pw.ts`, which posts a signed event through the local Caddy proxy and expects `{"received":true}`.
+- The integration suite includes `tests/stripe-webhook-caddy.pw.ts`, which posts a signed event through the local stack's Caddy proxy and expects `{"received":true}`. Production has no Caddy (#806); the API sets its own headers and webhook limit, covered by `services/api/server.test.ts`.

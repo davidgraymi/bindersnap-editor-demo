@@ -1168,6 +1168,103 @@ describe("stripe webhook transport security", () => {
   });
 });
 
+describe("what Caddy did, the API now does itself (#806)", () => {
+  test("every response carries the security headers", async () => {
+    const server = createApiServer();
+    try {
+      for (const path of ["/healthz", "/no-such-route"]) {
+        const response = await server.fetch(
+          new Request(`http://localhost${path}`),
+        );
+        expect(response.headers.get("x-frame-options")).toBe("DENY");
+        expect(response.headers.get("strict-transport-security")).toBe(
+          "max-age=31536000; includeSubDomains",
+        );
+        expect(response.headers.get("content-security-policy")).toBe(
+          "default-src 'none'; frame-ancestors 'none'; sandbox",
+        );
+        expect(response.headers.has("server")).toBe(false);
+      }
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("two visitors behind Cloudflare get two sign-in buckets", async () => {
+    const server = createApiServer();
+    const original = {
+      behindCloudflare: config.behindCloudflare,
+      authRateLimitEnabled: config.authRateLimitEnabled,
+      authRateLimitMax: config.authRateLimitMax,
+    };
+    config.behindCloudflare = true;
+    config.authRateLimitEnabled = true;
+    config.authRateLimitMax = 2;
+    const attacker = `203.0.113.${Math.floor(Math.random() * 200) + 1}`;
+    const visitor = `198.51.100.${Math.floor(Math.random() * 200) + 1}`;
+    const attempt = (cfConnectingIp: string, forwardedFor: string) =>
+      server.fetch(
+        new Request("http://localhost/auth/login", {
+          method: "POST",
+          headers: {
+            Origin: "http://localhost:5173",
+            "Content-Type": "application/json",
+            "CF-Connecting-IP": cfConnectingIp,
+            // Cloudflare appends to whatever the visitor sent.
+            "X-Forwarded-For": `${forwardedFor}, ${cfConnectingIp}`,
+          },
+          body: JSON.stringify({
+            identifier: `someone-${randomUUID()}`,
+            password: "wrong",
+          }),
+        }),
+      );
+
+    try {
+      expect((await attempt(attacker, "192.0.2.1")).status).toBe(401);
+      expect((await attempt(attacker, "192.0.2.2")).status).toBe(401);
+      // A new X-Forwarded-For does not buy the attacker a new bucket…
+      expect((await attempt(attacker, "192.0.2.3")).status).toBe(429);
+      // …and naming the visitor in it does not spend theirs.
+      expect((await attempt(visitor, attacker)).status).toBe(401);
+    } finally {
+      Object.assign(config, original);
+      server.stop(true);
+    }
+  });
+
+  test("a flood at the Stripe webhook is refused before its signature is checked", async () => {
+    const server = createApiServer();
+    const flooder = `192.0.2.${Math.floor(Math.random() * 200) + 1}`;
+    const unsigned = (ip: string) =>
+      server.fetch(
+        new Request("http://localhost/stripe/webhook", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "stripe-signature": "t=0,v1=forged",
+            "X-Forwarded-For": ip,
+          },
+          body: "{}",
+        }),
+      );
+
+    try {
+      const statuses: number[] = [];
+      for (let n = 0; n < 60; n += 1) {
+        statuses.push((await unsigned(flooder)).status);
+      }
+      expect(statuses.every((status) => status === 400)).toBe(true);
+      const refused = await unsigned(flooder);
+      expect(refused.status).toBe(429);
+      expect(refused.headers.get("Retry-After")).toBe("1");
+      expect((await unsigned(`${flooder}0`)).status).toBe(400);
+    } finally {
+      server.stop(true);
+    }
+  });
+});
+
 describe("a Host header of localhost in production", () => {
   test("does not skip the HTTPS check or take Secure off the cookie", async () => {
     const server = createApiServer();

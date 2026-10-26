@@ -51,7 +51,7 @@ variable "environment" {
 }
 
 variable "instance_type" {
-  description = "EC2 instance type. t4g.medium (4 GiB): t4g.small's 2 GiB left too little headroom for Gitea, the API, Caddy, Litestream and cloudflared together. Root volume is 30 GB (AL2023 ARM64 snapshot minimum)."
+  description = "EC2 instance type. t4g.medium (4 GiB): t4g.small's 2 GiB left too little headroom for Gitea, the API, Litestream and cloudflared together. Root volume is 30 GB (AL2023 ARM64 snapshot minimum)."
   type        = string
   default     = "t4g.medium"
 }

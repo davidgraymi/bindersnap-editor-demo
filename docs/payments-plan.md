@@ -453,6 +453,11 @@ STRIPE_PRICE_ID=price_...
 
 ## Infrastructure: Rate-Limiting /stripe/webhook at Caddy
 
+> **Superseded (#806).** Caddy was retired: `cloudflared` reaches the API
+> directly, and the API limits `POST /stripe/webhook` to 60 a second per
+> `CF-Connecting-IP` itself (`stripeWebhookLimiter` in
+> `services/api/edge.ts`). The section below is the original plan.
+
 `/stripe/webhook` is public and runs HMAC-SHA256 verification on every POST. Without a rate limit, an attacker can flood it with garbage signatures and waste CPU at the API layer.
 
 **Solution (issue #192):** A Caddy rate limit caps requests at **60 req/s per source IP**. Excess requests receive `429 Too Many Requests` before they reach the API.

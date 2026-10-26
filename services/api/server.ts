@@ -335,6 +335,11 @@ import {
   readRequestedReviewers,
 } from "./change-assignments";
 import { buildChangeUpdates } from "./change-updates";
+import {
+  applySecurityHeaders,
+  clientIpFrom,
+  stripeWebhookLimiter,
+} from "./edge";
 import type { DraftNameRecord } from "./draft-names";
 import {
   findSoleOwnerships,
@@ -522,25 +527,7 @@ function requestProtocol(req: Request): string {
 }
 
 function requestClientIp(req: Request): string {
-  const forwardedFor = req.headers.get("x-forwarded-for");
-  if (forwardedFor) {
-    const first = forwardedFor.split(",")[0]?.trim();
-    if (first) {
-      return first;
-    }
-  }
-
-  const cfConnectingIp = req.headers.get("cf-connecting-ip")?.trim();
-  if (cfConnectingIp) {
-    return cfConnectingIp;
-  }
-
-  const realIp = req.headers.get("x-real-ip")?.trim();
-  if (realIp) {
-    return realIp;
-  }
-
-  return new URL(req.url).hostname;
+  return clientIpFrom(req, config.behindCloudflare);
 }
 
 function isAllowedOrigin(origin: string | null): boolean {
@@ -15074,23 +15061,26 @@ export function createApiServer() {
                 : undefined,
           },
         );
-        return withRequestId(response, requestId);
+        return stampResponse(response, requestId);
       });
     },
   });
 }
 
 /**
- * Stamp `X-Request-Id` on a response. A response built from another `fetch`
- * (a proxied download) has immutable headers, so that one is copied.
+ * Stamp `X-Request-Id` and the security headers (`edge.ts`) on a response. A
+ * response built from another `fetch` (a proxied download) has immutable
+ * headers, so that one is copied.
  */
-function withRequestId(response: Response, requestId: string): Response {
+function stampResponse(response: Response, requestId: string): Response {
   try {
     response.headers.set("X-Request-Id", requestId);
+    applySecurityHeaders(response.headers);
     return response;
   } catch {
     const headers = new Headers(response.headers);
     headers.set("X-Request-Id", requestId);
+    applySecurityHeaders(headers);
     return new Response(response.body, {
       status: response.status,
       statusText: response.statusText,
@@ -15147,6 +15137,12 @@ async function handleRequest(req: Request): Promise<Response> {
   }
 
   if (pathname === "/stripe/webhook" && method === "POST") {
+    if (stripeWebhookLimiter.limited(clientIp)) {
+      logger.warn("Rate limit hit on the Stripe webhook", { clientIp });
+      const headers = mergeHeaders(baseHeaders);
+      headers.set("Retry-After", "1");
+      return json(429, { error: "Too many requests." }, headers);
+    }
     const response = await handleStripeWebhook(req, baseHeaders);
     const durationMs = Date.now() - startMs;
     if (response.status >= 500) {

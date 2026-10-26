@@ -4,7 +4,6 @@ version: 2
 updates:
   - package-ecosystem: docker
     directories:
-      - /deploy/files
       - /services/api
     schedule:
       interval: weekly

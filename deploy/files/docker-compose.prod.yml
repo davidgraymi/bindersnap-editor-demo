@@ -33,8 +33,10 @@ services:
       - USER_UID=1000
       - USER_GID=1000
       # --- Server ---
-      # A name only: nothing serves gitea.bindersnap.com (see Caddyfile.prod).
-      # Gitea builds the absolute URLs in its API answers from it, and the API
+      # A name only: nothing serves gitea.bindersnap.com, and the tunnel routes
+      # only api.bindersnap.com. The browser never talks to Gitea: the API
+      # reaches it on the Docker network and serves avatars itself. Gitea
+      # builds the absolute URLs in its API answers from this name, and the API
       # never hands those to the browser.
       - GITEA__server__ROOT_URL=https://gitea.bindersnap.com
       - GITEA__server__HTTP_PORT=3000
@@ -163,6 +165,9 @@ services:
       - BINDERSNAP_USER_EMAIL_DOMAIN=${BINDERSNAP_USER_EMAIL_DOMAIN:-users.bindersnap.com}
       - BINDERSNAP_GITEA_TOKEN_SCOPES=${BINDERSNAP_GITEA_TOKEN_SCOPES:-write:user,write:repository,write:issue,write:organization}
       - BINDERSNAP_REQUIRE_HTTPS=true
+      # Rate limits key on CF-Connecting-IP, never on X-Forwarded-For, which a
+      # visitor can write into. True only because the tunnel is the only way in.
+      - BINDERSNAP_BEHIND_CLOUDFLARE=true
       - BINDERSNAP_AUTH_RATE_LIMIT_ENABLED=true
       - BINDERSNAP_SESSIONS_DB_PATH=/var/lib/bindersnap/sessions.db
       # --- Email (issue #665) ---
@@ -176,34 +181,17 @@ services:
     volumes:
       - api-data:/var/lib/bindersnap
 
-  caddy:
-    build:
-      context: .
-      dockerfile: Dockerfile.caddy
-    container_name: bindersnap-caddy-prod
-    restart: unless-stopped
-    depends_on:
-      gitea:
-        condition: service_healthy
-      api:
-        condition: service_started
-    # No published ports: requests reach Caddy only from cloudflared, over
-    # the Docker network (see Caddyfile.prod).
-    volumes:
-      - ./Caddyfile.prod:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
-
   # The only way in. cloudflared dials out to Cloudflare and carries
-  # api.bindersnap.com's requests back to Caddy; the tunnel's routes live in
-  # Cloudflare (infra/edge). The token is the SSM leaf `cloudflare_tunnel_token`,
+  # api.bindersnap.com's requests straight to api:8787, which publishes no port
+  # on the host; the tunnel's routes live in Cloudflare (infra/edge). The API
+  # sets its own security headers and rate limits (services/api/edge.ts). The token is the SSM leaf `cloudflare_tunnel_token`,
   # written by infra/edge/put-tunnel-token.sh, never by Terraform.
   cloudflared:
     image: cloudflare/cloudflared:2026.9.3@sha256:072c067d25ccbe61d46e18f0d0723255f2bb5304f7317caa95b27031520ff92c
     container_name: bindersnap-cloudflared-prod
     restart: unless-stopped
     depends_on:
-      caddy:
+      api:
         condition: service_started
     command: ["tunnel", "--no-autoupdate", "--metrics", "0.0.0.0:2000", "run"]
     environment:
@@ -239,8 +227,6 @@ services:
 volumes:
   gitea-data:
   api-data:
-  caddy-data:
-  caddy-config:
 
 networks:
   default:

@@ -1,6 +1,7 @@
 # Response headers for bindersnap.com, the public site, read by Cloudflare's
 # static assets (wrangler.jsonc). The app, at app.bindersnap.com, has its own
-# (apps/app/public/_headers). Caddy sends the same set for api.bindersnap.com.
+# (apps/app/public/_headers). The API sends the same set itself
+# (services/api/edge.ts).
 #
 # No Content-Security-Policy script-src yet: the landing page and the Google
 # tag on every page use inline scripts, so a script policy needs
