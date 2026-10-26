@@ -4,7 +4,9 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { GetBillingStatusSeats } from './getBillingStatusSeats.ts';
 
 export type GetBillingStatusParams = {
 organization?: string;
+seats?: GetBillingStatusSeats;
 };

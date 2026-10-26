@@ -16,6 +16,7 @@ import {
 } from "../api";
 import {
   organizationBillingQuery,
+  organizationMembersQuery,
   organizationPeopleQuery,
   queryKeys,
 } from "../data/queries";
@@ -83,6 +84,16 @@ export function OrganizationPeople({ org }: OrganizationPeopleProps) {
    */
   const setPayload = (next: OrganizationPeoplePayload) => {
     queryClient.setQueryData(organizationPeopleQuery(org).queryKey, next);
+    // The names-only read the history and quick find use, from the same
+    // answer: a person added or removed here is named there at once.
+    queryClient.setQueryData(organizationMembersQuery(org).queryKey, {
+      organization: next.organization,
+      people: next.people.map(({ login, fullName, isOwner }) => ({
+        login,
+        fullName,
+        isOwner,
+      })),
+    });
     // Who writes may have changed, and with it the number of paid seats.
     void queryClient.invalidateQueries({
       queryKey: queryKeys.organizationBilling(org),

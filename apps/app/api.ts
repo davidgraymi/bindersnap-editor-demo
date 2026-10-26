@@ -32,6 +32,7 @@ import type {
   CreatedOrganizationGroupPayload,
   LibraryPayload,
   LibrarySearchPayload,
+  OrganizationMembersPayload,
   OrganizationPeoplePayload,
   PublishedWorkspaceChangePayload,
   WorkspaceChangeDetailPayload,
@@ -196,6 +197,7 @@ import type { DocumentSearchParams } from "./documentSearch";
 import type { ChangeScope } from "./changeScope";
 import { scopeChangeBase, scopeRepo } from "./changeScope";
 import { LEGAL_VERSION } from "../../packages/utils/legal";
+import { isCommitRef } from "../../packages/utils/gitRef";
 import { publicEnv } from "./publicEnv";
 
 /**
@@ -936,6 +938,22 @@ export async function proposeBinderSignOff(
   const response = await BindersClient.proposeBinderSignOffRules(org, binder, {
     rules,
   });
+  return response.data;
+}
+
+/**
+ * Who is in this organization, by name and whether they own it — not its
+ * groups. Cheaper for the server than `fetchOrganizationPeople` by two Gitea
+ * reads per group, so a screen that only names people asks for this.
+ */
+export async function fetchOrganizationMembers(
+  org: string,
+  request?: ReadRequest,
+): Promise<OrganizationMembersPayload> {
+  const response = await OrganizationsClient.getOrganizationMembers(
+    org,
+    request,
+  );
   return response.data;
 }
 
@@ -1976,8 +1994,9 @@ export async function downloadBinderDocument(
     documentPath,
     ref ? { ref } : undefined,
     // A branch moves with every save; a copy the browser kept from before one
-    // showed the words the save replaced. See `downloadHeaders` in the API.
-    { cache: "no-store" },
+    // showed the words the save replaced. A commit cannot move, so a version
+    // read at one is the browser's to keep. See `downloadHeaders` in the API.
+    ref && isCommitRef(ref) ? undefined : { cache: "no-store" },
   );
   return response.data;
 }
@@ -2102,14 +2121,19 @@ export async function markNotificationsRead(
 /**
  * One organization's billing. Billing is per organization, so every call
  * names the one it is about; omitting it asks for the session's oldest.
+ *
+ * `seats` asks for the paid-seat count too. Only a screen that shows a price
+ * per writer should: counting costs the server a Gitea read per writing group.
  */
 export async function fetchBillingStatus(
   organization?: string | null,
+  options: { seats?: boolean } = {},
 ): Promise<BillingStatusPayload> {
   try {
-    const response = await BillingClient.getBillingStatus(
-      organization ? { organization } : undefined,
-    );
+    const response = await BillingClient.getBillingStatus({
+      ...(organization ? { organization } : {}),
+      ...(options.seats ? { seats: "true" as const } : {}),
+    });
     return response.data;
   } catch (error) {
     // 402 from the billing endpoint contains billing data (e.g. past_due status),
