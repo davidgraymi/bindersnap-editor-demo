@@ -6790,6 +6790,9 @@ async function handleWorkspaceChangeDetail(
     };
     const changeOpen = pullState.state === "open";
     const mergeCommitSha = pullState.merge_commit_sha || null;
+    const decided = changeOpen
+      ? null
+      : resolveClosedOutcome(entry.pullRequest, entry.reviews);
 
     // **Where each document is filed on the base**, so a change that renamed
     // or moved one can say so. The identity survives a rename and the address
@@ -6880,9 +6883,13 @@ async function handleWorkspaceChangeDetail(
         // How it ended, for a change that has: the panel that reads "Ready to
         // publish" or "Awaiting review" on an open change has to read
         // "Published" on one that was.
-        outcome: changeOpen
-          ? null
-          : resolveClosedOutcome(entry.pullRequest, entry.reviews).outcome,
+        outcome: decided?.outcome ?? null,
+        closedAt: decided
+          ? ((entry.pullRequest as { merged_at?: string | null }).merged_at ??
+            (entry.pullRequest as { closed_at?: string | null }).closed_at ??
+            null)
+          : null,
+        decidedBy: decided?.decidedBy ?? null,
         branchLabel,
         documents: withVersions,
         removedDocuments,

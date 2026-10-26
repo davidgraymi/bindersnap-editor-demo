@@ -10,12 +10,15 @@ import {
   updateBinderChange,
 } from "../api";
 import { followInApp } from "../appLink";
-import { describeChangedDocument } from "../binderChange";
+import {
+  binderChangeDetailToRecord,
+  describeChangedDocument,
+} from "../binderChange";
 import { buildDocumentUrl, isEditorDocumentFile } from "../binderDocument";
 import { buildBinderUrl } from "../binderShell";
 import { buildChangedDocumentRows } from "../changedDocuments";
 import type { ChangeScope } from "../changeScope";
-import { formatDocumentName, toChangeRecord } from "../documentDisplay";
+import { formatDocumentName } from "../documentDisplay";
 import type { DocumentChangeView } from "../routes";
 import { nameFor, usePeopleNames } from "../usePeopleNames";
 import { ChangeByline } from "./ChangeByline";
@@ -177,18 +180,7 @@ export function BinderChangePage({
   }, [view, shown?.slugPath, detail?.change.branchName]);
 
   const record = useMemo(
-    () =>
-      detail
-        ? {
-            ...toChangeRecord(detail.change),
-            // `toChangeRecord` serves the open-changes list, so it assumes
-            // open. A decided change is not still awaiting a decision, and
-            // says how it ended — the approvals panel read "Awaiting review"
-            // on a change that had been published.
-            open: detail.change.state === "open",
-            outcome: detail.outcome,
-          }
-        : null,
+    () => (detail ? binderChangeDetailToRecord(detail) : null),
     [detail],
   );
 

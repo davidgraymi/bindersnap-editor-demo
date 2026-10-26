@@ -28,5 +28,9 @@ export type GetBinderChange200 = {
   viewer: GetBinderChange200Viewer;
   /** @nullable */
   outcome: GetBinderChange200Outcome;
+  /** @nullable */
+  closedAt: string | null;
+  /** @nullable */
+  decidedBy: string | null;
   clearsApprovalsOnEdit: boolean;
 };
