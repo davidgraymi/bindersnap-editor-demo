@@ -62,7 +62,12 @@ stack, and a re-run changes nothing unless config or secrets actually changed:
 5. log in to GHCR (if a token is present) and bootstrap the Gitea service token
    on first run;
 6. `docker compose up -d`, force-recreating **only** when this run changed the
-   env file or a config file.
+   env file or a config file;
+7. wait for the stack to be healthy (`files/bin/bindersnap-health-gate`: every
+   container up, Gitea and cloudflared healthy, the API answering `/healthz`
+   through Caddy), then remove the images no container uses and the build
+   cache — never volumes. A deploy that fails before or at the gate prunes
+   nothing.
 
 ## Prerequisites
 
@@ -112,6 +117,11 @@ and set the `api_tag` input to the last-good commit SHA. That deploy skips the
 build (the image already exists in GHCR) and pins `API_TAG=<sha>`. For a pin
 that must survive every subsequent push (not just one deploy), set the SSM
 `api_tag` override instead — see `docs/ops/break-glass.md` step 4.
+
+A healthy deploy prunes every image no container uses (issue #810), so the
+previous API build is not kept on the host: a rollback pulls it from GHCR, one
+pull. A deploy that fails its health gate prunes nothing, so the images the
+previous stack ran are still on the host.
 
 ## Security notes
 

@@ -21,6 +21,12 @@ Rollback is `git revert` on `main` (the deploy re-applies the prior stack), or a
 `workflow_dispatch` run with an explicit `api_tag`. Each deploy pins `API_TAG`
 to the deployed commit's SHA — never mutable `:latest`.
 
+Once the new stack passes its health gate, the deploy removes every image no
+container uses and the build cache, so `/data` (Docker's data-root, shared with
+Gitea and SQLite) does not fill up. It never prunes volumes. A rollback to an
+older API tag pulls that image from GHCR again; a deploy that fails the gate
+prunes nothing.
+
 ## Production security rules
 
 These apply to any change touching `deploy/`, `deploy/files/docker-compose.prod.yml`,

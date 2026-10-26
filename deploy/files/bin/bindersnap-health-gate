@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Wait for the stack this deploy just brought up to be healthy, or fail.
+#
+# The deploy prunes old images only after this passes (issue #810), so a deploy
+# whose new stack never comes up leaves the previous images on the host for a
+# quick rollback. Every long-running container must be running, the ones with a
+# healthcheck (Gitea, cloudflared) must report healthy, and the API must answer
+# /healthz through Caddy — the same route a request from the tunnel takes.
+set -euo pipefail
+
+ATTEMPTS="${HEALTH_GATE_ATTEMPTS:-24}"
+INTERVAL="${HEALTH_GATE_INTERVAL:-5}"
+
+CONTAINERS=(
+  bindersnap-gitea-prod
+  bindersnap-api-prod
+  bindersnap-caddy-prod
+  bindersnap-cloudflared-prod
+  bindersnap-litestream-prod
+)
+CADDY_CONTAINER="bindersnap-caddy-prod"
+
+reason=""
+
+check() {
+  local container state
+  for container in "${CONTAINERS[@]}"; do
+    # "<status> <health>", where health is empty for a container without a
+    # healthcheck.
+    state="$(docker inspect -f '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}' "${container}" 2>/dev/null || true)"
+    case "${state}" in
+      "running " | "running healthy") ;;
+      *)
+        reason="${container} is ${state:-missing}"
+        return 1
+        ;;
+    esac
+  done
+
+  if ! docker exec "${CADDY_CONTAINER}" wget -q -O /dev/null \
+    --header "Host: api.bindersnap.com" http://localhost/healthz >/dev/null 2>&1; then
+    reason="the API does not answer /healthz through Caddy"
+    return 1
+  fi
+}
+
+for attempt in $(seq 1 "${ATTEMPTS}"); do
+  if check; then
+    echo "Stack healthy (attempt ${attempt})"
+    exit 0
+  fi
+  echo "attempt ${attempt}: ${reason}; retrying in ${INTERVAL}s"
+  sleep "${INTERVAL}"
+done
+
+echo "Stack not healthy after ${ATTEMPTS} attempts: ${reason}" >&2
+exit 1

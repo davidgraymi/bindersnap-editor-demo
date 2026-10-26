@@ -193,3 +193,106 @@ describe("deploy .env.prod render (env_render.py)", () => {
     expect(result.exitCode).toBe(0);
   });
 });
+
+describe("bindersnap-health-gate", () => {
+  const healthGatePath = join(
+    repoRoot,
+    "deploy",
+    "files",
+    "bin",
+    "bindersnap-health-gate",
+  );
+
+  // A docker stub: every container is running and healthy, and the API
+  // answers, unless UNHEALTHY names a container or HEALTHZ_EXIT is non-zero.
+  function runHealthGate(extraEnv: Record<string, string> = {}) {
+    const root = mkdtempSync(join(tmpdir(), "bindersnap-healthgate-"));
+    const binDir = join(root, "bin");
+    mkdirSync(binDir, { recursive: true });
+    writeFileSync(
+      join(binDir, "docker"),
+      `#!/usr/bin/env bash
+case "$1" in
+  inspect)
+    container="\${@: -1}"
+    if [ "$container" = "\${UNHEALTHY:-}" ]; then
+      echo "running starting"
+    else
+      echo "running healthy"
+    fi
+    ;;
+  exec) exit "\${HEALTHZ_EXIT:-0}" ;;
+esac
+`,
+    );
+    chmodSync(join(binDir, "docker"), 0o755);
+
+    try {
+      return Bun.spawnSync(["bash", healthGatePath], {
+        env: {
+          ...process.env,
+          ...extraEnv,
+          HEALTH_GATE_ATTEMPTS: "2",
+          HEALTH_GATE_INTERVAL: "0",
+          PATH: `${binDir}:${process.env.PATH ?? ""}`,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }
+
+  test("passes when every container is up and the API answers", () => {
+    const result = runHealthGate();
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString()).toContain("Stack healthy");
+  });
+
+  test("fails when a container never becomes healthy", () => {
+    const result = runHealthGate({ UNHEALTHY: "bindersnap-gitea-prod" });
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain(
+      "bindersnap-gitea-prod is running starting",
+    );
+  });
+
+  test("fails when the API does not answer /healthz through Caddy", () => {
+    const result = runHealthGate({ HEALTHZ_EXIT: "1" });
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain("does not answer /healthz");
+  });
+});
+
+describe("deploy.py image prune (issue #810)", () => {
+  const deployPy = readFileSync(join(repoRoot, "deploy", "deploy.py"), "utf8");
+
+  // pyinfra runs operations in definition order, so the order of their names
+  // in deploy.py is the order of the deploy's operation list.
+  function operationIndex(name: string) {
+    const index = deployPy.indexOf(`name="${name}`);
+    expect(index).toBeGreaterThan(-1);
+    return index;
+  }
+
+  test("prunes only after the stack is up and the health gate passes", () => {
+    const up = operationIndex("Compose up");
+    const gate = operationIndex("Wait for the stack to be healthy");
+    const prune = operationIndex("Prune images");
+    expect(up).toBeLessThan(gate);
+    expect(gate).toBeLessThan(prune);
+  });
+
+  test("ships the health gate script to the host", () => {
+    expect(deployPy).toContain('"bindersnap-health-gate",');
+  });
+
+  test("removes unused images and the build cache, never volumes", () => {
+    const prune = operationIndex("Prune images");
+    const operation = deployPy.slice(prune, deployPy.indexOf("\n)\n", prune));
+    expect(operation).toContain('"docker image prune -af"');
+    expect(operation).toContain('"docker builder prune -af"');
+    expect(operation).not.toMatch(/--volumes|volume prune|system prune/);
+  });
+});
