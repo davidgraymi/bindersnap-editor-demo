@@ -12020,6 +12020,14 @@
                         null
                       ]
                     },
+                    "closedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "decidedBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "clearsApprovalsOnEdit": {
                       "type": "boolean"
                     }
@@ -12039,6 +12047,8 @@
                     "requiredReviewers",
                     "viewer",
                     "outcome",
+                    "closedAt",
+                    "decidedBy",
                     "clearsApprovalsOnEdit"
                   ]
                 }

@@ -143,6 +143,11 @@ test("a change with no reviewers publishes in a binder that needs no approvals",
     page.getByText("Nobody was asked to review this."),
   ).toBeVisible();
   await expect(page.getByText("Awaiting review")).toHaveCount(0);
+  // And its history ends on the publishing: who did it, and when (#647).
+  const published = page.locator(".rev-event").last();
+  await expect(published.locator(".rev-event-actor")).toHaveText("Test User");
+  await expect(published).toContainText("published this");
+  await expect(published.locator(".rev-event-when")).not.toBeEmpty();
 });
 
 test("a binder that needs an approval still waits for one", async ({

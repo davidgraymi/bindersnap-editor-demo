@@ -1,10 +1,13 @@
 import { expect, test } from "bun:test";
 
+import type { WorkspaceChangeDetailPayload } from "../../packages/api-schema/schemas/workspaces";
 import {
+  binderChangeDetailToRecord,
   describeChangedDocument,
   describeMove,
   parseRequestedChange,
 } from "./binderChange";
+import { buildReviewTimeline } from "./changeReview";
 
 const newDocument = {
   path: "nursing/hand-hygiene.01J8XZ4K7MQ9V3B0RN7YHS2E1D.md",
@@ -132,4 +135,91 @@ test("a document filed where it always was says nothing", () => {
   expect(
     describeMove({ ...revision, previousSlugPath: revision.slugPath }),
   ).toBeNull();
+});
+
+// --- a decided change's record ----------------------------------------------
+
+function changeDetail(
+  overrides: Partial<WorkspaceChangeDetailPayload> = {},
+): WorkspaceChangeDetailPayload {
+  return {
+    organization: "acme",
+    workspace: "policies",
+    change: {
+      id: 1,
+      number: 7,
+      title: "Update hand hygiene",
+      state: "closed",
+      created: "2026-09-01T10:00:00Z",
+      created_at: "2026-09-01T10:00:00Z",
+      branchName: "bindersnap/drafts/bob/hand-hygiene",
+      approvalCount: 1,
+      requiredApprovals: 1,
+      isApproved: true,
+      isRejected: false,
+      reviewers: [],
+      assignee: null,
+      body: "Update hand hygiene",
+      approvalState: "published",
+      user: { login: "bob" },
+      reviews: [],
+    },
+    branchLabel: null,
+    documents: [],
+    removedDocuments: [],
+    isBehind: false,
+    hasConflicts: false,
+    blockOnUnresolvedThreads: false,
+    unresolvedThreadCount: 0,
+    canManage: true,
+    requiredReviewers: { users: [], teams: [] },
+    viewer: { canApprove: false, canPublish: false },
+    outcome: "published",
+    closedAt: "2026-09-02T15:30:00Z",
+    decidedBy: "priya",
+    clearsApprovalsOnEdit: true,
+    ...overrides,
+  } as WorkspaceChangeDetailPayload;
+}
+
+test("a published binder change ends its history on who published it, and when", () => {
+  const record = binderChangeDetailToRecord(changeDetail());
+
+  expect(record.open).toBe(false);
+  expect(record.outcome).toBe("published");
+  expect(record.decidedBy).toBe("priya");
+  expect(record.closedAt).toBe("2026-09-02T15:30:00Z");
+
+  const entries = buildReviewTimeline({
+    change: record,
+    threads: [],
+    updates: [],
+    resetsApprovals: false,
+  });
+  const last = entries[entries.length - 1];
+  expect(last?.kind).toBe("closed");
+  expect(last?.event?.actor).toBe("Priya");
+  expect(last?.event?.verb).toBe("published this");
+  expect(last?.event?.when).not.toBe("");
+});
+
+test("an open binder change has no ending yet", () => {
+  const detail = changeDetail({
+    outcome: null,
+    closedAt: null,
+    decidedBy: null,
+  });
+  detail.change.state = "open";
+  const record = binderChangeDetailToRecord(detail);
+
+  expect(record.open).toBe(true);
+  expect(record.outcome).toBeNull();
+
+  const entries = buildReviewTimeline({
+    change: record,
+    threads: [],
+    updates: [],
+    resetsApprovals: false,
+  });
+  expect(entries.some((entry) => entry.kind === "closed")).toBe(false);
 });

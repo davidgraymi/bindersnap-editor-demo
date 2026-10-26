@@ -9,11 +9,16 @@
 import { parsePositiveIntParam } from "./binderDocument";
 import { formatDocumentName } from "./documentDisplay";
 import type {
+  WorkspaceChangeDetailPayload,
   WorkspaceChangeSummary,
   WorkspaceChangedDocument,
 } from "../../packages/api-schema/schemas/workspaces";
 import type { ChangeRecord } from "./documentDisplay";
-import { describeSubmission, parseChangeTitle } from "./documentDisplay";
+import {
+  describeSubmission,
+  parseChangeTitle,
+  toChangeRecord,
+} from "./documentDisplay";
 
 /**
  * Which change the address bar is asking for, or null for the binder itself.
@@ -112,6 +117,27 @@ export function describeMove(
   }
   if (renamed) return `Renamed from ${formatDocumentName(from.name)}`;
   return `Moved from ${where(from.folder)}`;
+}
+
+/**
+ * A binder's change as its own page reads it, open or decided.
+ *
+ * `toChangeRecord` serves the open-changes list, so it assumes open. A decided
+ * change is not still awaiting a decision, and says how it ended, who ended it
+ * and when — the approvals panel read "Awaiting review" on a change that had
+ * been published, and its history ended on "published this", naming nobody
+ * and no date.
+ */
+export function binderChangeDetailToRecord(
+  detail: WorkspaceChangeDetailPayload,
+): ChangeRecord {
+  return {
+    ...toChangeRecord(detail.change),
+    open: detail.change.state === "open",
+    outcome: detail.outcome,
+    closedAt: detail.closedAt,
+    decidedBy: detail.decidedBy,
+  };
 }
 
 /**

@@ -531,6 +531,16 @@ export const WorkspaceChangeDetailPayloadSchema = z.object({
   /** How a decided change ended; null while it is open. */
   outcome: z.enum(["published", "declined", "withdrawn"]).nullable(),
   /**
+   * When it was published or closed; null while it is open.
+   *
+   * With `decidedBy`, what the closing row of the change's history says:
+   * "Priya published this · Oct 26". Without them a published change ended on
+   * a row naming nobody and no date.
+   */
+  closedAt: z.string().nullable(),
+  /** Who published it, or who asked for changes it never came back from. */
+  decidedBy: z.string().nullable(),
+  /**
    * Whether an approval stops counting once what the change proposes moves
    * on: the binder's "A new version clears the approvals already collected".
    */
