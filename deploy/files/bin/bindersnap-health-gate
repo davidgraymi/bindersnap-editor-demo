@@ -5,7 +5,8 @@
 # whose new stack never comes up leaves the previous images on the host for a
 # quick rollback. Every long-running container must be running, the ones with a
 # healthcheck (Gitea, cloudflared) must report healthy, and the API must answer
-# /healthz through Caddy — the same route a request from the tunnel takes.
+# /healthz at http://api:8787 — the address cloudflared sends the tunnel's
+# requests to (infra/edge, origin_service).
 set -euo pipefail
 
 ATTEMPTS="${HEALTH_GATE_ATTEMPTS:-24}"
@@ -14,11 +15,11 @@ INTERVAL="${HEALTH_GATE_INTERVAL:-5}"
 CONTAINERS=(
   bindersnap-gitea-prod
   bindersnap-api-prod
-  bindersnap-caddy-prod
   bindersnap-cloudflared-prod
   bindersnap-litestream-prod
 )
-CADDY_CONTAINER="bindersnap-caddy-prod"
+API_CONTAINER="bindersnap-api-prod"
+API_ORIGIN="http://api:8787"
 
 reason=""
 
@@ -37,9 +38,12 @@ check() {
     esac
   done
 
-  if ! docker exec "${CADDY_CONTAINER}" wget -q -O /dev/null \
-    --header "Host: api.bindersnap.com" http://localhost/healthz >/dev/null 2>&1; then
-    reason="the API does not answer /healthz through Caddy"
+  # The API image is bun's slim image, with no curl or wget; bun's fetch asks
+  # the Docker network's DNS for "api", as cloudflared does.
+  if ! docker exec "${API_CONTAINER}" bun -e \
+    "const r = await fetch('${API_ORIGIN}/healthz'); process.exit(r.ok ? 0 : 1)" \
+    >/dev/null 2>&1; then
+    reason="the API does not answer /healthz at ${API_ORIGIN}"
     return 1
   fi
 }

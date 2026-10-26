@@ -525,8 +525,8 @@ server.shell(
 
 # ---------- 11. Health gate, then prune old images ----------
 
-# Every deploy pulls a new immutable `bindersnap-api:<sha>` (~380 MB) and the
-# validation gate builds the custom Caddy image, and Docker's data-root shares
+# Every deploy pulls a new immutable `bindersnap-api:<sha>` (~380 MB), and
+# Docker's data-root shares
 # /data with Gitea and SQLite. Unpruned, ~40 deploys filled the 20 GB volume
 # (issue #810). The prune runs only once the new stack is healthy: a failed
 # deploy stops at the gate and leaves the previous images in place for a quick
