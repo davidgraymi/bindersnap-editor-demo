@@ -4,6 +4,15 @@ import { join } from "node:path";
 import type { HelpGuide } from "../app/helpGuides";
 import { analyticsTag } from "../site/analytics";
 import {
+  breadcrumbLd,
+  jsonLdScript,
+  ROBOTS_META,
+  SHARE_IMAGE_LD,
+  SITE,
+  WEBSITE_LD,
+  ORGANIZATION_LD,
+} from "../site/structuredData";
+import {
   chromeCss,
   linkCard,
   pageHero,
@@ -44,12 +53,6 @@ export function helpHref(slug?: string): string {
   return slug ? `/help/${slug}` : "/help";
 }
 
-/**
- * Link previews need absolute URLs. The icons and the share card are the
- * site's own, from `apps/app/public`, which the build copies to the root.
- */
-const SITE = "https://bindersnap.com";
-
 const FONTS = "/fonts/fonts.css";
 
 /**
@@ -67,6 +70,8 @@ function page(params: {
   current?: string;
   hero: Parameters<typeof pageHero>[0];
   body: string;
+  /** schema.org nodes beside the organization and the website. */
+  structuredData: object[];
 }): string {
   const nav = params.guides
     .map((guide) => {
@@ -84,6 +89,7 @@ function page(params: {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escape(params.title)}</title>
 <meta name="description" content="${escape(params.description)}">
+${ROBOTS_META}
 <link rel="canonical" href="${SITE}${params.path}">
 ${
   params.markdown
@@ -107,6 +113,7 @@ ${
 <link rel="stylesheet" href="${FONTS}">
 <link rel="stylesheet" href="/help/help.css">
 <script>${THEME_SCRIPT}</script>
+${jsonLdScript(params.structuredData)}
 ${analyticsTag(process.env.BINDERSNAP_GA_MEASUREMENT_ID)}
 </head>
 <body>
@@ -161,6 +168,19 @@ export function renderHelpIndex(guides: readonly HelpGuide[]): string {
       title: "Help and guides",
       lede: "Short answers to the questions everybody asks in their first week.",
     },
+    structuredData: [
+      {
+        "@type": "CollectionPage",
+        name: "Help and guides",
+        url: `${SITE}/help`,
+        isPartOf: { "@id": WEBSITE_LD["@id"] },
+        hasPart: guides.map((guide) => ({
+          "@type": "TechArticle",
+          headline: guide.title,
+          url: `${SITE}${helpHref(guide.slug)}`,
+        })),
+      },
+    ],
     body: `<ul class="site-cards help-index">${cards}</ul>`,
   });
 }
@@ -197,6 +217,25 @@ export function renderHelpGuide(
         { name: guide.title, path: helpHref(guide.slug) },
       ],
     },
+    structuredData: [
+      breadcrumbLd([
+        { name: "Home", path: "/" },
+        { name: "Help", path: helpHref() },
+        { name: guide.title, path: helpHref(guide.slug) },
+      ]),
+      {
+        "@type": "TechArticle",
+        headline: guide.title,
+        description: guide.summary,
+        inLanguage: "en-US",
+        image: SHARE_IMAGE_LD,
+        mainEntityOfPage: `${SITE}${helpHref(guide.slug)}`,
+        isPartOf: { "@id": WEBSITE_LD["@id"] },
+        about: { "@type": "SoftwareApplication", name: "Bindersnap" },
+        author: { "@id": ORGANIZATION_LD["@id"] },
+        publisher: { "@id": ORGANIZATION_LD["@id"] },
+      },
+    ],
     body: `<article>
 ${guide.sections.map(sectionHtml).join("\n")}
 </article>
@@ -232,7 +271,7 @@ export function renderLlmsTxt(guides: readonly HelpGuide[]): string {
     "",
     ...guides.map(
       (guide) =>
-        `- [${guide.title}](${helpHref(guide.slug)}.md): ${guide.summary}`,
+        `- [${guide.title}](${SITE}${helpHref(guide.slug)}.md): ${guide.summary}`,
     ),
     "",
   ].join("\n");

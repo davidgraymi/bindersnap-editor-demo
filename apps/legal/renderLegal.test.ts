@@ -114,3 +114,21 @@ describe("the legal pages", () => {
     expect(files.get("/legal")).toContain("not for patient health information");
   });
 });
+
+describe("what search engines and AI assistants read", () => {
+  test("a page carries its breadcrumb and a WebPage in JSON-LD", () => {
+    const html = files.get("/legal/privacy")!;
+    expect(html).toContain("max-snippet:-1");
+    const graph = JSON.parse(
+      html.match(
+        /<script type="application\/ld\+json">([\s\S]*?)<\/script>/,
+      )![1]!,
+    )["@graph"] as { "@type": string }[];
+    expect(graph.map((node) => node["@type"])).toEqual([
+      "Organization",
+      "WebSite",
+      "BreadcrumbList",
+      "WebPage",
+    ]);
+  });
+});

@@ -3,6 +3,14 @@ import { markdownToHtml } from "../app/markdown";
 import { renderHelpCss } from "../help/renderHelp";
 import { analyticsTag } from "../site/analytics";
 import { linkCard, pageHero, siteFooter, siteHeader } from "../site/chrome";
+import {
+  breadcrumbLd,
+  jsonLdScript,
+  ORGANIZATION_LD,
+  ROBOTS_META,
+  SITE,
+  WEBSITE_LD,
+} from "../site/structuredData";
 import type { LegalDocument } from "./legalDocuments";
 
 /**
@@ -32,8 +40,6 @@ export function legalHref(slug?: string): string {
   return slug ? `/legal/${slug}` : "/legal";
 }
 
-const SITE = "https://bindersnap.com";
-
 const FONTS = "/fonts/fonts.css";
 
 const THEME_SCRIPT = `(function(){try{var s=localStorage.getItem("bs-theme");var d=window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.setAttribute("data-theme",s||(d?"dark":"light"));}catch(e){}})();`;
@@ -47,6 +53,8 @@ function page(params: {
   current?: string;
   hero: Parameters<typeof pageHero>[0];
   body: string;
+  /** schema.org nodes beside the organization and the website. */
+  structuredData: object[];
 }): string {
   const nav = params.documents
     .map((document) => {
@@ -64,6 +72,7 @@ function page(params: {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escape(params.title)}</title>
 <meta name="description" content="${escape(params.description)}">
+${ROBOTS_META}
 <link rel="canonical" href="${SITE}${params.path}">
 ${
   params.markdown
@@ -79,9 +88,13 @@ ${
 <meta property="og:title" content="${escape(params.title)}">
 <meta property="og:description" content="${escape(params.description)}">
 <meta property="og:image" content="${SITE}/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="${FONTS}">
 <link rel="stylesheet" href="/legal/legal.css">
 <script>${THEME_SCRIPT}</script>
+${jsonLdScript(params.structuredData)}
 ${analyticsTag(process.env.BINDERSNAP_GA_MEASUREMENT_ID)}
 </head>
 <body>
@@ -149,6 +162,7 @@ export function renderLegalIndex(documents: readonly LegalDocument[]): string {
       title: "Legal",
       lede: "What you agree to when you use Bindersnap, and what we promise back.",
     },
+    structuredData: [],
     body: `<p class="legal-callout">Bindersnap is not for patient health information. Keep your policies and procedures here — never patient records.</p>
 <ul class="site-cards help-index">${cards}</ul>`,
   });
@@ -175,6 +189,25 @@ export function renderLegalDocument(
         { name: document.title, path: legalHref(document.slug) },
       ],
     },
+    structuredData: [
+      breadcrumbLd([
+        { name: "Home", path: "/" },
+        { name: "Legal", path: legalHref() },
+        { name: document.title, path: legalHref(document.slug) },
+      ]),
+      {
+        "@type": "WebPage",
+        name: document.title,
+        description: document.summary,
+        url: `${SITE}${legalHref(document.slug)}`,
+        inLanguage: "en-US",
+        isPartOf: { "@id": WEBSITE_LD["@id"] },
+        publisher: { "@id": ORGANIZATION_LD["@id"] },
+        ...(/^\d{4}-\d{2}-\d{2}$/.test(document.version)
+          ? { dateModified: document.version }
+          : {}),
+      },
+    ],
     body: `<article>
 ${renderLegalBody(document.body)}
 </article>`,

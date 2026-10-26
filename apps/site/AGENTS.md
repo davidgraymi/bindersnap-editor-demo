@@ -25,6 +25,12 @@ minimum words, no broken internal links, no claims we cannot make (never
 page's `<title>` — landing, marketing, help and legal — to 70 characters, the
 length Bing Webmaster Tools flags.
 
+`structuredData.ts` is what every public page tells search engines and AI
+assistants: the organization and website JSON-LD nodes, the breadcrumb, and
+the robots meta that lets an answer quote a page in full. Marketing, help and
+legal build their `<head>` from it; `index.html` carries a copy that
+`renderSite.test.ts` holds equal.
+
 `chrome.ts` is the bar and footer every public page wears — landing, marketing,
 help and legal — styled by `chrome.css`. The landing page is a static
 `index.html` with a copy of that markup; `landing.test.ts` holds its links to

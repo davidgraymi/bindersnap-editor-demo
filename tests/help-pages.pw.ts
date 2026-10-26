@@ -45,7 +45,7 @@ test("an agent can read the guides as text", async ({ request }) => {
   expect(index.status()).toBe(200);
   const text = await index.text();
   expect(text).toContain("# Bindersnap Help");
-  expect(text).toContain("(/help/approvals.md)");
+  expect(text).toContain("(https://bindersnap.com/help/approvals.md)");
 
   // The site's own index, at the root, lists the guides among everything else.
   const site = await (await request.get(`${SITE_BASE_URL}/llms.txt`)).text();

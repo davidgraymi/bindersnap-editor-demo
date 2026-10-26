@@ -66,9 +66,12 @@ describe("the help pages", () => {
   });
 
   test("a page is whole without running anything", () => {
-    // The only script sets the theme; the words are in the HTML as served.
+    // The only script that runs sets the theme; the other is JSON-LD data.
+    // The words are in the HTML as served.
     const html = files.get("/help/approvals")!;
-    expect(html.match(/<script/g)).toHaveLength(1);
+    expect(
+      html.match(/<script(?! type="application\/ld\+json")/g),
+    ).toHaveLength(1);
     expect(html).toContain("<h2>How many approvals</h2>");
   });
 
@@ -116,7 +119,9 @@ describe("the help pages", () => {
   test("llms.txt lists every guide; the site's own is apps/site's", () => {
     const text = renderLlmsTxt(HELP_GUIDES);
     for (const guide of HELP_GUIDES) {
-      expect(text).toContain(`](/help/${guide.slug}.md): ${guide.summary}`);
+      expect(text).toContain(
+        `](https://bindersnap.com/help/${guide.slug}.md): ${guide.summary}`,
+      );
     }
     expect(files.has("/llms.txt")).toBe(false);
     expect(files.get("/help/llms.txt")).toBe(text);
@@ -128,5 +133,23 @@ describe("the help pages", () => {
     expect(helpContentType("/llms.txt")).toStartWith("text/plain");
     expect(helpContentType("/help/help.css")).toStartWith("text/css");
     expect(files.get("/help/help.css")).toContain("--bs-page-bg");
+  });
+});
+
+describe("what search engines and AI assistants read", () => {
+  test("a page carries its breadcrumb and a TechArticle in JSON-LD", () => {
+    const html = files.get("/help/approvals")!;
+    expect(html).toContain("max-snippet:-1");
+    const graph = JSON.parse(
+      html.match(
+        /<script type="application\/ld\+json">([\s\S]*?)<\/script>/,
+      )![1]!,
+    )["@graph"] as { "@type": string }[];
+    expect(graph.map((node) => node["@type"])).toEqual([
+      "Organization",
+      "WebSite",
+      "BreadcrumbList",
+      "TechArticle",
+    ]);
   });
 });

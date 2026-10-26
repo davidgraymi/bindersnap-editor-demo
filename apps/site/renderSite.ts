@@ -14,6 +14,16 @@ import {
   type Crumb,
 } from "./chrome";
 import {
+  breadcrumbLd,
+  jsonLdScript,
+  NOINDEX_META,
+  ORGANIZATION_LD,
+  ROBOTS_META,
+  SHARE_IMAGE_LD,
+  SITE,
+  WEBSITE_LD,
+} from "./structuredData";
+import {
   SITE_COLLECTIONS,
   siteHref,
   type SiteCollection,
@@ -35,7 +45,7 @@ import {
  * the build names a measurement ID (`./analytics`).
  */
 
-export const SITE = "https://bindersnap.com";
+export { ORGANIZATION_LD, SITE };
 
 /**
  * Our IndexNow key (https://www.indexnow.org). Not a secret: a search engine
@@ -57,24 +67,7 @@ const escape = (text: string) =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 
-/** JSON inside `<script>`: a `</script>` in a title must not end it. */
-const jsonLd = (value: unknown) =>
-  `<script type="application/ld+json">${JSON.stringify(value).replace(
-    /</g,
-    "\\u003c",
-  )}</script>`;
-
 const THEME_SCRIPT = `(function(){try{var s=localStorage.getItem("bs-theme");var d=window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.setAttribute("data-theme",s||(d?"dark":"light"));}catch(e){}})();`;
-
-/** Who publishes every page. Also on the landing page, in `index.html`. */
-export const ORGANIZATION_LD = {
-  "@type": "Organization",
-  "@id": `${SITE}/#organization`,
-  name: "Bindersnap",
-  legalName: "Solid Gray LLC",
-  url: `${SITE}/`,
-  logo: `${SITE}/icon-512.png`,
-};
 
 export function pageTitle(title: string): string {
   return /bindersnap/i.test(title) ? title : `${title} | Bindersnap`;
@@ -103,22 +96,13 @@ function shell(params: {
   /** Beside the body on a wide screen: where the page goes, and the trial. */
   rail?: string;
   measurementId?: string;
+  /** The date the page last changed, for `article:modified_time`. */
+  updated?: string;
+  /** Kept out of search results: the 404. */
+  noindex?: boolean;
 }): string {
   const graph = [
-    ORGANIZATION_LD,
-    ...(params.crumbs.length > 1
-      ? [
-          {
-            "@type": "BreadcrumbList",
-            itemListElement: params.crumbs.map((crumb, index) => ({
-              "@type": "ListItem",
-              position: index + 1,
-              name: crumb.name,
-              item: `${SITE}${crumb.path}`,
-            })),
-          },
-        ]
-      : []),
+    ...(params.crumbs.length > 1 ? [breadcrumbLd(params.crumbs)] : []),
     ...params.structuredData,
   ];
 
@@ -129,7 +113,11 @@ function shell(params: {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escape(params.title)}</title>
 <meta name="description" content="${escape(params.description)}">
-<link rel="canonical" href="${SITE}${params.path}">
+${
+  params.noindex
+    ? NOINDEX_META
+    : `${ROBOTS_META}\n<link rel="canonical" href="${SITE}${params.path}">`
+}
 ${
   params.markdown
     ? `<link rel="alternate" type="text/markdown" href="${params.markdown}">\n`
@@ -148,11 +136,16 @@ ${
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Bindersnap: The surveyor asks which version you approved. Show them.">
-<meta name="twitter:card" content="summary_large_image">
+<meta property="og:locale" content="en_US">
+${
+  params.updated
+    ? `<meta property="article:modified_time" content="${params.updated}">\n`
+    : ""
+}<meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="${FONTS}">
 <link rel="stylesheet" href="${SITE_CSS_PATH}">
 <script>${THEME_SCRIPT}</script>
-${jsonLd({ "@context": "https://schema.org", "@graph": graph })}
+${jsonLdScript(graph)}
 ${analyticsTag(params.measurementId ?? process.env.BINDERSNAP_GA_MEASUREMENT_ID)}
 </head>
 <body>
@@ -329,12 +322,14 @@ export function softwareApplicationLd(price: string, currency = "USD") {
     applicationCategory: "BusinessApplication",
     operatingSystem: "Web",
     url: `${SITE}/`,
+    description: ORGANIZATION_LD.description,
     publisher: { "@id": ORGANIZATION_LD["@id"] },
     offers: {
       "@type": "Offer",
       name: "Bindersnap Pro",
       price,
       priceCurrency: currency,
+      url: `${SITE}/pricing`,
       priceSpecification: {
         "@type": "UnitPriceSpecification",
         price,
@@ -387,8 +382,14 @@ export function renderSitePage(
       "@type": "Article",
       headline: page.title,
       description: page.description,
+      // `published:` in the front matter, when the page has been out longer
+      // than its last change.
+      datePublished: page.meta.published ?? page.updated,
       dateModified: page.updated,
+      inLanguage: "en-US",
+      image: SHARE_IMAGE_LD,
       mainEntityOfPage: `${SITE}${page.path}`,
+      isPartOf: { "@id": WEBSITE_LD["@id"] },
       author: { "@id": ORGANIZATION_LD["@id"] },
       publisher: { "@id": ORGANIZATION_LD["@id"] },
     },
@@ -399,7 +400,7 @@ export function renderSitePage(
       name: page.meta.term ?? page.title,
       description: page.description,
       url: `${SITE}${page.path}`,
-      inDefinedTermSet: `${SITE}${siteHref(page.collection)}`,
+      inDefinedTermSet: { "@id": `${SITE}${siteHref(page.collection)}` },
     });
   }
   if (page.meta.price) {
@@ -436,6 +437,7 @@ export function renderSitePage(
     description: page.description,
     path: page.path,
     markdown: `${page.path}.md`,
+    updated: page.updated,
     crumbs,
     structuredData,
     pages,
@@ -482,12 +484,29 @@ export function renderCollectionIndex(
         name: collection.label,
         description: collection.intro,
         url: `${SITE}${path}`,
+        isPartOf: { "@id": WEBSITE_LD["@id"] },
         hasPart: entries.map((page) => ({
           "@type": "Article",
           headline: page.title,
           url: `${SITE}${page.path}`,
         })),
       },
+      // The glossary is also the set its terms name in `inDefinedTermSet`.
+      ...(collection.key === "glossary"
+        ? [
+            {
+              "@type": "DefinedTermSet",
+              "@id": `${SITE}${path}`,
+              name: collection.label,
+              description: collection.intro,
+              hasDefinedTerm: entries.map((page) => ({
+                "@type": "DefinedTerm",
+                name: page.meta.term ?? page.title,
+                url: `${SITE}${page.path}`,
+              })),
+            },
+          ]
+        : []),
     ],
     pages,
     hero: {
@@ -518,6 +537,7 @@ export function renderNotFoundPage(
     title: pageTitle("Page not found"),
     description: "There is no page at this address.",
     path: "/404",
+    noindex: true,
     crumbs: [{ name: "Home", path: "/" }],
     structuredData: [],
     pages,
@@ -587,15 +607,25 @@ export function renderLlmsTxt(
     "",
     "> Bindersnap is policy and procedure management software for small healthcare providers — clinics, ambulatory surgery centers, home health agencies, hospices, behavioral health programs and rural health clinics. Every policy keeps its current approved version, every earlier version, and the record of who approved each one and when, so the organization can answer a surveyor or accreditor in minutes.",
     "",
-    "- Pricing: $39 a month per paid seat — the owners, admins and editors who write and publish policies. Reviewers who approve and staff who only read are free, in any number. Every organization starts with a 14-day free trial, no card required. See the pricing page.",
+    `- Pricing: $39 a month per paid seat — the owners, admins and editors who write and publish policies. Reviewers who approve and staff who only read are free, in any number. Every organization starts with a 14-day free trial, no card required. See the [pricing page](${SITE}/pricing.md).`,
+    "- How it works: a change to a policy is proposed, reviewed by the approvers the organization names, and only then becomes the current version. An approved version cannot change without a new, reviewable version.",
+    "- Works with the files you have: write policies in Bindersnap's editor, or upload the Word and PDF files you already keep.",
+    "- Exports any version, and an audit packet of versions and approvals, to PDF and Word. Reading and exporting stay free even if a subscription lapses.",
     "- Not for patient health information: Bindersnap holds an organization's policies and procedures, never patient records.",
-    "- Exports any version, and an audit packet of versions and approvals, to PDF and Word.",
+    "- Not a training or accreditation platform: it has no courses, tests or read-and-sign acknowledgments. The comparison pages below say where other products do more.",
+    "- Made by Solid Gray LLC, a Missouri company, for organizations in the United States. Questions go to the founder, David Gray, at david@bindersnap.com.",
     "",
-    "Every page below is also served as HTML at the same address without `.md`. The full text of all of them is at /llms-full.txt.",
+    `Every page below is also served as HTML at the same address without \`.md\`. The full text of all of them is at ${SITE}/llms-full.txt.`,
     "",
   ];
   const root = pages.filter((page) => page.collection.prefix === "");
-  if (root.length) lines.push("## Product", "", ...root.map(link), "");
+  lines.push(
+    "## Product",
+    "",
+    `- [Bindersnap](${SITE}/): What Bindersnap is, who it is for, and how a policy's approval record works.`,
+    ...root.map(link),
+    "",
+  );
   for (const collection of SITE_COLLECTIONS) {
     if (!collection.prefix) continue;
     const entries = pages.filter(
