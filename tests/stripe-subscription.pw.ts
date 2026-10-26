@@ -601,9 +601,13 @@ async function endTrial(sessionCookie: string): Promise<void> {
 async function getBillingStatus(
   sessionCookie: string,
 ): Promise<BillingStatusPayload> {
-  const response = await fetch(`${API_BASE_URL}/api/app/billing/status`, {
-    headers: { Cookie: `bindersnap_session=${sessionCookie}` },
-  });
+  // With the seat count, which the status leaves out unless asked for.
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/billing/status?seats=true`,
+    {
+      headers: { Cookie: `bindersnap_session=${sessionCookie}` },
+    },
+  );
   return response.json() as Promise<BillingStatusPayload>;
 }
 

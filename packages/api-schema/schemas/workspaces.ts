@@ -531,6 +531,16 @@ export const WorkspaceChangeDetailPayloadSchema = z.object({
   /** How a decided change ended; null while it is open. */
   outcome: z.enum(["published", "declined", "withdrawn"]).nullable(),
   /**
+   * When it was published or closed; null while it is open.
+   *
+   * With `decidedBy`, what the closing row of the change's history says:
+   * "Priya published this · Oct 26". Without them a published change ended on
+   * a row naming nobody and no date.
+   */
+  closedAt: z.string().nullable(),
+  /** Who published it, or who asked for changes it never came back from. */
+  decidedBy: z.string().nullable(),
+  /**
    * Whether an approval stops counting once what the change proposes moves
    * on: the binder's "A new version clears the approvals already collected".
    */
@@ -974,6 +984,22 @@ export const OrganizationPersonSchema = z.object({
   teams: z.array(z.string()),
 });
 export type OrganizationPerson = z.infer<typeof OrganizationPersonSchema>;
+
+/**
+ * Who is in an organization, by name, and nothing else.
+ *
+ * The People payload answers for every group too, which costs the server two
+ * Gitea reads per group. A screen that only needs "what is this login called"
+ * — a binder's history, quick find — asks for this instead: the members and
+ * the Owners team, a handful of reads however many groups there are.
+ */
+export const OrganizationMembersPayloadSchema = z.object({
+  organization: z.string(),
+  people: z.array(OrganizationPersonSchema.omit({ teams: true })),
+});
+export type OrganizationMembersPayload = z.infer<
+  typeof OrganizationMembersPayloadSchema
+>;
 
 /**
  * A group the organization has, and what it grants wherever it is adopted.

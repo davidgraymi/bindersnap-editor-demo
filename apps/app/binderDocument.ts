@@ -14,6 +14,7 @@ import type {
   WorkspaceDocumentState,
 } from "../../packages/api-schema/schemas/workspaces";
 import { parseDocumentFilename } from "../../packages/utils/documentPath";
+import { versionRef } from "../../packages/utils/gitRef";
 import { formatDocumentName } from "./documentDisplay";
 
 /** One step of the trail down to the document, inside its binder. */
@@ -51,8 +52,9 @@ export function buildDocumentCrumbs(
  *
  * `main` is the version on record rather than a tag, deliberately: it is what
  * a reader wants by default, and it stays right when a new version is
- * published while the page is open. An older version is read at its own tag,
- * which is the evidence rather than a copy of it.
+ * published while the page is open. An older version is read at the commit
+ * its tag names (`versionRef`): the same bytes as the tag, but a read the
+ * browser may keep for good, where a tag — which can be moved — is asked again.
  */
 export function resolveDocumentRef(params: {
   versions: DocumentVersion[];
@@ -78,7 +80,7 @@ export function resolveDocumentRef(params: {
     return { ref: recordRef, version: latest, missing: true };
   }
 
-  return { ref: asked.tag, version: asked, missing: false };
+  return { ref: versionRef(asked), version: asked, missing: false };
 }
 
 /**

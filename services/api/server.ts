@@ -100,6 +100,7 @@ import {
 } from "./signup-username";
 import { slugifyOrganizationName } from "../../packages/utils/organizationName";
 import { verifyTurnstile } from "../../packages/utils/turnstile";
+import { isCommitRef } from "../../packages/utils/gitRef";
 import { slugifyGroupName } from "../../packages/utils/groupName";
 import {
   joinFullName,
@@ -259,6 +260,7 @@ import {
 import type { ClosedChange } from "../../packages/api-schema/schemas/documents";
 import type {
   BinderPeoplePayload,
+  OrganizationMembersPayload,
   OrganizationPeoplePayload,
   DocumentVersion,
   WorkspaceDocumentListEntry,
@@ -1166,13 +1168,35 @@ async function resolveDocumentAccess(
   }
 }
 
+/**
+ * What every response that starts or ends a session carries.
+ *
+ * The browser keeps a published version's bytes for good (see
+ * `downloadHeaders`). A clinic's computer is often shared, so when a session
+ * ends — signed out, deleted, expired or revoked — every copy this origin left
+ * behind goes with it rather than staying for whoever sits down next. And a
+ * session that ended without saying so, in a browser closed mid-shift, is
+ * cleared when the next person signs in.
+ */
+const CLEAR_KEPT_COPIES_HEADERS = { "Clear-Site-Data": '"cache"' } as const;
+
 async function requireSession(
   req: Request,
   baseHeaders: Headers,
 ): Promise<{ session: SessionRecord; client: GiteaClient } | Response> {
   const session = await getSessionFromRequest(req);
   if (!session) {
-    return json(401, { error: "Unauthorized." }, baseHeaders);
+    // A cookie that names no live session is one that expired or was
+    // revoked: that session has ended without a sign-out, so its kept copies
+    // go the same way (`handleLogout`).
+    const ended = parseCookies(req).has(config.sessionCookieName);
+    return json(
+      401,
+      { error: "Unauthorized." },
+      ended
+        ? mergeHeaders(baseHeaders, CLEAR_KEPT_COPIES_HEADERS)
+        : baseHeaders,
+    );
   }
 
   return { session, client: createSessionGiteaClient(session) };
@@ -1743,8 +1767,8 @@ function attachmentDisposition(response: Response): string {
   return `attachment${params}`;
 }
 
-/** A commit id: the one kind of ref whose files can never change. */
-const COMMIT_REF = /^[0-9a-f]{40}$/i;
+/** A year, and never revalidated: the most any browser will honour. */
+export const IMMUTABLE_CACHE_CONTROL = "private, max-age=31536000, immutable";
 
 /**
  * The headers a document's bytes go out with.
@@ -1756,8 +1780,23 @@ const COMMIT_REF = /^[0-9a-f]{40}$/i;
  * branch; the document page, and both sides of a change's comparison, went on
  * reading the words from before the save, so an edit looked lost and a change
  * showed a document as edited with nothing in it to see. A branch, `main` and
- * a tag can all move, so only a commit id keeps Gitea's answer; everything
- * else is asked again each time.
+ * a tag can all move, so they are asked again each time.
+ *
+ * **A file at a commit is kept for good.** Its address is its content, so a
+ * copy can never be wrong, and the app reads every published version at its
+ * commit (`versionRef`) so that reopening v3, or comparing against it again,
+ * costs no request at all. `private`, so no shared cache keeps it; a session
+ * that starts or ends clears the browser's copies (`CLEAR_KEPT_COPIES_HEADERS`). Gitea's six
+ * hours bought a revalidation every six hours for bytes that cannot have
+ * changed.
+ *
+ * **This rests on no ref being named like a commit.** Gitea 28 resolves
+ * `?ref=` as a branch, then a tag, then a commit, and lets a branch or a tag be
+ * named with forty hex digits — so such a branch would shadow the commit, and
+ * its bytes would be kept as the commit's. None can exist: Gitea is reachable
+ * only from this API, and every ref it creates carries a prefix (`draft/`,
+ * `upload/`, `<uid>/v4`). A route that ever let a person name a ref freely
+ * must refuse a name `isCommitRef` accepts.
  *
  * **A document is never a page on this origin.** Anybody who can upload can
  * upload an SVG with a script in it, and Gitea serves one inline, relying on a
@@ -1788,7 +1827,9 @@ export function downloadHeaders(
   headers.set("content-disposition", attachmentDisposition(response));
   headers.set("content-security-policy", DOWNLOAD_CSP);
   headers.set("x-content-type-options", "nosniff");
-  if (!COMMIT_REF.test(ref)) {
+  if (isCommitRef(ref)) {
+    headers.set("cache-control", IMMUTABLE_CACHE_CONTROL);
+  } else {
     headers.set("cache-control", "no-store");
     headers.delete("etag");
     headers.delete("last-modified");
@@ -2306,6 +2347,7 @@ async function establishSession(
     "Set-Cookie": serializeSessionCookie(req, session.id, {
       expiresAt: lifetime.cookieExpiresAt,
     }),
+    ...CLEAR_KEPT_COPIES_HEADERS,
   });
 
   return { ok: true, session, headers };
@@ -2920,6 +2962,7 @@ async function handleLogout(
 
   const headers = mergeHeaders(baseHeaders, {
     "Set-Cookie": clearSessionCookie(req),
+    ...CLEAR_KEPT_COPIES_HEADERS,
   });
 
   return json(200, { ok: true }, headers);
@@ -3679,6 +3722,7 @@ async function handleDeleteAccount(
       status: 204,
       headers: mergeHeaders(baseHeaders, {
         "Set-Cookie": clearSessionCookie(req),
+        ...CLEAR_KEPT_COPIES_HEADERS,
       }),
     });
   } catch (err) {
@@ -6790,6 +6834,9 @@ async function handleWorkspaceChangeDetail(
     };
     const changeOpen = pullState.state === "open";
     const mergeCommitSha = pullState.merge_commit_sha || null;
+    const decided = changeOpen
+      ? null
+      : resolveClosedOutcome(entry.pullRequest, entry.reviews);
 
     // **Where each document is filed on the base**, so a change that renamed
     // or moved one can say so. The identity survives a rename and the address
@@ -6880,9 +6927,13 @@ async function handleWorkspaceChangeDetail(
         // How it ended, for a change that has: the panel that reads "Ready to
         // publish" or "Awaiting review" on an open change has to read
         // "Published" on one that was.
-        outcome: changeOpen
-          ? null
-          : resolveClosedOutcome(entry.pullRequest, entry.reviews).outcome,
+        outcome: decided?.outcome ?? null,
+        closedAt: decided
+          ? ((entry.pullRequest as { merged_at?: string | null }).merged_at ??
+            (entry.pullRequest as { closed_at?: string | null }).closed_at ??
+            null)
+          : null,
+        decidedBy: decided?.decidedBy ?? null,
         branchLabel,
         documents: withVersions,
         removedDocuments,
@@ -8919,6 +8970,61 @@ async function handleOrganizationPeople(
     );
   } catch (err) {
     logger.error("Failed to read an organization's people", {
+      username: session.username,
+      organization: orgName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to read the people.");
+  }
+}
+
+/**
+ * Who is in the organization, by name — the People page without its groups.
+ *
+ * A binder's history names people from this, and quick find searches it. The
+ * full People read costs two Gitea calls per group (some thirty for an
+ * organization of eight binders) to answer a question these screens never
+ * ask; this is the members and the Owners team. A read, so never gated.
+ */
+async function handleOrganizationMembers(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client, session } = auth;
+
+  try {
+    const organization = await findOrganization({ client, org: orgName });
+    if (!organization) {
+      return json(404, { error: "No such organization." }, baseHeaders);
+    }
+
+    const [members, owners] = await Promise.all([
+      listOrganizationMembers({ client, org: orgName }),
+      // A member who is not an owner cannot list the organization's teams.
+      // That costs them the owner marks, not the names.
+      listOrganizationOwners({ client, org: orgName }).catch(() => []),
+    ]);
+    const ownerLogins = new Set(
+      owners.map((owner) => owner.login.toLowerCase()),
+    );
+
+    const payload: OrganizationMembersPayload = {
+      organization: orgName,
+      people: members
+        .map((member) => ({
+          login: member.login,
+          fullName: member.fullName,
+          isOwner: ownerLogins.has(member.login.toLowerCase()),
+        }))
+        .sort((a, b) => a.login.localeCompare(b.login)),
+    };
+    return json(200, payload, baseHeaders);
+  } catch (err) {
+    logger.error("Failed to read an organization's members", {
       username: session.username,
       organization: orgName,
       error: err instanceof Error ? err.message : String(err),
@@ -14357,12 +14463,20 @@ async function handleBillingStatus(
   if (auth instanceof Response) return auth;
 
   const { username } = auth.session;
+  const query = new URL(req.url).searchParams;
   const organization = await resolveBillingOrganization(
     auth,
-    new URL(req.url).searchParams.get("organization"),
+    query.get("organization"),
     baseHeaders,
   );
   if (organization instanceof Response) return organization;
+
+  // **Seats only when asked.** Counting them reads every writing team's
+  // binders and members — some thirty Gitea calls for an organization of eight
+  // binders, growing with every one — and the app shell asks for this status
+  // on every load to know whether its person may write. Only the screens that
+  // show a price per writer ask for the count.
+  const countSeats = query.get("seats") === "true";
 
   const [priceInfo, accessState, canManageBilling, subscription, seats] =
     await Promise.all([
@@ -14374,7 +14488,7 @@ async function handleBillingStatus(
         : Promise.resolve(null),
       // What the organization pays for: its writers, counted once. Null
       // when Gitea will not say, so the page shows the unit price alone.
-      organization
+      organization && countSeats
         ? countBillableSeats({
             client: createSessionGiteaClient(auth.session),
             org: organization.name,
@@ -14395,7 +14509,7 @@ async function handleBillingStatus(
       accessSource: accessState.source,
       override: serializeSubscriptionOverride(accessState.override),
       plan: priceInfo,
-      seats,
+      ...(countSeats ? { seats } : {}),
       canManageBilling,
       // A Stripe customer exists, so the portal has something to open — true
       // for a lapsed or cancelled subscription too, which is exactly when a
@@ -15454,6 +15568,9 @@ async function handleRequest(req: Request): Promise<Response> {
     const organizationPeopleMatch = pathname.match(
       /^\/api\/app\/orgs\/([^/]+)\/people$/,
     );
+    const organizationMembersMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/members$/,
+    );
     const organizationPersonRoleMatch = pathname.match(
       /^\/api\/app\/orgs\/([^/]+)\/people\/([^/]+)\/role$/,
     );
@@ -15566,6 +15683,12 @@ async function handleRequest(req: Request): Promise<Response> {
         req,
         baseHeaders,
         decodeURIComponent(invitationAcceptMatch[1]!),
+      );
+    } else if (organizationMembersMatch && method === "GET") {
+      response = await handleOrganizationMembers(
+        req,
+        baseHeaders,
+        organizationMembersMatch[1]!,
       );
     } else if (organizationPeopleMatch && method === "GET") {
       response = await handleOrganizationPeople(

@@ -96,7 +96,18 @@ test("asking for the newest version still reads the record", () => {
   });
 });
 
-test("an older version is read at its own tag", () => {
+test("an older version is read at its commit when the server named it", () => {
+  // The same bytes as its tag, but a read the browser may keep for good.
+  const commit = "0be6a65b18248f5c31eb93afe1f700c9550f4e7f";
+  const withCommit = versions.map((entry) =>
+    entry.version === 1 ? { ...entry, commitSha: commit } : entry,
+  );
+  expect(
+    resolveDocumentRef({ versions: withCommit, requestedVersion: 1 }).ref,
+  ).toBe(commit);
+});
+
+test("an older version with no commit named is read at its own tag", () => {
   expect(resolveDocumentRef({ versions, requestedVersion: 1 })).toEqual({
     ref: "nursing/hand-hygiene/v1",
     version: versions[2]!,

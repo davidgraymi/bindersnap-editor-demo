@@ -65,7 +65,7 @@ stack, and a re-run changes nothing unless config or secrets actually changed:
    env file or a config file;
 7. wait for the stack to be healthy (`files/bin/bindersnap-health-gate`: every
    container up, Gitea and cloudflared healthy, the API answering `/healthz`
-   through Caddy), then remove the images no container uses and the build
+   at `http://api:8787`, where the tunnel sends requests), then remove the images no container uses and the build
    cache — never volumes. A deploy that fails before or at the gate prunes
    nothing.
 

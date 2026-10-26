@@ -644,6 +644,71 @@ describe("billing belongs to the organization's owners", () => {
   });
 });
 
+describe("billing status counts seats only when asked", () => {
+  const teamReads = () =>
+    fetchCalls.filter(
+      (call) =>
+        call.path.startsWith("/api/v1/teams/") ||
+        /\/orgs\/[^/]+\/teams$/.test(call.path),
+    );
+
+  test("the status every page load asks for reads no team from Gitea", async () => {
+    const server = createApiServer();
+    const sessionId = await seedSession(`plain-${randomUUID()}`);
+    fetchCalls.length = 0;
+
+    const body = (await (
+      await server.fetch(
+        makeSessionRequest("/api/app/billing/status", sessionId),
+      )
+    ).json()) as Record<string, unknown>;
+
+    expect("seats" in body).toBe(false);
+    expect(teamReads()).toHaveLength(0);
+  });
+
+  test("a screen that shows a price per writer asks, and is answered", async () => {
+    const server = createApiServer();
+    const sessionId = await seedSession(`priced-${randomUUID()}`);
+    fetchCalls.length = 0;
+
+    const body = (await (
+      await server.fetch(
+        makeSessionRequest("/api/app/billing/status?seats=true", sessionId),
+      )
+    ).json()) as Record<string, unknown>;
+
+    expect("seats" in body).toBe(true);
+    expect(teamReads().length).toBeGreaterThan(0);
+  });
+});
+
+describe("an organization's members, by name", () => {
+  test("names everybody and marks the owners, without reading a group's binders", async () => {
+    const server = createApiServer();
+    const owner = `names-${randomUUID()}`;
+    const sessionId = await seedSession(owner, { fullName: "Carol Mendes" });
+    giteaOrgOwners.set(`${owner}-org`, [
+      { login: owner, email: `${owner}@${config.emailDomain}` },
+    ]);
+    fetchCalls.length = 0;
+
+    const response = await server.fetch(
+      makeSessionRequest(`/api/app/orgs/${owner}-org/members`, sessionId),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      organization: `${owner}-org`,
+      people: [{ login: owner, fullName: "Carol Mendes", isOwner: true }],
+    });
+    // The People read asks every group for its binders; this never does.
+    expect(
+      fetchCalls.filter((call) => /\/teams\/\d+\/repos$/.test(call.path)),
+    ).toHaveLength(0);
+  });
+});
+
 describe("billing is per organization", () => {
   async function activate(giteaOrgId: number) {
     await subscriptionStore.upsert({
@@ -754,7 +819,7 @@ describe("billing is per organization", () => {
 
     // And the Billing page is told the same count before anyone pays.
     const status = await server.fetch(
-      makeSessionRequest("/api/app/billing/status", sessionId),
+      makeSessionRequest("/api/app/billing/status?seats=true", sessionId),
     );
     expect(((await status.json()) as { seats: number }).seats).toBe(3);
   });
@@ -2537,14 +2602,76 @@ describe("a document's bytes and the browser's cache", () => {
     }
   });
 
-  test("a file at a commit keeps Gitea's caching, since it cannot change", () => {
+  test("a file at a commit is kept for good, since it cannot change", () => {
     const headers = downloadHeaders(
       new Headers(),
       gitea(),
       "0be6a65b18248f5c31eb93afe1f700c9550f4e7f",
     );
-    expect(headers.get("cache-control")).toBe("private, max-age=21600");
+    expect(headers.get("cache-control")).toBe(
+      "private, max-age=31536000, immutable",
+    );
     expect(headers.get("etag")).toBe('"0be6a65b"');
+  });
+
+  test("a version tag is not a commit: tags can be moved", () => {
+    const headers = downloadHeaders(
+      new Headers(),
+      gitea(),
+      "01J8XZ4K7M0000000000000000/v3",
+    );
+    expect(headers.get("cache-control")).toBe("no-store");
+  });
+});
+
+describe("signing out", () => {
+  test("clears the browser's kept copies, for whoever sits down next", async () => {
+    const server = createApiServer();
+    try {
+      const response = await server.fetch(
+        new Request("http://localhost/auth/logout", {
+          method: "POST",
+          headers: { Origin: "http://localhost:5173" },
+        }),
+      );
+      expect(response.status).toBe(200);
+      expect(response.headers.get("Clear-Site-Data")).toBe('"cache"');
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("a session that expired or was revoked clears them too", async () => {
+    const server = createApiServer();
+    try {
+      const response = await server.fetch(
+        new Request("http://localhost/api/app/organizations", {
+          headers: {
+            Origin: "http://localhost:5173",
+            Cookie: "bindersnap_session=no-such-session",
+          },
+        }),
+      );
+      expect(response.status).toBe(401);
+      expect(response.headers.get("Clear-Site-Data")).toBe('"cache"');
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("a request that never had a session clears nothing", async () => {
+    const server = createApiServer();
+    try {
+      const response = await server.fetch(
+        new Request("http://localhost/api/app/organizations", {
+          headers: { Origin: "http://localhost:5173" },
+        }),
+      );
+      expect(response.status).toBe(401);
+      expect(response.headers.get("Clear-Site-Data")).toBeNull();
+    } finally {
+      server.stop(true);
+    }
   });
 });
 

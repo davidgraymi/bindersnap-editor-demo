@@ -21,6 +21,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { API_BASE_URL, APP_BASE_URL } from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
+import { isCommitRef } from "../packages/utils/gitRef";
 import { LEGAL_VERSION } from "../packages/utils/legal";
 
 test.describe.configure({ mode: "parallel", timeout: 240_000 });
@@ -276,11 +277,14 @@ test("after a save, every page reads the draft as it now is, not a copy kept fro
   await signInBrowser(page, session);
 
   // Every read of a file on a branch, and what it told the browser to keep.
+  // A read at a commit is the one kind that may be kept — a published version,
+  // as the comparison's earlier side is read (#397) — so it is not counted.
   const kept: string[] = [];
   page.on("response", (response) => {
-    if (/\/raw\//.test(response.url())) {
-      kept.push(response.headers()["cache-control"] ?? "");
-    }
+    const url = new URL(response.url());
+    if (!/\/raw\//.test(url.pathname)) return;
+    if (isCommitRef(url.searchParams.get("ref") ?? "")) return;
+    kept.push(response.headers()["cache-control"] ?? "");
   });
 
   // Read the policy on the draft first, as the draft picker does, so the
