@@ -161,8 +161,12 @@ so the primary rollback path is to revert in git: revert the offending commit on
 `main` (or run `deploy-pyinfra.yml` via `workflow_dispatch` selecting an earlier
 ref) and let the resulting deploy re-apply the known-good stack.
 
+A healthy deploy removes every image no container uses and the build cache
+(never volumes), so the previous API image is not on the host any more: a
+rollback pulls it from GHCR. A deploy that fails its health gate prunes nothing.
+
 If GitHub Actions is unavailable, the manual fallback on the instance pins the
-API image directly:
+API image directly (the `pull` fetches it again from GHCR):
 
 ```bash
 cd /opt/bindersnap

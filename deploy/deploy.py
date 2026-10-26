@@ -20,7 +20,9 @@ Pipeline (top to bottom — pyinfra runs operations in definition order):
      the Gitea service token on first run
   9. `docker compose up -d`, recreating only the services whose definition,
      env or bind-mounted config changed this run
- 10. install + configure the CloudWatch agent (disk/memory metrics for the
+ 10. wait for the stack to be healthy (gate), then prune the images no
+     container uses and the build cache — never volumes
+ 11. install + configure the CloudWatch agent (disk/memory metrics for the
      monitoring module's alarms — moved here from the Terraform user-data in
      phase 4, issue #306)
 
@@ -121,6 +123,7 @@ CONFIG_FILES = [
 HELPER_SCRIPTS = [
     "bindersnap-bootstrap-gitea",
     "bindersnap-stack-up",
+    "bindersnap-health-gate",
     "bindersnap-backup",
     "bindersnap-health-metrics",
 ]
@@ -530,7 +533,31 @@ server.shell(
     commands=[f"{BIN_DIR}/bindersnap-stack-up"],
 )
 
-# ---------- 11. Scheduled jobs (backup + health metrics) ----------
+# ---------- 11. Health gate, then prune old images ----------
+
+# Every deploy pulls a new immutable `bindersnap-api:<sha>` (~380 MB) and the
+# validation gate builds the custom Caddy image, and Docker's data-root shares
+# /data with Gitea and SQLite. Unpruned, ~40 deploys filled the 20 GB volume
+# (issue #810). The prune runs only once the new stack is healthy: a failed
+# deploy stops at the gate and leaves the previous images in place for a quick
+# rollback. It keeps every image a container uses (the running stack, and the
+# exited gitea-init), so rolling back to an older API tag is one pull from
+# GHCR. Never `--volumes`, never `docker system prune`: Gitea's and the API's
+# data live in named volumes.
+server.shell(
+    name="Wait for the stack to be healthy",
+    commands=[f"{BIN_DIR}/bindersnap-health-gate"],
+)
+
+server.shell(
+    name="Prune images no container uses and the build cache (never volumes)",
+    commands=[
+        "docker image prune -af",
+        "docker builder prune -af",
+    ],
+)
+
+# ---------- 12. Scheduled jobs (backup + health metrics) ----------
 
 _units_changed = []
 for _timer in SYSTEMD_TIMERS:
@@ -557,7 +584,7 @@ for _timer in SYSTEMD_TIMERS:
         enabled=True,
     )
 
-# ---------- 12. CloudWatch agent (disk + memory metrics) ----------
+# ---------- 13. CloudWatch agent (disk + memory metrics) ----------
 
 # The monitoring module's disk/memory alarms read the Bindersnap namespace this
 # agent publishes. Host configuration is owned here, not by Terraform user-data.
