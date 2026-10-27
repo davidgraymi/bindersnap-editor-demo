@@ -242,7 +242,8 @@ bad migration when the repositories are intact.
 ### Litestream fixes that are part of the cutover
 
 - Pin the image by digest. `litestream/litestream:0.3` floats today.
-- `retention: 168h` in `litestream.yml` (7 days of point-in-time restore).
+- `snapshot.retention: 168h` in `litestream.yml` (7 days of point-in-time
+  restore).
 - A replica-age metric and alarm (> 15 min), as #620 C5 describes.
 - Fix `scripts/restore.sh` to restore into the Docker volume through the
   Litestream image (#620 C4).

@@ -13,7 +13,8 @@ healthy=1
 if [ "$(docker inspect -f '{{.State.Running}}' "${CONTAINER}" 2>/dev/null || echo false)" != "true" ]; then
   echo "${CONTAINER} is not running" >&2
   healthy=0
-elif docker logs --since 10m "${CONTAINER}" 2>&1 | grep -q ' ERROR '; then
+# Litestream logs `level=ERROR msg=…`, never a bare ` ERROR `.
+elif docker logs --since 10m "${CONTAINER}" 2>&1 | grep -q 'level=ERROR'; then
   echo "${CONTAINER} logged an ERROR in the last 10 minutes" >&2
   healthy=0
 fi

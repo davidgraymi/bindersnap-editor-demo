@@ -206,8 +206,11 @@ services:
 
   litestream:
     # Pinned: a floating tag let a backup-agent upgrade ride along with any
-    # deploy. scripts/restore.sh restores with the same image; bump both.
-    image: litestream/litestream:0.3.14@sha256:c5a1e1b01916b3a110f6600820ef176d048d9b9c2411ef0a680de0caa68934a5
+    # deploy. scripts/restore.sh restores with the same image; bump both
+    # (scripts/restore.test.ts fails if they differ). An older Litestream
+    # restoring from a newer one's replica does not fail: it restores only the
+    # backups it can read, which can be days old.
+    image: litestream/litestream:0.5.17@sha256:4b02b9859a6b6b4087d8b8944e15f7e984bd7957cba322bbeee38b0e27b9656a
     container_name: bindersnap-litestream-prod
     restart: unless-stopped
     depends_on:
