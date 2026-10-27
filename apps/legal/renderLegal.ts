@@ -95,7 +95,7 @@ ${
 <link rel="stylesheet" href="/legal/legal.css">
 <script>${THEME_SCRIPT}</script>
 ${jsonLdScript(params.structuredData)}
-${analyticsTag(process.env.BINDERSNAP_GA_MEASUREMENT_ID)}
+${analyticsTag(process.env.BINDERSNAP_GA_MEASUREMENT_ID, "/legal")}
 </head>
 <body>
 <a class="help-skip" href="#content">Skip to the text</a>

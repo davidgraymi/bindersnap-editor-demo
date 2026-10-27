@@ -1,9 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import { JSDOM } from "jsdom";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { publicSiteFiles } from "./publicSite";
 import { REQUIRED_POLICIES, SITUATIONS } from "./requiredPolicies";
-import { analyticsTag, withAnalyticsTag } from "./analytics";
+import {
+  analyticsTag,
+  contentGroup,
+  trackAttributes,
+  withAnalyticsTag,
+} from "./analytics";
 import {
   extractFaqs,
   INDEXNOW_KEY,
@@ -488,6 +495,105 @@ describe("the Google tag", () => {
       if (before === undefined) delete process.env.BINDERSNAP_GA_MEASUREMENT_ID;
       else process.env.BINDERSNAP_GA_MEASUREMENT_ID = before;
     }
+  });
+});
+
+describe("the events the tag sends", () => {
+  /** A page with the tag running, and what it pushed to `dataLayer`. */
+  function taggedPage(body: string, path = "/glossary/qapi") {
+    const dom = new JSDOM(
+      `<html><head>${analyticsTag("G-ABC123XYZ", path)}</head><body>${body}</body></html>`,
+      { runScripts: "dangerously", url: `https://bindersnap.com${path}` },
+    );
+    const pushed = () =>
+      (dom.window as unknown as { dataLayer: IArguments[] }).dataLayer.map(
+        (entry) => Array.from(entry),
+      );
+    return { dom, pushed };
+  }
+
+  test("each page names its section as the content group", () => {
+    expect(contentGroup("/")).toBe("home");
+    expect(contentGroup("/glossary/qapi")).toBe("glossary");
+    expect(contentGroup("/templates")).toBe("templates");
+    expect(contentGroup("/pricing")).toBe("pricing");
+    expect(contentGroup("/help/approvals")).toBe("help");
+    expect(contentGroup("/404")).toBe("not-found");
+    expect(
+      analyticsTag("G-ABC123XYZ", "/compare/policystat-alternative"),
+    ).toContain('content_group:"compare"');
+    const page = pages.find((p) => p.collection.key === "glossary")!;
+    const before = process.env.BINDERSNAP_GA_MEASUREMENT_ID;
+    process.env.BINDERSNAP_GA_MEASUREMENT_ID = "G-ABC123XYZ";
+    try {
+      expect(renderSitePage(page, pages)).toContain('content_group:"glossary"');
+    } finally {
+      if (before === undefined) delete process.env.BINDERSNAP_GA_MEASUREMENT_ID;
+      else process.env.BINDERSNAP_GA_MEASUREMENT_ID = before;
+    }
+  });
+
+  test("a click on a tracked link sends its event and parameters", () => {
+    const { dom, pushed } = taggedPage(
+      `<a id="go" href="#"${trackAttributes("cta_click", { cta: "closing" })}><span id="inner">Start</span></a><a id="plain" href="#">Other</a>`,
+    );
+    const document = dom.window.document;
+    document.getElementById("plain")!.click();
+    document.getElementById("inner")!.click();
+    const events = pushed().filter((entry) => entry[0] === "event");
+    expect(events).toEqual([["event", "cta_click", { cta: "closing" }]]);
+  });
+
+  test("ticking a situation on the checklist sends which one", () => {
+    const tool = files.get("/tools/required-policies-checklist")!;
+    const body = tool.slice(
+      tool.indexOf("<body>") + 6,
+      tool.indexOf("</body>"),
+    );
+    const { dom, pushed } = taggedPage(
+      body,
+      "/tools/required-policies-checklist",
+    );
+    const box = dom.window.document.querySelector(
+      "#rp-filter input",
+    ) as HTMLInputElement;
+    box.click();
+    box.click();
+    const events = pushed().filter((entry) => entry[0] === "event");
+    expect(events).toEqual([
+      ["event", "checklist_filter", { org_type: box.value }],
+    ]);
+  });
+
+  test("every way to sign up, and every template download, is tracked", () => {
+    const page = files.get("/glossary")!;
+    expect(page).toMatch(
+      /class="site-header-cta" href="[^"]+\/-\/signup" data-track="cta_click" data-track-cta="nav"/,
+    );
+    expect(page).toContain('data-track="cta_click" data-track-cta="footer"');
+    expect(page).toContain('data-track="cta_click" data-track-cta="closing"');
+    const template = pages.find((p) => p.collection.key === "templates")!;
+    expect(files.get(template.path)).toContain(
+      `data-track="template_download" data-track-template="${template.slug}"`,
+    );
+    for (const html of files.values()) {
+      if (!html.startsWith("<!doctype html>")) continue;
+      for (const link of html.matchAll(/<a [^>]*\/-\/signup"[^>]*>/g)) {
+        expect(link[0]).toContain('data-track="cta_click"');
+      }
+    }
+  });
+
+  test("the landing page's copy of the bar and footer tracks the same links", () => {
+    const landing = readFileSync(join(import.meta.dir, "index.html"), "utf8");
+    const links = [...landing.matchAll(/<a\s[^>]*\/-\/signup"[^>]*>/g)].map(
+      (match) => match[0].replace(/\s+/g, " "),
+    );
+    expect(links.length).toBe(2);
+    expect(links[0]).toContain('data-track="cta_click" data-track-cta="nav"');
+    expect(links[1]).toContain(
+      'data-track="cta_click" data-track-cta="footer"',
+    );
   });
 });
 

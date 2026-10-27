@@ -114,7 +114,7 @@ ${
 <link rel="stylesheet" href="/help/help.css">
 <script>${THEME_SCRIPT}</script>
 ${jsonLdScript(params.structuredData)}
-${analyticsTag(process.env.BINDERSNAP_GA_MEASUREMENT_ID)}
+${analyticsTag(process.env.BINDERSNAP_GA_MEASUREMENT_ID, "/help")}
 </head>
 <body>
 <a class="help-skip" href="#content">Skip to the guide</a>

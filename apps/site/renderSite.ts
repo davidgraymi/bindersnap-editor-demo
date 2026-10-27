@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { stripTags } from "../../packages/utils/stripTags";
-import { analyticsTag } from "./analytics";
+import { analyticsTag, trackAttributes } from "./analytics";
 import { appOrigin, appUrl } from "./appLink";
 import { renderHelpCss } from "../help/renderHelp";
 import { renderLegalBody } from "../legal/renderLegal";
@@ -146,7 +146,10 @@ ${
 <link rel="stylesheet" href="${SITE_CSS_PATH}">
 <script>${THEME_SCRIPT}</script>
 ${jsonLdScript(graph)}
-${analyticsTag(params.measurementId ?? process.env.BINDERSNAP_GA_MEASUREMENT_ID)}
+${analyticsTag(
+  params.measurementId ?? process.env.BINDERSNAP_GA_MEASUREMENT_ID,
+  params.path,
+)}
 </head>
 <body>
 <a class="help-skip" href="#content">Skip to the page</a>
@@ -223,7 +226,7 @@ const CTA = `<section class="site-closing" aria-labelledby="site-closing-heading
 <p class="site-closing-tag">Get started</p>
 <h2 id="site-closing-heading">Keep the approval record <em>with the policy.</em></h2>
 <p>Bindersnap keeps every policy's current version, every earlier one, and who approved each — ready when the surveyor asks.</p>
-<a class="site-closing-button" href="${appUrl("/-/signup")}">Start your 14-day free trial</a>
+<a class="site-closing-button" href="${appUrl("/-/signup")}"${trackAttributes("cta_click", { cta: "closing" })}>Start your 14-day free trial</a>
 <p class="site-closing-hint">No card required · Reviewers and readers are free</p>
 </div>
 </section>`;
@@ -244,7 +247,7 @@ function railHtml(
     .join("")}</ol></nav>
 <div class="site-rail-card">
 <p>Every version of every policy, and who approved each.</p>
-<a href="${appUrl("/-/signup")}">Try Bindersnap free</a>
+<a href="${appUrl("/-/signup")}"${trackAttributes("cta_click", { cta: "rail" })}>Try Bindersnap free</a>
 </div>`;
 }
 
@@ -352,7 +355,7 @@ export function softwareApplicationLd(price: string, currency = "USD") {
  */
 export function frameTemplate(html: string, page?: SitePage): string {
   const download = page
-    ? `<p class="site-download"><a class="site-download-button" href="${page.path}.docx" download="${page.slug}.docx">Download as Word (.docx)</a><span>Edit it in Word, then upload it to Bindersnap to keep its approvals and every version.</span></p>`
+    ? `<p class="site-download"><a class="site-download-button" href="${page.path}.docx" download="${page.slug}.docx"${trackAttributes("template_download", { template: page.slug })}>Download as Word (.docx)</a><span>Edit it in Word, then upload it to Bindersnap to keep its approvals and every version.</span></p>`
     : "";
   return html.replace(
     /(<h2 id="the-template">[\s\S]*?<\/h2>)([\s\S]*?)(?=<h2 |$)/,

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { trackAttributes } from "./analytics";
 import { appUrl } from "./appLink";
 
 /**
@@ -20,6 +21,8 @@ export const LOGO_MARK = `<svg viewBox="0 0 18 18" fill="none" aria-hidden="true
 export interface ChromeLink {
   href: string;
   label: string;
+  /** Counted as a `cta_click` from this place, for a link that signs up. */
+  cta?: string;
 }
 
 /** The bar's links. Everything else is one scroll away, in the footer. */
@@ -53,7 +56,7 @@ export const FOOTER_COLUMNS: readonly {
       { href: "/for", label: "Who it's for" },
       { href: "/help", label: "Help and guides" },
       SIGN_IN,
-      { href: appUrl("/-/signup"), label: "Create an account" },
+      { href: appUrl("/-/signup"), label: "Create an account", cta: "footer" },
     ],
   },
   {
@@ -103,7 +106,7 @@ export function siteHeader(path: string): string {
   return `<header class="site-header">
   <div class="site-header-inner">
     <a class="site-logo" href="/"><span class="site-logo-mark">${LOGO_MARK}</span><span class="site-logo-name">Bindersnap</span></a>
-    <nav class="site-header-nav" aria-label="Site">${links}<a class="site-header-link" href="${SIGN_IN.href}">${SIGN_IN.label}</a><a class="site-header-cta" href="${SIGN_UP.href}">${SIGN_UP.label}</a></nav>
+    <nav class="site-header-nav" aria-label="Site">${links}<a class="site-header-link" href="${SIGN_IN.href}">${SIGN_IN.label}</a><a class="site-header-cta" href="${SIGN_UP.href}"${trackAttributes("cta_click", { cta: "nav" })}>${SIGN_UP.label}</a></nav>
   </div>
 </header>`;
 }
@@ -113,7 +116,10 @@ export function siteFooter(): string {
     (column) =>
       `<div><h2>${escape(column.heading)}</h2><ul>${column.links
         .map(
-          (link) => `<li><a href="${link.href}">${escape(link.label)}</a></li>`,
+          (link) =>
+            `<li><a href="${link.href}"${
+              link.cta ? trackAttributes("cta_click", { cta: link.cta }) : ""
+            }>${escape(link.label)}</a></li>`,
         )
         .join("")}</ul></div>`,
   ).join("");
