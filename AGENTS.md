@@ -237,7 +237,9 @@ Routes:
   - `/-/admin` — the site admin console, Gitea site admins only: health
     checks, then `/-/admin/users` (and creating an account),
     `/-/admin/organizations` (and giving one free access, for a number of
-    days, writers, or both), `/-/admin/binders`, `/-/admin/system`
+    days, writers, or both), `/-/admin/binders`, `/-/admin/signups`
+    (which page of bindersnap.com each signup came from, and who went on to
+    pay: `signup_sources`, never Google), `/-/admin/system`
     (versions, the pinned images,
     memory, disk, maintenance) and `/-/admin/config` (every setting; a secret
     only as set or not, `services/api/admin-system.ts`)

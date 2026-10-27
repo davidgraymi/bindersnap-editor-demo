@@ -10,6 +10,7 @@ import type {
   CreateAdminUserBody,
   GetAdminConfig200,
   GetAdminOverview200,
+  GetAdminSignups200,
   GetAdminSystem200,
   ListAdminBinders200,
   ListAdminBindersParams,
@@ -265,6 +266,38 @@ export const getListAdminBindersUrl = (params?: ListAdminBindersParams,) => {
 export const listAdminBinders = async (params?: ListAdminBindersParams, options?: Parameters<typeof customFetch>[1]): Promise<listAdminBindersResponse> => {
 
   return customFetch<listAdminBindersResponse>(getListAdminBindersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type getAdminSignupsResponse200 = {
+  data: GetAdminSignups200
+  status: 200
+}
+
+export type getAdminSignupsResponseSuccess = (getAdminSignupsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getAdminSignupsResponse = (getAdminSignupsResponseSuccess)
+
+export const getGetAdminSignupsUrl = () => {
+
+
+
+
+  return `/api/app/admin/signups`
+}
+
+export const getAdminSignups = async ( options?: Parameters<typeof customFetch>[1]): Promise<getAdminSignupsResponse> => {
+
+  return customFetch<getAdminSignupsResponse>(getGetAdminSignupsUrl(),
   {
     ...options,
     method: 'GET'

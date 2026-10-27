@@ -88,6 +88,7 @@ import type {
 } from "../../packages/api-schema/schemas/billing";
 import type {
   AdminBinderListPayload,
+  AdminSignupsPayload,
   AdminConfigPayload,
   AdminCreateUserBody,
   AdminCreatedUser,
@@ -140,6 +141,8 @@ export type {
 export type {
   AdminBillingState,
   AdminBinderListPayload,
+  AdminSignupTally,
+  AdminSignupsPayload,
   AdminConfigEntry,
   AdminConfigPayload,
   AdminCreateUserBody,
@@ -2268,6 +2271,12 @@ export async function listAdminBinders(
     page: String(page),
     limit: String(limit),
   });
+  return response.data;
+}
+
+/** Where signups came from, and how many went on to pay. */
+export async function getAdminSignups(): Promise<AdminSignupsPayload> {
+  const response = await AdminClient.getAdminSignups();
   return response.data;
 }
 

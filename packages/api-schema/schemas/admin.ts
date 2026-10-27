@@ -217,6 +217,47 @@ export type AdminBinderListPayload = z.infer<
   typeof AdminBinderListPayloadSchema
 >;
 
+// ─── Signups ─────────────────────────────────────────────────────────────
+
+/** Signups that share one value of a source, and how far they went. */
+export const AdminSignupTallySchema = z.object({
+  /** The page, site or campaign; null where the signup did not say. */
+  key: z.string().nullable(),
+  signups: z.number(),
+  /** Of those, how many created an organization. */
+  organizations: z.number(),
+  /** Of those, how many created one that pays now. */
+  paying: z.number(),
+});
+export type AdminSignupTally = z.infer<typeof AdminSignupTallySchema>;
+
+export const AdminSignupRowSchema = z.object({
+  username: z.string(),
+  createdAt: z.number(),
+  invited: z.boolean(),
+  entryPath: z.string().nullable(),
+  fromPath: z.string().nullable(),
+  referrerHost: z.string().nullable(),
+  campaign: z.string().nullable(),
+  organizations: z.array(
+    z.object({ name: z.string(), billing: AdminBillingStateSchema }),
+  ),
+});
+export type AdminSignupRow = z.infer<typeof AdminSignupRowSchema>;
+
+export const AdminSignupsPayloadSchema = z.object({
+  /** Signups with a row; accounts made before rows were kept have none. */
+  recorded: z.number(),
+  /** Epoch ms of the first row, or null for none. */
+  since: z.number().nullable(),
+  byEntryPage: z.array(AdminSignupTallySchema),
+  bySite: z.array(AdminSignupTallySchema),
+  byCampaign: z.array(AdminSignupTallySchema),
+  /** The newest signups, newest first. */
+  recent: z.array(AdminSignupRowSchema),
+});
+export type AdminSignupsPayload = z.infer<typeof AdminSignupsPayloadSchema>;
+
 // ─── System, configuration and accounts ──────────────────────────────────
 
 export const AdminReleaseImageSchema = z.object({

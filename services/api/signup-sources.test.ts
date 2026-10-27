@@ -52,3 +52,15 @@ test("deleting the account deletes its row", () => {
   store.forget("ALICE");
   expect(store.get("alice")).toBeNull();
 });
+
+test("signups are listed newest first", () => {
+  const store = freshStore();
+  store.record("avery", { entryPath: "/" }, false, 1_000);
+  store.record("blake", undefined, false, 3_000);
+  store.record("casey", { referrerHost: "www.google.com" }, false, 2_000);
+  expect(store.list().map((row) => row.username)).toEqual([
+    "blake",
+    "casey",
+    "avery",
+  ]);
+});

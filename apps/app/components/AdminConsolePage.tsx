@@ -47,6 +47,7 @@ import {
   AdminSystem,
   NewAccountPanel,
 } from "./AdminSystemSections";
+import { AdminSignups } from "./AdminSignupsSection";
 import { SkeletonPanel } from "./Skeleton";
 import { StatusChip } from "./StatusChip";
 
@@ -111,6 +112,8 @@ export function AdminConsolePage({
         <AdminOrganizations link={link} />
       ) : section === "binders" ? (
         <AdminBinders link={link} />
+      ) : section === "signups" ? (
+        <AdminSignups link={link} />
       ) : section === "system" ? (
         <AdminSystem />
       ) : (

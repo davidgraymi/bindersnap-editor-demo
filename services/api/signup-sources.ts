@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 
 import {
   cleanSignupSource,
@@ -62,14 +62,17 @@ export class SignupSourceStore {
       .from(signupSources)
       .where(eq(signupSources.username, key(username)))
       .get();
-    if (!row) return null;
-    const source = cleanSignupSource(row) ?? {};
-    return {
-      username: row.username,
-      ...source,
-      invited: row.invited,
-      createdAt: row.createdAt,
-    };
+    return row ? toRow(row) : null;
+  }
+
+  /** Every signup on record, newest first. */
+  list(): SignupSourceRow[] {
+    return this.db
+      .select()
+      .from(signupSources)
+      .orderBy(desc(signupSources.createdAt))
+      .all()
+      .map(toRow);
   }
 
   forget(username: string): void {
@@ -78,6 +81,15 @@ export class SignupSourceStore {
       .where(eq(signupSources.username, key(username)))
       .run();
   }
+}
+
+function toRow(row: typeof signupSources.$inferSelect): SignupSourceRow {
+  return {
+    username: row.username,
+    ...(cleanSignupSource(row) ?? {}),
+    invited: row.invited,
+    createdAt: row.createdAt,
+  };
 }
 
 let store: SignupSourceStore | null = null;

@@ -3211,6 +3211,178 @@
           "hasMore"
         ]
       },
+      "AdminSignupsPayload": {
+        "type": "object",
+        "properties": {
+          "recorded": {
+            "type": "number"
+          },
+          "since": {
+            "type": "number",
+            "nullable": true
+          },
+          "byEntryPage": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "signups": {
+                  "type": "number"
+                },
+                "organizations": {
+                  "type": "number"
+                },
+                "paying": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "key",
+                "signups",
+                "organizations",
+                "paying"
+              ]
+            }
+          },
+          "bySite": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "signups": {
+                  "type": "number"
+                },
+                "organizations": {
+                  "type": "number"
+                },
+                "paying": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "key",
+                "signups",
+                "organizations",
+                "paying"
+              ]
+            }
+          },
+          "byCampaign": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "signups": {
+                  "type": "number"
+                },
+                "organizations": {
+                  "type": "number"
+                },
+                "paying": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "key",
+                "signups",
+                "organizations",
+                "paying"
+              ]
+            }
+          },
+          "recent": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "username": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "number"
+                },
+                "invited": {
+                  "type": "boolean"
+                },
+                "entryPath": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "fromPath": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "referrerHost": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "campaign": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "organizations": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "billing": {
+                        "type": "string",
+                        "enum": [
+                          "paying",
+                          "past_due",
+                          "trial",
+                          "trial_ended",
+                          "comped",
+                          "revoked",
+                          "canceled",
+                          "none"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "billing"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "username",
+                "createdAt",
+                "invited",
+                "entryPath",
+                "fromPath",
+                "referrerHost",
+                "campaign",
+                "organizations"
+              ]
+            }
+          }
+        },
+        "required": [
+          "recorded",
+          "since",
+          "byEntryPage",
+          "bySite",
+          "byCampaign",
+          "recent"
+        ]
+      },
       "AdminSystemPayload": {
         "type": "object",
         "properties": {
@@ -16533,6 +16705,195 @@
                     "limit",
                     "total",
                     "hasMore"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/admin/signups": {
+      "get": {
+        "operationId": "getAdminSignups",
+        "tags": [
+          "admin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Where signups came from, by page, site and campaign, and how many went on to pay",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "recorded": {
+                      "type": "number"
+                    },
+                    "since": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "byEntryPage": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "signups": {
+                            "type": "number"
+                          },
+                          "organizations": {
+                            "type": "number"
+                          },
+                          "paying": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "signups",
+                          "organizations",
+                          "paying"
+                        ]
+                      }
+                    },
+                    "bySite": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "signups": {
+                            "type": "number"
+                          },
+                          "organizations": {
+                            "type": "number"
+                          },
+                          "paying": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "signups",
+                          "organizations",
+                          "paying"
+                        ]
+                      }
+                    },
+                    "byCampaign": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "signups": {
+                            "type": "number"
+                          },
+                          "organizations": {
+                            "type": "number"
+                          },
+                          "paying": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "signups",
+                          "organizations",
+                          "paying"
+                        ]
+                      }
+                    },
+                    "recent": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "username": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "number"
+                          },
+                          "invited": {
+                            "type": "boolean"
+                          },
+                          "entryPath": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "fromPath": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "referrerHost": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "campaign": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "organizations": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "billing": {
+                                  "type": "string",
+                                  "enum": [
+                                    "paying",
+                                    "past_due",
+                                    "trial",
+                                    "trial_ended",
+                                    "comped",
+                                    "revoked",
+                                    "canceled",
+                                    "none"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "billing"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "username",
+                          "createdAt",
+                          "invited",
+                          "entryPath",
+                          "fromPath",
+                          "referrerHost",
+                          "campaign",
+                          "organizations"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "recorded",
+                    "since",
+                    "byEntryPage",
+                    "bySite",
+                    "byCampaign",
+                    "recent"
                   ]
                 }
               }
