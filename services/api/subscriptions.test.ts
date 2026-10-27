@@ -630,7 +630,79 @@ describe("SubscriptionStore — admin overrides", () => {
       reason: "manual comp",
       updatedBy: "admin-user",
       updatedAt: 123,
+      expiresAt: null,
+      maxWriters: null,
     });
+  });
+
+  it("free access stops at its end, and the organization is back on what it pays", async () => {
+    const store = makeStore();
+    const org = ORG["override-user"];
+    await store.putAccessOverride({
+      giteaOrgId: org,
+      access: "grant",
+      reason: null,
+      updatedBy: "admin-user",
+      updatedAt: 1,
+      expiresAt: 1_000,
+    });
+
+    const before = await store.resolveAccess(org, { now: 999 });
+    expect(before.source).toBe("admin_grant");
+    expect(before.grantLapse).toBeNull();
+
+    const after = await store.resolveAccess(org, { now: 1_000 });
+    expect(after.hasAccess).toBe(false);
+    expect(after.source).toBe("none");
+    expect(after.grantLapse).toBe("expired");
+  });
+
+  it("free access for some writers stops when the organization has more", async () => {
+    const store = makeStore();
+    const org = ORG["override-user"];
+    await store.putAccessOverride({
+      giteaOrgId: org,
+      access: "grant",
+      reason: null,
+      updatedBy: "admin-user",
+      updatedAt: 1,
+      maxWriters: 3,
+    });
+
+    const within = await store.resolveAccess(org, { writers: async () => 3 });
+    expect(within).toMatchObject({
+      hasAccess: true,
+      source: "admin_grant",
+      writers: 3,
+    });
+
+    const over = await store.resolveAccess(org, { writers: async () => 4 });
+    expect(over).toMatchObject({
+      hasAccess: false,
+      source: "none",
+      grantLapse: "over_writers",
+      writers: 4,
+    });
+
+    // Nobody counting: a list that only shows the grant takes it as given.
+    expect((await store.resolveAccess(org)).source).toBe("admin_grant");
+
+    // A grant with no writer limit never asks for a count.
+    await store.putAccessOverride({
+      giteaOrgId: org,
+      access: "grant",
+      reason: null,
+      updatedBy: "admin-user",
+      updatedAt: 2,
+    });
+    let counted = false;
+    await store.resolveAccess(org, {
+      writers: async () => {
+        counted = true;
+        return 99;
+      },
+    });
+    expect(counted).toBe(false);
   });
 
   it("revoke overrides Stripe-backed access until the override is removed", async () => {
@@ -667,8 +739,12 @@ describe("SubscriptionStore — admin overrides", () => {
         reason: "manual review hold",
         updatedBy: "admin-user",
         updatedAt: 200,
+        expiresAt: null,
+        maxWriters: null,
       },
       trialEndsAt: null,
+      grantLapse: null,
+      writers: null,
     });
 
     await store.deleteAccessOverride(ORG["stripe-user"]);
@@ -682,6 +758,8 @@ describe("SubscriptionStore — admin overrides", () => {
       }),
       override: null,
       trialEndsAt: null,
+      grantLapse: null,
+      writers: null,
     });
   });
 

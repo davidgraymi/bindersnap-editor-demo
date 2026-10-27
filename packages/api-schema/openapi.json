@@ -2493,6 +2493,14 @@
               },
               "updatedAt": {
                 "type": "number"
+              },
+              "expiresAt": {
+                "type": "number",
+                "nullable": true
+              },
+              "maxWriters": {
+                "type": "number",
+                "nullable": true
               }
             },
             "required": [
@@ -2643,6 +2651,14 @@
                     },
                     "updatedAt": {
                       "type": "number"
+                    },
+                    "expiresAt": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "maxWriters": {
+                      "type": "number",
+                      "nullable": true
                     }
                   },
                   "required": [
@@ -2849,7 +2865,33 @@
                 "organizations": {
                   "type": "array",
                   "items": {
-                    "type": "string"
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "number"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "billing": {
+                        "type": "string",
+                        "enum": [
+                          "paying",
+                          "past_due",
+                          "trial",
+                          "trial_ended",
+                          "comped",
+                          "revoked",
+                          "canceled",
+                          "none"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "billing"
+                    ]
                   }
                 }
               },
@@ -2974,6 +3016,47 @@
                 "trialEndsAt": {
                   "type": "number",
                   "nullable": true
+                },
+                "freeAccess": {
+                  "type": "object",
+                  "nullable": true,
+                  "properties": {
+                    "expiresAt": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "maxWriters": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "reason": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "grantedBy": {
+                      "type": "string"
+                    },
+                    "grantedAt": {
+                      "type": "number"
+                    },
+                    "lapse": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "expired",
+                        "over_writers",
+                        null
+                      ]
+                    }
+                  },
+                  "required": [
+                    "expiresAt",
+                    "maxWriters",
+                    "reason",
+                    "grantedBy",
+                    "grantedAt",
+                    "lapse"
+                  ]
                 }
               },
               "required": [
@@ -2993,7 +3076,8 @@
                 "stripeCustomerId",
                 "currentPeriodEnd",
                 "cancelAtPeriodEnd",
-                "trialEndsAt"
+                "trialEndsAt",
+                "freeAccess"
               ]
             }
           },
@@ -15394,6 +15478,14 @@
                         },
                         "updatedAt": {
                           "type": "number"
+                        },
+                        "expiresAt": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "maxWriters": {
+                          "type": "number",
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -15783,7 +15875,33 @@
                           "organizations": {
                             "type": "array",
                             "items": {
-                              "type": "string"
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "billing": {
+                                  "type": "string",
+                                  "enum": [
+                                    "paying",
+                                    "past_due",
+                                    "trial",
+                                    "trial_ended",
+                                    "comped",
+                                    "revoked",
+                                    "canceled",
+                                    "none"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "name",
+                                "billing"
+                              ]
                             }
                           }
                         },
@@ -16017,6 +16135,47 @@
                           "trialEndsAt": {
                             "type": "number",
                             "nullable": true
+                          },
+                          "freeAccess": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "expiresAt": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "maxWriters": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "reason": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "grantedBy": {
+                                "type": "string"
+                              },
+                              "grantedAt": {
+                                "type": "number"
+                              },
+                              "lapse": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [
+                                  "expired",
+                                  "over_writers",
+                                  null
+                                ]
+                              }
+                            },
+                            "required": [
+                              "expiresAt",
+                              "maxWriters",
+                              "reason",
+                              "grantedBy",
+                              "grantedAt",
+                              "lapse"
+                            ]
                           }
                         },
                         "required": [
@@ -16036,7 +16195,8 @@
                           "stripeCustomerId",
                           "currentPeriodEnd",
                           "cancelAtPeriodEnd",
-                          "trialEndsAt"
+                          "trialEndsAt",
+                          "freeAccess"
                         ]
                       }
                     },
@@ -16060,6 +16220,145 @@
                     "limit",
                     "total",
                     "hasMore"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/admin/organizations/{org}/access": {
+      "put": {
+        "operationId": "setAdminOrganizationAccess",
+        "tags": [
+          "admin"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "access": {
+                    "type": "string",
+                    "enum": [
+                      "grant",
+                      "revoke"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "days": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 1,
+                    "maximum": 3650
+                  },
+                  "maxWriters": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 1,
+                    "maximum": 10000
+                  }
+                },
+                "required": [
+                  "access"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Free access given, or access cut off",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "billing": {
+                      "type": "string",
+                      "enum": [
+                        "paying",
+                        "past_due",
+                        "trial",
+                        "trial_ended",
+                        "comped",
+                        "revoked",
+                        "canceled",
+                        "none"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "billing"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "clearAdminOrganizationAccess",
+        "tags": [
+          "admin"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Back on whatever the organization pays",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "billing": {
+                      "type": "string",
+                      "enum": [
+                        "paying",
+                        "past_due",
+                        "trial",
+                        "trial_ended",
+                        "comped",
+                        "revoked",
+                        "canceled",
+                        "none"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "billing"
                   ]
                 }
               }
@@ -16327,6 +16626,14 @@
                               },
                               "updatedAt": {
                                 "type": "number"
+                              },
+                              "expiresAt": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "maxWriters": {
+                                "type": "number",
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -16886,6 +17193,14 @@
                             },
                             "updatedAt": {
                               "type": "number"
+                            },
+                            "expiresAt": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "maxWriters": {
+                              "type": "number",
+                              "nullable": true
                             }
                           },
                           "required": [

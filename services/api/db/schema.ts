@@ -90,6 +90,14 @@ export const subscriptionAccessOverrides = sqliteTable(
     reason: text("reason"),
     updatedBy: text("updated_by").notNull(),
     updatedAt: integer("updated_at").notNull(),
+    /**
+     * A grant's two limits, each optional: when it ends (Unix seconds), and
+     * how many writers it covers. Past either, the grant stops counting and
+     * the organization is back on whatever else it has: its subscription,
+     * its trial, or nothing. Null is no limit.
+     */
+    expiresAt: integer("expires_at"),
+    maxWriters: integer("max_writers"),
   },
 );
 

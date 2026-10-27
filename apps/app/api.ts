@@ -93,10 +93,9 @@ import type {
   AdminCreatedUser,
   AdminReconcilerRun,
   AdminSystemPayload,
+  AdminOrganizationAccessResult,
   AdminOrganizationListPayload,
   AdminOverviewPayload,
-  AdminSubscriptionAccessListPayload,
-  AdminSubscriptionAccessUser,
   AdminUserListPayload,
 } from "../../packages/api-schema/schemas/admin";
 
@@ -149,13 +148,16 @@ export type {
   AdminReleaseImage,
   AdminSystemPayload,
   AdminBinderRow,
+  AdminFreeAccess,
   AdminHealthCheck,
+  AdminOrganizationAccessResult,
   AdminOrganizationListPayload,
   AdminOrganizationRow,
   AdminOverviewPayload,
   AdminSubscriptionAccessListPayload,
   AdminSubscriptionAccessUser,
   AdminUserListPayload,
+  AdminUserOrganization,
   AdminUserRow,
 } from "../../packages/api-schema/schemas/admin";
 export type {
@@ -2227,6 +2229,31 @@ export async function listAdminOrganizations(
   return response.data;
 }
 
+/**
+ * Give an organization Pro access for free, or cut it off. Billing is the
+ * organization's, so this is addressed by organization even from People.
+ */
+export async function setAdminOrganizationAccess(
+  org: string,
+  access: "grant" | "revoke",
+  limits: { days?: number | null; maxWriters?: number | null } = {},
+): Promise<AdminOrganizationAccessResult> {
+  const response = await AdminClient.setAdminOrganizationAccess(org, {
+    access,
+    days: limits.days ?? null,
+    maxWriters: limits.maxWriters ?? null,
+  });
+  return response.data;
+}
+
+/** Put an organization back on whatever it pays. */
+export async function clearAdminOrganizationAccess(
+  org: string,
+): Promise<AdminOrganizationAccessResult> {
+  const response = await AdminClient.clearAdminOrganizationAccess(org);
+  return response.data;
+}
+
 export async function listAdminBinders(
   query = "",
   page = 1,
@@ -2261,33 +2288,4 @@ export async function createAdminUser(
 export async function runAdminReconciler(): Promise<AdminReconcilerRun> {
   const response = await AdminClient.runAdminReconciler();
   return response.data;
-}
-
-export async function listAdminSubscriptionAccess(
-  query = "",
-  page = 1,
-  limit = 12,
-): Promise<AdminSubscriptionAccessListPayload> {
-  const response = await AdminClient.listAdminSubscriptionAccess({
-    q: query,
-    page: String(page),
-    limit: String(limit),
-  });
-  return response.data;
-}
-
-export async function setAdminSubscriptionAccess(
-  username: string,
-  access: "grant" | "revoke",
-): Promise<AdminSubscriptionAccessUser> {
-  const response = await AdminClient.setAdminSubscriptionAccess(username, {
-    access,
-  });
-  return response.data.user;
-}
-
-export async function clearAdminSubscriptionAccess(
-  username: string,
-): Promise<void> {
-  await AdminClient.clearAdminSubscriptionAccess(username);
 }

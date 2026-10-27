@@ -5,6 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type {
+  ClearAdminOrganizationAccess200,
   CreateAdminUser201,
   CreateAdminUserBody,
   GetAdminConfig200,
@@ -19,6 +20,8 @@ import type {
   ListAdminUsers200,
   ListAdminUsersParams,
   RunAdminReconciler200,
+  SetAdminOrganizationAccess200,
+  SetAdminOrganizationAccessBody,
   SetAdminSubscriptionAccess200,
   SetAdminSubscriptionAccessBody
 } from '../model';
@@ -161,6 +164,71 @@ export const listAdminOrganizations = async (params?: ListAdminOrganizationsPara
   {
     ...options,
     method: 'GET'
+
+
+  }
+);}
+
+
+export type setAdminOrganizationAccessResponse200 = {
+  data: SetAdminOrganizationAccess200
+  status: 200
+}
+
+export type setAdminOrganizationAccessResponseSuccess = (setAdminOrganizationAccessResponse200) & {
+  headers: Headers;
+};
+;
+
+export type setAdminOrganizationAccessResponse = (setAdminOrganizationAccessResponseSuccess)
+
+export const getSetAdminOrganizationAccessUrl = (org: string,) => {
+
+
+
+
+  return `/api/app/admin/organizations/${org}/access`
+}
+
+export const setAdminOrganizationAccess = async (org: string,
+    setAdminOrganizationAccessBody: SetAdminOrganizationAccessBody, options?: Parameters<typeof customFetch>[1]): Promise<setAdminOrganizationAccessResponse> => {
+
+  return customFetch<setAdminOrganizationAccessResponse>(getSetAdminOrganizationAccessUrl(org),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(setAdminOrganizationAccessBody)
+  }
+);}
+
+
+export type clearAdminOrganizationAccessResponse200 = {
+  data: ClearAdminOrganizationAccess200
+  status: 200
+}
+
+export type clearAdminOrganizationAccessResponseSuccess = (clearAdminOrganizationAccessResponse200) & {
+  headers: Headers;
+};
+;
+
+export type clearAdminOrganizationAccessResponse = (clearAdminOrganizationAccessResponseSuccess)
+
+export const getClearAdminOrganizationAccessUrl = (org: string,) => {
+
+
+
+
+  return `/api/app/admin/organizations/${org}/access`
+}
+
+export const clearAdminOrganizationAccess = async (org: string, options?: Parameters<typeof customFetch>[1]): Promise<clearAdminOrganizationAccessResponse> => {
+
+  return customFetch<clearAdminOrganizationAccessResponse>(getClearAdminOrganizationAccessUrl(org),
+  {
+    ...options,
+    method: 'DELETE'
 
 
   }

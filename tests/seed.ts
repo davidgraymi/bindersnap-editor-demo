@@ -34,7 +34,7 @@ import type { ListBinderDocuments200DocumentsItem } from "../packages/api-client
 import type { ProposeBinderSignOffRulesBodyRulesItem } from "../packages/api-client/model/proposeBinderSignOffRulesBodyRulesItem";
 import { ReviewBinderChangeBodyEvent } from "../packages/api-client/model/reviewBinderChangeBodyEvent";
 import { ApiRequestError } from "../packages/api-client/mutator";
-import { Sessions } from "./bff-session";
+import { API_BASE_URL, Sessions } from "./bff-session";
 import {
   giteaRequest,
   repoPath,
@@ -53,6 +53,7 @@ import {
   type SeedBinderChange,
   type SeedBinderDocument,
   type SeedBinderRole,
+  type SeedPlan,
   type SeedChange,
   type SeedDocument,
   type SeedDocumentFormat,
@@ -182,6 +183,147 @@ async function ensureOrganization(
   }
   log(`Created organization: ${name}`);
   return name;
+}
+
+/**
+ * The deployment's other customers, each made by its owner from the app's
+ * "new organization" route like the first, with its other people added.
+ */
+async function ensureOtherOrganizations(
+  scenario: SeedScenario,
+  sessions: Sessions,
+  log: (message: string) => void,
+): Promise<void> {
+  for (const other of scenario.otherOrganizations) {
+    const as = await sessions.options(other.owner);
+    const existing = (await Orgs.listOrganizations(as)).data.organizations.find(
+      (organization) => organization.name === other.name,
+    );
+    if (!existing) {
+      const created = (
+        await Orgs.createOrganization(
+          { acceptedTerms: LEGAL_VERSION, name: other.displayName },
+          as,
+        )
+      ).data.organization.name;
+      if (created !== other.name) {
+        throw new Error(
+          `The scenario names an organization "${other.name}", but creating "${other.displayName}" made "${created}". Make the two agree.`,
+        );
+      }
+      log(`Created organization: ${other.name}`);
+    }
+
+    const people = (await Orgs.getOrganizationPeople(other.name, as)).data;
+    for (const member of other.members) {
+      if (people.people.some((person) => person.login === member)) continue;
+      await Orgs.addOrganizationPerson(
+        other.name,
+        { username: member, owner: false },
+        as,
+      );
+      log(`Added ${member} to ${other.name}`);
+    }
+  }
+}
+
+/** A dev-only API route, as `username`. Each is a 404 outside a dev stack. */
+async function devRoute(
+  sessions: Sessions,
+  username: string,
+  path: string,
+  body: Record<string, unknown>,
+): Promise<unknown> {
+  const as = await sessions.options(username);
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: "POST",
+    headers: { ...as.headers, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(
+      `${path} as ${username} answered ${response.status}: ${await response.text()}`,
+    );
+  }
+  return response.json();
+}
+
+/**
+ * Every organization on the plan the scenario gives it, so the admin
+ * console's Who pays has one of each to show.
+ *
+ * Paying and past due are a subscription row as Stripe's webhook would write
+ * it, and a trial is the organization's own record: neither has a screen to
+ * make it without Stripe, so a dev-only route writes them. That route also
+ * puts back an organization's record when `bun run down` dropped the API's
+ * database and kept Gitea's. Comped is the site admin's real route, the one
+ * People's "Give free access" calls.
+ */
+async function ensurePlans(
+  scenario: SeedScenario,
+  sessions: Sessions,
+  log: (message: string) => void,
+): Promise<void> {
+  const admin = scenario.users.find((user) => user.siteAdmin)?.username;
+  const organizations: Array<{ name: string; owner: string; plan: SeedPlan }> =
+    [scenario.organization, ...scenario.otherOrganizations];
+
+  for (const { name, owner, plan } of organizations) {
+    // A comped organization's trial ran out: what it would pay without us.
+    await devRoute(sessions, owner, "/api/dev/organization-plan", {
+      organization: name,
+      plan: plan === "comped" ? "trial_ended" : plan,
+    });
+    if (plan === "comped") {
+      if (!admin) {
+        throw new Error(
+          `${name} is comped, which takes a site admin, and the scenario has none.`,
+        );
+      }
+      const as = await sessions.options(admin);
+      const response = await fetch(
+        `${API_BASE_URL}/api/app/admin/organizations/${encodeURIComponent(name)}/access`,
+        {
+          method: "PUT",
+          headers: { ...as.headers, "Content-Type": "application/json" },
+          // Both limits, so the console has one of each to show.
+          body: JSON.stringify({
+            access: "grant",
+            reason: "Seeded",
+            days: 180,
+            maxWriters: 5,
+          }),
+        },
+      );
+      if (!response.ok) {
+        throw new Error(
+          `Comping ${name} answered ${response.status}: ${await response.text()}`,
+        );
+      }
+    }
+    log(`Put ${name} on its plan: ${plan}`);
+  }
+}
+
+/**
+ * Everyone's address confirmed, except the accounts the scenario leaves
+ * waiting. Last of all: a session waiting on its address can reach almost
+ * nothing in the API, which is the point of leaving one that way.
+ */
+async function ensureEmails(
+  scenario: SeedScenario,
+  sessions: Sessions,
+  log: (message: string) => void,
+): Promise<void> {
+  for (const user of scenario.users) {
+    await devRoute(sessions, user.username, "/api/dev/email", {
+      confirmed: user.emailConfirmed,
+    });
+  }
+  const waiting = scenario.users.filter((user) => !user.emailConfirmed);
+  log(
+    `Confirmed every address${waiting.length ? ` but ${waiting.map((user) => user.username).join(", ")}'s` : ""}`,
+  );
 }
 
 /**
@@ -1224,6 +1366,10 @@ async function ensureAgreements(
   log: (message: string) => void,
 ): Promise<void> {
   for (const user of scenario.users) {
+    // Somebody left waiting on their address is refused almost everything,
+    // the Terms included, until they confirm it: on a re-run they already
+    // are. They accept the Terms after confirming, as a real person would.
+    if (!user.emailConfirmed) continue;
     const as = await sessions.options(user.username);
     const status = (await Legal.getLegalStatus(as)).data;
     if (!status.person && status.organizations.length === 0) continue;
@@ -1258,6 +1404,7 @@ export async function seedDevStack(
   try {
     const org = await ensureOrganization(scenario, sessions, log);
     await ensurePeopleAndGroups(org, scenario, sessions, log);
+    await ensureOtherOrganizations(scenario, sessions, log);
     await ensureAgreements(scenario, sessions, log);
 
     // **Binders at once, not one after another.** Each is its own repository
@@ -1275,6 +1422,9 @@ export async function seedDevStack(
         ),
       ),
     );
+
+    await ensurePlans(scenario, sessions, log);
+    await ensureEmails(scenario, sessions, log);
 
     return {
       pullRequests: Object.assign({}, ...applied),

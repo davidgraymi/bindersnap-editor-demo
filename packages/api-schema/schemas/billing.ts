@@ -22,6 +22,10 @@ export const AdminSubscriptionAccessOverrideSchema = z.object({
   reason: z.string().nullable().optional(),
   updatedBy: z.string(),
   updatedAt: z.number(),
+  // Free access's limits: when it ends (Unix seconds) and how many writers it
+  // covers. Null is no limit.
+  expiresAt: z.number().nullable().optional(),
+  maxWriters: z.number().nullable().optional(),
 });
 export type AdminSubscriptionAccessOverride = z.infer<
   typeof AdminSubscriptionAccessOverrideSchema

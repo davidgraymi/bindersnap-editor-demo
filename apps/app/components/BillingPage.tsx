@@ -24,6 +24,8 @@ interface BillingPageProps {
   cancelAtPeriodEnd: boolean;
   cancelAt: number | null;
   trialEndsAt: number | null;
+  /** Free access's limits, when Bindersnap gave the organization some. */
+  freeAccess?: { expiresAt: number | null; maxWriters: number | null } | null;
   /** Whose bill it is — the organization's slug, or null outside one. */
   organization: string | null;
   plan: OfferedPlan | null;
@@ -57,6 +59,7 @@ export function BillingPage({
   cancelAtPeriodEnd,
   cancelAt,
   trialEndsAt,
+  freeAccess = null,
   organization,
   plan,
   onSubscribe,
@@ -153,6 +156,7 @@ export function BillingPage({
     cancelAtPeriodEnd,
     cancelAt,
     trialEndsAt,
+    freeAccess,
     canManage: canManageBilling,
     hasBillingAccount,
   });
