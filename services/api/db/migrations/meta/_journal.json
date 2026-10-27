@@ -106,6 +106,13 @@
       "when": 1793133734734,
       "tag": "0014_signup_sources",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1793143332873,
+      "tag": "0015_activity_events",
+      "breakpoints": true
     }
   ]
 }

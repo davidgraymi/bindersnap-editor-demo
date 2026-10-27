@@ -20,6 +20,7 @@ import type {
   ListAdminSubscriptionAccessParams,
   ListAdminUsers200,
   ListAdminUsersParams,
+  RunAdminActivityBuild200,
   RunAdminReconciler200,
   SetAdminOrganizationAccess200,
   SetAdminOrganizationAccessBody,
@@ -433,6 +434,38 @@ export const getRunAdminReconcilerUrl = () => {
 export const runAdminReconciler = async ( options?: Parameters<typeof customFetch>[1]): Promise<runAdminReconcilerResponse> => {
 
   return customFetch<runAdminReconcilerResponse>(getRunAdminReconcilerUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+export type runAdminActivityBuildResponse200 = {
+  data: RunAdminActivityBuild200
+  status: 200
+}
+
+export type runAdminActivityBuildResponseSuccess = (runAdminActivityBuildResponse200) & {
+  headers: Headers;
+};
+;
+
+export type runAdminActivityBuildResponse = (runAdminActivityBuildResponseSuccess)
+
+export const getRunAdminActivityBuildUrl = () => {
+
+
+
+
+  return `/api/app/admin/maintenance/activity`
+}
+
+export const runAdminActivityBuild = async ( options?: Parameters<typeof customFetch>[1]): Promise<runAdminActivityBuildResponse> => {
+
+  return customFetch<runAdminActivityBuildResponse>(getRunAdminActivityBuildUrl(),
   {
     ...options,
     method: 'POST'

@@ -548,3 +548,50 @@ export const signupSources = sqliteTable(
   },
   (table) => [index("signup_sources_created_at_idx").on(table.createdAt)],
 );
+
+/**
+ * What happened on this deployment, one row per event, for the site admin's
+ * growth reports and the export (`services/api/activity.ts`).
+ *
+ * **A derived index, not a record.** Every row is rebuilt from Gitea and the
+ * tables above, every six hours, and dropping the table loses nothing but the
+ * wait for the next pass. Nothing reads it to decide anything: no publish
+ * gate, approval check or audit export, which read Gitea (ADR 0004). Each id
+ * is an immutable coordinate (a pull request's number, a review's id, a tag's
+ * name), so a row is either right or detectably stale.
+ *
+ * **Ids, never names.** An organization, binder and person are Gitea's numeric
+ * ids; no username, email, title or document text is stored, so the export
+ * can leave the console as it is. Times are epoch milliseconds.
+ */
+export const activityEvents = sqliteTable(
+  "activity_events",
+  {
+    /** `change_proposed:12:4`, `version_published:12:<uid>/v2`, … */
+    id: text("id").primaryKey(),
+    kind: text("kind").notNull(),
+    at: integer("at").notNull(),
+    orgId: integer("org_id"),
+    binderId: integer("binder_id"),
+    changeNumber: integer("change_number"),
+    actorId: integer("actor_id"),
+    /** Kind-specific and never personal: a page path, a branch kind, a role. */
+    detail: text("detail"),
+  },
+  (table) => [
+    index("activity_events_kind_at_idx").on(table.kind, table.at),
+    index("activity_events_org_idx").on(table.orgId),
+    index("activity_events_binder_idx").on(table.binderId, table.changeNumber),
+  ],
+);
+
+/** The last pass that wrote `activity_events`: one row, id 1. */
+export const activityBuilds = sqliteTable("activity_builds", {
+  id: integer("id").primaryKey(),
+  startedAt: integer("started_at").notNull(),
+  finishedAt: integer("finished_at").notNull(),
+  events: integer("events").notNull(),
+  binders: integer("binders").notNull(),
+  /** Binders or organizations that could not be read, as JSON. */
+  errors: text("errors").notNull(),
+});

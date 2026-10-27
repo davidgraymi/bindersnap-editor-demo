@@ -92,6 +92,7 @@ import type {
   AdminConfigPayload,
   AdminCreateUserBody,
   AdminCreatedUser,
+  AdminActivityRun,
   AdminReconcilerRun,
   AdminSystemPayload,
   AdminOrganizationAccessResult,
@@ -147,6 +148,8 @@ export type {
   AdminConfigPayload,
   AdminCreateUserBody,
   AdminCreatedUser,
+  AdminActivityBuild,
+  AdminActivityRun,
   AdminReconcilerRun,
   AdminReleaseImage,
   AdminSystemPayload,
@@ -2300,5 +2303,11 @@ export async function createAdminUser(
 
 export async function runAdminReconciler(): Promise<AdminReconcilerRun> {
   const response = await AdminClient.runAdminReconciler();
+  return response.data;
+}
+
+/** Rebuild the activity dataset from scratch, rather than wait for its pass. */
+export async function runAdminActivityBuild(): Promise<AdminActivityRun> {
+  const response = await AdminClient.runAdminActivityBuild();
   return response.data;
 }

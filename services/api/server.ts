@@ -36,6 +36,7 @@ import {
   type NewLegalAgreement,
 } from "./legal-agreements";
 import { signupSourceStore } from "./signup-sources";
+import { activityStore, collectActivity, type ActivityBuild } from "./activity";
 import {
   LEGAL_ACCEPT_AGAIN_VERSION,
   LEGAL_VERSION,
@@ -56,6 +57,7 @@ import {
   checkGitea,
   checkJobs,
   checkMail,
+  checkActivity,
   checkReconciler,
   checkStripe,
   countGitea,
@@ -15364,6 +15366,52 @@ async function runReconcilerPass(): Promise<void> {
   });
 }
 
+/** The activity pass in flight, so the timer and Rebuild now never overlap. */
+let activityPass: Promise<ActivityBuild | null> | null = null;
+
+/**
+ * Rebuild the activity dataset (`activity.ts`) with the service account's
+ * read access. `full` asks Gitea for every change's reviews again rather
+ * than taking a closed change's from the last pass. Null with no client to
+ * read with.
+ */
+function runActivityPass(full = false): Promise<ActivityBuild | null> {
+  activityPass ??= (async () => {
+    const client = createPrivilegedGiteaClient();
+    if (!client) return null;
+    const store = activityStore();
+    const last = full ? null : store.lastBuild();
+    const pass = await collectActivity({
+      client,
+      organizations: await organizationStore.list(),
+      signups: signupSourceStore().list(),
+      confirmations: emailVerificationStore().confirmations(),
+      invitations: invitationStore().all(),
+      reuse: last
+        ? {
+            before: last.startedAt,
+            reviews: (binderId, changeNumber) =>
+              store.reviewsFor(binderId, changeNumber),
+          }
+        : null,
+    });
+    store.replace(pass);
+    for (const error of pass.build.errors) {
+      logger.warn("Activity pass could not read", { ...error });
+    }
+    logger.info("Activity pass finished", {
+      events: pass.build.events,
+      binders: pass.build.binders,
+      errors: pass.build.errors.length,
+      ms: pass.build.finishedAt - pass.build.startedAt,
+    });
+    return pass.build;
+  })().finally(() => {
+    activityPass = null;
+  });
+  return activityPass;
+}
+
 /** Admin only: what the reconciler found last time it looked. */
 async function handleReconcilerReport(
   req: Request,
@@ -15521,6 +15569,12 @@ async function handleAdminOverview(
       priceId: Boolean(config.stripePriceId),
     }),
     checkReconciler(lastReconcilerReport),
+    safely(() => checkActivity(activityStore().lastBuild(), now)) ?? {
+      id: "activity",
+      label: "Activity dataset",
+      status: "down",
+      detail: "The activity table could not be read.",
+    },
     checkGate({
       limit: MAX_CONCURRENT_GITEA_REQUESTS,
       inFlight: giteaRequestGate.inFlight,
@@ -15855,6 +15909,29 @@ async function handleAdminRunReconciler(
     admin: auth.currentUser.username,
   });
   return json(200, { report: lastReconcilerReport }, baseHeaders);
+}
+
+/** Admin only: rebuild the activity dataset now, from scratch. */
+async function handleAdminRunActivityBuild(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireAdminSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  let build: ActivityBuild | null;
+  try {
+    build = await runActivityPass(true);
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "The activity dataset was not rebuilt.",
+    );
+  }
+  logger.info("Site admin rebuilt the activity dataset", {
+    admin: auth.currentUser.username,
+  });
+  return json(200, { build }, baseHeaders);
 }
 
 /**
@@ -16244,6 +16321,11 @@ async function handleRequest(req: Request): Promise<Response> {
     method === "POST"
   ) {
     response = await handleAdminRunReconciler(req, baseHeaders);
+  } else if (
+    pathname === "/api/app/admin/maintenance/activity" &&
+    method === "POST"
+  ) {
+    response = await handleAdminRunActivityBuild(req, baseHeaders);
   } else if (pathname === "/api/app/home/changes" && method === "GET") {
     response = await handleHomeChanges(req, baseHeaders);
   } else if (pathname === "/api/app/documents" && method === "GET") {
@@ -17189,6 +17271,16 @@ if (import.meta.main) {
     );
   setTimeout(syncSeats, 2 * 60_000);
   setInterval(syncSeats, 6 * 60 * 60_000);
+  // Rebuild the activity dataset for the admin's growth reports, after the
+  // two sweeps above have had their turn at Gitea.
+  const buildActivity = () =>
+    void runActivityPass().catch((err) =>
+      logger.error("Activity pass failed", {
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+  setTimeout(buildActivity, 3 * 60_000);
+  setInterval(buildActivity, 6 * 60 * 60_000);
   logger.info("Bindersnap API listening", {
     url: `http://localhost:${server.port}`,
     port: server.port,

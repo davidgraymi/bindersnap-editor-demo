@@ -170,6 +170,10 @@ test("only a site admin reaches the console's routes", async () => {
     );
     expect(create.status).toBe(403);
     expect(createdUsers).toEqual([]);
+    const rebuild = await server.fetch(
+      request(session, "/api/app/admin/maintenance/activity", {}),
+    );
+    expect(rebuild.status).toBe(403);
   } finally {
     server.stop(true);
   }

@@ -130,6 +130,7 @@ import {
   AdminOrganizationAccessResultSchema,
   AdminOrganizationListPayloadSchema,
   AdminReconcilerRunSchema,
+  AdminActivityRunSchema,
   AdminSystemPayloadSchema,
   AdminOverviewPayloadSchema,
   AdminSubscriptionAccessListPayloadSchema,
@@ -2809,6 +2810,20 @@ registry.registerPath({
     200: {
       description: "The pass it just made",
       content: { "application/json": { schema: AdminReconcilerRunSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/admin/maintenance/activity",
+  operationId: "runAdminActivityBuild",
+  tags: ["admin"],
+  responses: {
+    200: {
+      description:
+        "The activity dataset, rebuilt from scratch; null with nothing to read with",
+      content: { "application/json": { schema: AdminActivityRunSchema } },
     },
   },
 });

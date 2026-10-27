@@ -360,3 +360,24 @@ export const AdminReconcilerRunSchema = z.object({
     .nullable(),
 });
 export type AdminReconcilerRun = z.infer<typeof AdminReconcilerRunSchema>;
+
+/** A pass of the activity dataset (`services/api/activity.ts`). */
+export const AdminActivityBuildSchema = z.object({
+  startedAt: z.number(),
+  finishedAt: z.number(),
+  events: z.number(),
+  binders: z.number(),
+  errors: z.array(
+    z.object({
+      org: z.string(),
+      binder: z.string().nullable(),
+      error: z.string(),
+    }),
+  ),
+});
+export type AdminActivityBuild = z.infer<typeof AdminActivityBuildSchema>;
+
+export const AdminActivityRunSchema = z.object({
+  build: AdminActivityBuildSchema.nullable(),
+});
+export type AdminActivityRun = z.infer<typeof AdminActivityRunSchema>;

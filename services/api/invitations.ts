@@ -225,6 +225,15 @@ export class InvitationStore {
       .run();
   }
 
+  /** Every invitation ever sent, for the activity dataset. */
+  all(): Invitation[] {
+    return this.db
+      .select()
+      .from(organizationInvitations)
+      .all()
+      .map(toInvitation);
+  }
+
   /** Accepted, but no owner was signed in to add them yet. */
   waitingToJoin(): Invitation[] {
     return this.db
