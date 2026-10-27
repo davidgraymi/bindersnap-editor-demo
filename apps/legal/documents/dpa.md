@@ -1,7 +1,7 @@
 # Data Processing Addendum
 
-Last updated: October 25, 2026
-Version: 2026-10-25
+Last updated: October 27, 2026
+Version: 2026-10-27
 
 This Data Processing Addendum ("DPA") is part of the Terms of Service (the "Terms") between Solid Gray LLC, a Missouri limited liability company that operates Bindersnap ("Bindersnap," "we"), and the Customer. It applies when we process Personal Data on the Customer's behalf through the Service.
 

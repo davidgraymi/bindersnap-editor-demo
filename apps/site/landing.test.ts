@@ -72,6 +72,24 @@ test("landing signup routes to the signup page with the typed email", () => {
   expect(navigations).toEqual([targetUrl]);
 });
 
+test("a landing signup is counted by where it was, never by the address typed", () => {
+  installDom();
+  const sent: unknown[][] = [];
+  const global = globalThis as { gtag?: (...args: unknown[]) => void };
+  global.gtag = (...args) => sent.push(args);
+  try {
+    routeLandingSignup(document, "hero", () => {});
+    routeLandingSignup(document, "cta", () => {});
+  } finally {
+    delete global.gtag;
+  }
+  expect(sent).toEqual([
+    ["event", "cta_click", { cta: "landing_hero", with_email: "yes" }],
+    ["event", "cta_click", { cta: "landing_closing", with_email: "no" }],
+  ]);
+  expect(JSON.stringify(sent)).not.toContain("team@bindersnap.com");
+});
+
 test("pressing Enter in a landing email field routes to signup", () => {
   installDom();
   const submittedSources: string[] = [];

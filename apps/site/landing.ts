@@ -1,3 +1,4 @@
+import { trackEvent } from "./analytics";
 import { appUrl } from "./appLink";
 
 export type SignupSource = "hero" | "cta";
@@ -54,6 +55,11 @@ export function routeLandingSignup(
     `${source}-email`,
   ) as HTMLInputElement | null;
   const signupUrl = buildSignupUrl(input?.value);
+  // Where on the page, and whether an address was typed: never the address.
+  trackEvent("cta_click", {
+    cta: source === "hero" ? "landing_hero" : "landing_closing",
+    with_email: input?.value.trim() ? "yes" : "no",
+  });
   navigate(signupUrl);
   return signupUrl;
 }

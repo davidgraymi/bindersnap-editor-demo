@@ -326,6 +326,9 @@ const SCRIPT = `(function(){
     count.textContent=on.length?shown+" of "+rows.length+" apply to you":"All "+rows.length+" shown. Tick what describes you.";
   }
   form.hidden=false; form.addEventListener("change",update); update();
+  form.addEventListener("change",function(e){
+    if(e.target.checked&&window.gtag)gtag("event","checklist_filter",{org_type:e.target.value});
+  });
 })();`;
 
 export function requiredPoliciesHtml(): string {
