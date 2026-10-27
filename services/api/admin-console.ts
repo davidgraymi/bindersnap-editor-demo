@@ -83,6 +83,15 @@ export interface AdminUserDeps {
     sentAt: number | null;
   };
   liveSessions(username: string): Promise<number>;
+  /** Where each of the person's organizations stands with us. */
+  access(giteaOrgId: number): Promise<EffectiveSubscriptionAccess>;
+}
+
+/** One organization a person is in, and what it pays. */
+export interface AdminUserOrganization {
+  id: number;
+  name: string;
+  billing: AdminBillingState;
 }
 
 export interface AdminUserRow {
@@ -98,7 +107,7 @@ export interface AdminUserRow {
   createdAt: number | null;
   lastLoginAt: number | null;
   liveSessions: number;
-  organizations: string[];
+  organizations: AdminUserOrganization[];
 }
 
 export async function listAdminUsers(
@@ -130,9 +139,18 @@ export async function listAdminUsers(
           })
           .then((result) => unwrap(Promise.resolve(result)))
           .then((orgs) =>
-            orgs
-              .map((org) => org.username ?? org.name ?? "")
-              .filter((name) => name !== ""),
+            Promise.all(
+              orgs
+                .map((org) => ({
+                  id: org.id ?? 0,
+                  name: org.username ?? org.name ?? "",
+                }))
+                .filter((org) => org.name !== "")
+                .map(async (org): Promise<AdminUserOrganization> => ({
+                  ...org,
+                  billing: billingState(await deps.access(org.id)),
+                })),
+            ),
           )
           // One account's memberships failing to load is not the page failing.
           .catch(() => []),

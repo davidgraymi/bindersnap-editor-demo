@@ -38,6 +38,15 @@
 #     member of no binder at all             erin
 #     member of no organization at all       frank
 #     reviewer who can publish nothing       dan
+#     owns another organization              maya, tomas, rosa, lena
+#     has not confirmed their address        nadia
+#
+#   organizations, and who pays (the admin console's Who pays)
+#     paying                                 riverside-health
+#     in trial                               lakeside-hospice
+#     past due                               harbor-home-health
+#     comped by a site admin                 summit-surgery-center
+#     no plan: the trial ran out             valley-behavioral-health
 #
 #   binders
 #     admins only                            hr-investigations
@@ -143,6 +152,45 @@ users:
     role: Signed up and belongs to no organization at all
     organizationMember: false
 
+  # The other customers on this deployment, one per plan. Each owns its own
+  # organization and nothing in Riverside Health.
+  - username: maya
+    fullName: Maya Chen
+    email: maya@example.com
+    role: Director of nursing — owns Lakeside Hospice, two weeks into its trial
+    organizationMember: false
+
+  - username: kofi
+    fullName: Kofi Mensah
+    email: kofi@example.com
+    role: Compliance coordinator at Lakeside Hospice
+    organizationMember: false
+
+  - username: tomas
+    fullName: Tomas Reyes
+    email: tomas@example.com
+    role: Administrator — owns Harbor Home Health, whose card was declined
+    organizationMember: false
+
+  - username: rosa
+    fullName: Rosa Delgado
+    email: rosa@example.com
+    role: Practice manager — owns Summit Surgery Center, on access we gave for free
+    organizationMember: false
+
+  - username: lena
+    fullName: Lena Brooks
+    email: lena@example.com
+    role: Program director — owns Valley Behavioral Health, whose trial ran out
+    organizationMember: false
+
+  - username: nadia
+    fullName: Nadia Karim
+    email: nadia@example.com
+    role: Signed up and has not clicked the link in the confirmation email
+    organizationMember: false
+    emailConfirmed: false
+
 # The one organization. Everything below belongs to it, which is ADR 0004's
 # first level: it is who we bill and who your people are.
 organization:
@@ -154,6 +202,10 @@ organization:
   # one before.
   owners:
     - priya
+  # A paying customer: the subscription row Stripe's webhook would write.
+  # Everyone in it is exempt from billing on this stack all the same
+  # (BINDERSNAP_PAYWALL_BYPASS_USERS), so its billing page says Complimentary.
+  plan: paying
 
   # The customer's own groups, reusable across binders. A group is a Gitea team
   # carrying one level, so the level travels with the name — a committee cannot
@@ -187,6 +239,32 @@ organization:
         - priya
         - dan
         - hugo
+
+# Every other customer on the deployment, one for each plan the admin console
+# can show. Each is made by its owner from the app, so it has its record, its
+# trial and its first binder, and nothing else.
+otherOrganizations:
+  - name: lakeside-hospice
+    displayName: Lakeside Hospice
+    owner: maya
+    members:
+      - kofi
+    plan: trial
+
+  - name: harbor-home-health
+    displayName: Harbor Home Health
+    owner: tomas
+    plan: past_due
+
+  - name: summit-surgery-center
+    displayName: Summit Surgery Center
+    owner: rosa
+    plan: comped
+
+  - name: valley-behavioral-health
+    displayName: Valley Behavioral Health
+    owner: lena
+    plan: trial_ended
 
 binders:
   # ===========================================================================

@@ -87,7 +87,7 @@ const users: AdminUserListPayload = {
       createdAt: Date.UTC(2026, 2, 14),
       lastLoginAt: null,
       liveSessions: 1,
-      organizations: ["riverside-health"],
+      organizations: [{ id: 7, name: "riverside-health", billing: "trial" }],
     },
   ],
   query: "",
@@ -153,6 +153,14 @@ const mockCreateAdminUser = mock(async (body: { email: string }) => ({
   emailed: "welcome" as const,
 }));
 const mockListAdminUsers = mock(async (..._args: unknown[]) => users);
+const mockSetAdminOrganizationAccess = mock(async (org: string) => ({
+  organization: org,
+  billing: "comped" as const,
+}));
+const mockClearAdminOrganizationAccess = mock(async (org: string) => ({
+  organization: org,
+  billing: "trial" as const,
+}));
 
 // Spread the real module: see AdminSubscriptionManagementPage.test.ts.
 const actualApi = await import("../api");
@@ -162,6 +170,8 @@ mock.module("../api", () => ({
   getAdminSystem: mockGetAdminSystem,
   createAdminUser: mockCreateAdminUser,
   listAdminUsers: mockListAdminUsers,
+  setAdminOrganizationAccess: mockSetAdminOrganizationAccess,
+  clearAdminOrganizationAccess: mockClearAdminOrganizationAccess,
 }));
 
 const { AdminConsolePage } = await import("./AdminConsolePage");
@@ -238,7 +248,6 @@ test("each section is a link to its own address", async () => {
       "/-/admin/users",
       "/-/admin/organizations",
       "/-/admin/binders",
-      "/-/admin/subscriptions",
       "/-/admin/system",
       "/-/admin/config",
     ]);
@@ -269,6 +278,7 @@ test("people show their email and whether they confirmed it", async () => {
     expect(text).toContain("jordan@example.com");
     expect(text).toContain("Not confirmed");
     expect(text).toContain("riverside-health");
+    expect(text).toContain("In trial");
     expect(text).toContain("1–1 of 1");
   } finally {
     unmount();
@@ -343,6 +353,39 @@ test("a new account is created from the People page", async () => {
     expect(container.textContent).toContain(
       "A link to choose a password went to jordan@example.com.",
     );
+  } finally {
+    unmount();
+  }
+});
+
+test("free access is given to a person's organization from People, and ended", async () => {
+  const { container, unmount } = render({
+    section: "users",
+    currentUsername: "alice",
+    onNavigate: () => {},
+  });
+  const button = () =>
+    container.querySelector<HTMLButtonElement>(
+      'button[aria-label$="riverside-health"]',
+    )!;
+  try {
+    await settle();
+    expect(button().textContent).toBe("Give free access");
+    button().dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    await settle();
+    expect(mockSetAdminOrganizationAccess).toHaveBeenCalledWith(
+      "riverside-health",
+      "grant",
+    );
+    expect(container.textContent).toContain("Comped");
+    expect(button().textContent).toBe("End free access");
+
+    button().dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    await settle();
+    expect(mockClearAdminOrganizationAccess).toHaveBeenCalledWith(
+      "riverside-health",
+    );
+    expect(button().textContent).toBe("Give free access");
   } finally {
     unmount();
   }

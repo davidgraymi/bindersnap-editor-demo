@@ -50,6 +50,7 @@ import { identiconSvg } from "./identicon";
 import { reconcileBinders, type ReconcilerReport } from "./reconciler";
 import {
   ADMIN_PAGE_LIMIT,
+  billingState,
   checkGate,
   checkGitea,
   checkJobs,
@@ -14563,6 +14564,9 @@ async function syncOrganizationSeats(orgName: string): Promise<void> {
   );
   if (!subscription?.stripeSubscriptionId) return;
   if (subscription.status === "canceled") return;
+  // A dev route's stand-in (`/api/dev/organization-plan`): Stripe has never
+  // heard of it, so there is nothing there to bill seats on.
+  if (subscription.stripeSubscriptionId.startsWith("sub_dev_")) return;
 
   const seats = await countBillableSeats({ client, org: orgName });
   const result = await syncSubscriptionSeats(getStripeClient(), {
@@ -14827,6 +14831,134 @@ async function handleDevEndTrial(
   });
 
   return json(200, { ok: true, organization: organization.name }, baseHeaders);
+}
+
+/**
+ * Dev only: where this person's address stands, as the seed wants it.
+ *
+ * Seeded accounts are made straight in Gitea, before the API, so none of them
+ * went through signup's confirmation and every one would read as having
+ * predated it. A real deployment's people confirmed theirs; the seed says so
+ * here, and leaves the odd one waiting so that state is on screen too.
+ */
+async function handleDevEmail(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  if (config.isProduction || !config.devFeaturesEnabled) {
+    return json(404, { error: "Not found." }, baseHeaders);
+  }
+
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const user = await fetchSessionGiteaUser(auth.session);
+  if (!user?.email) {
+    return json(409, { error: "This account has no address." }, baseHeaders);
+  }
+
+  const store = emailVerificationStore();
+  const confirmed = body.confirmed !== false;
+  const current = store.status(auth.session.username);
+  // Idempotent: a re-run leaves an address where it already stands.
+  if (current.state !== (confirmed ? "confirmed" : "waiting")) {
+    store.start(auth.session.username, user.email, { confirmed });
+  }
+  return json(
+    200,
+    { ok: true, state: store.status(auth.session.username).state },
+    baseHeaders,
+  );
+}
+
+const DEV_PLANS = ["paying", "past_due", "trial", "trial_ended"] as const;
+
+/**
+ * Dev only: put an organization on a plan, as the seed wants it.
+ *
+ * Also writes the organization's record when it has none. `bun run down`
+ * drops the API's database but keeps Gitea's, so the next seed finds the
+ * organization already made and would otherwise leave it with no record, no
+ * trial and no plan: "made outside Bindersnap" in the admin console.
+ *
+ * Paying and past due are a subscription row as Stripe's webhook would write
+ * it; a comped organization is the real admin route, which the seed calls.
+ */
+async function handleDevOrganizationPlan(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  if (config.isProduction || !config.devFeaturesEnabled) {
+    return json(404, { error: "Not found." }, baseHeaders);
+  }
+
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const plan = DEV_PLANS.find((candidate) => candidate === body.plan);
+  if (!plan) {
+    return json(
+      400,
+      { error: `plan must be one of ${DEV_PLANS.join(", ")}.` },
+      baseHeaders,
+    );
+  }
+  const organization = await resolveBillingOrganization(
+    auth,
+    body.organization,
+    baseHeaders,
+  );
+  if (organization instanceof Response) return organization;
+  if (!organization) {
+    return json(
+      409,
+      { error: "You are not in an organization yet." },
+      baseHeaders,
+    );
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const day = 24 * 60 * 60;
+  const existing = await organizationStore.get(organization.id);
+  await organizationStore.upsert({
+    giteaOrgId: organization.id,
+    name: organization.name,
+    createdBy: existing?.createdBy ?? auth.session.username,
+    createdAt: existing?.createdAt ?? now,
+    trialEndsAt:
+      plan === "trial"
+        ? now + 9 * day
+        : plan === "trial_ended"
+          ? now - 5 * day
+          : (existing?.trialEndsAt ?? now - 30 * day),
+  });
+
+  if (plan === "paying" || plan === "past_due") {
+    await subscriptionStore.upsert({
+      giteaOrgId: organization.id,
+      stripeCustomerId: `cus_dev_org_${organization.id}`,
+      stripeSubscriptionId: `sub_dev_org_${organization.id}`,
+      status: plan === "paying" ? "active" : "past_due",
+      currentPeriodEnd: plan === "paying" ? now + 21 * day : now - 6 * day,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
+      updatedAt: Date.now(),
+    });
+  }
+
+  return json(
+    200,
+    {
+      ok: true,
+      organization: organization.name,
+      billing: billingState(
+        await subscriptionStore.resolveAccess(organization.id),
+      ),
+    },
+    baseHeaders,
+  );
 }
 
 async function buildLegacyAdminSubscriptionAccessState(
@@ -15370,6 +15502,7 @@ async function handleAdminUsers(
               emailVerificationStore().status(username),
             liveSessions: async (username) =>
               (await sessionStore.liveForUser(username)).length,
+            access: (id) => subscriptionStore.resolveAccess(id),
           },
           params,
         )),
@@ -15379,6 +15512,81 @@ async function handleAdminUsers(
     );
   } catch (err) {
     return responseFromError(err, baseHeaders, "Unable to list accounts.");
+  }
+}
+
+/**
+ * Admin only: give an organization Pro access for free, cut it off, or put
+ * it back on whatever it pays (`DELETE`). Addressed by organization, not by
+ * person: ADR 0004 bills the organization, and a person in two of them would
+ * otherwise leave the console guessing which one was meant.
+ */
+async function handleAdminOrganizationAccess(
+  req: Request,
+  baseHeaders: Headers,
+  rawOrg: string,
+  method: "PUT" | "DELETE",
+): Promise<Response> {
+  const auth = await requireAdminSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const client = adminConsoleClient(baseHeaders);
+  if (client instanceof Response) return client;
+
+  const name = decodePathParam(rawOrg).trim();
+  let access: "grant" | "revoke" | null = null;
+  let reason: string | null = null;
+  if (method === "PUT") {
+    const payload = await readJsonBody(req);
+    const input = readInputString(payload, null, "access").toLowerCase();
+    if (input !== "grant" && input !== "revoke") {
+      return json(
+        400,
+        { error: "access must be grant or revoke." },
+        baseHeaders,
+      );
+    }
+    access = input;
+    reason = readInputString(payload, null, "reason") || null;
+  }
+
+  try {
+    const org = await unwrap(
+      client.GET("/orgs/{org}", { params: { path: { org: name } } }),
+    );
+    const giteaOrgId = org.id ?? 0;
+    if (access) {
+      await subscriptionStore.putAccessOverride({
+        giteaOrgId,
+        access,
+        reason,
+        updatedBy: auth.currentUser.username,
+        updatedAt: Date.now(),
+      });
+    } else {
+      await subscriptionStore.deleteAccessOverride(giteaOrgId);
+    }
+    logger.info("Site admin changed an organization's access", {
+      admin: auth.currentUser.username,
+      organization: name,
+      giteaOrgId,
+      access: access ?? "cleared",
+    });
+    return json(
+      200,
+      {
+        organization: name,
+        billing: billingState(
+          await subscriptionStore.resolveAccess(giteaOrgId),
+        ),
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to change this organization's access.",
+    );
   }
 }
 
@@ -15866,6 +16074,16 @@ async function handleRequest(req: Request): Promise<Response> {
     response = await handleAdminOrganizations(req, baseHeaders);
   } else if (pathname === "/api/app/admin/binders" && method === "GET") {
     response = await handleAdminBinders(req, baseHeaders);
+  } else if (
+    /^\/api\/app\/admin\/organizations\/[^/]+\/access$/.test(pathname) &&
+    (method === "PUT" || method === "DELETE")
+  ) {
+    response = await handleAdminOrganizationAccess(
+      req,
+      baseHeaders,
+      pathname.split("/")[5] ?? "",
+      method,
+    );
   } else if (pathname === "/api/app/admin/users" && method === "POST") {
     response = await handleAdminCreateUser(req, baseHeaders);
   } else if (pathname === "/api/app/admin/system" && method === "GET") {
@@ -15910,6 +16128,10 @@ async function handleRequest(req: Request): Promise<Response> {
     response = await handleDevGrantSubscription(req, baseHeaders);
   } else if (pathname === "/api/dev/end-trial" && method === "POST") {
     response = await handleDevEndTrial(req, baseHeaders);
+  } else if (pathname === "/api/dev/email" && method === "POST") {
+    response = await handleDevEmail(req, baseHeaders);
+  } else if (pathname === "/api/dev/organization-plan" && method === "POST") {
+    response = await handleDevOrganizationPlan(req, baseHeaders);
   } else {
     const adminSubscriptionAccessActionMatch = pathname.match(
       /^\/api\/app\/admin\/subscriptions\/access\/([^/]+)$/,

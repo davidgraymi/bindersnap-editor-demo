@@ -85,7 +85,57 @@ describe("parseSeedScenario", () => {
       owner: "alice",
       owners: [],
       groups: [],
+      plan: "trial",
     });
+    expect(scenario.otherOrganizations).toEqual([]);
+    // A seeded account has confirmed its address unless it says otherwise.
+    expect(scenario.users[0]?.emailConfirmed).toBe(true);
+  });
+
+  test("reads other organizations, each on a plan", () => {
+    const scenario = parseSeedScenario(
+      MINIMAL.replace(
+        "binders: []",
+        `otherOrganizations:
+  - name: lakeside-hospice
+    displayName: Lakeside Hospice
+    owner: alice
+    plan: past_due
+binders: []`,
+      ),
+    );
+    expect(scenario.otherOrganizations).toEqual([
+      {
+        name: "lakeside-hospice",
+        displayName: "Lakeside Hospice",
+        owner: "alice",
+        members: [],
+        plan: "past_due",
+      },
+    ]);
+  });
+
+  test("refuses a plan nobody is on, and a stranger in another organization", () => {
+    expect(() =>
+      parseSeedScenario(
+        MINIMAL.replace(
+          "  owner: alice\n",
+          "  owner: alice\n  plan: forever\n",
+        ),
+      ),
+    ).toThrow("scenario.organization.plan");
+    expect(() =>
+      parseSeedScenario(
+        MINIMAL.replace(
+          "binders: []",
+          `otherOrganizations:
+  - name: lakeside-hospice
+    displayName: Lakeside Hospice
+    owner: zed
+binders: []`,
+        ),
+      ),
+    ).toThrow('unknown user "zed"');
   });
 
   test("defaults a document's format to the editor's own JSON", () => {

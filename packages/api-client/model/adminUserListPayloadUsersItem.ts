@@ -5,6 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { AdminUserListPayloadUsersItemEmailConfirmation } from './adminUserListPayloadUsersItemEmailConfirmation.ts';
+import type { AdminUserListPayloadUsersItemOrganizationsItem } from './adminUserListPayloadUsersItemOrganizationsItem.ts';
 
 export type AdminUserListPayloadUsersItem = {
   username: string;
@@ -21,5 +22,5 @@ export type AdminUserListPayloadUsersItem = {
   /** @nullable */
   lastLoginAt: number | null;
   liveSessions: number;
-  organizations: string[];
+  organizations: AdminUserListPayloadUsersItemOrganizationsItem[];
 };

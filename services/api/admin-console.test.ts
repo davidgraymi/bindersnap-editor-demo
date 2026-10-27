@@ -209,7 +209,7 @@ test("listAdminUsers joins Gitea's accounts with what Bindersnap knows of them",
     "/users/{username}/orgs": (init) => ({
       data:
         init.params.path.username === "alice"
-          ? [{ username: "riverside-health" }]
+          ? [{ id: 7, username: "riverside-health" }]
           : [],
     }),
   });
@@ -222,6 +222,14 @@ test("listAdminUsers joins Gitea's accounts with what Bindersnap knows of them",
           ? { state: "confirmed", confirmedAt: 5, sentAt: 1 }
           : { state: "waiting", confirmedAt: null, sentAt: 1 },
       liveSessions: async (username) => (username === "alice" ? 2 : 0),
+      access: async (giteaOrgId) =>
+        access({
+          giteaOrgId,
+          hasAccess: true,
+          source: "admin_grant",
+          subscription: null,
+          trialEndsAt: null,
+        }),
     },
     { page: 1, limit: 2, query: "a" },
   );
@@ -239,7 +247,8 @@ test("listAdminUsers joins Gitea's accounts with what Bindersnap knows of them",
     emailConfirmation: "confirmed",
     isSiteAdmin: true,
     liveSessions: 2,
-    organizations: ["riverside-health"],
+    // Each organization with what it pays, so People can give free access.
+    organizations: [{ id: 7, name: "riverside-health", billing: "comped" }],
     lastLoginAt: Date.parse("2026-03-14T00:00:00Z"),
   });
   expect(result.users[1]).toMatchObject({

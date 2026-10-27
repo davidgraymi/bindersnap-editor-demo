@@ -9,14 +9,18 @@ import {
 import { RefreshCw, Search } from "lucide-react";
 
 import {
+  clearAdminOrganizationAccess,
   getAdminOverview,
   listAdminBinders,
   listAdminOrganizations,
   listAdminUsers,
+  setAdminOrganizationAccess,
+  type AdminBillingState,
   type AdminBinderListPayload,
   type AdminOrganizationListPayload,
   type AdminOverviewPayload,
   type AdminUserListPayload,
+  type AdminUserOrganization,
 } from "../api";
 import {
   ADMIN_SECTION_LABELS,
@@ -40,7 +44,6 @@ import {
   type AdminSection,
   type AppRoute,
 } from "../routes";
-import { AdminSubscriptionManagementPage } from "./AdminSubscriptionManagementPage";
 import {
   AdminConfig,
   AdminSystem,
@@ -112,10 +115,8 @@ export function AdminConsolePage({
         <AdminBinders link={link} />
       ) : section === "system" ? (
         <AdminSystem />
-      ) : section === "config" ? (
-        <AdminConfig />
       ) : (
-        <AdminSubscriptionManagementPage />
+        <AdminConfig />
       )}
     </section>
   );
@@ -437,6 +438,9 @@ function AdminUsers({ link }: { link: LinkProps }) {
     () => listAdminUsers(query, page, PAGE_SIZE),
     `users:${query}:${page}:${created}`,
   );
+  // What a free-access button changed, by organization: it shows on every
+  // row that organization's people are on, without reading the page again.
+  const [billing, setBilling] = useState<Record<string, AdminBillingState>>({});
 
   return (
     <div className="admin-console-stack">
@@ -519,13 +523,22 @@ function AdminUsers({ link }: { link: LinkProps }) {
                     {user.organizations.length === 0 ? (
                       <span className="admin-console-secondary">None</span>
                     ) : (
-                      <span className="admin-console-chips">
+                      <ul className="admin-console-orgs">
                         {user.organizations.map((org) => (
-                          <a key={org} {...link({ kind: "organization", org })}>
-                            {org}
-                          </a>
+                          <OrganizationAccess
+                            key={org.name}
+                            org={org}
+                            billing={billing[org.name] ?? org.billing}
+                            link={link}
+                            onChanged={(next) =>
+                              setBilling((current) => ({
+                                ...current,
+                                [org.name]: next,
+                              }))
+                            }
+                          />
                         ))}
-                      </span>
+                      </ul>
                     )}
                   </td>
                   <td>{formatAdminDate(user.lastLoginAt)}</td>
@@ -538,6 +551,75 @@ function AdminUsers({ link }: { link: LinkProps }) {
         )}
       </ListPanel>
     </div>
+  );
+}
+
+/**
+ * One of a person's organizations: what it pays, and the one switch a site
+ * admin has over that. Free access is the organization's (ADR 0004), so
+ * giving it here gives it to everybody in the organization, which the label
+ * says.
+ */
+function OrganizationAccess({
+  org,
+  billing,
+  link,
+  onChanged,
+}: {
+  org: AdminUserOrganization;
+  billing: AdminBillingState;
+  link: LinkProps;
+  onChanged: (billing: AdminBillingState) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // An override is in force: ending it puts them back on what they pay.
+  const overridden = billing === "comped" || billing === "revoked";
+
+  const change = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = overridden
+        ? await clearAdminOrganizationAccess(org.name)
+        : await setAdminOrganizationAccess(org.name, "grant");
+      onChanged(result.billing);
+    } catch (caught) {
+      setError(errorMessage(caught, "Unable to change this organization."));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <li className="admin-console-org">
+      <a {...link({ kind: "organization", org: org.name })}>{org.name}</a>
+      <StatusChip tone={billingTone(billing)} size="sm">
+        {BILLING_LABELS[billing]}
+      </StatusChip>
+      <button
+        type="button"
+        className="bs-btn bs-btn-secondary bs-btn--sm"
+        disabled={busy}
+        aria-label={`${
+          billing === "comped"
+            ? "End free access for"
+            : billing === "revoked"
+              ? "Restore access for"
+              : "Give free access to"
+        } ${org.name}`}
+        onClick={() => void change()}
+      >
+        {busy
+          ? "Saving…"
+          : billing === "comped"
+            ? "End free access"
+            : billing === "revoked"
+              ? "Restore access"
+              : "Give free access"}
+      </button>
+      {error ? <span className="app-inline-error">{error}</span> : null}
+    </li>
   );
 }
 

@@ -2849,7 +2849,33 @@
                 "organizations": {
                   "type": "array",
                   "items": {
-                    "type": "string"
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "number"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "billing": {
+                        "type": "string",
+                        "enum": [
+                          "paying",
+                          "past_due",
+                          "trial",
+                          "trial_ended",
+                          "comped",
+                          "revoked",
+                          "canceled",
+                          "none"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "billing"
+                    ]
                   }
                 }
               },
@@ -15783,7 +15809,33 @@
                           "organizations": {
                             "type": "array",
                             "items": {
-                              "type": "string"
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "billing": {
+                                  "type": "string",
+                                  "enum": [
+                                    "paying",
+                                    "past_due",
+                                    "trial",
+                                    "trial_ended",
+                                    "comped",
+                                    "revoked",
+                                    "canceled",
+                                    "none"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "name",
+                                "billing"
+                              ]
                             }
                           }
                         },
@@ -16060,6 +16112,133 @@
                     "limit",
                     "total",
                     "hasMore"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/admin/organizations/{org}/access": {
+      "put": {
+        "operationId": "setAdminOrganizationAccess",
+        "tags": [
+          "admin"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "access": {
+                    "type": "string",
+                    "enum": [
+                      "grant",
+                      "revoke"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "access"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Free access given, or access cut off",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "billing": {
+                      "type": "string",
+                      "enum": [
+                        "paying",
+                        "past_due",
+                        "trial",
+                        "trial_ended",
+                        "comped",
+                        "revoked",
+                        "canceled",
+                        "none"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "billing"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "clearAdminOrganizationAccess",
+        "tags": [
+          "admin"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Back on whatever the organization pays",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "billing": {
+                      "type": "string",
+                      "enum": [
+                        "paying",
+                        "past_due",
+                        "trial",
+                        "trial_ended",
+                        "comped",
+                        "revoked",
+                        "canceled",
+                        "none"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "billing"
                   ]
                 }
               }

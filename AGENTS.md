@@ -234,9 +234,9 @@ Routes:
   - `/-/billing` — the session's organization's billing, rewritten to
     `/{org}/-/billing`
   - `/-/admin` — the site admin console, Gitea site admins only: health
-    checks, then `/-/admin/users` (and creating an account),
-    `/-/admin/organizations`, `/-/admin/binders`, `/-/admin/subscriptions`
-    (Pro access overrides), `/-/admin/system` (versions, the pinned images,
+    checks, then `/-/admin/users` (creating an account, and giving a
+    person's organization free access), `/-/admin/organizations`,
+    `/-/admin/binders`, `/-/admin/system` (versions, the pinned images,
     memory, disk, maintenance) and `/-/admin/config` (every setting; a secret
     only as set or not, `services/api/admin-system.ts`)
 - `/{org}` — an organization; `/{org}/-/people`, `/{org}/-/billing`,

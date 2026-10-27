@@ -86,6 +86,27 @@ export const AdminOverviewPayloadSchema = z.object({
 });
 export type AdminOverviewPayload = z.infer<typeof AdminOverviewPayloadSchema>;
 
+export const AdminBillingStateSchema = z.enum([
+  "paying",
+  "past_due",
+  "trial",
+  "trial_ended",
+  "comped",
+  "revoked",
+  "canceled",
+  "none",
+]);
+export type AdminBillingState = z.infer<typeof AdminBillingStateSchema>;
+
+// What each of a person's organizations pays, so free access is given from
+// the People list. Billing stays the organization's (ADR 0004).
+export const AdminUserOrganizationSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  billing: AdminBillingStateSchema,
+});
+export type AdminUserOrganization = z.infer<typeof AdminUserOrganizationSchema>;
+
 export const AdminUserRowSchema = z.object({
   username: z.string(),
   fullName: z.string(),
@@ -99,7 +120,7 @@ export const AdminUserRowSchema = z.object({
   createdAt: z.number().nullable(),
   lastLoginAt: z.number().nullable(),
   liveSessions: z.number(),
-  organizations: z.array(z.string()),
+  organizations: z.array(AdminUserOrganizationSchema),
 });
 export type AdminUserRow = z.infer<typeof AdminUserRowSchema>;
 
@@ -110,17 +131,21 @@ export const AdminUserListPayloadSchema = z.object({
 });
 export type AdminUserListPayload = z.infer<typeof AdminUserListPayloadSchema>;
 
-export const AdminBillingStateSchema = z.enum([
-  "paying",
-  "past_due",
-  "trial",
-  "trial_ended",
-  "comped",
-  "revoked",
-  "canceled",
-  "none",
-]);
-export type AdminBillingState = z.infer<typeof AdminBillingStateSchema>;
+export const SetAdminOrganizationAccessBodySchema = z.object({
+  access: z.enum(["grant", "revoke"]),
+  reason: z.string().optional(),
+});
+export type SetAdminOrganizationAccessBody = z.infer<
+  typeof SetAdminOrganizationAccessBodySchema
+>;
+
+export const AdminOrganizationAccessResultSchema = z.object({
+  organization: z.string(),
+  billing: AdminBillingStateSchema,
+});
+export type AdminOrganizationAccessResult = z.infer<
+  typeof AdminOrganizationAccessResultSchema
+>;
 
 export const AdminOrganizationRowSchema = z.object({
   id: z.number(),
