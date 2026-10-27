@@ -4,6 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { AuthSignupBodySource } from './authSignupBodySource.ts';
 
 export type AuthSignupBody = {
   /** @minLength 1 */
@@ -19,4 +20,5 @@ export type AuthSignupBody = {
   /** @minLength 1 */
   acceptedTerms: string;
   turnstileToken?: string;
+  source?: AuthSignupBodySource;
 };

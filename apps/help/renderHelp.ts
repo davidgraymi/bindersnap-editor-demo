@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import type { HelpGuide } from "../app/helpGuides";
 import { analyticsTag } from "../site/analytics";
+import { SIGNUP_SOURCE_SCRIPT } from "../site/signupSource";
 import {
   breadcrumbLd,
   jsonLdScript,
@@ -113,6 +114,7 @@ ${
 <link rel="stylesheet" href="${FONTS}">
 <link rel="stylesheet" href="/help/help.css">
 <script>${THEME_SCRIPT}</script>
+<script>${SIGNUP_SOURCE_SCRIPT}</script>
 ${jsonLdScript(params.structuredData)}
 ${analyticsTag(process.env.BINDERSNAP_GA_MEASUREMENT_ID, "/help")}
 </head>

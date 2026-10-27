@@ -1,4 +1,5 @@
 import { retargetAppLinks } from "./appLink";
+import { tagSignupLinks } from "./signupSource";
 import {
   bindSignupEnterKeys,
   installScrollReveal,
@@ -21,6 +22,7 @@ document.documentElement.setAttribute("data-landing-ready", "");
 
 restoreTheme();
 retargetAppLinks();
+tagSignupLinks(window);
 
 installScrollReveal();
 

@@ -66,8 +66,9 @@ test("landing signup routes to the signup page with the typed email", () => {
     navigations.push(url);
   });
 
+  // The address typed, then where the visit came from (`signupSource.ts`).
   expect(targetUrl).toBe(
-    "https://app.bindersnap.com/-/signup?email=team%40bindersnap.com",
+    "https://app.bindersnap.com/-/signup?email=team%40bindersnap.com&from=%2F",
   );
   expect(navigations).toEqual([targetUrl]);
 });

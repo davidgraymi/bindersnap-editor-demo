@@ -522,3 +522,29 @@ export const legalAgreements = sqliteTable(
     index("legal_agreements_organization_idx").on(table.organizationId),
   ],
 );
+
+/**
+ * Where each account's signup came from (`packages/utils/signupSource.ts`):
+ * the page of bindersnap.com its visit began on, the page it signed up from,
+ * the site that sent it, and any campaign tags. One row per account, written
+ * at signup, whether or not there was anything to say, so accounts with no
+ * row are the ones made before this was recorded. Configuration about the
+ * account, not evidence, so SQLite (ADR 0004); deleted with the account.
+ */
+export const signupSources = sqliteTable(
+  "signup_sources",
+  {
+    /** Lower-cased: Gitea logins are case-insensitive. */
+    username: text("username").primaryKey(),
+    entryPath: text("entry_path"),
+    fromPath: text("from_path"),
+    referrerHost: text("referrer_host"),
+    utmSource: text("utm_source"),
+    utmMedium: text("utm_medium"),
+    utmCampaign: text("utm_campaign"),
+    /** Signed up from an invitation to someone else's organization. */
+    invited: integer("invited", { mode: "boolean" }).notNull().default(false),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [index("signup_sources_created_at_idx").on(table.createdAt)],
+);

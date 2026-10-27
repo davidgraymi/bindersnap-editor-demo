@@ -226,6 +226,7 @@ import { scopeChangeBase, scopeRepo } from "./changeScope";
 import { LEGAL_VERSION } from "../../packages/utils/legal";
 import { isCommitRef } from "../../packages/utils/gitRef";
 import { publicEnv } from "./publicEnv";
+import type { SignupSource } from "../../packages/utils/signupSource";
 
 /**
  * What a read can be told by whoever asked for it: to stop. TanStack Query
@@ -289,6 +290,7 @@ export async function signup(
   password: string,
   turnstileToken: string | null,
   invitation?: string | null,
+  source?: SignupSource | null,
 ): Promise<SessionAuthState> {
   // No username: the API makes one from the name (`signup-username.ts`), and
   // she signs in with her email.
@@ -301,6 +303,8 @@ export async function signup(
     acceptedTerms: LEGAL_VERSION,
     ...(turnstileToken ? { turnstileToken } : {}),
     ...(invitation ? { invitation } : {}),
+    // Which page of the site sent them, if the link said (`signupSource.ts`).
+    ...(source ? { source } : {}),
   });
   return response.data;
 }

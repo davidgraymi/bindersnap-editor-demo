@@ -2,6 +2,7 @@ import { stripTags } from "../../packages/utils/stripTags";
 import { markdownToHtml } from "../app/markdown";
 import { renderHelpCss } from "../help/renderHelp";
 import { analyticsTag } from "../site/analytics";
+import { SIGNUP_SOURCE_SCRIPT } from "../site/signupSource";
 import { linkCard, pageHero, siteFooter, siteHeader } from "../site/chrome";
 import {
   breadcrumbLd,
@@ -94,6 +95,7 @@ ${
 <link rel="stylesheet" href="${FONTS}">
 <link rel="stylesheet" href="/legal/legal.css">
 <script>${THEME_SCRIPT}</script>
+<script>${SIGNUP_SOURCE_SCRIPT}</script>
 ${jsonLdScript(params.structuredData)}
 ${analyticsTag(process.env.BINDERSNAP_GA_MEASUREMENT_ID, "/legal")}
 </head>

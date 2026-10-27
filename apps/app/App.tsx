@@ -68,6 +68,7 @@ import {
   type AppRoute,
 } from "./routes";
 import { resolveSignupPrefill } from "./authIntent";
+import { rememberedSignupSource, rememberSignupSource } from "./signupSource";
 import { validateFullName } from "../../packages/utils/personName";
 import { AgreementCheckbox } from "./components/AgreementCheckbox";
 import { AcceptTermsPage } from "./components/AcceptTermsPage";
@@ -1052,6 +1053,8 @@ export function App() {
       route.kind === "signup"
         ? resolveSignupPrefill(window.location.search).email
         : "";
+    // Where the site's link said this signup came from, kept for the tab.
+    if (route.kind === "signup") rememberSignupSource(window.location.search);
 
     return (
       <LoginPage
@@ -1094,6 +1097,7 @@ export function App() {
             password,
             turnstileToken,
             pendingInvitationToken(),
+            rememberedSignupSource(),
           );
           // Carried from the signup form so the create-organization screen
           // arrives filled in rather than asking again.
