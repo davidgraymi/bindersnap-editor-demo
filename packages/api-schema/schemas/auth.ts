@@ -33,6 +33,21 @@ export const LoginBodySchema = z.object({
 });
 export type LoginBody = z.infer<typeof LoginBodySchema>;
 
+/**
+ * Where the signup came from, as the public site's signup links say
+ * (`packages/utils/signupSource.ts`). Every field is optional, and the API
+ * drops any that is not the shape it should be rather than refusing the signup.
+ */
+export const SignupSourceSchema = z.object({
+  entryPath: z.string().optional(),
+  fromPath: z.string().optional(),
+  referrerHost: z.string().optional(),
+  utmSource: z.string().optional(),
+  utmMedium: z.string().optional(),
+  utmCampaign: z.string().optional(),
+});
+export type SignupSourceBody = z.infer<typeof SignupSourceSchema>;
+
 export const SignupBodySchema = z.object({
   /** Joined into the account's one full name, which the record writes. */
   firstName: z.string().min(1),
@@ -59,6 +74,8 @@ export const SignupBodySchema = z.object({
    * secret (production); refused with `403`, `code: "turnstile_failed"`.
    */
   turnstileToken: z.string().optional(),
+  /** Kept beside the account; never refused, only cleaned. */
+  source: SignupSourceSchema.optional(),
 });
 export type SignupBody = z.infer<typeof SignupBodySchema>;
 

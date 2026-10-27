@@ -705,7 +705,8 @@ function typeInto(input: HTMLInputElement, value: string) {
 }
 
 test("App sends the signup form's Turnstile token, and asks for a new one after", async () => {
-  installDom("/-/signup");
+  // As the site's links arrive: with where the visit came from.
+  installDom("/-/signup?entry=/glossary/qapi&from=/pricing&ref=www.google.com");
   process.env.BUN_PUBLIC_SIGNUP_TURNSTILE_SITE_KEY = "1x00000000000000000000AA";
   let resets = 0;
   let tokens = 0;
@@ -760,6 +761,11 @@ test("App sends the signup form's Turnstile token, and asks for a new one after"
     await waitFor(() => {
       expect(mockSignup).toHaveBeenCalledTimes(1);
       expect((mockSignup.mock.calls[0] as unknown[])[3]).toBe("signup-token");
+      expect((mockSignup.mock.calls[0] as unknown[])[5]).toEqual({
+        entryPath: "/glossary/qapi",
+        fromPath: "/pricing",
+        referrerHost: "www.google.com",
+      });
       expect(resets).toBe(1);
       expect(container.querySelector(".app-inline-error")?.textContent).toBe(
         "That email is taken.",

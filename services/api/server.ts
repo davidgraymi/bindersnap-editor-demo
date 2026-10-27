@@ -35,6 +35,7 @@ import {
   legalAgreementStore,
   type NewLegalAgreement,
 } from "./legal-agreements";
+import { signupSourceStore } from "./signup-sources";
 import {
   LEGAL_ACCEPT_AGAIN_VERSION,
   LEGAL_VERSION,
@@ -2238,6 +2239,26 @@ function recordLegalAgreement(agreement: NewLegalAgreement): void {
   }
 }
 
+/**
+ * Where a new account came from, for counting which pages of the site bring
+ * in customers. Like the agreement above, a row that does not land is logged
+ * and left: it is no reason to fail a signup that has already made an account.
+ */
+function recordSignupSource(
+  username: string,
+  source: unknown,
+  invited: boolean,
+): void {
+  try {
+    signupSourceStore().record(username, source, invited);
+  } catch (err) {
+    logger.error("Failed to record where a signup came from", {
+      username,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 /** Gitea's id for the signed-in account, or null if Gitea will not say. */
 async function sessionUserId(client: GiteaClient): Promise<number | null> {
   const { data } = await client.GET("/user").catch(() => ({ data: undefined }));
@@ -2745,6 +2766,7 @@ async function handleSignup(
     invitation?: unknown;
     acceptedTerms?: unknown;
     turnstileToken?: unknown;
+    source?: unknown;
   }>(req);
   // Optional: the signup form no longer asks for one (`signup-username.ts`).
   // The seed and API callers that name one still get exactly that name.
@@ -2824,6 +2846,7 @@ async function handleSignup(
     version: LEGAL_VERSION,
   });
   startEmailVerification(username, email, invitationToken);
+  recordSignupSource(username, payload?.source, Boolean(invitationToken));
 
   const loginName = await verifyUserCredentials(username, password).catch(
     () => null,
@@ -3780,6 +3803,7 @@ async function handleDeleteAccount(
     // The token died with the account; only the row is left.
     await sessionStore.delete(session.id);
     emailVerificationStore().forget(username);
+    signupSourceStore().forget(username);
     logger.info("Account deleted", {
       username,
       organizationsLeft: orgs.length,

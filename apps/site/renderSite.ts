@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import { stripTags } from "../../packages/utils/stripTags";
 import { analyticsTag, trackAttributes } from "./analytics";
+import { SIGNUP_SOURCE_SCRIPT } from "./signupSource";
 import { appOrigin, appUrl } from "./appLink";
 import { renderHelpCss } from "../help/renderHelp";
 import { renderLegalBody } from "../legal/renderLegal";
@@ -145,6 +146,7 @@ ${
 <link rel="stylesheet" href="${FONTS}">
 <link rel="stylesheet" href="${SITE_CSS_PATH}">
 <script>${THEME_SCRIPT}</script>
+<script>${SIGNUP_SOURCE_SCRIPT}</script>
 ${jsonLdScript(graph)}
 ${analyticsTag(
   params.measurementId ?? process.env.BINDERSNAP_GA_MEASUREMENT_ID,

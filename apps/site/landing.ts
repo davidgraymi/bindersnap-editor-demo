@@ -1,5 +1,6 @@
 import { trackEvent } from "./analytics";
 import { appUrl } from "./appLink";
+import { signupSourceParams } from "./signupSource";
 
 export type SignupSource = "hero" | "cta";
 
@@ -31,13 +32,19 @@ export function toggleTheme(doc: Document = document): string {
   return nextTheme;
 }
 
-export function buildSignupUrl(email: string | null | undefined): string {
+export function buildSignupUrl(
+  email: string | null | undefined,
+  /** Where the visit came from (`signupSource.ts`), carried to the app. */
+  source?: URLSearchParams,
+): string {
   const params = new URLSearchParams();
   const normalizedEmail = email?.trim() ?? "";
 
   if (normalizedEmail) {
     params.set("email", normalizedEmail);
   }
+
+  for (const [name, value] of source ?? []) params.set(name, value);
 
   // The app's own origin (app.bindersnap.com), not this site's.
   const query = params.toString();
@@ -54,7 +61,10 @@ export function routeLandingSignup(
   const input = doc.getElementById(
     `${source}-email`,
   ) as HTMLInputElement | null;
-  const signupUrl = buildSignupUrl(input?.value);
+  const signupUrl = buildSignupUrl(
+    input?.value,
+    doc.defaultView ? signupSourceParams(doc.defaultView) : undefined,
+  );
   // Where on the page, and whether an address was typed: never the address.
   trackEvent("cta_click", {
     cta: source === "hero" ? "landing_hero" : "landing_closing",

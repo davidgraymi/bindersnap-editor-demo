@@ -66,12 +66,13 @@ describe("the help pages", () => {
   });
 
   test("a page is whole without running anything", () => {
-    // The only script that runs sets the theme; the other is JSON-LD data.
-    // The words are in the HTML as served.
+    // The scripts that run set the theme and tag the signup links
+    // (`apps/site/signupSource.ts`); the other is JSON-LD data. The words are
+    // in the HTML as served.
     const html = files.get("/help/approvals")!;
     expect(
       html.match(/<script(?! type="application\/ld\+json")/g),
-    ).toHaveLength(1);
+    ).toHaveLength(2);
     expect(html).toContain("<h2>How many approvals</h2>");
   });
 

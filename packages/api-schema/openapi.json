@@ -100,6 +100,29 @@
           },
           "turnstileToken": {
             "type": "string"
+          },
+          "source": {
+            "type": "object",
+            "properties": {
+              "entryPath": {
+                "type": "string"
+              },
+              "fromPath": {
+                "type": "string"
+              },
+              "referrerHost": {
+                "type": "string"
+              },
+              "utmSource": {
+                "type": "string"
+              },
+              "utmMedium": {
+                "type": "string"
+              },
+              "utmCampaign": {
+                "type": "string"
+              }
+            }
           }
         },
         "required": [
@@ -3612,6 +3635,29 @@
                   },
                   "turnstileToken": {
                     "type": "string"
+                  },
+                  "source": {
+                    "type": "object",
+                    "properties": {
+                      "entryPath": {
+                        "type": "string"
+                      },
+                      "fromPath": {
+                        "type": "string"
+                      },
+                      "referrerHost": {
+                        "type": "string"
+                      },
+                      "utmSource": {
+                        "type": "string"
+                      },
+                      "utmMedium": {
+                        "type": "string"
+                      },
+                      "utmCampaign": {
+                        "type": "string"
+                      }
+                    }
                   }
                 },
                 "required": [
