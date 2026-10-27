@@ -15,7 +15,7 @@
 #   3. Each module has a terraform.tfvars with non-derivable values filled in
 #   4. CLOUDFLARE_API_TOKEN (infra/edge), STRIPE_API_KEY (infra/billing, a
 #      live key) and STRIPE_TEST_API_KEY (infra/billing-test, a test key) are
-#      exported
+#      exported, or typed in when the script asks for them
 
 set -euo pipefail
 
@@ -213,6 +213,20 @@ tf_run() {
 echo "=== Bindersnap infrastructure: ${ACTION} ==="
 
 DRIFTED=()
+
+# Asks for a token that is not exported, without echoing it, when a person is
+# at the terminal. CI has no terminal and falls through to the checks below.
+prompt_secret() {
+  local name="$1" label="$2" value
+  if [[ -z "${!name:-}" && -t 0 ]]; then
+    read -rsp "${label}: " value
+    echo
+    export "${name}=${value}"
+  fi
+}
+prompt_secret CLOUDFLARE_API_TOKEN "Cloudflare token"
+prompt_secret STRIPE_API_KEY "Stripe live key"
+prompt_secret STRIPE_TEST_API_KEY "Stripe test key"
 
 # The edge module talks to Cloudflare, not AWS. Fail before anything applies
 # rather than half-way through.
