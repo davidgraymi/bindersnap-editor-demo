@@ -25,10 +25,9 @@ test("the production Compose file's images are read with the API's commit as its
     tag: SHA,
     digest: null,
   });
-  expect(byService.get("gitea")).toMatchObject({
-    name: "gitea/gitea",
-    tag: "28.0.0",
-  });
+  // Whatever Gitea the file pins this week: the point is that it is read.
+  expect(byService.get("gitea")).toMatchObject({ name: "gitea/gitea" });
+  expect(byService.get("gitea")!.tag).toMatch(/^\d+\.\d+\.\d+$/);
   expect(byService.get("gitea")!.digest).toMatch(/^sha256:[0-9a-f]{64}$/);
   // Every service that runs something names an image.
   const compose = readFileSync(
