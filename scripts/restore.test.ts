@@ -1,9 +1,26 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 const tempDirs: string[] = [];
+
+/** The Litestream image the production stack replicates with. */
+function composeLitestreamImage(): string {
+  const compose = readFileSync(
+    join(import.meta.dir, "../deploy/files/docker-compose.prod.yml"),
+    "utf8",
+  );
+  const image = compose.match(/^\s*image: (litestream\/litestream:\S+)$/m)?.[1];
+  if (!image) throw new Error("no litestream image in docker-compose.prod.yml");
+  return image;
+}
 
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
@@ -79,11 +96,9 @@ describe("restore.sh", () => {
     expect(args.slice(0, 3)).toEqual(["run", "--rm", "-v"]);
     expect(args[3]).toBe("bindersnap_gitea-data:/data/gitea");
     expect(args).toContain("--entrypoint");
-    expect(
-      args.find((arg) =>
-        arg.startsWith("litestream/litestream:0.3.14@sha256:"),
-      ),
-    ).toBeDefined();
+    // An older Litestream restoring a newer one's replica does not fail: it
+    // restores only the backups it can read, which can be days old.
+    expect(args).toContain(composeLitestreamImage());
     // The trailing positional arguments the inline script reads as $1..$3.
     expect(args.at(-3)).toBe("/data/gitea/gitea.db");
     expect(args.at(-1)).toBe("s3://bindersnap-litestream-test/gitea");

@@ -275,9 +275,8 @@ organizations and binders that will no longer exist.
 
 Some old data survives the wipe:
 
-- Litestream starts a new generation for each new database. It does not
-  restore on start, so the stack cannot bring the old data back. The old
-  generations stay in the S3 bucket until its lifecycle rule expires them.
+- Litestream does not restore on start, so the stack cannot bring the old
+  data back. The old backups stay in the S3 bucket.
 - The DLM snapshots of the data volume still hold the old data.
 - Stripe customers and subscriptions are not touched. A subscription that named
   an old organization belongs to nobody now. Cancel it in Stripe.

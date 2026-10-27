@@ -56,6 +56,11 @@ bindersnap-stack-up
 The old file stays beside the new one as `gitea.db.pre-restore-<time>`. If the
 restore fails part-way, move it back.
 
+`restore.sh` restores with the image the stack replicates with, and must:
+Litestream 0.5 writes `ltx/` files, and 0.3 reads only its own `generations/`,
+so a 0.3 restore after the upgrade quietly returns the last backup 0.3 made.
+0.5 reads both and restores whichever is newer.
+
 ## Restore 2: the host or its volume is gone (EBS snapshot)
 
 1. Pick the newest good snapshot:

@@ -30,7 +30,7 @@ RESTORE_ASSUME_YES="${RESTORE_ASSUME_YES:-0}"
 COMPOSE_PROJECT="${COMPOSE_PROJECT:-bindersnap}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 # Keep in step with the litestream service in deploy/files/docker-compose.prod.yml.
-LITESTREAM_IMAGE="${LITESTREAM_IMAGE:-litestream/litestream:0.3.14@sha256:c5a1e1b01916b3a110f6600820ef176d048d9b9c2411ef0a680de0caa68934a5}"
+LITESTREAM_IMAGE="${LITESTREAM_IMAGE:-litestream/litestream:0.5.17@sha256:4b02b9859a6b6b4087d8b8944e15f7e984bd7957cba322bbeee38b0e27b9656a}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'

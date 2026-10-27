@@ -7,7 +7,7 @@
       "name": "MIT",
       "url": "http://opensource.org/licenses/MIT"
     },
-    "version": "28.0.0"
+    "version": "28.2.0"
   },
   "paths": {
     "/admin/actions/jobs": {
@@ -12409,6 +12409,9 @@
           },
           "404": {
             "$ref": "#/components/responses/notFound"
+          },
+          "423": {
+            "$ref": "#/components/responses/repoArchivedError"
           }
         }
       },
@@ -12470,6 +12473,9 @@
           },
           "412": {
             "$ref": "#/components/responses/error"
+          },
+          "423": {
+            "$ref": "#/components/responses/repoArchivedError"
           }
         }
       }
@@ -13660,6 +13666,9 @@
           },
           "404": {
             "$ref": "#/components/responses/notFound"
+          },
+          "423": {
+            "$ref": "#/components/responses/repoArchivedError"
           }
         }
       },
@@ -13711,6 +13720,9 @@
           },
           "404": {
             "$ref": "#/components/responses/notFound"
+          },
+          "423": {
+            "$ref": "#/components/responses/repoArchivedError"
           }
         }
       },
@@ -13759,6 +13771,9 @@
           },
           "404": {
             "$ref": "#/components/responses/notFound"
+          },
+          "423": {
+            "$ref": "#/components/responses/repoArchivedError"
           }
         }
       }
@@ -13822,6 +13837,9 @@
           },
           "422": {
             "$ref": "#/components/responses/validationError"
+          },
+          "423": {
+            "$ref": "#/components/responses/repoArchivedError"
           }
         }
       }

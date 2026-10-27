@@ -18,7 +18,7 @@ Gitea is where the evidence lives (non-negotiable 2). Read `AGENTS.md`
 - Types come from Gitea's own OpenAPI spec in `gitea-client/spec/`, generated
   by `bun run generate:gitea-client` against the local stack's Gitea. Check an
   endpoint there, not from memory: Gitea's API changes between releases, and
-  production runs 28.0.0.
+  production runs 28.2.0.
 - The `README.md` in that folder predates the BFF (it still mentions
   `sessionStorage`). Trust the code and `AGENTS.md` over it.
 - Unit tests mock the fetch layer and need no Gitea. Behaviour that depends on
