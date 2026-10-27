@@ -5,7 +5,11 @@
  * OpenAPI spec version: 1.0.0
  */
 import type {
+  CreateAdminUser201,
+  CreateAdminUserBody,
+  GetAdminConfig200,
   GetAdminOverview200,
+  GetAdminSystem200,
   ListAdminBinders200,
   ListAdminBindersParams,
   ListAdminOrganizations200,
@@ -14,6 +18,7 @@ import type {
   ListAdminSubscriptionAccessParams,
   ListAdminUsers200,
   ListAdminUsersParams,
+  RunAdminReconciler200,
   SetAdminSubscriptionAccess200,
   SetAdminSubscriptionAccessBody
 } from '../model';
@@ -87,6 +92,38 @@ export const listAdminUsers = async (params?: ListAdminUsersParams, options?: Pa
     method: 'GET'
 
 
+  }
+);}
+
+
+export type createAdminUserResponse201 = {
+  data: CreateAdminUser201
+  status: 201
+}
+
+export type createAdminUserResponseSuccess = (createAdminUserResponse201) & {
+  headers: Headers;
+};
+;
+
+export type createAdminUserResponse = (createAdminUserResponseSuccess)
+
+export const getCreateAdminUserUrl = () => {
+
+
+
+
+  return `/api/app/admin/users`
+}
+
+export const createAdminUser = async (createAdminUserBody: CreateAdminUserBody, options?: Parameters<typeof customFetch>[1]): Promise<createAdminUserResponse> => {
+
+  return customFetch<createAdminUserResponse>(getCreateAdminUserUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createAdminUserBody)
   }
 );}
 
@@ -202,6 +239,102 @@ export const listAdminSubscriptionAccess = async (params?: ListAdminSubscription
   {
     ...options,
     method: 'GET'
+
+
+  }
+);}
+
+
+export type getAdminSystemResponse200 = {
+  data: GetAdminSystem200
+  status: 200
+}
+
+export type getAdminSystemResponseSuccess = (getAdminSystemResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getAdminSystemResponse = (getAdminSystemResponseSuccess)
+
+export const getGetAdminSystemUrl = () => {
+
+
+
+
+  return `/api/app/admin/system`
+}
+
+export const getAdminSystem = async ( options?: Parameters<typeof customFetch>[1]): Promise<getAdminSystemResponse> => {
+
+  return customFetch<getAdminSystemResponse>(getGetAdminSystemUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type getAdminConfigResponse200 = {
+  data: GetAdminConfig200
+  status: 200
+}
+
+export type getAdminConfigResponseSuccess = (getAdminConfigResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getAdminConfigResponse = (getAdminConfigResponseSuccess)
+
+export const getGetAdminConfigUrl = () => {
+
+
+
+
+  return `/api/app/admin/config`
+}
+
+export const getAdminConfig = async ( options?: Parameters<typeof customFetch>[1]): Promise<getAdminConfigResponse> => {
+
+  return customFetch<getAdminConfigResponse>(getGetAdminConfigUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type runAdminReconcilerResponse200 = {
+  data: RunAdminReconciler200
+  status: 200
+}
+
+export type runAdminReconcilerResponseSuccess = (runAdminReconcilerResponse200) & {
+  headers: Headers;
+};
+;
+
+export type runAdminReconcilerResponse = (runAdminReconcilerResponseSuccess)
+
+export const getRunAdminReconcilerUrl = () => {
+
+
+
+
+  return `/api/app/admin/maintenance/reconciler`
+}
+
+export const runAdminReconciler = async ( options?: Parameters<typeof customFetch>[1]): Promise<runAdminReconcilerResponse> => {
+
+  return customFetch<runAdminReconcilerResponse>(getRunAdminReconcilerUrl(),
+  {
+    ...options,
+    method: 'POST'
 
 
   }

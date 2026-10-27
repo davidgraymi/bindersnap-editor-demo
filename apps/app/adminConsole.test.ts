@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 
 import {
+  formatBytes,
+  formatConfigValue,
+  formatUptime,
+  isCommitSha,
   formatAdminSeconds,
   formatRange,
   formatSize,
@@ -43,4 +47,20 @@ test("formatAdminSeconds reads Stripe's seconds", () => {
   expect(formatAdminSeconds(Date.UTC(2026, 2, 14, 12) / 1000)).toBe(
     "Mar 14, 2026",
   );
+});
+
+test("formatBytes, formatUptime and formatConfigValue read as a person would", () => {
+  expect(formatBytes(null)).toBe("—");
+  expect(formatBytes(512)).toBe("512 B");
+  expect(formatBytes(1536)).toBe("1.5 KB");
+  expect(formatBytes(120 * 1024 * 1024)).toBe("120 MB");
+  expect(formatUptime(0, 3 * 86_400_000 + 4 * 3_600_000)).toBe(
+    "3 days, 4 hours",
+  );
+  expect(formatUptime(0, 60_000)).toBe("1 minute");
+  expect(formatConfigValue(true)).toBe("Yes");
+  expect(formatConfigValue("")).toBe("Not set");
+  expect(formatConfigValue(["a", "b"])).toBe("a, b");
+  expect(isCommitSha("2ec0a5b93e300610fd6051d349e54a25e4ec0829")).toBe(true);
+  expect(isCommitSha("unknown")).toBe(false);
 });

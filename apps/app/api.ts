@@ -88,6 +88,11 @@ import type {
 } from "../../packages/api-schema/schemas/billing";
 import type {
   AdminBinderListPayload,
+  AdminConfigPayload,
+  AdminCreateUserBody,
+  AdminCreatedUser,
+  AdminReconcilerRun,
+  AdminSystemPayload,
   AdminOrganizationListPayload,
   AdminOverviewPayload,
   AdminSubscriptionAccessListPayload,
@@ -136,6 +141,13 @@ export type {
 export type {
   AdminBillingState,
   AdminBinderListPayload,
+  AdminConfigEntry,
+  AdminConfigPayload,
+  AdminCreateUserBody,
+  AdminCreatedUser,
+  AdminReconcilerRun,
+  AdminReleaseImage,
+  AdminSystemPayload,
   AdminBinderRow,
   AdminHealthCheck,
   AdminOrganizationListPayload,
@@ -2225,6 +2237,29 @@ export async function listAdminBinders(
     page: String(page),
     limit: String(limit),
   });
+  return response.data;
+}
+
+export async function getAdminSystem(): Promise<AdminSystemPayload> {
+  const response = await AdminClient.getAdminSystem();
+  return response.data;
+}
+
+export async function getAdminConfig(): Promise<AdminConfigPayload> {
+  const response = await AdminClient.getAdminConfig();
+  // orval widens the value union to `unknown`; the schema says what it is.
+  return response.data as AdminConfigPayload;
+}
+
+export async function createAdminUser(
+  body: AdminCreateUserBody,
+): Promise<AdminCreatedUser> {
+  const response = await AdminClient.createAdminUser(body);
+  return response.data;
+}
+
+export async function runAdminReconciler(): Promise<AdminReconcilerRun> {
+  const response = await AdminClient.runAdminReconciler();
   return response.data;
 }
 

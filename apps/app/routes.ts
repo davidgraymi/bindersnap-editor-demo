@@ -116,6 +116,8 @@ export const ADMIN_SECTIONS = [
   "organizations",
   "binders",
   "subscriptions",
+  "system",
+  "config",
 ] as const;
 export type AdminSection = (typeof ADMIN_SECTIONS)[number];
 
@@ -181,6 +183,8 @@ const APP_PAGES: Readonly<Record<string, AppRoute>> = {
   "/-/admin/binders": { kind: "admin", section: "binders" },
   // The console began as this one page, and its address still works.
   "/-/admin/subscriptions": { kind: "admin", section: "subscriptions" },
+  "/-/admin/system": { kind: "admin", section: "system" },
+  "/-/admin/config": { kind: "admin", section: "config" },
   "/-/organizations/new": { kind: "createOrganization" },
   // Billing belongs to an organization, at `/{org}/-/billing`. This one asks
   // for the session's oldest, and the app rewrites the address to say which.

@@ -9,7 +9,73 @@ export const ADMIN_SECTION_LABELS: Record<AdminSection, string> = {
   organizations: "Organizations",
   binders: "Binders",
   subscriptions: "Pro access",
+  system: "System",
+  config: "Configuration",
 };
+
+/** Where a commit's changes can be read. */
+export const REPOSITORY_URL =
+  "https://github.com/davidgraymi/bindersnap-editor-demo";
+
+/** A full commit SHA, which is what a deployed `release` is. */
+export function isCommitSha(value: string | null): value is string {
+  return value !== null && /^[0-9a-f]{40}$/i.test(value);
+}
+
+export function commitUrl(sha: string): string {
+  return `${REPOSITORY_URL}/commit/${sha}`;
+}
+
+/** "1.4 GB", "312 MB", "18 KB". */
+export function formatBytes(bytes: number | null): string {
+  if (bytes === null) return "—";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  const shown =
+    unit === 0 || value >= 10 ? Math.round(value) : value.toFixed(1);
+  return `${shown} ${units[unit]}`;
+}
+
+/** "3 days, 4 hours", "12 minutes" — how long since. */
+export function formatUptime(
+  sinceMs: number,
+  now: number = Date.now(),
+): string {
+  const minutes = Math.max(0, Math.floor((now - sinceMs) / 60_000));
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  const plural = (count: number, unit: string) =>
+    `${count} ${unit}${count === 1 ? "" : "s"}`;
+  if (days > 0) return `${plural(days, "day")}, ${plural(hours, "hour")}`;
+  if (hours > 0)
+    return `${plural(hours, "hour")}, ${plural(minutes % 60, "minute")}`;
+  return plural(minutes, "minute");
+}
+
+/** `gitea/gitea:28.0.0`: the name and tag, without the digest. */
+export function imageReference(image: {
+  name: string;
+  tag: string | null;
+  digest: string | null;
+}): string {
+  return `${image.name}${image.tag ? `:${image.tag}` : ""}`;
+}
+
+/** A setting's value as a person reads it. */
+export function formatConfigValue(
+  value: string | number | boolean | string[] | null | undefined,
+): string {
+  if (value === null || value === undefined || value === "") return "Not set";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (Array.isArray(value))
+    return value.length === 0 ? "None" : value.join(", ");
+  return String(value);
+}
 
 export function healthTone(status: AdminHealthCheck["status"]): StatusTone {
   return status === "ok"

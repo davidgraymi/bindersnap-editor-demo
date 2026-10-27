@@ -234,8 +234,11 @@ Routes:
   - `/-/billing` — the session's organization's billing, rewritten to
     `/{org}/-/billing`
   - `/-/admin` — the site admin console, Gitea site admins only: health
-    checks, then `/-/admin/users`, `/-/admin/organizations`,
-    `/-/admin/binders` and `/-/admin/subscriptions` (Pro access overrides)
+    checks, then `/-/admin/users` (and creating an account),
+    `/-/admin/organizations`, `/-/admin/binders`, `/-/admin/subscriptions`
+    (Pro access overrides), `/-/admin/system` (versions, the pinned images,
+    memory, disk, maintenance) and `/-/admin/config` (every setting; a secret
+    only as set or not, `services/api/admin-system.ts`)
 - `/{org}` — an organization; `/{org}/-/people`, `/{org}/-/billing`,
   `/{org}/-/settings`, `/{org}/-/binders/new`
 - `/{org}/{binder}` — a binder; its screens and documents are behind its own
@@ -359,7 +362,8 @@ token — not `/auth/me`, not login (#662) — and nothing about Gitea goes into
 **The API's own Gitea tokens are split by power.** `BINDERSNAP_GITEA_SERVICE_TOKEN`
 (read scopes only) must be set; the API exits at startup if it is missing in
 production. `BINDERSNAP_GITEA_ADMIN_TOKEN` (`write:admin` only) is used solely
-for signup, password changes, account deletion and token revocation. Never give
+for creating an account (at signup, or by a site admin from `/-/admin/users`),
+password changes, account deletion and token revocation. Never give
 the read token a write scope, and never use the admin token for a read: the
 read token runs on nearly every request. Anything a person can do in Gitea
 themselves — renaming their own draft, say — is done with their own session

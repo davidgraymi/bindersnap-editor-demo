@@ -41,6 +41,11 @@ import {
   type AppRoute,
 } from "../routes";
 import { AdminSubscriptionManagementPage } from "./AdminSubscriptionManagementPage";
+import {
+  AdminConfig,
+  AdminSystem,
+  NewAccountPanel,
+} from "./AdminSystemSections";
 import { SkeletonPanel } from "./Skeleton";
 import { StatusChip } from "./StatusChip";
 
@@ -105,6 +110,10 @@ export function AdminConsolePage({
         <AdminOrganizations link={link} />
       ) : section === "binders" ? (
         <AdminBinders link={link} />
+      ) : section === "system" ? (
+        <AdminSystem />
+      ) : section === "config" ? (
+        <AdminConfig />
       ) : (
         <AdminSubscriptionManagementPage />
       )}
@@ -422,101 +431,113 @@ function useListQuery() {
 
 function AdminUsers({ link }: { link: LinkProps }) {
   const { query, page, setPage, search } = useListQuery();
+  // A new account lands on the first page: the list is newest first.
+  const [created, setCreated] = useState(0);
   const { data, error, loading } = useAdminList<AdminUserListPayload>(
     () => listAdminUsers(query, page, PAGE_SIZE),
-    `users:${query}:${page}`,
+    `users:${query}:${page}:${created}`,
   );
 
   return (
-    <ListPanel
-      label="People"
-      search={{
-        placeholder: "Search by name, username or email",
-        onSearch: search,
-      }}
-      page={page}
-      limit={PAGE_SIZE}
-      shown={data?.users.length ?? 0}
-      total={data?.total ?? null}
-      hasMore={data?.hasMore ?? false}
-      onPage={setPage}
-    >
-      {error ? (
-        <p className="app-inline-error">{error}</p>
-      ) : loading || !data ? (
-        <SkeletonPanel label="Loading people" rows={6} />
-      ) : data.users.length === 0 ? (
-        <div className="bs-empty">
-          <p className="bs-empty-lead">Nobody matches that.</p>
-        </div>
-      ) : (
-        <table className="admin-console-table">
-          <thead>
-            <tr>
-              <th scope="col">Person</th>
-              <th scope="col">Email</th>
-              <th scope="col">Organizations</th>
-              <th scope="col">Last signed in</th>
-              <th scope="col">Joined</th>
-              <th scope="col">Sessions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.users.map((user) => (
-              <tr key={user.username}>
-                <td>
-                  <span className="admin-console-primary">{user.username}</span>
-                  {user.fullName ? (
-                    <span className="admin-console-secondary">
-                      {user.fullName}
-                    </span>
-                  ) : null}
-                  <span className="admin-console-flags">
-                    {user.isSiteAdmin ? (
-                      <StatusChip tone="waiting" size="sm">
-                        Site admin
-                      </StatusChip>
-                    ) : null}
-                    {!user.active || user.prohibitLogin ? (
-                      <StatusChip tone="declined" size="sm">
-                        Cannot sign in
-                      </StatusChip>
-                    ) : null}
-                  </span>
-                </td>
-                <td>
-                  <span className="admin-console-primary">
-                    {user.email || "—"}
-                  </span>
-                  <StatusChip
-                    tone={emailTone(user.emailConfirmation)}
-                    size="sm"
-                  >
-                    {emailLabel(user.emailConfirmation)}
-                  </StatusChip>
-                </td>
-                <td>
-                  {user.organizations.length === 0 ? (
-                    <span className="admin-console-secondary">None</span>
-                  ) : (
-                    <span className="admin-console-chips">
-                      {user.organizations.map((org) => (
-                        <a key={org} {...link({ kind: "organization", org })}>
-                          {org}
-                        </a>
-                      ))}
-                    </span>
-                  )}
-                </td>
-                <td>{formatAdminDate(user.lastLoginAt)}</td>
-                <td>{formatAdminDate(user.createdAt)}</td>
-                <td className="admin-console-number">{user.liveSessions}</td>
+    <div className="admin-console-stack">
+      <NewAccountPanel
+        onCreated={() => {
+          setPage(1);
+          setCreated((count) => count + 1);
+        }}
+      />
+      <ListPanel
+        label="People"
+        search={{
+          placeholder: "Search by name, username or email",
+          onSearch: search,
+        }}
+        page={page}
+        limit={PAGE_SIZE}
+        shown={data?.users.length ?? 0}
+        total={data?.total ?? null}
+        hasMore={data?.hasMore ?? false}
+        onPage={setPage}
+      >
+        {error ? (
+          <p className="app-inline-error">{error}</p>
+        ) : loading || !data ? (
+          <SkeletonPanel label="Loading people" rows={6} />
+        ) : data.users.length === 0 ? (
+          <div className="bs-empty">
+            <p className="bs-empty-lead">Nobody matches that.</p>
+          </div>
+        ) : (
+          <table className="admin-console-table">
+            <thead>
+              <tr>
+                <th scope="col">Person</th>
+                <th scope="col">Email</th>
+                <th scope="col">Organizations</th>
+                <th scope="col">Last signed in</th>
+                <th scope="col">Joined</th>
+                <th scope="col">Sessions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </ListPanel>
+            </thead>
+            <tbody>
+              {data.users.map((user) => (
+                <tr key={user.username}>
+                  <td>
+                    <span className="admin-console-primary">
+                      {user.username}
+                    </span>
+                    {user.fullName ? (
+                      <span className="admin-console-secondary">
+                        {user.fullName}
+                      </span>
+                    ) : null}
+                    <span className="admin-console-flags">
+                      {user.isSiteAdmin ? (
+                        <StatusChip tone="waiting" size="sm">
+                          Site admin
+                        </StatusChip>
+                      ) : null}
+                      {!user.active || user.prohibitLogin ? (
+                        <StatusChip tone="declined" size="sm">
+                          Cannot sign in
+                        </StatusChip>
+                      ) : null}
+                    </span>
+                  </td>
+                  <td>
+                    <span className="admin-console-primary">
+                      {user.email || "—"}
+                    </span>
+                    <StatusChip
+                      tone={emailTone(user.emailConfirmation)}
+                      size="sm"
+                    >
+                      {emailLabel(user.emailConfirmation)}
+                    </StatusChip>
+                  </td>
+                  <td>
+                    {user.organizations.length === 0 ? (
+                      <span className="admin-console-secondary">None</span>
+                    ) : (
+                      <span className="admin-console-chips">
+                        {user.organizations.map((org) => (
+                          <a key={org} {...link({ kind: "organization", org })}>
+                            {org}
+                          </a>
+                        ))}
+                      </span>
+                    )}
+                  </td>
+                  <td>{formatAdminDate(user.lastLoginAt)}</td>
+                  <td>{formatAdminDate(user.createdAt)}</td>
+                  <td className="admin-console-number">{user.liveSessions}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </ListPanel>
+    </div>
   );
 }
 

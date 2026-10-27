@@ -3103,6 +3103,303 @@
           "total",
           "hasMore"
         ]
+      },
+      "AdminSystemPayload": {
+        "type": "object",
+        "properties": {
+          "bindersnap": {
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": "string",
+                "nullable": true
+              },
+              "commit": {
+                "type": "string",
+                "nullable": true
+              },
+              "environment": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "version",
+              "commit",
+              "environment"
+            ]
+          },
+          "gitea": {
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": "string",
+                "nullable": true
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "version",
+              "url"
+            ]
+          },
+          "images": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "object",
+              "properties": {
+                "service": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "tag": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "digest": {
+                  "type": "string",
+                  "nullable": true
+                }
+              },
+              "required": [
+                "service",
+                "name",
+                "tag",
+                "digest"
+              ]
+            }
+          },
+          "runtime": {
+            "type": "object",
+            "properties": {
+              "bunVersion": {
+                "type": "string"
+              },
+              "bunRevision": {
+                "type": "string"
+              },
+              "platform": {
+                "type": "string"
+              },
+              "arch": {
+                "type": "string"
+              },
+              "hostname": {
+                "type": "string"
+              },
+              "pid": {
+                "type": "number"
+              },
+              "startedAt": {
+                "type": "number"
+              },
+              "cpuCount": {
+                "type": "number"
+              },
+              "loadAverage": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "cpuUserSeconds": {
+                "type": "number"
+              },
+              "cpuSystemSeconds": {
+                "type": "number"
+              },
+              "memory": {
+                "type": "object",
+                "properties": {
+                  "rss": {
+                    "type": "number"
+                  },
+                  "heapUsed": {
+                    "type": "number"
+                  },
+                  "heapTotal": {
+                    "type": "number"
+                  },
+                  "external": {
+                    "type": "number"
+                  },
+                  "arrayBuffers": {
+                    "type": "number"
+                  },
+                  "hostTotal": {
+                    "type": "number"
+                  },
+                  "hostFree": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "rss",
+                  "heapUsed",
+                  "heapTotal",
+                  "external",
+                  "arrayBuffers",
+                  "hostTotal",
+                  "hostFree"
+                ]
+              }
+            },
+            "required": [
+              "bunVersion",
+              "bunRevision",
+              "platform",
+              "arch",
+              "hostname",
+              "pid",
+              "startedAt",
+              "cpuCount",
+              "loadAverage",
+              "cpuUserSeconds",
+              "cpuSystemSeconds",
+              "memory"
+            ]
+          },
+          "storage": {
+            "type": "object",
+            "properties": {
+              "databasePath": {
+                "type": "string"
+              },
+              "databaseBytes": {
+                "type": "number",
+                "nullable": true
+              },
+              "walBytes": {
+                "type": "number",
+                "nullable": true
+              },
+              "diskTotalBytes": {
+                "type": "number",
+                "nullable": true
+              },
+              "diskFreeBytes": {
+                "type": "number",
+                "nullable": true
+              }
+            },
+            "required": [
+              "databasePath",
+              "databaseBytes",
+              "walBytes",
+              "diskTotalBytes",
+              "diskFreeBytes"
+            ]
+          }
+        },
+        "required": [
+          "bindersnap",
+          "gitea",
+          "images",
+          "runtime",
+          "storage"
+        ]
+      },
+      "AdminConfigPayload": {
+        "type": "object",
+        "properties": {
+          "sections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "entries": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "value": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          {
+                            "nullable": true
+                          }
+                        ]
+                      },
+                      "secret": {
+                        "type": "boolean"
+                      },
+                      "isSet": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "label",
+                      "secret",
+                      "isSet"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "title",
+                "entries"
+              ]
+            }
+          }
+        },
+        "required": [
+          "sections"
+        ]
+      },
+      "AdminCreatedUser": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "fullName": {
+            "type": "string"
+          },
+          "emailed": {
+            "type": "string",
+            "enum": [
+              "welcome",
+              "confirmation"
+            ]
+          }
+        },
+        "required": [
+          "username",
+          "email",
+          "fullName",
+          "emailed"
+        ]
       }
     },
     "parameters": {}
@@ -15536,6 +15833,80 @@
             }
           }
         }
+      },
+      "post": {
+        "operationId": "createAdminUser",
+        "tags": [
+          "admin"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "firstName": {
+                    "type": "string"
+                  },
+                  "lastName": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "email",
+                  "firstName",
+                  "lastName"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The account, and which email went to it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "username": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "fullName": {
+                      "type": "string"
+                    },
+                    "emailed": {
+                      "type": "string",
+                      "enum": [
+                        "welcome",
+                        "confirmation"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "username",
+                    "email",
+                    "fullName",
+                    "emailed"
+                  ]
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/app/admin/organizations": {
@@ -15997,6 +16368,381 @@
                     "limit",
                     "hasMore",
                     "query"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/admin/system": {
+      "get": {
+        "operationId": "getAdminSystem",
+        "tags": [
+          "admin"
+        ],
+        "responses": {
+          "200": {
+            "description": "The build, the runtime and the images it pins",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "bindersnap": {
+                      "type": "object",
+                      "properties": {
+                        "version": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "commit": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "environment": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "version",
+                        "commit",
+                        "environment"
+                      ]
+                    },
+                    "gitea": {
+                      "type": "object",
+                      "properties": {
+                        "version": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "version",
+                        "url"
+                      ]
+                    },
+                    "images": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "service": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "tag": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "digest": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "service",
+                          "name",
+                          "tag",
+                          "digest"
+                        ]
+                      }
+                    },
+                    "runtime": {
+                      "type": "object",
+                      "properties": {
+                        "bunVersion": {
+                          "type": "string"
+                        },
+                        "bunRevision": {
+                          "type": "string"
+                        },
+                        "platform": {
+                          "type": "string"
+                        },
+                        "arch": {
+                          "type": "string"
+                        },
+                        "hostname": {
+                          "type": "string"
+                        },
+                        "pid": {
+                          "type": "number"
+                        },
+                        "startedAt": {
+                          "type": "number"
+                        },
+                        "cpuCount": {
+                          "type": "number"
+                        },
+                        "loadAverage": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        },
+                        "cpuUserSeconds": {
+                          "type": "number"
+                        },
+                        "cpuSystemSeconds": {
+                          "type": "number"
+                        },
+                        "memory": {
+                          "type": "object",
+                          "properties": {
+                            "rss": {
+                              "type": "number"
+                            },
+                            "heapUsed": {
+                              "type": "number"
+                            },
+                            "heapTotal": {
+                              "type": "number"
+                            },
+                            "external": {
+                              "type": "number"
+                            },
+                            "arrayBuffers": {
+                              "type": "number"
+                            },
+                            "hostTotal": {
+                              "type": "number"
+                            },
+                            "hostFree": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "rss",
+                            "heapUsed",
+                            "heapTotal",
+                            "external",
+                            "arrayBuffers",
+                            "hostTotal",
+                            "hostFree"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "bunVersion",
+                        "bunRevision",
+                        "platform",
+                        "arch",
+                        "hostname",
+                        "pid",
+                        "startedAt",
+                        "cpuCount",
+                        "loadAverage",
+                        "cpuUserSeconds",
+                        "cpuSystemSeconds",
+                        "memory"
+                      ]
+                    },
+                    "storage": {
+                      "type": "object",
+                      "properties": {
+                        "databasePath": {
+                          "type": "string"
+                        },
+                        "databaseBytes": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "walBytes": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "diskTotalBytes": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "diskFreeBytes": {
+                          "type": "number",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "databasePath",
+                        "databaseBytes",
+                        "walBytes",
+                        "diskTotalBytes",
+                        "diskFreeBytes"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "bindersnap",
+                    "gitea",
+                    "images",
+                    "runtime",
+                    "storage"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/admin/config": {
+      "get": {
+        "operationId": "getAdminConfig",
+        "tags": [
+          "admin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Every setting; secrets only as set or not",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sections": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "title": {
+                            "type": "string"
+                          },
+                          "entries": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "value": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "boolean"
+                                    },
+                                    {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    {
+                                      "nullable": true
+                                    }
+                                  ]
+                                },
+                                "secret": {
+                                  "type": "boolean"
+                                },
+                                "isSet": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "label",
+                                "secret",
+                                "isSet"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "title",
+                          "entries"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "sections"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/admin/maintenance/reconciler": {
+      "post": {
+        "operationId": "runAdminReconciler",
+        "tags": [
+          "admin"
+        ],
+        "responses": {
+          "200": {
+            "description": "The pass it just made",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "report": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "checkedAt": {
+                          "type": "string"
+                        },
+                        "binders": {
+                          "type": "number"
+                        },
+                        "findings": {
+                          "type": "array",
+                          "items": {
+                            "nullable": true
+                          }
+                        },
+                        "errors": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "org": {
+                                "type": "string"
+                              },
+                              "binder": {
+                                "type": "string"
+                              },
+                              "error": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "org",
+                              "binder",
+                              "error"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "checkedAt",
+                        "binders",
+                        "findings",
+                        "errors"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "report"
                   ]
                 }
               }

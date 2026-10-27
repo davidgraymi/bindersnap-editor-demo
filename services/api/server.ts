@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "crypto";
+import { createHash, randomBytes, randomUUID } from "crypto";
 import { isIP } from "net";
 
 import { config, type SessionCookieSameSite } from "./config";
@@ -43,6 +43,8 @@ import {
   passwordChangedEmail,
   passwordResetStore,
   resetLinkEmail,
+  welcomeEmail,
+  WELCOME_LINK_TTL_MS,
 } from "./password-reset";
 import { identiconSvg } from "./identicon";
 import { reconcileBinders, type ReconcilerReport } from "./reconciler";
@@ -62,6 +64,13 @@ import {
   type HealthCheck,
 } from "./admin-console";
 import { emailOutboxStore } from "./mail/outbox";
+import {
+  describeConfig,
+  packageVersion,
+  releaseImages,
+  runtimeStats,
+  storageStats,
+} from "./admin-system";
 import {
   PublishConflict,
   runPublish,
@@ -15429,6 +15438,178 @@ async function handleAdminBinders(
   }
 }
 
+/**
+ * Admin only: which build this is, what it runs on, and what it pins — the
+ * console's System page. Gitea's version is asked of Gitea, so a deploy that
+ * left an old Gitea running says so.
+ */
+async function handleAdminSystem(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireAdminSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const client = adminConsoleClient(baseHeaders);
+  if (client instanceof Response) return client;
+
+  const gitea = await client
+    .GET("/version", {})
+    .then((result) => result.data?.version ?? null)
+    .catch(() => null);
+
+  return json(
+    200,
+    {
+      bindersnap: {
+        version: packageVersion(),
+        commit: config.release || null,
+        environment: config.nodeEnv,
+      },
+      gitea: { version: gitea, url: config.giteaUrl },
+      images: releaseImages(config.release),
+      runtime: runtimeStats(API_STARTED_AT),
+      storage: storageStats(config.sessionsDbPath),
+    },
+    baseHeaders,
+  );
+}
+
+/** Admin only: every setting the API runs with. Secrets say only "set". */
+async function handleAdminConfig(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireAdminSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  return json(200, { sections: describeConfig(config) }, baseHeaders);
+}
+
+/** Admin only: run the reconciler now rather than wait for its next pass. */
+async function handleAdminRunReconciler(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireAdminSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  try {
+    await runReconcilerPass();
+  } catch (err) {
+    return responseFromError(err, baseHeaders, "The reconciler did not run.");
+  }
+  logger.info("Site admin ran the reconciler", {
+    admin: auth.currentUser.username,
+  });
+  return json(200, { report: lastReconcilerReport }, baseHeaders);
+}
+
+/**
+ * Admin only: make an account, as Gitea's own "Create User Account" does.
+ *
+ * The same act as signup, on the same admin token, minus what signup does for
+ * the person themselves: no session, no Terms accepted on their behalf (they
+ * accept them at first sign-in), no organization. Either the admin sets a
+ * password and hands it over — the address then still has to be confirmed,
+ * by the usual email — or the person is emailed a link to choose their own,
+ * which confirms the address as any reset does.
+ */
+async function handleAdminCreateUser(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireAdminSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const payload = await readJson<{
+    username?: unknown;
+    email?: unknown;
+    firstName?: unknown;
+    lastName?: unknown;
+    password?: unknown;
+  }>(req);
+  const text = (value: unknown) =>
+    typeof value === "string" ? value.trim() : "";
+  const requestedUsername = text(payload?.username);
+  const email = text(payload?.email);
+  const firstName = text(payload?.firstName);
+  const lastName = text(payload?.lastName);
+  const password =
+    typeof payload?.password === "string" ? payload.password : "";
+
+  if (!looksLikeEmailAddress(email)) {
+    return json(400, { error: "Enter their email address." }, baseHeaders);
+  }
+  const nameError = validateFullName(firstName, lastName);
+  if (nameError) return json(400, { error: nameError }, baseHeaders);
+
+  const existing = await findUsernameByEmail(email).catch(() => null);
+  if (existing?.kind === "authenticated") {
+    return json(
+      409,
+      { error: `${existing.username} already uses that email address.` },
+      baseHeaders,
+    );
+  }
+
+  const sendWelcome = password === "";
+  const fullName = joinFullName(firstName, lastName);
+  const { username, result: created } = await createWithFreeUsername(
+    requestedUsername
+      ? [requestedUsername]
+      : usernameCandidates(usernameFromName(firstName, lastName, email)),
+    (candidate) =>
+      createGiteaUser(
+        candidate,
+        email,
+        // Nobody knows this one: the welcome link is how they choose theirs.
+        sendWelcome ? randomBytes(32).toString("base64url") : password,
+        fullName,
+      ),
+  );
+  if (!("created" in created)) {
+    return json(created.status, { error: created.error }, baseHeaders);
+  }
+
+  const invitedBy = auth.currentUser.fullName || auth.currentUser.username;
+  if (sendWelcome) {
+    // Waiting, so the reset that follows the welcome link confirms it.
+    emailVerificationStore().start(username, email);
+    const token = passwordResetStore().issue(
+      username,
+      email,
+      Date.now(),
+      WELCOME_LINK_TTL_MS,
+    );
+    queueEmail({
+      kind: "welcome",
+      to: email,
+      content: welcomeEmail({
+        link: `${config.appOrigin}/-/reset_password?token=${encodeURIComponent(token)}`,
+        username,
+        invitedBy,
+      }),
+    });
+  } else {
+    startEmailVerification(username, email, "");
+  }
+
+  logger.info("Site admin created an account", {
+    admin: auth.currentUser.username,
+    username,
+    welcome: sendWelcome,
+  });
+
+  return json(
+    201,
+    {
+      username,
+      email,
+      fullName,
+      emailed: sendWelcome ? "welcome" : "confirmation",
+    },
+    baseHeaders,
+  );
+}
+
 export function createApiServer() {
   return Bun.serve({
     port: config.apiPort,
@@ -15685,6 +15866,17 @@ async function handleRequest(req: Request): Promise<Response> {
     response = await handleAdminOrganizations(req, baseHeaders);
   } else if (pathname === "/api/app/admin/binders" && method === "GET") {
     response = await handleAdminBinders(req, baseHeaders);
+  } else if (pathname === "/api/app/admin/users" && method === "POST") {
+    response = await handleAdminCreateUser(req, baseHeaders);
+  } else if (pathname === "/api/app/admin/system" && method === "GET") {
+    response = await handleAdminSystem(req, baseHeaders);
+  } else if (pathname === "/api/app/admin/config" && method === "GET") {
+    response = await handleAdminConfig(req, baseHeaders);
+  } else if (
+    pathname === "/api/app/admin/maintenance/reconciler" &&
+    method === "POST"
+  ) {
+    response = await handleAdminRunReconciler(req, baseHeaders);
   } else if (pathname === "/api/app/home/changes" && method === "GET") {
     response = await handleHomeChanges(req, baseHeaders);
   } else if (pathname === "/api/app/documents" && method === "GET") {

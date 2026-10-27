@@ -6140,9 +6140,117 @@ a.admin-console-primary:hover {
   display: none;
 }
 
+.admin-console-nowrap {
+  white-space: nowrap;
+}
+
 .admin-console-number {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/* Links in the console's tables and lists: the app's link colour, not the
+   browser's blue. */
+.admin-console-table a:not(.admin-console-primary),
+.admin-console-facts a {
+  color: var(--bs-coral-text);
+}
+
+/* Label and value, the console's System and Configuration pages. */
+.admin-console-facts {
+  display: grid;
+  grid-template-columns: minmax(10rem, 16rem) minmax(0, 1fr);
+  margin: 0;
+}
+
+.admin-console-facts > div {
+  display: contents;
+}
+
+.admin-console-facts dt,
+.admin-console-facts dd {
+  margin: 0;
+  padding: var(--brand-space-2);
+  border-top: 1px solid var(--bs-rule-warm);
+  font-size: var(--brand-text-ui-md);
+}
+
+.admin-console-facts > div:first-child dt,
+.admin-console-facts > div:first-child dd {
+  border-top: none;
+}
+
+.admin-console-facts dt {
+  color: var(--bs-text-muted);
+}
+
+.admin-console-facts dd {
+  color: var(--bs-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.admin-console-facts code,
+.admin-console-table code {
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.admin-console-key {
+  display: block;
+  margin-top: var(--brand-space-0-5);
+  color: var(--bs-text-muted);
+}
+
+.admin-console-note {
+  margin: 0;
+  padding: var(--brand-space-2);
+  border-top: 1px solid var(--bs-rule-warm);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.admin-console-form .admin-console-note {
+  padding: 0;
+  border-top: none;
+}
+
+.admin-console-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--brand-space-2);
+}
+
+.admin-console-done {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  color: var(--bs-status-ok-fg);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.admin-console-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-3);
+}
+
+.admin-console-form-wide {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 640px) {
+  .admin-console-facts,
+  .admin-console-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-console-facts dd {
+    border-top: none;
+    padding-top: 0;
+  }
 }
 
 /* ── RESPONSIVE ──────────────────────────────────────────────── */

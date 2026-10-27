@@ -123,7 +123,12 @@ import {
 import {
   AdminAccessUserResultSchema,
   AdminBinderListPayloadSchema,
+  AdminConfigPayloadSchema,
+  AdminCreateUserBodySchema,
+  AdminCreatedUserSchema,
   AdminOrganizationListPayloadSchema,
+  AdminReconcilerRunSchema,
+  AdminSystemPayloadSchema,
   AdminOverviewPayloadSchema,
   AdminSubscriptionAccessListPayloadSchema,
   AdminUserListPayloadSchema,
@@ -191,6 +196,9 @@ registry.register(
   AdminOrganizationListPayloadSchema,
 );
 registry.register("AdminBinderListPayload", AdminBinderListPayloadSchema);
+registry.register("AdminSystemPayload", AdminSystemPayloadSchema);
+registry.register("AdminConfigPayload", AdminConfigPayloadSchema);
+registry.register("AdminCreatedUser", AdminCreatedUserSchema);
 
 // Auth routes
 registry.registerPath({
@@ -2683,6 +2691,64 @@ registry.registerPath({
           schema: AdminSubscriptionAccessListPayloadSchema,
         },
       },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/admin/users",
+  operationId: "createAdminUser",
+  tags: ["admin"],
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: AdminCreateUserBodySchema } },
+    },
+  },
+  responses: {
+    201: {
+      description: "The account, and which email went to it",
+      content: { "application/json": { schema: AdminCreatedUserSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/admin/system",
+  operationId: "getAdminSystem",
+  tags: ["admin"],
+  responses: {
+    200: {
+      description: "The build, the runtime and the images it pins",
+      content: { "application/json": { schema: AdminSystemPayloadSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/admin/config",
+  operationId: "getAdminConfig",
+  tags: ["admin"],
+  responses: {
+    200: {
+      description: "Every setting; secrets only as set or not",
+      content: { "application/json": { schema: AdminConfigPayloadSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/admin/maintenance/reconciler",
+  operationId: "runAdminReconciler",
+  tags: ["admin"],
+  responses: {
+    200: {
+      description: "The pass it just made",
+      content: { "application/json": { schema: AdminReconcilerRunSchema } },
     },
   },
 });

@@ -4,7 +4,11 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { JSDOM } from "jsdom";
 
-import type { AdminOverviewPayload, AdminUserListPayload } from "../api";
+import type {
+  AdminOverviewPayload,
+  AdminSystemPayload,
+  AdminUserListPayload,
+} from "../api";
 import type { AppRoute } from "../routes";
 
 const DOM_KEYS = [
@@ -93,7 +97,61 @@ const users: AdminUserListPayload = {
   hasMore: false,
 };
 
+const system: AdminSystemPayload = {
+  bindersnap: {
+    version: "0.4.94",
+    commit: "2ec0a5b93e300610fd6051d349e54a25e4ec0829",
+    environment: "production",
+  },
+  gitea: { version: "28.0.0", url: "http://gitea:3000" },
+  images: [
+    {
+      service: "gitea",
+      name: "gitea/gitea",
+      tag: "28.0.0",
+      digest:
+        "sha256:a9dc25679ebdd33356242d2e0667cc220043745e8339922879f187c20329a42e",
+    },
+  ],
+  runtime: {
+    bunVersion: "1.4.3",
+    bunRevision: "abc123",
+    platform: "linux",
+    arch: "arm64",
+    hostname: "api",
+    pid: 1,
+    startedAt: Date.now() - 3 * 60 * 60_000,
+    cpuCount: 2,
+    loadAverage: [0.1, 0.2, 0.3],
+    cpuUserSeconds: 12,
+    cpuSystemSeconds: 3,
+    memory: {
+      rss: 120 * 1024 * 1024,
+      heapUsed: 40 * 1024 * 1024,
+      heapTotal: 60 * 1024 * 1024,
+      external: 1024,
+      arrayBuffers: 0,
+      hostTotal: 4 * 1024 ** 3,
+      hostFree: 1024 ** 3,
+    },
+  },
+  storage: {
+    databasePath: "/var/lib/bindersnap/sessions.db",
+    databaseBytes: 2 * 1024 * 1024,
+    walBytes: 0,
+    diskTotalBytes: 20 * 1024 ** 3,
+    diskFreeBytes: 15 * 1024 ** 3,
+  },
+};
+
 const mockGetAdminOverview = mock(async () => overview);
+const mockGetAdminSystem = mock(async () => system);
+const mockCreateAdminUser = mock(async (body: { email: string }) => ({
+  username: "jkim",
+  email: body.email,
+  fullName: "Jordan Kim",
+  emailed: "welcome" as const,
+}));
 const mockListAdminUsers = mock(async (..._args: unknown[]) => users);
 
 // Spread the real module: see AdminSubscriptionManagementPage.test.ts.
@@ -101,6 +159,8 @@ const actualApi = await import("../api");
 mock.module("../api", () => ({
   ...actualApi,
   getAdminOverview: mockGetAdminOverview,
+  getAdminSystem: mockGetAdminSystem,
+  createAdminUser: mockCreateAdminUser,
   listAdminUsers: mockListAdminUsers,
 }));
 
@@ -179,6 +239,8 @@ test("each section is a link to its own address", async () => {
       "/-/admin/organizations",
       "/-/admin/binders",
       "/-/admin/subscriptions",
+      "/-/admin/system",
+      "/-/admin/config",
     ]);
     tabs[1]!.dispatchEvent(
       new window.MouseEvent("click", {
@@ -208,6 +270,79 @@ test("people show their email and whether they confirmed it", async () => {
     expect(text).toContain("Not confirmed");
     expect(text).toContain("riverside-health");
     expect(text).toContain("1–1 of 1");
+  } finally {
+    unmount();
+  }
+});
+
+test("the system page names the build, its images and the process", async () => {
+  const { container, unmount } = render({
+    section: "system",
+    currentUsername: "alice",
+    onNavigate: () => {},
+  });
+  try {
+    await settle();
+    const text = container.textContent ?? "";
+    expect(text).toContain("0.4.94");
+    expect(text).toContain("2ec0a5b93e30");
+    expect(text).toContain("gitea/gitea:28.0.0");
+    expect(text).toContain("3 hours, 0 minutes");
+    const commit = container.querySelector<HTMLAnchorElement>(
+      'a[href$="/commit/2ec0a5b93e300610fd6051d349e54a25e4ec0829"]',
+    );
+    expect(commit).not.toBeNull();
+  } finally {
+    unmount();
+  }
+});
+
+test("a new account is created from the People page", async () => {
+  const { container, unmount } = render({
+    section: "users",
+    currentUsername: "alice",
+    onNavigate: () => {},
+  });
+  try {
+    await settle();
+    const open = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("New account"),
+    );
+    open!.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    await settle();
+
+    const setter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      "value",
+    )!.set!;
+    const inputs = Array.from(
+      container.querySelectorAll<HTMLInputElement>(".admin-console-form input"),
+    );
+    for (const [index, value] of [
+      "Jordan",
+      "Kim",
+      "jordan@example.com",
+    ].entries()) {
+      setter.call(inputs[index], value);
+      inputs[index]!.dispatchEvent(
+        new window.Event("input", { bubbles: true }),
+      );
+    }
+    container
+      .querySelector("form.admin-console-form")!
+      .dispatchEvent(
+        new window.Event("submit", { bubbles: true, cancelable: true }),
+      );
+    await settle();
+
+    expect(mockCreateAdminUser).toHaveBeenCalledWith({
+      firstName: "Jordan",
+      lastName: "Kim",
+      email: "jordan@example.com",
+    });
+    expect(container.textContent).toContain(
+      "A link to choose a password went to jordan@example.com.",
+    );
   } finally {
     unmount();
   }

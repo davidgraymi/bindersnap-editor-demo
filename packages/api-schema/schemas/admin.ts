@@ -174,3 +174,106 @@ export const AdminBinderListPayloadSchema = z.object({
 export type AdminBinderListPayload = z.infer<
   typeof AdminBinderListPayloadSchema
 >;
+
+// ─── System, configuration and accounts ──────────────────────────────────
+
+export const AdminReleaseImageSchema = z.object({
+  service: z.string(),
+  name: z.string(),
+  tag: z.string().nullable(),
+  digest: z.string().nullable(),
+});
+export type AdminReleaseImage = z.infer<typeof AdminReleaseImageSchema>;
+
+export const AdminSystemPayloadSchema = z.object({
+  bindersnap: z.object({
+    version: z.string().nullable(),
+    commit: z.string().nullable(),
+    environment: z.string(),
+  }),
+  gitea: z.object({ version: z.string().nullable(), url: z.string() }),
+  // Null when the image does not carry the production Compose file.
+  images: z.array(AdminReleaseImageSchema).nullable(),
+  runtime: z.object({
+    bunVersion: z.string(),
+    bunRevision: z.string(),
+    platform: z.string(),
+    arch: z.string(),
+    hostname: z.string(),
+    pid: z.number(),
+    startedAt: z.number(),
+    cpuCount: z.number(),
+    loadAverage: z.array(z.number()),
+    cpuUserSeconds: z.number(),
+    cpuSystemSeconds: z.number(),
+    memory: z.object({
+      rss: z.number(),
+      heapUsed: z.number(),
+      heapTotal: z.number(),
+      external: z.number(),
+      arrayBuffers: z.number(),
+      hostTotal: z.number(),
+      hostFree: z.number(),
+    }),
+  }),
+  storage: z.object({
+    databasePath: z.string(),
+    databaseBytes: z.number().nullable(),
+    walBytes: z.number().nullable(),
+    diskTotalBytes: z.number().nullable(),
+    diskFreeBytes: z.number().nullable(),
+  }),
+});
+export type AdminSystemPayload = z.infer<typeof AdminSystemPayloadSchema>;
+
+export const AdminConfigEntrySchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  // Never present for a secret.
+  value: z
+    .union([z.string(), z.number(), z.boolean(), z.array(z.string())])
+    .nullable()
+    .optional(),
+  secret: z.boolean(),
+  isSet: z.boolean(),
+});
+export type AdminConfigEntry = z.infer<typeof AdminConfigEntrySchema>;
+
+export const AdminConfigPayloadSchema = z.object({
+  sections: z.array(
+    z.object({ title: z.string(), entries: z.array(AdminConfigEntrySchema) }),
+  ),
+});
+export type AdminConfigPayload = z.infer<typeof AdminConfigPayloadSchema>;
+
+export const AdminCreateUserBodySchema = z.object({
+  username: z.string().optional(),
+  email: z.string(),
+  firstName: z.string(),
+  lastName: z.string(),
+  // Empty or absent: email them a link to choose their own.
+  password: z.string().optional(),
+});
+export type AdminCreateUserBody = z.infer<typeof AdminCreateUserBodySchema>;
+
+export const AdminCreatedUserSchema = z.object({
+  username: z.string(),
+  email: z.string(),
+  fullName: z.string(),
+  emailed: z.enum(["welcome", "confirmation"]),
+});
+export type AdminCreatedUser = z.infer<typeof AdminCreatedUserSchema>;
+
+export const AdminReconcilerRunSchema = z.object({
+  report: z
+    .object({
+      checkedAt: z.string(),
+      binders: z.number(),
+      findings: z.array(z.unknown()),
+      errors: z.array(
+        z.object({ org: z.string(), binder: z.string(), error: z.string() }),
+      ),
+    })
+    .nullable(),
+});
+export type AdminReconcilerRun = z.infer<typeof AdminReconcilerRunSchema>;
