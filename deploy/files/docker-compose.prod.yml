@@ -10,7 +10,7 @@
 
 services:
   gitea-init:
-    image: alpine:3.22.6@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
+    image: alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
     container_name: bindersnap-gitea-init-prod
     user: "0:0"
     command: ["sh", "-c", "chown -R 1000:1000 /data"]
@@ -187,7 +187,7 @@ services:
   # sets its own security headers and rate limits (services/api/edge.ts). The token is the SSM leaf `cloudflare_tunnel_token`,
   # written by infra/edge/put-tunnel-token.sh, never by Terraform.
   cloudflared:
-    image: cloudflare/cloudflared:2026.9.3@sha256:072c067d25ccbe61d46e18f0d0723255f2bb5304f7317caa95b27031520ff92c
+    image: cloudflare/cloudflared:2026.10.4@sha256:c6c7ae1d5dfdcb094ad344ed68ccffc26635c9c6be80965664c33baf064b0515
     container_name: bindersnap-cloudflared-prod
     restart: unless-stopped
     depends_on:

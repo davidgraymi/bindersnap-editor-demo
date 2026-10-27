@@ -3,7 +3,7 @@
   "version": "0.4.95",
   "private": true,
   "type": "module",
-  "packageManager": "bun@1.4.3",
+  "packageManager": "bun@1.4.4",
   "scripts": {
     "build": "bun scripts/build.ts",
     "changelog": "auto-changelog -p && git add CHANGELOG.md",

@@ -100,7 +100,7 @@ services:
   # machine. The Playwright suite reads messages back through its API
   # (tests/mailpit.ts); people read them at the stack's `mail` URL.
   mailpit:
-    image: axllent/mailpit:v1.27
+    image: axllent/mailpit:v1.32
     container_name: ${STACK_NAME:-bindersnap}-mailpit
     environment:
       - MP_MAX_MESSAGES=2000
