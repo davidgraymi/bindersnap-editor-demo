@@ -11,6 +11,9 @@ on:
       # Infra/deploy-only changes don't ship app code — don't cut a release.
       - "deploy/**"
       - "infra/**"
+  # Cuts the release a push skipped, e.g. when a merge's message carried a
+  # skip marker by accident.
+  workflow_dispatch:
 
 concurrency:
   group: release

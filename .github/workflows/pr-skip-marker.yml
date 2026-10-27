@@ -1,0 +1,36 @@
+name: PR skip-CI marker
+
+# A squash merge copies the PR's title and body into the commit on main, and
+# GitHub skips every push workflow when that message holds a skip marker
+# anywhere — even quoted in backticks. #849 and #850 landed that way and
+# nothing deployed. This fails a PR whose title or body would do the same.
+# `edited` is why this is its own workflow: re-running PR Verification on
+# every body edit would be wasteful.
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions: {}
+
+concurrency:
+  group: pr-skip-marker-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: No skip marker in title or body
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+
+    steps:
+      - name: Check the title and body
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          pattern='\[(skip ci|ci skip|no ci|skip actions|actions skip)\]'
+          if printf '%s\n%s\n' "$TITLE" "$BODY" | grep -inE "$pattern"; then
+            echo "::error::The PR's title or body holds a skip-CI marker (above). A squash merge would put it in main's commit and skip the deploy. Reword it, e.g. \"a skip-CI commit\"."
+            exit 1
+          fi
