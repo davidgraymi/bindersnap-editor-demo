@@ -802,8 +802,8 @@ test.describe("ADR 0004: the Gitea permission model the workspace rests on", () 
  * Everything the design rests on for per-folder sign-off was read from the
  * merged diff of go-gitea PR #34995, never run. `gitea-28-findings.md` §6
  * lists exactly what to assert before depending on any of it, and this is that
- * list. Dev and production both run 28.0.0, the first release with this
- * field, so these cases are also the thing that would fail loudly if somebody
+ * list. Dev and production both run 28.2.0; 28.0.0 was the first release with
+ * this field, so these cases are also the thing that would fail loudly if somebody
  * pointed the stack at an older Gitea while provisioning assumed the gate.
  *
  * **Two gates, two rules, and conflating them is the mistake to avoid.**

@@ -19,11 +19,11 @@ services:
     restart: "no"
 
   gitea:
-    # The same pinned 28.0.0 as the repository's own `docker-compose.yml`;
+    # The same pinned 28.2.0 as the repository's own `docker-compose.yml`;
     # change both in one commit. A Gitea upgrade migrates `gitea.db` on start
     # and cannot be reverted by reverting this line — see docs/ops/deploy.md,
     # "Gitea version changes are not covered by a git revert".
-    image: gitea/gitea:28.0.0@sha256:a9dc25679ebdd33356242d2e0667cc220043745e8339922879f187c20329a42e
+    image: gitea/gitea:28.2.0@sha256:30777c91280d973fa02be48b1ade735bd6859e8f6f7af3b4444d519437852504
     container_name: bindersnap-gitea-prod
     restart: unless-stopped
     depends_on:
