@@ -19,15 +19,16 @@ on:
   push:
     branches:
       - main
+    # Not package.json or bun.lock: a dependency bump changes what is bundled,
+    # and the release bump that also touches them carries [skip ci].
     paths-ignore:
       - "CHANGELOG.md"
-      - "package.json"
-      - "bun.lock"
       # Infra/deploy-only changes never affect the static site — don't republish.
       - "deploy/**"
       - "infra/**"
-      # The feedback Worker deploys itself (feedback-worker.yml).
+      # Each Worker deploys itself (feedback-worker.yml, uptime-worker.yml).
       - "services/feedback/**"
+      - "services/uptime/**"
   workflow_dispatch:
 
 permissions:
@@ -39,7 +40,8 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     environment:
       name: production
       url: https://bindersnap.com
@@ -47,13 +49,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: ".bun-version"
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      - name: Set up Bun and install dependencies
+        uses: ./.github/actions/setup-bun
 
       - name: Build the app and the site
         env:
