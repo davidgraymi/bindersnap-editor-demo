@@ -107,6 +107,7 @@ import {
   organizationHasAccess,
   webhookEventStore,
   type EffectiveSubscriptionAccess,
+  type ResolveAccessOptions,
   type SubscriptionAccessOverrideRecord,
 } from "./subscriptions";
 import { organizationStore } from "./organizations";
@@ -1323,6 +1324,31 @@ async function paywallOrganization(
   }
 }
 
+/**
+ * How the paywall resolves access: it counts writers, from Gitea, so free
+ * access given for a number of writers stops when the organization has more.
+ * Only called for an organization whose grant has a writer limit. Without the
+ * service client nothing can be counted, and the grant is taken at its word
+ * rather than locking the organization out.
+ */
+function paywallAccessOptions(org: string): ResolveAccessOptions {
+  return {
+    writers: async () => {
+      const client = createPrivilegedGiteaClient();
+      if (!client) return 0;
+      return countBillableSeats({ client, org }).catch((err) => {
+        // Gitea not answering is no reason to lock out an organization we
+        // chose to give access to.
+        logger.warn("Could not count writers for a free-access limit", {
+          organization: org,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return 0;
+      });
+    },
+  };
+}
+
 function noSuchOrganization(baseHeaders: Headers): Response {
   return json(404, { error: "No such organization." }, baseHeaders);
 }
@@ -1348,7 +1374,13 @@ async function requireSubscription(
   // in it is not covered by whichever organization they are in.
   const organization = await paywallOrganization(auth, req);
   if (organization === "missing") return noSuchOrganization(baseHeaders);
-  if (!organization || !(await organizationHasAccess(organization.id))) {
+  if (
+    !organization ||
+    !(await organizationHasAccess(
+      organization.id,
+      paywallAccessOptions(organization.name),
+    ))
+  ) {
     return paymentRequired(
       baseHeaders,
       organization?.name ?? requestOrganization(req),
@@ -1410,7 +1442,10 @@ async function requireSubscriptionOrAdmin(
   if (
     organization &&
     organization !== "missing" &&
-    (await organizationHasAccess(organization.id))
+    (await organizationHasAccess(
+      organization.id,
+      paywallAccessOptions(organization.name),
+    ))
   ) {
     return auth;
   }
@@ -1499,7 +1534,12 @@ async function resolveSubscriptionAccessState(
     };
   }
 
-  const access = await subscriptionStore.resolveAccess(organization.id);
+  // As the paywall reads it, writer limit included, so the billing page never
+  // says an organization can write when the paywall would refuse it.
+  const access = await subscriptionStore.resolveAccess(
+    organization.id,
+    paywallAccessOptions(organization.name),
+  );
   return {
     hasAccess: access.hasAccess,
     source: access.source,
@@ -5498,6 +5538,8 @@ function serializeSubscriptionOverride(
     reason: override.reason,
     updatedBy: override.updatedBy,
     updatedAt: override.updatedAt,
+    expiresAt: override.expiresAt ?? null,
+    maxWriters: override.maxWriters ?? null,
   };
 }
 
@@ -15535,6 +15577,8 @@ async function handleAdminOrganizationAccess(
   const name = decodePathParam(rawOrg).trim();
   let access: "grant" | "revoke" | null = null;
   let reason: string | null = null;
+  let expiresAt: number | null = null;
+  let maxWriters: number | null = null;
   if (method === "PUT") {
     const payload = await readJsonBody(req);
     const input = readInputString(payload, null, "access").toLowerCase();
@@ -15547,6 +15591,26 @@ async function handleAdminOrganizationAccess(
     }
     access = input;
     reason = readInputString(payload, null, "reason") || null;
+
+    // Free access's two limits, each optional: a number of days, and a
+    // number of writers. Cutting an organization off takes neither.
+    const days = optionalWholeNumber(payload?.days, 1, 3650);
+    const writers = optionalWholeNumber(payload?.maxWriters, 1, 10_000);
+    if (days === undefined || writers === undefined) {
+      return json(
+        400,
+        {
+          error:
+            "Days must be a whole number from 1 to 3650, and writers from 1 to 10000.",
+        },
+        baseHeaders,
+      );
+    }
+    if (access === "grant") {
+      expiresAt =
+        days === null ? null : Math.floor(Date.now() / 1000) + days * 86_400;
+      maxWriters = writers;
+    }
   }
 
   try {
@@ -15561,6 +15625,8 @@ async function handleAdminOrganizationAccess(
         reason,
         updatedBy: auth.currentUser.username,
         updatedAt: Date.now(),
+        expiresAt,
+        maxWriters,
       });
     } else {
       await subscriptionStore.deleteAccessOverride(giteaOrgId);
@@ -15570,13 +15636,20 @@ async function handleAdminOrganizationAccess(
       organization: name,
       giteaOrgId,
       access: access ?? "cleared",
+      expiresAt,
+      maxWriters,
     });
     return json(
       200,
       {
         organization: name,
+        // As the paywall will read it, so a grant for fewer writers than the
+        // organization has says so at once.
         billing: billingState(
-          await subscriptionStore.resolveAccess(giteaOrgId),
+          await subscriptionStore.resolveAccess(
+            giteaOrgId,
+            paywallAccessOptions(name),
+          ),
         ),
       },
       baseHeaders,
@@ -15588,6 +15661,28 @@ async function handleAdminOrganizationAccess(
       "Unable to change this organization's access.",
     );
   }
+}
+
+/**
+ * A whole number in [min, max], null when absent or empty, undefined when
+ * it is anything else.
+ */
+function optionalWholeNumber(
+  value: unknown,
+  min: number,
+  max: number,
+): number | null | undefined {
+  if (value === undefined || value === null || value === "") return null;
+  const number = typeof value === "string" ? Number(value) : value;
+  if (
+    typeof number !== "number" ||
+    !Number.isInteger(number) ||
+    number < min ||
+    number > max
+  ) {
+    return undefined;
+  }
+  return number;
 }
 
 /** Admin only: every organization, with its billing and its size. */
@@ -15608,7 +15703,8 @@ async function handleAdminOrganizations(
         {
           client,
           record: (id) => organizationStore.get(id),
-          access: (id) => subscriptionStore.resolveAccess(id),
+          access: (id, writers) =>
+            subscriptionStore.resolveAccess(id, { writers }),
           owners: async (org) =>
             (await listOrganizationOwners({ client, org })).map(
               (owner) => owner.login,

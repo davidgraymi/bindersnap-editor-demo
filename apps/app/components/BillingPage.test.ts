@@ -123,6 +123,20 @@ test("complimentary access is not asked to subscribe", () => {
   }
 });
 
+test("free access says until when, and for how many writers", () => {
+  const summary = describeBilling({
+    ...base,
+    accessSource: "admin_grant",
+    freeAccess: { expiresAt: Date.UTC(2027, 3, 25, 12) / 1000, maxWriters: 5 },
+  });
+  expect(summary.detail).toBe(
+    "Bindersnap has granted this organization access until Apr 25, 2027 for up to 5 writers. There is nothing to pay.",
+  );
+  expect(describeBilling({ ...base, accessSource: "admin_grant" }).detail).toBe(
+    "Bindersnap has granted this organization access. There is nothing to pay.",
+  );
+});
+
 test("a lapsed organization is read-only and can subscribe", () => {
   const summary = describeBilling({
     ...base,

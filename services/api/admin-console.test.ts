@@ -313,8 +313,59 @@ test("listAdminOrganizations reads billing from SQLite and size from Gitea", asy
       currentPeriodEnd: null,
       cancelAtPeriodEnd: false,
       trialEndsAt: 200,
+      freeAccess: null,
     },
   ]);
+});
+
+test("an organization's free access shows its limits, checked against the writers it shows", async () => {
+  const { client } = mockClient({
+    "/admin/orgs": () => ({
+      total: 1,
+      data: [{ id: 7, username: "summit", full_name: "Summit" }],
+    }),
+    "/orgs/{org}/repos": () => ({ data: [{}], total: 1 }),
+  });
+  let writersSeen: number | null = null;
+
+  const result = await listAdminOrganizations(
+    {
+      client,
+      record: async () => null,
+      access: async (giteaOrgId, writers) => {
+        writersSeen = writers ? await writers() : null;
+        return access({
+          giteaOrgId,
+          hasAccess: false,
+          source: "trial",
+          override: {
+            giteaOrgId,
+            access: "grant",
+            reason: "Pilot",
+            updatedBy: "alice",
+            updatedAt: 5,
+            expiresAt: 900,
+            maxWriters: 5,
+          },
+          grantLapse: "over_writers",
+        });
+      },
+      owners: async () => [],
+      seats: async () => 6,
+    },
+    { page: 1, limit: 50 },
+  );
+
+  // The limit is checked against the same count the row shows.
+  expect(writersSeen).toBe(6);
+  expect(result.organizations[0]!.freeAccess).toEqual({
+    expiresAt: 900,
+    maxWriters: 5,
+    reason: "Pilot",
+    grantedBy: "alice",
+    grantedAt: 5,
+    lapse: "over_writers",
+  });
 });
 
 test("listAdminBinders lists every repository, newest change first", async () => {

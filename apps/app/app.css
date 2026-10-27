@@ -5835,6 +5835,23 @@ a.admin-console-primary:hover {
   gap: var(--brand-space-2);
 }
 
+/* Free access, under an organization's plan. */
+.admin-console-free {
+  display: grid;
+  gap: var(--brand-space-1);
+  margin-top: var(--brand-space-2);
+}
+
+.admin-console-free-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--brand-space-1);
+}
+
+.admin-console-warn {
+  color: var(--bs-status-warn-fg);
+}
+
 .admin-console-flags:empty {
   display: none;
 }

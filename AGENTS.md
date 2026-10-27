@@ -234,9 +234,10 @@ Routes:
   - `/-/billing` — the session's organization's billing, rewritten to
     `/{org}/-/billing`
   - `/-/admin` — the site admin console, Gitea site admins only: health
-    checks, then `/-/admin/users` (creating an account, and giving a
-    person's organization free access), `/-/admin/organizations`,
-    `/-/admin/binders`, `/-/admin/system` (versions, the pinned images,
+    checks, then `/-/admin/users` (and creating an account),
+    `/-/admin/organizations` (and giving one free access, for a number of
+    days, writers, or both), `/-/admin/binders`, `/-/admin/system`
+    (versions, the pinned images,
     memory, disk, maintenance) and `/-/admin/config` (every setting; a secret
     only as set or not, `services/api/admin-system.ts`)
 - `/{org}` — an organization; `/{org}/-/people`, `/{org}/-/billing`,
@@ -424,7 +425,10 @@ leave without taking their company's subscription with them. Stripe carries
 
 `resolveAccess` is one precedence list, highest first — `admin_revoke`,
 `admin_grant`, Stripe `active`/`trialing` with a 3-day grace, the local
-`organizations.trial_ends_at`, then nothing. The 14-day trial is a local column
+`organizations.trial_ends_at`, then nothing. A grant may end on a date or
+cover a number of writers; past either it is passed over and the list goes
+on. The paywall counts writers from Gitea for that, and only for a grant
+with a writer limit. The 14-day trial is a local column
 rather than a Stripe trialing subscription because #369 wants no card at all
 during it, and keeping the whole thing in one function is what makes two
 sources of access truth affordable.

@@ -134,6 +134,10 @@ export type AdminUserListPayload = z.infer<typeof AdminUserListPayloadSchema>;
 export const SetAdminOrganizationAccessBodySchema = z.object({
   access: z.enum(["grant", "revoke"]),
   reason: z.string().optional(),
+  // Free access's limits, each optional: for how many days, and for how many
+  // writers. Past either, the organization is back on what it pays.
+  days: z.number().int().min(1).max(3650).nullable().optional(),
+  maxWriters: z.number().int().min(1).max(10_000).nullable().optional(),
 });
 export type SetAdminOrganizationAccessBody = z.infer<
   typeof SetAdminOrganizationAccessBodySchema
@@ -146,6 +150,18 @@ export const AdminOrganizationAccessResultSchema = z.object({
 export type AdminOrganizationAccessResult = z.infer<
   typeof AdminOrganizationAccessResultSchema
 >;
+
+export const AdminFreeAccessSchema = z.object({
+  expiresAt: z.number().nullable(),
+  maxWriters: z.number().nullable(),
+  reason: z.string().nullable(),
+  grantedBy: z.string(),
+  grantedAt: z.number(),
+  // Why it no longer counts: it ended, or the organization has more writers
+  // than it covers. Null while it counts.
+  lapse: z.enum(["expired", "over_writers"]).nullable(),
+});
+export type AdminFreeAccess = z.infer<typeof AdminFreeAccessSchema>;
 
 export const AdminOrganizationRowSchema = z.object({
   id: z.number(),
@@ -165,6 +181,7 @@ export const AdminOrganizationRowSchema = z.object({
   currentPeriodEnd: z.number().nullable(),
   cancelAtPeriodEnd: z.boolean(),
   trialEndsAt: z.number().nullable(),
+  freeAccess: AdminFreeAccessSchema.nullable(),
 });
 export type AdminOrganizationRow = z.infer<typeof AdminOrganizationRowSchema>;
 

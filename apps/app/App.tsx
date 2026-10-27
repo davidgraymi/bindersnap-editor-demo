@@ -444,6 +444,10 @@ export function App() {
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false);
   const [cancelAt, setCancelAt] = useState<number | null>(null);
   const [trialEndsAt, setTrialEndsAt] = useState<number | null>(null);
+  const [freeAccess, setFreeAccess] = useState<{
+    expiresAt: number | null;
+    maxWriters: number | null;
+  } | null>(null);
   const [canManageBilling, setCanManageBilling] = useState(false);
   const [paywallOpen, setPaywallOpen] = useState(false);
   const paywall = useMemo(() => ({ open: () => setPaywallOpen(true) }), []);
@@ -492,6 +496,14 @@ export function App() {
       setCancelAt(billing.cancelAt);
       setPlan(billing.plan ? { ...billing.plan, seats: null } : null);
       setTrialEndsAt(billing.trialEndsAt);
+      setFreeAccess(
+        billing.accessSource === "admin_grant" && billing.override
+          ? {
+              expiresAt: billing.override.expiresAt ?? null,
+              maxWriters: billing.override.maxWriters ?? null,
+            }
+          : null,
+      );
       setCanManageBilling(billing.canManageBilling === true);
       setHasBillingAccount(billing.hasBillingAccount === true);
     } catch {
@@ -1141,6 +1153,7 @@ export function App() {
                   cancelAtPeriodEnd={cancelAtPeriodEnd}
                   cancelAt={cancelAt}
                   trialEndsAt={trialEndsAt}
+                  freeAccess={freeAccess}
                   organization={
                     route.kind === "billing" && route.org
                       ? route.org

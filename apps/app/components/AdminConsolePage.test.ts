@@ -153,10 +153,57 @@ const mockCreateAdminUser = mock(async (body: { email: string }) => ({
   emailed: "welcome" as const,
 }));
 const mockListAdminUsers = mock(async (..._args: unknown[]) => users);
-const mockSetAdminOrganizationAccess = mock(async (org: string) => ({
-  organization: org,
-  billing: "comped" as const,
+const organizationRow = (
+  name: string,
+  fullName: string,
+  extra: Record<string, unknown>,
+) => ({
+  id: name.length,
+  name,
+  fullName,
+  email: "",
+  known: true,
+  createdBy: "alice",
+  createdAt: Date.UTC(2026, 2, 14) / 1000,
+  owners: ["alice"],
+  seats: 3,
+  binders: 1,
+  hasAccess: true,
+  billing: "trial" as const,
+  stripeStatus: null,
+  stripeCustomerId: null,
+  currentPeriodEnd: null,
+  cancelAtPeriodEnd: false,
+  trialEndsAt: null,
+  freeAccess: null,
+  ...extra,
+});
+const mockListAdminOrganizations = mock(async (..._args: unknown[]) => ({
+  organizations: [
+    organizationRow("summit-surgery-center", "Summit Surgery Center", {
+      billing: "comped",
+      freeAccess: {
+        expiresAt: Date.UTC(2027, 3, 25) / 1000,
+        maxWriters: 5,
+        reason: null,
+        grantedBy: "alice",
+        grantedAt: 1,
+        lapse: null,
+      },
+    }),
+    organizationRow("lakeside-hospice", "Lakeside Hospice", {}),
+  ],
+  page: 1,
+  limit: 25,
+  total: 2,
+  hasMore: false,
 }));
+const mockSetAdminOrganizationAccess = mock(
+  async (org: string, ..._rest: unknown[]) => ({
+    organization: org,
+    billing: "comped" as const,
+  }),
+);
 const mockClearAdminOrganizationAccess = mock(async (org: string) => ({
   organization: org,
   billing: "trial" as const,
@@ -170,6 +217,7 @@ mock.module("../api", () => ({
   getAdminSystem: mockGetAdminSystem,
   createAdminUser: mockCreateAdminUser,
   listAdminUsers: mockListAdminUsers,
+  listAdminOrganizations: mockListAdminOrganizations,
   setAdminOrganizationAccess: mockSetAdminOrganizationAccess,
   clearAdminOrganizationAccess: mockClearAdminOrganizationAccess,
 }));
@@ -358,34 +406,59 @@ test("a new account is created from the People page", async () => {
   }
 });
 
-test("free access is given to a person's organization from People, and ended", async () => {
+test("free access is given from Organizations, for days and writers, and ended", async () => {
   const { container, unmount } = render({
-    section: "users",
+    section: "organizations",
     currentUsername: "alice",
     onNavigate: () => {},
   });
-  const button = () =>
-    container.querySelector<HTMLButtonElement>(
-      'button[aria-label$="riverside-health"]',
-    )!;
+  const button = (label: string) =>
+    container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+  const click = (element: Element) =>
+    element.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
   try {
     await settle();
-    expect(button().textContent).toBe("Give free access");
-    button().dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    expect(container.textContent).toContain("Free until");
+    expect(container.textContent).toContain("for up to 5 writers (3 now)");
+    // An organization's record keeps seconds; read as milliseconds it was 1970.
+    expect(container.textContent).toContain("Mar 14, 2026");
+    expect(container.textContent).not.toContain("1970");
+
+    // An organization with none: the form takes days and writers.
+    click(button("Give free access to Lakeside Hospice")!);
+    await settle();
+    const setter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      "value",
+    )!.set!;
+    const inputs = Array.from(
+      container.querySelectorAll<HTMLInputElement>(".admin-console-form input"),
+    );
+    for (const [index, value] of ["30", "4"].entries()) {
+      setter.call(inputs[index], value);
+      inputs[index]!.dispatchEvent(
+        new window.Event("input", { bubbles: true }),
+      );
+    }
+    container
+      .querySelector("form.admin-console-form")!
+      .dispatchEvent(
+        new window.Event("submit", { bubbles: true, cancelable: true }),
+      );
     await settle();
     expect(mockSetAdminOrganizationAccess).toHaveBeenCalledWith(
-      "riverside-health",
+      "lakeside-hospice",
       "grant",
+      { days: 30, maxWriters: 4 },
     );
-    expect(container.textContent).toContain("Comped");
-    expect(button().textContent).toBe("End free access");
 
-    button().dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    // Ending it is always there while there is any.
+    click(button("End free access for Summit Surgery Center")!);
     await settle();
     expect(mockClearAdminOrganizationAccess).toHaveBeenCalledWith(
-      "riverside-health",
+      "summit-surgery-center",
     );
-    expect(button().textContent).toBe("Give free access");
+    expect(mockListAdminOrganizations.mock.calls.length).toBeGreaterThan(1);
   } finally {
     unmount();
   }

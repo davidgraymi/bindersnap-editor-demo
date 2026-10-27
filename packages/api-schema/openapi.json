@@ -2493,6 +2493,14 @@
               },
               "updatedAt": {
                 "type": "number"
+              },
+              "expiresAt": {
+                "type": "number",
+                "nullable": true
+              },
+              "maxWriters": {
+                "type": "number",
+                "nullable": true
               }
             },
             "required": [
@@ -2643,6 +2651,14 @@
                     },
                     "updatedAt": {
                       "type": "number"
+                    },
+                    "expiresAt": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "maxWriters": {
+                      "type": "number",
+                      "nullable": true
                     }
                   },
                   "required": [
@@ -3000,6 +3016,47 @@
                 "trialEndsAt": {
                   "type": "number",
                   "nullable": true
+                },
+                "freeAccess": {
+                  "type": "object",
+                  "nullable": true,
+                  "properties": {
+                    "expiresAt": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "maxWriters": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "reason": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "grantedBy": {
+                      "type": "string"
+                    },
+                    "grantedAt": {
+                      "type": "number"
+                    },
+                    "lapse": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "expired",
+                        "over_writers",
+                        null
+                      ]
+                    }
+                  },
+                  "required": [
+                    "expiresAt",
+                    "maxWriters",
+                    "reason",
+                    "grantedBy",
+                    "grantedAt",
+                    "lapse"
+                  ]
                 }
               },
               "required": [
@@ -3019,7 +3076,8 @@
                 "stripeCustomerId",
                 "currentPeriodEnd",
                 "cancelAtPeriodEnd",
-                "trialEndsAt"
+                "trialEndsAt",
+                "freeAccess"
               ]
             }
           },
@@ -15420,6 +15478,14 @@
                         },
                         "updatedAt": {
                           "type": "number"
+                        },
+                        "expiresAt": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "maxWriters": {
+                          "type": "number",
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -16069,6 +16135,47 @@
                           "trialEndsAt": {
                             "type": "number",
                             "nullable": true
+                          },
+                          "freeAccess": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "expiresAt": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "maxWriters": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "reason": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "grantedBy": {
+                                "type": "string"
+                              },
+                              "grantedAt": {
+                                "type": "number"
+                              },
+                              "lapse": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [
+                                  "expired",
+                                  "over_writers",
+                                  null
+                                ]
+                              }
+                            },
+                            "required": [
+                              "expiresAt",
+                              "maxWriters",
+                              "reason",
+                              "grantedBy",
+                              "grantedAt",
+                              "lapse"
+                            ]
                           }
                         },
                         "required": [
@@ -16088,7 +16195,8 @@
                           "stripeCustomerId",
                           "currentPeriodEnd",
                           "cancelAtPeriodEnd",
-                          "trialEndsAt"
+                          "trialEndsAt",
+                          "freeAccess"
                         ]
                       }
                     },
@@ -16152,6 +16260,18 @@
                   },
                   "reason": {
                     "type": "string"
+                  },
+                  "days": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 1,
+                    "maximum": 3650
+                  },
+                  "maxWriters": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 1,
+                    "maximum": 10000
                   }
                 },
                 "required": [
@@ -16506,6 +16626,14 @@
                               },
                               "updatedAt": {
                                 "type": "number"
+                              },
+                              "expiresAt": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "maxWriters": {
+                                "type": "number",
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -17065,6 +17193,14 @@
                             },
                             "updatedAt": {
                               "type": "number"
+                            },
+                            "expiresAt": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "maxWriters": {
+                              "type": "number",
+                              "nullable": true
                             }
                           },
                           "required": [

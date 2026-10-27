@@ -17,4 +17,8 @@ export type SetAdminSubscriptionAccess200UserOverride = {
   reason?: string | null;
   updatedBy: string;
   updatedAt: number;
+  /** @nullable */
+  expiresAt?: number | null;
+  /** @nullable */
+  maxWriters?: number | null;
 } | null;

@@ -37,6 +37,8 @@ export interface BillingSummaryInput {
   cancelAtPeriodEnd: boolean;
   cancelAt: number | null;
   trialEndsAt: number | null;
+  /** Free access's limits: its end (Unix seconds) and the writers it covers. */
+  freeAccess?: { expiresAt: number | null; maxWriters: number | null } | null;
   /** Whether this person may subscribe, cancel or change the card. */
   canManage?: boolean;
   /** Whether a Stripe customer exists, so Stripe's portal has a page. */
@@ -78,6 +80,21 @@ export function describeBilling(input: BillingSummaryInput): BillingSummary {
     };
   }
   return summary;
+}
+
+/** What free access covers, and until when, in one sentence. */
+function grantDetail(
+  limits: { expiresAt: number | null; maxWriters: number | null } | null,
+): string {
+  const until =
+    limits?.expiresAt != null
+      ? ` until ${formatBillingDate(limits.expiresAt)}`
+      : "";
+  const writers =
+    limits?.maxWriters != null
+      ? ` for up to ${limits.maxWriters} ${limits.maxWriters === 1 ? "writer" : "writers"}`
+      : "";
+  return `Bindersnap has granted this organization access${until}${writers}. There is nothing to pay.`;
 }
 
 function describeStanding(input: BillingSummaryInput): BillingSummary {
@@ -124,7 +141,7 @@ function describeStanding(input: BillingSummaryInput): BillingSummary {
       detail:
         accessSource === "config_bypass"
           ? "This environment exempts your account from billing. There is nothing to pay."
-          : "Bindersnap has granted this organization access. There is nothing to pay.",
+          : grantDetail(input.freeAccess ?? null),
       actions: [],
       ownersOnly: false,
     };

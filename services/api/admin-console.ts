@@ -13,7 +13,7 @@
  * is copied from one to the other.
  */
 
-import type { EffectiveSubscriptionAccess } from "./subscriptions";
+import type { EffectiveSubscriptionAccess, GrantLapse } from "./subscriptions";
 import type { OrganizationRecord } from "./organizations";
 import { unwrap, type GiteaClient } from "./gitea-client/client";
 import type { components } from "./gitea-client/spec/gitea";
@@ -182,7 +182,11 @@ export async function listAdminUsers(
 export interface AdminOrganizationDeps {
   client: GiteaClient;
   record(giteaOrgId: number): Promise<OrganizationRecord | null>;
-  access(giteaOrgId: number): Promise<EffectiveSubscriptionAccess>;
+  /** `writers` is the count already made for the row, for a writer limit. */
+  access(
+    giteaOrgId: number,
+    writers?: () => Promise<number>,
+  ): Promise<EffectiveSubscriptionAccess>;
   owners(org: string): Promise<string[]>;
   seats(org: string): Promise<number>;
 }
@@ -231,6 +235,7 @@ export interface AdminOrganizationRow {
   /** Not every Gitea org came through Bindersnap's signup. */
   known: boolean;
   createdBy: string | null;
+  /** Unix seconds, as the organization's record keeps it. */
   createdAt: number | null;
   owners: string[];
   seats: number | null;
@@ -242,6 +247,36 @@ export interface AdminOrganizationRow {
   currentPeriodEnd: number | null;
   cancelAtPeriodEnd: boolean;
   trialEndsAt: number | null;
+  /** Free access a site admin gave, and whether it still counts. */
+  freeAccess: AdminFreeAccess | null;
+}
+
+export interface AdminFreeAccess {
+  /** Unix seconds, or null for no end. */
+  expiresAt: number | null;
+  /** Null for any number of writers. */
+  maxWriters: number | null;
+  reason: string | null;
+  grantedBy: string;
+  grantedAt: number;
+  /** Why it no longer counts, or null while it does. */
+  lapse: GrantLapse | null;
+}
+
+/** The free access on record, from what `resolveAccess` answered. */
+export function freeAccessOf(
+  access: EffectiveSubscriptionAccess,
+): AdminFreeAccess | null {
+  const override = access.override;
+  if (override?.access !== "grant") return null;
+  return {
+    expiresAt: override.expiresAt ?? null,
+    maxWriters: override.maxWriters ?? null,
+    reason: override.reason,
+    grantedBy: override.updatedBy,
+    grantedAt: override.updatedAt,
+    lapse: access.grantLapse ?? null,
+  };
 }
 
 export async function listAdminOrganizations(
@@ -259,11 +294,14 @@ export async function listAdminOrganizations(
     items.map(async (org): Promise<AdminOrganizationRow> => {
       const id = org.id ?? 0;
       const name = org.username ?? org.name ?? "";
+      const seatCount = deps.seats(name).catch(() => null);
       const [record, access, owners, seats, binders] = await Promise.all([
         deps.record(id),
-        deps.access(id),
+        // A writer limit is checked against the count this row shows. Not
+        // counted (Gitea did not answer), the grant is taken at its word.
+        deps.access(id, async () => (await seatCount) ?? 0),
         deps.owners(name).catch(() => []),
-        deps.seats(name).catch(() => null),
+        seatCount,
         client
           .GET("/orgs/{org}/repos", {
             params: { path: { org: name }, query: { page: 1, limit: 1 } },
@@ -291,6 +329,7 @@ export async function listAdminOrganizations(
         currentPeriodEnd: access.subscription?.currentPeriodEnd ?? null,
         cancelAtPeriodEnd: access.subscription?.cancelAtPeriodEnd ?? false,
         trialEndsAt: access.trialEndsAt,
+        freeAccess: freeAccessOf(access),
       };
     }),
   );

@@ -5,6 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { AdminOrganizationListPayloadOrganizationsItemBilling } from './adminOrganizationListPayloadOrganizationsItemBilling.ts';
+import type { AdminOrganizationListPayloadOrganizationsItemFreeAccess } from './adminOrganizationListPayloadOrganizationsItemFreeAccess.ts';
 
 export type AdminOrganizationListPayloadOrganizationsItem = {
   id: number;
@@ -32,4 +33,6 @@ export type AdminOrganizationListPayloadOrganizationsItem = {
   cancelAtPeriodEnd: boolean;
   /** @nullable */
   trialEndsAt: number | null;
+  /** @nullable */
+  freeAccess: AdminOrganizationListPayloadOrganizationsItemFreeAccess;
 };

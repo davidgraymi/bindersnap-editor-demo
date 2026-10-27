@@ -286,7 +286,13 @@ async function ensurePlans(
         {
           method: "PUT",
           headers: { ...as.headers, "Content-Type": "application/json" },
-          body: JSON.stringify({ access: "grant", reason: "Seeded" }),
+          // Both limits, so the console has one of each to show.
+          body: JSON.stringify({
+            access: "grant",
+            reason: "Seeded",
+            days: 180,
+            maxWriters: 5,
+          }),
         },
       );
       if (!response.ok) {

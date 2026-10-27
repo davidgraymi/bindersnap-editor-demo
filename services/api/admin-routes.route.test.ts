@@ -348,6 +348,28 @@ test("free access is given to an organization, and taken back", async () => {
       request(session, path, { access: "forever" }, "PUT"),
     );
     expect(nonsense.status).toBe(400);
+
+    // For a number of days and a number of writers.
+    const limited = await server.fetch(
+      request(
+        session,
+        path,
+        { access: "grant", days: 30, maxWriters: 2 },
+        "PUT",
+      ),
+    );
+    expect(limited.status).toBe(200);
+    const override = await subscriptionStore.getAccessOverride(7);
+    expect(override?.maxWriters).toBe(2);
+    const thirtyDays = Math.floor(Date.now() / 1000) + 30 * 86_400;
+    expect(Math.abs((override?.expiresAt ?? 0) - thirtyDays)).toBeLessThan(5);
+    for (const bad of [{ days: 0 }, { days: 1.5 }, { maxWriters: "lots" }]) {
+      const refused = await server.fetch(
+        request(session, path, { access: "grant", ...bad }, "PUT"),
+      );
+      expect(refused.status).toBe(400);
+    }
+    await server.fetch(request(session, path, undefined, "DELETE"));
     const nobody = await server.fetch(
       request(
         session,

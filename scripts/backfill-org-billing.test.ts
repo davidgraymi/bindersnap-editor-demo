@@ -122,6 +122,8 @@ describe("runBackfill", () => {
         reason: "design partner",
         updatedBy: "admin-user",
         updatedAt: 200,
+        expiresAt: null,
+        maxWriters: null,
       });
     } finally {
       temp.cleanup();

@@ -148,6 +148,7 @@ export type {
   AdminReleaseImage,
   AdminSystemPayload,
   AdminBinderRow,
+  AdminFreeAccess,
   AdminHealthCheck,
   AdminOrganizationAccessResult,
   AdminOrganizationListPayload,
@@ -2235,9 +2236,12 @@ export async function listAdminOrganizations(
 export async function setAdminOrganizationAccess(
   org: string,
   access: "grant" | "revoke",
+  limits: { days?: number | null; maxWriters?: number | null } = {},
 ): Promise<AdminOrganizationAccessResult> {
   const response = await AdminClient.setAdminOrganizationAccess(org, {
     access,
+    days: limits.days ?? null,
+    maxWriters: limits.maxWriters ?? null,
   });
   return response.data;
 }

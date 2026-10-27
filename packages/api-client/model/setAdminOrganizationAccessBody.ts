@@ -9,4 +9,16 @@ import type { SetAdminOrganizationAccessBodyAccess } from './setAdminOrganizatio
 export type SetAdminOrganizationAccessBody = {
   access: SetAdminOrganizationAccessBodyAccess;
   reason?: string;
+  /**
+     * @minimum 1
+     * @maximum 3650
+     * @nullable
+     */
+  days?: number | null;
+  /**
+     * @minimum 1
+     * @maximum 10000
+     * @nullable
+     */
+  maxWriters?: number | null;
 };

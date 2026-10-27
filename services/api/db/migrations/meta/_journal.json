@@ -92,6 +92,13 @@
       "when": 1791413295888,
       "tag": "0012_legal_agreement_parties",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1793071756606,
+      "tag": "0013_free_access_limits",
+      "breakpoints": true
     }
   ]
 }
