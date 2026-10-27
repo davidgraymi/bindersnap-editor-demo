@@ -45,19 +45,17 @@ terraform -chdir="${STATE_DIR}" apply \
 
 # Extract outputs and write backend.hcl
 BUCKET="$(terraform -chdir="${STATE_DIR}" output -raw bucket_name)"
-LOCK_TABLE="$(terraform -chdir="${STATE_DIR}" output -raw lock_table_name)"
 
 cat > "${BACKEND_HCL}" <<EOF
 bucket         = "${BUCKET}"
 region         = "${AWS_REGION}"
-dynamodb_table = "${LOCK_TABLE}"
+use_lockfile   = true
 encrypt        = true
 EOF
 
 echo ""
 echo "=== Bootstrap complete ==="
 echo "  State bucket:  ${BUCKET}"
-echo "  Lock table:    ${LOCK_TABLE}"
 echo "  Backend config: ${BACKEND_HCL}"
 echo ""
 echo "Next steps:"
