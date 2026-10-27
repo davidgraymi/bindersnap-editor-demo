@@ -5,6 +5,8 @@
 #   cd infra/
 #   ./apply-all.sh          # apply all modules (wires outputs between them)
 #   ./apply-all.sh plan     # plan only — each module uses its own tfvars
+#   ./apply-all.sh init     # point every module at the S3 state backend and
+#                           # install its providers; changes nothing
 #   ./apply-all.sh drift    # plan every module with the same output wiring as
 #                           # apply, change nothing, exit 2 if any has drifted
 #                           # (.github/workflows/terraform-drift.yml runs this)
@@ -22,8 +24,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ACTION="${1:-apply}"
 case "${ACTION}" in
-  apply | plan | drift) ;;
-  *) echo "Usage: $0 [apply|plan|drift]"; exit 1 ;;
+  apply | plan | drift | init) ;;
+  *) echo "Usage: $0 [apply|plan|drift|init]"; exit 1 ;;
 esac
 BACKEND_CONFIG="${SCRIPT_DIR}/state/backend.hcl"
 
@@ -211,6 +213,17 @@ tf_run() {
 }
 
 echo "=== Bindersnap infrastructure: ${ACTION} ==="
+
+# --- Init mode: no tokens needed, nothing applied. infra/state keeps its own
+# state locally and is left out.
+if [[ "$ACTION" == "init" ]]; then
+  for module in account-baseline compute billing billing-test secrets backups email monitoring ci edge; do
+    tf_init "${module}"
+  done
+  echo ""
+  echo "=== Done. All modules initialized against the S3 backend. ==="
+  exit 0
+fi
 
 DRIFTED=()
 

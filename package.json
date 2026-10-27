@@ -46,6 +46,7 @@
     "stack": "bun scripts/stack.ts",
     "tf:apply": "bash infra/apply-all.sh",
     "tf:bootstrap": "bash infra/bootstrap.sh",
+    "tf:init": "bash infra/apply-all.sh init",
     "tf:plan": "bash infra/apply-all.sh plan"
   },
   "dependencies": {
