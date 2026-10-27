@@ -30,8 +30,9 @@ Gitea is where the evidence lives (non-negotiable 2). Read `AGENTS.md`
   **their session token**, so Gitea records them as the actor.
 - `BINDERSNAP_GITEA_SERVICE_TOKEN` is **read-only** and runs on nearly every
   request. Never give it a write scope.
-- `BINDERSNAP_GITEA_ADMIN_TOKEN` is `write:admin` only: signup, password
-  changes, account deletion, token revocation. Never use it to read.
+- `BINDERSNAP_GITEA_ADMIN_TOKEN` is `write:admin` only: creating an account
+  (signup, or a site admin's), password changes, account deletion, token
+  revocation. Never use it to read.
 - No response ever carries a Gitea token (non-negotiable 1, #662).
 
 ## Which primitive

@@ -13,6 +13,9 @@ COPY packages/utils ./packages/utils
 # server.ts loads it today, which is the only reason its absence has not
 # already killed the container — copy them rather than leave that waiting.
 COPY packages/api-schema/schemas ./packages/api-schema/schemas
+# The images this commit deploys, which the admin console's System page lists
+# (services/api/admin-system.ts). Data, not code: no secrets live in it.
+COPY deploy/files/docker-compose.prod.yml ./deploy/files/docker-compose.prod.yml
 RUN bun install --frozen-lockfile --production
 
 FROM oven/bun:1.4.4-slim@sha256:1846adf22496bd711036aae8be147e57bdebbaea2e5264e3e0b5af1db187d9a4

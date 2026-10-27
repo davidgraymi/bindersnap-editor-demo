@@ -138,3 +138,16 @@ test("a group whose run threw still lets the next one in", async () => {
     "next",
   );
 });
+
+test("statusCounts tallies jobs for the admin console", () => {
+  const store = freshStore();
+  const job = store.create(base);
+  store.create({ ...base, subject: "change:13" });
+  store.fail(job.id, "merge refused", { permanent: true });
+  expect(store.statusCounts()).toEqual({
+    pending: 1,
+    running: 0,
+    done: 0,
+    failed: 1,
+  });
+});

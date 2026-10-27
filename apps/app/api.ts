@@ -87,8 +87,17 @@ import type {
   BillingStatusPayload,
 } from "../../packages/api-schema/schemas/billing";
 import type {
+  AdminBinderListPayload,
+  AdminConfigPayload,
+  AdminCreateUserBody,
+  AdminCreatedUser,
+  AdminReconcilerRun,
+  AdminSystemPayload,
+  AdminOrganizationListPayload,
+  AdminOverviewPayload,
   AdminSubscriptionAccessListPayload,
   AdminSubscriptionAccessUser,
+  AdminUserListPayload,
 } from "../../packages/api-schema/schemas/admin";
 
 // Re-export all generated types
@@ -130,8 +139,24 @@ export type {
   VersionSubmission,
 } from "../../packages/api-schema/schemas/documents";
 export type {
+  AdminBillingState,
+  AdminBinderListPayload,
+  AdminConfigEntry,
+  AdminConfigPayload,
+  AdminCreateUserBody,
+  AdminCreatedUser,
+  AdminReconcilerRun,
+  AdminReleaseImage,
+  AdminSystemPayload,
+  AdminBinderRow,
+  AdminHealthCheck,
+  AdminOrganizationListPayload,
+  AdminOrganizationRow,
+  AdminOverviewPayload,
   AdminSubscriptionAccessListPayload,
   AdminSubscriptionAccessUser,
+  AdminUserListPayload,
+  AdminUserRow,
 } from "../../packages/api-schema/schemas/admin";
 export type {
   AdminSubscriptionAccessOverride,
@@ -2172,6 +2197,71 @@ export async function createPortalSession(
 }
 
 // Admin functions
+
+export async function getAdminOverview(): Promise<AdminOverviewPayload> {
+  const response = await AdminClient.getAdminOverview();
+  return response.data;
+}
+
+export async function listAdminUsers(
+  query = "",
+  page = 1,
+  limit = 25,
+): Promise<AdminUserListPayload> {
+  const response = await AdminClient.listAdminUsers({
+    q: query,
+    page: String(page),
+    limit: String(limit),
+  });
+  return response.data;
+}
+
+export async function listAdminOrganizations(
+  page = 1,
+  limit = 25,
+): Promise<AdminOrganizationListPayload> {
+  const response = await AdminClient.listAdminOrganizations({
+    page: String(page),
+    limit: String(limit),
+  });
+  return response.data;
+}
+
+export async function listAdminBinders(
+  query = "",
+  page = 1,
+  limit = 25,
+): Promise<AdminBinderListPayload> {
+  const response = await AdminClient.listAdminBinders({
+    q: query,
+    page: String(page),
+    limit: String(limit),
+  });
+  return response.data;
+}
+
+export async function getAdminSystem(): Promise<AdminSystemPayload> {
+  const response = await AdminClient.getAdminSystem();
+  return response.data;
+}
+
+export async function getAdminConfig(): Promise<AdminConfigPayload> {
+  const response = await AdminClient.getAdminConfig();
+  // orval widens the value union to `unknown`; the schema says what it is.
+  return response.data as AdminConfigPayload;
+}
+
+export async function createAdminUser(
+  body: AdminCreateUserBody,
+): Promise<AdminCreatedUser> {
+  const response = await AdminClient.createAdminUser(body);
+  return response.data;
+}
+
+export async function runAdminReconciler(): Promise<AdminReconcilerRun> {
+  const response = await AdminClient.runAdminReconciler();
+  return response.data;
+}
 
 export async function listAdminSubscriptionAccess(
   query = "",

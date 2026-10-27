@@ -1,0 +1,349 @@
+import { expect, mock, test } from "bun:test";
+
+import {
+  billingState,
+  checkMail,
+  checkReconciler,
+  checkStripe,
+  giteaTime,
+  listAdminBinders,
+  listAdminOrganizations,
+  listAdminUsers,
+  MAIL_STALL_MS,
+  tallyBilling,
+  totalCount,
+} from "./admin-console";
+import type { GiteaClient } from "./gitea-client/client";
+import type { EffectiveSubscriptionAccess } from "./subscriptions";
+
+type Handler = (init?: any) => { data: unknown; total?: number } | unknown;
+
+/** A client answering GETs by path, with `X-Total-Count` when one is given. */
+function mockClient(handlers: Record<string, Handler>) {
+  const get = mock(async (path: string, init?: unknown) => {
+    const handler = handlers[path];
+    if (!handler) {
+      return {
+        data: undefined,
+        error: { message: "not found" },
+        response: new Response(null, { status: 404 }),
+      };
+    }
+    const answer = handler(init) as { data: unknown; total?: number };
+    const headers = new Headers();
+    if (answer.total !== undefined) {
+      headers.set("X-Total-Count", String(answer.total));
+    }
+    return {
+      data: answer.data,
+      error: undefined,
+      response: new Response(null, { status: 200, headers }),
+    };
+  });
+  return { client: { GET: get } as unknown as GiteaClient, get };
+}
+
+function access(
+  overrides: Partial<EffectiveSubscriptionAccess>,
+): EffectiveSubscriptionAccess {
+  return {
+    giteaOrgId: 1,
+    hasAccess: false,
+    source: "none",
+    subscription: null,
+    override: null,
+    trialEndsAt: null,
+    ...overrides,
+  };
+}
+
+const subscription = (status: string) => ({
+  giteaOrgId: 1,
+  stripeCustomerId: "cus_1",
+  stripeSubscriptionId: "sub_1",
+  status,
+  currentPeriodEnd: null,
+  cancelAtPeriodEnd: false,
+  cancelAt: null,
+  updatedAt: 0,
+});
+
+test("totalCount reads Gitea's header, and nothing else", () => {
+  const withTotal = new Response(null, {
+    headers: { "X-Total-Count": "112" },
+  });
+  expect(totalCount(withTotal)).toBe(112);
+  expect(totalCount(new Response(null))).toBeNull();
+  expect(
+    totalCount(new Response(null, { headers: { "X-Total-Count": "lots" } })),
+  ).toBeNull();
+});
+
+test("giteaTime reads Gitea's zero time as never", () => {
+  expect(giteaTime("0001-01-01T00:00:00Z")).toBeNull();
+  expect(giteaTime(undefined)).toBeNull();
+  expect(giteaTime("2026-03-14T12:00:00Z")).toBe(
+    Date.parse("2026-03-14T12:00:00Z"),
+  );
+});
+
+test("billingState follows the paywall's own precedence", () => {
+  expect(billingState(access({ source: "admin_revoke" }))).toBe("revoked");
+  expect(billingState(access({ source: "admin_grant" }))).toBe("comped");
+  expect(
+    billingState(
+      access({ source: "stripe", subscription: subscription("active") }),
+    ),
+  ).toBe("paying");
+  expect(billingState(access({ source: "trial", trialEndsAt: 10 }))).toBe(
+    "trial",
+  );
+  // A subscription that grants nothing has lapsed, whatever Stripe last said.
+  expect(billingState(access({ subscription: subscription("active") }))).toBe(
+    "past_due",
+  );
+  expect(billingState(access({ subscription: subscription("past_due") }))).toBe(
+    "past_due",
+  );
+  expect(billingState(access({ subscription: subscription("canceled") }))).toBe(
+    "canceled",
+  );
+  expect(billingState(access({ trialEndsAt: 10 }))).toBe("trial_ended");
+  expect(billingState(access({}))).toBe("none");
+});
+
+test("tallyBilling counts each organization once", () => {
+  expect(
+    tallyBilling([
+      access({ source: "stripe", subscription: subscription("active") }),
+      access({ source: "stripe", subscription: subscription("trialing") }),
+      access({ source: "trial", trialEndsAt: 10 }),
+      access({ trialEndsAt: 10 }),
+      access({ subscription: subscription("unpaid") }),
+    ]),
+  ).toEqual({
+    paying: 2,
+    pastDue: 1,
+    trial: 1,
+    trialEnded: 1,
+    comped: 0,
+    revoked: 0,
+    canceled: 0,
+    none: 0,
+  });
+});
+
+test("checkMail says when nothing can send, and when the outbox is stuck", () => {
+  const counts = { pending: 1, sent: 4, failed: 0 };
+  expect(
+    checkMail({ transport: "off", counts, oldestPendingAt: null, now: 0 })
+      .status,
+  ).toBe("warn");
+  expect(
+    checkMail({
+      transport: "ses",
+      counts,
+      oldestPendingAt: 0,
+      now: MAIL_STALL_MS + 1,
+    }).status,
+  ).toBe("down");
+  expect(
+    checkMail({ transport: "ses", counts, oldestPendingAt: 0, now: 1000 })
+      .status,
+  ).toBe("ok");
+  expect(
+    checkMail({
+      transport: "ses",
+      counts: { ...counts, failed: 2 },
+      oldestPendingAt: null,
+      now: 0,
+    }).status,
+  ).toBe("warn");
+});
+
+test("checkStripe names what is missing", () => {
+  const check = checkStripe({
+    secretKey: true,
+    webhookSecret: false,
+    priceId: true,
+  });
+  expect(check.status).toBe("warn");
+  expect(check.detail).toContain("webhook secret");
+  expect(
+    checkStripe({ secretKey: true, webhookSecret: true, priceId: true }).status,
+  ).toBe("ok");
+});
+
+test("checkReconciler flags a pass that has not run, or found something", () => {
+  expect(checkReconciler(null).status).toBe("warn");
+  expect(checkReconciler({ binders: 3, findings: [], errors: [] }).status).toBe(
+    "ok",
+  );
+  expect(
+    checkReconciler({ binders: 3, findings: [{}], errors: [] }).status,
+  ).toBe("warn");
+});
+
+test("listAdminUsers joins Gitea's accounts with what Bindersnap knows of them", async () => {
+  const { client, get } = mockClient({
+    "/admin/users": () => ({
+      total: 2,
+      data: [
+        {
+          login: "alice",
+          full_name: "Alice Example",
+          email: "alice@example.com",
+          is_admin: true,
+          active: true,
+          created: "2026-01-02T00:00:00Z",
+          last_login: "2026-03-14T00:00:00Z",
+        },
+        {
+          login: "bob",
+          email: "bob@example.com",
+          active: false,
+          last_login: "0001-01-01T00:00:00Z",
+        },
+      ],
+    }),
+    "/users/{username}/orgs": (init) => ({
+      data:
+        init.params.path.username === "alice"
+          ? [{ username: "riverside-health" }]
+          : [],
+    }),
+  });
+
+  const result = await listAdminUsers(
+    {
+      client,
+      emailStatus: (username) =>
+        username === "alice"
+          ? { state: "confirmed", confirmedAt: 5, sentAt: 1 }
+          : { state: "waiting", confirmedAt: null, sentAt: 1 },
+      liveSessions: async (username) => (username === "alice" ? 2 : 0),
+    },
+    { page: 1, limit: 2, query: "a" },
+  );
+
+  expect(get.mock.calls[0]![1]).toEqual({
+    params: {
+      query: { page: 1, limit: 2, sort: "created", order: "desc", q: "a" },
+    },
+  });
+  expect(result.total).toBe(2);
+  expect(result.hasMore).toBe(false);
+  expect(result.users[0]).toMatchObject({
+    username: "alice",
+    email: "alice@example.com",
+    emailConfirmation: "confirmed",
+    isSiteAdmin: true,
+    liveSessions: 2,
+    organizations: ["riverside-health"],
+    lastLoginAt: Date.parse("2026-03-14T00:00:00Z"),
+  });
+  expect(result.users[1]).toMatchObject({
+    username: "bob",
+    emailConfirmation: "waiting",
+    active: false,
+    lastLoginAt: null,
+    organizations: [],
+  });
+});
+
+test("listAdminOrganizations reads billing from SQLite and size from Gitea", async () => {
+  const { client } = mockClient({
+    "/admin/orgs": () => ({
+      total: 51,
+      data: [{ id: 7, username: "riverside-health", full_name: "Riverside" }],
+    }),
+    "/orgs/{org}/repos": () => ({ data: [{}], total: 3 }),
+  });
+
+  const result = await listAdminOrganizations(
+    {
+      client,
+      record: async () => ({
+        giteaOrgId: 7,
+        name: "riverside-health",
+        createdBy: "alice",
+        createdAt: 100,
+        trialEndsAt: 200,
+      }),
+      access: async () =>
+        access({
+          giteaOrgId: 7,
+          hasAccess: true,
+          source: "stripe",
+          subscription: subscription("active"),
+          trialEndsAt: 200,
+        }),
+      owners: async () => ["alice"],
+      seats: async () => 4,
+    },
+    { page: 1, limit: 50 },
+  );
+
+  expect(result.hasMore).toBe(true);
+  expect(result.organizations).toEqual([
+    {
+      id: 7,
+      name: "riverside-health",
+      fullName: "Riverside",
+      email: "",
+      known: true,
+      createdBy: "alice",
+      createdAt: 100,
+      owners: ["alice"],
+      seats: 4,
+      binders: 3,
+      hasAccess: true,
+      billing: "paying",
+      stripeStatus: "active",
+      stripeCustomerId: "cus_1",
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
+      trialEndsAt: 200,
+    },
+  ]);
+});
+
+test("listAdminBinders lists every repository, newest change first", async () => {
+  const { client, get } = mockClient({
+    "/repos/search": () => ({
+      total: 1,
+      data: {
+        ok: true,
+        data: [
+          {
+            id: 9,
+            name: "policies",
+            owner: { login: "riverside-health" },
+            private: true,
+            size: 2048,
+            open_pr_counter: 2,
+            updated_at: "2026-03-14T00:00:00Z",
+          },
+        ],
+      },
+    }),
+  });
+
+  const result = await listAdminBinders(client, {
+    page: 1,
+    limit: 25,
+    query: "",
+  });
+
+  expect(get.mock.calls[0]![1]).toEqual({
+    params: { query: { page: 1, limit: 25, sort: "updated", order: "desc" } },
+  });
+  expect(result.binders[0]).toMatchObject({
+    org: "riverside-health",
+    name: "policies",
+    private: true,
+    sizeKb: 2048,
+    openChanges: 2,
+  });
+  expect(result.total).toBe(1);
+});

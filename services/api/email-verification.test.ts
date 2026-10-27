@@ -101,3 +101,21 @@ test("the email names the account and carries the link", () => {
     "https://app.example/-/verify_email?token=abc",
   );
 });
+
+test("status and countUnconfirmed answer the admin console", () => {
+  const store = freshStore();
+  expect(store.status("alice")).toEqual({
+    state: "predates",
+    confirmedAt: null,
+    sentAt: null,
+  });
+  store.start("alice", "alice@example.com", { now: 10 });
+  store.start("bob", "bob@example.com", { confirmed: true, now: 20 });
+  expect(store.status("Alice")).toEqual({
+    state: "waiting",
+    confirmedAt: null,
+    sentAt: 10,
+  });
+  expect(store.status("bob").state).toBe("confirmed");
+  expect(store.countUnconfirmed()).toBe(1);
+});
