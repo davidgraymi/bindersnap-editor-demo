@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, count, eq, isNull } from "drizzle-orm";
 
 import { config } from "./config";
 import { openSqliteDb, type SqliteDb } from "./db/client";
@@ -62,6 +62,36 @@ export class EmailVerificationStore {
   isUnconfirmed(username: string): boolean {
     const row = this.row(username);
     return row !== null && row.verifiedAt === null;
+  }
+
+  /**
+   * Where an account stands on confirming its address, for the admin
+   * console: `confirmed`, still `waiting`, or `predates` confirmation (no row,
+   * which `isUnconfirmed` also reads as nothing left to do).
+   */
+  status(username: string): {
+    state: "confirmed" | "waiting" | "predates";
+    confirmedAt: number | null;
+    sentAt: number | null;
+  } {
+    const row = this.row(username);
+    if (!row) return { state: "predates", confirmedAt: null, sentAt: null };
+    return {
+      state: row.verifiedAt === null ? "waiting" : "confirmed",
+      confirmedAt: row.verifiedAt,
+      sentAt: row.sentAt,
+    };
+  }
+
+  /** How many accounts still have to confirm their address. */
+  countUnconfirmed(): number {
+    return (
+      this.db
+        .select({ total: count() })
+        .from(emailVerifications)
+        .where(isNull(emailVerifications.verifiedAt))
+        .get()?.total ?? 0
+    );
   }
 
   /** The address waiting to be confirmed, or null if there is none. */

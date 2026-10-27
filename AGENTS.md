@@ -232,7 +232,10 @@ Routes:
   - `/-/organizations/new` — create (or ask to join) an organization
   - `/-/user_settings/profile` — the signed-in person's own account
   - `/-/billing` — the session's organization's billing, rewritten to
-    `/{org}/-/billing`; `/-/admin/subscriptions` — site admins only
+    `/{org}/-/billing`
+  - `/-/admin` — the site admin console, Gitea site admins only: health
+    checks, then `/-/admin/users`, `/-/admin/organizations`,
+    `/-/admin/binders` and `/-/admin/subscriptions` (Pro access overrides)
 - `/{org}` — an organization; `/{org}/-/people`, `/{org}/-/billing`,
   `/{org}/-/settings`, `/{org}/-/binders/new`
 - `/{org}/{binder}` — a binder; its screens and documents are behind its own

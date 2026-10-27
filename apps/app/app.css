@@ -5646,18 +5646,6 @@ a.bs-knot {
   gap: var(--brand-space-6);
 }
 
-.admin-pro-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--brand-space-4);
-}
-
-.admin-pro-header-copy {
-  max-width: 42rem;
-}
-
-.admin-pro-header-copy h1,
 .admin-pro-card-heading h2,
 .admin-pro-state-card h3,
 .admin-pro-empty-state h3 {
@@ -5666,33 +5654,17 @@ a.bs-knot {
   color: var(--bs-text-primary);
 }
 
-/* A page's own name, so it is the page-title size like every other page's. */
-.admin-pro-header-copy h1 {
-  font-size: 26px;
-  line-height: var(--brand-leading-tight);
+.admin-pro-lead {
+  max-width: var(--brand-measure);
+  margin: 0;
+  color: var(--bs-text-secondary);
 }
 
-.admin-pro-header-copy p,
 .admin-pro-card-heading p,
 .admin-pro-empty-state p,
 .admin-pro-muted {
   margin: var(--brand-space-3) 0 0;
   color: var(--bs-text-muted);
-}
-
-.admin-pro-admin-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--brand-space-2);
-  min-height: var(--brand-space-8);
-  padding: 0 var(--brand-space-3);
-  border-radius: var(--brand-radius-full);
-  border: 1px solid var(--bs-rule);
-  background: var(--bs-surface-1);
-  color: var(--brand-coral);
-  font-size: var(--brand-text-label);
-  letter-spacing: var(--brand-tracking-wide);
-  text-transform: uppercase;
 }
 
 .admin-pro-grid {
@@ -5961,7 +5933,6 @@ a.bs-knot {
 }
 
 @media (max-width: 640px) {
-  .admin-pro-header,
   .admin-pro-state-row {
     flex-direction: column;
   }
@@ -5983,6 +5954,195 @@ a.bs-knot {
   .admin-pro-actions .bs-btn {
     width: 100%;
   }
+}
+
+/* ── Site admin console (issue 840) ───────────────────────────────────
+   The binder's grammar — panels, rows, chips — with one addition: a table,
+   because a list of people or organizations is compared across columns. */
+
+.admin-console .doc-tab {
+  text-decoration: none;
+}
+
+.admin-console-who {
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.admin-console-stack {
+  display: grid;
+  gap: var(--brand-space-4);
+}
+
+.admin-console-muted {
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.admin-console-link {
+  color: var(--bs-coral-text);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.admin-console-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--brand-space-3);
+}
+
+.admin-console-tile {
+  display: grid;
+  gap: var(--brand-space-1);
+  padding: var(--brand-space-4);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  color: var(--bs-text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--brand-transition-fast);
+}
+
+.admin-console-tile:hover {
+  border-color: var(--bs-coral-border);
+}
+
+.admin-console-tile:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 2px;
+}
+
+.admin-console-tile-label {
+  color: var(--bs-text-muted);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-label);
+  letter-spacing: var(--brand-tracking-wide);
+  text-transform: uppercase;
+}
+
+.admin-console-tile-value {
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-h3);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.admin-console-tile-note {
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.admin-console-billing {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: var(--brand-space-3);
+  margin: 0;
+  padding: var(--brand-space-3) var(--brand-space-2);
+}
+
+.admin-console-billing > div {
+  display: grid;
+  gap: var(--brand-space-1);
+  justify-items: start;
+}
+
+.admin-console-billing dd {
+  margin: 0;
+  font-size: var(--brand-text-ui-lg);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.admin-console-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 16rem;
+  max-width: 24rem;
+}
+
+.admin-console-search .bs-input {
+  width: 100%;
+  padding-left: var(--brand-space-8);
+}
+
+.admin-console-search-icon {
+  position: absolute;
+  left: var(--brand-space-2-5);
+  color: var(--bs-text-faint);
+  pointer-events: none;
+}
+
+.admin-console-table-wrap {
+  overflow-x: auto;
+}
+
+.admin-console-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--brand-text-ui-md);
+}
+
+.admin-console-table th {
+  padding: var(--brand-space-2);
+  border-bottom: 1px solid var(--bs-rule-warm);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+  font-weight: var(--brand-weight-medium);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.admin-console-table td {
+  padding: var(--brand-space-2);
+  border-top: 1px solid var(--bs-rule-warm);
+  color: var(--bs-text-secondary);
+  vertical-align: top;
+}
+
+.admin-console-table tbody tr:first-child td {
+  border-top: none;
+}
+
+.admin-console-table td > * + * {
+  margin-top: var(--brand-space-1);
+}
+
+.admin-console-primary {
+  display: block;
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-medium);
+  overflow-wrap: anywhere;
+}
+
+a.admin-console-primary {
+  text-decoration: none;
+}
+
+a.admin-console-primary:hover {
+  text-decoration: underline;
+}
+
+.admin-console-secondary {
+  display: block;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+  overflow-wrap: anywhere;
+}
+
+.admin-console-flags,
+.admin-console-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--brand-space-1);
+}
+
+.admin-console-flags:empty {
+  display: none;
+}
+
+.admin-console-number {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* ── RESPONSIVE ──────────────────────────────────────────────── */

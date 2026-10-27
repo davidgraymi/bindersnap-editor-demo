@@ -5,13 +5,169 @@
  * OpenAPI spec version: 1.0.0
  */
 import type {
+  GetAdminOverview200,
+  ListAdminBinders200,
+  ListAdminBindersParams,
+  ListAdminOrganizations200,
+  ListAdminOrganizationsParams,
   ListAdminSubscriptionAccess200,
   ListAdminSubscriptionAccessParams,
+  ListAdminUsers200,
+  ListAdminUsersParams,
   SetAdminSubscriptionAccess200,
   SetAdminSubscriptionAccessBody
 } from '../model';
 
 import { customFetch } from '.././mutator.ts';
+
+export type getAdminOverviewResponse200 = {
+  data: GetAdminOverview200
+  status: 200
+}
+
+export type getAdminOverviewResponseSuccess = (getAdminOverviewResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getAdminOverviewResponse = (getAdminOverviewResponseSuccess)
+
+export const getGetAdminOverviewUrl = () => {
+
+
+
+
+  return `/api/app/admin/overview`
+}
+
+export const getAdminOverview = async ( options?: Parameters<typeof customFetch>[1]): Promise<getAdminOverviewResponse> => {
+
+  return customFetch<getAdminOverviewResponse>(getGetAdminOverviewUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type listAdminUsersResponse200 = {
+  data: ListAdminUsers200
+  status: 200
+}
+
+export type listAdminUsersResponseSuccess = (listAdminUsersResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listAdminUsersResponse = (listAdminUsersResponseSuccess)
+
+export const getListAdminUsersUrl = (params?: ListAdminUsersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/app/admin/users?${stringifiedParams}` : `/api/app/admin/users`
+}
+
+export const listAdminUsers = async (params?: ListAdminUsersParams, options?: Parameters<typeof customFetch>[1]): Promise<listAdminUsersResponse> => {
+
+  return customFetch<listAdminUsersResponse>(getListAdminUsersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type listAdminOrganizationsResponse200 = {
+  data: ListAdminOrganizations200
+  status: 200
+}
+
+export type listAdminOrganizationsResponseSuccess = (listAdminOrganizationsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listAdminOrganizationsResponse = (listAdminOrganizationsResponseSuccess)
+
+export const getListAdminOrganizationsUrl = (params?: ListAdminOrganizationsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/app/admin/organizations?${stringifiedParams}` : `/api/app/admin/organizations`
+}
+
+export const listAdminOrganizations = async (params?: ListAdminOrganizationsParams, options?: Parameters<typeof customFetch>[1]): Promise<listAdminOrganizationsResponse> => {
+
+  return customFetch<listAdminOrganizationsResponse>(getListAdminOrganizationsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type listAdminBindersResponse200 = {
+  data: ListAdminBinders200
+  status: 200
+}
+
+export type listAdminBindersResponseSuccess = (listAdminBindersResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listAdminBindersResponse = (listAdminBindersResponseSuccess)
+
+export const getListAdminBindersUrl = (params?: ListAdminBindersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/app/admin/binders?${stringifiedParams}` : `/api/app/admin/binders`
+}
+
+export const listAdminBinders = async (params?: ListAdminBindersParams, options?: Parameters<typeof customFetch>[1]): Promise<listAdminBindersResponse> => {
+
+  return customFetch<listAdminBindersResponse>(getListAdminBindersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
 
 export type listAdminSubscriptionAccessResponse200 = {
   data: ListAdminSubscriptionAccess200

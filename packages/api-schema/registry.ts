@@ -122,7 +122,11 @@ import {
 } from "./schemas/billing";
 import {
   AdminAccessUserResultSchema,
+  AdminBinderListPayloadSchema,
+  AdminOrganizationListPayloadSchema,
+  AdminOverviewPayloadSchema,
   AdminSubscriptionAccessListPayloadSchema,
+  AdminUserListPayloadSchema,
   SetAdminAccessBodySchema,
 } from "./schemas/admin";
 import { RepoCollaboratorPermissionSummarySchema } from "./schemas/common";
@@ -180,6 +184,13 @@ registry.register(
   "AdminSubscriptionAccessListPayload",
   AdminSubscriptionAccessListPayloadSchema,
 );
+registry.register("AdminOverviewPayload", AdminOverviewPayloadSchema);
+registry.register("AdminUserListPayload", AdminUserListPayloadSchema);
+registry.register(
+  "AdminOrganizationListPayload",
+  AdminOrganizationListPayloadSchema,
+);
+registry.register("AdminBinderListPayload", AdminBinderListPayloadSchema);
 
 // Auth routes
 registry.registerPath({
@@ -2578,6 +2589,80 @@ registry.registerPath({
 });
 
 // Admin routes
+const AdminPageQuerySchema = z.object({
+  q: z.string().optional(),
+  page: z.string().optional(),
+  limit: z.string().optional(),
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/admin/overview",
+  operationId: "getAdminOverview",
+  tags: ["admin"],
+  responses: {
+    200: {
+      description: "Health checks and the deployment's size",
+      content: {
+        "application/json": { schema: AdminOverviewPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/admin/users",
+  operationId: "listAdminUsers",
+  tags: ["admin"],
+  request: { query: AdminPageQuerySchema },
+  responses: {
+    200: {
+      description: "Every account",
+      content: {
+        "application/json": { schema: AdminUserListPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/admin/organizations",
+  operationId: "listAdminOrganizations",
+  tags: ["admin"],
+  request: {
+    query: z.object({
+      page: z.string().optional(),
+      limit: z.string().optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Every organization",
+      content: {
+        "application/json": { schema: AdminOrganizationListPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/admin/binders",
+  operationId: "listAdminBinders",
+  tags: ["admin"],
+  request: { query: AdminPageQuerySchema },
+  responses: {
+    200: {
+      description: "Every binder",
+      content: {
+        "application/json": { schema: AdminBinderListPayloadSchema },
+      },
+    },
+  },
+});
+
 registry.registerPath({
   method: "get",
   path: "/api/app/admin/subscriptions/access",

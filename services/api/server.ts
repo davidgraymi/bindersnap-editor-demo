@@ -47,6 +47,22 @@ import {
 import { identiconSvg } from "./identicon";
 import { reconcileBinders, type ReconcilerReport } from "./reconciler";
 import {
+  ADMIN_PAGE_LIMIT,
+  checkGate,
+  checkGitea,
+  checkJobs,
+  checkMail,
+  checkReconciler,
+  checkStripe,
+  countGitea,
+  listAdminBinders,
+  listAdminOrganizations,
+  listAdminUsers,
+  tallyBilling,
+  type HealthCheck,
+} from "./admin-console";
+import { emailOutboxStore } from "./mail/outbox";
+import {
   PublishConflict,
   runPublish,
   type PublishDeps,
@@ -15150,6 +15166,269 @@ async function handleReconcilerReport(
   return json(200, { report: lastReconcilerReport }, baseHeaders);
 }
 
+/** When this process started, for the console's uptime line. */
+const API_STARTED_AT = Date.now();
+
+/**
+ * The console's reads run on the service account's read token: they list
+ * every account, organization and binder, which no person's own token can.
+ * The caller has already proven they are a site admin.
+ */
+function adminConsoleClient(baseHeaders: Headers): GiteaClient | Response {
+  return (
+    createPrivilegedGiteaClient() ??
+    json(
+      503,
+      { error: "The API has no Gitea service token to read with." },
+      baseHeaders,
+    )
+  );
+}
+
+function adminPageParams(url: URL): {
+  page: number;
+  limit: number;
+  query: string;
+} {
+  return {
+    page: parsePositiveIntInput(url.searchParams.get("page"), 1),
+    limit: Math.min(
+      parsePositiveIntInput(url.searchParams.get("limit"), 25),
+      ADMIN_PAGE_LIMIT,
+    ),
+    query: url.searchParams.get("q")?.trim() ?? "",
+  };
+}
+
+/**
+ * Admin only: is the deployment well, and how big is it. One request, so the
+ * console's first screen is one round trip.
+ */
+async function handleAdminOverview(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireAdminSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const client = adminConsoleClient(baseHeaders);
+  if (client instanceof Response) return client;
+
+  const now = Date.now();
+  const database = ((): HealthCheck => {
+    try {
+      const mail = emailOutboxStore().statusCounts();
+      return {
+        id: "database",
+        label: "Database",
+        status: "ok",
+        detail: `SQLite answered. ${mail.pending} emails waiting to send.`,
+      };
+    } catch (err) {
+      return {
+        id: "database",
+        label: "Database",
+        status: "down",
+        detail: err instanceof Error ? err.message : "Did not answer.",
+      };
+    }
+  })();
+
+  const safely = <T>(read: () => T): T | null => {
+    try {
+      return read();
+    } catch {
+      return null;
+    }
+  };
+  const mailCounts = safely(() => emailOutboxStore().statusCounts());
+  const jobCounts = safely(() => jobStore().statusCounts());
+
+  const [gitea, users, organizations, binders, knownOrganizations] =
+    await Promise.all([
+      checkGitea(client),
+      countGitea(() =>
+        client.GET("/admin/users", { params: { query: { limit: 1 } } }),
+      ),
+      countGitea(() =>
+        client.GET("/admin/orgs", { params: { query: { limit: 1 } } }),
+      ),
+      countGitea(() =>
+        client.GET("/repos/search", { params: { query: { limit: 1 } } }),
+      ),
+      organizationStore.list().catch(() => []),
+    ]);
+
+  // Every organization Bindersnap made, and any other with billing on file,
+  // so an ended trial counts as well as a live one.
+  const knownStates = await subscriptionStore
+    .listKnownAccessStates()
+    .catch(() => []);
+  const seen = new Set(knownStates.map((state) => state.giteaOrgId));
+  const accesses = [
+    ...knownStates,
+    ...(await Promise.all(
+      knownOrganizations
+        .filter((organization) => !seen.has(organization.giteaOrgId))
+        .map((organization) =>
+          subscriptionStore.resolveAccess(organization.giteaOrgId),
+        ),
+    )),
+  ];
+
+  const checks: HealthCheck[] = [
+    {
+      id: "api",
+      label: "API",
+      status: "ok",
+      detail: `Release ${config.release || "unknown"}, up ${Math.round(
+        (now - API_STARTED_AT) / 60_000,
+      )} minutes.`,
+    },
+    gitea,
+    database,
+    mailCounts
+      ? checkMail({
+          transport: config.mailTransport,
+          counts: mailCounts,
+          oldestPendingAt: mailCounts.oldestPendingAt,
+          now,
+        })
+      : {
+          id: "mail",
+          label: "Email",
+          status: "down",
+          detail: "The outbox could not be read.",
+        },
+    jobCounts
+      ? checkJobs(jobCounts)
+      : {
+          id: "jobs",
+          label: "Publishing",
+          status: "down",
+          detail: "The job table could not be read.",
+        },
+    checkStripe({
+      secretKey: Boolean(config.stripeSecretKey),
+      webhookSecret: Boolean(config.stripeWebhookSecret),
+      priceId: Boolean(config.stripePriceId),
+    }),
+    checkReconciler(lastReconcilerReport),
+    checkGate({
+      limit: MAX_CONCURRENT_GITEA_REQUESTS,
+      inFlight: giteaRequestGate.inFlight,
+      queued: giteaRequestGate.queued,
+    }),
+  ];
+
+  return json(
+    200,
+    {
+      checkedAt: now,
+      checks,
+      counts: {
+        users,
+        organizations,
+        binders,
+        unconfirmedEmails: safely(() =>
+          emailVerificationStore().countUnconfirmed(),
+        ),
+      },
+      billing: tallyBilling(accesses),
+    },
+    baseHeaders,
+  );
+}
+
+/** Admin only: every account, newest first, with what Bindersnap knows of it. */
+async function handleAdminUsers(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireAdminSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const client = adminConsoleClient(baseHeaders);
+  if (client instanceof Response) return client;
+
+  try {
+    const params = adminPageParams(new URL(req.url));
+    return json(
+      200,
+      {
+        ...(await listAdminUsers(
+          {
+            client,
+            emailStatus: (username) =>
+              emailVerificationStore().status(username),
+            liveSessions: async (username) =>
+              (await sessionStore.liveForUser(username)).length,
+          },
+          params,
+        )),
+        query: params.query,
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    return responseFromError(err, baseHeaders, "Unable to list accounts.");
+  }
+}
+
+/** Admin only: every organization, with its billing and its size. */
+async function handleAdminOrganizations(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireAdminSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const client = adminConsoleClient(baseHeaders);
+  if (client instanceof Response) return client;
+
+  try {
+    const params = adminPageParams(new URL(req.url));
+    return json(
+      200,
+      await listAdminOrganizations(
+        {
+          client,
+          record: (id) => organizationStore.get(id),
+          access: (id) => subscriptionStore.resolveAccess(id),
+          owners: async (org) =>
+            (await listOrganizationOwners({ client, org })).map(
+              (owner) => owner.login,
+            ),
+          seats: (org) => countBillableSeats({ client, org }),
+        },
+        params,
+      ),
+      baseHeaders,
+    );
+  } catch (err) {
+    return responseFromError(err, baseHeaders, "Unable to list organizations.");
+  }
+}
+
+/** Admin only: every binder, most recently changed first. */
+async function handleAdminBinders(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireAdminSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const client = adminConsoleClient(baseHeaders);
+  if (client instanceof Response) return client;
+
+  try {
+    const params = adminPageParams(new URL(req.url));
+    return json(
+      200,
+      { ...(await listAdminBinders(client, params)), query: params.query },
+      baseHeaders,
+    );
+  } catch (err) {
+    return responseFromError(err, baseHeaders, "Unable to list binders.");
+  }
+}
+
 export function createApiServer() {
   return Bun.serve({
     port: config.apiPort,
@@ -15398,6 +15677,14 @@ async function handleRequest(req: Request): Promise<Response> {
     method === "GET"
   ) {
     response = await handleGiteaDiagnostics(req, baseHeaders);
+  } else if (pathname === "/api/app/admin/overview" && method === "GET") {
+    response = await handleAdminOverview(req, baseHeaders);
+  } else if (pathname === "/api/app/admin/users" && method === "GET") {
+    response = await handleAdminUsers(req, baseHeaders);
+  } else if (pathname === "/api/app/admin/organizations" && method === "GET") {
+    response = await handleAdminOrganizations(req, baseHeaders);
+  } else if (pathname === "/api/app/admin/binders" && method === "GET") {
+    response = await handleAdminBinders(req, baseHeaders);
   } else if (pathname === "/api/app/home/changes" && method === "GET") {
     response = await handleHomeChanges(req, baseHeaders);
   } else if (pathname === "/api/app/documents" && method === "GET") {

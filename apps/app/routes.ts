@@ -26,7 +26,11 @@ export type AppRoute =
   | { kind: "workspace" }
   | { kind: "documents" }
   | { kind: "changes" }
-  | { kind: "adminSubscriptions" }
+  /**
+   * The site admin's console, `/-/admin` and its sections: everyone, every
+   * organization, every binder, and whether the deployment is well.
+   */
+  | { kind: "admin"; section: AdminSection }
   /** The signed-in person's own account: `/-/user_settings/profile`. */
   | { kind: "accountSettings" }
   /**
@@ -105,6 +109,16 @@ export type DocumentChangeView =
 /** The organization's own tabs. Binders is the one it opens on. */
 export type OrganizationTab = "binders" | "people" | "settings";
 
+/** The admin console's sections, in the order its tabs show them. */
+export const ADMIN_SECTIONS = [
+  "overview",
+  "users",
+  "organizations",
+  "binders",
+  "subscriptions",
+] as const;
+export type AdminSection = (typeof ADMIN_SECTIONS)[number];
+
 /**
  * The two tabs that became one.
  *
@@ -161,7 +175,12 @@ const APP_PAGES: Readonly<Record<string, AppRoute>> = {
   // binder's own Change requests tab, which can only answer for one binder.
   "/-/changes": { kind: "changes" },
   "/-/user_settings/profile": { kind: "accountSettings" },
-  "/-/admin/subscriptions": { kind: "adminSubscriptions" },
+  "/-/admin": { kind: "admin", section: "overview" },
+  "/-/admin/users": { kind: "admin", section: "users" },
+  "/-/admin/organizations": { kind: "admin", section: "organizations" },
+  "/-/admin/binders": { kind: "admin", section: "binders" },
+  // The console began as this one page, and its address still works.
+  "/-/admin/subscriptions": { kind: "admin", section: "subscriptions" },
   "/-/organizations/new": { kind: "createOrganization" },
   // Billing belongs to an organization, at `/{org}/-/billing`. This one asks
   // for the session's oldest, and the app rewrites the address to say which.
@@ -277,8 +296,10 @@ export function routeToPath(route: AppRoute): string {
       return "/-/changes";
     case "accountSettings":
       return "/-/user_settings/profile";
-    case "adminSubscriptions":
-      return "/-/admin/subscriptions";
+    case "admin":
+      return route.section === "overview"
+        ? "/-/admin"
+        : `/-/admin/${route.section}`;
     case "billing":
       return route.org ? `/${route.org}/-/billing` : "/-/billing";
     case "createOrganization":
@@ -400,7 +421,7 @@ export function isProtectedAppRoute(route: AppRoute): boolean {
     route.kind === "documents" ||
     route.kind === "changes" ||
     route.kind === "accountSettings" ||
-    route.kind === "adminSubscriptions" ||
+    route.kind === "admin" ||
     // An organization's own pages need a session to resolve at all: which
     // binders you can see is a question about you.
     route.kind === "organization" ||

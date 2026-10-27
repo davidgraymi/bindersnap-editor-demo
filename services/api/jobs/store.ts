@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { and, eq, inArray, isNull, lt, or } from "drizzle-orm";
+import { and, count, eq, inArray, isNull, lt, or } from "drizzle-orm";
 
 import { config } from "../config";
 import { openSqliteDb, type SqliteDb } from "../db/client";
@@ -249,6 +249,21 @@ export class JobStore {
    */
   delete(id: string): void {
     this.db.delete(jobs).where(eq(jobs.id, id)).run();
+  }
+
+  /** How many jobs sit in each state, for the admin console. */
+  statusCounts(): Record<JobStatus, number> {
+    const counts = { pending: 0, running: 0, done: 0, failed: 0 };
+    for (const row of this.db
+      .select({ status: jobs.status, total: count() })
+      .from(jobs)
+      .groupBy(jobs.status)
+      .all()) {
+      if (row.status in counts) {
+        counts[row.status as JobStatus] = row.total;
+      }
+    }
+    return counts;
   }
 
   /** Forget finished jobs past their retention. */

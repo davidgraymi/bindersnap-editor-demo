@@ -215,3 +215,24 @@ test("a mailbox splits into name and address for Mailpit", () => {
     email: "plain@example.com",
   });
 });
+
+test("statusCounts tallies the outbox for the admin console", () => {
+  const outbox = freshOutbox();
+  expect(outbox.statusCounts()).toEqual({
+    pending: 0,
+    sent: 0,
+    failed: 0,
+    oldestPendingAt: null,
+  });
+  const first = outbox.enqueue({ ...email, now: 1000 });
+  outbox.enqueue({ ...email, now: 2000 });
+  const sent = outbox.enqueue({ ...email, now: 500 });
+  outbox.markSent(sent.id, "msg-1", 600);
+  outbox.markFailed(first.id, "bad address", true, 1100);
+  expect(outbox.statusCounts()).toEqual({
+    pending: 1,
+    sent: 1,
+    failed: 1,
+    oldestPendingAt: 2000,
+  });
+});

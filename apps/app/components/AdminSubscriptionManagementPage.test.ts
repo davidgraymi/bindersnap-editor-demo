@@ -218,11 +218,7 @@ async function renderWithLoadedUser(user: AdminSubscriptionAccessUser) {
     query: user.username,
   });
 
-  const rendered = render(
-    createElement(AdminSubscriptionManagementPage, {
-      currentUsername: "alice",
-    }),
-  );
+  const rendered = render(createElement(AdminSubscriptionManagementPage));
 
   typeUsername(rendered.container, user.username);
   await settle();
@@ -259,9 +255,7 @@ test("lookup matches the username case-insensitively", async () => {
   });
 
   const { container, unmount } = render(
-    createElement(AdminSubscriptionManagementPage, {
-      currentUsername: "alice",
-    }),
+    createElement(AdminSubscriptionManagementPage),
   );
 
   typeUsername(container, "BOB");
@@ -286,9 +280,7 @@ test("a list response with no exact match reports the user as not found", async 
   });
 
   const { container, unmount } = render(
-    createElement(AdminSubscriptionManagementPage, {
-      currentUsername: "alice",
-    }),
+    createElement(AdminSubscriptionManagementPage),
   );
 
   typeUsername(container, "bob");
@@ -306,9 +298,7 @@ test("a list response with no exact match reports the user as not found", async 
 
 test("an empty username never reaches the API", async () => {
   const { container, unmount } = render(
-    createElement(AdminSubscriptionManagementPage, {
-      currentUsername: "alice",
-    }),
+    createElement(AdminSubscriptionManagementPage),
   );
 
   submitLookup(container);
@@ -328,9 +318,7 @@ test("a failing lookup surfaces the server's message", async () => {
   );
 
   const { container, unmount } = render(
-    createElement(AdminSubscriptionManagementPage, {
-      currentUsername: "alice",
-    }),
+    createElement(AdminSubscriptionManagementPage),
   );
 
   typeUsername(container, "bob");

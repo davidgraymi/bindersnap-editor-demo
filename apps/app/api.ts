@@ -87,8 +87,12 @@ import type {
   BillingStatusPayload,
 } from "../../packages/api-schema/schemas/billing";
 import type {
+  AdminBinderListPayload,
+  AdminOrganizationListPayload,
+  AdminOverviewPayload,
   AdminSubscriptionAccessListPayload,
   AdminSubscriptionAccessUser,
+  AdminUserListPayload,
 } from "../../packages/api-schema/schemas/admin";
 
 // Re-export all generated types
@@ -130,8 +134,17 @@ export type {
   VersionSubmission,
 } from "../../packages/api-schema/schemas/documents";
 export type {
+  AdminBillingState,
+  AdminBinderListPayload,
+  AdminBinderRow,
+  AdminHealthCheck,
+  AdminOrganizationListPayload,
+  AdminOrganizationRow,
+  AdminOverviewPayload,
   AdminSubscriptionAccessListPayload,
   AdminSubscriptionAccessUser,
+  AdminUserListPayload,
+  AdminUserRow,
 } from "../../packages/api-schema/schemas/admin";
 export type {
   AdminSubscriptionAccessOverride,
@@ -2172,6 +2185,48 @@ export async function createPortalSession(
 }
 
 // Admin functions
+
+export async function getAdminOverview(): Promise<AdminOverviewPayload> {
+  const response = await AdminClient.getAdminOverview();
+  return response.data;
+}
+
+export async function listAdminUsers(
+  query = "",
+  page = 1,
+  limit = 25,
+): Promise<AdminUserListPayload> {
+  const response = await AdminClient.listAdminUsers({
+    q: query,
+    page: String(page),
+    limit: String(limit),
+  });
+  return response.data;
+}
+
+export async function listAdminOrganizations(
+  page = 1,
+  limit = 25,
+): Promise<AdminOrganizationListPayload> {
+  const response = await AdminClient.listAdminOrganizations({
+    page: String(page),
+    limit: String(limit),
+  });
+  return response.data;
+}
+
+export async function listAdminBinders(
+  query = "",
+  page = 1,
+  limit = 25,
+): Promise<AdminBinderListPayload> {
+  const response = await AdminClient.listAdminBinders({
+    q: query,
+    page: String(page),
+    limit: String(limit),
+  });
+  return response.data;
+}
 
 export async function listAdminSubscriptionAccess(
   query = "",

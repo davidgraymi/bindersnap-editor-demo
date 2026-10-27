@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { and, eq, inArray, lt, lte } from "drizzle-orm";
+import { and, count, eq, inArray, lt, lte, min } from "drizzle-orm";
 
 import { config } from "../config";
 import { openSqliteDb, type SqliteDb } from "../db/client";
@@ -177,6 +177,31 @@ export class EmailOutbox {
       .where(eq(emailOutbox.id, id))
       .run();
     return this.get(id)!;
+  }
+
+  /**
+   * How many emails sit in each state, and when the oldest still waiting was
+   * queued — the admin console's mail health line.
+   */
+  statusCounts(): Record<EmailStatus, number> & {
+    oldestPendingAt: number | null;
+  } {
+    const counts = { pending: 0, sent: 0, failed: 0 };
+    for (const row of this.db
+      .select({ status: emailOutbox.status, total: count() })
+      .from(emailOutbox)
+      .groupBy(emailOutbox.status)
+      .all()) {
+      if (row.status in counts) {
+        counts[row.status as EmailStatus] = row.total;
+      }
+    }
+    const oldest = this.db
+      .select({ at: min(emailOutbox.createdAt) })
+      .from(emailOutbox)
+      .where(eq(emailOutbox.status, "pending"))
+      .get();
+    return { ...counts, oldestPendingAt: oldest?.at ?? null };
   }
 
   /** Forget finished emails past the retention window. */

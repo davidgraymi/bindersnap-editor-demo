@@ -16,10 +16,6 @@ import {
   type SearchUsersPayload,
 } from "../api";
 
-interface AdminSubscriptionManagementPageProps {
-  currentUsername: string;
-}
-
 function formatTimestamp(value: number | null): string | null {
   if (value === null) {
     return null;
@@ -66,9 +62,7 @@ export function formatSourceLabel(user: AdminSubscriptionAccessUser): string {
     .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
-export function AdminSubscriptionManagementPage({
-  currentUsername,
-}: AdminSubscriptionManagementPageProps) {
+export function AdminSubscriptionManagementPage() {
   const [usernameQuery, setUsernameQuery] = useState("");
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -247,20 +241,13 @@ export function AdminSubscriptionManagementPage({
   );
 
   return (
-    <div className="admin-pro-page app-page-shell">
-      <div className="admin-pro-header">
-        <div className="admin-pro-header-copy">
-          <h1>Bindersnap Pro access</h1>
-          <p>
-            Check a teammate&apos;s current subscription access, then grant or
-            revoke manual Pro access without leaving the workspace shell.
-          </p>
-        </div>
-        <div className="admin-pro-admin-pill">
-          <Shield size={14} strokeWidth={1.8} aria-hidden="true" />
-          Signed in as {currentUsername}
-        </div>
-      </div>
+    <div className="admin-pro-page">
+      {/* The console's header says whose session this is; this section only
+          has to say what it is for. */}
+      <p className="admin-pro-lead">
+        Check an organization&apos;s Pro access by one of its people, then grant
+        or revoke it by hand. For support exceptions, not routine billing.
+      </p>
 
       <div className="admin-pro-grid">
         <section className="admin-pro-card">

@@ -2685,6 +2685,424 @@
           "hasMore",
           "query"
         ]
+      },
+      "AdminOverviewPayload": {
+        "type": "object",
+        "properties": {
+          "checkedAt": {
+            "type": "number"
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ok",
+                    "warn",
+                    "down"
+                  ]
+                },
+                "detail": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "label",
+                "status",
+                "detail"
+              ]
+            }
+          },
+          "counts": {
+            "type": "object",
+            "properties": {
+              "users": {
+                "type": "number",
+                "nullable": true
+              },
+              "organizations": {
+                "type": "number",
+                "nullable": true
+              },
+              "binders": {
+                "type": "number",
+                "nullable": true
+              },
+              "unconfirmedEmails": {
+                "type": "number",
+                "nullable": true
+              }
+            },
+            "required": [
+              "users",
+              "organizations",
+              "binders",
+              "unconfirmedEmails"
+            ]
+          },
+          "billing": {
+            "type": "object",
+            "properties": {
+              "paying": {
+                "type": "number"
+              },
+              "pastDue": {
+                "type": "number"
+              },
+              "trial": {
+                "type": "number"
+              },
+              "trialEnded": {
+                "type": "number"
+              },
+              "comped": {
+                "type": "number"
+              },
+              "revoked": {
+                "type": "number"
+              },
+              "canceled": {
+                "type": "number"
+              },
+              "none": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "paying",
+              "pastDue",
+              "trial",
+              "trialEnded",
+              "comped",
+              "revoked",
+              "canceled",
+              "none"
+            ]
+          }
+        },
+        "required": [
+          "checkedAt",
+          "checks",
+          "counts",
+          "billing"
+        ]
+      },
+      "AdminUserListPayload": {
+        "type": "object",
+        "properties": {
+          "users": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "username": {
+                  "type": "string"
+                },
+                "fullName": {
+                  "type": "string"
+                },
+                "email": {
+                  "type": "string"
+                },
+                "emailConfirmation": {
+                  "type": "string",
+                  "enum": [
+                    "confirmed",
+                    "waiting",
+                    "predates"
+                  ]
+                },
+                "emailConfirmedAt": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "isSiteAdmin": {
+                  "type": "boolean"
+                },
+                "active": {
+                  "type": "boolean"
+                },
+                "prohibitLogin": {
+                  "type": "boolean"
+                },
+                "createdAt": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "lastLoginAt": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "liveSessions": {
+                  "type": "number"
+                },
+                "organizations": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "username",
+                "fullName",
+                "email",
+                "emailConfirmation",
+                "emailConfirmedAt",
+                "isSiteAdmin",
+                "active",
+                "prohibitLogin",
+                "createdAt",
+                "lastLoginAt",
+                "liveSessions",
+                "organizations"
+              ]
+            }
+          },
+          "query": {
+            "type": "string"
+          },
+          "page": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number",
+            "nullable": true
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "users",
+          "query",
+          "page",
+          "limit",
+          "total",
+          "hasMore"
+        ]
+      },
+      "AdminOrganizationListPayload": {
+        "type": "object",
+        "properties": {
+          "organizations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "number"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "fullName": {
+                  "type": "string"
+                },
+                "email": {
+                  "type": "string"
+                },
+                "known": {
+                  "type": "boolean"
+                },
+                "createdBy": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "createdAt": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "owners": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "seats": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "binders": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "hasAccess": {
+                  "type": "boolean"
+                },
+                "billing": {
+                  "type": "string",
+                  "enum": [
+                    "paying",
+                    "past_due",
+                    "trial",
+                    "trial_ended",
+                    "comped",
+                    "revoked",
+                    "canceled",
+                    "none"
+                  ]
+                },
+                "stripeStatus": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "stripeCustomerId": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "currentPeriodEnd": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "cancelAtPeriodEnd": {
+                  "type": "boolean"
+                },
+                "trialEndsAt": {
+                  "type": "number",
+                  "nullable": true
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "fullName",
+                "email",
+                "known",
+                "createdBy",
+                "createdAt",
+                "owners",
+                "seats",
+                "binders",
+                "hasAccess",
+                "billing",
+                "stripeStatus",
+                "stripeCustomerId",
+                "currentPeriodEnd",
+                "cancelAtPeriodEnd",
+                "trialEndsAt"
+              ]
+            }
+          },
+          "page": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number",
+            "nullable": true
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "organizations",
+          "page",
+          "limit",
+          "total",
+          "hasMore"
+        ]
+      },
+      "AdminBinderListPayload": {
+        "type": "object",
+        "properties": {
+          "binders": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "number"
+                },
+                "org": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "private": {
+                  "type": "boolean"
+                },
+                "archived": {
+                  "type": "boolean"
+                },
+                "empty": {
+                  "type": "boolean"
+                },
+                "sizeKb": {
+                  "type": "number"
+                },
+                "openChanges": {
+                  "type": "number"
+                },
+                "createdAt": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "updatedAt": {
+                  "type": "number",
+                  "nullable": true
+                }
+              },
+              "required": [
+                "id",
+                "org",
+                "name",
+                "description",
+                "private",
+                "archived",
+                "empty",
+                "sizeKb",
+                "openChanges",
+                "createdAt",
+                "updatedAt"
+              ]
+            }
+          },
+          "query": {
+            "type": "string"
+          },
+          "page": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number",
+            "nullable": true
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "binders",
+          "query",
+          "page",
+          "limit",
+          "total",
+          "hasMore"
+        ]
       }
     },
     "parameters": {}
@@ -14843,6 +15261,562 @@
                   },
                   "required": [
                     "url"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/admin/overview": {
+      "get": {
+        "operationId": "getAdminOverview",
+        "tags": [
+          "admin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Health checks and the deployment's size",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "checkedAt": {
+                      "type": "number"
+                    },
+                    "checks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "ok",
+                              "warn",
+                              "down"
+                            ]
+                          },
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "label",
+                          "status",
+                          "detail"
+                        ]
+                      }
+                    },
+                    "counts": {
+                      "type": "object",
+                      "properties": {
+                        "users": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "organizations": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "binders": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "unconfirmedEmails": {
+                          "type": "number",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "users",
+                        "organizations",
+                        "binders",
+                        "unconfirmedEmails"
+                      ]
+                    },
+                    "billing": {
+                      "type": "object",
+                      "properties": {
+                        "paying": {
+                          "type": "number"
+                        },
+                        "pastDue": {
+                          "type": "number"
+                        },
+                        "trial": {
+                          "type": "number"
+                        },
+                        "trialEnded": {
+                          "type": "number"
+                        },
+                        "comped": {
+                          "type": "number"
+                        },
+                        "revoked": {
+                          "type": "number"
+                        },
+                        "canceled": {
+                          "type": "number"
+                        },
+                        "none": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "paying",
+                        "pastDue",
+                        "trial",
+                        "trialEnded",
+                        "comped",
+                        "revoked",
+                        "canceled",
+                        "none"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "checkedAt",
+                    "checks",
+                    "counts",
+                    "billing"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/admin/users": {
+      "get": {
+        "operationId": "listAdminUsers",
+        "tags": [
+          "admin"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Every account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "users": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "username": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "emailConfirmation": {
+                            "type": "string",
+                            "enum": [
+                              "confirmed",
+                              "waiting",
+                              "predates"
+                            ]
+                          },
+                          "emailConfirmedAt": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "isSiteAdmin": {
+                            "type": "boolean"
+                          },
+                          "active": {
+                            "type": "boolean"
+                          },
+                          "prohibitLogin": {
+                            "type": "boolean"
+                          },
+                          "createdAt": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "lastLoginAt": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "liveSessions": {
+                            "type": "number"
+                          },
+                          "organizations": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "username",
+                          "fullName",
+                          "email",
+                          "emailConfirmation",
+                          "emailConfirmedAt",
+                          "isSiteAdmin",
+                          "active",
+                          "prohibitLogin",
+                          "createdAt",
+                          "lastLoginAt",
+                          "liveSessions",
+                          "organizations"
+                        ]
+                      }
+                    },
+                    "query": {
+                      "type": "string"
+                    },
+                    "page": {
+                      "type": "number"
+                    },
+                    "limit": {
+                      "type": "number"
+                    },
+                    "total": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "users",
+                    "query",
+                    "page",
+                    "limit",
+                    "total",
+                    "hasMore"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/admin/organizations": {
+      "get": {
+        "operationId": "listAdminOrganizations",
+        "tags": [
+          "admin"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Every organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organizations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "known": {
+                            "type": "boolean"
+                          },
+                          "createdBy": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "owners": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "seats": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "binders": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "hasAccess": {
+                            "type": "boolean"
+                          },
+                          "billing": {
+                            "type": "string",
+                            "enum": [
+                              "paying",
+                              "past_due",
+                              "trial",
+                              "trial_ended",
+                              "comped",
+                              "revoked",
+                              "canceled",
+                              "none"
+                            ]
+                          },
+                          "stripeStatus": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "stripeCustomerId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "currentPeriodEnd": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "cancelAtPeriodEnd": {
+                            "type": "boolean"
+                          },
+                          "trialEndsAt": {
+                            "type": "number",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "fullName",
+                          "email",
+                          "known",
+                          "createdBy",
+                          "createdAt",
+                          "owners",
+                          "seats",
+                          "binders",
+                          "hasAccess",
+                          "billing",
+                          "stripeStatus",
+                          "stripeCustomerId",
+                          "currentPeriodEnd",
+                          "cancelAtPeriodEnd",
+                          "trialEndsAt"
+                        ]
+                      }
+                    },
+                    "page": {
+                      "type": "number"
+                    },
+                    "limit": {
+                      "type": "number"
+                    },
+                    "total": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "organizations",
+                    "page",
+                    "limit",
+                    "total",
+                    "hasMore"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/admin/binders": {
+      "get": {
+        "operationId": "listAdminBinders",
+        "tags": [
+          "admin"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Every binder",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "binders": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "org": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "private": {
+                            "type": "boolean"
+                          },
+                          "archived": {
+                            "type": "boolean"
+                          },
+                          "empty": {
+                            "type": "boolean"
+                          },
+                          "sizeKb": {
+                            "type": "number"
+                          },
+                          "openChanges": {
+                            "type": "number"
+                          },
+                          "createdAt": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "updatedAt": {
+                            "type": "number",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "org",
+                          "name",
+                          "description",
+                          "private",
+                          "archived",
+                          "empty",
+                          "sizeKb",
+                          "openChanges",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    },
+                    "query": {
+                      "type": "string"
+                    },
+                    "page": {
+                      "type": "number"
+                    },
+                    "limit": {
+                      "type": "number"
+                    },
+                    "total": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "binders",
+                    "query",
+                    "page",
+                    "limit",
+                    "total",
+                    "hasMore"
                   ]
                 }
               }

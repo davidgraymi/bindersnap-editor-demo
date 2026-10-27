@@ -21,7 +21,7 @@ import { BinderShell } from "./BinderShell";
 import { OrganizationPage } from "./OrganizationPage";
 import { LocationTrail } from "./LocationTrail";
 import { useWriteAction } from "../paywallContext";
-import { AdminSubscriptionManagementPage } from "./AdminSubscriptionManagementPage";
+import { AdminConsolePage } from "./AdminConsolePage";
 import { AppIcon } from "./AppIcon";
 import { BindersnapLogoMark } from "./BindersnapLogoMark";
 import { DocumentsPage } from "./DocumentsPage";
@@ -141,7 +141,7 @@ export function AppShell({
       : route.kind === "billing" && route.org
         ? route.org
         : defaultOrg;
-  const isAdminSubscriptions = route.kind === "adminSubscriptions";
+  const isAdminConsole = route.kind === "admin";
 
   const displayName = user?.fullName ?? user?.username ?? "";
   const username = user?.username ?? displayName;
@@ -398,18 +398,18 @@ export function AppShell({
                     {user?.isAdmin ? (
                       <button
                         type="button"
-                        className={`app-profile-menu-item${isAdminSubscriptions ? " app-profile-menu-item--active" : ""}`}
+                        className={`app-profile-menu-item${isAdminConsole ? " app-profile-menu-item--active" : ""}`}
                         role="menuitem"
                         onClick={() => {
                           setProfileOpen(false);
-                          onNavigate({ kind: "adminSubscriptions" });
+                          onNavigate({ kind: "admin", section: "overview" });
                         }}
                       >
                         <span className="app-profile-menu-icon">
                           {renderProfileMenuIcon("admin")}
                         </span>
                         <span className="app-profile-menu-label">
-                          Pro Access
+                          Site admin
                         </span>
                       </button>
                     ) : null}
@@ -591,9 +591,11 @@ export function AppShell({
                 />
               ) : route.kind === "billing" ? (
                 billing
-              ) : route.kind === "adminSubscriptions" ? (
-                <AdminSubscriptionManagementPage
+              ) : route.kind === "admin" ? (
+                <AdminConsolePage
+                  section={route.section}
                   currentUsername={currentUsername}
+                  onNavigate={onNavigate}
                 />
               ) : (
                 <HomePage
