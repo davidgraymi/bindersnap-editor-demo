@@ -241,10 +241,17 @@ esac
     );
   });
 
-  test("fails when the API does not answer /healthz through Caddy", () => {
+  test("fails when the API does not answer /healthz at api:8787", () => {
     const result = runHealthGate({ HEALTHZ_EXIT: "1" });
     expect(result.exitCode).not.toBe(0);
-    expect(result.stderr.toString()).toContain("does not answer /healthz");
+    expect(result.stderr.toString()).toContain(
+      "does not answer /healthz at http://api:8787",
+    );
+  });
+
+  test("no longer waits for Caddy, which #831 removed", () => {
+    const script = readFileSync(healthGatePath, "utf8");
+    expect(script).not.toMatch(/caddy/i);
   });
 });
 
