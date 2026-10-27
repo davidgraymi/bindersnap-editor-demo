@@ -136,6 +136,14 @@ binders: []`,
         ),
       ),
     ).toThrow('unknown user "zed"');
+    expect(() =>
+      parseSeedScenario(
+        MINIMAL.replace(
+          "    email: alice@example.com\n",
+          "    email: alice@example.com\n    emailConfirmed: false\n",
+        ),
+      ),
+    ).toThrow("has not confirmed their address");
   });
 
   test("defaults a document's format to the editor's own JSON", () => {

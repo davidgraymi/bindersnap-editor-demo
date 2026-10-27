@@ -1505,14 +1505,33 @@ export function parseSeedScenario(source: string): SeedScenario {
     );
   });
 
+  // Somebody still waiting on their address is refused almost every route,
+  // so the seed could do nothing as them.
+  const waiting = new Set(
+    users.filter((user) => !user.emailConfirmed).map((user) => user.username),
+  );
+  const requireActive = (username: string, path: string): void => {
+    requireKnown(username, path);
+    if (waiting.has(username)) {
+      fail(
+        path,
+        `"${username}" has not confirmed their address, and the API refuses ` +
+          "almost everything they would do here",
+      );
+    }
+  };
+  [organization.owner, ...organization.owners].forEach((username) =>
+    requireActive(username, "scenario.organization"),
+  );
+
   otherOrganizations.forEach((other, index) => {
     const path = `scenario.otherOrganizations[${index}]`;
     if (other.name === organization.name) {
       fail(`${path}.name`, `"${other.name}" is the scenario's organization`);
     }
-    requireKnown(other.owner, `${path}.owner`);
+    requireActive(other.owner, `${path}.owner`);
     other.members.forEach((member, memberIndex) => {
-      requireKnown(member, `${path}.members[${memberIndex}]`);
+      requireActive(member, `${path}.members[${memberIndex}]`);
       if (member === other.owner) {
         fail(`${path}.members[${memberIndex}]`, "the owner is already in it");
       }

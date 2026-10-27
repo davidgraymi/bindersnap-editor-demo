@@ -1360,6 +1360,10 @@ async function ensureAgreements(
   log: (message: string) => void,
 ): Promise<void> {
   for (const user of scenario.users) {
+    // Somebody left waiting on their address is refused almost everything,
+    // the Terms included, until they confirm it: on a re-run they already
+    // are. They accept the Terms after confirming, as a real person would.
+    if (!user.emailConfirmed) continue;
     const as = await sessions.options(user.username);
     const status = (await Legal.getLegalStatus(as)).data;
     if (!status.person && status.organizations.length === 0) continue;
