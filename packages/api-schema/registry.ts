@@ -2815,6 +2815,24 @@ registry.registerPath({
 });
 
 registry.registerPath({
+  method: "get",
+  path: "/api/app/admin/activity/export",
+  operationId: "exportAdminActivity",
+  tags: ["admin"],
+  responses: {
+    200: {
+      description:
+        "Every activity event as CSV: dates, kinds and Gitea ids, never a name",
+      content: {
+        "text/csv": {
+          schema: z.string().openapi({ type: "string", format: "binary" }),
+        },
+      },
+    },
+  },
+});
+
+registry.registerPath({
   method: "post",
   path: "/api/app/admin/maintenance/activity",
   operationId: "runAdminActivityBuild",

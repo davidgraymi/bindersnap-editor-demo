@@ -36,7 +36,12 @@ import {
   type NewLegalAgreement,
 } from "./legal-agreements";
 import { signupSourceStore } from "./signup-sources";
-import { activityStore, collectActivity, type ActivityBuild } from "./activity";
+import {
+  activityCsv,
+  activityStore,
+  collectActivity,
+  type ActivityBuild,
+} from "./activity";
 import {
   LEGAL_ACCEPT_AGAIN_VERSION,
   LEGAL_VERSION,
@@ -15935,6 +15940,42 @@ async function handleAdminRunActivityBuild(
 }
 
 /**
+ * Admin only: the activity dataset as CSV. Ids and dates, never a name or an
+ * address, so the file can be worked on away from the console.
+ */
+async function handleAdminActivityExport(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireAdminSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  let csv: string;
+  try {
+    csv = activityCsv(activityStore().list());
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "The activity dataset could not be read.",
+    );
+  }
+  logger.info("Site admin exported the activity dataset", {
+    admin: auth.currentUser.username,
+  });
+
+  const headers = mergeHeaders(baseHeaders);
+  headers.set("content-type", "text/csv; charset=utf-8");
+  headers.set(
+    "content-disposition",
+    `attachment; filename="bindersnap-activity-${new Date().toISOString().slice(0, 10)}.csv"`,
+  );
+  headers.set("cache-control", "no-store");
+  headers.set("access-control-expose-headers", "content-disposition");
+  return new Response(csv, { status: 200, headers });
+}
+
+/**
  * Admin only: make an account, as Gitea's own "Create User Account" does.
  *
  * The same act as signup, on the same admin token, minus what signup does for
@@ -16298,6 +16339,11 @@ async function handleRequest(req: Request): Promise<Response> {
     response = await handleAdminOrganizations(req, baseHeaders);
   } else if (pathname === "/api/app/admin/signups" && method === "GET") {
     response = await handleAdminSignups(req, baseHeaders);
+  } else if (
+    pathname === "/api/app/admin/activity/export" &&
+    method === "GET"
+  ) {
+    response = await handleAdminActivityExport(req, baseHeaders);
   } else if (pathname === "/api/app/admin/binders" && method === "GET") {
     response = await handleAdminBinders(req, baseHeaders);
   } else if (

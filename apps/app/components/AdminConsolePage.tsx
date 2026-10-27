@@ -47,6 +47,7 @@ import {
   AdminSystem,
   NewAccountPanel,
 } from "./AdminSystemSections";
+import { ActivityExportButton } from "./AdminActivityExport";
 import { AdminSignups } from "./AdminSignupsSection";
 import { SkeletonPanel } from "./Skeleton";
 import { StatusChip } from "./StatusChip";
@@ -241,6 +242,7 @@ function AdminOverview({
                   <span className="bs-row-meta">{check.detail}</span>
                 </span>
                 <span className="bs-row-right">
+                  {check.id === "activity" ? <ActivityExportButton /> : null}
                   <StatusChip tone={healthTone(check.status)} size="sm">
                     {healthLabel(check.status)}
                   </StatusChip>

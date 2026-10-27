@@ -443,6 +443,38 @@ export const runAdminReconciler = async ( options?: Parameters<typeof customFetc
 );}
 
 
+export type exportAdminActivityResponse200 = {
+  data: Blob
+  status: 200
+}
+
+export type exportAdminActivityResponseSuccess = (exportAdminActivityResponse200) & {
+  headers: Headers;
+};
+;
+
+export type exportAdminActivityResponse = (exportAdminActivityResponseSuccess)
+
+export const getExportAdminActivityUrl = () => {
+
+
+
+
+  return `/api/app/admin/activity/export`
+}
+
+export const exportAdminActivity = async ( options?: Parameters<typeof customFetch>[1]): Promise<exportAdminActivityResponse> => {
+
+  return customFetch<exportAdminActivityResponse>(getExportAdminActivityUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
 export type runAdminActivityBuildResponse200 = {
   data: RunAdminActivityBuild200
   status: 200

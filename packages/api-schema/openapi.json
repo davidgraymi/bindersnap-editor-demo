@@ -17465,6 +17465,27 @@
         }
       }
     },
+    "/api/app/admin/activity/export": {
+      "get": {
+        "operationId": "exportAdminActivity",
+        "tags": [
+          "admin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Every activity event as CSV: dates, kinds and Gitea ids, never a name",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/app/admin/maintenance/activity": {
       "post": {
         "operationId": "runAdminActivityBuild",

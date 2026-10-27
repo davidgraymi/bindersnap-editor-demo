@@ -174,6 +174,10 @@ test("only a site admin reaches the console's routes", async () => {
       request(session, "/api/app/admin/maintenance/activity", {}),
     );
     expect(rebuild.status).toBe(403);
+    const exported = await server.fetch(
+      request(session, "/api/app/admin/activity/export"),
+    );
+    expect(exported.status).toBe(403);
   } finally {
     server.stop(true);
   }
@@ -194,6 +198,28 @@ test("the signups report answers a site admin", async () => {
       byCampaign: expect.any(Array),
       recent: expect.any(Array),
     });
+  } finally {
+    server.stop(true);
+  }
+});
+
+test("the activity export is a CSV a site admin downloads", async () => {
+  const server = createApiServer();
+  const session = await seedSession();
+  try {
+    const response = await server.fetch(
+      request(session, "/api/app/admin/activity/export"),
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe(
+      "text/csv; charset=utf-8",
+    );
+    expect(response.headers.get("content-disposition")).toMatch(
+      /^attachment; filename="bindersnap-activity-\d{4}-\d{2}-\d{2}\.csv"$/,
+    );
+    expect((await response.text()).split("\r\n")[0]).toBe(
+      "at,kind,organization_id,binder_id,change_number,actor_id,detail",
+    );
   } finally {
     server.stop(true);
   }
