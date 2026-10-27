@@ -258,6 +258,70 @@ export const AdminSignupsPayloadSchema = z.object({
 });
 export type AdminSignupsPayload = z.infer<typeof AdminSignupsPayloadSchema>;
 
+// ─── Growth ──────────────────────────────────────────────────────────────
+
+/**
+ * How many accounts reached each step, from the activity dataset. A step
+ * counts once an organization the account created reached it; `paying` is
+ * that organization's billing now.
+ */
+export const AdminGrowthReachedSchema = z.object({
+  signedUp: z.number(),
+  confirmed: z.number(),
+  organization: z.number(),
+  proposed: z.number(),
+  approved: z.number(),
+  published: z.number(),
+  invited: z.number(),
+  joined: z.number(),
+  paying: z.number(),
+});
+export type AdminGrowthReached = z.infer<typeof AdminGrowthReachedSchema>;
+
+export const AdminGrowthTrialSchema = z.object({
+  name: z.string(),
+  createdBy: z.string(),
+  /** Epoch ms. */
+  createdAt: z.number(),
+  /** Unix seconds, like the trial column. */
+  trialEndsAt: z.number(),
+  billing: AdminBillingStateSchema,
+  proposed: z.number(),
+  approved: z.number(),
+  published: z.number(),
+  joined: z.number(),
+  /** Epoch ms of the organization's latest event, or null for none. */
+  lastActivityAt: z.number().nullable(),
+});
+export type AdminGrowthTrial = z.infer<typeof AdminGrowthTrialSchema>;
+
+export const AdminGrowthPayloadSchema = z.object({
+  /** When the activity dataset was last built, epoch ms; null if never. */
+  builtAt: z.number().nullable(),
+  /** The first signup counted, epoch ms, or null for none. */
+  since: z.number().nullable(),
+  /** Accounts made from an invitation, left out of the funnel. */
+  invited: z.number(),
+  total: AdminGrowthReachedSchema,
+  /** Median days from signup to the step, for the accounts that reached it. */
+  medianDays: z.object({
+    organization: z.number().nullable(),
+    proposed: z.number().nullable(),
+    published: z.number().nullable(),
+  }),
+  /** The newest weeks with a signup, newest first; Monday, epoch ms. */
+  byWeek: z.array(
+    z.object({ weekStart: z.number(), reached: AdminGrowthReachedSchema }),
+  ),
+  /** By the page of bindersnap.com the visit began on. */
+  byEntryPage: z.array(
+    z.object({ key: z.string().nullable(), reached: AdminGrowthReachedSchema }),
+  ),
+  /** Trials running, and those ended in the last two weeks without paying. */
+  trials: z.array(AdminGrowthTrialSchema),
+});
+export type AdminGrowthPayload = z.infer<typeof AdminGrowthPayloadSchema>;
+
 // ─── System, configuration and accounts ──────────────────────────────────
 
 export const AdminReleaseImageSchema = z.object({

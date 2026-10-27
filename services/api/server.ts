@@ -68,6 +68,7 @@ import {
   countGitea,
   listAdminBinders,
   listAdminOrganizations,
+  reportGrowth,
   reportSignups,
   listAdminUsers,
   tallyBilling,
@@ -15830,6 +15831,34 @@ async function handleAdminSignups(
   }
 }
 
+/**
+ * Admin only: from signup to a published version and paying, and every
+ * trial's progress, from the activity dataset.
+ */
+async function handleAdminGrowth(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireAdminSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  try {
+    const store = activityStore();
+    return json(
+      200,
+      await reportGrowth({
+        events: store.list(),
+        organizations: await organizationStore.list(),
+        builtAt: store.lastBuild()?.finishedAt ?? null,
+        access: (id) => subscriptionStore.resolveAccess(id),
+      }),
+      baseHeaders,
+    );
+  } catch (err) {
+    return responseFromError(err, baseHeaders, "Unable to report growth.");
+  }
+}
+
 /** Admin only: every binder, most recently changed first. */
 async function handleAdminBinders(
   req: Request,
@@ -16337,6 +16366,8 @@ async function handleRequest(req: Request): Promise<Response> {
     response = await handleAdminUsers(req, baseHeaders);
   } else if (pathname === "/api/app/admin/organizations" && method === "GET") {
     response = await handleAdminOrganizations(req, baseHeaders);
+  } else if (pathname === "/api/app/admin/growth" && method === "GET") {
+    response = await handleAdminGrowth(req, baseHeaders);
   } else if (pathname === "/api/app/admin/signups" && method === "GET") {
     response = await handleAdminSignups(req, baseHeaders);
   } else if (

@@ -5,6 +5,7 @@ import { createRoot } from "react-dom/client";
 import { JSDOM } from "jsdom";
 
 import type {
+  AdminGrowthPayload,
   AdminOverviewPayload,
   AdminSignupsPayload,
   AdminSystemPayload,
@@ -237,6 +238,50 @@ const signups: AdminSignupsPayload = {
 };
 const mockGetAdminSignups = mock(async () => signups);
 
+const reached = (counts: Partial<AdminGrowthPayload["total"]> = {}) => ({
+  signedUp: 0,
+  confirmed: 0,
+  organization: 0,
+  proposed: 0,
+  approved: 0,
+  published: 0,
+  invited: 0,
+  joined: 0,
+  paying: 0,
+  ...counts,
+});
+const growth: AdminGrowthPayload = {
+  builtAt: Date.UTC(2026, 9, 27, 12),
+  since: Date.UTC(2026, 9, 5),
+  invited: 1,
+  total: reached({ signedUp: 4, organization: 2, published: 1, paying: 1 }),
+  medianDays: { organization: 0.5, proposed: 2, published: null },
+  byWeek: [
+    {
+      weekStart: Date.UTC(2026, 9, 12),
+      reached: reached({ signedUp: 4, organization: 2, published: 1 }),
+    },
+  ],
+  byEntryPage: [
+    { key: "/glossary/qapi", reached: reached({ signedUp: 3, paying: 1 }) },
+  ],
+  trials: [
+    {
+      name: "riverside-health",
+      createdBy: "jkim",
+      createdAt: Date.UTC(2026, 9, 20),
+      trialEndsAt: Math.floor(Date.now() / 1000) + 3 * 86_400 - 60,
+      billing: "trial",
+      proposed: 2,
+      approved: 0,
+      published: 0,
+      joined: 1,
+      lastActivityAt: Date.UTC(2026, 9, 26),
+    },
+  ],
+};
+const mockGetAdminGrowth = mock(async () => growth);
+
 // Spread the real module: see AdminSubscriptionManagementPage.test.ts.
 const actualApi = await import("../api");
 mock.module("../api", () => ({
@@ -244,6 +289,7 @@ mock.module("../api", () => ({
   getAdminOverview: mockGetAdminOverview,
   getAdminSystem: mockGetAdminSystem,
   getAdminSignups: mockGetAdminSignups,
+  getAdminGrowth: mockGetAdminGrowth,
   createAdminUser: mockCreateAdminUser,
   listAdminUsers: mockListAdminUsers,
   listAdminOrganizations: mockListAdminOrganizations,
@@ -326,6 +372,7 @@ test("each section is a link to its own address", async () => {
       "/-/admin/organizations",
       "/-/admin/binders",
       "/-/admin/signups",
+      "/-/admin/growth",
       "/-/admin/system",
       "/-/admin/config",
     ]);
@@ -387,6 +434,40 @@ test("signups show which pages and sites brought people in, and who pays", async
     expect(newest).toContain("/pricing");
     expect(newest).toContain("Paying");
     expect(container.textContent).toContain("3 signups since Oct 1, 2026");
+  } finally {
+    unmount();
+  }
+});
+
+test("growth follows signups to paying, and flags trials with nothing published", async () => {
+  const { container, unmount } = render({
+    section: "growth",
+    currentUsername: "alice",
+    onNavigate: () => {},
+  });
+  try {
+    await settle();
+    expect(mockGetAdminGrowth).toHaveBeenCalled();
+    const panels = Array.from(container.querySelectorAll("section.bs-panel"));
+    expect(panels.map((panel) => panel.getAttribute("aria-label"))).toEqual([
+      "From signup to paying",
+      "By week signed up",
+      "By first page of the visit",
+      "Trials",
+    ]);
+    const funnel = panels[0]!.textContent ?? "";
+    expect(funnel).toContain("Published a version");
+    expect(funnel).toContain("25%");
+    expect(funnel).toContain("Under a day");
+    expect(funnel).toContain("Download CSV");
+    expect(panels[2]!.textContent).toContain("/glossary/qapi");
+    const trials = panels[3]!.textContent ?? "";
+    expect(trials).toContain("riverside-health");
+    expect(trials).toContain("3 days left");
+    expect(trials).toContain("Nothing published");
+    expect(container.textContent).toContain(
+      "1 who came by invitation joined somebody else's organization",
+    );
   } finally {
     unmount();
   }

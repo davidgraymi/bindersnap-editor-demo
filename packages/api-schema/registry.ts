@@ -131,6 +131,7 @@ import {
   AdminOrganizationListPayloadSchema,
   AdminReconcilerRunSchema,
   AdminActivityRunSchema,
+  AdminGrowthPayloadSchema,
   AdminSystemPayloadSchema,
   AdminOverviewPayloadSchema,
   AdminSubscriptionAccessListPayloadSchema,
@@ -201,6 +202,7 @@ registry.register(
 );
 registry.register("AdminBinderListPayload", AdminBinderListPayloadSchema);
 registry.register("AdminSignupsPayload", AdminSignupsPayloadSchema);
+registry.register("AdminGrowthPayload", AdminGrowthPayloadSchema);
 registry.register("AdminSystemPayload", AdminSystemPayloadSchema);
 registry.register("AdminConfigPayload", AdminConfigPayloadSchema);
 registry.register("AdminCreatedUser", AdminCreatedUserSchema);
@@ -2711,6 +2713,22 @@ registry.registerPath({
       description: "Every binder",
       content: {
         "application/json": { schema: AdminBinderListPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/admin/growth",
+  operationId: "getAdminGrowth",
+  tags: ["admin"],
+  responses: {
+    200: {
+      description:
+        "From signup to a published version and paying, by week and by first page, and every trial's progress",
+      content: {
+        "application/json": { schema: AdminGrowthPayloadSchema },
       },
     },
   },

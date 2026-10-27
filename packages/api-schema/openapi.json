@@ -3383,6 +3383,275 @@
           "recent"
         ]
       },
+      "AdminGrowthPayload": {
+        "type": "object",
+        "properties": {
+          "builtAt": {
+            "type": "number",
+            "nullable": true
+          },
+          "since": {
+            "type": "number",
+            "nullable": true
+          },
+          "invited": {
+            "type": "number"
+          },
+          "total": {
+            "type": "object",
+            "properties": {
+              "signedUp": {
+                "type": "number"
+              },
+              "confirmed": {
+                "type": "number"
+              },
+              "organization": {
+                "type": "number"
+              },
+              "proposed": {
+                "type": "number"
+              },
+              "approved": {
+                "type": "number"
+              },
+              "published": {
+                "type": "number"
+              },
+              "invited": {
+                "type": "number"
+              },
+              "joined": {
+                "type": "number"
+              },
+              "paying": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "signedUp",
+              "confirmed",
+              "organization",
+              "proposed",
+              "approved",
+              "published",
+              "invited",
+              "joined",
+              "paying"
+            ]
+          },
+          "medianDays": {
+            "type": "object",
+            "properties": {
+              "organization": {
+                "type": "number",
+                "nullable": true
+              },
+              "proposed": {
+                "type": "number",
+                "nullable": true
+              },
+              "published": {
+                "type": "number",
+                "nullable": true
+              }
+            },
+            "required": [
+              "organization",
+              "proposed",
+              "published"
+            ]
+          },
+          "byWeek": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "weekStart": {
+                  "type": "number"
+                },
+                "reached": {
+                  "type": "object",
+                  "properties": {
+                    "signedUp": {
+                      "type": "number"
+                    },
+                    "confirmed": {
+                      "type": "number"
+                    },
+                    "organization": {
+                      "type": "number"
+                    },
+                    "proposed": {
+                      "type": "number"
+                    },
+                    "approved": {
+                      "type": "number"
+                    },
+                    "published": {
+                      "type": "number"
+                    },
+                    "invited": {
+                      "type": "number"
+                    },
+                    "joined": {
+                      "type": "number"
+                    },
+                    "paying": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "signedUp",
+                    "confirmed",
+                    "organization",
+                    "proposed",
+                    "approved",
+                    "published",
+                    "invited",
+                    "joined",
+                    "paying"
+                  ]
+                }
+              },
+              "required": [
+                "weekStart",
+                "reached"
+              ]
+            }
+          },
+          "byEntryPage": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "reached": {
+                  "type": "object",
+                  "properties": {
+                    "signedUp": {
+                      "type": "number"
+                    },
+                    "confirmed": {
+                      "type": "number"
+                    },
+                    "organization": {
+                      "type": "number"
+                    },
+                    "proposed": {
+                      "type": "number"
+                    },
+                    "approved": {
+                      "type": "number"
+                    },
+                    "published": {
+                      "type": "number"
+                    },
+                    "invited": {
+                      "type": "number"
+                    },
+                    "joined": {
+                      "type": "number"
+                    },
+                    "paying": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "signedUp",
+                    "confirmed",
+                    "organization",
+                    "proposed",
+                    "approved",
+                    "published",
+                    "invited",
+                    "joined",
+                    "paying"
+                  ]
+                }
+              },
+              "required": [
+                "key",
+                "reached"
+              ]
+            }
+          },
+          "trials": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "createdBy": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "number"
+                },
+                "trialEndsAt": {
+                  "type": "number"
+                },
+                "billing": {
+                  "type": "string",
+                  "enum": [
+                    "paying",
+                    "past_due",
+                    "trial",
+                    "trial_ended",
+                    "comped",
+                    "revoked",
+                    "canceled",
+                    "none"
+                  ]
+                },
+                "proposed": {
+                  "type": "number"
+                },
+                "approved": {
+                  "type": "number"
+                },
+                "published": {
+                  "type": "number"
+                },
+                "joined": {
+                  "type": "number"
+                },
+                "lastActivityAt": {
+                  "type": "number",
+                  "nullable": true
+                }
+              },
+              "required": [
+                "name",
+                "createdBy",
+                "createdAt",
+                "trialEndsAt",
+                "billing",
+                "proposed",
+                "approved",
+                "published",
+                "joined",
+                "lastActivityAt"
+              ]
+            }
+          }
+        },
+        "required": [
+          "builtAt",
+          "since",
+          "invited",
+          "total",
+          "medianDays",
+          "byWeek",
+          "byEntryPage",
+          "trials"
+        ]
+      },
       "AdminSystemPayload": {
         "type": "object",
         "properties": {
@@ -16705,6 +16974,292 @@
                     "limit",
                     "total",
                     "hasMore"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/admin/growth": {
+      "get": {
+        "operationId": "getAdminGrowth",
+        "tags": [
+          "admin"
+        ],
+        "responses": {
+          "200": {
+            "description": "From signup to a published version and paying, by week and by first page, and every trial's progress",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "builtAt": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "since": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "invited": {
+                      "type": "number"
+                    },
+                    "total": {
+                      "type": "object",
+                      "properties": {
+                        "signedUp": {
+                          "type": "number"
+                        },
+                        "confirmed": {
+                          "type": "number"
+                        },
+                        "organization": {
+                          "type": "number"
+                        },
+                        "proposed": {
+                          "type": "number"
+                        },
+                        "approved": {
+                          "type": "number"
+                        },
+                        "published": {
+                          "type": "number"
+                        },
+                        "invited": {
+                          "type": "number"
+                        },
+                        "joined": {
+                          "type": "number"
+                        },
+                        "paying": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "signedUp",
+                        "confirmed",
+                        "organization",
+                        "proposed",
+                        "approved",
+                        "published",
+                        "invited",
+                        "joined",
+                        "paying"
+                      ]
+                    },
+                    "medianDays": {
+                      "type": "object",
+                      "properties": {
+                        "organization": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "proposed": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "published": {
+                          "type": "number",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "organization",
+                        "proposed",
+                        "published"
+                      ]
+                    },
+                    "byWeek": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "weekStart": {
+                            "type": "number"
+                          },
+                          "reached": {
+                            "type": "object",
+                            "properties": {
+                              "signedUp": {
+                                "type": "number"
+                              },
+                              "confirmed": {
+                                "type": "number"
+                              },
+                              "organization": {
+                                "type": "number"
+                              },
+                              "proposed": {
+                                "type": "number"
+                              },
+                              "approved": {
+                                "type": "number"
+                              },
+                              "published": {
+                                "type": "number"
+                              },
+                              "invited": {
+                                "type": "number"
+                              },
+                              "joined": {
+                                "type": "number"
+                              },
+                              "paying": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "signedUp",
+                              "confirmed",
+                              "organization",
+                              "proposed",
+                              "approved",
+                              "published",
+                              "invited",
+                              "joined",
+                              "paying"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "weekStart",
+                          "reached"
+                        ]
+                      }
+                    },
+                    "byEntryPage": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "reached": {
+                            "type": "object",
+                            "properties": {
+                              "signedUp": {
+                                "type": "number"
+                              },
+                              "confirmed": {
+                                "type": "number"
+                              },
+                              "organization": {
+                                "type": "number"
+                              },
+                              "proposed": {
+                                "type": "number"
+                              },
+                              "approved": {
+                                "type": "number"
+                              },
+                              "published": {
+                                "type": "number"
+                              },
+                              "invited": {
+                                "type": "number"
+                              },
+                              "joined": {
+                                "type": "number"
+                              },
+                              "paying": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "signedUp",
+                              "confirmed",
+                              "organization",
+                              "proposed",
+                              "approved",
+                              "published",
+                              "invited",
+                              "joined",
+                              "paying"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "reached"
+                        ]
+                      }
+                    },
+                    "trials": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "createdBy": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "number"
+                          },
+                          "trialEndsAt": {
+                            "type": "number"
+                          },
+                          "billing": {
+                            "type": "string",
+                            "enum": [
+                              "paying",
+                              "past_due",
+                              "trial",
+                              "trial_ended",
+                              "comped",
+                              "revoked",
+                              "canceled",
+                              "none"
+                            ]
+                          },
+                          "proposed": {
+                            "type": "number"
+                          },
+                          "approved": {
+                            "type": "number"
+                          },
+                          "published": {
+                            "type": "number"
+                          },
+                          "joined": {
+                            "type": "number"
+                          },
+                          "lastActivityAt": {
+                            "type": "number",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "createdBy",
+                          "createdAt",
+                          "trialEndsAt",
+                          "billing",
+                          "proposed",
+                          "approved",
+                          "published",
+                          "joined",
+                          "lastActivityAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "builtAt",
+                    "since",
+                    "invited",
+                    "total",
+                    "medianDays",
+                    "byWeek",
+                    "byEntryPage",
+                    "trials"
                   ]
                 }
               }
