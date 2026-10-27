@@ -46,7 +46,10 @@
     "stack": "bun scripts/stack.ts",
     "tf:apply": "bash infra/apply-all.sh",
     "tf:bootstrap": "bash infra/bootstrap.sh",
-    "tf:plan": "bash infra/apply-all.sh plan"
+    "tf:init": "bash infra/apply-all.sh init",
+    "tf:plan": "bash infra/apply-all.sh plan",
+    "tf:pull": "bash infra/tfvars.sh pull",
+    "tf:push": "bash infra/tfvars.sh push"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^8.5.0",

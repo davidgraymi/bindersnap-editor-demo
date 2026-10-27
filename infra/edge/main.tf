@@ -300,7 +300,12 @@ resource "cloudflare_dns_record" "ses" {
   name    = each.value.name
   type    = each.value.type
   # An MX value arrives as "10 host"; Cloudflare takes the priority apart.
-  content  = each.value.type == "MX" ? split(" ", each.value.value)[1] : each.value.value
+  # Cloudflare wants a TXT value in quotation marks and flags one without them.
+  content = (
+    each.value.type == "MX" ? split(" ", each.value.value)[1] :
+    each.value.type == "TXT" ? "\"${each.value.value}\"" :
+    each.value.value
+  )
   priority = each.value.type == "MX" ? tonumber(split(" ", each.value.value)[0]) : null
   proxied  = false
   ttl      = 1
