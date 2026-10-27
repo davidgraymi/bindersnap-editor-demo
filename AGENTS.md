@@ -50,7 +50,8 @@ version was approved, the answer is on the page.
   technical. Runs approvals today through Word, email and a shared drive, and
   has been asked "which version did we approve?" without a good answer.
 - **Pricing:** $39 a month per writer (Owner, Admin, Editor). Reviewers and
-  readers are free. Every organization starts with a 14-day trial, no card.
+  readers are free. A person's first organization starts with a 14-day trial,
+  no card; any organization they create after that is paid for from the start.
 - **Bindersnap holds no patient data.** Never call it "HIPAA compliant".
 - The app calls them **documents**; marketing copy may say "policy".
 
@@ -287,8 +288,11 @@ The router is the `pathname` chain at the bottom of `services/api/server.ts`;
 `openapi.json`, which `packages/api-client` is typed from (`bun run generate:bff`).
 The families:
 
-- `/auth/*` — signup (creates the Gitea account, then the organization and its
-  first binder, ADR 0004), login, logout, `me`, email verification, password reset
+- `/auth/*` — signup (creates the Gitea account and nothing else), login,
+  logout, `me`, email verification, password reset. An account may have no
+  organization: `POST /api/app/organizations` is the one place one is created,
+  with its first binder (ADR 0004), and the app sends a person there when they
+  first try to write
 - `/api/app/binders/:org/:binder/...` — a binder: its documents, folders,
   renames, archives and restores, drafts, changes (reviews, discussions,
   reactions, assignments, conflicts, update, publish), people, groups, rules,
@@ -432,6 +436,12 @@ with a writer limit. The 14-day trial is a local column
 rather than a Stripe trialing subscription because #369 wants no card at all
 during it, and keeping the whole thing in one function is what makes two
 sources of access truth affordable.
+
+**The trial goes to a person's first organization only** (`resolveTrialEnd` in
+`services/api/organizations.ts`). Anyone signed in may create as many
+organizations as they like, and nothing limits it, but a trial on each would be
+a free trial for every click. Checkout needs an organization and an Owner of it:
+a person with none gets a 409 and is asked to create one, never a card form.
 
 Seats are derived from Gitea team membership on every call
 (`listBillableSeats`), so there is no seat table to drift.
