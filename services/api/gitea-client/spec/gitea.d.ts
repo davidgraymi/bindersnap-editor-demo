@@ -1,4 +1,4 @@
-// Generated from Gitea 28.0.0 at 2026-10-06T20:39:56Z
+// Generated from Gitea 28.2.0 at 2026-10-27T01:15:58Z
 // Source: services/api/gitea-client/spec/swagger2.json
 // Note: Types have been extended via extensions.json
 // Do not edit manually — re-run: bun run generate:api
@@ -17075,6 +17075,7 @@ export interface operations {
             204: components["responses"]["empty"];
             403: components["responses"]["forbidden"];
             404: components["responses"]["notFound"];
+            423: components["responses"]["repoArchivedError"];
         };
     };
     issueEditIssue: {
@@ -17101,6 +17102,7 @@ export interface operations {
             403: components["responses"]["forbidden"];
             404: components["responses"]["notFound"];
             412: components["responses"]["error"];
+            423: components["responses"]["repoArchivedError"];
         };
     };
     issueListIssueAttachments: {
@@ -17593,6 +17595,7 @@ export interface operations {
             200: components["responses"]["LabelList"];
             403: components["responses"]["forbidden"];
             404: components["responses"]["notFound"];
+            423: components["responses"]["repoArchivedError"];
         };
     };
     issueAddLabel: {
@@ -17614,6 +17617,7 @@ export interface operations {
             200: components["responses"]["LabelList"];
             403: components["responses"]["forbidden"];
             404: components["responses"]["notFound"];
+            423: components["responses"]["repoArchivedError"];
         };
     };
     issueClearLabels: {
@@ -17635,6 +17639,7 @@ export interface operations {
             204: components["responses"]["empty"];
             403: components["responses"]["forbidden"];
             404: components["responses"]["notFound"];
+            423: components["responses"]["repoArchivedError"];
         };
     };
     issueRemoveLabel: {
@@ -17659,6 +17664,7 @@ export interface operations {
             403: components["responses"]["forbidden"];
             404: components["responses"]["notFound"];
             422: components["responses"]["validationError"];
+            423: components["responses"]["repoArchivedError"];
         };
     };
     issueLockIssue: {

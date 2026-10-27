@@ -673,9 +673,6 @@ export function App() {
       return;
     }
 
-    const isAdminSubscriptionRoute =
-      route.kind === "adminSubscriptions" && user?.isAdmin;
-
     if (
       user &&
       (route.kind === "login" ||
@@ -691,7 +688,7 @@ export function App() {
       return;
     }
 
-    if (user && route.kind === "adminSubscriptions" && !user.isAdmin) {
+    if (user && route.kind === "admin" && !user.isAdmin) {
       navigateTo({ kind: "home" }, true);
       return;
     }
@@ -702,7 +699,7 @@ export function App() {
       subscriptionStatus === "none" &&
       route.kind === "home"
     ) {
-      navigateTo({ kind: "adminSubscriptions" }, true);
+      navigateTo({ kind: "admin", section: "overview" }, true);
       return;
     }
 

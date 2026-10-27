@@ -32,8 +32,23 @@ test("getRoute maps the SPA home route to the landing/app home kind", () => {
     "/-/invitations/abc_123-x",
   );
   expect(getRoute("/-/signup")).toEqual({ kind: "signup" });
+  expect(getRoute("/-/admin")).toEqual({ kind: "admin", section: "overview" });
+  expect(getRoute("/-/admin/users")).toEqual({
+    kind: "admin",
+    section: "users",
+  });
+  expect(getRoute("/-/admin/organizations")).toEqual({
+    kind: "admin",
+    section: "organizations",
+  });
+  expect(getRoute("/-/admin/binders")).toEqual({
+    kind: "admin",
+    section: "binders",
+  });
+  // The console's first address, from before it was a console.
   expect(getRoute("/-/admin/subscriptions")).toEqual({
-    kind: "adminSubscriptions",
+    kind: "admin",
+    section: "subscriptions",
   });
 });
 
@@ -220,7 +235,8 @@ test("routeToPath keeps home and workspace on the root URL", () => {
   expect(routeToPath({ kind: "resetPassword" })).toBe("/-/reset_password");
   expect(routeToPath({ kind: "verifyEmail" })).toBe("/-/verify_email");
   expect(routeToPath({ kind: "signup" })).toBe("/-/signup");
-  expect(routeToPath({ kind: "adminSubscriptions" })).toBe(
+  expect(routeToPath({ kind: "admin", section: "overview" })).toBe("/-/admin");
+  expect(routeToPath({ kind: "admin", section: "subscriptions" })).toBe(
     "/-/admin/subscriptions",
   );
 });

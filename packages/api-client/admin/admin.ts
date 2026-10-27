@@ -5,13 +5,206 @@
  * OpenAPI spec version: 1.0.0
  */
 import type {
+  CreateAdminUser201,
+  CreateAdminUserBody,
+  GetAdminConfig200,
+  GetAdminOverview200,
+  GetAdminSystem200,
+  ListAdminBinders200,
+  ListAdminBindersParams,
+  ListAdminOrganizations200,
+  ListAdminOrganizationsParams,
   ListAdminSubscriptionAccess200,
   ListAdminSubscriptionAccessParams,
+  ListAdminUsers200,
+  ListAdminUsersParams,
+  RunAdminReconciler200,
   SetAdminSubscriptionAccess200,
   SetAdminSubscriptionAccessBody
 } from '../model';
 
 import { customFetch } from '.././mutator.ts';
+
+export type getAdminOverviewResponse200 = {
+  data: GetAdminOverview200
+  status: 200
+}
+
+export type getAdminOverviewResponseSuccess = (getAdminOverviewResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getAdminOverviewResponse = (getAdminOverviewResponseSuccess)
+
+export const getGetAdminOverviewUrl = () => {
+
+
+
+
+  return `/api/app/admin/overview`
+}
+
+export const getAdminOverview = async ( options?: Parameters<typeof customFetch>[1]): Promise<getAdminOverviewResponse> => {
+
+  return customFetch<getAdminOverviewResponse>(getGetAdminOverviewUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type listAdminUsersResponse200 = {
+  data: ListAdminUsers200
+  status: 200
+}
+
+export type listAdminUsersResponseSuccess = (listAdminUsersResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listAdminUsersResponse = (listAdminUsersResponseSuccess)
+
+export const getListAdminUsersUrl = (params?: ListAdminUsersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/app/admin/users?${stringifiedParams}` : `/api/app/admin/users`
+}
+
+export const listAdminUsers = async (params?: ListAdminUsersParams, options?: Parameters<typeof customFetch>[1]): Promise<listAdminUsersResponse> => {
+
+  return customFetch<listAdminUsersResponse>(getListAdminUsersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type createAdminUserResponse201 = {
+  data: CreateAdminUser201
+  status: 201
+}
+
+export type createAdminUserResponseSuccess = (createAdminUserResponse201) & {
+  headers: Headers;
+};
+;
+
+export type createAdminUserResponse = (createAdminUserResponseSuccess)
+
+export const getCreateAdminUserUrl = () => {
+
+
+
+
+  return `/api/app/admin/users`
+}
+
+export const createAdminUser = async (createAdminUserBody: CreateAdminUserBody, options?: Parameters<typeof customFetch>[1]): Promise<createAdminUserResponse> => {
+
+  return customFetch<createAdminUserResponse>(getCreateAdminUserUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createAdminUserBody)
+  }
+);}
+
+
+export type listAdminOrganizationsResponse200 = {
+  data: ListAdminOrganizations200
+  status: 200
+}
+
+export type listAdminOrganizationsResponseSuccess = (listAdminOrganizationsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listAdminOrganizationsResponse = (listAdminOrganizationsResponseSuccess)
+
+export const getListAdminOrganizationsUrl = (params?: ListAdminOrganizationsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/app/admin/organizations?${stringifiedParams}` : `/api/app/admin/organizations`
+}
+
+export const listAdminOrganizations = async (params?: ListAdminOrganizationsParams, options?: Parameters<typeof customFetch>[1]): Promise<listAdminOrganizationsResponse> => {
+
+  return customFetch<listAdminOrganizationsResponse>(getListAdminOrganizationsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type listAdminBindersResponse200 = {
+  data: ListAdminBinders200
+  status: 200
+}
+
+export type listAdminBindersResponseSuccess = (listAdminBindersResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listAdminBindersResponse = (listAdminBindersResponseSuccess)
+
+export const getListAdminBindersUrl = (params?: ListAdminBindersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/app/admin/binders?${stringifiedParams}` : `/api/app/admin/binders`
+}
+
+export const listAdminBinders = async (params?: ListAdminBindersParams, options?: Parameters<typeof customFetch>[1]): Promise<listAdminBindersResponse> => {
+
+  return customFetch<listAdminBindersResponse>(getListAdminBindersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
 
 export type listAdminSubscriptionAccessResponse200 = {
   data: ListAdminSubscriptionAccess200
@@ -46,6 +239,102 @@ export const listAdminSubscriptionAccess = async (params?: ListAdminSubscription
   {
     ...options,
     method: 'GET'
+
+
+  }
+);}
+
+
+export type getAdminSystemResponse200 = {
+  data: GetAdminSystem200
+  status: 200
+}
+
+export type getAdminSystemResponseSuccess = (getAdminSystemResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getAdminSystemResponse = (getAdminSystemResponseSuccess)
+
+export const getGetAdminSystemUrl = () => {
+
+
+
+
+  return `/api/app/admin/system`
+}
+
+export const getAdminSystem = async ( options?: Parameters<typeof customFetch>[1]): Promise<getAdminSystemResponse> => {
+
+  return customFetch<getAdminSystemResponse>(getGetAdminSystemUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type getAdminConfigResponse200 = {
+  data: GetAdminConfig200
+  status: 200
+}
+
+export type getAdminConfigResponseSuccess = (getAdminConfigResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getAdminConfigResponse = (getAdminConfigResponseSuccess)
+
+export const getGetAdminConfigUrl = () => {
+
+
+
+
+  return `/api/app/admin/config`
+}
+
+export const getAdminConfig = async ( options?: Parameters<typeof customFetch>[1]): Promise<getAdminConfigResponse> => {
+
+  return customFetch<getAdminConfigResponse>(getGetAdminConfigUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type runAdminReconcilerResponse200 = {
+  data: RunAdminReconciler200
+  status: 200
+}
+
+export type runAdminReconcilerResponseSuccess = (runAdminReconcilerResponse200) & {
+  headers: Headers;
+};
+;
+
+export type runAdminReconcilerResponse = (runAdminReconcilerResponseSuccess)
+
+export const getRunAdminReconcilerUrl = () => {
+
+
+
+
+  return `/api/app/admin/maintenance/reconciler`
+}
+
+export const runAdminReconciler = async ( options?: Parameters<typeof customFetch>[1]): Promise<runAdminReconcilerResponse> => {
+
+  return customFetch<runAdminReconcilerResponse>(getRunAdminReconcilerUrl(),
+  {
+    ...options,
+    method: 'POST'
 
 
   }

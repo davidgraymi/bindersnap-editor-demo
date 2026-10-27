@@ -2,6 +2,10 @@
 # The dev-only Dockerfiles (root, services/hocuspocus) float on tags and are left out.
 version: 2
 updates:
+  # Dependabot moves only the Dockerfile. The same Bun is pinned in
+  # .bun-version, package.json's packageManager,
+  # deploy/files/bin/bindersnap-bootstrap-gitea and
+  # deploy/files/scripts/bootstrap-gitea-service-account.ts: move them with it.
   - package-ecosystem: docker
     directories:
       - /services/api
@@ -22,9 +26,20 @@ updates:
       # tests/gitea-permission-model.pw.ts pins down. Bump it by hand.
       - dependency-name: gitea/gitea
         update-types: ["version-update:semver-major"]
+    # Gitea and Litestream each get a PR of their own, so neither rides along
+    # with a routine bump. Merging deploys production, and CI runs only the dev
+    # stack: it boots Gitea but never Litestream, cloudflared or the prod-only
+    # Alpine. A Gitea bump migrates gitea.db one way (docs/ops/deploy.md) and
+    # deploys alone; a Litestream bump must move scripts/restore.sh's image too,
+    # or a restore reads only the backups that image understands.
     groups:
+      gitea:
+        patterns: ["gitea/gitea"]
+      litestream:
+        patterns: ["litestream/litestream"]
       docker-compose:
         patterns: ["*"]
+        exclude-patterns: ["gitea/gitea", "litestream/litestream"]
 
   - package-ecosystem: github-actions
     directory: /

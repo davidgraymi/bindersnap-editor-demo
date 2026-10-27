@@ -9,9 +9,10 @@
  *   lookup at sign-in. These run on nearly every request, so a leak or a bug
  *   in any of them can expose only what the token can read.
  * - **The admin token** — `write:admin` and nothing else. Only the four acts
- *   that need it: creating an account at signup, setting a new password,
- *   deleting an account, and revoking a session's token. Each is rare, and
- *   each has already checked the person's own password.
+ *   that need it: creating an account (at signup, or by a site admin),
+ *   setting a new password, deleting an account, and revoking a session's
+ *   token. Each is rare, and each has already checked the person's own
+ *   password — or, for an admin's new account, that they are a site admin.
  *
  * The service account is a Gitea site admin, so a token's scopes are the only
  * thing standing between a read path and root-equivalent power. One token with

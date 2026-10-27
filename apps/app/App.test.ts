@@ -416,7 +416,7 @@ test("App drops into read-only mode when the payment required handler fires", as
   }
 });
 
-test("App keeps Gitea admins on the Pro access route even when billing status is unavailable", async () => {
+test("App keeps Gitea admins in the site admin console even when billing status is unavailable", async () => {
   installDom("/-/admin/subscriptions");
 
   mockFetchSessionUser.mockImplementation(async () => ({
@@ -441,7 +441,7 @@ test("App keeps Gitea admins on the Pro access route even when billing status is
       );
 
       expect(window.location.pathname).toBe("/-/admin/subscriptions");
-      expect(appShell?.dataset.routeKind).toBe("adminSubscriptions");
+      expect(appShell?.dataset.routeKind).toBe("admin");
       expect(appShell?.dataset.userIsAdmin).toBe("true");
       expect(
         container.querySelector('[data-testid="billing-page"]'),

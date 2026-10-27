@@ -19,6 +19,11 @@ import type { EmailContent } from "./mail/layout";
 
 /** A link is good for an hour. */
 export const RESET_LINK_TTL_MS = 60 * 60_000;
+/**
+ * A welcome link, for an account a site admin made without a password, is
+ * good for three days: the person may not read the email the hour it lands.
+ */
+export const WELCOME_LINK_TTL_MS = 3 * 24 * 60 * 60_000;
 /** One email per account per this long, however often somebody asks. */
 export const RESET_EMAIL_COOLDOWN_MS = 2 * 60_000;
 
@@ -64,7 +69,12 @@ export class PasswordResetStore {
   }
 
   /** A new link for this account; every earlier one stops working. */
-  issue(username: string, email: string, now = Date.now()): string {
+  issue(
+    username: string,
+    email: string,
+    now = Date.now(),
+    ttlMs = RESET_LINK_TTL_MS,
+  ): string {
     const token = newResetToken();
     this.retireAll(username, now);
     this.db
@@ -74,7 +84,7 @@ export class PasswordResetStore {
         username,
         email,
         createdAt: now,
-        expiresAt: now + RESET_LINK_TTL_MS,
+        expiresAt: now + ttlMs,
         usedAt: null,
       })
       .run();
@@ -178,6 +188,32 @@ export function resetLinkEmail(params: {
     footnotes: [
       "The link works once, for the next hour.",
       "If you did not ask for this, ignore this email. Your password stays as it is.",
+    ],
+  };
+}
+
+/**
+ * The first email to an account a site admin created: the same link as a
+ * reset, worded as a welcome. Choosing a password with it confirms the
+ * address too, as any reset does.
+ */
+export function welcomeEmail(params: {
+  link: string;
+  username: string;
+  invitedBy: string;
+}): EmailContent {
+  return {
+    subject: "Your Bindersnap account is ready",
+    preview: "Choose a password, and you can sign in.",
+    heading: "Welcome to Bindersnap",
+    paragraphs: [
+      `${params.invitedBy} made you a Bindersnap account. Your username is ${params.username}.`,
+      "Choose a password with the button below, then sign in with your email address or that username.",
+    ],
+    action: { label: "Choose my password", url: params.link },
+    footnotes: [
+      "The link works once, for the next three days. After that, use Forgot password on the sign-in page.",
+      "If you were not expecting this, ignore this email. Nobody can sign in to the account until a password is chosen.",
     ],
   };
 }

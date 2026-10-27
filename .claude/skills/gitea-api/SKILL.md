@@ -18,7 +18,7 @@ Gitea is where the evidence lives (non-negotiable 2). Read `AGENTS.md`
 - Types come from Gitea's own OpenAPI spec in `gitea-client/spec/`, generated
   by `bun run generate:gitea-client` against the local stack's Gitea. Check an
   endpoint there, not from memory: Gitea's API changes between releases, and
-  production runs 28.0.0.
+  production runs 28.2.0.
 - The `README.md` in that folder predates the BFF (it still mentions
   `sessionStorage`). Trust the code and `AGENTS.md` over it.
 - Unit tests mock the fetch layer and need no Gitea. Behaviour that depends on
@@ -30,8 +30,9 @@ Gitea is where the evidence lives (non-negotiable 2). Read `AGENTS.md`
   **their session token**, so Gitea records them as the actor.
 - `BINDERSNAP_GITEA_SERVICE_TOKEN` is **read-only** and runs on nearly every
   request. Never give it a write scope.
-- `BINDERSNAP_GITEA_ADMIN_TOKEN` is `write:admin` only: signup, password
-  changes, account deletion, token revocation. Never use it to read.
+- `BINDERSNAP_GITEA_ADMIN_TOKEN` is `write:admin` only: creating an account
+  (signup, or a site admin's), password changes, account deletion, token
+  revocation. Never use it to read.
 - No response ever carries a Gitea token (non-negotiable 1, #662).
 
 ## Which primitive
