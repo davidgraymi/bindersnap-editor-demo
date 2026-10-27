@@ -126,6 +126,7 @@ import {
   AdminConfigPayloadSchema,
   AdminCreateUserBodySchema,
   AdminCreatedUserSchema,
+  AdminOrganizationAccessResultSchema,
   AdminOrganizationListPayloadSchema,
   AdminReconcilerRunSchema,
   AdminSystemPayloadSchema,
@@ -133,6 +134,7 @@ import {
   AdminSubscriptionAccessListPayloadSchema,
   AdminUserListPayloadSchema,
   SetAdminAccessBodySchema,
+  SetAdminOrganizationAccessBodySchema,
 } from "./schemas/admin";
 import { RepoCollaboratorPermissionSummarySchema } from "./schemas/common";
 
@@ -2650,6 +2652,46 @@ registry.registerPath({
       description: "Every organization",
       content: {
         "application/json": { schema: AdminOrganizationListPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "put",
+  path: "/api/app/admin/organizations/{org}/access",
+  operationId: "setAdminOrganizationAccess",
+  tags: ["admin"],
+  request: {
+    params: z.object({ org: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: SetAdminOrganizationAccessBodySchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Free access given, or access cut off",
+      content: {
+        "application/json": { schema: AdminOrganizationAccessResultSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "delete",
+  path: "/api/app/admin/organizations/{org}/access",
+  operationId: "clearAdminOrganizationAccess",
+  tags: ["admin"],
+  request: { params: z.object({ org: z.string() }) },
+  responses: {
+    200: {
+      description: "Back on whatever the organization pays",
+      content: {
+        "application/json": { schema: AdminOrganizationAccessResultSchema },
       },
     },
   },

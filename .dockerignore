@@ -8,3 +8,5 @@
 !services/api/**
 !services/hocuspocus/
 !services/hocuspocus/**
+# The API reads the images it was deployed with from this file (admin System page).
+!deploy/files/docker-compose.prod.yml

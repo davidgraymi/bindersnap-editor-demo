@@ -41,7 +41,14 @@ export interface SubscriptionAccessOverrideRecord {
   reason: string | null;
   updatedBy: string;
   updatedAt: number;
+  /** A grant's end, Unix seconds. Null or absent: no end. */
+  expiresAt?: number | null;
+  /** How many writers a grant covers. Null or absent: any number. */
+  maxWriters?: number | null;
 }
+
+/** Why a grant on record is not what gives the organization access. */
+export type GrantLapse = "expired" | "over_writers";
 
 export interface EffectiveSubscriptionAccess {
   giteaOrgId: number;
@@ -51,6 +58,21 @@ export interface EffectiveSubscriptionAccess {
   override: SubscriptionAccessOverrideRecord | null;
   /** When the local trial ends, if one is what is granting access. */
   trialEndsAt: number | null;
+  /** A grant on record that no longer counts, and why. */
+  grantLapse?: GrantLapse | null;
+  /** The writers counted against a grant's limit, when they were counted. */
+  writers?: number | null;
+}
+
+export interface ResolveAccessOptions {
+  /**
+   * Counts the organization's writers, from Gitea. Only called when a grant
+   * limits them; without it a writer limit is not checked, which is right
+   * for a list that only shows the grant, and wrong for the paywall.
+   */
+  writers?: () => Promise<number>;
+  /** Unix seconds; defaults to now. */
+  now?: number;
 }
 
 function hasStripeBackedAccess(record: SubscriptionRecord | null): boolean {
@@ -82,7 +104,10 @@ export interface SubscriptionBackend {
   ): Promise<SubscriptionAccessOverrideRecord | null>;
   putAccessOverride(record: SubscriptionAccessOverrideRecord): Promise<void>;
   deleteAccessOverride(giteaOrgId: number): Promise<void>;
-  resolveAccess(giteaOrgId: number): Promise<EffectiveSubscriptionAccess>;
+  resolveAccess(
+    giteaOrgId: number,
+    options?: ResolveAccessOptions,
+  ): Promise<EffectiveSubscriptionAccess>;
   listKnownAccessStates(): Promise<EffectiveSubscriptionAccess[]>;
 }
 
@@ -203,7 +228,11 @@ export class SubscriptionStore implements SubscriptionBackend {
   ): Promise<void> {
     this.db
       .insert(subscriptionAccessOverrides)
-      .values(record)
+      .values({
+        ...record,
+        expiresAt: record.expiresAt ?? null,
+        maxWriters: record.maxWriters ?? null,
+      })
       .onConflictDoUpdate({
         target: subscriptionAccessOverrides.giteaOrgId,
         set: {
@@ -211,6 +240,9 @@ export class SubscriptionStore implements SubscriptionBackend {
           reason: record.reason,
           updatedBy: record.updatedBy,
           updatedAt: record.updatedAt,
+          // A new override replaces the old one whole, limits included.
+          expiresAt: record.expiresAt ?? null,
+          maxWriters: record.maxWriters ?? null,
         },
       })
       .run();
@@ -231,7 +263,11 @@ export class SubscriptionStore implements SubscriptionBackend {
    * Stripe subscription and a local trial column — are an acceptable cost.
    *
    *   1. `admin_revoke`  — no access, whatever else says.
-   *   2. `admin_grant`   — access; the comp mechanism.
+   *   2. `admin_grant`   — access; the comp mechanism. Unless it has ended,
+   *      or covers fewer writers than the organization has (counted only
+   *      when the caller can, see `options.writers`): then it is passed over
+   *      and the list goes on, so a lapsed grant leaves the organization on
+   *      whatever else it has.
    *   3. Stripe `active` / `trialing`, with the 3-day grace on a stale period
    *      end that covers a missed webhook.
    *   4. The local trial: `organizations.trial_ends_at` still in the future.
@@ -242,19 +278,39 @@ export class SubscriptionStore implements SubscriptionBackend {
    */
   async resolveAccess(
     giteaOrgId: number,
+    options: ResolveAccessOptions = {},
   ): Promise<EffectiveSubscriptionAccess> {
     const subscription = await this.getByOrganization(giteaOrgId);
     const override = await this.getAccessOverride(giteaOrgId);
     const organization = await this.organizations.get(giteaOrgId);
     const trialEndsAt = organization?.trialEndsAt ?? null;
+    const now = options.now ?? Math.floor(Date.now() / 1000);
 
-    const base = { giteaOrgId, subscription, override, trialEndsAt };
+    let grantLapse: GrantLapse | null = null;
+    let writers: number | null = null;
+    if (override?.access === "grant") {
+      if (override.expiresAt != null && override.expiresAt <= now) {
+        grantLapse = "expired";
+      } else if (override.maxWriters != null && options.writers) {
+        writers = await options.writers();
+        if (writers > override.maxWriters) grantLapse = "over_writers";
+      }
+    }
+
+    const base = {
+      giteaOrgId,
+      subscription,
+      override,
+      trialEndsAt,
+      grantLapse,
+      writers,
+    };
 
     if (override?.access === "revoke") {
       return { ...base, hasAccess: false, source: "admin_revoke" };
     }
 
-    if (override?.access === "grant") {
+    if (override?.access === "grant" && grantLapse === null) {
       return { ...base, hasAccess: true, source: "admin_grant" };
     }
 
@@ -493,8 +549,11 @@ class LazySubscriptionStore implements SubscriptionBackend {
     return this.store.deleteAccessOverride(giteaOrgId);
   }
 
-  resolveAccess(giteaOrgId: number): Promise<EffectiveSubscriptionAccess> {
-    return this.store.resolveAccess(giteaOrgId);
+  resolveAccess(
+    giteaOrgId: number,
+    options?: ResolveAccessOptions,
+  ): Promise<EffectiveSubscriptionAccess> {
+    return this.store.resolveAccess(giteaOrgId, options);
   }
 
   listKnownAccessStates(): Promise<EffectiveSubscriptionAccess[]> {
@@ -507,6 +566,7 @@ export const subscriptionStore = new LazySubscriptionStore();
 /** Whether this organization may author right now. */
 export async function organizationHasAccess(
   giteaOrgId: number,
+  options?: ResolveAccessOptions,
 ): Promise<boolean> {
-  return (await subscriptionStore.resolveAccess(giteaOrgId)).hasAccess;
+  return (await subscriptionStore.resolveAccess(giteaOrgId, options)).hasAccess;
 }

@@ -47,7 +47,27 @@ export interface SeedUser {
    * today is to have an account in that state to sign in as.
    */
   organizationMember: boolean;
+  /**
+   * Whether the account has confirmed its address. Seeded accounts are made
+   * in Gitea before the API exists, so the seed confirms them afterwards —
+   * a real deployment's people did — unless this says to leave one waiting.
+   */
+  emailConfirmed: boolean;
 }
+
+/**
+ * Where an organization stands with us, as the admin console shows it.
+ * `trial_ended` is the organization with no plan: its trial ran out and
+ * nobody paid.
+ */
+export const SEED_PLANS = [
+  "paying",
+  "past_due",
+  "trial",
+  "trial_ended",
+  "comped",
+] as const;
+export type SeedPlan = (typeof SEED_PLANS)[number];
 
 /** One paragraph-and-heading block of a document body. */
 export interface SeedSection {
@@ -389,6 +409,21 @@ export interface SeedOrganization {
    */
   owners: string[];
   groups: SeedGroup[];
+  plan: SeedPlan;
+}
+
+/**
+ * Another customer on the same deployment: what the site admin's console is
+ * for, since one organization says nothing about who pays. Each holds the
+ * first binder its owner made with it and nothing more.
+ */
+export interface SeedOtherOrganization {
+  name: string;
+  displayName: string;
+  owner: string;
+  /** Members besides its owner. */
+  members: string[];
+  plan: SeedPlan;
 }
 
 export interface SeedScenario {
@@ -396,6 +431,7 @@ export interface SeedScenario {
   password: string;
   users: SeedUser[];
   organization: SeedOrganization;
+  otherOrganizations: SeedOtherOrganization[];
   binders: SeedBinder[];
 }
 
@@ -1112,6 +1148,11 @@ export function parseSeedScenario(source: string): SeedScenario {
         `${userPath}.organizationMember`,
         true,
       ),
+      emailConfirmed: asBoolean(
+        rawUser.emailConfirmed,
+        `${userPath}.emailConfirmed`,
+        true,
+      ),
     };
   });
 
@@ -1135,7 +1176,29 @@ export function parseSeedScenario(source: string): SeedScenario {
       (group, index) =>
         parseGroup(group, `scenario.organization.groups[${index}]`),
     ),
+    // What a new organization is on until somebody pays.
+    plan: asEnum(
+      organizationRaw.plan,
+      "scenario.organization.plan",
+      SEED_PLANS,
+      "trial",
+    ),
   };
+
+  const otherOrganizations = asArray(
+    raw.otherOrganizations ?? [],
+    "scenario.otherOrganizations",
+  ).map((value, index): SeedOtherOrganization => {
+    const path = `scenario.otherOrganizations[${index}]`;
+    const other = asRecord(value, path);
+    return {
+      name: asString(other.name, `${path}.name`),
+      displayName: asString(other.displayName, `${path}.displayName`),
+      owner: asString(other.owner, `${path}.owner`),
+      members: asStringList(other.members ?? [], `${path}.members`),
+      plan: asEnum(other.plan, `${path}.plan`, SEED_PLANS, "trial"),
+    };
+  });
 
   const binders = asArray(raw.binders, "scenario.binders").map(
     (binder, index) => parseBinder(binder, `scenario.binders[${index}]`),
@@ -1442,7 +1505,40 @@ export function parseSeedScenario(source: string): SeedScenario {
     );
   });
 
-  return { password, users, organization, binders };
+  // Somebody still waiting on their address is refused almost every route,
+  // so the seed could do nothing as them.
+  const waiting = new Set(
+    users.filter((user) => !user.emailConfirmed).map((user) => user.username),
+  );
+  const requireActive = (username: string, path: string): void => {
+    requireKnown(username, path);
+    if (waiting.has(username)) {
+      fail(
+        path,
+        `"${username}" has not confirmed their address, and the API refuses ` +
+          "almost everything they would do here",
+      );
+    }
+  };
+  [organization.owner, ...organization.owners].forEach((username) =>
+    requireActive(username, "scenario.organization"),
+  );
+
+  otherOrganizations.forEach((other, index) => {
+    const path = `scenario.otherOrganizations[${index}]`;
+    if (other.name === organization.name) {
+      fail(`${path}.name`, `"${other.name}" is the scenario's organization`);
+    }
+    requireActive(other.owner, `${path}.owner`);
+    other.members.forEach((member, memberIndex) => {
+      requireActive(member, `${path}.members[${memberIndex}]`);
+      if (member === other.owner) {
+        fail(`${path}.members[${memberIndex}]`, "the owner is already in it");
+      }
+    });
+  });
+
+  return { password, users, organization, otherOrganizations, binders };
 }
 
 export function loadSeedScenario(path: string | URL): SeedScenario {

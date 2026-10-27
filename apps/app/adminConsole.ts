@@ -8,7 +8,6 @@ export const ADMIN_SECTION_LABELS: Record<AdminSection, string> = {
   users: "People",
   organizations: "Organizations",
   binders: "Binders",
-  subscriptions: "Pro access",
   system: "System",
   config: "Configuration",
 };

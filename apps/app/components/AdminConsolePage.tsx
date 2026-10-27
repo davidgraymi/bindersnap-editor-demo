@@ -9,10 +9,12 @@ import {
 import { RefreshCw, Search } from "lucide-react";
 
 import {
+  clearAdminOrganizationAccess,
   getAdminOverview,
   listAdminBinders,
   listAdminOrganizations,
   listAdminUsers,
+  setAdminOrganizationAccess,
   type AdminBinderListPayload,
   type AdminOrganizationListPayload,
   type AdminOverviewPayload,
@@ -40,7 +42,6 @@ import {
   type AdminSection,
   type AppRoute,
 } from "../routes";
-import { AdminSubscriptionManagementPage } from "./AdminSubscriptionManagementPage";
 import {
   AdminConfig,
   AdminSystem,
@@ -112,10 +113,8 @@ export function AdminConsolePage({
         <AdminBinders link={link} />
       ) : section === "system" ? (
         <AdminSystem />
-      ) : section === "config" ? (
-        <AdminConfig />
       ) : (
-        <AdminSubscriptionManagementPage />
+        <AdminConfig />
       )}
     </section>
   );
@@ -519,13 +518,23 @@ function AdminUsers({ link }: { link: LinkProps }) {
                     {user.organizations.length === 0 ? (
                       <span className="admin-console-secondary">None</span>
                     ) : (
-                      <span className="admin-console-chips">
+                      <ul className="admin-console-orgs">
                         {user.organizations.map((org) => (
-                          <a key={org} {...link({ kind: "organization", org })}>
-                            {org}
-                          </a>
+                          <li key={org.name} className="admin-console-org">
+                            <a
+                              {...link({ kind: "organization", org: org.name })}
+                            >
+                              {org.name}
+                            </a>
+                            <StatusChip
+                              tone={billingTone(org.billing)}
+                              size="sm"
+                            >
+                              {BILLING_LABELS[org.billing]}
+                            </StatusChip>
+                          </li>
                         ))}
-                      </span>
+                      </ul>
                     )}
                   </td>
                   <td>{formatAdminDate(user.lastLoginAt)}</td>
@@ -541,94 +550,337 @@ function AdminUsers({ link }: { link: LinkProps }) {
   );
 }
 
+type OrganizationRow = AdminOrganizationListPayload["organizations"][number];
+
 function AdminOrganizations({ link }: { link: LinkProps }) {
   const { page, setPage } = useListQuery();
+  // Bumped after free access changes, to read the plans again.
+  const [changes, setChanges] = useState(0);
   const { data, error, loading } = useAdminList<AdminOrganizationListPayload>(
     () => listAdminOrganizations(page, PAGE_SIZE),
-    `organizations:${page}`,
+    `organizations:${page}:${changes}`,
   );
+  const [granting, setGranting] = useState<OrganizationRow | null>(null);
+  const changed = () => setChanges((count) => count + 1);
 
   return (
-    <ListPanel
-      label="Organizations"
-      page={page}
-      limit={PAGE_SIZE}
-      shown={data?.organizations.length ?? 0}
-      total={data?.total ?? null}
-      hasMore={data?.hasMore ?? false}
-      onPage={setPage}
-    >
-      {error ? (
-        <p className="app-inline-error">{error}</p>
-      ) : loading || !data ? (
-        <SkeletonPanel label="Loading organizations" rows={6} />
-      ) : data.organizations.length === 0 ? (
-        <div className="bs-empty">
-          <p className="bs-empty-lead">No organizations yet.</p>
-        </div>
-      ) : (
-        <table className="admin-console-table">
-          <thead>
-            <tr>
-              <th scope="col">Organization</th>
-              <th scope="col">Plan</th>
-              <th scope="col">Owners</th>
-              <th scope="col">Writers</th>
-              <th scope="col">Binders</th>
-              <th scope="col">Created</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.organizations.map((org) => (
-              <tr key={org.id}>
-                <td>
-                  <a
-                    className="admin-console-primary"
-                    {...link({ kind: "organization", org: org.name })}
-                  >
-                    {org.fullName || org.name}
-                  </a>
-                  <span className="admin-console-secondary">
-                    {org.name}
-                    {org.email ? ` · ${org.email}` : ""}
-                  </span>
-                  {!org.known ? (
-                    <span className="admin-console-flags">
-                      <StatusChip tone="withdrawn" size="sm">
-                        Made outside Bindersnap
-                      </StatusChip>
-                    </span>
-                  ) : null}
-                </td>
-                <td>
-                  <StatusChip tone={billingTone(org.billing)} size="sm">
-                    {BILLING_LABELS[org.billing]}
-                  </StatusChip>
-                  <span className="admin-console-secondary">
-                    {planDetail(org)}
-                  </span>
-                </td>
-                <td>{org.owners.length === 0 ? "—" : org.owners.join(", ")}</td>
-                <td className="admin-console-number">
-                  {formatCount(org.seats)}
-                </td>
-                <td className="admin-console-number">
-                  {formatCount(org.binders)}
-                </td>
-                <td>
-                  {formatAdminDate(org.createdAt)}
-                  {org.createdBy ? (
-                    <span className="admin-console-secondary">
-                      by {org.createdBy}
-                    </span>
-                  ) : null}
-                </td>
+    <div className="admin-console-stack">
+      {granting ? (
+        <FreeAccessPanel
+          key={granting.name}
+          org={granting}
+          onClose={() => setGranting(null)}
+          onSaved={() => {
+            setGranting(null);
+            changed();
+          }}
+        />
+      ) : null}
+      <ListPanel
+        label="Organizations"
+        page={page}
+        limit={PAGE_SIZE}
+        shown={data?.organizations.length ?? 0}
+        total={data?.total ?? null}
+        hasMore={data?.hasMore ?? false}
+        onPage={setPage}
+      >
+        {error ? (
+          <p className="app-inline-error">{error}</p>
+        ) : loading || !data ? (
+          <SkeletonPanel label="Loading organizations" rows={6} />
+        ) : data.organizations.length === 0 ? (
+          <div className="bs-empty">
+            <p className="bs-empty-lead">No organizations yet.</p>
+          </div>
+        ) : (
+          <table className="admin-console-table">
+            <thead>
+              <tr>
+                <th scope="col">Organization</th>
+                <th scope="col">Plan</th>
+                <th scope="col">Owners</th>
+                <th scope="col">Writers</th>
+                <th scope="col">Binders</th>
+                <th scope="col">Created</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </ListPanel>
+            </thead>
+            <tbody>
+              {data.organizations.map((org) => (
+                <tr key={org.id}>
+                  <td>
+                    <a
+                      className="admin-console-primary"
+                      {...link({ kind: "organization", org: org.name })}
+                    >
+                      {org.fullName || org.name}
+                    </a>
+                    <span className="admin-console-secondary">
+                      {org.name}
+                      {org.email ? ` · ${org.email}` : ""}
+                    </span>
+                    {!org.known ? (
+                      <span className="admin-console-flags">
+                        <StatusChip tone="withdrawn" size="sm">
+                          Made outside Bindersnap
+                        </StatusChip>
+                      </span>
+                    ) : null}
+                  </td>
+                  <td>
+                    <StatusChip tone={billingTone(org.billing)} size="sm">
+                      {BILLING_LABELS[org.billing]}
+                    </StatusChip>
+                    <span className="admin-console-secondary">
+                      {planDetail(org)}
+                    </span>
+                    <FreeAccessControls
+                      org={org}
+                      onGive={() => setGranting(org)}
+                      onChanged={changed}
+                    />
+                  </td>
+                  <td>
+                    {org.owners.length === 0 ? "—" : org.owners.join(", ")}
+                  </td>
+                  <td className="admin-console-number">
+                    {formatCount(org.seats)}
+                  </td>
+                  <td className="admin-console-number">
+                    {formatCount(org.binders)}
+                  </td>
+                  <td>
+                    {/* The organization's record keeps Unix seconds. */}
+                    {formatAdminSeconds(org.createdAt)}
+                    {org.createdBy ? (
+                      <span className="admin-console-secondary">
+                        by {org.createdBy}
+                      </span>
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </ListPanel>
+    </div>
+  );
+}
+
+/**
+ * Free access, under an organization's plan: what it covers and until when,
+ * and the switches. Ending it is always offered while there is any on
+ * record, lapsed or not. Restoring access undoes cutting an organization off.
+ */
+function FreeAccessControls({
+  org,
+  onGive,
+  onChanged,
+}: {
+  org: OrganizationRow;
+  onGive: () => void;
+  onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const free = org.freeAccess;
+
+  const clear = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await clearAdminOrganizationAccess(org.name);
+      onChanged();
+    } catch (caught) {
+      setError(errorMessage(caught, "Unable to change this organization."));
+      setBusy(false);
+    }
+  };
+
+  const label = org.fullName || org.name;
+  return (
+    <div className="admin-console-free">
+      {free ? (
+        <span
+          className={`admin-console-secondary${free.lapse ? " admin-console-warn" : ""}`}
+        >
+          {freeAccessSummary(free, org.seats)}
+        </span>
+      ) : null}
+      <span className="admin-console-free-actions">
+        {org.billing === "revoked" ? (
+          <button
+            type="button"
+            className="bs-btn bs-btn-secondary bs-btn--sm"
+            disabled={busy}
+            aria-label={`Restore access for ${label}`}
+            onClick={() => void clear()}
+          >
+            Restore access
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="bs-btn bs-btn-secondary bs-btn--sm"
+            disabled={busy}
+            aria-label={`${free ? "Change free access for" : "Give free access to"} ${label}`}
+            onClick={onGive}
+          >
+            {free ? "Change" : "Give free access"}
+          </button>
+        )}
+        {free ? (
+          <button
+            type="button"
+            className="bs-btn bs-btn-secondary bs-btn--quiet bs-btn--sm"
+            disabled={busy}
+            aria-label={`End free access for ${label}`}
+            onClick={() => void clear()}
+          >
+            {busy ? "Ending…" : "End free access"}
+          </button>
+        ) : null}
+      </span>
+      {error ? <span className="app-inline-error">{error}</span> : null}
+    </div>
+  );
+}
+
+/** "Free until Jan 25, 2027 for up to 5 writers (3 now)", or why it ended. */
+export function freeAccessSummary(
+  free: NonNullable<OrganizationRow["freeAccess"]>,
+  writers: number | null,
+): string {
+  const writersWord = (count: number) =>
+    `${count} ${count === 1 ? "writer" : "writers"}`;
+  if (free.lapse === "expired") {
+    return `Free access ended ${formatAdminSeconds(free.expiresAt)}`;
+  }
+  if (free.lapse === "over_writers" && free.maxWriters !== null) {
+    return `Free access covers ${writersWord(free.maxWriters)}; it has ${writers ?? "more"}`;
+  }
+  const until =
+    free.expiresAt !== null
+      ? `until ${formatAdminSeconds(free.expiresAt)}`
+      : "with no end";
+  const covers =
+    free.maxWriters !== null
+      ? ` for up to ${writersWord(free.maxWriters)}${writers !== null ? ` (${writers} now)` : ""}`
+      : "";
+  return `Free ${until}${covers}`;
+}
+
+/**
+ * Give an organization free access, or change what it has: for a number of
+ * days, for a number of writers, both, or neither. Past either limit the
+ * organization is back on what it pays, which the paywall checks for itself.
+ */
+function FreeAccessPanel({
+  org,
+  onClose,
+  onSaved,
+}: {
+  org: OrganizationRow;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const free = org.freeAccess;
+  const daysLeft =
+    free?.expiresAt != null
+      ? Math.max(
+          1,
+          Math.ceil((free.expiresAt * 1000 - Date.now()) / 86_400_000),
+        )
+      : null;
+  const [days, setDays] = useState(daysLeft !== null ? String(daysLeft) : "");
+  const [writers, setWriters] = useState(
+    free?.maxWriters != null ? String(free.maxWriters) : "",
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const label = org.fullName || org.name;
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      await setAdminOrganizationAccess(org.name, "grant", {
+        days: days.trim() === "" ? null : Number(days),
+        maxWriters: writers.trim() === "" ? null : Number(writers),
+      });
+      onSaved();
+    } catch (caught) {
+      setError(errorMessage(caught, "Unable to give free access."));
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="bs-panel" aria-label={`Free access for ${label}`}>
+      <div className="bs-panel-bar">
+        <h2 className="bs-panel-bar-title">Free access for {label}</h2>
+      </div>
+      <form className="admin-console-form" onSubmit={(e) => void submit(e)}>
+        <label className="app-field">
+          <span className="bs-field-label">For how many days</span>
+          <input
+            className="bs-input"
+            type="number"
+            min={1}
+            max={3650}
+            step={1}
+            inputMode="numeric"
+            value={days}
+            onChange={(event) => setDays(event.target.value)}
+            placeholder="No end"
+          />
+        </label>
+        <label className="app-field">
+          <span className="bs-field-label">For how many writers</span>
+          <input
+            className="bs-input"
+            type="number"
+            min={1}
+            max={10000}
+            step={1}
+            inputMode="numeric"
+            value={writers}
+            onChange={(event) => setWriters(event.target.value)}
+            placeholder="Any number"
+          />
+        </label>
+        <p className="admin-console-note admin-console-form-wide">
+          Everyone in {label} writes for free until either limit is passed.
+          {org.seats !== null
+            ? ` It has ${org.seats} ${org.seats === 1 ? "writer" : "writers"} now.`
+            : ""}{" "}
+          Past a limit it goes back to what it pays, and you can end free access
+          at any time.
+        </p>
+        {error ? (
+          <p className="app-inline-error admin-console-form-wide">{error}</p>
+        ) : null}
+        <div className="admin-console-actions admin-console-form-wide">
+          <button
+            type="button"
+            className="bs-btn bs-btn-secondary"
+            disabled={saving}
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="bs-btn bs-btn-primary"
+            disabled={saving}
+          >
+            {saving ? "Saving…" : free ? "Save" : "Give free access"}
+          </button>
+        </div>
+      </form>
+    </section>
   );
 }
 

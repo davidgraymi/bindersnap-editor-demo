@@ -5,6 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { ListAdminUsers200UsersItemEmailConfirmation } from './listAdminUsers200UsersItemEmailConfirmation.ts';
+import type { ListAdminUsers200UsersItemOrganizationsItem } from './listAdminUsers200UsersItemOrganizationsItem.ts';
 
 export type ListAdminUsers200UsersItem = {
   username: string;
@@ -21,5 +22,5 @@ export type ListAdminUsers200UsersItem = {
   /** @nullable */
   lastLoginAt: number | null;
   liveSessions: number;
-  organizations: string[];
+  organizations: ListAdminUsers200UsersItemOrganizationsItem[];
 };

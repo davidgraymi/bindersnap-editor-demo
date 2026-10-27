@@ -45,10 +45,11 @@ test("getRoute maps the SPA home route to the landing/app home kind", () => {
     kind: "admin",
     section: "binders",
   });
-  // The console's first address, from before it was a console.
+  // The console's first address, from before it was a console: Pro access,
+  // which People gives now.
   expect(getRoute("/-/admin/subscriptions")).toEqual({
     kind: "admin",
-    section: "subscriptions",
+    section: "users",
   });
 });
 
@@ -236,8 +237,8 @@ test("routeToPath keeps home and workspace on the root URL", () => {
   expect(routeToPath({ kind: "verifyEmail" })).toBe("/-/verify_email");
   expect(routeToPath({ kind: "signup" })).toBe("/-/signup");
   expect(routeToPath({ kind: "admin", section: "overview" })).toBe("/-/admin");
-  expect(routeToPath({ kind: "admin", section: "subscriptions" })).toBe(
-    "/-/admin/subscriptions",
+  expect(routeToPath({ kind: "admin", section: "users" })).toBe(
+    "/-/admin/users",
   );
 });
 

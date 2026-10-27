@@ -115,7 +115,6 @@ export const ADMIN_SECTIONS = [
   "users",
   "organizations",
   "binders",
-  "subscriptions",
   "system",
   "config",
 ] as const;
@@ -181,8 +180,9 @@ const APP_PAGES: Readonly<Record<string, AppRoute>> = {
   "/-/admin/users": { kind: "admin", section: "users" },
   "/-/admin/organizations": { kind: "admin", section: "organizations" },
   "/-/admin/binders": { kind: "admin", section: "binders" },
-  // The console began as this one page, and its address still works.
-  "/-/admin/subscriptions": { kind: "admin", section: "subscriptions" },
+  // The console began as this one page, Pro access, which is now given from
+  // People. Its address still works, and lands there.
+  "/-/admin/subscriptions": { kind: "admin", section: "users" },
   "/-/admin/system": { kind: "admin", section: "system" },
   "/-/admin/config": { kind: "admin", section: "config" },
   "/-/organizations/new": { kind: "createOrganization" },

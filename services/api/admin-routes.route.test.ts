@@ -4,8 +4,10 @@ import { randomUUID } from "crypto";
 import { config } from "./config";
 import { emailVerificationStore } from "./email-verification";
 import { emailOutboxStore } from "./mail/outbox";
+import { organizationStore, OrganizationStore } from "./organizations";
 import { createApiServer } from "./server";
 import { SessionStore, sessionStore } from "./sessions";
+import { SubscriptionStore, subscriptionStore } from "./subscriptions";
 
 /**
  * The console's System, Configuration and New account routes: only a site
@@ -26,6 +28,7 @@ const original = {
   sessionsDbPath: config.sessionsDbPath,
   apiPort: config.apiPort,
   release: config.release,
+  devFeaturesEnabled: config.devFeaturesEnabled,
   ...Object.fromEntries(
     Object.keys(SECRETS).map((key) => [
       key,
@@ -52,6 +55,12 @@ beforeEach(() => {
   config.sessionsDbPath = `/tmp/bindersnap-admin-routes-${randomUUID()}.sqlite`;
   (sessionStore as unknown as { _store: SessionStore | null })._store =
     new SessionStore(config.sessionsDbPath);
+  (
+    subscriptionStore as unknown as { _store: SubscriptionStore | null }
+  )._store = new SubscriptionStore(config.sessionsDbPath);
+  (
+    organizationStore as unknown as { _store: OrganizationStore | null }
+  )._store = new OrganizationStore(config.sessionsDbPath);
 
   isAdmin = true;
   existingEmail = null;
@@ -71,7 +80,22 @@ beforeEach(() => {
     const path = url.pathname;
 
     if (path === "/api/v1/user") {
-      return json({ login: "root", full_name: "Rae Root", is_admin: isAdmin });
+      return json({
+        login: "root",
+        full_name: "Rae Root",
+        email: "root@example.com",
+        is_admin: isAdmin,
+      });
+    }
+    if (path === "/api/v1/orgs/riverside-health") {
+      return json({ id: 7, username: "riverside-health" });
+    }
+    if (path === "/api/v1/user/orgs") {
+      return json(
+        url.searchParams.get("page") === "1" || !url.searchParams.has("page")
+          ? [{ id: 7, username: "riverside-health", full_name: "Riverside" }]
+          : [],
+      );
     }
     if (path === "/api/v1/version") return json({ version: "28.0.0" });
     if (path === "/api/v1/admin/emails/search") {
@@ -112,9 +136,10 @@ function request(
   sessionId: string,
   path: string,
   body?: Record<string, unknown>,
+  method: string = body ? "POST" : "GET",
 ): Request {
   return new Request(`http://localhost${path}`, {
-    method: body ? "POST" : "GET",
+    method,
     headers: {
       Origin: config.appOrigin,
       Cookie: `${config.sessionCookieName}=${sessionId}`,
@@ -287,6 +312,126 @@ test("an address another account uses is refused before Gitea is asked", async (
     );
     expect(response.status).toBe(409);
     expect(createdUsers).toEqual([]);
+  } finally {
+    server.stop(true);
+  }
+});
+
+test("free access is given to an organization, and taken back", async () => {
+  const server = createApiServer();
+  const session = await seedSession();
+  const path = "/api/app/admin/organizations/riverside-health/access";
+  try {
+    const grant = await server.fetch(
+      request(session, path, { access: "grant" }, "PUT"),
+    );
+    expect(grant.status).toBe(200);
+    expect(await grant.json()).toEqual({
+      organization: "riverside-health",
+      billing: "comped",
+    });
+    expect((await subscriptionStore.getAccessOverride(7))?.updatedBy).toBe(
+      "root",
+    );
+
+    const clear = await server.fetch(
+      request(session, path, undefined, "DELETE"),
+    );
+    expect(clear.status).toBe(200);
+    expect(await clear.json()).toEqual({
+      organization: "riverside-health",
+      billing: "none",
+    });
+    expect(await subscriptionStore.getAccessOverride(7)).toBeNull();
+
+    const nonsense = await server.fetch(
+      request(session, path, { access: "forever" }, "PUT"),
+    );
+    expect(nonsense.status).toBe(400);
+
+    // For a number of days and a number of writers.
+    const limited = await server.fetch(
+      request(
+        session,
+        path,
+        { access: "grant", days: 30, maxWriters: 2 },
+        "PUT",
+      ),
+    );
+    expect(limited.status).toBe(200);
+    const override = await subscriptionStore.getAccessOverride(7);
+    expect(override?.maxWriters).toBe(2);
+    const thirtyDays = Math.floor(Date.now() / 1000) + 30 * 86_400;
+    expect(Math.abs((override?.expiresAt ?? 0) - thirtyDays)).toBeLessThan(5);
+    for (const bad of [{ days: 0 }, { days: 1.5 }, { maxWriters: "lots" }]) {
+      const refused = await server.fetch(
+        request(session, path, { access: "grant", ...bad }, "PUT"),
+      );
+      expect(refused.status).toBe(400);
+    }
+    await server.fetch(request(session, path, undefined, "DELETE"));
+    const nobody = await server.fetch(
+      request(
+        session,
+        "/api/app/admin/organizations/no-such-org/access",
+        { access: "grant" },
+        "PUT",
+      ),
+    );
+    expect(nobody.status).toBe(404);
+
+    isAdmin = false;
+    const refused = await server.fetch(
+      request(session, path, { access: "grant" }, "PUT"),
+    );
+    expect(refused.status).toBe(403);
+    expect(await subscriptionStore.getAccessOverride(7)).toBeNull();
+  } finally {
+    server.stop(true);
+  }
+});
+
+test("the seed's dev routes confirm an address and set a plan, and only in dev", async () => {
+  const server = createApiServer();
+  const session = await seedSession();
+  try {
+    config.devFeaturesEnabled = false;
+    expect(
+      (await server.fetch(request(session, "/api/dev/email", {}))).status,
+    ).toBe(404);
+
+    config.devFeaturesEnabled = true;
+    const confirmed = await server.fetch(
+      request(session, "/api/dev/email", {}),
+    );
+    expect(await confirmed.json()).toEqual({ ok: true, state: "confirmed" });
+    expect(emailVerificationStore().status("root").state).toBe("confirmed");
+
+    // An organization Gitea has and SQLite does not gets its record back.
+    expect(await organizationStore.get(7)).toBeNull();
+    const plan = await server.fetch(
+      request(session, "/api/dev/organization-plan", {
+        organization: "riverside-health",
+        plan: "paying",
+      }),
+    );
+    expect(await plan.json()).toEqual({
+      ok: true,
+      organization: "riverside-health",
+      billing: "paying",
+    });
+    expect(await organizationStore.get(7)).toMatchObject({
+      name: "riverside-health",
+      createdBy: "root",
+    });
+
+    const trial = await server.fetch(
+      request(session, "/api/dev/organization-plan", {
+        organization: "riverside-health",
+        plan: "free-forever",
+      }),
+    );
+    expect(trial.status).toBe(400);
   } finally {
     server.stop(true);
   }
