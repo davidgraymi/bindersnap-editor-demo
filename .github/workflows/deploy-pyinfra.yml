@@ -53,21 +53,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: ".bun-version"
-
-      - name: Restore Bun cache
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('.bun-version') }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-${{ hashFiles('.bun-version') }}-
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      - name: Set up Bun and install dependencies
+        uses: ./.github/actions/setup-bun
 
       - name: Run API and ops test suite
         run: bun run test:ops
@@ -77,11 +64,11 @@ jobs:
   # pulls it (issue #313). This is the only place the API image is built for
   # production; `:latest` is pushed alongside as a local-dev fallback only.
   # Skipped on a rollback dispatch (api_tag set), where the target image
-  # already exists in GHCR.
+  # already exists in GHCR. It runs beside the test gate rather than after it:
+  # deploy waits on both, so a red test still ships nothing, and the run is
+  # as long as the slower of the two instead of their sum.
   build:
     name: Build API Image
-    needs:
-      - test
     if: ${{ github.event.inputs.api_tag == '' }}
     permissions:
       contents: read

@@ -1,0 +1,25 @@
+name: Set up Bun and install dependencies
+description: >-
+  Installs the Bun in .bun-version, restores its package cache keyed on
+  bun.lock, and runs `bun install --frozen-lockfile`. Every workflow that
+  installs dependencies uses this, so none of them pays for a cold install.
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version-file: ".bun-version"
+
+    - name: Restore Bun cache
+      uses: actions/cache@v6
+      with:
+        path: ~/.bun/install/cache
+        key: ${{ runner.os }}-bun-${{ hashFiles('.bun-version') }}-${{ hashFiles('bun.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-bun-${{ hashFiles('.bun-version') }}-
+
+    - name: Install dependencies
+      shell: bash
+      run: bun install --frozen-lockfile
