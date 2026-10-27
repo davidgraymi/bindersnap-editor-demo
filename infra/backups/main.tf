@@ -21,7 +21,7 @@ terraform {
 
   backend "s3" {
     key = "backups/terraform.tfstate"
-    # Remaining config (bucket, region, dynamodb_table, encrypt) loaded from:
+    # Remaining config (bucket, region, use_lockfile, encrypt) loaded from:
     #   terraform init -backend-config=../state/backend.hcl
   }
 }

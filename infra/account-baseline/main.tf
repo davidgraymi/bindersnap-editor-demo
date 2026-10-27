@@ -53,7 +53,7 @@ variable "alert_email" {
 variable "monthly_budget_usd" {
   description = "Monthly AWS spend that triggers the budget alerts. The design expects about $45."
   type        = number
-  default     = 75
+  default     = 50
 }
 
 variable "cloudtrail_retention_days" {
