@@ -123,6 +123,7 @@ import {
 import {
   AdminAccessUserResultSchema,
   AdminBinderListPayloadSchema,
+  AdminSignupsPayloadSchema,
   AdminConfigPayloadSchema,
   AdminCreateUserBodySchema,
   AdminCreatedUserSchema,
@@ -198,6 +199,7 @@ registry.register(
   AdminOrganizationListPayloadSchema,
 );
 registry.register("AdminBinderListPayload", AdminBinderListPayloadSchema);
+registry.register("AdminSignupsPayload", AdminSignupsPayloadSchema);
 registry.register("AdminSystemPayload", AdminSystemPayloadSchema);
 registry.register("AdminConfigPayload", AdminConfigPayloadSchema);
 registry.register("AdminCreatedUser", AdminCreatedUserSchema);
@@ -2708,6 +2710,22 @@ registry.registerPath({
       description: "Every binder",
       content: {
         "application/json": { schema: AdminBinderListPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/admin/signups",
+  operationId: "getAdminSignups",
+  tags: ["admin"],
+  responses: {
+    200: {
+      description:
+        "Where signups came from, by page, site and campaign, and how many went on to pay",
+      content: {
+        "application/json": { schema: AdminSignupsPayloadSchema },
       },
     },
   },

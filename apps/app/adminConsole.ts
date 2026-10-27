@@ -8,6 +8,7 @@ export const ADMIN_SECTION_LABELS: Record<AdminSection, string> = {
   users: "People",
   organizations: "Organizations",
   binders: "Binders",
+  signups: "Signups",
   system: "System",
   config: "Configuration",
 };
@@ -192,4 +193,23 @@ export function formatSize(kb: number): string {
 
 export function formatCount(value: number | null): string {
   return value === null ? "—" : value.toLocaleString("en-US");
+}
+
+/**
+ * A source of signups as the Signups tab names it. The key is a path on
+ * bindersnap.com, a host name, or a campaign's tags; a missing one says why.
+ */
+export function signupKeyLabel(
+  dimension: "entry" | "site" | "campaign",
+  key: string | null,
+): string {
+  if (dimension === "site") {
+    if (key === "invitation") return "An invitation";
+    return key ?? "Direct or unknown";
+  }
+  if (dimension === "entry") {
+    if (key === "/") return "Home page";
+    return key ?? "Not recorded";
+  }
+  return key ?? "None";
 }

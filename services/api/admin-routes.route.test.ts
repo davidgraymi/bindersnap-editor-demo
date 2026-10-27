@@ -154,7 +154,11 @@ test("only a site admin reaches the console's routes", async () => {
   const session = await seedSession();
   isAdmin = false;
   try {
-    for (const path of ["/api/app/admin/config", "/api/app/admin/system"]) {
+    for (const path of [
+      "/api/app/admin/config",
+      "/api/app/admin/system",
+      "/api/app/admin/signups",
+    ]) {
       expect((await server.fetch(request(session, path))).status).toBe(403);
     }
     const create = await server.fetch(
@@ -166,6 +170,26 @@ test("only a site admin reaches the console's routes", async () => {
     );
     expect(create.status).toBe(403);
     expect(createdUsers).toEqual([]);
+  } finally {
+    server.stop(true);
+  }
+});
+
+test("the signups report answers a site admin", async () => {
+  const server = createApiServer();
+  const session = await seedSession();
+  try {
+    const response = await server.fetch(
+      request(session, "/api/app/admin/signups"),
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      recorded: expect.any(Number),
+      byEntryPage: expect.any(Array),
+      bySite: expect.any(Array),
+      byCampaign: expect.any(Array),
+      recent: expect.any(Array),
+    });
   } finally {
     server.stop(true);
   }

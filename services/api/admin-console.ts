@@ -15,6 +15,7 @@
 
 import type { EffectiveSubscriptionAccess, GrantLapse } from "./subscriptions";
 import type { OrganizationRecord } from "./organizations";
+import type { SignupSourceRow } from "./signup-sources";
 import { unwrap, type GiteaClient } from "./gitea-client/client";
 import type { components } from "./gitea-client/spec/gitea";
 
@@ -337,6 +338,131 @@ export async function listAdminOrganizations(
   return {
     organizations,
     ...pageOf(params.page, params.limit, organizations.length, total),
+  };
+}
+
+// ─── Signups ─────────────────────────────────────────────────────────────
+
+export interface AdminSignupTally {
+  key: string | null;
+  signups: number;
+  organizations: number;
+  paying: number;
+}
+
+export interface AdminSignupRow {
+  username: string;
+  createdAt: number;
+  invited: boolean;
+  entryPath: string | null;
+  fromPath: string | null;
+  referrerHost: string | null;
+  campaign: string | null;
+  organizations: { name: string; billing: AdminBillingState }[];
+}
+
+export interface AdminSignupsReport {
+  recorded: number;
+  since: number | null;
+  byEntryPage: AdminSignupTally[];
+  bySite: AdminSignupTally[];
+  byCampaign: AdminSignupTally[];
+  recent: AdminSignupRow[];
+}
+
+export interface AdminSignupDeps {
+  /** Every signup on record, newest first (`SignupSourceStore.list`). */
+  signups: SignupSourceRow[];
+  /** Every organization's record, to find the ones each person created. */
+  organizations: OrganizationRecord[];
+  access(giteaOrgId: number): Promise<EffectiveSubscriptionAccess>;
+}
+
+/** How many of the newest signups the report lists one by one. */
+export const RECENT_SIGNUPS = 50;
+
+/** `utm_source / utm_medium / utm_campaign`, or null with none of them. */
+export function campaignOf(row: SignupSourceRow): string | null {
+  if (!row.utmSource && !row.utmMedium && !row.utmCampaign) return null;
+  return [row.utmSource, row.utmMedium, row.utmCampaign]
+    .map((part) => part ?? "–")
+    .join(" / ");
+}
+
+/**
+ * Which pages, sites and campaigns bring in signups, and how many of those
+ * went on to create an organization and to pay for one. Paying is
+ * `billingState` now, the same word the Organizations tab uses, so a trial
+ * that converted counts and one that lapsed does not.
+ */
+export async function reportSignups(
+  deps: AdminSignupDeps,
+): Promise<AdminSignupsReport> {
+  const created = new Map<string, OrganizationRecord[]>();
+  for (const org of deps.organizations) {
+    const by = org.createdBy.trim().toLowerCase();
+    created.set(by, [...(created.get(by) ?? []), org]);
+  }
+
+  const rows = await Promise.all(
+    deps.signups.map(async (signup) => {
+      const organizations = await Promise.all(
+        (created.get(signup.username) ?? []).map(async (org) => ({
+          name: org.name,
+          billing: billingState(await deps.access(org.giteaOrgId)),
+        })),
+      );
+      return { signup, organizations };
+    }),
+  );
+
+  const tally = (keyOf: (row: SignupSourceRow) => string | null) => {
+    const tallies = new Map<string | null, AdminSignupTally>();
+    for (const { signup, organizations } of rows) {
+      const key = keyOf(signup);
+      const entry = tallies.get(key) ?? {
+        key,
+        signups: 0,
+        organizations: 0,
+        paying: 0,
+      };
+      entry.signups += 1;
+      if (organizations.length) entry.organizations += 1;
+      if (organizations.some((org) => org.billing === "paying")) {
+        entry.paying += 1;
+      }
+      tallies.set(key, entry);
+    }
+    return [...tallies.values()].sort(
+      (a, b) =>
+        b.paying - a.paying ||
+        b.organizations - a.organizations ||
+        b.signups - a.signups ||
+        String(a.key).localeCompare(String(b.key)),
+    );
+  };
+
+  return {
+    recorded: rows.length,
+    since: rows.length
+      ? Math.min(...rows.map(({ signup }) => signup.createdAt))
+      : null,
+    byEntryPage: tally((row) => row.entryPath ?? null),
+    // An invitation is its own way in, whatever site the email was read on.
+    bySite: tally((row) =>
+      row.invited ? "invitation" : (row.referrerHost ?? null),
+    ),
+    byCampaign: tally(campaignOf).filter((entry) => entry.key !== null),
+    recent: rows.slice(0, RECENT_SIGNUPS).map(({ signup, organizations }) => ({
+      username: signup.username,
+      createdAt: signup.createdAt,
+      invited: signup.invited,
+      entryPath: signup.entryPath ?? null,
+      fromPath: signup.fromPath ?? null,
+      referrerHost: signup.referrerHost ?? null,
+      campaign: campaignOf(signup),
+      organizations,
+    })),
   };
 }
 

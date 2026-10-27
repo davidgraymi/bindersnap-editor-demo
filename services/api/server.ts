@@ -61,6 +61,7 @@ import {
   countGitea,
   listAdminBinders,
   listAdminOrganizations,
+  reportSignups,
   listAdminUsers,
   tallyBilling,
   type HealthCheck,
@@ -15744,6 +15745,32 @@ async function handleAdminOrganizations(
   }
 }
 
+/**
+ * Admin only: where signups came from (`signup_sources`) and how many of them
+ * created an organization and pay for it now.
+ */
+async function handleAdminSignups(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireAdminSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  try {
+    return json(
+      200,
+      await reportSignups({
+        signups: signupSourceStore().list(),
+        organizations: await organizationStore.list(),
+        access: (id) => subscriptionStore.resolveAccess(id),
+      }),
+      baseHeaders,
+    );
+  } catch (err) {
+    return responseFromError(err, baseHeaders, "Unable to report signups.");
+  }
+}
+
 /** Admin only: every binder, most recently changed first. */
 async function handleAdminBinders(
   req: Request,
@@ -16192,6 +16219,8 @@ async function handleRequest(req: Request): Promise<Response> {
     response = await handleAdminUsers(req, baseHeaders);
   } else if (pathname === "/api/app/admin/organizations" && method === "GET") {
     response = await handleAdminOrganizations(req, baseHeaders);
+  } else if (pathname === "/api/app/admin/signups" && method === "GET") {
+    response = await handleAdminSignups(req, baseHeaders);
   } else if (pathname === "/api/app/admin/binders" && method === "GET") {
     response = await handleAdminBinders(req, baseHeaders);
   } else if (

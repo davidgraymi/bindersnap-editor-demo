@@ -10,6 +10,7 @@ import {
   listAdminOrganizations,
   listAdminUsers,
   MAIL_STALL_MS,
+  reportSignups,
   tallyBilling,
   totalCount,
 } from "./admin-console";
@@ -406,4 +407,96 @@ test("listAdminBinders lists every repository, newest change first", async () =>
     openChanges: 2,
   });
   expect(result.total).toBe(1);
+});
+
+test("reportSignups counts each source by signups, organizations and payers", async () => {
+  const signup = (
+    username: string,
+    createdAt: number,
+    source: Record<string, string> = {},
+    invited = false,
+  ) => ({ username, createdAt, invited, ...source });
+  const org = (giteaOrgId: number, name: string, createdBy: string) => ({
+    giteaOrgId,
+    name,
+    createdBy,
+    createdAt: 0,
+    trialEndsAt: null,
+  });
+  const report = await reportSignups({
+    // Newest first, as the store lists them.
+    signups: [
+      signup("dana", 4_000, { entryPath: "/pricing" }, true),
+      signup("casey", 3_000, {
+        entryPath: "/glossary/qapi",
+        referrerHost: "www.google.com",
+        utmSource: "newsletter",
+        utmCampaign: "oct",
+      }),
+      signup("blake", 2_000, {
+        entryPath: "/glossary/qapi",
+        referrerHost: "www.google.com",
+      }),
+      signup("avery", 1_000),
+    ],
+    organizations: [
+      // Created under a login in another case: still theirs.
+      org(1, "riverside", "Blake"),
+      org(2, "lakeside", "casey"),
+      org(3, "hillside", "someone-else"),
+    ],
+    access: async (id) =>
+      id === 1
+        ? access({ source: "stripe", subscription: subscription("active") })
+        : access({ source: "trial", trialEndsAt: 10 }),
+  });
+
+  expect(report.recorded).toBe(4);
+  expect(report.since).toBe(1_000);
+  expect(report.byEntryPage).toEqual([
+    { key: "/glossary/qapi", signups: 2, organizations: 2, paying: 1 },
+    { key: "/pricing", signups: 1, organizations: 0, paying: 0 },
+    { key: null, signups: 1, organizations: 0, paying: 0 },
+  ]);
+  expect(report.bySite).toEqual([
+    { key: "www.google.com", signups: 2, organizations: 2, paying: 1 },
+    { key: "invitation", signups: 1, organizations: 0, paying: 0 },
+    { key: null, signups: 1, organizations: 0, paying: 0 },
+  ]);
+  expect(report.byCampaign).toEqual([
+    { key: "newsletter / – / oct", signups: 1, organizations: 1, paying: 0 },
+  ]);
+  expect(report.recent.map((row) => row.username)).toEqual([
+    "dana",
+    "casey",
+    "blake",
+    "avery",
+  ]);
+  expect(report.recent[2]).toEqual({
+    username: "blake",
+    createdAt: 2_000,
+    invited: false,
+    entryPath: "/glossary/qapi",
+    fromPath: null,
+    referrerHost: "www.google.com",
+    campaign: null,
+    organizations: [{ name: "riverside", billing: "paying" }],
+  });
+});
+
+test("reportSignups with nothing recorded says so", async () => {
+  expect(
+    await reportSignups({
+      signups: [],
+      organizations: [],
+      access: async () => access({}),
+    }),
+  ).toEqual({
+    recorded: 0,
+    since: null,
+    byEntryPage: [],
+    bySite: [],
+    byCampaign: [],
+    recent: [],
+  });
 });

@@ -6,6 +6,7 @@ import { JSDOM } from "jsdom";
 
 import type {
   AdminOverviewPayload,
+  AdminSignupsPayload,
   AdminSystemPayload,
   AdminUserListPayload,
 } from "../api";
@@ -209,12 +210,40 @@ const mockClearAdminOrganizationAccess = mock(async (org: string) => ({
   billing: "trial" as const,
 }));
 
+const signups: AdminSignupsPayload = {
+  recorded: 3,
+  since: Date.UTC(2026, 9, 1),
+  byEntryPage: [
+    { key: "/glossary/qapi", signups: 2, organizations: 2, paying: 1 },
+    { key: null, signups: 1, organizations: 0, paying: 0 },
+  ],
+  bySite: [
+    { key: "www.google.com", signups: 2, organizations: 2, paying: 1 },
+    { key: "invitation", signups: 1, organizations: 0, paying: 0 },
+  ],
+  byCampaign: [],
+  recent: [
+    {
+      username: "casey",
+      createdAt: Date.UTC(2026, 9, 20),
+      invited: false,
+      entryPath: "/glossary/qapi",
+      fromPath: "/pricing",
+      referrerHost: "www.google.com",
+      campaign: null,
+      organizations: [{ name: "lakeside", billing: "paying" }],
+    },
+  ],
+};
+const mockGetAdminSignups = mock(async () => signups);
+
 // Spread the real module: see AdminSubscriptionManagementPage.test.ts.
 const actualApi = await import("../api");
 mock.module("../api", () => ({
   ...actualApi,
   getAdminOverview: mockGetAdminOverview,
   getAdminSystem: mockGetAdminSystem,
+  getAdminSignups: mockGetAdminSignups,
   createAdminUser: mockCreateAdminUser,
   listAdminUsers: mockListAdminUsers,
   listAdminOrganizations: mockListAdminOrganizations,
@@ -296,6 +325,7 @@ test("each section is a link to its own address", async () => {
       "/-/admin/users",
       "/-/admin/organizations",
       "/-/admin/binders",
+      "/-/admin/signups",
       "/-/admin/system",
       "/-/admin/config",
     ]);
@@ -328,6 +358,35 @@ test("people show their email and whether they confirmed it", async () => {
     expect(text).toContain("riverside-health");
     expect(text).toContain("In trial");
     expect(text).toContain("1–1 of 1");
+  } finally {
+    unmount();
+  }
+});
+
+test("signups show which pages and sites brought people in, and who pays", async () => {
+  const { container, unmount } = render({
+    section: "signups",
+    currentUsername: "alice",
+    onNavigate: () => {},
+  });
+  try {
+    await settle();
+    expect(mockGetAdminSignups).toHaveBeenCalled();
+    const panels = Array.from(container.querySelectorAll("section.bs-panel"));
+    expect(panels.map((panel) => panel.getAttribute("aria-label"))).toEqual([
+      "First page of the visit",
+      "Sent by",
+      "Newest signups",
+    ]);
+    const firstPage = panels[0]!.textContent ?? "";
+    expect(firstPage).toContain("/glossary/qapi");
+    expect(firstPage).toContain("Not recorded");
+    expect(panels[1]!.textContent).toContain("An invitation");
+    const newest = panels[2]!.textContent ?? "";
+    expect(newest).toContain("casey");
+    expect(newest).toContain("/pricing");
+    expect(newest).toContain("Paying");
+    expect(container.textContent).toContain("3 signups since Oct 1, 2026");
   } finally {
     unmount();
   }
