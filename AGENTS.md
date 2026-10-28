@@ -239,7 +239,9 @@ Routes:
     `/-/admin/organizations` (and giving one free access, for a number of
     days, writers, or both), `/-/admin/binders`, `/-/admin/signups`
     (which page of bindersnap.com each signup came from, and who went on to
-    pay: `signup_sources`, never Google), `/-/admin/system`
+    pay: `signup_sources`, never Google), `/-/admin/growth` (from signup to
+    a published version and paying, and every trial's progress, from the
+    activity dataset), `/-/admin/system`
     (versions, the pinned images,
     memory, disk, maintenance) and `/-/admin/config` (every setting; a secret
     only as set or not, `services/api/admin-system.ts`)

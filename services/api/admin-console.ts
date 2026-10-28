@@ -15,6 +15,7 @@
 
 import type { EffectiveSubscriptionAccess, GrantLapse } from "./subscriptions";
 import type { OrganizationRecord } from "./organizations";
+import type { ActivityEvent } from "./activity";
 import type { SignupSourceRow } from "./signup-sources";
 import { unwrap, type GiteaClient } from "./gitea-client/client";
 import type { components } from "./gitea-client/spec/gitea";
@@ -463,6 +464,334 @@ export async function reportSignups(
       campaign: campaignOf(signup),
       organizations,
     })),
+  };
+}
+
+// ─── Growth ──────────────────────────────────────────────────────────────
+
+/** From signup to paying, in the order an organization usually gets there. */
+export const GROWTH_STEPS = [
+  "signedUp",
+  "confirmed",
+  "organization",
+  "proposed",
+  "approved",
+  "published",
+  "invited",
+  "joined",
+  "paying",
+] as const;
+export type GrowthStep = (typeof GROWTH_STEPS)[number];
+export type GrowthReached = Record<GrowthStep, number>;
+
+export interface AdminGrowthTrial {
+  name: string;
+  createdBy: string;
+  createdAt: number;
+  trialEndsAt: number;
+  billing: AdminBillingState;
+  proposed: number;
+  approved: number;
+  published: number;
+  joined: number;
+  lastActivityAt: number | null;
+}
+
+export interface AdminGrowthReport {
+  builtAt: number | null;
+  since: number | null;
+  invited: number;
+  total: GrowthReached;
+  medianDays: {
+    organization: number | null;
+    proposed: number | null;
+    published: number | null;
+  };
+  byWeek: { weekStart: number; reached: GrowthReached }[];
+  byEntryPage: { key: string | null; reached: GrowthReached }[];
+  trials: AdminGrowthTrial[];
+}
+
+export interface AdminGrowthDeps {
+  /** The activity dataset (`ActivityStore.list`). */
+  events: readonly ActivityEvent[];
+  /** Every organization's record, for its name, creator and trial. */
+  organizations: readonly OrganizationRecord[];
+  builtAt: number | null;
+  access(giteaOrgId: number): Promise<EffectiveSubscriptionAccess>;
+  now?: number;
+}
+
+/** Weeks of signups the report breaks out. */
+export const GROWTH_WEEKS = 12;
+
+/** How long an unpaid ended trial stays on the list, to be followed up. */
+export const ENDED_TRIAL_DAYS = 14;
+
+const DAY_MS = 86_400_000;
+
+/** Monday 00:00 UTC of the week `at` falls in. */
+export function weekStart(at: number): number {
+  const day = Math.floor(at / DAY_MS);
+  // 1970-01-01 was a Thursday, so a Monday is a day where (day + 3) % 7 is 0.
+  return (day - ((day + 3) % 7)) * DAY_MS;
+}
+
+/** The middle value, in days to one decimal, or null with none. */
+function medianDays(spans: number[]): number | null {
+  if (spans.length === 0) return null;
+  const sorted = [...spans].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const ms =
+    sorted.length % 2 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+  return Math.round((ms / DAY_MS) * 10) / 10;
+}
+
+function noneReached(): GrowthReached {
+  return Object.fromEntries(
+    GROWTH_STEPS.map((step) => [step, 0]),
+  ) as GrowthReached;
+}
+
+interface OrganizationProgress {
+  firstProposed: number | null;
+  firstApproved: number | null;
+  firstPublished: number | null;
+  proposed: number;
+  approved: number;
+  published: number;
+  invited: number;
+  joined: number;
+  lastActivityAt: number | null;
+}
+
+/** Changes to the rules or the binder's shape are not document work. */
+function isDocumentChange(event: ActivityEvent): boolean {
+  return event.detail !== "sign-off" && event.detail !== "shape";
+}
+
+/**
+ * The funnel from signup to a published version and paying, and every
+ * trial's progress, from the activity dataset. An account reaches a step when
+ * an organization it created does, so an invited reviewer's approval counts
+ * for the organization that invited them. Accounts made from an invitation
+ * joined somebody else's organization and are counted apart.
+ */
+export async function reportGrowth(
+  deps: AdminGrowthDeps,
+): Promise<AdminGrowthReport> {
+  const now = deps.now ?? Date.now();
+  const progress = new Map<number, OrganizationProgress>();
+  const progressOf = (orgId: number) => {
+    let entry = progress.get(orgId);
+    if (!entry) {
+      entry = {
+        firstProposed: null,
+        firstApproved: null,
+        firstPublished: null,
+        proposed: 0,
+        approved: 0,
+        published: 0,
+        invited: 0,
+        joined: 0,
+        lastActivityAt: null,
+      };
+      progress.set(orgId, entry);
+    }
+    return entry;
+  };
+  const first = (current: number | null, at: number) =>
+    current === null ? at : Math.min(current, at);
+
+  const signups: ActivityEvent[] = [];
+  const confirmed = new Set<number>();
+  const createdBy = new Map<number, { orgId: number; at: number }[]>();
+
+  for (const event of deps.events) {
+    if (event.orgId !== null) {
+      const entry = progressOf(event.orgId);
+      entry.lastActivityAt = Math.max(entry.lastActivityAt ?? 0, event.at);
+    }
+    switch (event.kind) {
+      case "account_created":
+        signups.push(event);
+        break;
+      case "email_confirmed":
+        if (event.actorId !== null) confirmed.add(event.actorId);
+        break;
+      case "org_created":
+        if (event.actorId !== null && event.orgId !== null) {
+          createdBy.set(event.actorId, [
+            ...(createdBy.get(event.actorId) ?? []),
+            { orgId: event.orgId, at: event.at },
+          ]);
+        }
+        break;
+      case "change_proposed":
+        if (event.orgId !== null && isDocumentChange(event)) {
+          const entry = progressOf(event.orgId);
+          entry.proposed += 1;
+          entry.firstProposed = first(entry.firstProposed, event.at);
+        }
+        break;
+      case "review_approved":
+        if (event.orgId !== null) {
+          const entry = progressOf(event.orgId);
+          entry.approved += 1;
+          entry.firstApproved = first(entry.firstApproved, event.at);
+        }
+        break;
+      case "version_published":
+        if (event.orgId !== null) {
+          const entry = progressOf(event.orgId);
+          entry.published += 1;
+          entry.firstPublished = first(entry.firstPublished, event.at);
+        }
+        break;
+      case "invite_sent":
+        if (event.orgId !== null) progressOf(event.orgId).invited += 1;
+        break;
+      case "invite_accepted":
+        if (event.orgId !== null) progressOf(event.orgId).joined += 1;
+        break;
+      default:
+        break;
+    }
+  }
+
+  const counted = signups.filter((event) => event.detail !== "invitation");
+  const orgIdsOf = (actorId: number | null) =>
+    actorId === null ? [] : (createdBy.get(actorId) ?? []);
+
+  // Billing now, for every organization the report names.
+  const named = new Set<number>([
+    ...counted.flatMap((event) =>
+      orgIdsOf(event.actorId).map((org) => org.orgId),
+    ),
+    ...deps.organizations
+      .filter((record) => record.trialEndsAt !== null)
+      .map((record) => record.giteaOrgId),
+  ]);
+  const billing = new Map<number, AdminBillingState>(
+    await Promise.all(
+      [...named].map(
+        async (orgId) =>
+          [orgId, billingState(await deps.access(orgId))] as const,
+      ),
+    ),
+  );
+
+  const spans = {
+    organization: [] as number[],
+    proposed: [] as number[],
+    published: [] as number[],
+  };
+  const reachedBy = counted.map((signup) => {
+    const orgs = orgIdsOf(signup.actorId);
+    const entries = orgs.map((org) => progress.get(org.orgId));
+    const earliest = (pick: (entry: OrganizationProgress) => number | null) =>
+      entries.reduce<number | null>((soonest, entry) => {
+        const at = entry ? pick(entry) : null;
+        return at === null ? soonest : first(soonest, at);
+      }, null);
+    const firstOrg = orgs.reduce<number | null>(
+      (soonest, org) => first(soonest, org.at),
+      null,
+    );
+    const proposedAt = earliest((entry) => entry.firstProposed);
+    const approvedAt = earliest((entry) => entry.firstApproved);
+    const publishedAt = earliest((entry) => entry.firstPublished);
+    if (firstOrg !== null) spans.organization.push(firstOrg - signup.at);
+    if (proposedAt !== null) spans.proposed.push(proposedAt - signup.at);
+    if (publishedAt !== null) spans.published.push(publishedAt - signup.at);
+
+    const reached: Record<GrowthStep, boolean> = {
+      signedUp: true,
+      confirmed: signup.actorId !== null && confirmed.has(signup.actorId),
+      organization: firstOrg !== null,
+      proposed: proposedAt !== null,
+      approved: approvedAt !== null,
+      published: publishedAt !== null,
+      invited: entries.some((entry) => (entry?.invited ?? 0) > 0),
+      joined: entries.some((entry) => (entry?.joined ?? 0) > 0),
+      paying: orgs.some((org) => billing.get(org.orgId) === "paying"),
+    };
+    return { signup, reached };
+  });
+
+  const tally = (rows: typeof reachedBy): GrowthReached => {
+    const total = noneReached();
+    for (const { reached } of rows) {
+      for (const step of GROWTH_STEPS) if (reached[step]) total[step] += 1;
+    }
+    return total;
+  };
+  const groupBy = <K>(keyOf: (row: (typeof reachedBy)[number]) => K) => {
+    const groups = new Map<K, typeof reachedBy>();
+    for (const row of reachedBy) {
+      const key = keyOf(row);
+      groups.set(key, [...(groups.get(key) ?? []), row]);
+    }
+    return [...groups.entries()].map(([key, rows]) => ({
+      key,
+      reached: tally(rows),
+    }));
+  };
+
+  const trials = deps.organizations
+    .flatMap((record): AdminGrowthTrial[] => {
+      if (record.trialEndsAt === null) return [];
+      const state = billing.get(record.giteaOrgId) ?? "none";
+      const endedRecently =
+        state === "trial_ended" &&
+        record.trialEndsAt * 1000 >= now - ENDED_TRIAL_DAYS * DAY_MS;
+      if (state !== "trial" && !endedRecently) return [];
+      const entry = progress.get(record.giteaOrgId);
+      return [
+        {
+          name: record.name,
+          createdBy: record.createdBy,
+          createdAt: record.createdAt * 1000,
+          trialEndsAt: record.trialEndsAt,
+          billing: state,
+          proposed: entry?.proposed ?? 0,
+          approved: entry?.approved ?? 0,
+          published: entry?.published ?? 0,
+          joined: entry?.joined ?? 0,
+          lastActivityAt: entry?.lastActivityAt ?? null,
+        },
+      ];
+    })
+    .sort(
+      (a, b) => a.trialEndsAt - b.trialEndsAt || a.name.localeCompare(b.name),
+    );
+
+  return {
+    builtAt: deps.builtAt,
+    since: counted.length
+      ? Math.min(...counted.map((event) => event.at))
+      : null,
+    invited: signups.length - counted.length,
+    total: tally(reachedBy),
+    medianDays: {
+      organization: medianDays(spans.organization),
+      proposed: medianDays(spans.proposed),
+      published: medianDays(spans.published),
+    },
+    byWeek: groupBy((row) => weekStart(row.signup.at))
+      .map(({ key, reached }) => ({ weekStart: key, reached }))
+      .sort((a, b) => b.weekStart - a.weekStart)
+      .slice(0, GROWTH_WEEKS),
+    byEntryPage: groupBy((row) => row.signup.detail)
+      .map(({ key, reached }) => ({ key, reached }))
+      .sort(
+        (a, b) =>
+          b.reached.paying - a.reached.paying ||
+          b.reached.published - a.reached.published ||
+          b.reached.signedUp - a.reached.signedUp ||
+          String(a.key).localeCompare(String(b.key)),
+      ),
+    trials,
   };
 }
 

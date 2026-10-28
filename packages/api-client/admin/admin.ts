@@ -9,6 +9,7 @@ import type {
   CreateAdminUser201,
   CreateAdminUserBody,
   GetAdminConfig200,
+  GetAdminGrowth200,
   GetAdminOverview200,
   GetAdminSignups200,
   GetAdminSystem200,
@@ -267,6 +268,38 @@ export const getListAdminBindersUrl = (params?: ListAdminBindersParams,) => {
 export const listAdminBinders = async (params?: ListAdminBindersParams, options?: Parameters<typeof customFetch>[1]): Promise<listAdminBindersResponse> => {
 
   return customFetch<listAdminBindersResponse>(getListAdminBindersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type getAdminGrowthResponse200 = {
+  data: GetAdminGrowth200
+  status: 200
+}
+
+export type getAdminGrowthResponseSuccess = (getAdminGrowthResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getAdminGrowthResponse = (getAdminGrowthResponseSuccess)
+
+export const getGetAdminGrowthUrl = () => {
+
+
+
+
+  return `/api/app/admin/growth`
+}
+
+export const getAdminGrowth = async ( options?: Parameters<typeof customFetch>[1]): Promise<getAdminGrowthResponse> => {
+
+  return customFetch<getAdminGrowthResponse>(getGetAdminGrowthUrl(),
   {
     ...options,
     method: 'GET'

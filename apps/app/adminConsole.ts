@@ -1,4 +1,10 @@
-import type { AdminBillingState, AdminHealthCheck, AdminUserRow } from "./api";
+import type {
+  AdminBillingState,
+  AdminGrowthReached,
+  AdminGrowthTrial,
+  AdminHealthCheck,
+  AdminUserRow,
+} from "./api";
 import type { StatusTone } from "./components/StatusChip";
 import type { AdminSection } from "./routes";
 
@@ -9,6 +15,7 @@ export const ADMIN_SECTION_LABELS: Record<AdminSection, string> = {
   organizations: "Organizations",
   binders: "Binders",
   signups: "Signups",
+  growth: "Growth",
   system: "System",
   config: "Configuration",
 };
@@ -212,4 +219,53 @@ export function signupKeyLabel(
     return key ?? "Not recorded";
   }
   return key ?? "None";
+}
+
+/** The Growth tab's funnel, step by step, in the order it shows them. */
+export const GROWTH_STEP_LABELS: Record<keyof AdminGrowthReached, string> = {
+  signedUp: "Signed up",
+  confirmed: "Confirmed their email",
+  organization: "Created an organization",
+  proposed: "Proposed a change to a document",
+  approved: "Had a change approved",
+  published: "Published a version",
+  invited: "Invited someone",
+  joined: "Someone they invited joined",
+  paying: "Pays now",
+};
+
+/** "40%" of the signups; a dash when there were none. */
+export function formatShare(part: number, whole: number): string {
+  return whole === 0 ? "—" : `${Math.round((part / whole) * 100)}%`;
+}
+
+/** "Under a day", "1 day", "2.5 days", or a dash for nobody yet. */
+export function formatDays(days: number | null): string {
+  if (days === null) return "—";
+  if (days < 1) return "Under a day";
+  return `${days} ${days === 1 ? "day" : "days"}`;
+}
+
+/** "3 days left", "Ends today", "Ended 2 days ago". Unix seconds in. */
+export function trialTimeLeft(
+  trialEndsAt: number,
+  now: number = Date.now(),
+): string {
+  const days = Math.ceil((trialEndsAt * 1000 - now) / 86_400_000);
+  if (days > 1) return `${days} days left`;
+  if (days === 1) return "1 day left";
+  if (days === 0) return "Ends today";
+  return days === -1 ? "Ended yesterday" : `Ended ${-days} days ago`;
+}
+
+/**
+ * How far a trial has got: a published version is the point of the product,
+ * so a trial without one is the one to follow up.
+ */
+export function trialProgress(
+  trial: Pick<AdminGrowthTrial, "proposed" | "published">,
+): { label: string; tone: StatusTone } {
+  if (trial.published > 0) return { label: "Published", tone: "approved" };
+  if (trial.proposed > 0) return { label: "Nothing published", tone: "review" };
+  return { label: "No changes yet", tone: "changes" };
 }

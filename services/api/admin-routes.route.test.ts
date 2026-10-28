@@ -158,6 +158,7 @@ test("only a site admin reaches the console's routes", async () => {
       "/api/app/admin/config",
       "/api/app/admin/system",
       "/api/app/admin/signups",
+      "/api/app/admin/growth",
     ]) {
       expect((await server.fetch(request(session, path))).status).toBe(403);
     }
@@ -197,6 +198,26 @@ test("the signups report answers a site admin", async () => {
       bySite: expect.any(Array),
       byCampaign: expect.any(Array),
       recent: expect.any(Array),
+    });
+  } finally {
+    server.stop(true);
+  }
+});
+
+test("the growth report answers a site admin", async () => {
+  const server = createApiServer();
+  const session = await seedSession();
+  try {
+    const response = await server.fetch(
+      request(session, "/api/app/admin/growth"),
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      total: { signedUp: expect.any(Number), paying: expect.any(Number) },
+      medianDays: expect.any(Object),
+      byWeek: expect.any(Array),
+      byEntryPage: expect.any(Array),
+      trials: expect.any(Array),
     });
   } finally {
     server.stop(true);

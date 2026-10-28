@@ -88,6 +88,7 @@ import type {
 } from "../../packages/api-schema/schemas/billing";
 import type {
   AdminBinderListPayload,
+  AdminGrowthPayload,
   AdminSignupsPayload,
   AdminConfigPayload,
   AdminCreateUserBody,
@@ -142,6 +143,9 @@ export type {
 export type {
   AdminBillingState,
   AdminBinderListPayload,
+  AdminGrowthPayload,
+  AdminGrowthReached,
+  AdminGrowthTrial,
   AdminSignupTally,
   AdminSignupsPayload,
   AdminConfigEntry,
@@ -2274,6 +2278,12 @@ export async function listAdminBinders(
     page: String(page),
     limit: String(limit),
   });
+  return response.data;
+}
+
+/** From signup to a published version and paying, and every trial's progress. */
+export async function getAdminGrowth(): Promise<AdminGrowthPayload> {
+  const response = await AdminClient.getAdminGrowth();
   return response.data;
 }
 

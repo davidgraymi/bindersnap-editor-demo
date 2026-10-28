@@ -12,10 +12,13 @@ import {
   listAdminOrganizations,
   listAdminUsers,
   MAIL_STALL_MS,
+  reportGrowth,
   reportSignups,
   tallyBilling,
   totalCount,
+  weekStart,
 } from "./admin-console";
+import type { ActivityEvent } from "./activity";
 import type { GiteaClient } from "./gitea-client/client";
 import type { EffectiveSubscriptionAccess } from "./subscriptions";
 
@@ -525,4 +528,213 @@ test("reportSignups with nothing recorded says so", async () => {
     byCampaign: [],
     recent: [],
   });
+});
+
+const DAY = 86_400_000;
+// Monday, October 5, 2026, 00:00 UTC.
+const MONDAY = Date.UTC(2026, 9, 5);
+
+function event(
+  kind: ActivityEvent["kind"],
+  at: number,
+  fields: Partial<ActivityEvent> = {},
+): ActivityEvent {
+  return {
+    id: `${kind}:${at}:${fields.actorId ?? ""}:${fields.orgId ?? ""}`,
+    kind,
+    at,
+    orgId: null,
+    binderId: null,
+    changeNumber: null,
+    actorId: null,
+    detail: null,
+    ...fields,
+  };
+}
+
+test("weekStart is the Monday a moment falls in, in UTC", () => {
+  expect(weekStart(MONDAY)).toBe(MONDAY);
+  expect(weekStart(MONDAY + 6 * DAY + DAY - 1)).toBe(MONDAY);
+  expect(weekStart(MONDAY - 1)).toBe(MONDAY - 7 * DAY);
+});
+
+test("reportGrowth follows each signup to a published version and paying", async () => {
+  const now = MONDAY + 20 * DAY;
+  const events = [
+    // Alice: from a template page, all the way to a published version.
+    event("account_created", MONDAY, {
+      actorId: 1,
+      detail: "/templates/hand-hygiene",
+    }),
+    event("email_confirmed", MONDAY + 1000, { actorId: 1 }),
+    event("org_created", MONDAY + 1 * DAY, {
+      actorId: 1,
+      orgId: 7,
+      detail: "trial",
+    }),
+    // A sign-off rule is not document work.
+    event("change_proposed", MONDAY + 1 * DAY, {
+      orgId: 7,
+      binderId: 12,
+      detail: "sign-off",
+    }),
+    event("change_proposed", MONDAY + 2 * DAY, {
+      orgId: 7,
+      binderId: 12,
+      detail: "upload",
+    }),
+    event("invite_sent", MONDAY + 2 * DAY, {
+      orgId: 7,
+      actorId: 1,
+      detail: "reviewer",
+    }),
+    // Jordan came by invitation: Alice's reviewer, not a new customer.
+    event("account_created", MONDAY + 3 * DAY, {
+      actorId: 2,
+      detail: "invitation",
+    }),
+    event("invite_accepted", MONDAY + 3 * DAY, {
+      orgId: 7,
+      actorId: 2,
+      detail: "reviewer",
+    }),
+    event("review_approved", MONDAY + 3 * DAY, {
+      orgId: 7,
+      binderId: 12,
+      actorId: 2,
+    }),
+    event("version_published", MONDAY + 4 * DAY, {
+      orgId: 7,
+      binderId: 12,
+      detail: "first",
+    }),
+    // Dan, a week later, from nowhere recorded: signed up and stopped.
+    event("account_created", MONDAY + 8 * DAY, { actorId: 3 }),
+    // Erin made an organization that pays, and nothing else yet.
+    event("account_created", MONDAY + 9 * DAY, {
+      actorId: 4,
+      detail: "/pricing",
+    }),
+    event("org_created", MONDAY + 12 * DAY, { actorId: 4, orgId: 8 }),
+  ];
+  const seconds = (ms: number) => Math.floor(ms / 1000);
+  const report = await reportGrowth({
+    events,
+    builtAt: now - 1000,
+    now,
+    organizations: [
+      {
+        giteaOrgId: 7,
+        name: "mercy-health",
+        createdBy: "alice",
+        createdAt: seconds(MONDAY + DAY),
+        trialEndsAt: seconds(now + 2 * DAY),
+      },
+      {
+        giteaOrgId: 8,
+        name: "erin-clinic",
+        createdBy: "erin",
+        createdAt: seconds(MONDAY + 12 * DAY),
+        trialEndsAt: null,
+      },
+      // Ended three days ago, unpaid: still on the list to follow up.
+      {
+        giteaOrgId: 9,
+        name: "lapsed",
+        createdBy: "fay",
+        createdAt: 1,
+        trialEndsAt: seconds(now - 3 * DAY),
+      },
+      // Ended a month ago: off the list.
+      {
+        giteaOrgId: 10,
+        name: "long-gone",
+        createdBy: "gus",
+        createdAt: 1,
+        trialEndsAt: seconds(now - 30 * DAY),
+      },
+    ],
+    access: async (id) =>
+      id === 7
+        ? access({ source: "trial", trialEndsAt: seconds(now + 2 * DAY) })
+        : id === 8
+          ? access({ source: "stripe", subscription: subscription("active") })
+          : access({ trialEndsAt: 1 }),
+  });
+
+  expect(report.invited).toBe(1);
+  expect(report.since).toBe(MONDAY);
+  expect(report.total).toEqual({
+    signedUp: 3,
+    confirmed: 1,
+    organization: 2,
+    proposed: 1,
+    approved: 1,
+    published: 1,
+    invited: 1,
+    joined: 1,
+    paying: 1,
+  });
+  expect(report.medianDays).toEqual({
+    organization: 2,
+    proposed: 2,
+    published: 4,
+  });
+  expect(
+    report.byWeek.map((week) => [week.weekStart, week.reached.signedUp]),
+  ).toEqual([
+    [MONDAY + 7 * DAY, 2],
+    [MONDAY, 1],
+  ]);
+  expect(
+    report.byEntryPage.map((row) => [
+      row.key,
+      row.reached.published,
+      row.reached.paying,
+    ]),
+  ).toEqual([
+    ["/pricing", 0, 1],
+    ["/templates/hand-hygiene", 1, 0],
+    [null, 0, 0],
+  ]);
+  expect(report.trials).toEqual([
+    {
+      name: "lapsed",
+      createdBy: "fay",
+      createdAt: 1000,
+      trialEndsAt: seconds(now - 3 * DAY),
+      billing: "trial_ended",
+      proposed: 0,
+      approved: 0,
+      published: 0,
+      joined: 0,
+      lastActivityAt: null,
+    },
+    {
+      name: "mercy-health",
+      createdBy: "alice",
+      createdAt: seconds(MONDAY + DAY) * 1000,
+      trialEndsAt: seconds(now + 2 * DAY),
+      billing: "trial",
+      proposed: 1,
+      approved: 1,
+      published: 1,
+      joined: 1,
+      lastActivityAt: MONDAY + 4 * DAY,
+    },
+  ]);
+});
+
+test("reportGrowth with no dataset yet says so, and counts nothing", async () => {
+  const report = await reportGrowth({
+    events: [],
+    organizations: [],
+    builtAt: null,
+    access: async () => access({}),
+  });
+  expect(report.builtAt).toBeNull();
+  expect(report.since).toBeNull();
+  expect(report.total.signedUp).toBe(0);
+  expect(report.byWeek).toEqual([]);
+  expect(report.trials).toEqual([]);
 });
