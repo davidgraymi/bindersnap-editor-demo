@@ -2306,6 +2306,23 @@ export async function runAdminReconciler(): Promise<AdminReconcilerRun> {
   return response.data;
 }
 
+/**
+ * The activity dataset as CSV, and what the server named the file. Ids and
+ * dates only: the server leaves out every name and address.
+ */
+export async function exportAdminActivity(): Promise<{
+  blob: Blob;
+  fileName: string;
+}> {
+  const response = await AdminClient.exportAdminActivity({
+    cache: "no-store",
+  });
+  const named = response.headers
+    .get("content-disposition")
+    ?.match(/filename="([^"]+)"/)?.[1];
+  return { blob: response.data, fileName: named ?? "bindersnap-activity.csv" };
+}
+
 /** Rebuild the activity dataset from scratch, rather than wait for its pass. */
 export async function runAdminActivityBuild(): Promise<AdminActivityRun> {
   const response = await AdminClient.runAdminActivityBuild();

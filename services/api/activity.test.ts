@@ -5,6 +5,7 @@ import { join } from "node:path";
 
 import {
   accountEvents,
+  activityCsv,
   ActivityStore,
   binderEvents,
   branchKind,
@@ -515,4 +516,55 @@ test("a change's reviews are found again by binder and number", () => {
   });
   expect(store.reviewsFor(12, 1)).toEqual([review]);
   expect(store.lastBuild()?.events).toBe(2);
+});
+
+test("the export is dates, kinds and ids, one event a line", () => {
+  const csv = activityCsv([
+    {
+      id: "account_created:1",
+      kind: "account_created",
+      at: Date.parse("2026-10-01T12:00:00Z"),
+      orgId: null,
+      binderId: null,
+      changeNumber: null,
+      actorId: 1,
+      detail: "/templates/hand-hygiene",
+    },
+    {
+      id: "change_proposed:12:4",
+      kind: "change_proposed",
+      at: Date.parse("2026-10-02T00:00:00Z"),
+      orgId: 7,
+      binderId: 12,
+      changeNumber: 4,
+      actorId: 2,
+      detail: "draft",
+    },
+  ]);
+  expect(csv).toBe(
+    [
+      "at,kind,organization_id,binder_id,change_number,actor_id,detail",
+      "2026-10-01T12:00:00.000Z,account_created,,,,1,/templates/hand-hygiene",
+      "2026-10-02T00:00:00.000Z,change_proposed,7,12,4,2,draft",
+      "",
+    ].join("\r\n"),
+  );
+});
+
+test("a detail a spreadsheet would run, or that holds a comma, is quoted safe", () => {
+  const row = (detail: string) =>
+    activityCsv([
+      {
+        id: "x",
+        kind: "account_created",
+        at: 0,
+        orgId: null,
+        binderId: null,
+        changeNumber: null,
+        actorId: 1,
+        detail,
+      },
+    ]).split("\r\n")[1];
+  expect(row("=HYPERLINK(1)")).toEndWith(",'=HYPERLINK(1)");
+  expect(row('/a,"b"')).toEndWith(',"/a,""b"""');
 });

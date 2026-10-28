@@ -1,7 +1,7 @@
 # Terms of Service
 
-Last updated: October 27, 2026
-Version: 2026-10-27
+Last updated: October 28, 2026
+Version: 2026-10-28
 
 These Terms of Service ("Terms") are the agreement for using Bindersnap. Please read them. They are written to be readable, but they are a binding contract.
 
@@ -94,6 +94,8 @@ The same applies to other data that needs special regulatory protection, such as
 - comply with law and these Terms.
 
 We do not sell Customer Content, use it to advertise, or use it to train machine-learning models. The license ends when Customer Content is deleted, subject to Section 8 and backup retention described in the DPA.
+
+**Usage counts.** We may count, from our own records, how the Service is used: for example how many changes, reviews and published versions an organization has, and when they were made. We use these counts to run, support and improve the Service. They hold dates and our internal IDs, never the words of Customer Content. We do not share them outside Bindersnap except combined in a way that identifies no Customer and no person.
 
 **Our property.** We and our licensors own the Service, its software, and its branding. These Terms give the Customer the right to use the Service, not to own it. If you send us feedback, we may use it without obligation to you.
 

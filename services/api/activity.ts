@@ -492,6 +492,52 @@ export async function collectActivity(
   };
 }
 
+// ─── The export ─────────────────────────────────────────────────────────
+
+/** The export's columns, in order. Ids and dates only: no name, no address. */
+export const ACTIVITY_CSV_COLUMNS = [
+  "at",
+  "kind",
+  "organization_id",
+  "binder_id",
+  "change_number",
+  "actor_id",
+  "detail",
+] as const;
+
+/**
+ * One CSV field. A value a spreadsheet would run as a formula is opened with
+ * an apostrophe; none should reach here, but a page path is a string from a
+ * request once.
+ */
+function csvField(value: string | number | null): string {
+  if (value === null) return "";
+  let text = String(value);
+  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+/** Every event as CSV, oldest first, for DuckDB or a spreadsheet. */
+export function activityCsv(events: readonly ActivityEvent[]): string {
+  const lines = [ACTIVITY_CSV_COLUMNS.join(",")];
+  for (const event of events) {
+    lines.push(
+      [
+        new Date(event.at).toISOString(),
+        event.kind,
+        event.orgId,
+        event.binderId,
+        event.changeNumber,
+        event.actorId,
+        event.detail,
+      ]
+        .map(csvField)
+        .join(","),
+    );
+  }
+  return `${lines.join("\r\n")}\r\n`;
+}
+
 // ─── The table ──────────────────────────────────────────────────────────
 
 /** Rows per insert: well under SQLite's limit on bound values. */
