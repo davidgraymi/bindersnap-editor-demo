@@ -5,6 +5,7 @@ import {
   createAdminUser,
   getAdminConfig,
   getAdminSystem,
+  runAdminActivityBuild,
   runAdminReconciler,
   type AdminConfigPayload,
   type AdminCreatedUser,
@@ -241,62 +242,95 @@ export function AdminSystem() {
 
 /** The jobs an admin can start by hand, as Gitea's Maintenance Operations. */
 function Maintenance() {
+  return (
+    <section className="bs-panel" aria-label="Maintenance">
+      <div className="bs-panel-bar">
+        <h2 className="bs-panel-bar-title">Maintenance</h2>
+      </div>
+      <MaintenanceRow
+        name="Check every binder now"
+        meta="Looks for a binder whose record is unprotected, and a change published without its versions. It repairs nothing. It runs a minute after the API starts and every six hours; this runs it now. Findings go to the log."
+        busyLabel="Checking…"
+        failure="The reconciler did not run."
+        run={async () => {
+          const { report } = await runAdminReconciler();
+          return report
+            ? `Read ${report.binders} binders: ${report.findings.length} findings, ${report.errors.length} errors.`
+            : "The reconciler has nothing to read with on this API.";
+        }}
+      />
+      <MaintenanceRow
+        name="Rebuild the activity dataset"
+        meta="Reads every account, organization, change, review and version again for the growth reports, asking Gitea for every review rather than reusing a closed change's. It rebuilds three minutes after the API starts and every six hours."
+        busyLabel="Rebuilding…"
+        failure="The activity dataset was not rebuilt."
+        run={async () => {
+          const { build } = await runAdminActivityBuild();
+          return build
+            ? `Read ${build.binders} binders: ${build.events} events, ${build.errors.length} errors.`
+            : "The activity dataset has nothing to read with on this API.";
+        }}
+      />
+    </section>
+  );
+}
+
+function MaintenanceRow({
+  name,
+  meta,
+  busyLabel,
+  failure,
+  run,
+}: {
+  name: string;
+  meta: string;
+  busyLabel: string;
+  failure: string;
+  /** What it did, in a sentence. */
+  run: () => Promise<string>;
+}) {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const run = async () => {
+  const start = async () => {
     setRunning(true);
     setResult(null);
     setError(null);
     try {
-      const { report } = await runAdminReconciler();
-      setResult(
-        report
-          ? `Read ${report.binders} binders: ${report.findings.length} findings, ${report.errors.length} errors.`
-          : "The reconciler has nothing to read with on this API.",
-      );
+      setResult(await run());
     } catch (err) {
-      setError(errorMessage(err, "The reconciler did not run."));
+      setError(errorMessage(err, failure));
     } finally {
       setRunning(false);
     }
   };
 
   return (
-    <section className="bs-panel" aria-label="Maintenance">
-      <div className="bs-panel-bar">
-        <h2 className="bs-panel-bar-title">Maintenance</h2>
-      </div>
-      <div className="bs-row">
-        <span className="bs-row-body">
-          <span className="bs-row-name">Check every binder now</span>
-          <span className="bs-row-meta">
-            Looks for a binder whose record is unprotected, and a change
-            published without its versions. It repairs nothing. It runs a minute
-            after the API starts and every six hours; this runs it now. Findings
-            go to the log.
+    <div className="bs-row">
+      <span className="bs-row-body">
+        <span className="bs-row-name">{name}</span>
+        <span className="bs-row-meta">{meta}</span>
+        {result ? (
+          <span className="admin-console-done" role="status">
+            <CheckCircle2 size={14} strokeWidth={1.8} aria-hidden="true" />
+            {result}
           </span>
-          {result ? (
-            <span className="admin-console-done" role="status">
-              <CheckCircle2 size={14} strokeWidth={1.8} aria-hidden="true" />
-              {result}
-            </span>
-          ) : null}
-          {error ? <span className="app-inline-error">{error}</span> : null}
-        </span>
-        <span className="bs-row-right">
-          <button
-            type="button"
-            className="bs-btn bs-btn-secondary bs-btn--sm"
-            disabled={running}
-            onClick={() => void run()}
-          >
-            {running ? "Checking…" : "Run"}
-          </button>
-        </span>
-      </div>
-    </section>
+        ) : null}
+        {error ? <span className="app-inline-error">{error}</span> : null}
+      </span>
+      <span className="bs-row-right">
+        <button
+          type="button"
+          className="bs-btn bs-btn-secondary bs-btn--sm"
+          disabled={running}
+          aria-label={`Run: ${name}`}
+          onClick={() => void start()}
+        >
+          {running ? busyLabel : "Run"}
+        </button>
+      </span>
+    </div>
   );
 }
 

@@ -1,6 +1,8 @@
 import { expect, mock, test } from "bun:test";
 
 import {
+  ACTIVITY_STALE_MS,
+  checkActivity,
   billingState,
   checkMail,
   checkReconciler,
@@ -183,6 +185,30 @@ test("checkReconciler flags a pass that has not run, or found something", () => 
   expect(
     checkReconciler({ binders: 3, findings: [{}], errors: [] }).status,
   ).toBe("warn");
+});
+
+test("checkActivity flags a dataset never built, overdue, or partly read", () => {
+  const now = 100 * 60 * 60_000;
+  const build = {
+    finishedAt: now - 30 * 60_000,
+    events: 40,
+    binders: 3,
+    errors: [],
+  };
+  expect(checkActivity(null, now).status).toBe("warn");
+  expect(checkActivity(build, now)).toEqual({
+    id: "activity",
+    label: "Activity dataset",
+    status: "ok",
+    detail: "Built 30 minutes ago from 3 binders: 40 events.",
+  });
+  expect(
+    checkActivity({ ...build, finishedAt: now - ACTIVITY_STALE_MS - 1 }, now)
+      .status,
+  ).toBe("warn");
+  expect(checkActivity({ ...build, errors: [{}] }, now).detail).toContain(
+    "1 could not be read",
+  );
 });
 
 test("listAdminUsers joins Gitea's accounts with what Bindersnap knows of them", async () => {

@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 
-import { and, count, eq, isNull } from "drizzle-orm";
+import { and, count, eq, isNotNull, isNull } from "drizzle-orm";
 
 import { config } from "./config";
 import { openSqliteDb, type SqliteDb } from "./db/client";
@@ -92,6 +92,23 @@ export class EmailVerificationStore {
         .where(isNull(emailVerifications.verifiedAt))
         .get()?.total ?? 0
     );
+  }
+
+  /** When each account confirmed its address, for the activity dataset. */
+  confirmations(): { username: string; verifiedAt: number }[] {
+    return this.db
+      .select({
+        username: emailVerifications.username,
+        verifiedAt: emailVerifications.verifiedAt,
+      })
+      .from(emailVerifications)
+      .where(isNotNull(emailVerifications.verifiedAt))
+      .all()
+      .flatMap((row) =>
+        row.verifiedAt === null
+          ? []
+          : [{ username: row.username, verifiedAt: row.verifiedAt }],
+      );
   }
 
   /** The address waiting to be confirmed, or null if there is none. */

@@ -650,6 +650,48 @@ export function checkReconciler(
   };
 }
 
+/** Two missed passes: the activity dataset rebuilds every six hours. */
+export const ACTIVITY_STALE_MS = 12 * 60 * 60_000;
+
+/** "3 hours", "12 minutes": how long ago a pass finished. */
+function agoText(ms: number): string {
+  const minutes = Math.max(0, Math.round(ms / 60_000));
+  if (minutes < 120) return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+  return `${Math.round(minutes / 60)} hours`;
+}
+
+export function checkActivity(
+  build: {
+    finishedAt: number;
+    events: number;
+    binders: number;
+    errors: unknown[];
+  } | null,
+  now: number,
+): HealthCheck {
+  const base = { id: "activity", label: "Activity dataset" };
+  if (!build) {
+    return {
+      ...base,
+      status: "warn",
+      detail:
+        "Not built yet. It builds three minutes after the API starts, then every six hours.",
+    };
+  }
+  const summary = `Built ${agoText(now - build.finishedAt)} ago from ${build.binders} binders: ${build.events} events.`;
+  if (now - build.finishedAt > ACTIVITY_STALE_MS) {
+    return { ...base, status: "warn", detail: `${summary} That is overdue.` };
+  }
+  if (build.errors.length > 0) {
+    return {
+      ...base,
+      status: "warn",
+      detail: `${summary} ${build.errors.length} could not be read and keep their last rows.`,
+    };
+  }
+  return { ...base, status: "ok", detail: summary };
+}
+
 export function checkGate(gate: {
   limit: number;
   inFlight: number;

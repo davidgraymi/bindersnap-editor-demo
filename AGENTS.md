@@ -497,7 +497,8 @@ nothing but speed when dropped. Every row keys on an immutable git coordinate (a
 tag name, a commit SHA) so it is either correct or detectably stale, never subtly
 wrong. **The index serves browsing; Gitea serves proving** — no publish gate,
 approval check, or audit export may read it. Anything else that duplicates Gitea
-state is a cache, and caches are banned. None has been built yet.
+state is a cache, and caches are banned. One has been built: the activity
+dataset (`services/api/activity.ts`), behind the site admin's growth reports.
 
 `.gitea/CODEOWNERS` is the one configuration that belongs in git: it is read at
 pull-request time and lives on the same timeline as the content it governs, so

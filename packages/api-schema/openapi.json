@@ -17465,6 +17465,79 @@
         }
       }
     },
+    "/api/app/admin/maintenance/activity": {
+      "post": {
+        "operationId": "runAdminActivityBuild",
+        "tags": [
+          "admin"
+        ],
+        "responses": {
+          "200": {
+            "description": "The activity dataset, rebuilt from scratch; null with nothing to read with",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "build": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "startedAt": {
+                          "type": "number"
+                        },
+                        "finishedAt": {
+                          "type": "number"
+                        },
+                        "events": {
+                          "type": "number"
+                        },
+                        "binders": {
+                          "type": "number"
+                        },
+                        "errors": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "org": {
+                                "type": "string"
+                              },
+                              "binder": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "error": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "org",
+                              "binder",
+                              "error"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "startedAt",
+                        "finishedAt",
+                        "events",
+                        "binders",
+                        "errors"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "build"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/app/admin/subscriptions/access/{username}": {
       "put": {
         "operationId": "setAdminSubscriptionAccess",
