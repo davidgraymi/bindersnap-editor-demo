@@ -35,4 +35,38 @@ describe("parseBinderRulesRequest", () => {
       );
     }
   });
+
+  test("takes the groups and people whose approvals count", () => {
+    expect(
+      parseBinderRulesRequest({
+        requiredApprovals: 3,
+        approvers: { groups: ["board", "board"], people: [" dr-okafor "] },
+      }),
+    ).toEqual({
+      requiredApprovals: 3,
+      approvers: { groups: ["board"], people: ["dr-okafor"] },
+    });
+    expect(
+      parseBinderRulesRequest({ approvers: { groups: ["board"] } }),
+    ).toEqual({ approvers: { groups: ["board"], people: [] } });
+  });
+
+  test("takes an empty list of approvers, as Gitea does", () => {
+    // Nobody's approval counts. A binder needing none is unaffected; one
+    // needing approvals publishes nothing until its admin names approvers.
+    expect(
+      parseBinderRulesRequest({ approvers: { groups: [], people: [] } }),
+    ).toEqual({ approvers: { groups: [], people: [] } });
+  });
+
+  test("refuses approvers that are not lists of names", () => {
+    for (const approvers of [
+      "board",
+      3,
+      { groups: "board" },
+      { people: [""] },
+    ]) {
+      expect(typeof parseBinderRulesRequest({ approvers })).toBe("string");
+    }
+  });
 });

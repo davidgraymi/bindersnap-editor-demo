@@ -230,6 +230,7 @@ test("a member creates the binder, and it belongs to the organization", async ()
     required_approvals: number;
     enable_approvals_whitelist: boolean;
     approvals_whitelist_teams: string[];
+    approvals_whitelist_username: string[];
     block_on_official_review_requests: boolean;
     block_on_codeowner_reviews?: boolean;
   }>(token, `/repos/${org.name}/clinical-policies/branch_protections/main`);
@@ -244,15 +245,12 @@ test("a member creates the binder, and it belongs to the organization", async ()
   // resolves "official reviewer" as "has write access", which would make every
   // reviewer's approval count for nothing.
   expect(protection.enable_approvals_whitelist).toBe(true);
-  // `staff`, because the binder is open to the organization — and `Owners`,
-  // which is never granted onto a repository at all. Gitea gives it admin over
-  // the whole organization implicitly, so a whitelist derived from the granted
-  // teams alone would omit it and an owner's approval would silently stop
-  // counting.
-  expect(protection.approvals_whitelist_teams.sort()).toEqual([
-    "Owners",
-    "staff",
-  ]);
+  // Nobody, as with Gitea's own whitelist: a new binder names no approvers.
+  // It needs no approvals either, so it publishes until its admin raises the
+  // count and names who approves. Granting `staff` lets everyone read; it
+  // makes nobody an approver.
+  expect(protection.approvals_whitelist_teams).toEqual([]);
+  expect(protection.approvals_whitelist_username).toEqual([]);
   // **The per-folder gate is on, and the review-request gate is off.**
   // `block_on_codeowner_reviews` (Gitea 28.0.0) is what enforces a sign-off
   // rule and lets it name a team. `block_on_official_review_requests` (1.27)
@@ -839,6 +837,29 @@ async function addApprover(
     { method: "PUT", headers: { Authorization: `token ${ownerToken}` } },
   );
   expect([200, 204]).toContain(added.status);
+
+  // Reading is not approving: a new binder names no approvers, so this person
+  // is named one, by login, on the binder's own approvals whitelist.
+  const protection = await giteaGet<{
+    approvals_whitelist_username?: string[];
+  }>(ownerToken, `/repos/${org}/${workspace}/branch_protections/main`);
+  const named = await fetch(
+    `${GITEA_URL}/api/v1/repos/${org}/${workspace}/branch_protections/main`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `token ${ownerToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        approvals_whitelist_username: [
+          ...(protection.approvals_whitelist_username ?? []),
+          credentials.username,
+        ],
+      }),
+    },
+  );
+  expect(named.status, await named.text()).toBe(200);
 
   return {
     credentials,
@@ -1934,11 +1955,10 @@ test("an owner's approval counts, although Owners is never granted", async () =>
   ).toEqual([`${uidOf(documentPath)}/v1`]);
 });
 
-test("a member of staff can approve, and the approval counts", async () => {
-  // ADR 0004 promises reviewers are free forever, and `staff` is how the whole
-  // organization holds that permission once instead of once per binder. It is
-  // only true if `staff` is whitelisted — read on `repo.code` and `repo.pulls`
-  // is what approving costs, and the whitelist is what makes it count.
+test("a member of staff's approval counts once staff are approvers, and not before", async () => {
+  // Reading a binder is not signing it off. Everyone at the organization can
+  // read an open binder, and their approval counts only if an admin names
+  // `staff` an approver — then it is real, and free, as ADR 0004 promises.
   const author = buildCredentials();
   const authorCookie = await signUp(author);
   const org = await createOrganization(authorCookie, `Binder ${randomUUID()}`);
@@ -1948,6 +1968,89 @@ test("a member of staff can approve, and the approval counts", async () => {
 
   const ownerToken = await createUserToken(author.username, author.password);
 
+  const staffMember = buildCredentials();
+  const staffCookie = await signUp(staffMember);
+  const teams = await giteaGet<Array<{ id: number; name: string }>>(
+    ownerToken,
+    `/orgs/${org.name}/teams`,
+  );
+  const staff = teams.find((team) => team.name === "staff");
+  expect(staff, JSON.stringify(teams)).toBeTruthy();
+  const joined = await fetch(
+    `${GITEA_URL}/api/v1/teams/${staff!.id}/members/${staffMember.username}`,
+    { method: "PUT", headers: { Authorization: `token ${ownerToken}` } },
+  );
+  expect([200, 204]).toContain(joined.status);
+
+  expect(
+    (
+      await setRules(authorCookie, org.name, "clinical", {
+        requiredApprovals: 1,
+      })
+    ).status,
+  ).toBe(200);
+
+  const addedDoc = await addDocument(authorCookie, org.name, "clinical", {
+    name: "Infection Control",
+  });
+  const { pullRequestNumber } = JSON.parse(addedDoc.body) as {
+    pullRequestNumber: number;
+  };
+  const staffToken = await createUserToken(
+    staffMember.username,
+    staffMember.password,
+  );
+
+  // Straight to Gitea, which records it — and does not count it.
+  await approveChange(staffToken, org.name, "clinical", pullRequestNumber);
+  expect(
+    (await publishChange(authorCookie, org.name, "clinical", pullRequestNumber))
+      .status,
+  ).not.toBe(200);
+
+  // Through Bindersnap, it is refused before it is recorded.
+  const refused = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org.name}/clinical/changes/${pullRequestNumber}/reviews`,
+    {
+      method: "POST",
+      headers: authHeaders(staffCookie),
+      body: JSON.stringify({ event: "APPROVE" }),
+    },
+  );
+  expect(refused.status).toBe(403);
+  expect(await refused.json()).toEqual({
+    error: "Only this binder's approvers can approve.",
+  });
+
+  // Named an approver, the same person's approval counts.
+  expect(
+    (
+      await setRules(authorCookie, org.name, "clinical", {
+        approvers: { groups: ["staff"] },
+      })
+    ).status,
+  ).toBe(200);
+  await approveChange(staffToken, org.name, "clinical", pullRequestNumber);
+  expect(
+    (await publishChange(authorCookie, org.name, "clinical", pullRequestNumber))
+      .status,
+  ).toBe(200);
+});
+
+test("a binder that needs 2 approvals from the Board counts only the Board", async () => {
+  // The rule a governing body actually sets: a policy takes effect only once
+  // enough of *its* members have signed off. Gitea enforces it at the merge
+  // through the approvals whitelist — the count is `required_approvals`, and
+  // whose approvals count toward it is the list the administrator chose.
+  const author = buildCredentials();
+  const authorCookie = await signUp(author);
+  const org = await createOrganization(authorCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(authorCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+  const ownerToken = await createUserToken(author.username, author.password);
+
+  // Somebody on staff, whose approval counts on a binder that has not chosen.
   const staffMember = buildCredentials();
   await signUp(staffMember);
   const teams = await giteaGet<Array<{ id: number; name: string }>>(
@@ -1962,25 +2065,237 @@ test("a member of staff can approve, and the approval counts", async () => {
   );
   expect([200, 204]).toContain(joined.status);
 
-  const addedDoc = await addDocument(authorCookie, org.name, "clinical", {
-    name: "Infection Control",
+  expect(
+    (await createGroup(authorCookie, org.name, "Board", "reviewer")).status,
+  ).toBe(201);
+  const board = [buildCredentials(), buildCredentials()];
+  for (const member of board) {
+    await signUp(member);
+    const added = await addToGroup(
+      authorCookie,
+      org.name,
+      "board",
+      member.username,
+    );
+    expect(added.status, added.body).toBe(200);
+  }
+  const granted = await grantGroup(authorCookie, org.name, "clinical", "board");
+  expect(granted.status, granted.body).toBe(200);
+
+  // Naming a group with no access gives it access: Gitea counts nobody who
+  // cannot read the binder, so an approver group has to be able to.
+  expect(
+    (await createGroup(authorCookie, org.name, "Finance", "reviewer")).status,
+  ).toBe(201);
+  const finance = await setRules(authorCookie, org.name, "clinical", {
+    approvers: { groups: ["finance"] },
   });
-  const { pullRequestNumber } = JSON.parse(addedDoc.body) as {
+  expect(finance.status, finance.body).toBe(200);
+  expect(
+    (await readBinderPeople(authorCookie, org.name, "clinical")).groups.map(
+      (group) => group.name,
+    ),
+  ).toContain("finance");
+  // A group that does not exist is refused.
+  expect(
+    (
+      await setRules(authorCookie, org.name, "clinical", {
+        approvers: { groups: ["no-such-group"] },
+      })
+    ).status,
+  ).toBe(400);
+
+  const set = await setRules(authorCookie, org.name, "clinical", {
+    requiredApprovals: 2,
+    approvers: { groups: ["board"] },
+  });
+  expect(set.status, set.body).toBe(200);
+  expect(JSON.parse(set.body)).toMatchObject({
+    requiredApprovals: 2,
+    approvers: { groups: ["board"], people: [] },
+  });
+  expect(
+    await readApprovalsWhitelist(ownerToken, org.name, "clinical"),
+  ).toEqual(["board"]);
+
+  // Granting another group, so that it can review, must not make its
+  // approvals count toward the Board's two.
+  expect(
+    (await createGroup(authorCookie, org.name, "Nursing Leads", "reviewer"))
+      .status,
+  ).toBe(201);
+  const widened = await grantGroup(
+    authorCookie,
+    org.name,
+    "clinical",
+    "nursing-leads",
+  );
+  expect(widened.status, widened.body).toBe(200);
+  expect(
+    (JSON.parse(widened.body) as { approvalsWhitelist: string[] })
+      .approvalsWhitelist,
+  ).toEqual(["board"]);
+
+  const addedDoc = await addDocument(authorCookie, org.name, "clinical", {
+    name: "Governance",
+  });
+  const { pullRequestNumber, documentPath } = JSON.parse(addedDoc.body) as {
     pullRequestNumber: number;
+    documentPath: string;
   };
 
+  // Two approvals, one of them from the Board: not enough.
   await approveChange(
     await createUserToken(staffMember.username, staffMember.password),
     org.name,
     "clinical",
     pullRequestNumber,
   );
+  await approveChange(
+    await createUserToken(board[0]!.username, board[0]!.password),
+    org.name,
+    "clinical",
+    pullRequestNumber,
+  );
+  const refused = await publishChange(
+    authorCookie,
+    org.name,
+    "clinical",
+    pullRequestNumber,
+  );
+  expect(refused.status, refused.body).not.toBe(200);
 
+  // The change's approval panel says the same thing Gitea does: one of two,
+  // from the Board member. The staff approval counted for nothing, so it is
+  // not there.
+  const detail = await getChange(
+    authorCookie,
+    org.name,
+    "clinical",
+    pullRequestNumber,
+  );
+  expect(detail.status, detail.body).toBe(200);
+  const [rule] = (
+    JSON.parse(detail.body) as {
+      approvalRules: Array<{
+        kind: string;
+        required: number;
+        eligible: Array<{ login: string }>;
+        approvedBy: Array<{ login: string }>;
+      }>;
+    }
+  ).approvalRules;
+  expect(rule).toMatchObject({ kind: "approvers", required: 2 });
+  expect(rule!.approvedBy.map((user) => user.login)).toEqual([
+    board[0]!.username,
+  ]);
+  expect(rule!.eligible.map((user) => user.login).sort()).toEqual(
+    board.map((member) => member.username).sort(),
+  );
+
+  // The second Board member's approval is what publishes it.
+  await approveChange(
+    await createUserToken(board[1]!.username, board[1]!.password),
+    org.name,
+    "clinical",
+    pullRequestNumber,
+  );
+  const published = await publishChange(
+    authorCookie,
+    org.name,
+    "clinical",
+    pullRequestNumber,
+  );
+  expect(published.status, published.body).toBe(200);
+
+  // And the version says whose approvals counted, because the rule can change
+  // tomorrow and "2 approvals" alone does not say from whom.
+  const tag = await giteaGet<{ message?: string }>(
+    ownerToken,
+    `/repos/${org.name}/clinical/tags/${encodeURIComponent(
+      `${uidOf(documentPath)}/v1`,
+    )}`,
+  );
+  expect(tag.message).toContain("Approvals required: 2");
+  expect(tag.message).toContain("Approvals counted from: groups board");
+
+  // Nobody, which Gitea allows: nothing more can be published here until an
+  // admin names approvers again.
+  const cleared = await setRules(authorCookie, org.name, "clinical", {
+    approvers: { groups: [], people: [] },
+  });
+  expect(cleared.status, cleared.body).toBe(200);
   expect(
-    (await publishChange(authorCookie, org.name, "clinical", pullRequestNumber))
-      .status,
-  ).toBe(200);
+    await readApprovalsWhitelist(ownerToken, org.name, "clinical"),
+  ).toEqual([]);
 });
+
+test("a new binder takes its approvers at creation", async () => {
+  // The picker on the new-binder form. Naming a group grants it read, so the
+  // Board can approve in a binder it has only just been given.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createGroup(sessionCookie, org.name, "Board", "reviewer")).status,
+  ).toBe(201);
+
+  const refused = await fetch(
+    `${API_BASE_URL}/api/app/orgs/${org.name}/binders`,
+    {
+      method: "POST",
+      headers: authHeaders(sessionCookie),
+      body: JSON.stringify({
+        name: "Governance",
+        approvers: { groups: ["no-such-group"] },
+      }),
+    },
+  );
+  expect(refused.status).toBe(400);
+
+  const created = await fetch(
+    `${API_BASE_URL}/api/app/orgs/${org.name}/binders`,
+    {
+      method: "POST",
+      headers: authHeaders(sessionCookie),
+      body: JSON.stringify({
+        name: "Governance",
+        approvers: { groups: ["board"], people: [credentials.username] },
+      }),
+    },
+  );
+  expect(created.status, await created.clone().text()).toBe(201);
+
+  const ownerToken = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+  expect(
+    await readApprovalsWhitelist(ownerToken, org.name, "governance"),
+  ).toEqual(["board"]);
+  expect(
+    (await readBinderPeople(sessionCookie, org.name, "governance")).groups.map(
+      (group) => group.name,
+    ),
+  ).toContain("board");
+});
+
+async function setRules(
+  sessionCookie: string,
+  org: string,
+  workspace: string,
+  rules: Record<string, unknown>,
+): Promise<{ status: number; body: string }> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${workspace}/rules`,
+    {
+      method: "PATCH",
+      headers: authHeaders(sessionCookie),
+      body: JSON.stringify(rules),
+    },
+  );
+  return { status: response.status, body: await response.text() };
+}
 
 test("the organization says who is in it, and which groups they are in", async () => {
   const credentials = buildCredentials();
@@ -2142,11 +2457,10 @@ test("a group is named and levelled at once, and reaches no binder until it is a
   expect(again.status, again.body).toBe(409);
 });
 
-test("a member of a granted group can approve, and the approval counts", async () => {
+test("a member of an approver group can approve, and the approval counts", async () => {
   // The proof for groups, and it is one claim with two halves: the grant gives
-  // the access, and the whitelist recompute is what makes the approval mean
-  // anything. Without the second, the approval is recorded, displayed, and
-  // satisfies nothing — with no error message anywhere.
+  // the access, and naming the group an approver is what makes the approval
+  // mean anything. Without the second, the approval satisfies nothing.
   const author = buildCredentials();
   const authorCookie = await signUp(author);
   const org = await createOrganization(authorCookie, `Binder ${randomUUID()}`);
@@ -2194,17 +2508,19 @@ test("a member of a granted group can approve, and the approval counts", async (
   expect(grantedPayload.teams.map((team) => team.name)).toContain(
     "quality-committee",
   );
-  // Recomputed in the same call, and containing `Owners` — which Gitea never
-  // grants onto a repository, so a list derived from the granted teams alone
-  // would omit it and stop counting an owner's approval.
-  expect(grantedPayload.approvalsWhitelist.slice().sort()).toEqual([
-    "Owners",
-    "quality-committee",
-    "staff",
-  ]);
+  // Granting gives access and nothing else: the committee can read and
+  // review, and its approvals count only once an admin names it an approver.
+  expect(grantedPayload.approvalsWhitelist).toEqual([]);
+  expect(
+    (
+      await setRules(authorCookie, org.name, "clinical", {
+        approvers: { groups: ["quality-committee"] },
+      })
+    ).status,
+  ).toBe(200);
   expect(
     await readApprovalsWhitelist(ownerToken, org.name, "clinical"),
-  ).toEqual(["Owners", "quality-committee", "staff"]);
+  ).toEqual(["quality-committee"]);
 
   const addedDoc = await addDocument(authorCookie, org.name, "clinical", {
     name: "Infection Control",
@@ -2226,7 +2542,7 @@ test("a member of a granted group can approve, and the approval counts", async (
   ).toBe(200);
 });
 
-test("revoking a group narrows the approvals whitelist in the same call", async () => {
+test("revoking an approver group takes it off the approvers in the same call", async () => {
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
   const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
@@ -2248,8 +2564,15 @@ test("revoking a group narrows the approvals whitelist in the same call", async 
       .status,
   ).toBe(200);
   expect(
+    (
+      await setRules(sessionCookie, org.name, "clinical", {
+        approvers: { groups: ["nursing-leads", "Owners"] },
+      })
+    ).status,
+  ).toBe(200);
+  expect(
     await readApprovalsWhitelist(ownerToken, org.name, "clinical"),
-  ).toEqual(["Owners", "nursing-leads", "staff"]);
+  ).toEqual(["Owners", "nursing-leads"]);
 
   const revoked = await revokeGroup(
     sessionCookie,
@@ -2263,16 +2586,12 @@ test("revoking a group narrows the approvals whitelist in the same call", async 
     approvalsWhitelist: string[];
   };
   expect(payload.teams.map((team) => team.name)).not.toContain("nursing-leads");
-  // Narrowed by the same code path that widened it — a whitelist that only ever
-  // grew would leave a revoked group's approvals counting after the access that
-  // justified them was taken away.
-  expect(payload.approvalsWhitelist.slice().sort()).toEqual([
-    "Owners",
-    "staff",
-  ]);
+  // A group that cannot read the binder approves nothing, so it does not stay
+  // on the list as a name that means nothing.
+  expect(payload.approvalsWhitelist).toEqual(["Owners"]);
   expect(
     await readApprovalsWhitelist(ownerToken, org.name, "clinical"),
-  ).toEqual(["Owners", "staff"]);
+  ).toEqual(["Owners"]);
 });
 
 test("a group says which binders it reaches, from the group's own row", async () => {
@@ -2558,11 +2877,10 @@ test("a person added to a binder gets its role team, made on first use", async (
     seat: false,
   });
 
-  // The grant is only half of it: without the whitelist the approval would be
-  // recorded, displayed, and satisfy nothing.
+  // Access, not approval: adding somebody makes nobody an approver.
   expect(
     await readApprovalsWhitelist(ownerToken, org.name, "clinical"),
-  ).toEqual(["Owners", "clinical-reviewers", "staff"]);
+  ).toEqual([]);
 });
 
 test("a reviewer promoted to editor can push, and demoted cannot", async () => {
@@ -2838,6 +3156,13 @@ test("a binder can be closed to the organization and opened again", async () => 
     (await readBinderPeople(sessionCookie, org.name, "clinical"))
       .openToOrganization,
   ).toBe(true);
+  expect(
+    (
+      await setRules(sessionCookie, org.name, "clinical", {
+        approvers: { groups: ["staff", "Owners"] },
+      })
+    ).status,
+  ).toBe(200);
 
   const closed = await setVisibility(
     sessionCookie,
@@ -2851,8 +3176,8 @@ test("a binder can be closed to the organization and opened again", async () => 
       .openToOrganization,
   ).toBe(false);
 
-  // The whitelist narrows with it. Left behind, `staff` would be a team whose
-  // members' approvals still counted on a binder they can no longer read.
+  // `staff` comes off the approvers with its access. Left behind, it would be
+  // a group named as approving a binder its members can no longer read.
   expect(
     await readApprovalsWhitelist(ownerToken, org.name, "clinical"),
   ).toEqual(["Owners"]);
@@ -2868,9 +3193,10 @@ test("a binder can be closed to the organization and opened again", async () => 
     (JSON.parse(reopened.body) as { openToOrganization: boolean })
       .openToOrganization,
   ).toBe(true);
+  // Reopening gives access back and makes nobody an approver again.
   expect(
     await readApprovalsWhitelist(ownerToken, org.name, "clinical"),
-  ).toEqual(["Owners", "staff"]);
+  ).toEqual(["Owners"]);
 });
 
 test("a restricted binder is not readable by a member who was not added", async () => {
@@ -2910,7 +3236,7 @@ test("a restricted binder is not readable by a member who was not added", async 
   );
   expect(
     await readApprovalsWhitelist(ownerToken, org.name, "investigations"),
-  ).toEqual(["Owners"]);
+  ).toEqual([]);
 
   // A member of the organization who was not added cannot see it. They are in
   // `staff` — every member is — and `staff` is not granted here.

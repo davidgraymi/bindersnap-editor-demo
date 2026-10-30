@@ -124,7 +124,12 @@ async function provision(): Promise<{
     {
       method: "POST",
       headers: authHeaders(session),
-      body: JSON.stringify({ name: "Clinical Policies" }),
+      body: JSON.stringify({
+        name: "Clinical Policies",
+        // Everyone in the organization approves here; a new binder names
+        // no approvers, as Gitea's own default.
+        approvers: { groups: ["staff", "Owners"] },
+      }),
     },
   );
   const binderBody = await binderResponse.text();

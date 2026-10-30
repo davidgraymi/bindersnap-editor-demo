@@ -913,7 +913,12 @@ async function startNamedDraft(
     {
       method: "POST",
       headers: authHeaders(session),
-      body: JSON.stringify({ name }),
+      // Everyone in the organization approves here, so whoever this test asks
+      // to approve can. A new binder names no approvers, as Gitea's own default.
+      body: JSON.stringify({
+        name,
+        approvers: { groups: ["staff", "Owners"] },
+      }),
     },
   );
   expect(response.status, await response.clone().text()).toBe(201);

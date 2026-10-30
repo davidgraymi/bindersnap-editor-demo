@@ -62,7 +62,7 @@ function bodyOf(call: unknown): Record<string, unknown> {
   return (call as [string, { body: Record<string, unknown> }])[1].body;
 }
 
-test("protectWorkspaceMain whitelists the role teams so a free reviewer's approval counts", async () => {
+test("protectWorkspaceMain turns the whitelist on, with nobody on it by default", async () => {
   const { client, mockPost } = createMockClient({
     GET: { "/repos/{owner}/{repo}/branch_protections/{name}": () => NOT_FOUND },
     POST: {
@@ -81,15 +81,12 @@ test("protectWorkspaceMain whitelists the role teams so a free reviewer's approv
 
   const body = bodyOf(mockPost.mock.calls[0]);
 
-  // Without these two lines Gitea resolves "official reviewer" as "has write
-  // access on repo.code", a free reviewer's approval satisfies nothing, and the
-  // whole free-reviewer tier is decorative. See ADR 0004.
+  // On, or Gitea resolves "official reviewer" as "has write access on
+  // repo.code" and a free reviewer named as an approver counts for nothing.
+  // Empty, as Gitea's own default is: nobody approves until somebody is named.
   expect(body.enable_approvals_whitelist).toBe(true);
-  expect(body.approvals_whitelist_teams).toEqual([
-    "clinical-policies-admins",
-    "clinical-policies-authors",
-    "clinical-policies-reviewers",
-  ]);
+  expect(body.approvals_whitelist_teams).toEqual([]);
+  expect(body.approvals_whitelist_username).toEqual([]);
 
   // The product's core claim: nothing reaches main except a merged, approved
   // change.
@@ -237,70 +234,10 @@ test("provisionWorkspace makes no role teams, and opens the binder to staff", as
   expect(order.at(-1)).toBe("protect");
   expect(order.indexOf("grant")).toBeGreaterThan(order.indexOf("team:staff"));
 
-  // And `Owners` is on the list although it is never granted — Gitea gives it
-  // admin over the whole organization implicitly, so a whitelist that omits it
-  // silently stops counting an owner's approval.
+  // Nobody approves until somebody is named, as with Gitea's own whitelist.
+  // Granting `staff` lets everyone read; it makes nobody an approver.
   expect(whitelist).toEqual([]);
-  expect(protectedWith).toEqual(["staff", "Owners"]);
-});
-
-test("the approvals whitelist always names Owners, granted or not", async () => {
-  // The sharpest failure in this design, and a silent one. `Owners` is never
-  // granted onto a repository — Gitea gives it admin over the whole
-  // organization implicitly — so a whitelist derived from the granted teams
-  // alone omits it, and an owner's approval is recorded, displayed, and counts
-  // nothing. It presents as "publishing is mysteriously blocked".
-  let whitelist: string[] = [];
-
-  const { client } = createMockClient({
-    GET: {
-      "/repos/{owner}/{repo}/teams": () => [
-        { id: 10, name: "staff", permission: "read" },
-        { id: 11, name: "quality-committee", permission: "read" },
-      ],
-    },
-    PATCH: {
-      "/repos/{owner}/{repo}/branch_protections/{name}": (init: {
-        body: { approvals_whitelist_teams?: string[] };
-      }) => {
-        whitelist = init.body.approvals_whitelist_teams ?? [];
-        return {};
-      },
-    },
-  });
-
-  const { recomputeApprovalsWhitelist } = await import("./workspaces");
-  const names = await recomputeApprovalsWhitelist({
-    client,
-    org: "mercy-health",
-    workspace: "clinical-policies",
-  });
-
-  expect(names).toEqual(["staff", "quality-committee", "Owners"]);
-  expect(whitelist).toEqual(["staff", "quality-committee", "Owners"]);
-});
-
-test("a team already named Owners is not whitelisted twice", async () => {
-  const { client } = createMockClient({
-    GET: {
-      "/repos/{owner}/{repo}/teams": () => [
-        { id: 1, name: "Owners", permission: "owner" },
-        { id: 10, name: "staff", permission: "read" },
-      ],
-    },
-    PATCH: {
-      "/repos/{owner}/{repo}/branch_protections/{name}": () => ({}),
-    },
-  });
-
-  const { recomputeApprovalsWhitelist } = await import("./workspaces");
-  expect(
-    await recomputeApprovalsWhitelist({
-      client,
-      org: "mercy-health",
-      workspace: "clinical-policies",
-    }),
-  ).toEqual(["Owners", "staff"]);
+  expect(protectedWith).toEqual([]);
 });
 
 test("provisionWorkspace reuses a repository that already exists", async () => {
