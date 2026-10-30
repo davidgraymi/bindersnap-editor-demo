@@ -39,7 +39,7 @@ export const HELP_GUIDES: HelpGuide[] = [
           "Name your organization. You did this when you signed up, or you can do it from the + menu.",
           "Make a binder. Call it what your team already calls it — “Policy manual” works.",
           "Bring in your documents. Drop a whole folder on the binder: its subfolders become the binder's folders.",
-          "Decide who approves. A new binder needs no approvals, so you can publish on your own while you move in. When a colleague should sign things off, add them and set the approvals the binder needs in its settings.",
+          "Decide who approves. A new binder needs no approvals, so you can publish on your own while you move in. When colleagues should sign things off, choose them as the binder's approvers and set how many approvals it needs, in its settings.",
           "Publish. Open the change request and publish it. That version is now the record.",
         ],
       },
@@ -102,8 +102,17 @@ export const HELP_GUIDES: HelpGuide[] = [
         heading: "How many approvals",
         paragraphs: [
           "A new binder needs no approvals, so you can publish your own changes straight away while you move in.",
-          "When colleagues should sign off first, set how many approvals a change needs in Settings → How changes are approved. The binder's admin can change it at any time, and the change is recorded. Nobody can approve their own change, so a binder needing one approval needs one other person.",
+          "When colleagues should sign off first, set how many approvals a change needs, and who can give them, in Settings → How changes are approved. The binder's admin can change both at any time, and every change is recorded. Nobody can approve their own change, so a binder needing one approval needs one other approver.",
           "Whatever the number, a reviewer you ask holds the change until they answer, and one who asks for changes holds it until they are happy.",
+        ],
+      },
+      {
+        heading: "Whose approvals count",
+        paragraphs: [
+          "Only a binder's approvers can approve its changes. Choose them under Whose approvals count, beside the number, or when you create the binder: groups, people, or both. Ask for 3 approvals from your Board, and nothing is published until three board members approve. Everyone else with access can still review and comment.",
+          "A new binder has no approvers and needs no approvals, so you can publish while you move in. Choose approvers before you raise the number, or nothing can be published.",
+          "The number is shared across everyone you choose. 3 from the Board and the medical staff means any 3 of them together, not 3 from each. To make sure one group always signs off, add a sign-off rule for it as well.",
+          "Every published version records the rule it met: how many approvals it needed, whose counted, and who gave them.",
         ],
       },
       {

@@ -394,20 +394,49 @@ A change is a pull request and may touch several documents; each document it
 publishes gets its own tag on the shared merge commit. Retiring a document is
 `git rm` in an approved change — the history stays.
 
-Role teams, verified against Gitea 28.0.0 by
-`tests/gitea-permission-model.pw.ts`: `<ws>-admins` is `permission: admin`,
-`<ws>-authors` is write on `repo.code`/`repo.pulls`/`repo.issues`/`repo.releases`,
-`<ws>-reviewers` is **read** on `repo.code`/`repo.pulls`/`repo.issues`. Read on
-both units is all a reviewer needs to comment, approve and reject.
+Access is **groups granted onto a binder**: an organization team granted onto
+the repository at a level (admin, write, or read on `repo.code`/`repo.pulls`/
+`repo.issues`). `staff`, everyone in the organization, is granted read when a
+binder is open to the organization. Adding one person to one binder creates a
+per-binder team for that level on first use (`createWorkspaceRoleTeam`); there
+are no teams made up front. Read on both units is all an approver needs to
+comment, approve and reject, verified against Gitea 28.0.0 by
+`tests/gitea-permission-model.pw.ts`.
 
-**Every workspace's branch protection must set `enable_approvals_whitelist: true`
-with the three role teams in `approvals_whitelist_teams`.** Without it Gitea
-resolves "official reviewer" as "has write access on `repo.code`", so a free
-reviewer's approval is recorded and counts for nothing and their rejection blocks
-nothing. This one field is what makes free reviewers real. `.gitea/CODEOWNERS`
-patterns are anchored regexes, not gitignore globs — a folder rule is
-`policies/nursing/.*` — and the file is read from the base branch, so a
-CODEOWNERS change never governs its own change.
+**Every workspace's branch protection must set `enable_approvals_whitelist: true`.**
+Without it Gitea resolves "official reviewer" as "has write access on
+`repo.code`", so a free reviewer's approval is recorded and counts for nothing
+and their rejection blocks nothing. The whitelist is **the binder's approvers:
+whose approvals count toward `required_approvals`**.
+
+- **Access and approval are separate.** Granting a group lets it read (or
+  write); it never makes anyone an approver. The approvers are an explicit list
+  of groups and people a binder admin keeps, chosen at creation (the new-binder
+  form) or in settings, and **empty by default**, as Gitea's own whitelist is.
+  Gitea 28 counts nobody's approval with an empty list — no fallback to write
+  access — and a new binder needs 0 approvals, so it publishes until its admin
+  raises the count and names approvers.
+- Naming a group an approver grants it access, because Gitea counts nobody who
+  cannot read the binder; a person must have access already. A group that
+  loses access comes off the list (`dropApproverGroup`), which also clears the
+  stale entry Gitea keeps hidden.
+- **Only approvers approve.** The API refuses an approval or a request for
+  changes from anyone else ("Only this binder's approvers can approve."), and
+  the change page shows them no buttons. Anybody with access can comment.
+- The count is shared across the list, not per group. Gitea marks each review
+  `official` when it is submitted, and `countApprovals` counts only those, so
+  the app never shows "2 of 2" on a change Gitea will refuse.
+- A change carries `approvalRules` (`services/api/approval-rules.ts`): the
+  binder's approvers and each sign-off rule that applies, who can approve
+  (never the author) and who has. That is the panel at the top of a change.
+  Who was _asked_ to review is a separate thing: Gitea's review requests, the
+  Reviewers sidebar.
+- The list in force at a publish is stamped on the version's tag
+  ("Approvals counted from").
+
+`.gitea/CODEOWNERS` patterns are anchored regexes, not gitignore globs — a
+folder rule is `policies/nursing/.*` — and the file is read from the base
+branch, so a CODEOWNERS change never governs its own change.
 
 **A sign-off rule blocks through `block_on_codeowner_reviews`** (Gitea 28.0.0):
 for every CODEOWNERS rule matching a changed file, one of that rule's owners
