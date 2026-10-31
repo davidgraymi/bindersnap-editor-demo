@@ -901,17 +901,20 @@ export async function createBinder(
   description?: string,
   /** Whether the whole organization can read it. Asked on the form. */
   openToOrganization = true,
-  /** Whose approvals count. Empty, as Gitea's own default is. */
+  /** Who approves changes. Empty, as Gitea's own default is. */
   approvers: { groups: string[]; people: string[] } = {
     groups: [],
     people: [],
   },
+  /** Who to give access to as it is made: the form's Access section. */
+  access: { groups: string[]; people: string[] } = { groups: [], people: [] },
 ): Promise<WorkspaceSummary> {
   const response = await BindersClient.createBinder(org, {
     name,
     description,
     openToOrganization,
     approvers,
+    access,
   });
   return response.data.workspace;
 }

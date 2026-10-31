@@ -75,10 +75,8 @@ describe("a rule's row", () => {
     ).toBe("Board and Dr. Bola Okafor");
   });
 
-  test("calls staff everyone", () => {
-    expect(describeRuleOwners(rule({ groups: ["staff"] }))).toBe(
-      "everyone at the organization",
-    );
+  test("calls staff Everyone", () => {
+    expect(describeRuleOwners(rule({ groups: ["staff"] }))).toBe("Everyone");
   });
 
   test("names what a sign-off rule covers", () => {
