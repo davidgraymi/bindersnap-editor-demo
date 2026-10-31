@@ -164,7 +164,7 @@ test("provisionWorkspace makes no role teams, and opens the binder to staff", as
       "/repos/{owner}/{repo}": () => NOT_FOUND,
       "/orgs/{org}/teams": () => [],
       "/repos/{owner}/{repo}/teams": () => [
-        { id: 10, name: "staff", permission: "read" },
+        { id: 10, name: "everyone", permission: "read" },
       ],
       "/repos/{owner}/{repo}/branch_protections/{name}": () => NOT_FOUND,
       "/repos/{owner}/{repo}/contents/{filepath}": () => NOT_FOUND,
@@ -222,12 +222,12 @@ test("provisionWorkspace makes no role teams, and opens the binder to staff", as
   // three teams per binder inverts the model: two of them stay empty forever,
   // and a group that reviews three binders becomes three membership lists a
   // human keeps in step by hand. The only team made here is the org's own.
-  expect(createdTeams).toEqual(["staff"]);
+  expect(createdTeams).toEqual(["everyone"]);
   expect(mockPut.mock.calls).toHaveLength(1);
 
   // A new binder is open to the organization, which is the decided default:
   // the common case is a manual everybody must read in order to attest to it.
-  expect(result.staff.name).toBe("staff");
+  expect(result.staff.name).toBe("everyone");
 
   expect(order[0]).toBe("repo");
   // Protection last: the team has to exist before it can be whitelisted.
@@ -250,10 +250,10 @@ test("provisionWorkspace reuses a repository that already exists", async () => {
         owner: { login: "mercy-health" },
       }),
       "/orgs/{org}/teams": () => [
-        { id: 10, name: "staff", permission: "read" },
+        { id: 10, name: "everyone", permission: "read" },
       ],
       "/repos/{owner}/{repo}/teams": () => [
-        { id: 10, name: "staff", permission: "read" },
+        { id: 10, name: "everyone", permission: "read" },
       ],
       "/repos/{owner}/{repo}/branch_protections/{name}": () => ({
         rule_name: "main",

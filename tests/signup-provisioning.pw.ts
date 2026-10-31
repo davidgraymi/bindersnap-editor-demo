@@ -184,7 +184,7 @@ test("creating an organization creates the organization, and no binder", async (
     token,
     `/orgs/${org}/teams`,
   );
-  expect(teams.map((team) => team.name).sort()).toEqual(["Owners", "staff"]);
+  expect(teams.map((team) => team.name).sort()).toEqual(["Owners", "everyone"]);
 });
 
 test("a second organization of the same name gets its own", async () => {
