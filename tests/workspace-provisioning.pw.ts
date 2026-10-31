@@ -2082,8 +2082,9 @@ test("a binder that needs 2 approvals from the Board counts only the Board", asy
   const granted = await grantGroup(authorCookie, org.name, "clinical", "board");
   expect(granted.status, granted.body).toBe(200);
 
-  // Naming a group with no access gives it access: Gitea counts nobody who
-  // cannot read the binder, so an approver group has to be able to.
+  // Never refused, as Gitea never refuses — but Gitea keeps an approver only
+  // once they can read the binder. The response is what it kept, which is how
+  // the page knows to offer Finance access.
   expect(
     (await createGroup(authorCookie, org.name, "Finance", "reviewer")).status,
   ).toBe(201);
@@ -2091,19 +2092,14 @@ test("a binder that needs 2 approvals from the Board counts only the Board", asy
     approvers: { groups: ["finance"] },
   });
   expect(finance.status, finance.body).toBe(200);
+  expect(JSON.parse(finance.body).approvers.groups).toEqual([]);
   expect(
-    (await readBinderPeople(authorCookie, org.name, "clinical")).groups.map(
-      (group) => group.name,
-    ),
-  ).toContain("finance");
-  // A group that does not exist is refused.
-  expect(
-    (
-      await setRules(authorCookie, org.name, "clinical", {
-        approvers: { groups: ["no-such-group"] },
-      })
-    ).status,
-  ).toBe(400);
+    (await grantGroup(authorCookie, org.name, "clinical", "finance")).status,
+  ).toBe(200);
+  const kept = await setRules(authorCookie, org.name, "clinical", {
+    approvers: { groups: ["finance"] },
+  });
+  expect(JSON.parse(kept.body).approvers.groups).toEqual(["finance"]);
 
   const set = await setRules(authorCookie, org.name, "clinical", {
     requiredApprovals: 2,
@@ -2231,27 +2227,14 @@ test("a binder that needs 2 approvals from the Board counts only the Board", asy
 });
 
 test("a new binder takes its approvers at creation", async () => {
-  // The picker on the new-binder form. Naming a group grants it read, so the
-  // Board can approve in a binder it has only just been given.
+  // The new-binder form: approvers, and an Access section for the ones who
+  // cannot read the binder yet. Access goes first, so Gitea keeps them.
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
   const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
   expect(
     (await createGroup(sessionCookie, org.name, "Board", "reviewer")).status,
   ).toBe(201);
-
-  const refused = await fetch(
-    `${API_BASE_URL}/api/app/orgs/${org.name}/binders`,
-    {
-      method: "POST",
-      headers: authHeaders(sessionCookie),
-      body: JSON.stringify({
-        name: "Governance",
-        approvers: { groups: ["no-such-group"] },
-      }),
-    },
-  );
-  expect(refused.status).toBe(400);
 
   const created = await fetch(
     `${API_BASE_URL}/api/app/orgs/${org.name}/binders`,
@@ -2261,6 +2244,7 @@ test("a new binder takes its approvers at creation", async () => {
       body: JSON.stringify({
         name: "Governance",
         approvers: { groups: ["board"], people: [credentials.username] },
+        access: { groups: ["board"] },
       }),
     },
   );

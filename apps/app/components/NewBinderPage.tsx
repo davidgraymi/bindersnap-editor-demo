@@ -4,7 +4,7 @@ import { Building2, Lock } from "lucide-react";
 
 import { createBinder } from "../api";
 import { organizationPeopleQuery, queryKeys } from "../data/queries";
-import { approverOptions } from "../binderSettings";
+import { approverOptions, needsAccess } from "../binderSettings";
 import { ApproverPicker } from "./ApproverPicker";
 import { followInApp } from "../appLink";
 import type { WorkspaceSummary } from "../../../packages/api-schema/schemas/workspaces";
@@ -84,15 +84,31 @@ export function NewBinderPage({
     people: string[];
   }>({ groups: [], people: [] });
   const orgPeople = useQuery(organizationPeopleQuery(org)).data;
-  // People only if they will be able to read the binder: everyone when it is
-  // open, otherwise the owners. A group named here is given access.
-  const readers = (orgPeople?.people ?? []).filter(
-    (person) => openToOrganization || person.isOwner,
-  );
   const options = approverOptions(
-    [{ name: "staff", members: readers }],
     (orgPeople?.groups ?? []).map((group) => group.name),
+    orgPeople?.people ?? [],
   );
+  // Who will be able to read the new binder without being given access: the
+  // owners, and Everyone when it is open. Anybody else chosen is an Access row,
+  // given access as the binder is made unless it is removed from there.
+  const [skipped, setSkipped] = useState<string[]>([]);
+  const access = needsAccess(
+    approvers,
+    openToOrganization
+      ? [{ name: "staff", members: orgPeople?.people ?? [] }]
+      : [],
+    (orgPeople?.people ?? [])
+      .filter((person) => person.isOwner)
+      .map((person) => person.login),
+  );
+  const grants = {
+    groups: access.groups.filter(
+      (group) => !skipped.includes(`group:${group}`),
+    ),
+    people: access.people.filter(
+      (login) => !skipped.includes(`person:${login}`),
+    ),
+  };
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -130,12 +146,8 @@ export function NewBinderPage({
               name.trim(),
               description.trim() === "" ? undefined : description.trim(),
               openToOrganization,
-              {
-                groups: approvers.groups,
-                people: approvers.people.filter((login) =>
-                  readers.some((person) => person.login === login),
-                ),
-              },
+              approvers,
+              grants,
             );
             await queryClient.invalidateQueries({
               queryKey: queryKeys.organizationBinders(org),
@@ -270,11 +282,6 @@ export function NewBinderPage({
             Who approves changes
             <span className="bs-field-optional">optional</span>
           </legend>
-          <p className="bs-field-hint">
-            Only these people's approvals count. A new binder needs no
-            approvals, so you can leave this empty and choose later in its
-            settings. A group you choose can read the binder.
-          </p>
           <ApproverPicker
             id="new-binder-approvers"
             groups={approvers.groups}
@@ -282,6 +289,11 @@ export function NewBinderPage({
             options={options}
             disabled={submitting}
             onChange={setApprovers}
+            access={{
+              ...grants,
+              onSkip: (kind, value) =>
+                setSkipped([...skipped, `${kind}:${value}`]),
+            }}
           />
         </fieldset>
 

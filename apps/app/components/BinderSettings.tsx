@@ -50,6 +50,8 @@ import {
   describeApprovers,
   GROUP_LEVELS,
   groupLevelLabel,
+  droppedApproversNote,
+  needsAccess,
   noApproversNote,
   parseApprovalCount,
   unreachableApprovalsNote,
@@ -1631,73 +1633,127 @@ function ApprovalCountField({
 }
 
 /**
- * Whose approvals count toward the number needed.
+ * Who approves changes in this binder.
  *
  * A list the binder's admin keeps, as Gitea keeps its approvals whitelist:
- * nobody until somebody is named. Naming a group gives it access to the
- * binder; a person has to have access already.
+ * nobody until somebody is chosen, and anybody can be. Gitea keeps an approver
+ * only once they can read the binder, so anybody chosen who cannot yet appears
+ * under Access with a button that gives them access, there and then.
  *
  * Saved as one change rather than per pick: "the Board" then "and Dr. Okafor"
  * written one at a time would leave the binder, for a moment, counting the
  * Board alone.
  */
 function ApproversRow({
+  org,
+  binder,
   approvers,
   teams,
-  orgGroups,
   canManage,
   saving,
   onSave,
 }: {
+  org: string;
+  binder: string;
   approvers: ApproversView | null;
   teams: WorkspaceSettingsPayload["teams"];
-  orgGroups: readonly string[];
   canManage: boolean;
   saving: boolean;
   onSave: (approvers: {
     groups: string[];
     people: string[];
-  }) => Promise<boolean>;
+  }) => Promise<{ groups: string[]; people: string[] } | null | false>;
 }) {
+  const queryClient = useQueryClient();
+  const orgPeople = useQuery(organizationPeopleQuery(org)).data;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<{ groups: string[]; people: string[] }>({
     groups: [],
     people: [],
   });
+  const [granting, setGranting] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  const options = approverOptions(
+    (orgPeople?.groups ?? []).map((group) => group.name),
+    orgPeople?.people ?? [],
+  );
+  const owners = (orgPeople?.people ?? [])
+    .filter((person) => person.isOwner)
+    .map((person) => person.login);
+  const access = needsAccess(draft, teams, owners);
+  const nameOf = (value: string, kind: "group" | "person") =>
+    kind === "group"
+      ? describeGroupName(value)
+      : (options.people.find((person) => person.login === value)?.name ??
+        value);
+
+  async function grant(kind: "group" | "person", value: string) {
+    setGranting(`${kind}:${value}`);
+    setNote(null);
+    try {
+      if (kind === "group") {
+        await grantBinderGroup(org, binder, value);
+      } else {
+        await addBinderPerson(org, binder, value, "reviewer");
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.binderSettings(org, binder),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.binderPeople(org, binder),
+        }),
+      ]);
+    } catch (err: unknown) {
+      setNote(
+        errorMessage(err, `Unable to give ${nameOf(value, kind)} access.`),
+      );
+    } finally {
+      setGranting(null);
+    }
+  }
 
   return (
     <li className="bs-row">
       <span className="bs-row-body">
         <span className="bs-row-name" id="binder-approvers">
-          Whose approvals count
+          Who approves changes
         </span>
         <span className="bs-row-meta">
           {approvers === null
             ? "Could not be read"
-            : describeApprovers(approvers, teams, describeGroupName)}
+            : describeApprovers(approvers, options.people, describeGroupName)}
         </span>
         {editing ? (
           <>
-            <span className="bs-row-meta">
-              Only these people can approve. Everyone else with access can still
-              review and comment.
-            </span>
             <ApproverPicker
               id="binder-approver-search"
               groups={draft.groups}
               people={draft.people}
-              options={approverOptions(teams, orgGroups)}
+              options={options}
               disabled={saving}
               onChange={setDraft}
+              access={{ ...access, onGrant: grant, busy: granting }}
             />
+            {note ? (
+              <span className="bs-row-meta bs-row-meta--warning" role="status">
+                {note}
+              </span>
+            ) : null}
             <div className="bs-panel-foot">
               <button
                 type="button"
                 className="bs-btn bs-btn--sm bs-btn-primary"
-                disabled={saving}
+                disabled={saving || granting !== null}
                 onClick={() =>
-                  void onSave(draft).then((saved) => {
-                    if (saved) setEditing(false);
+                  void onSave(draft).then((kept) => {
+                    if (kept === false) return;
+                    const dropped = kept
+                      ? droppedApproversNote(draft, kept, nameOf)
+                      : null;
+                    setNote(dropped);
+                    if (!dropped) setEditing(false);
                   })
                 }
               >
@@ -1707,7 +1763,10 @@ function ApproversRow({
                 type="button"
                 className="bs-btn bs-btn--sm bs-btn--quiet"
                 disabled={saving}
-                onClick={() => setEditing(false)}
+                onClick={() => {
+                  setNote(null);
+                  setEditing(false);
+                }}
               >
                 Cancel
               </button>
@@ -1725,6 +1784,7 @@ function ApproversRow({
                 groups: [...approvers.groups],
                 people: [...approvers.people],
               });
+              setNote(null);
               setEditing(true);
             }}
           >
@@ -1775,7 +1835,7 @@ function ApprovalSection({
     requiredApprovals?: number;
     dismissStaleApprovals?: boolean;
     approvers?: { groups: string[]; people: string[] };
-  }): Promise<boolean> {
+  }): Promise<{ groups: string[]; people: string[] } | null | false> {
     setSaving(true);
     setNotice(null);
     try {
@@ -1792,7 +1852,7 @@ function ApprovalSection({
           approvers: updated.approvers ?? rules.approvers,
         },
       });
-      return true;
+      return updated.approvers ?? null;
     } catch (err: unknown) {
       setNotice(errorMessage(err, "Unable to change the rules."));
       return false;
@@ -1872,9 +1932,10 @@ function ApprovalSection({
             </span>
           </li>
           <ApproversRow
+            org={org}
+            binder={binder}
             approvers={rules.approvers}
             teams={settings.teams}
-            orgGroups={settings.signOff.groups}
             canManage={canManage}
             saving={saving}
             onSave={(approvers) => change({ approvers })}

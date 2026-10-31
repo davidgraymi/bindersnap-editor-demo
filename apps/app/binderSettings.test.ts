@@ -5,6 +5,8 @@ import {
   countApprovers,
   countChosenApprovers,
   describeApprovers,
+  droppedApproversNote,
+  needsAccess,
   noApproversNote,
   describeTeamAccess,
   searchApprovers,
@@ -66,7 +68,7 @@ describe("approval counts", () => {
   });
 });
 
-describe("whose approvals count", () => {
+describe("who approves changes", () => {
   const teams = [
     {
       name: "staff",
@@ -86,36 +88,69 @@ describe("whose approvals count", () => {
     },
   ];
   const title = (handle: string) =>
-    handle.charAt(0).toUpperCase() + handle.slice(1);
+    handle === "staff"
+      ? "Everyone"
+      : handle.charAt(0).toUpperCase() + handle.slice(1);
 
-  test("offers every group in the organization, Owners, and everyone last", () => {
-    // Naming a group gives it access, so it need not have any yet.
-    expect(approverOptions(teams, ["finance"]).groups).toEqual([
-      "board",
-      "finance",
-      "Owners",
-      "staff",
+  test("anybody in the organization can be chosen, Everyone last", () => {
+    const options = approverOptions(
+      ["finance", "board"],
+      [
+        { login: "nurse", fullName: "Nia Nurse" },
+        { login: "okafor", fullName: "" },
+      ],
+    );
+    expect(options.groups).toEqual(["board", "finance", "Owners", "staff"]);
+    expect(options.people).toEqual([
+      { login: "nurse", name: "Nia Nurse" },
+      { login: "okafor", name: "okafor" },
     ]);
   });
 
-  test("offers only people who can already read the binder, once each", () => {
-    expect(approverOptions(teams).people).toEqual([
-      { login: "chair", name: "Cam Chair" },
-      { login: "nurse", name: "Nia Nurse" },
-      { login: "treasurer", name: "treasurer" },
-    ]);
+  test("whoever cannot read the binder yet is an Access row", () => {
+    expect(
+      needsAccess(
+        {
+          groups: ["board", "finance", "Owners"],
+          people: ["chair", "okafor", "boss"],
+        },
+        teams,
+        ["boss"],
+      ),
+    ).toEqual({ groups: ["finance"], people: ["okafor"] });
+  });
+
+  test("whoever Gitea did not keep is said by name after Save", () => {
+    expect(
+      droppedApproversNote(
+        { groups: ["board", "finance"], people: [] },
+        { groups: ["board"], people: [] },
+        title,
+      ),
+    ).toBe("Finance isn't an approver yet: give them access first.");
+    expect(
+      droppedApproversNote(
+        { groups: ["board"], people: [] },
+        { groups: ["board"], people: [] },
+        title,
+      ),
+    ).toBeNull();
   });
 
   test("nobody reads as nobody yet", () => {
-    expect(describeApprovers({ groups: [], people: [] }, teams, title)).toBe(
+    expect(describeApprovers({ groups: [], people: [] }, [], title)).toBe(
       "Nobody yet",
     );
   });
 
-  test("a choice reads as names", () => {
+  test("a choice reads as names, Everyone included", () => {
     expect(
-      describeApprovers({ groups: ["board"], people: ["nurse"] }, teams, title),
-    ).toBe("Board and Nia Nurse");
+      describeApprovers(
+        { groups: ["staff"], people: ["nurse"] },
+        [{ login: "nurse", name: "Nia Nurse" }],
+        title,
+      ),
+    ).toBe("Everyone and Nia Nurse");
   });
 
   test("the warning counts only the people whose approvals count", () => {
@@ -134,21 +169,20 @@ describe("whose approvals count", () => {
 });
 
 describe("searching for approvers", () => {
-  const options = approverOptions([
-    {
-      name: "staff",
-      members: [
-        { login: "nurse", fullName: "Nia Nurse" },
-        { login: "okafor", fullName: "Dr. Bola Okafor" },
-      ],
-    },
-    { name: "board-of-directors", members: [] },
-  ]);
+  const options = approverOptions(
+    ["board-of-directors"],
+    [
+      { login: "nurse", fullName: "Nia Nurse" },
+      { login: "okafor", fullName: "Dr. Bola Okafor" },
+    ],
+  );
   const title = (handle: string) =>
-    handle
-      .split("-")
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(" ");
+    handle === "staff"
+      ? "Everyone"
+      : handle
+          .split("-")
+          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(" ");
   const none = { groups: [], people: [] };
 
   test("finds nothing until something is typed", () => {
@@ -180,7 +214,7 @@ describe("searching for approvers", () => {
 
   test("calls staff everyone, and finds it by that name", () => {
     expect(searchApprovers(options, "everyone", none, title)).toEqual([
-      { kind: "group", value: "staff", label: "Everyone at the organization" },
+      { kind: "group", value: "staff", label: "Everyone" },
     ]);
   });
 });

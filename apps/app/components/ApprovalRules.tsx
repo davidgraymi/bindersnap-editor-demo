@@ -51,14 +51,7 @@ export function describeRuleOwners(
         },
       ) || login,
   );
-  const names = [
-    ...rule.groups.map((group) =>
-      group === "staff"
-        ? "everyone at the organization"
-        : describeGroupName(group),
-    ),
-    ...people,
-  ];
+  const names = [...rule.groups.map(describeGroupName), ...people];
   return names.length === 0 ? "nobody" : listSentence(names);
 }
 

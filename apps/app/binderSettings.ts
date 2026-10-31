@@ -143,7 +143,7 @@ export function parseApprovalCount(text: string): number | null {
 
 /** The organization's built-in team, which is never granted onto a binder. */
 const OWNERS = "Owners";
-/** Everyone at the organization, granted onto an open binder. */
+/** Everyone in the organization: the `staff` team, read as "Everyone". */
 const STAFF = "staff";
 
 interface ApproverTeam {
@@ -158,49 +158,91 @@ export interface ApproversView {
 }
 
 /**
- * What a search for approvers can find.
- *
- * **Any group in the organization**, granted here or not: naming a group an
- * approver gives it access, because Gitea counts nobody who cannot read the
- * binder. Owners and everyone (`staff`) are always offered. **People only if
- * they can already read the binder** — giving one person access means making
- * a team for them, so that is done on the People section first.
+ * What a search for approvers can find: every group in the organization,
+ * Owners and Everyone included, and every person in it. Anybody can be picked;
+ * whether they can read the binder yet is the Access section's business.
  */
 export function approverOptions(
-  teams: readonly ApproverTeam[],
-  orgGroups: readonly string[] = [],
+  orgGroups: readonly string[],
+  orgPeople: readonly { login: string; fullName?: string }[],
 ): {
   groups: string[];
   people: { login: string; name: string }[];
 } {
-  const groups = [
-    ...new Set([
-      ...orgGroups,
-      ...teams.map((team) => team.name),
-      OWNERS,
-      STAFF,
-    ]),
-  ].sort((left, right) => {
-    if (left === STAFF) return 1;
-    if (right === STAFF) return -1;
-    return left.localeCompare(right);
-  });
-
+  const groups = [...new Set([...orgGroups, OWNERS, STAFF])].sort(
+    (left, right) => {
+      if (left === STAFF) return 1;
+      if (right === STAFF) return -1;
+      return left.localeCompare(right);
+    },
+  );
   const people = new Map<string, string>();
-  for (const team of teams) {
-    for (const member of team.members) {
-      if (!people.has(member.login)) {
-        people.set(member.login, member.fullName || member.login);
-      }
+  for (const person of orgPeople) {
+    if (!people.has(person.login)) {
+      people.set(person.login, person.fullName || person.login);
     }
   }
-
   return {
     groups,
     people: [...people.entries()]
       .map(([login, name]) => ({ login, name }))
       .sort((left, right) => left.name.localeCompare(right.name)),
   };
+}
+
+/**
+ * The chosen approvers who cannot read the binder yet.
+ *
+ * Gitea keeps an approver only once they can read the binder, so these are
+ * the rows of the Access section. `teams` is what is granted onto the binder;
+ * `owners` can read every binder already.
+ */
+export function needsAccess(
+  chosen: ApproversView,
+  teams: readonly ApproverTeam[],
+  owners: readonly string[],
+): { groups: string[]; people: string[] } {
+  const granted = new Set([...teams.map((team) => team.name), OWNERS]);
+  const readers = new Set(owners.map((login) => login.toLowerCase()));
+  for (const team of teams) {
+    for (const member of team.members) readers.add(member.login.toLowerCase());
+  }
+  return {
+    groups: chosen.groups.filter((group) => !granted.has(group)),
+    people: chosen.people.filter((login) => !readers.has(login.toLowerCase())),
+  };
+}
+
+/**
+ * Who was asked for and not kept: the approvers Gitea dropped because they
+ * cannot read the binder. Said after Save, by name.
+ */
+export function droppedApproversNote(
+  asked: ApproversView,
+  kept: ApproversView,
+  name: (value: string, kind: "group" | "person") => string,
+): string | null {
+  const dropped = [
+    ...asked.groups
+      .filter((group) => !kept.groups.includes(group))
+      .map((group) => name(group, "group")),
+    ...asked.people
+      .filter(
+        (login) =>
+          !kept.people.some(
+            (keptLogin) => keptLogin.toLowerCase() === login.toLowerCase(),
+          ),
+      )
+      .map((login) => name(login, "person")),
+  ];
+  if (dropped.length === 0) return null;
+  const list =
+    dropped.length === 1
+      ? dropped[0]!
+      : `${dropped.slice(0, -1).join(", ")} and ${dropped[dropped.length - 1]}`;
+  return dropped.length === 1
+    ? `${list} isn't an approver yet: give them access first.`
+    : `${list} aren't approvers yet: give them access first.`;
 }
 
 /**
@@ -226,24 +268,19 @@ export function countChosenApprovers(
 /** The approvers in a sentence: "Board and Dr. Okafor", or "Nobody yet". */
 export function describeApprovers(
   approvers: ApproversView,
-  teams: readonly ApproverTeam[],
+  people: readonly { login: string; name: string }[],
   groupName: (handle: string) => string,
 ): string {
-  const { people } = approverOptions(teams);
   const names = [
-    ...approvers.groups.map((group) =>
-      group === STAFF ? "everyone at the organization" : groupName(group),
-    ),
+    ...approvers.groups.map(groupName),
     ...approvers.people.map(
       (login) => people.find((person) => person.login === login)?.name ?? login,
     ),
   ];
   if (names.length === 0) return "Nobody yet";
-  const text =
-    names.length === 1
-      ? names[0]!
-      : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-  return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+  return names.length === 1
+    ? names[0]!
+    : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
 /**
@@ -259,7 +296,7 @@ export function noApproversNote(
 ): string | null {
   if (!required || !approvers) return null;
   if (approvers.groups.length + approvers.people.length > 0) return null;
-  return "Nobody can approve changes in this binder, so nothing can be published until you choose approvers.";
+  return "Nobody can approve changes in this binder, so nothing can be published until you choose who approves changes.";
 }
 
 /** One thing a search for approvers can find: a group or a person. */
@@ -271,8 +308,8 @@ export type ApproverMatch =
  * What a search for approvers finds: groups and people whose name or login
  * contains every word typed, not already chosen, groups first.
  *
- * Nothing until something is typed. A list of everyone at the organization is
- * the thing the search replaces.
+ * Nothing until something is typed. A list of the whole organization is the
+ * thing the search replaces.
  */
 export function searchApprovers(
   options: ReturnType<typeof approverOptions>,
@@ -293,8 +330,7 @@ export function searchApprovers(
     .map((group) => ({
       kind: "group" as const,
       value: group,
-      label:
-        group === STAFF ? "Everyone at the organization" : groupName(group),
+      label: groupName(group),
     }))
     .filter((match) => hit(match.label, match.value));
 

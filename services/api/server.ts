@@ -135,7 +135,6 @@ import {
   usernameCandidates,
   usernameFromName,
 } from "./signup-username";
-import { describeGroupName } from "../../packages/utils/groupName";
 import {
   buildApprovalRules,
   matchingSignOffRules,
@@ -8849,16 +8848,12 @@ async function handleBinderRules(
 
     if (rules.approvers !== undefined) {
       const before = protection;
-      const applied = await applyApprovers({
+      protection = await applyApprovers({
         client,
         org: orgName,
         workspace: workspaceName,
         approvers: rules.approvers,
       });
-      if (typeof applied === "string") {
-        return json(400, { error: applied }, baseHeaders);
-      }
-      protection = applied;
       const previousValue = before
         ? describeApprovers({
             groups: before.approvalsWhitelistTeams,
@@ -9217,71 +9212,20 @@ async function readBinderSettings(
 }
 
 /**
- * Make these groups and people a binder's approvers, or say why not.
+ * Make these groups and people a binder's approvers.
  *
- * **Naming a group grants it access.** Gitea counts nobody who cannot read the
- * binder, so a group named as an approver without access would be a name that
- * approves nothing. It is granted onto the binder at its own level, the same
- * grant the Groups section makes. A person is not granted anything: that
- * would mean making a team for one person, so somebody without access is
- * refused with a sentence instead.
- *
- * An empty list is allowed. Nobody's approval counts, so a binder needing
- * approvals publishes nothing until its admin names approvers — which is what
- * Gitea itself does with an empty whitelist.
+ * **Passed to Gitea as they are, never refused.** Gitea keeps only the ones
+ * who can read the binder and drops the rest without an error, so what comes
+ * back is the list that counts; the page compares it with what was asked and
+ * offers access for anyone dropped. Granting access is a separate act.
  */
 async function applyApprovers(params: {
   client: GiteaClient;
   org: string;
   workspace: string;
   approvers: { groups: string[]; people: string[] };
-}): Promise<RepoBranchProtection | string> {
+}): Promise<RepoBranchProtection> {
   const { client, org, workspace, approvers } = params;
-
-  const granted = await listRepoTeams({ client, owner: org, repo: workspace });
-  const grantedNames = new Set(granted.map((team) => team.name));
-  // Listing the organization's groups needs ownership. A binder admin who is
-  // not an owner can still name any group already granted here.
-  const orgTeams = await listOrganizationTeams({ client, org }).catch(
-    () => null,
-  );
-
-  const toGrant: typeof granted = [];
-  for (const group of approvers.groups) {
-    if (group === OWNERS_TEAM_NAME || grantedNames.has(group)) continue;
-    const team = orgTeams?.find((candidate) => candidate.name === group);
-    if (!team) {
-      return orgTeams
-        ? `There is no group called ${describeGroupName(group)}.`
-        : `${describeGroupName(group)} doesn't have access to this binder. Ask an owner to give it access first.`;
-    }
-    toGrant.push(team);
-  }
-
-  // Everyone who will be able to read the binder once those groups are in.
-  const owners = orgTeams?.find((team) => team.name === OWNERS_TEAM_NAME);
-  const people = new Map<string, string>();
-  for (const team of [...granted, ...toGrant, ...(owners ? [owners] : [])]) {
-    const members = await listTeamMembers({ client, teamId: team.id }).catch(
-      () => [],
-    );
-    for (const member of members) {
-      people.set(member.login.toLowerCase(), member.login);
-    }
-  }
-  const logins: string[] = [];
-  for (const person of approvers.people) {
-    const login = people.get(person.toLowerCase());
-    if (!login) {
-      return `${person} doesn't have access to this binder, so their approval can't count here. Give them access first.`;
-    }
-    logins.push(login);
-  }
-
-  for (const team of toGrant) {
-    await grantTeamOnRepo({ client, teamId: team.id, org, repo: workspace });
-  }
-
   // Written with the caller's own token: Gitea lets only a repository admin
   // edit branch protection, so Gitea is what says this person may.
   return updateRepoBranchProtection({
@@ -9291,7 +9235,7 @@ async function applyApprovers(params: {
     ruleName: "main",
     enableApprovalsWhitelist: true,
     approvalsWhitelistTeams: approvers.groups,
-    approvalsWhitelistUsernames: logins,
+    approvalsWhitelistUsernames: approvers.people,
   });
 }
 
@@ -14287,6 +14231,8 @@ interface ProvisionBinderPlan {
   openToOrganization: boolean;
   /** Whose approvals count. Absent on a job from before approvers existed. */
   approvers?: { groups: string[]; people: string[] };
+  /** Groups and people to give access to, from the form's Access section. */
+  access?: { groups: string[]; people: string[] };
 }
 
 type ProvisionOutcome =
@@ -14328,8 +14274,10 @@ async function executeProvisionJob(
       name: plan.name,
       description: plan.description,
       openToOrganization: plan.openToOrganization,
-      approvers: plan.approvers,
     });
+    // The form's Access section, then the approvers: Gitea keeps an approver
+    // only once they can read the binder, so access goes first.
+    await grantNewBinderAccess(client, plan);
     store.complete(job.id, { workspace: provisioned.workspace.name });
     logger.info("Workspace created", {
       username: job.createdBy,
@@ -14400,51 +14348,50 @@ function provisionJobResponse(
 }
 
 /**
- * Whether a new binder's approvers can be its approvers, checked before
- * anything is made.
+ * Give a new binder's Access rows their access, then write its approvers.
  *
- * A group must exist; provisioning grants it read. A person must be able to
- * read the binder the moment it exists: anybody in the organization when it
- * is open, otherwise an owner or a member of an approver group.
+ * A group gets the binder at its own level, as the Groups section grants it;
+ * a person is added as a reviewer. A group that does not exist is skipped —
+ * the approvers list then reads back without it, which the page shows.
+ * Idempotent, so a resumed job does no harm.
  */
-async function checkNewBinderApprovers(params: {
-  client: GiteaClient;
-  org: string;
-  approvers: { groups: string[]; people: string[] };
-  openToOrganization: boolean;
-}): Promise<string | null> {
-  const { client, org, approvers, openToOrganization } = params;
-  if (approvers.groups.length === 0 && approvers.people.length === 0) {
-    return null;
-  }
-  const teams = await listOrganizationTeams({ client, org });
-  const byName = new Map(teams.map((team) => [team.name, team]));
-  for (const group of approvers.groups) {
-    if (!byName.has(group)) {
-      return `There is no group called ${describeGroupName(group)}.`;
-    }
-  }
-  if (approvers.people.length === 0) return null;
-
-  const readers = [
-    OWNERS_TEAM_NAME,
-    ...(openToOrganization ? [STAFF_TEAM_NAME] : []),
-    ...approvers.groups,
-  ];
-  const people = new Set<string>();
-  for (const name of readers) {
-    const team = byName.get(name);
+async function grantNewBinderAccess(
+  client: GiteaClient,
+  plan: ProvisionBinderPlan,
+): Promise<void> {
+  const access = plan.access ?? { groups: [], people: [] };
+  for (const group of access.groups) {
+    const team = await findOrganizationTeam({
+      client,
+      org: plan.org,
+      name: group,
+    }).catch(() => null);
     if (!team) continue;
-    for (const member of await listTeamMembers({ client, teamId: team.id })) {
-      people.add(member.login.toLowerCase());
-    }
+    await grantTeamOnRepo({
+      client,
+      teamId: team.id,
+      org: plan.org,
+      repo: plan.name,
+    });
   }
-  const outside = approvers.people.find(
-    (person) => !people.has(person.toLowerCase()),
-  );
-  return outside
-    ? `${outside} won't be able to read this binder, so their approval couldn't count. Open it to the organization, or add them after it is made.`
-    : null;
+  for (const username of access.people) {
+    await addToBinder({
+      client,
+      org: plan.org,
+      workspace: plan.name,
+      username,
+      role: BINDER_LEVEL_ROLES.reviewer!,
+    });
+  }
+  const approvers = plan.approvers ?? { groups: [], people: [] };
+  if (approvers.groups.length + approvers.people.length > 0) {
+    await applyApprovers({
+      client,
+      org: plan.org,
+      workspace: plan.name,
+      approvers,
+    });
+  }
 }
 
 /** The runner's turn at a binder: finish it as the person who created it. */
@@ -14476,6 +14423,7 @@ async function handleCreateWorkspace(
     description?: unknown;
     openToOrganization?: unknown;
     approvers?: unknown;
+    access?: unknown;
   }>(req);
   const approvers =
     payload?.approvers === undefined
@@ -14483,6 +14431,17 @@ async function handleCreateWorkspace(
       : parseApprovers(payload.approvers);
   if (typeof approvers === "string") {
     return json(400, { error: approvers }, baseHeaders);
+  }
+  const access =
+    payload?.access === undefined
+      ? { groups: [], people: [] }
+      : parseApprovers(payload.access);
+  if (typeof access === "string") {
+    return json(
+      400,
+      { error: "Say which groups and people get access." },
+      baseHeaders,
+    );
   }
   const openToOrganization = payload?.openToOrganization !== false;
   const requested =
@@ -14531,14 +14490,6 @@ async function handleCreateWorkspace(
         );
       }
 
-      const refusal = await checkNewBinderApprovers({
-        client: auth.client,
-        org: orgName,
-        approvers,
-        openToOrganization,
-      });
-      if (refusal) return json(400, { error: refusal }, baseHeaders);
-
       const job = jobStore().create<ProvisionBinderPlan>({
         kind: "provision-binder",
         groupKey,
@@ -14552,6 +14503,7 @@ async function handleCreateWorkspace(
           // anyway.
           openToOrganization,
           approvers,
+          access,
         },
         createdBy: auth.session.username,
         sessionId: sessionStore.reference(auth.session.id),
