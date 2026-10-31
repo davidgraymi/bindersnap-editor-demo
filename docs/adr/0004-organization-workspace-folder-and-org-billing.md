@@ -141,6 +141,8 @@ merged, approved pull request — the product's core claim, unchanged from ADR 0
   with `block_on_official_review_requests` so a merge is blocked while a code
   owner's requested review is outstanding. Verified; the pattern syntax is a regex
   rather than a glob, which the last section spells out.
+- **Who approves changes** is the approvals whitelist: the binder's approvers.
+  See the amendment below.
 - **Reset approvals on a new version** is `dismiss_stale_approvals`, as today.
 - **Block on unresolved threads** has no Gitea equivalent, so it stays enforced by
   the BFF at publish time — now once per workspace instead of once per document,
@@ -152,6 +154,20 @@ in "What State Lives Where" below: it is read at pull-request time and lives on 
 same timeline as the content it governs, so `?ref=<tag>` genuinely answers "who
 owned this policy when this version was approved." It passes the point-in-time test.
 A settings row does not need to.
+
+> **Amended 2026-10-30 (#866): access and approval are separate.** This ADR
+> first made everyone with access an approver: the whitelist listed every role
+> team, and later every group granted onto the binder, `staff` included, so any
+> reader's approval counted. Now a binder's **approvers** are an explicit list of
+> groups and people its admin chooses, at creation or in settings, empty by
+> default as Gitea's own whitelist is. Granting access never makes anybody an
+> approver. The page shows the whole organization when choosing approvers and
+> lets only those who can read the binder be picked, because Gitea keeps no
+> other approver. The organization's read team, once `staff`, is now `everyone`
+> (renamed in place). Only approvers may approve or ask for
+> changes; everyone with access may comment. "3 approvals from the Board" is
+> `required_approvals: 3` with the Board as the whitelist, enforced by Gitea at
+> the merge. Reviewers stay free: an approver who only reads costs no seat.
 
 ### 6. Access is uniform within a workspace
 
@@ -569,6 +585,9 @@ promised — still a Gitea permission, still not an app check.
 > A workspace's branch protection **must** set `enable_approvals_whitelist: true` with
 > the role teams whitelisted. Without it, reviewers are decorative. This is the one
 > setting that makes "reviewers are free forever" (#369) true rather than aspirational.
+>
+> Since 2026-10-30 the whitelist holds the binder's chosen approvers rather than
+> its role teams (see the amendment in section 5). The field must still be on.
 
 ### 2. CODEOWNERS is enforcement, not only auto-assignment
 
