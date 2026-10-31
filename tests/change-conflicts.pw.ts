@@ -165,7 +165,12 @@ async function provisionClash(): Promise<{
       await fetch(`${API_BASE_URL}/api/app/orgs/${org}/binders`, {
         method: "POST",
         headers: authHeaders(session),
-        body: JSON.stringify({ name: "Clinical Policies" }),
+        body: JSON.stringify({
+          name: "Clinical Policies",
+          // Everyone in the organization approves here; a new binder names
+          // no approvers, as Gitea's own default.
+          approvers: { groups: ["everyone", "Owners"] },
+        }),
       })
     ).json()) as { workspace: { name: string } }
   ).workspace.name;

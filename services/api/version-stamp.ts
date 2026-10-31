@@ -63,6 +63,15 @@ export interface PublishedPolicy {
   /** How many approvals the binder required, or null when it could not be read. */
   requiredApprovals: number | null;
   /**
+   * Whose approvals counted toward that number — Gitea's approvals whitelist
+   * at the merge — or null when it could not be read.
+   *
+   * "3 approvals" means nothing on its own: three from the board and three
+   * from anybody granted onto the binder are different rules. The rule can
+   * change tomorrow, so it is stamped here rather than looked up.
+   */
+  approvers: { groups: string[]; people: string[] } | null;
+  /**
    * Everyone whose approval stood at the moment of the merge.
    *
    * Stale and dismissed reviews are not sign-offs and must not be here — a
@@ -109,6 +118,11 @@ export function buildVersionStamp(policy: PublishedPolicy): string {
         ? "unknown"
         : String(policy.requiredApprovals)
     }`,
+    `  Approvals counted from: ${
+      policy.approvers === null
+        ? "unknown"
+        : describeApprovers(policy.approvers)
+    }`,
     `  Approved by: ${
       policy.approvedBy.length === 0 ? "nobody" : policy.approvedBy.join(", ")
     }`,
@@ -127,6 +141,25 @@ export function buildVersionStamp(policy: PublishedPolicy): string {
   ];
 
   return `${lines.join("\n")}\n`;
+}
+
+/**
+ * A list of approvers as the stamp and the settings trail write it:
+ * "groups board, Owners; people dr-okafor".
+ */
+export function describeApprovers(approvers: {
+  groups: readonly string[];
+  people: readonly string[];
+}): string {
+  const parts = [
+    approvers.groups.length > 0
+      ? `groups ${approvers.groups.join(", ")}`
+      : null,
+    approvers.people.length > 0
+      ? `people ${approvers.people.join(", ")}`
+      : null,
+  ].filter((part): part is string => part !== null);
+  return parts.length > 0 ? parts.join("; ") : "nobody";
 }
 
 function yesNo(value: boolean): string {

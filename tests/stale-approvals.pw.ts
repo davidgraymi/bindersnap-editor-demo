@@ -127,6 +127,9 @@ async function setUp(): Promise<{
     (
       await json(owner.session, "POST", `/api/app/orgs/${org}/binders`, {
         name: "Policies",
+        // Everyone in the organization approves here; a new binder names
+        // no approvers, as Gitea's own default.
+        approvers: { groups: ["everyone", "Owners"] },
       })
     ).workspace as { name: string }
   ).name;

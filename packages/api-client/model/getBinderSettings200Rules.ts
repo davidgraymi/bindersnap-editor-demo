@@ -4,6 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { GetBinderSettings200RulesApprovers } from './getBinderSettings200RulesApprovers.ts';
 
 export type GetBinderSettings200Rules = {
   /** @nullable */
@@ -11,4 +12,6 @@ export type GetBinderSettings200Rules = {
   dismissStaleApprovals: boolean;
   pushBlocked: boolean;
   blockOnUnresolvedThreads: boolean;
+  /** @nullable */
+  approvers: GetBinderSettings200RulesApprovers;
 };

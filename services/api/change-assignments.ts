@@ -92,10 +92,19 @@ export function latestReviewByUser(
  * approvals (`dismiss_stale_approvals`, which also marks them dismissed) or
  * ignores them (`ignore_stale_approvals`). `ignoresStale` is that rule, and
  * defaults to the strict reading for a caller that does not know it.
+ *
+ * **And only an official one.** Gitea counts an approval toward
+ * `required_approvals` only if the reviewer was on the binder's approvals
+ * whitelist when they approved, and marks the review `official` to say so. A
+ * binder that needs two approvals from its Board can hold an approval from a
+ * nurse who can review but is not on the Board; counting it here would show
+ * "2 of 2" on a change Gitea refuses to merge. A review with no flag at all is
+ * counted, since every Gitea this runs against sets it.
  */
 function counts(review: PullReview, ignoresStale: boolean): boolean {
   return (
     toReviewerStatus(review.state) === "approved" &&
+    review.official !== false &&
     !(ignoresStale && review.stale === true)
   );
 }

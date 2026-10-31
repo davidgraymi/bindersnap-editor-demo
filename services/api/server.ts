@@ -135,6 +135,11 @@ import {
   usernameCandidates,
   usernameFromName,
 } from "./signup-username";
+import {
+  buildApprovalRules,
+  matchingSignOffRules,
+  type ApprovalRuleView,
+} from "./approval-rules";
 import { slugifyOrganizationName } from "../../packages/utils/organizationName";
 import { verifyTurnstile } from "../../packages/utils/turnstile";
 import { isCommitRef } from "../../packages/utils/gitRef";
@@ -160,7 +165,6 @@ import {
   readWorkspaceAccess,
   renameWorkspaceRepo,
   describeWorkspaceRepo,
-  recomputeApprovalsWhitelist,
 } from "./gitea-client/workspaces";
 import {
   createDocumentVersionTag,
@@ -216,7 +220,7 @@ import {
   countBillableSeats,
   createOrganizationGroup,
   createWorkspaceRoleTeam,
-  ensureStaffTeam,
+  ensureEveryoneTeam,
   findOrganization,
   findOrganizationTeam,
   grantTeamOnRepo,
@@ -233,7 +237,7 @@ import {
   removeOrganizationMember,
   removeTeamMember,
   revokeTeamFromRepo,
-  STAFF_TEAM_NAME,
+  isEveryoneTeam,
   WORKSPACE_ROLES,
   workspaceTeamName,
   type WorkspaceRole,
@@ -372,6 +376,7 @@ import {
   planReviewerChanges,
   readAssignee,
   readRequestedReviewers,
+  toChangeUser,
 } from "./change-assignments";
 import { buildChangeUpdates } from "./change-updates";
 import {
@@ -395,6 +400,7 @@ import {
 import {
   buildArchiveStamp,
   buildVersionStamp,
+  describeApprovers,
   readVersionStamp,
 } from "./version-stamp";
 
@@ -6238,6 +6244,12 @@ const publishDeps: PublishDeps = {
     ]);
     return {
       requiredApprovals,
+      approvers: protection
+        ? {
+            groups: protection.approvalsWhitelistTeams,
+            people: protection.approvalsWhitelistUsernames,
+          }
+        : null,
       approvedBy: merged
         ? approverSignatures(
             merged.reviews,
@@ -6812,6 +6824,76 @@ async function readDecisionRights(params: {
 }
 
 /**
+ * A change's approval rules, with the groups in them read as people.
+ *
+ * Read with the service account, the way the rest of the binder's policy is:
+ * who has to approve is something every reviewer is entitled to see. A group
+ * that cannot be read lists nobody, which the panel says as "Nobody can
+ * approve this yet" rather than pretending to know.
+ */
+async function readApprovalRules(params: {
+  org: string;
+  workspace: string;
+  author: string;
+  reviews: Parameters<typeof buildApprovalRules>[0]["reviews"];
+  signOff: SignOffRule[];
+  ignoresStale: boolean;
+}): Promise<ApprovalRuleView[]> {
+  const { org, workspace, author, reviews, signOff, ignoresStale } = params;
+  const client = createPrivilegedGiteaClient();
+  const protection = await readWorkspaceProtection(org, workspace);
+
+  const wanted = new Set([
+    ...(protection?.approvalsWhitelistTeams ?? []),
+    ...signOff.flatMap((rule) => rule.teams),
+  ]);
+  const teams =
+    client && wanted.size > 0
+      ? await listOrganizationTeams({ client, org }).catch(() => [])
+      : [];
+  const members = new Map<
+    string,
+    { login: string; fullName: string; avatarUrl: string }[]
+  >();
+  await Promise.all(
+    [...wanted].map(async (group) => {
+      const team = teams.find((candidate) => candidate.name === group);
+      const people =
+        team && client
+          ? await listTeamMembers({ client, teamId: team.id }).catch(() => [])
+          : [];
+      members.set(
+        group,
+        people.map((member) => ({
+          login: member.login,
+          fullName: member.fullName,
+          avatarUrl: "",
+        })),
+      );
+    }),
+  );
+
+  return buildApprovalRules({
+    author,
+    requiredApprovals: protection?.requiredApprovals ?? null,
+    approvers: protection
+      ? {
+          groups: protection.approvalsWhitelistTeams,
+          people: protection.approvalsWhitelistUsernames,
+        }
+      : null,
+    signOff,
+    reviews,
+    ignoresStale,
+    members: (group) => members.get(group) ?? [],
+    person: (login) =>
+      toChangeUser(
+        reviews.find((review) => review.user?.login === login)?.user,
+      ) ?? { login, fullName: "", avatarUrl: "" },
+  });
+}
+
+/**
  * Whether `main` has moved on since this change branched off it.
  *
  * A binder protects `main` with `block_on_outdated_branch`, so a change that
@@ -7065,6 +7147,22 @@ async function handleWorkspaceChangeDetail(
           rules: signOff.rules,
           paths: documents.map((document) => document.path),
           gate,
+        }),
+        // What has to be true before it can be published, rule by rule, and
+        // who has met each — the panel at the top of the change. Separate
+        // from who was asked to review, which is `change.reviewers`.
+        approvalRules: await readApprovalRules({
+          org: orgName,
+          workspace: workspaceName,
+          author: entry.pullRequest.user?.login ?? "",
+          reviews: entry.reviews,
+          signOff: gate?.codeownersBlock
+            ? matchingSignOffRules(
+                signOff.rules,
+                documents.map((document) => document.path),
+              )
+            : [],
+          ignoresStale: mergeRules?.ignoresStale ?? true,
         }),
       },
       baseHeaders,
@@ -7639,6 +7737,27 @@ async function handleWorkspaceChangeReview(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
+    // **Only an approver approves.** Gitea records an approval from anybody
+    // who can read the change and counts it only from an approver, so an
+    // approval from anyone else would sit in the record as a sign-off that
+    // signed nothing off. A request for changes is the same: Gitea lets only an
+    // approver's block publishing. Anybody can still comment.
+    if (event !== "COMMENT") {
+      const rights = await readDecisionRights({
+        org: orgName,
+        binder: workspaceName,
+        username: auth.session.username,
+        canWrite: workspace.access.push,
+      });
+      if (!rights.canApprove) {
+        return json(
+          403,
+          { error: "Only this binder's approvers can approve." },
+          baseHeaders,
+        );
+      }
+    }
+
     const review = await submitReview({
       client,
       owner: orgName,
@@ -8143,6 +8262,17 @@ async function handleWorkspaceSettings(
           // it has the same consequence, so it is reported the same way.
           pushBlocked: protection ? !protection.enablePush : false,
           blockOnUnresolvedThreads: reviewSettings.blockOnUnresolvedThreads,
+          /**
+           * Whose approvals count toward `requiredApprovals`: Gitea's approvals
+           * whitelist, which Gitea enforces at the merge. Null when the
+           * protection could not be read.
+           */
+          approvers: protection
+            ? {
+                groups: protection.approvalsWhitelistTeams,
+                people: protection.approvalsWhitelistUsernames,
+              }
+            : null,
         },
         signOff: {
           /**
@@ -8182,7 +8312,7 @@ async function handleWorkspaceSettings(
           ).length,
           groups: (orgTeams ?? teams)
             .map((team) => team.name)
-            .filter((name) => name !== STAFF_TEAM_NAME)
+            .filter((name) => !isEveryoneTeam(name))
             .sort((left, right) => left.localeCompare(right)),
           emptyGroups: emptySignOffGroups,
           /**
@@ -8492,22 +8622,13 @@ export function parseBinderRulesRequest(
     blockOnUnresolvedThreads?: unknown;
     requiredApprovals?: unknown;
     dismissStaleApprovals?: unknown;
+    approvers?: unknown;
   } | null,
-):
-  | {
-      blockOnUnresolvedThreads?: boolean;
-      requiredApprovals?: number;
-      dismissStaleApprovals?: boolean;
-    }
-  | string {
+): BinderRulesRequest | string {
   if (!body || typeof body !== "object") {
     return "Say which rule to change.";
   }
-  const out: {
-    blockOnUnresolvedThreads?: boolean;
-    requiredApprovals?: number;
-    dismissStaleApprovals?: boolean;
-  } = {};
+  const out: BinderRulesRequest = {};
   if (body.blockOnUnresolvedThreads !== undefined) {
     if (typeof body.blockOnUnresolvedThreads !== "boolean") {
       return "Say whether a change must have every discussion resolved before it can be published.";
@@ -8532,10 +8653,51 @@ export function parseBinderRulesRequest(
     }
     out.dismissStaleApprovals = body.dismissStaleApprovals;
   }
+  if (body.approvers !== undefined) {
+    const approvers = parseApprovers(body.approvers);
+    if (typeof approvers === "string") return approvers;
+    out.approvers = approvers;
+  }
   if (Object.keys(out).length === 0) {
     return "Say which rule to change.";
   }
   return out;
+}
+
+export interface BinderRulesRequest {
+  blockOnUnresolvedThreads?: boolean;
+  requiredApprovals?: number;
+  dismissStaleApprovals?: boolean;
+  /** Whose approvals count toward the number needed. Empty means nobody's. */
+  approvers?: { groups: string[]; people: string[] };
+}
+
+/**
+ * The groups and people whose approvals count, as a request names them.
+ *
+ * Empty is allowed and means what Gitea means by it: nobody's approval counts.
+ */
+function parseApprovers(
+  value: unknown,
+): { groups: string[]; people: string[] } | string {
+  if (value === null || typeof value !== "object") {
+    return "Say which groups and people can approve.";
+  }
+  const { groups = [], people = [] } = value as {
+    groups?: unknown;
+    people?: unknown;
+  };
+  const names = (list: unknown): string[] | null =>
+    Array.isArray(list) &&
+    list.every((entry) => typeof entry === "string" && entry.trim() !== "")
+      ? [...new Set(list.map((entry: string) => entry.trim()))]
+      : null;
+  const parsedGroups = names(groups);
+  const parsedPeople = names(people);
+  if (!parsedGroups || !parsedPeople) {
+    return "Say which groups and people can approve.";
+  }
+  return { groups: parsedGroups, people: parsedPeople };
 }
 
 /**
@@ -8580,6 +8742,7 @@ async function handleBinderRules(
       blockOnUnresolvedThreads?: unknown;
       requiredApprovals?: unknown;
       dismissStaleApprovals?: unknown;
+      approvers?: unknown;
     } | null;
 
     const rules = parseBinderRulesRequest(body);
@@ -8683,6 +8846,38 @@ async function handleBinderRules(
       events.push(...recorded);
     }
 
+    if (rules.approvers !== undefined) {
+      const before = protection;
+      protection = await applyApprovers({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+        approvers: rules.approvers,
+      });
+      const previousValue = before
+        ? describeApprovers({
+            groups: before.approvalsWhitelistTeams,
+            people: before.approvalsWhitelistUsernames,
+          })
+        : null;
+      const newValue = describeApprovers({
+        groups: protection.approvalsWhitelistTeams,
+        people: protection.approvalsWhitelistUsernames,
+      });
+      if (previousValue !== newValue) {
+        const event: SettingsEventRecord = {
+          giteaRepoId: workspace.id,
+          setting: "approvers",
+          previousValue,
+          newValue,
+          changedBy: session.username,
+          changedAt: Math.floor(Date.now() / 1000),
+        };
+        await workspaceSettingsStore.record([event]);
+        events.push(event);
+      }
+    }
+
     logger.info("Binder rules changed", {
       username: session.username,
       organization: orgName,
@@ -8700,6 +8895,12 @@ async function handleBinderRules(
         blockOnUnresolvedThreads: settings.blockOnUnresolvedThreads,
         requiredApprovals: protection?.requiredApprovals ?? null,
         dismissStaleApprovals: protection?.dismissStaleApprovals ?? null,
+        approvers: protection
+          ? {
+              groups: protection.approvalsWhitelistTeams,
+              people: protection.approvalsWhitelistUsernames,
+            }
+          : null,
       },
       baseHeaders,
     );
@@ -9011,6 +9212,84 @@ async function readBinderSettings(
 }
 
 /**
+ * Make these groups and people a binder's approvers.
+ *
+ * **Passed to Gitea as they are, never refused.** Gitea keeps only the ones
+ * who can read the binder and drops the rest without an error, so what comes
+ * back is the list that counts; the page compares it with what was asked and
+ * offers access for anyone dropped. Granting access is a separate act.
+ */
+async function applyApprovers(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  approvers: { groups: string[]; people: string[] };
+}): Promise<RepoBranchProtection> {
+  const { client, org, workspace, approvers } = params;
+  // Everyone by whichever name this organization's team has: an organization
+  // whose `staff` team has not been renamed yet still has an Everyone.
+  let groups = approvers.groups;
+  if (groups.some(isEveryoneTeam)) {
+    const everyone = (
+      await listOrganizationTeams({ client, org }).catch(() => [])
+    ).find((team) => isEveryoneTeam(team.name));
+    if (everyone) {
+      groups = groups.map((group) =>
+        isEveryoneTeam(group) ? everyone.name : group,
+      );
+    }
+  }
+  // Written with the caller's own token: Gitea lets only a repository admin
+  // edit branch protection, so Gitea is what says this person may.
+  return updateRepoBranchProtection({
+    client,
+    owner: org,
+    repo: workspace,
+    ruleName: "main",
+    enableApprovalsWhitelist: true,
+    approvalsWhitelistTeams: groups,
+    approvalsWhitelistUsernames: approvers.people,
+  });
+}
+
+/**
+ * Take a group off a binder's approvers, when it loses access to the binder.
+ *
+ * Narrowing only, and only of the one group: Gitea counts nobody who cannot
+ * read the binder, so a group left on the list after its access went would be
+ * a name on the settings page that approves nothing. Returns the groups left.
+ */
+async function dropApproverGroup(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  group: string;
+}): Promise<string[]> {
+  const { client, org, workspace, group } = params;
+  // Narrowing only, and of this one group plus any Gitea is already hiding.
+  const protection = await getRepoBranchProtection(
+    client,
+    org,
+    workspace,
+    "main",
+  );
+  // **Written even when the group is not in the list read back.** Gitea hides
+  // a whitelisted group that has lost access to the repository but keeps it
+  // stored, so it would come back as an approver the day access returned.
+  // Writing the visible list replaces the stored one.
+  const groups = protection?.approvalsWhitelistTeams ?? [];
+  const updated = await updateRepoBranchProtection({
+    client,
+    owner: org,
+    repo: workspace,
+    ruleName: "main",
+    approvalsWhitelistTeams: groups.filter((name) => name !== group),
+    enableApprovalsWhitelist: true,
+  });
+  return updated.approvalsWhitelistTeams;
+}
+
+/**
  * A binder's branch protection, read with the service account.
  *
  * The same reasoning as `readRequiredApprovals`, which this replaces for the
@@ -9183,7 +9462,7 @@ async function readOrganizationPeople(
       if (team.name === OWNERS_TEAM_NAME) owners.add(login);
       // `staff` is everybody by definition, so listing it against every name
       // says nothing and crowds out the groups that do.
-      if (team.name === STAFF_TEAM_NAME) continue;
+      if (isEveryoneTeam(team.name)) continue;
       const existing = teamsByLogin.get(login);
       if (existing) {
         existing.push(team.name);
@@ -9212,7 +9491,7 @@ async function readOrganizationPeople(
       // `staff` is the organization's membership, not a group somebody composes
       // — the People count above is already the same number, and its only
       // control is each binder's own "who can see this" switch.
-      .filter(({ team }) => team.name !== STAFF_TEAM_NAME)
+      .filter(({ team }) => !isEveryoneTeam(team.name))
       .map(({ team, members: teamMembers, binders: teamBinders }) => ({
         id: team.id,
         name: team.name,
@@ -10112,6 +10391,19 @@ async function handleCreateOrganizationGroup(
         baseHeaders,
       );
     }
+    // Everyone is the organization itself, kept in step by Bindersnap; a
+    // second group by that name would be a group nobody could tell apart.
+    if (isEveryoneTeam(name) || name === OWNERS_TEAM_NAME.toLowerCase()) {
+      return json(
+        400,
+        {
+          error: `Every organization already has a group called ${
+            isEveryoneTeam(name) ? "Everyone" : "Owners"
+          }. Choose another name.`,
+        },
+        baseHeaders,
+      );
+    }
 
     if (!isGroupLevel(body?.level)) {
       return json(
@@ -10270,7 +10562,7 @@ async function ensureOrganizationMembership(params: {
   username: string;
 }): Promise<void> {
   const { client, org, username } = params;
-  const staff = await ensureStaffTeam({ client, org });
+  const staff = await ensureEveryoneTeam({ client, org });
   await addTeamMember({ client, teamId: staff.id, username });
 }
 
@@ -10410,7 +10702,13 @@ async function readBinderPeople(
       }
 
       if (!ownTeams.has(team.name)) held.groups.push(team.name);
-      if (isHigherAccess(team.codeAccess, held.access)) {
+      // At the same level, the more particular group says more: "through
+      // Quality Committee" rather than "through Everyone", who are everybody.
+      const sameLevelButNamed =
+        team.codeAccess === held.access &&
+        isEveryoneTeam(held.through) &&
+        !isEveryoneTeam(team.name);
+      if (isHigherAccess(team.codeAccess, held.access) || sameLevelButNamed) {
         held.access = team.codeAccess;
         held.through = team.name;
         held.individual = ownTeams.has(team.name);
@@ -10443,7 +10741,7 @@ async function readBinderPeople(
       // "who can see this binder", and a row beside the customer's own
       // committees — with its own Remove button — would make the most
       // consequential access choice in the product look like housekeeping.
-      .filter(({ team }) => team.name !== STAFF_TEAM_NAME)
+      .filter(({ team }) => !isEveryoneTeam(team.name))
       .map(({ team, members }) => ({
         id: team.id,
         name: team.name,
@@ -10457,7 +10755,7 @@ async function readBinderPeople(
       .sort((left, right) => left.name.localeCompare(right.name)),
     // Derived from the unfiltered set, never stored: a copy could disagree with
     // the grant Gitea is the one enforcing.
-    openToOrganization: teams.some((team) => team.name === STAFF_TEAM_NAME),
+    openToOrganization: teams.some((team) => isEveryoneTeam(team.name)),
     organizationMembers: organizationMembers.map((member) => ({
       login: member.login,
       fullName: member.fullName,
@@ -10491,8 +10789,6 @@ async function addToBinder(params: {
   // person out rather than in a team that reaches nothing.
   await grantTeamOnRepo({ client, teamId: team.id, org, repo: workspace });
   await addTeamMember({ client, teamId: team.id, username });
-
-  await recomputeApprovalsWhitelist({ client, org, workspace });
 }
 
 /**
@@ -10784,7 +11080,7 @@ async function handleBinderVisibility(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    const staff = await ensureStaffTeam({ client, org: orgName });
+    const staff = await ensureEveryoneTeam({ client, org: orgName });
 
     if (body.openToOrganization) {
       await grantTeamOnRepo({
@@ -10802,11 +11098,16 @@ async function handleBinderVisibility(
       });
     }
 
-    await recomputeApprovalsWhitelist({
-      client,
-      org: orgName,
-      workspace: workspaceName,
-    });
+    // Closing the binder takes `staff`'s access, so it cannot go on being an
+    // approver: Gitea would count nobody through it.
+    if (!body.openToOrganization) {
+      await dropApproverGroup({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+        group: staff.name,
+      });
+    }
 
     logger.info("Binder visibility changed", {
       username: session.username,
@@ -10925,13 +11226,26 @@ async function handleBinderGroup(
       });
     }
 
-    // After the grant, never before: the whitelist is derived from what Gitea
-    // says is granted, so reading it first would write the state we just left.
-    const approvalsWhitelist = await recomputeApprovalsWhitelist({
-      client,
-      org: orgName,
-      workspace: workspaceName,
-    });
+    // **Granting changes access, never who approves.** A group granted here
+    // can read and review; its approvals count only once an admin names it an
+    // approver. A revoked group loses its place as an approver too, because
+    // Gitea counts nobody who cannot read the binder.
+    const approvalsWhitelist =
+      revoking === null
+        ? ((
+            await getRepoBranchProtection(
+              client,
+              orgName,
+              workspaceName,
+              "main",
+            )
+          )?.approvalsWhitelistTeams ?? [])
+        : await dropApproverGroup({
+            client,
+            org: orgName,
+            workspace: workspaceName,
+            group: team.name,
+          });
 
     const teams = await listRepoTeams({
       client,
@@ -13947,6 +14261,8 @@ interface ProvisionBinderPlan {
   name: string;
   description?: string;
   openToOrganization: boolean;
+  /** Whose approvals count. Absent on a job from before approvers existed. */
+  approvers?: { groups: string[]; people: string[] };
 }
 
 type ProvisionOutcome =
@@ -13989,6 +14305,7 @@ async function executeProvisionJob(
       description: plan.description,
       openToOrganization: plan.openToOrganization,
     });
+    await writeNewBinderApprovers(client, plan);
     store.complete(job.id, { workspace: provisioned.workspace.name });
     logger.info("Workspace created", {
       username: job.createdBy,
@@ -14058,6 +14375,27 @@ function provisionJobResponse(
   }
 }
 
+/**
+ * Write a new binder's approvers, once it exists.
+ *
+ * The form offers only approvers who will be able to read the binder — the
+ * owners, and Everyone and its members when the binder is open — so Gitea
+ * keeps them all. Idempotent, so a resumed job does no harm.
+ */
+async function writeNewBinderApprovers(
+  client: GiteaClient,
+  plan: ProvisionBinderPlan,
+): Promise<void> {
+  const approvers = plan.approvers ?? { groups: [], people: [] };
+  if (approvers.groups.length + approvers.people.length === 0) return;
+  await applyApprovers({
+    client,
+    org: plan.org,
+    workspace: plan.name,
+    approvers,
+  });
+}
+
 /** The runner's turn at a binder: finish it as the person who created it. */
 async function resumeProvisionJob(job: JobRecord): Promise<void> {
   const session = job.sessionId
@@ -14086,7 +14424,17 @@ async function handleCreateWorkspace(
     name?: unknown;
     description?: unknown;
     openToOrganization?: unknown;
+    approvers?: unknown;
   }>(req);
+  const approvers =
+    payload?.approvers === undefined
+      ? { groups: [], people: [] }
+      : parseApprovers(payload.approvers);
+  if (typeof approvers === "string") {
+    return json(400, { error: approvers }, baseHeaders);
+  }
+
+  const openToOrganization = payload?.openToOrganization !== false;
   const requested =
     typeof payload?.name === "string" ? payload.name.trim() : "";
   if (!requested) {
@@ -14144,7 +14492,8 @@ async function handleCreateWorkspace(
           // Absent means open, which is the decided default — an older client
           // that does not ask gets the answer the product would have given
           // anyway.
-          openToOrganization: payload?.openToOrganization !== false,
+          openToOrganization,
+          approvers,
         },
         createdBy: auth.session.username,
         sessionId: sessionStore.reference(auth.session.id),

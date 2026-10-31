@@ -485,6 +485,31 @@ async function ensureBinderShell(run: BinderRun): Promise<void> {
   }
 
   const settings = (await Binders.getBinderSettings(org, binder.name, as)).data;
+
+  // **Approvers before approvals.** Gitea decides whether an approval counts
+  // when it is given, so a binder whose approvers are named after its seeded
+  // approvals would hold a record of approvals that counted for nothing. Every
+  // group with access approves here, and Owners, which is how the scenario's
+  // approvals were written.
+  const approvers = [
+    ...new Set([
+      ...settings.teams
+        .map((team) => team.name)
+        .filter((name) => name !== "everyone" && name !== "staff"),
+      "Owners",
+    ]),
+  ].sort();
+  const current = [...(settings.rules.approvers?.groups ?? [])].sort();
+  if (approvers.join() !== current.join()) {
+    await Binders.setBinderRules(
+      org,
+      binder.name,
+      { approvers: { groups: approvers, people: [] } },
+      as,
+    );
+    log(`${binder.name} is approved by ${approvers.join(", ")}`);
+  }
+
   if ((settings.rules.requiredApprovals ?? 1) !== binder.requiredApprovals) {
     await Binders.setBinderRules(
       org,

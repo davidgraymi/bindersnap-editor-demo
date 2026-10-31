@@ -850,6 +850,7 @@ test("the timeline names who published a version, from its stamp", () => {
     path: `hand-hygiene.${uid}.json`,
     version: 1,
     requiredApprovals: 1,
+    approvers: { groups: ["Owners"], people: [] },
     approvedBy: ["alice"],
     blockOnUnresolvedThreads: false,
     signOffEnforced: true,

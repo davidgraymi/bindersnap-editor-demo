@@ -4,6 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { GetBinderChange200ApprovalRulesItem } from './getBinderChange200ApprovalRulesItem.ts';
 import type { GetBinderChange200Change } from './getBinderChange200Change.ts';
 import type { GetBinderChange200DocumentsItem } from './getBinderChange200DocumentsItem.ts';
 import type { GetBinderChange200Outcome } from './getBinderChange200Outcome.ts';
@@ -26,6 +27,7 @@ export type GetBinderChange200 = {
   canManage: boolean;
   requiredReviewers: GetBinderChange200RequiredReviewers;
   viewer: GetBinderChange200Viewer;
+  approvalRules: GetBinderChange200ApprovalRulesItem[];
   /** @nullable */
   outcome: GetBinderChange200Outcome;
   /** @nullable */

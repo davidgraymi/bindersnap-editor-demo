@@ -2298,6 +2298,23 @@
           },
           "openToOrganization": {
             "type": "boolean"
+          },
+          "approvers": {
+            "type": "object",
+            "properties": {
+              "groups": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "people": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
           }
         },
         "required": [
@@ -6617,6 +6634,23 @@
                   },
                   "openToOrganization": {
                     "type": "boolean"
+                  },
+                  "approvers": {
+                    "type": "object",
+                    "properties": {
+                      "groups": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "people": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
                   }
                 },
                 "required": [
@@ -10111,13 +10145,36 @@
                         },
                         "blockOnUnresolvedThreads": {
                           "type": "boolean"
+                        },
+                        "approvers": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "groups": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "people": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "groups",
+                            "people"
+                          ]
                         }
                       },
                       "required": [
                         "requiredApprovals",
                         "dismissStaleApprovals",
                         "pushBlocked",
-                        "blockOnUnresolvedThreads"
+                        "blockOnUnresolvedThreads",
+                        "approvers"
                       ]
                     },
                     "signOff": {
@@ -10314,6 +10371,23 @@
                   },
                   "dismissStaleApprovals": {
                     "type": "boolean"
+                  },
+                  "approvers": {
+                    "type": "object",
+                    "properties": {
+                      "groups": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "people": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -10344,6 +10418,28 @@
                     "dismissStaleApprovals": {
                       "type": "boolean",
                       "nullable": true
+                    },
+                    "approvers": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "groups": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "people": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "groups",
+                        "people"
+                      ]
                     }
                   },
                   "required": [
@@ -10351,7 +10447,8 @@
                     "workspace",
                     "blockOnUnresolvedThreads",
                     "requiredApprovals",
-                    "dismissStaleApprovals"
+                    "dismissStaleApprovals",
+                    "approvers"
                   ]
                 }
               }
@@ -13357,6 +13454,104 @@
                         "canPublish"
                       ]
                     },
+                    "approvalRules": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "approvers",
+                              "sign-off"
+                            ]
+                          },
+                          "scope": {
+                            "type": "string",
+                            "nullable": true,
+                            "enum": [
+                              "binder",
+                              "folder",
+                              "document",
+                              "rules",
+                              null
+                            ]
+                          },
+                          "target": {
+                            "type": "string"
+                          },
+                          "groups": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "people": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "required": {
+                            "type": "number"
+                          },
+                          "eligible": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                },
+                                "avatarUrl": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName",
+                                "avatarUrl"
+                              ]
+                            }
+                          },
+                          "approvedBy": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                },
+                                "avatarUrl": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName",
+                                "avatarUrl"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "scope",
+                          "target",
+                          "groups",
+                          "people",
+                          "required",
+                          "eligible",
+                          "approvedBy"
+                        ]
+                      }
+                    },
                     "outcome": {
                       "type": "string",
                       "nullable": true,
@@ -13393,6 +13588,7 @@
                     "canManage",
                     "requiredReviewers",
                     "viewer",
+                    "approvalRules",
                     "outcome",
                     "closedAt",
                     "decidedBy",

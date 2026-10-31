@@ -58,6 +58,18 @@ test("countApprovals ignores approvals that no longer stand", () => {
   ).toBe(0);
 });
 
+test("countApprovals counts only approvals Gitea will count at the merge", () => {
+  // A binder that needs two approvals from its Board: the nurse can review,
+  // but is not on the Board, so Gitea recorded the approval as unofficial.
+  // Counting it would show "2 of 2" on a change Gitea refuses to merge.
+  const reviews = [
+    review("board-chair", "APPROVED", { official: true }),
+    review("nurse", "APPROVED", { official: false }),
+  ];
+  expect(countApprovals(reviews)).toBe(1);
+  expect(approverSignatures(reviews).join(" ")).not.toContain("nurse");
+});
+
 test("countApprovals follows a reviewer's latest word", () => {
   const reviews = [
     review("dana", "APPROVED", { submitted_at: "2026-01-01T00:00:00Z" }),

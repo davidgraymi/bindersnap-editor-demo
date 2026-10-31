@@ -63,6 +63,16 @@ export const NewWorkspaceBodySchema = z.object({
    * product would have given anyway.
    */
   openToOrganization: z.boolean().optional(),
+  /**
+   * Who approves changes. Empty, as Gitea's own default is, when absent.
+   * Gitea keeps only approvers who can read the binder.
+   */
+  approvers: z
+    .object({
+      groups: z.array(z.string()).optional(),
+      people: z.array(z.string()).optional(),
+    })
+    .optional(),
 });
 export type NewWorkspaceBody = z.infer<typeof NewWorkspaceBodySchema>;
 
@@ -528,6 +538,24 @@ export const WorkspaceChangeDetailPayloadSchema = z.object({
     canApprove: z.boolean(),
     canPublish: z.boolean(),
   }),
+  /**
+   * What has to be true before the change can be published, rule by rule:
+   * the binder's approvers (when it needs approvals), then each sign-off rule
+   * matching a changed file. `eligible` leaves the author out; `approvedBy`
+   * is only approvals that count. Who was asked to review is `reviewers`.
+   */
+  approvalRules: z.array(
+    z.object({
+      kind: z.enum(["approvers", "sign-off"]),
+      scope: z.enum(["binder", "folder", "document", "rules"]).nullable(),
+      target: z.string(),
+      groups: z.array(z.string()),
+      people: z.array(z.string()),
+      required: z.number(),
+      eligible: z.array(ChangeUserSchema),
+      approvedBy: z.array(ChangeUserSchema),
+    }),
+  ),
   /** How a decided change ended; null while it is open. */
   outcome: z.enum(["published", "declined", "withdrawn"]).nullable(),
   /**
@@ -771,6 +799,19 @@ export type WorkspaceTeam = z.infer<typeof WorkspaceTeamSchema>;
  * BFF at publish. Shown together because a customer does not care which of us
  * enforces what — they care what has to be true before a policy changes.
  */
+/**
+ * Whose approvals count toward a binder's `requiredApprovals`: Gitea's
+ * approvals whitelist, which Gitea enforces at the merge.
+ *
+ * The count is shared across everything listed — "3 from Board, Medical staff"
+ * is any 3 of them together, not 3 from each.
+ */
+export const BinderApproversSchema = z.object({
+  groups: z.array(z.string()),
+  people: z.array(z.string()),
+});
+export type BinderApprovers = z.infer<typeof BinderApproversSchema>;
+
 export const WorkspaceRulesSchema = z.object({
   /** Null when the rule could not be read at all. */
   requiredApprovals: z.number().nullable(),
@@ -779,6 +820,8 @@ export const WorkspaceRulesSchema = z.object({
   /** Nothing but an approved change reaches the record. */
   pushBlocked: z.boolean(),
   blockOnUnresolvedThreads: z.boolean(),
+  /** Null when the rule could not be read at all. */
+  approvers: BinderApproversSchema.nullable(),
 });
 export type WorkspaceRules = z.infer<typeof WorkspaceRulesSchema>;
 
@@ -913,6 +956,16 @@ export const BinderRulesRequestSchema = z.object({
     .max(Number.MAX_SAFE_INTEGER)
     .optional(),
   dismissStaleApprovals: z.boolean().optional(),
+  /**
+   * Whose approvals count. Empty means nobody's. Gitea keeps only those who
+   * can read the binder; the response says who was kept.
+   */
+  approvers: z
+    .object({
+      groups: z.array(z.string()).optional(),
+      people: z.array(z.string()).optional(),
+    })
+    .optional(),
 });
 export type BinderRulesRequest = z.infer<typeof BinderRulesRequestSchema>;
 
@@ -923,6 +976,7 @@ export const BinderRulesPayloadSchema = z.object({
   /** Null when the rule could not be read back. */
   requiredApprovals: z.number().nullable(),
   dismissStaleApprovals: z.boolean().nullable(),
+  approvers: BinderApproversSchema.nullable(),
 });
 export type BinderRulesPayload = z.infer<typeof BinderRulesPayloadSchema>;
 

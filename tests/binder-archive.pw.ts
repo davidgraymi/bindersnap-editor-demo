@@ -100,7 +100,12 @@ async function createBinder(session: string, org: string): Promise<string> {
   const response = await fetch(`${API_BASE_URL}/api/app/orgs/${org}/binders`, {
     method: "POST",
     headers: authHeaders(session),
-    body: JSON.stringify({ name: "Clinical Policies" }),
+    body: JSON.stringify({
+      name: "Clinical Policies",
+      // Everyone in the organization approves here; a new binder names
+      // no approvers, as Gitea's own default.
+      approvers: { groups: ["everyone", "Owners"] },
+    }),
   });
   const body = await response.text();
   expect(response.status, `create binder failed: ${body}`).toBe(201);
