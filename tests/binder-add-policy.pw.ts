@@ -112,7 +112,10 @@ async function createBinder(
     headers: authHeaders(sessionCookie),
     // Everyone in the organization approves here, so whoever this test asks
     // to approve can. A new binder names no approvers, as Gitea's own default.
-    body: JSON.stringify({ name, approvers: { groups: ["staff", "Owners"] } }),
+    body: JSON.stringify({
+      name,
+      approvers: { groups: ["everyone", "Owners"] },
+    }),
   });
   const body = await response.text();
   expect(response.status, `create binder failed: ${body}`).toBe(201);

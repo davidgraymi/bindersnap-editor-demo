@@ -4,7 +4,6 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { CreateBinderBodyAccess } from './createBinderBodyAccess.ts';
 import type { CreateBinderBodyApprovers } from './createBinderBodyApprovers.ts';
 
 export type CreateBinderBody = {
@@ -13,5 +12,4 @@ export type CreateBinderBody = {
   description?: string;
   openToOrganization?: boolean;
   approvers?: CreateBinderBodyApprovers;
-  access?: CreateBinderBodyAccess;
 };

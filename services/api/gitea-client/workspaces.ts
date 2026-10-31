@@ -10,7 +10,7 @@ import { bootstrapEmptyMainBranch } from "./repos";
 import {
   addTeamMember,
   createOrganization,
-  ensureStaffTeam,
+  ensureEveryoneTeam,
   findOrganization,
   grantTeamOnRepo,
   type GiteaOrganization,
@@ -433,7 +433,7 @@ export async function provisionWorkspace(
   // `staff` is still ensured either way: it is the organization's membership
   // list, and a restricted binder is a binder it is not granted onto — not a
   // reason for it to be missing.
-  const staff = await ensureStaffTeam({ client, org });
+  const staff = await ensureEveryoneTeam({ client, org });
   if (openToOrganization) {
     await grantTeamOnRepo({ client, teamId: staff.id, org, repo: name });
   }
@@ -496,7 +496,7 @@ export async function provisionOrganization(
   //
   // Best-effort: an organization without `staff` is still an organization, and
   // `provisionWorkspace` makes it if it has to.
-  await ensureStaffTeam({ client, org: organization.name })
+  await ensureEveryoneTeam({ client, org: organization.name })
     .then((staff) =>
       addTeamMember({ client, teamId: staff.id, username: owner }),
     )
