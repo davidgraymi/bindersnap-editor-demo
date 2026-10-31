@@ -3822,6 +3822,23 @@ test("the settings page takes a typed approval count, and says when nobody could
     .addCookies([
       { name: "bindersnap_session", value: sessionCookie, url: APP_BASE_URL },
     ]);
+  // Its owner approves, so the warning below is about the count, not about
+  // nobody having been chosen.
+  expect(
+    (
+      await fetch(
+        `${API_BASE_URL}/api/app/binders/${org.name}/clinical/rules`,
+        {
+          method: "PATCH",
+          headers: authHeaders(sessionCookie),
+          body: JSON.stringify({
+            approvers: { groups: ["Owners"], people: [] },
+          }),
+        },
+      )
+    ).status,
+  ).toBe(200);
+
   await page.goto(`${APP_BASE_URL}/${org.name}/clinical/-/settings`);
   const count = page.getByLabel("Approvals needed before publishing");
   // A new binder needs none, and none is something anybody can meet.
