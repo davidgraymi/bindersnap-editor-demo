@@ -7,7 +7,12 @@ import {
   describeApprovers,
   approverReach,
   noApproversNote,
+  describeBinderGroup,
+  describeMembers,
+  isAnyBinderRoleTeam,
   describeTeamAccess,
+  isBinderRoleTeam,
+  searchMembers,
   searchApprovers,
   parseApprovalCount,
   unreachableApprovalsNote,
@@ -204,6 +209,79 @@ describe("searching for approvers", () => {
   test("calls the whole organization Everyone, and finds it by that name", () => {
     expect(searchApprovers(options, "everyone", none, title, canPick)).toEqual([
       { kind: "group", value: "everyone", label: "Everyone", canPick: true },
+    ]);
+  });
+});
+
+describe("a binder's members", () => {
+  test("its own per-person teams are not groups", () => {
+    expect(isBinderRoleTeam("clinical", "clinical-authors")).toBe(true);
+    expect(isBinderRoleTeam("clinical", "Clinical-Admins")).toBe(true);
+    // Another binder's, or a group somebody made, is a group here.
+    expect(isBinderRoleTeam("clinical", "corporate-authors")).toBe(false);
+    expect(isBinderRoleTeam("clinical", "quality-committee")).toBe(false);
+  });
+
+  test("its own per-person teams are named for what they hold", () => {
+    const name = (handle: string) => `Group ${handle}`;
+    expect(describeBinderGroup("clinical", "clinical-admins", name)).toBe(
+      "This binder's admins",
+    );
+    expect(describeBinderGroup("clinical", "clinical-authors", name)).toBe(
+      "This binder's editors",
+    );
+    expect(describeBinderGroup("clinical", "clinical-reviewers", name)).toBe(
+      "This binder's reviewers",
+    );
+    expect(describeBinderGroup("clinical", "board", name)).toBe("Group board");
+  });
+
+  test("another binder's per-person team is not a group to offer", () => {
+    expect(
+      isAnyBinderRoleTeam({
+        name: "corporate-authors",
+        binders: ["corporate"],
+      }),
+    ).toBe(true);
+    expect(isAnyBinderRoleTeam({ name: "board", binders: ["corporate"] })).toBe(
+      false,
+    );
+  });
+
+  test("a group's row names who is in it", () => {
+    const person = (fullName: string) => ({
+      login: fullName.toLowerCase(),
+      fullName,
+    });
+    expect(describeMembers([])).toBe("Nobody in it yet");
+    expect(describeMembers([person("Alice")])).toBe("Alice");
+    expect(describeMembers([person("Alice"), person("Priya")])).toBe(
+      "Alice and Priya",
+    );
+    expect(
+      describeMembers(["Hugo", "Dan", "Ines", "Bob", "Carol"].map(person)),
+    ).toBe("Hugo, Dan, Ines and 2 more");
+    // Nobody is nameless: a login stands in.
+    expect(describeMembers([{ login: "dan", fullName: "" }])).toBe("dan");
+  });
+
+  test("one search finds groups and people, groups first", () => {
+    const matches = searchMembers(
+      [
+        { name: "quality-committee", access: "read" },
+        { name: "legal", access: "read" },
+      ],
+      [
+        { login: "erin", fullName: "Erin Vasquez" },
+        { login: "quinn", fullName: "" },
+      ],
+      "qu",
+      (name) => name.replace("-", " "),
+    );
+    expect(matches.map((match) => match.label)).toEqual([
+      "quality committee",
+      "Erin Vasquez",
+      "quinn",
     ]);
   });
 });

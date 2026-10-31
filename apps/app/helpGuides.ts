@@ -102,14 +102,14 @@ export const HELP_GUIDES: HelpGuide[] = [
         heading: "How many approvals",
         paragraphs: [
           "A new binder needs no approvals, so you can publish your own changes straight away while you move in.",
-          "When colleagues should sign off first, set how many approvals a change needs, and who can give them, in Settings → How changes are approved. The binder's admin can change both at any time, and every change is recorded. Nobody can approve their own change, so a binder needing one approval needs one other approver.",
+          "When colleagues should sign off first, set how many approvals a change needs, and who can give them, in the binder's Settings, on the Approvals tab. The binder's admin can change both at any time, and every change is recorded. Nobody can approve their own change, so a binder needing one approval needs one other approver.",
           "Whatever the number, a reviewer you ask holds the change until they answer, and one who asks for changes holds it until they are happy.",
         ],
       },
       {
         heading: "Who approves changes",
         paragraphs: [
-          "Only a binder's approvers can approve its changes. Choose them under Who approves changes, beside the number, or when you create the binder: groups, people, or both. The list shows everyone in your organization; only people and groups with access to the binder can be chosen. To choose someone else, give them access under People or Groups first. Ask for 3 approvals from your Board, and nothing is published until three board members approve. Everyone else with access can still review and comment.",
+          "Only a binder's approvers can approve its changes. Choose them on the Approvals tab, in the Every change row beside the number, or when you create the binder: groups, people, or both. The list shows everyone in your organization; only people and groups with access to the binder can be chosen. To choose someone else, give them access on the People & access tab first. Ask for 3 approvals from your Board, and nothing is published until three board members approve. Everyone else with access can still review and comment.",
           "A new binder has no approvers and needs no approvals, so you can publish while you move in. Choose approvers before you raise the number, or nothing can be published.",
           "The number is shared across everyone you choose. 3 from the Board and the medical staff means any 3 of them together, not 3 from each. To make sure one group always signs off, add a sign-off rule for it as well.",
           "Every published version records the rule it met: how many approvals it needed, whose counted, and who gave them.",
@@ -118,7 +118,7 @@ export const HELP_GUIDES: HelpGuide[] = [
       {
         heading: "If the document changes after it was approved",
         paragraphs: [
-          "By default, a new version clears the approvals already given — people approved what they read, not what came after. You can turn that off in the binder's settings, and the change is recorded.",
+          "By default, a new version clears the approvals already given — people approved what they read, not what came after. You can turn that off on the binder's Approvals tab, under Before publishing, and the change is recorded.",
         ],
       },
     ],

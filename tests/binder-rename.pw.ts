@@ -380,9 +380,9 @@ test("the rename field is not drawn for somebody who cannot use it", async ({
   await signInBrowser(page, strangerSession);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}?tab=settings`);
 
-  await expect(page.getByRole("heading", { name: "People" })).toBeVisible({
-    timeout: 30_000,
-  });
+  await expect(
+    page.getByText("Only a binder administrator can change these settings."),
+  ).toBeVisible({ timeout: 30_000 });
   await expect(
     page.getByRole("textbox", { name: "Name", exact: true }),
   ).toHaveCount(0);

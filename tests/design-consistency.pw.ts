@@ -284,6 +284,9 @@ test("every row of controls in the product is one size", async ({ page }) => {
   // screens to the list above.
   await page.goto(`${APP_BASE_URL}/${org}/${binder}?tab=sign-off`);
   await settleOnRealShell(page);
+  await page
+    .getByRole("button", { name: "Add a rule for a folder or document" })
+    .click();
   const foot = page.locator("#sign-off .bs-panel-foot").first();
   await foot
     .getByRole("combobox", { name: "What has to be signed off" })
@@ -291,13 +294,13 @@ test("every row of controls in the product is one size", async ({ page }) => {
   await foot
     .getByRole("combobox", { name: "Which group signs it off" })
     .selectOption({ index: 1 });
-  await page.getByRole("button", { name: "Add a rule" }).click();
+  await page.getByRole("button", { name: "Add this rule" }).click();
   await page
     .getByRole("button", { name: /^Change the rule for / })
     .first()
     .click();
   await expect(
-    page.locator("#sign-off .bs-row--on").getByRole("combobox", {
+    page.locator("#sign-off .bs-settings-rules-edit").getByRole("combobox", {
       name: "What has to be signed off",
     }),
   ).toBeVisible({ timeout: 30_000 });
@@ -468,6 +471,8 @@ test("nothing but the three containers holds content in a binder", async ({
     "bs-section-note",
     "binder-strip",
     "change-main",
+    // A page's own tabs title it, the way the page heading does.
+    "doc-tabs",
   ];
 
   const screens: Array<[string, string]> = [

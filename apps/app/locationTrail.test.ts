@@ -114,6 +114,9 @@ test("each of a binder's screens is one step into the binder", () => {
   // Old addresses for what are now sections of Settings land on Settings.
   expect(path("/riverside-health/clinical?tab=people")).toEqual(["Settings"]);
   expect(path("/riverside-health/clinical?tab=sign-off")).toEqual(["Settings"]);
+  expect(path("/riverside-health/clinical?tab=approvals")).toEqual([
+    "Settings",
+  ]);
   expect(path("/riverside-health/clinical?archive=1")).toEqual(["Archive"]);
   expect(path("/riverside-health/clinical?edit=1")).toEqual(["Editing"]);
   expect(path("/riverside-health/clinical?edit=propose")).toEqual([

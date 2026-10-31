@@ -458,12 +458,15 @@ test("the binder's tabs still work once a document is open", async ({
   );
 
   // Leaving the document by the sidebar, which is where the binder's own
-  // screens live now. People is a section of Settings, not a screen of its own.
+  // screens live now. People & access is a tab of Settings, not a screen of
+  // its own.
   await openBinderSection(page, "Settings");
 
-  await expect(page.getByRole("heading", { name: "People" })).toBeVisible({
-    timeout: 30_000,
-  });
+  await expect(page.getByRole("tab", { name: "General" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+    { timeout: 30_000 },
+  );
   // The document is gone, not merely covered: the page is Settings now, and
   // the binder is named once, in the sidebar, by the name it was given rather
   // than by the slug the repository is addressed by.
@@ -476,20 +479,31 @@ test("the binder's tabs still work once a document is open", async ({
   // Who can act here is a question about people, not about billing. The seat
   // chip on every row and the "N people · N seats · N free" line above them
   // both said the same thing twice and neither belonged on this page.
+  await page.getByRole("tab", { name: "People & access" }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/${org}/${binder}/-/settings/people$`),
+  );
+  await expect(
+    page.getByLabel("Add people or groups to this binder"),
+  ).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(/\d+ seats? · \d+ free/)).toHaveCount(0);
   await expect(page.getByText("Seat", { exact: true })).toHaveCount(0);
 
-  // Sign-off rules are on the same page — plus the one thing that section must
-  // never say. Gitea is our plumbing, and naming it on a page a compliance
-  // manager reads explains nothing.
+  // The approval rules are a tab of the same page — plus the one thing it
+  // must never say. Gitea is our plumbing, and naming it on a page a
+  // compliance manager reads explains nothing.
+  await page.getByRole("tab", { name: "Approvals" }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/${org}/${binder}/-/settings/approvals$`),
+  );
   await expect(
-    page.getByRole("heading", { name: "Sign-off rules" }),
+    page.getByRole("columnheader", { name: "Who approves" }),
   ).toBeVisible({ timeout: 30_000 });
   await expect(page.locator("#sign-off").getByText("Gitea")).toHaveCount(0);
 
   // And a second screen, to prove the first was not a one-off.
   await openBinderSection(page, "History");
-  await expect(page.getByRole("heading", { name: "People" })).toHaveCount(0, {
+  await expect(page.getByRole("tab", { name: "Approvals" })).toHaveCount(0, {
     timeout: 30_000,
   });
 });

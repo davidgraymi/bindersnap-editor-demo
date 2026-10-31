@@ -6,11 +6,10 @@ import {
   FileText,
   Folder,
   Library,
-  Lock,
   Pencil,
+  Plus,
   ShieldCheck,
   Users,
-  X,
 } from "lucide-react";
 import { useIsReadOnly } from "../readOnlyContext";
 import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
@@ -48,15 +47,22 @@ import {
   approverOptions,
   countChosenApprovers,
   describeApprovers,
+  describeBinderGroup,
+  describeMembers,
   GROUP_LEVELS,
   groupLevelLabel,
   approverReach,
+  isAnyBinderRoleTeam,
+  isBinderRoleTeam,
   noApproversNote,
   parseApprovalCount,
+  searchMembers,
   unreachableApprovalsNote,
   type ApproversView,
+  type MemberMatch,
 } from "../binderSettings";
 import { ApproverPicker } from "./ApproverPicker";
+import { FloatingResults } from "./FloatingResults";
 import { RemoveButton } from "./RemoveButton";
 import { formatDocumentName } from "../documentDisplay";
 import { describeGroupName } from "../../../packages/utils/groupName";
@@ -66,38 +72,43 @@ import { SettingsGroup } from "./SettingsGroup";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 /**
- * How this binder is governed — one page, one scroll, six blocks.
+ * How this binder is governed, in three tabs: General, People & access, and
+ * Approvals.
  *
- * **It was three tabs**: People, Sign-off rules and Settings, each visited a
- * handful of times a year and drawn as peers of the tree somebody opens every
- * morning. They are one question — who can do what here, and what has to be
- * true before a policy changes — so they are one page. No index down the side:
- * six short blocks you can read in one scroll do not need a map to reach
- * something already on screen.
+ * **Three tabs, because one scroll hid the point of the page.** On one page
+ * the approval rules — the product's one promise — sat under the name form,
+ * the visibility choice, every person and every group, and an empty-state
+ * essay about sign-off rules. An owner of the product could not find them.
+ * The tabs are the questions somebody arrives with: what is it called, who is
+ * in it, and what has to happen before a change is published. Each tab has
+ * one name and no second heading saying it again.
  *
- * **People, Groups and Sign-off rules are one shape.** A panel of rows with a
- * single footer that adds to it — pick the thing, pick the level, Add. They
- * had three shapes, and adding a person and adding a group are the same act.
+ * **Approvals is one table.** The binder's approvers and its sign-off rules
+ * answer the same question — who has to approve what — so they are rows of
+ * one table, Rule · Who approves · Approvals required, the way GitLab lists a
+ * project's approval rules. How many and who are on the same row, because
+ * they are one rule.
  *
- * **Most of the explanatory notes are gone.** Each was true and each was us
- * talking over the customer's own screen. The sentences that survive are the
- * ones that change what somebody would do: a rule that is holding nothing, a
- * binder whose rules are not enforced, and that changing the rules needs an
- * approval.
- *
- * See D5 in `docs/design/binder-screens-spec.md`.
+ * **People & access is one list.** The groups granted here and the people
+ * added one by one, with one search to add either. Whether the whole
+ * organization can read it is one switch above the list.
  */
 
-export type BinderSettingsSection = "people" | "sign-off";
+export type BinderSettingsSection = "general" | "access" | "approvals";
+
+const SECTIONS: ReadonlyArray<{ id: BinderSettingsSection; label: string }> = [
+  { id: "general", label: "General" },
+  // The organization's word for the same question, on its own tab.
+  { id: "access", label: "People & access" },
+  { id: "approvals", label: "Approvals" },
+];
 
 interface BinderSettingsProps {
   org: string;
   binder: string;
-  /**
-   * A block to scroll to once the page has read, for the addresses that were
-   * tabs of their own — `/-/settings/people` and `/-/settings/sign-off` open on them.
-   */
-  focus?: BinderSettingsSection;
+  /** The tab on show: `/-/settings`, `/-/settings/people`, `/-/settings/approvals`. */
+  section: BinderSettingsSection;
+  onSection: (section: BinderSettingsSection) => void;
   /**
    * The binder's new address, once it has one.
    *
@@ -121,7 +132,8 @@ function errorMessage(err: unknown, fallback: string): string {
 export function BinderSettings({
   org,
   binder,
-  focus,
+  section,
+  onSection,
   onRenamed,
   onDescribed,
   onOpenChange,
@@ -167,30 +179,44 @@ export function BinderSettings({
   const setSettings = (next: WorkspaceSettingsPayload) =>
     queryClient.setQueryData(queryKeys.binderSettings(org, binder), next);
 
-  const peopleRef = useRef<HTMLElement>(null);
-  const signOffRef = useRef<HTMLElement>(null);
-
   const loaded = settings !== null && people !== null && description !== null;
 
-  // Once, when the page has something to scroll to. A block that is not drawn
-  // yet has no position.
-  useEffect(() => {
-    if (!loaded || !focus) return;
-    const target = focus === "people" ? peopleRef : signOffRef;
-    target.current?.scrollIntoView({ block: "start" });
-  }, [loaded, focus]);
+  const tabs = (
+    <nav
+      className="doc-tabs bs-settings-tabs"
+      role="tablist"
+      aria-label="Settings"
+    >
+      {SECTIONS.map((entry) => (
+        <button
+          key={entry.id}
+          type="button"
+          role="tab"
+          className={`doc-tab${section === entry.id ? " doc-tab--active" : ""}`}
+          aria-selected={section === entry.id}
+          onClick={() => onSection(entry.id)}
+        >
+          {entry.label}
+        </button>
+      ))}
+    </nav>
+  );
 
   if (error) {
     return (
-      <p className="bs-note bs-note--danger" role="alert">
-        {error}
-      </p>
+      <div className="binder-pane bs-settings bs-settings--tabbed">
+        {tabs}
+        <p className="bs-note bs-note--danger" role="alert">
+          {error}
+        </p>
+      </div>
     );
   }
 
   if (!loaded) {
     return (
-      <div className="binder-pane bs-settings">
+      <div className="binder-pane bs-settings bs-settings--tabbed">
+        {tabs}
         <SkeletonGroup label="Reading this binder's settings">
           <SkeletonLine width="medium" />
           <SkeletonLine width="short" />
@@ -201,98 +227,80 @@ export function BinderSettings({
 
   const canManage = settings.canManage && !isReadOnly;
   const canManagePeople = people.canManage && !isReadOnly;
+  const managing = section === "access" ? canManagePeople : canManage;
 
   return (
-    <div className="binder-pane bs-settings">
-      <SettingsGroup
-        id="binder-settings-general"
-        title="General"
-        note="What this binder is called, and what it is for."
-      >
-        {canManage ? (
-          <NameAndDescription
-            org={org}
-            binder={binder}
-            description={description}
-            onRenamed={(workspace) => {
-              refreshOrganization();
-              onRenamed?.(workspace);
-            }}
-            onDescribed={(next) => {
-              queryClient.setQueryData(
-                binderQuery(org, binder).queryKey,
-                (overview) =>
-                  overview && {
-                    ...overview,
-                    workspace: { ...overview.workspace, description: next },
-                  },
-              );
-              onDescribed?.();
-            }}
-          />
-        ) : (
-          // Said once, at the top, rather than as a missing control in every
-          // block below.
-          <p className="bs-section-note">
-            Only a binder administrator can change these settings.
-          </p>
-        )}
-      </SettingsGroup>
+    <div className="binder-pane bs-settings bs-settings--tabbed">
+      {tabs}
 
-      <SettingsGroup
-        id="binder-settings-access"
-        title="Access"
-        note="Who can read this binder, and what each person can do in it."
-      >
-        <PeopleSections
-          ref={peopleRef}
+      {/* Said once, at the top, rather than as a missing control on every
+          row below. */}
+      {managing ? null : (
+        <p className="bs-section-note">
+          Only a binder administrator can change these settings.
+        </p>
+      )}
+
+      {section === "access" ? (
+        <AccessTab
           org={org}
           binder={binder}
           payload={people}
           canManage={canManagePeople}
           onChanged={setPeople}
         />
-      </SettingsGroup>
-
-      <SettingsGroup
-        id="binder-settings-review"
-        title="Review and publishing"
-        note="What has to be true before a change becomes the published version."
-      >
-        <SignOffSection
-          ref={signOffRef}
-          org={org}
-          binder={binder}
-          settings={settings}
-          canManage={canManage}
-          onOpenChange={onOpenChange}
-        />
-
-        <ApprovalSection
+      ) : section === "approvals" ? (
+        <ApprovalsTab
           org={org}
           binder={binder}
           settings={settings}
           canManage={canManage}
           onChanged={setSettings}
+          onOpenChange={onOpenChange}
         />
-      </SettingsGroup>
+      ) : (
+        <>
+          {canManage ? (
+            <NameAndDescription
+              org={org}
+              binder={binder}
+              description={description}
+              onRenamed={(workspace) => {
+                refreshOrganization();
+                onRenamed?.(workspace);
+              }}
+              onDescribed={(next) => {
+                queryClient.setQueryData(
+                  binderQuery(org, binder).queryKey,
+                  (overview) =>
+                    overview && {
+                      ...overview,
+                      workspace: { ...overview.workspace, description: next },
+                    },
+                );
+                onDescribed?.();
+              }}
+            />
+          ) : null}
 
-      {settings.canDelete && !isReadOnly ? (
-        <SettingsGroup
-          id="binder-settings-delete"
-          title="Delete this binder"
-          note="Permanent. Only an owner of the organization can do this."
-        >
-          <DeleteBinder
-            org={org}
-            binder={binder}
-            onDeleted={() => {
-              refreshOrganization();
-              onDeleted?.();
-            }}
-          />
-        </SettingsGroup>
-      ) : null}
+          {settings.canDelete && !isReadOnly ? (
+            <SettingsGroup
+              id="binder-settings-delete"
+              title="Delete this binder"
+              note="Permanent. Only an owner of the organization can do this."
+            >
+              <DeleteBinder
+                org={org}
+                binder={binder}
+                onDeleted={() => {
+                  refreshOrganization();
+                  onDeleted?.();
+                }}
+              />
+            </SettingsGroup>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }
@@ -498,7 +506,7 @@ function NameAndDescription({
   );
 }
 
-/* ── Who can see it, people and groups ────────────────────────────────── */
+/* ── People & access ──────────────────────────────────────────────────── */
 
 /**
  * The organization's Owners team reaches every binder implicitly rather than
@@ -508,32 +516,39 @@ function isOwnersTeam(team: { name: string }): boolean {
   return team.name === "Owners";
 }
 
-/**
- * Why this person can do what they can do here, in one line.
- *
- * The row that raises "why can Aisha approve here" is the row that answers it
- * — and for somebody here through a shared group that answer is the group's
- * name, which is also why the row has no role picker.
- */
-function describeWhy(person: BinderPerson): string {
-  if (!person.individual) {
-    return `Through ${describeGroupName(person.through)}`;
-  }
-  if (person.groups.length === 0) return "Added to this binder";
-  return `Added to this binder · also in ${person.groups
-    .map(describeGroupName)
-    .join(", ")}`;
+/** Everyone in the organization: the switch, never a row or a pick. */
+function isEveryoneGroup(name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower === "everyone" || lower === "staff";
 }
 
-function PeopleSections({
-  ref,
+/**
+ * The rest of what is true of somebody added one by one: the groups here they
+ * are also in. Somebody here *only* through a group is not a row of their own
+ * — their group's row names them.
+ */
+function describeAlsoIn(person: BinderPerson): string | null {
+  if (person.groups.length === 0) return null;
+  return `Also in ${person.groups.map(describeGroupName).join(", ")}`;
+}
+
+/**
+ * Who can get into this binder, and what they can do there.
+ *
+ * **One switch, one list, one search.** It was a pair of radio cards ("Who can
+ * see this binder"), a People list and a Groups list, with three ways to add.
+ * The radio pair was one yes-or-no drawn as two choices, under a name that
+ * undersold it — the people below it edit and administer, not only see. And
+ * the two lists showed everyone twice: once as a person "through" a group,
+ * and again inside the group.
+ */
+function AccessTab({
   org,
   binder,
   payload,
   canManage,
   onChanged,
 }: {
-  ref: React.Ref<HTMLElement>;
   org: string;
   binder: string;
   payload: BinderPeoplePayload;
@@ -543,6 +558,12 @@ function PeopleSections({
   const orgDisplayName = useOrganizationDisplayName(org);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // Only an admin can add, so only an admin pays for the organization's
+  // groups. Losing them costs the groups in the search, not the page.
+  const orgRead = useQuery({
+    ...organizationPeopleQuery(org),
+    enabled: canManage,
+  });
 
   async function run(act: () => Promise<BinderPeoplePayload>) {
     setBusy(true);
@@ -550,7 +571,7 @@ function PeopleSections({
     try {
       onChanged(await act());
     } catch (err: unknown) {
-      // On the block, not the page. A refusal here is a sentence worth
+      // On the tab, not the page. A refusal here is a sentence worth
       // reading — "she is here through Quality Committee, and that reaches
       // three binders" — and replacing the list with it would hide the row.
       setNotice(errorMessage(err, "That did not work."));
@@ -560,169 +581,165 @@ function PeopleSections({
   }
 
   const open = payload.openToOrganization;
+  const groups = payload.groups.filter(
+    (group) => !isBinderRoleTeam(binder, group.name),
+  );
+  const individuals = payload.people.filter((person) => person.individual);
+
+  const granted = new Set(groups.map((group) => group.name.toLowerCase()));
+  const groupCandidates = (orgRead.data?.groups ?? []).filter(
+    (group) =>
+      !granted.has(group.name.toLowerCase()) &&
+      !isOwnersTeam(group) &&
+      !isEveryoneGroup(group.name) &&
+      !isBinderRoleTeam(binder, group.name) &&
+      !isAnyBinderRoleTeam(group),
+  );
+  // Somebody here through a group is still offered: adding them on their own
+  // is the one way to give one member of a group more in this binder.
+  const added = new Set(
+    individuals.map((person) => person.login.toLowerCase()),
+  );
+  const peopleCandidates = payload.organizationMembers.filter(
+    (person) => !added.has(person.login.toLowerCase()),
+  );
 
   return (
     <>
-      <section className="bs-section" aria-labelledby="binder-settings-seen">
-        <div className="bs-section-head">
-          <h3 className="bs-section-title" id="binder-settings-seen">
-            Who can see this binder
-          </h3>
-        </div>
-        {canManage ? (
-          /* A radio pair rather than a toggle: the two states are a choice
-             somebody made, not an on and an off. "Only the people below" is
-             the answer an HR investigation binder needs, not the absence of a
-             setting. */
-          <div
-            className="bs-fields"
-            role="radiogroup"
-            aria-labelledby="binder-settings-seen"
-          >
-            <label className="bs-choice">
-              <input
-                type="radio"
-                name="binder-visibility"
-                checked={open}
-                disabled={busy}
-                onChange={() =>
-                  void run(() => setBinderVisibility(org, binder, true))
-                }
-              />
-              <Building2
-                className="bs-choice-icon"
-                size={16}
-                strokeWidth={1.75}
-                aria-hidden="true"
-              />
-              <span>
-                <span className="bs-choice-name">
-                  Everyone at {orgDisplayName}
-                </span>
-                <span className="bs-choice-note">
-                  They can read it and comment on changes. Only the approvers
-                  you choose can approve them.
-                </span>
-              </span>
-            </label>
-            <label className="bs-choice">
-              <input
-                type="radio"
-                name="binder-visibility"
-                checked={!open}
-                disabled={busy}
-                onChange={() =>
-                  void run(() => setBinderVisibility(org, binder, false))
-                }
-              />
-              <Lock
-                className="bs-choice-icon"
-                size={16}
-                strokeWidth={1.75}
-                aria-hidden="true"
-              />
-              <span>
-                <span className="bs-choice-name">Only the people below</span>
-                <span className="bs-choice-note">
-                  These people and groups, and nobody else.
-                </span>
-              </span>
-            </label>
-          </div>
-        ) : (
-          <p className="bs-section-note">
-            {open
-              ? `Everyone at ${orgDisplayName} can read this binder and comment on changes. The people below can do more.`
-              : "Only the people below can see this binder."}
-          </p>
-        )}
-      </section>
-
       {notice ? (
         <p className="bs-note bs-note--danger" role="alert">
           {notice}
         </p>
       ) : null}
 
-      <section
-        className="bs-section"
-        id="people"
-        ref={ref}
-        aria-labelledby="binder-settings-people"
-      >
-        <div className="bs-section-head">
-          <h3 className="bs-section-title" id="binder-settings-people">
-            People
-          </h3>
-          <span className="bs-section-count">{payload.people.length}</span>
-        </div>
-        <div className="bs-panel">
-          {payload.people.length === 0 ? (
-            <div className="bs-empty">
-              <p>
-                Nobody is granted here, or your access does not let you see who
-                is — Gitea shows a binder&rsquo;s teams to its admins.
-              </p>
-            </div>
-          ) : (
-            <ul className="bs-row-list">
-              {payload.people.map((person) => (
-                <PersonRow
-                  key={person.login}
-                  person={person}
-                  canManage={canManage}
-                  busy={busy}
-                  onSetLevel={(level) =>
-                    void run(() =>
-                      setBinderPersonLevel(org, binder, person.login, level),
-                    )
-                  }
-                  onRemove={() =>
-                    void run(() =>
-                      removeBinderPerson(org, binder, person.login),
-                    )
-                  }
+      <div className="bs-panel">
+        <ul className="bs-row-list">
+          <li className="bs-row">
+            <span className="bs-row-icon">
+              <AppIcon icon={Building2} size="md" />
+            </span>
+            <span className="bs-row-body">
+              <label className="bs-row-name" htmlFor="binder-open">
+                Open to everyone at {orgDisplayName}
+              </label>
+              <span className="bs-row-meta">
+                {open
+                  ? "Everyone in the organization can read it and comment on changes."
+                  : "Only the people and groups below can see it."}
+              </span>
+            </span>
+            <span className="bs-row-right bs-settings-value">
+              {canManage ? (
+                <input
+                  id="binder-open"
+                  className="bs-checkbox"
+                  type="checkbox"
+                  checked={open}
+                  disabled={busy}
+                  onChange={(event) => {
+                    const next = event.target.checked;
+                    void run(() => setBinderVisibility(org, binder, next));
+                  }}
                 />
-              ))}
-            </ul>
-          )}
-          {canManage ? (
-            <AddPersonFoot
-              people={payload.organizationMembers}
-              // Only individual grants. Somebody here through a group is still
-              // offered, because adding them individually is the one way to
-              // give a single member of a group more in this binder.
-              already={payload.people
-                .filter((person) => person.individual)
-                .map((person) => person.login)}
-              busy={busy}
-              onAdd={(username, level) =>
-                void run(() => addBinderPerson(org, binder, username, level))
-              }
-            />
-          ) : null}
-        </div>
-      </section>
+              ) : open ? (
+                "Yes"
+              ) : (
+                "No"
+              )}
+            </span>
+          </li>
+        </ul>
+      </div>
 
-      <GroupsSection
-        org={org}
-        binder={binder}
-        groups={payload.groups}
-        canManage={canManage}
-        busy={busy}
-        onChanged={(act) => void run(act)}
-      />
+      <div className="bs-panel">
+        {groups.length + individuals.length === 0 ? (
+          <div className="bs-empty">
+            <p>
+              Nobody has been added, or your access does not let you see who
+              has.
+            </p>
+          </div>
+        ) : (
+          <ul className="bs-row-list" aria-label="People and groups">
+            {groups.map((group) => {
+              const name = describeGroupName(group.name);
+              return (
+                <li className="bs-row" key={`group:${group.id}`}>
+                  <span className="bs-row-icon">
+                    <AppIcon icon={Users} size="md" />
+                  </span>
+                  <span className="bs-row-body">
+                    <span className="bs-row-name">{name}</span>
+                    {/* A group with nobody in it grants nothing and, named by
+                        a rule, waits for nobody. Said on its row. */}
+                    <span
+                      className={`bs-row-meta${group.members.length === 0 ? " bs-row-meta--warn" : ""}`}
+                    >
+                      {describeMembers(group.members)}
+                    </span>
+                  </span>
+                  <span className="bs-row-right">
+                    <span>{groupLevelLabel(group.access)}</span>
+                    {canManage && !isOwnersTeam(group) ? (
+                      <RemoveButton
+                        label={`Take ${name} out of this binder`}
+                        busy={busy}
+                        onClick={() =>
+                          void run(async () => {
+                            await revokeBinderGroup(org, binder, group.name);
+                            return fetchBinderPeople(org, binder);
+                          })
+                        }
+                      />
+                    ) : null}
+                  </span>
+                </li>
+              );
+            })}
+            {individuals.map((person) => (
+              <PersonRow
+                key={`person:${person.login}`}
+                person={person}
+                canManage={canManage}
+                busy={busy}
+                onSetLevel={(level) =>
+                  void run(() =>
+                    setBinderPersonLevel(org, binder, person.login, level),
+                  )
+                }
+                onRemove={() =>
+                  void run(() => removeBinderPerson(org, binder, person.login))
+                }
+              />
+            ))}
+          </ul>
+        )}
+        {canManage ? (
+          <AddMember
+            groups={groupCandidates}
+            people={peopleCandidates}
+            busy={busy}
+            onAddGroup={(group) =>
+              void run(async () => {
+                await grantBinderGroup(org, binder, group);
+                return fetchBinderPeople(org, binder);
+              })
+            }
+            onAddPerson={(username, level) =>
+              void run(() => addBinderPerson(org, binder, username, level))
+            }
+          />
+        ) : null}
+      </div>
     </>
   );
 }
 
 /**
- * One person, and what is true of them here.
+ * Somebody added to this binder on their own, and what they can do here.
  *
  * A role is a dropdown rather than a dialog: changing it is one Gitea call and
- * reversible. Somebody here through a group gets their level as text in its
- * place — the visible face of a real constraint, since that group is one
- * object across every binder it reaches.
+ * reversible.
  */
 function PersonRow({
   person,
@@ -742,17 +759,17 @@ function PersonRow({
     GROUP_LEVELS.find(
       (option) => option.label === groupLevelLabel(person.access),
     )?.value ?? "";
-  const editable = canManage && person.individual;
+  const also = describeAlsoIn(person);
 
   return (
     <li className="bs-row">
       <PersonAvatar person={person} size="sm" />
       <span className="bs-row-body">
         <span className="bs-row-name">{name}</span>
-        <span className="bs-row-meta">{describeWhy(person)}</span>
+        {also ? <span className="bs-row-meta">{also}</span> : null}
       </span>
       <span className="bs-row-right">
-        {editable ? (
+        {canManage ? (
           <>
             <select
               className="bs-input bs-input--sm bs-settings-level"
@@ -781,213 +798,166 @@ function PersonRow({
   );
 }
 
-function AddPersonFoot({
-  people,
-  already,
-  busy,
-  onAdd,
-}: {
-  people: Array<{ login: string; fullName: string }>;
-  /** Who already holds an individual grant here, and so has nothing to add. */
-  already: string[];
-  busy: boolean;
-  onAdd: (username: string, level: string) => void;
-}) {
-  const [username, setUsername] = useState("");
-  const [level, setLevel] = useState("reviewer");
-
-  const here = new Set(already.map((login) => login.toLowerCase()));
-  const candidates = people.filter(
-    (person) => !here.has(person.login.toLowerCase()),
-  );
-
-  return (
-    <div className="bs-panel-foot">
-      <select
-        className="bs-input bs-input--sm bs-settings-pick"
-        value={username}
-        disabled={busy || candidates.length === 0}
-        onChange={(event) => setUsername(event.target.value)}
-        aria-label="Add somebody to this binder"
-      >
-        <option value="">
-          {candidates.length === 0
-            ? "Everybody in the organization is already here"
-            : "Add somebody…"}
-        </option>
-        {candidates.map((person) => (
-          <option key={person.login} value={person.login}>
-            {person.fullName || person.login}
-          </option>
-        ))}
-      </select>
-      <select
-        className="bs-input bs-input--sm bs-settings-level"
-        value={level}
-        disabled={busy}
-        onChange={(event) => setLevel(event.target.value)}
-        aria-label="At what level"
-      >
-        {GROUP_LEVELS.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      <button
-        type="button"
-        className="bs-btn bs-btn--sm bs-btn-secondary"
-        disabled={busy || username === ""}
-        onClick={() => {
-          onAdd(username, level);
-          setUsername("");
-        }}
-      >
-        Add
-      </button>
-    </div>
-  );
-}
-
 /**
- * The groups granted onto this binder.
+ * The one way in: search the organization's groups and people, pick one,
+ * then Add.
  *
- * Composed here and made on the organization: a group carries one level
- * everywhere it is used, so the footer has no level picker — the level is in
- * the option. Each grant and revoke also rewrites the approvals whitelist in
- * the same request, which is what makes its members' approvals count.
+ * **A group brings its own level.** A group is one object across every binder
+ * it reaches, so it is added at the level it has; only a person is given one
+ * here.
  */
-function GroupsSection({
-  org,
-  binder,
+function AddMember({
   groups,
-  canManage,
+  people,
   busy,
-  onChanged,
+  onAddGroup,
+  onAddPerson,
 }: {
-  org: string;
-  binder: string;
-  groups: BinderPeoplePayload["groups"];
-  canManage: boolean;
+  groups: OrganizationGroup[];
+  people: Array<{ login: string; fullName: string }>;
   busy: boolean;
-  onChanged: (act: () => Promise<BinderPeoplePayload>) => void;
+  onAddGroup: (group: string) => void;
+  onAddPerson: (username: string, level: string) => void;
 }) {
-  // Only an admin can compose, so only an admin pays for the picker. Losing
-  // the picker costs the footer, not the page.
-  const groupsRead = useQuery({
-    ...organizationPeopleQuery(org),
-    enabled: canManage,
-  });
-  const available: OrganizationGroup[] | null = groupsRead.isError
-    ? []
-    : (groupsRead.data?.groups ?? null);
-  const [adding, setAdding] = useState("");
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [chosen, setChosen] = useState<MemberMatch | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [level, setLevel] = useState("reviewer");
+  const matches = searchMembers(groups, people, query, describeGroupName);
 
-  const granted = new Set(groups.map((group) => group.name.toLowerCase()));
-  const candidates = (available ?? []).filter(
-    (group) => !granted.has(group.name.toLowerCase()) && !isOwnersTeam(group),
-  );
+  if (chosen) {
+    return (
+      <div className="bs-panel-foot">
+        {chosen.kind === "group" ? (
+          <AppIcon icon={Users} size="sm" />
+        ) : (
+          <PersonAvatar
+            person={{ login: chosen.login, fullName: chosen.label }}
+            size="sm"
+          />
+        )}
+        <span className="bs-panel-foot-note bs-settings-chosen">
+          {chosen.label}
+        </span>
+        {chosen.kind === "person" ? (
+          <select
+            className="bs-input bs-input--sm bs-settings-level"
+            value={level}
+            disabled={busy}
+            onChange={(event) => setLevel(event.target.value)}
+            aria-label={`What ${chosen.label} can do here`}
+          >
+            {GROUP_LEVELS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span>{groupLevelLabel(chosen.access)}</span>
+        )}
+        <button
+          type="button"
+          className="bs-btn bs-btn--sm bs-btn-primary"
+          disabled={busy}
+          onClick={() => {
+            if (chosen.kind === "group") onAddGroup(chosen.name);
+            else onAddPerson(chosen.login, level);
+            setChosen(null);
+            setQuery("");
+          }}
+        >
+          Add
+        </button>
+        <button
+          type="button"
+          className="bs-btn bs-btn--sm bs-btn--quiet"
+          disabled={busy}
+          onClick={() => setChosen(null)}
+        >
+          Cancel
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <section className="bs-section" aria-labelledby="binder-settings-groups">
-      <div className="bs-section-head">
-        <h3 className="bs-section-title" id="binder-settings-groups">
-          Groups
-        </h3>
-        <span className="bs-section-count">{groups.length}</span>
-      </div>
-      <div className="bs-panel">
-        {groups.length === 0 ? (
-          <div className="bs-empty">
-            <p>No groups are granted onto this binder.</p>
-          </div>
-        ) : (
-          <ul className="bs-row-list">
-            {groups.map((group) => {
-              const name = describeGroupName(group.name);
-              const count = group.members.length;
-              return (
-                <li className="bs-row" key={group.id}>
-                  <span className="bs-row-icon">
-                    <AppIcon icon={Users} size="md" />
-                  </span>
-                  <span className="bs-row-body">
-                    <span className="bs-row-name">{name}</span>
-                    {/* A group with nobody in it grants nothing and, named by
-                        a sign-off rule, waits for nobody. Said on the row
-                        that grants it. */}
-                    <span
-                      className={`bs-row-meta${count === 0 ? " bs-row-meta--warn" : ""}`}
-                    >
-                      {count === 0
-                        ? "Nobody in it yet"
-                        : count === 1
-                          ? "1 person"
-                          : `${count} people`}
-                    </span>
-                  </span>
-                  <span className="bs-row-right">
-                    <span>{groupLevelLabel(group.access)}</span>
-                    {canManage && !isOwnersTeam(group) ? (
-                      <RemoveButton
-                        label={`Take ${name} out of this binder`}
-                        busy={busy}
-                        onClick={() =>
-                          onChanged(async () => {
-                            await revokeBinderGroup(org, binder, group.name);
-                            return fetchBinderPeople(org, binder);
-                          })
-                        }
+    <div className="bs-panel-foot bs-settings-adder">
+      <input
+        ref={inputRef}
+        className="rev-picker-input"
+        type="search"
+        autoComplete="off"
+        placeholder="Add people or groups…"
+        aria-label="Add people or groups to this binder"
+        value={query}
+        disabled={busy}
+        onFocus={() => setOpen(true)}
+        onClick={() => setOpen(true)}
+        onKeyDown={(event) => {
+          // A search box clears itself on Escape, and that change would open
+          // the list again. Escape closes the list; the words stay.
+          if (event.key === "Escape" && open) {
+            event.preventDefault();
+            setOpen(false);
+          }
+        }}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setOpen(true);
+        }}
+      />
+      {open ? (
+        <FloatingResults anchor={inputRef} onClose={() => setOpen(false)}>
+          {matches.length > 0 ? (
+            <ul className="rev-picker-results">
+              {matches.map((match) => (
+                <li
+                  key={
+                    match.kind === "group"
+                      ? `group:${match.name}`
+                      : `person:${match.login}`
+                  }
+                >
+                  <button
+                    type="button"
+                    className="rev-picker-result"
+                    onClick={() => {
+                      setChosen(match);
+                      setOpen(false);
+                    }}
+                  >
+                    {match.kind === "group" ? (
+                      <AppIcon icon={Users} size="sm" />
+                    ) : (
+                      <PersonAvatar
+                        person={{ login: match.login, fullName: match.label }}
+                        size="sm"
                       />
-                    ) : null}
-                  </span>
+                    )}
+                    <span className="rev-picker-identity">
+                      <span className="rev-picker-name">{match.label}</span>
+                      <span className="rev-picker-login">
+                        {match.kind === "group"
+                          ? `Group · ${groupLevelLabel(match.access)}`
+                          : `@${match.login}`}
+                      </span>
+                    </span>
+                  </button>
                 </li>
-              );
-            })}
-          </ul>
-        )}
-        {canManage ? (
-          <div className="bs-panel-foot">
-            <select
-              className="bs-input bs-input--sm bs-settings-pick"
-              value={adding}
-              disabled={busy || candidates.length === 0}
-              onChange={(event) => setAdding(event.target.value)}
-              aria-label="Add a group to this binder"
-            >
-              <option value="">
-                {available === null
-                  ? "Reading this organization's groups…"
-                  : candidates.length === 0
-                    ? "Every group is already here"
-                    : "Add a group…"}
-              </option>
-              {candidates.map((group) => (
-                <option key={group.id} value={group.name}>
-                  {describeGroupName(group.name)} ·{" "}
-                  {groupLevelLabel(group.access)}
-                </option>
               ))}
-            </select>
-            <button
-              type="button"
-              className="bs-btn bs-btn--sm bs-btn-secondary"
-              disabled={busy || adding === ""}
-              onClick={() => {
-                const group = adding;
-                setAdding("");
-                onChanged(async () => {
-                  await grantBinderGroup(org, binder, group);
-                  return fetchBinderPeople(org, binder);
-                });
-              }}
-            >
-              Add
-            </button>
-          </div>
-        ) : null}
-      </div>
-    </section>
+            </ul>
+          ) : (
+            <p className="rev-picker-hint">
+              {query === ""
+                ? "Everybody in the organization is already here."
+                : "Nothing matches that."}
+            </p>
+          )}
+        </FloatingResults>
+      ) : null}
+    </div>
   );
 }
 
@@ -1228,353 +1198,7 @@ function RulePickers({
   );
 }
 
-/**
- * Who has to sign off on what.
- *
- * **Saving does not save, and that is the feature.** Changing who signs off is
- * itself a change to the binder, so the rows here are a draft of the whole set
- * and "Propose these rules" opens a change request for it. A customer buying
- * "nothing changes without approval" who found the rules could be changed
- * silently would have found the hole in the product.
- *
- * **No state pill on a rule.** A rule on this page *is* the binder's rule; an
- * "Enforced" chip on every row was the page repeating its title once per line.
- * What is worth saying — that the binder is not enforcing any of them, or that
- * one is holding nothing — is said where it applies.
- */
-function SignOffSection({
-  ref,
-  org,
-  binder,
-  settings,
-  canManage,
-  onOpenChange,
-}: {
-  ref: React.Ref<HTMLElement>;
-  org: string;
-  binder: string;
-  settings: WorkspaceSettingsPayload;
-  canManage: boolean;
-  onOpenChange: (changeNumber: number) => void;
-}) {
-  const signOff = settings.signOff;
-  const [draft, setDraft] = useState<DraftRule[]>(() =>
-    signOff.rules.map(draftFrom),
-  );
-  const [editing, setEditing] = useState<string | null>(null);
-  const [newTarget, setNewTarget] = useState("");
-  const [newTeam, setNewTeam] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [opened, setOpened] = useState<number | null>(null);
-
-  const pending = signOff.pendingChange;
-  const changed = ruleSignature(draft) !== ruleSignature(signOff.rules);
-  // Two open at once would leave competing versions of the rules in review,
-  // and whichever was published last would silently win.
-  const drafting = canManage && pending === null && opened === null;
-
-  async function propose() {
-    setSaving(true);
-    setNotice(null);
-    try {
-      const result = await proposeBinderSignOff(
-        org,
-        binder,
-        draft.map(({ scope, target, teams, users }) => ({
-          scope,
-          target,
-          teams,
-          users,
-        })),
-      );
-      setEditing(null);
-      setOpened(result.changeNumber);
-    } catch (err: unknown) {
-      setNotice(errorMessage(err, "Unable to propose these rules."));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const update = (key: string, next: Partial<SignOffRuleView>) =>
-    setDraft(
-      draft.map((entry) => (entry.key === key ? { ...entry, ...next } : entry)),
-    );
-
-  const empty = draft.length === 0 && signOff.unreadable.length === 0;
-
-  return (
-    <section
-      className="bs-section"
-      id="sign-off"
-      ref={ref}
-      aria-labelledby="binder-settings-sign-off"
-    >
-      <div className="bs-section-head">
-        <h3 className="bs-section-title" id="binder-settings-sign-off">
-          Sign-off rules
-        </h3>
-        {signOff.rules.length > 0 ? (
-          <span className="bs-section-count">{signOff.rules.length}</span>
-        ) : null}
-      </div>
-
-      {/* First, because rules that are listed but not enforced are worse than
-          no rules at all: the page would be promising something that is not
-          happening. */}
-      {signOff.enforced || signOff.rules.length === 0 ? null : (
-        <p className="bs-note bs-note--danger" role="alert">
-          This binder is not holding changes for these rules, so a change can be
-          published without the sign-off below. Ask an administrator to check
-          the binder&rsquo;s protection rules.
-        </p>
-      )}
-
-      {notice ? (
-        <p className="bs-note bs-note--danger" role="alert">
-          {notice}
-        </p>
-      ) : null}
-
-      <div className="bs-panel">
-        {empty ? (
-          /* The empty state is the section, so it says what a rule is rather
-             than only that there is none. It disappears the moment a rule
-             exists, which is what keeps it from being a permanent rail. */
-          <div className="bs-empty bs-settings-signoff-empty">
-            <p className="bs-empty-lead">
-              Nothing here needs its own sign-off yet.
-            </p>
-            <p>
-              Every change to this binder needs its usual approvals, whatever it
-              touches. A sign-off rule adds a second requirement to one part of
-              it —{" "}
-              <em>
-                the infection control group signs off on anything filed in
-                nursing
-              </em>{" "}
-              — so a document cannot be published without the people who own
-              that subject.
-            </p>
-            <p>
-              A rule can cover this whole binder, one folder, a single document,
-              or these rules themselves — and a change that lands under two
-              rules needs both.
-            </p>
-          </div>
-        ) : (
-          <ul className="bs-row-list">
-            {draft.map((rule) =>
-              editing === rule.key && drafting ? (
-                <li className="bs-row bs-row--on" key={rule.key}>
-                  <RulePickers
-                    target={targetValue(rule)}
-                    team={rule.teams[0] ?? ""}
-                    folders={signOff.folders}
-                    documents={signOff.documents}
-                    groups={signOff.groups}
-                    busy={saving}
-                    current={rule}
-                    onTarget={(value) =>
-                      update(rule.key, parseTargetValue(value))
-                    }
-                    onTeam={(value) =>
-                      update(rule.key, { teams: value === "" ? [] : [value] })
-                    }
-                  />
-                  <button
-                    type="button"
-                    className="bs-btn bs-btn--sm bs-btn-secondary"
-                    onClick={() => setEditing(null)}
-                  >
-                    Done
-                  </button>
-                </li>
-              ) : (
-                <RuleRow
-                  key={rule.key}
-                  rule={rule}
-                  documents={signOff.documents}
-                  emptyGroups={signOff.emptyGroups}
-                  actions={
-                    drafting ? (
-                      <span className="bs-rowacts">
-                        <button
-                          type="button"
-                          className="bs-rowact"
-                          disabled={saving}
-                          aria-label={`Change the rule for ${describeTarget(rule, signOff.documents)}`}
-                          title="Change"
-                          onClick={() => setEditing(rule.key)}
-                        >
-                          <AppIcon icon={Pencil} size="sm" />
-                        </button>
-                        <RemoveButton
-                          label={`Remove the rule for ${describeTarget(rule, signOff.documents)}`}
-                          busy={saving}
-                          onClick={() =>
-                            setDraft(
-                              draft.filter((entry) => entry.key !== rule.key),
-                            )
-                          }
-                        />
-                      </span>
-                    ) : null
-                  }
-                />
-              ),
-            )}
-            {/* A rule the screen omitted would be a rule somebody believes is
-                not there. Gitea drops what it cannot read with only a log
-                warning, so this row is the only place it is ever visible. */}
-            {signOff.unreadable.map((line) => (
-              <li className="bs-row" key={`unreadable-${line.line}`}>
-                <span className="bs-row-icon bs-row-icon--warn">
-                  <AppIcon icon={AlertTriangle} size="md" />
-                </span>
-                <span className="bs-row-body">
-                  <span className="bs-row-name">
-                    A rule that cannot be read, and enforces nothing
-                  </span>
-                  <span className="bs-row-meta">
-                    <code className="bs-filename">{line.text}</code>
-                  </span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {drafting ? (
-          <>
-            {/* The same footer People and Groups have: what it covers, who
-                signs it off, Add. */}
-            <div className="bs-panel-foot">
-              <RulePickers
-                target={newTarget}
-                team={newTeam}
-                folders={signOff.folders}
-                documents={signOff.documents}
-                groups={signOff.groups}
-                busy={saving}
-                onTarget={setNewTarget}
-                onTeam={setNewTeam}
-              />
-              <button
-                type="button"
-                className="bs-btn bs-btn--sm bs-btn-secondary"
-                aria-label="Add a rule"
-                disabled={saving || newTarget === "" || newTeam === ""}
-                onClick={() => {
-                  setDraft([
-                    ...draft,
-                    draftFrom({
-                      ...parseTargetValue(newTarget),
-                      teams: [newTeam],
-                      users: [],
-                    }),
-                  ]);
-                  setNewTarget("");
-                  setNewTeam("");
-                }}
-              >
-                Add
-              </button>
-            </div>
-
-            {/* Why the policy picker is short, when it is. A document rule is
-                keyed on the identity in the filename, so a binder filed
-                before that existed offers no documents at all. */}
-            {signOff.documents.length === 0 &&
-            signOff.unnameableDocuments > 0 ? (
-              <div className="bs-panel-foot">
-                {signOff.unnameableDocuments === 1
-                  ? "The document in this binder was filed before Bindersnap tracked documents individually, so a rule can only cover its folder."
-                  : `The ${signOff.unnameableDocuments} documents in this binder were filed before Bindersnap tracked documents individually, so a rule can only cover their folders.`}
-              </div>
-            ) : null}
-
-            <div className="bs-panel-foot">
-              <span className="bs-panel-foot-note">
-                Changing these rules is itself a change to the binder, so it
-                goes through the same approval your documents do.
-              </span>
-              {changed ? (
-                <button
-                  type="button"
-                  className="bs-btn bs-btn--sm bs-btn--quiet"
-                  disabled={saving}
-                  onClick={() => {
-                    setEditing(null);
-                    setDraft(signOff.rules.map(draftFrom));
-                  }}
-                >
-                  Undo
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="bs-btn bs-btn--sm bs-btn-primary"
-                disabled={saving || !changed}
-                onClick={() => void propose()}
-              >
-                {saving ? "Opening a change…" : "Propose these rules"}
-              </button>
-            </div>
-          </>
-        ) : canManage && (opened ?? pending) !== null ? (
-          <div className="bs-panel-foot">
-            <span className="bs-panel-foot-note">
-              {opened !== null
-                ? "We opened a change request for these rules. Nothing takes effect until it is published."
-                : "A change to these rules is already waiting for a decision."}
-            </span>
-            <button
-              type="button"
-              className="bs-btn bs-btn--sm bs-btn-secondary"
-              onClick={() => onOpenChange((opened ?? pending)!)}
-            >
-              Review the change
-            </button>
-          </div>
-        ) : null}
-      </div>
-    </section>
-  );
-}
-
-function RuleRow({
-  rule,
-  documents,
-  emptyGroups,
-  actions,
-}: {
-  rule: SignOffRuleView;
-  documents: SignOffDocumentView[];
-  emptyGroups: string[];
-  actions: ReactNode;
-}) {
-  const owners = describeOwners(rule, emptyGroups);
-  return (
-    <li className="bs-row">
-      <span className="bs-row-icon">
-        <AppIcon icon={scopeIcon(rule.scope)} size="md" />
-      </span>
-      <span className="bs-row-body">
-        <span className="bs-row-name">{describeTarget(rule, documents)}</span>
-        <span
-          className={`bs-row-meta${owners.holdingNothing ? " bs-row-meta--warn" : ""}`}
-        >
-          {owners.text}
-        </span>
-      </span>
-      {actions ? <span className="bs-row-right">{actions}</span> : null}
-    </li>
-  );
-}
-
-/* ── How changes are approved ─────────────────────────────────────────── */
+/* ── The approval count ───────────────────────────────────────────────── */
 
 /**
  * The approval count, typed.
@@ -1609,6 +1233,7 @@ function ApprovalCountField({
   return (
     <input
       id="binder-approvals"
+      aria-label="Approvals required"
       className="bs-input bs-input--sm bs-settings-count"
       type="number"
       inputMode="numeric"
@@ -1631,162 +1256,68 @@ function ApprovalCountField({
   );
 }
 
-/**
- * Who approves changes in this binder.
- *
- * A list the binder's admin keeps, as Gitea keeps its approvals whitelist:
- * nobody until somebody is chosen. The search shows the whole organization,
- * and lets only those who can read the binder be picked — Gitea counts nobody
- * else. Giving somebody access is the Groups and People sections' job.
- *
- * Saved as one change rather than per pick: "the Board" then "and Dr. Okafor"
- * written one at a time would leave the binder, for a moment, counting the
- * Board alone.
- */
-function ApproversRow({
-  org,
-  approvers,
-  teams,
-  canManage,
-  saving,
-  onSave,
-}: {
-  org: string;
-  approvers: ApproversView | null;
-  teams: WorkspaceSettingsPayload["teams"];
-  canManage: boolean;
-  saving: boolean;
-  onSave: (approvers: {
-    groups: string[];
-    people: string[];
-  }) => Promise<unknown>;
-}) {
-  const orgPeople = useQuery(organizationPeopleQuery(org)).data;
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<{ groups: string[]; people: string[] }>({
-    groups: [],
-    people: [],
-  });
-
-  const options = approverOptions(
-    (orgPeople?.groups ?? []).map((group) => group.name),
-    orgPeople?.people ?? [],
-  );
-  const canPick = approverReach(
-    teams,
-    (orgPeople?.people ?? [])
-      .filter((person) => person.isOwner)
-      .map((person) => person.login),
-  );
-
-  return (
-    <li className="bs-row">
-      <span className="bs-row-body">
-        <span className="bs-row-name" id="binder-approvers">
-          Who approves changes
-        </span>
-        <span className="bs-row-meta">
-          {approvers === null
-            ? "Could not be read"
-            : describeApprovers(approvers, options.people, describeGroupName)}
-        </span>
-        {editing ? (
-          <>
-            <ApproverPicker
-              id="binder-approver-search"
-              groups={draft.groups}
-              people={draft.people}
-              options={options}
-              canPick={canPick}
-              disabled={saving}
-              onChange={setDraft}
-            />
-            <div className="bs-panel-foot">
-              <button
-                type="button"
-                className="bs-btn bs-btn--sm bs-btn-primary"
-                disabled={saving}
-                onClick={() =>
-                  void onSave(draft).then((saved) => {
-                    if (saved !== false) setEditing(false);
-                  })
-                }
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                className="bs-btn bs-btn--sm bs-btn--quiet"
-                disabled={saving}
-                onClick={() => setEditing(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </>
-        ) : null}
-      </span>
-      <span className="bs-row-right bs-settings-value">
-        {canManage && approvers !== null && !editing ? (
-          <button
-            type="button"
-            className="bs-btn bs-btn--sm bs-btn-secondary"
-            onClick={() => {
-              setDraft({
-                groups: [...approvers.groups],
-                people: [...approvers.people],
-              });
-              setEditing(true);
-            }}
-          >
-            Change
-          </button>
-        ) : null}
-      </span>
-    </li>
-  );
-}
+/* ── Approvals ────────────────────────────────────────────────────────── */
 
 /**
- * The rules every change in the binder meets, as rows rather than a bulleted
- * paragraph.
+ * What has to happen before a change is published: one table of rules, then
+ * the two conditions every publish meets.
  *
- * **The binder's administrator can change every one of them.** A clinic
- * trying Bindersnap on its own has nobody else to approve its first policy, and
- * a rule its own administrator cannot change leaves them stuck. Each takes
- * effect straight away and is recorded with who changed it.
+ * **Two kinds of row, one question.** The first row is the binder's own rule
+ * — how many approvals every change needs, and whose count — kept in the
+ * binder's protection and saved the moment it changes. The rows under it are
+ * sign-off rules, one per folder or document, kept in the binder's CODEOWNERS
+ * file: **changing them is itself a change to the binder**, so they are
+ * drafted here and "Propose these rules" opens a change request for them. A
+ * customer buying "nothing changes without approval" who found the rules could
+ * be changed silently would have found the hole in the product.
+ *
+ * **No state pill on a rule.** A rule on this page *is* the binder's rule.
+ * What is worth saying — that the binder is not enforcing them, or that one is
+ * holding nothing — is said where it applies.
  */
-function ApprovalSection({
+function ApprovalsTab({
   org,
   binder,
   settings,
   canManage,
   onChanged,
+  onOpenChange,
 }: {
   org: string;
   binder: string;
   settings: WorkspaceSettingsPayload;
   canManage: boolean;
   onChanged: (settings: WorkspaceSettingsPayload) => void;
+  onOpenChange: (changeNumber: number) => void;
 }) {
   const rules = settings.rules;
+  const signOff = settings.signOff;
   const [saving, setSaving] = useState(false);
-  const unreachable =
-    rules.requiredApprovals === null
-      ? null
-      : (noApproversNote(rules.requiredApprovals, rules.approvers) ??
-        unreachableApprovalsNote(
-          rules.requiredApprovals,
-          countChosenApprovers(rules.approvers, settings.teams),
-        ));
   const [notice, setNotice] = useState<string | null>(null);
 
+  const [draft, setDraft] = useState<DraftRule[]>(() =>
+    signOff.rules.map(draftFrom),
+  );
+  const [editingRule, setEditingRule] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [newTarget, setNewTarget] = useState("");
+  const [newTeam, setNewTeam] = useState("");
+  const [proposing, setProposing] = useState(false);
+  const [opened, setOpened] = useState<number | null>(null);
+
+  const pending = signOff.pendingChange;
+  const changed = ruleSignature(draft) !== ruleSignature(signOff.rules);
+  // Two open at once would leave competing versions of the rules in review,
+  // and whichever was published last would silently win.
+  const drafting = canManage && pending === null && opened === null;
+
+  /** The binder's own rules: saved straight away, answered with the new state. */
   async function change(next: {
     blockOnUnresolvedThreads?: boolean;
     requiredApprovals?: number;
     dismissStaleApprovals?: boolean;
     approvers?: { groups: string[]; people: string[] };
-  }): Promise<{ groups: string[]; people: string[] } | null | false> {
+  }): Promise<boolean> {
     setSaving(true);
     setNotice(null);
     try {
@@ -1803,7 +1334,7 @@ function ApprovalSection({
           approvers: updated.approvers ?? rules.approvers,
         },
       });
-      return updated.approvers ?? null;
+      return true;
     } catch (err: unknown) {
       setNotice(errorMessage(err, "Unable to change the rules."));
       return false;
@@ -1812,15 +1343,37 @@ function ApprovalSection({
     }
   }
 
-  return (
-    <section className="bs-section" aria-labelledby="binder-settings-approval">
-      <div className="bs-section-head">
-        <h3 className="bs-section-title" id="binder-settings-approval">
-          How changes are approved
-        </h3>
-      </div>
+  async function propose() {
+    setProposing(true);
+    setNotice(null);
+    try {
+      const result = await proposeBinderSignOff(
+        org,
+        binder,
+        draft.map(({ scope, target, teams, users }) => ({
+          scope,
+          target,
+          teams,
+          users,
+        })),
+      );
+      setEditingRule(null);
+      setOpened(result.changeNumber);
+    } catch (err: unknown) {
+      setNotice(errorMessage(err, "Unable to propose these rules."));
+    } finally {
+      setProposing(false);
+    }
+  }
 
-      {/* Worth saying loudly: a binder without this is not making the
+  const update = (key: string, next: Partial<SignOffRuleView>) =>
+    setDraft(
+      draft.map((entry) => (entry.key === key ? { ...entry, ...next } : entry)),
+    );
+
+  return (
+    <>
+      {/* Worth saying loudly: a binder without these is not making the
           product's one promise. */}
       {rules.pushBlocked ? null : (
         <p className="bs-note bs-note--danger" role="alert">
@@ -1828,129 +1381,529 @@ function ApprovalSection({
           be changed without a review.
         </p>
       )}
-
+      {signOff.enforced || signOff.rules.length === 0 ? null : (
+        <p className="bs-note bs-note--danger" role="alert">
+          This binder is not holding changes for its sign-off rules, so a change
+          can be published without them. Ask an administrator to check the
+          binder&rsquo;s protection rules.
+        </p>
+      )}
       {notice ? (
         <p className="bs-note bs-note--danger" role="alert">
           {notice}
         </p>
       ) : null}
 
-      <div className="bs-panel">
-        <ul className="bs-row-list">
-          <li className="bs-row">
-            <span className="bs-row-body">
-              <label className="bs-row-name" htmlFor="binder-approvals">
-                Approvals needed before publishing
-              </label>
-              <span className="bs-row-meta">
-                {rules.requiredApprovals === 0
-                  ? "Anyone who can publish may do so without an approval. Right for a binder only you work in."
-                  : "Nobody can approve their own change, so the author never counts toward this."}
-              </span>
-              {rules.requiredApprovals !== null &&
-              rules.requiredApprovals > 1 &&
-              rules.approvers &&
-              rules.approvers.groups.length + rules.approvers.people.length >
-                1 ? (
-                <span className="bs-row-meta">
-                  Any {rules.requiredApprovals} of the approvers below together,
-                  not {rules.requiredApprovals} from each group.
-                </span>
-              ) : null}
-              {unreachable ? (
-                <span
-                  className="bs-row-meta bs-row-meta--warning"
-                  role="status"
-                >
-                  {unreachable}
-                </span>
-              ) : null}
-            </span>
-            <span className="bs-row-right bs-settings-value">
-              {rules.requiredApprovals === null ? (
-                "Could not be read"
-              ) : canManage ? (
-                <ApprovalCountField
-                  value={rules.requiredApprovals}
-                  disabled={saving}
-                  onCommit={(count) =>
-                    void change({ requiredApprovals: count })
+      <div className="bs-panel" id="sign-off">
+        <table className="rev-rules-table bs-settings-rules">
+          <thead>
+            <tr>
+              <th scope="col">Rule</th>
+              <th scope="col">Who approves</th>
+              <th scope="col" className="bs-settings-rules-count">
+                Approvals required
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <EveryChangeRow
+              org={org}
+              binder={binder}
+              settings={settings}
+              canManage={canManage}
+              saving={saving}
+              onCount={(count) => void change({ requiredApprovals: count })}
+              onApprovers={(approvers) => change({ approvers })}
+            />
+            {draft.map((rule) =>
+              editingRule === rule.key && drafting ? (
+                <tr key={rule.key}>
+                  <td colSpan={3}>
+                    <div className="bs-settings-rules-edit">
+                      <RulePickers
+                        target={targetValue(rule)}
+                        team={rule.teams[0] ?? ""}
+                        folders={signOff.folders}
+                        documents={signOff.documents}
+                        groups={signOff.groups}
+                        busy={proposing}
+                        current={rule}
+                        onTarget={(value) =>
+                          update(rule.key, parseTargetValue(value))
+                        }
+                        onTeam={(value) =>
+                          update(rule.key, {
+                            teams: value === "" ? [] : [value],
+                          })
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="bs-btn bs-btn--sm bs-btn-secondary"
+                        onClick={() => setEditingRule(null)}
+                      >
+                        Done
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                <RuleRow
+                  key={rule.key}
+                  rule={rule}
+                  documents={signOff.documents}
+                  emptyGroups={signOff.emptyGroups}
+                  actions={
+                    drafting ? (
+                      <span className="bs-rowacts">
+                        <button
+                          type="button"
+                          className="bs-rowact"
+                          disabled={proposing}
+                          aria-label={`Change the rule for ${describeTarget(rule, signOff.documents)}`}
+                          title="Change"
+                          onClick={() => setEditingRule(rule.key)}
+                        >
+                          <AppIcon icon={Pencil} size="sm" />
+                        </button>
+                        <RemoveButton
+                          label={`Remove the rule for ${describeTarget(rule, signOff.documents)}`}
+                          busy={proposing}
+                          onClick={() =>
+                            setDraft(
+                              draft.filter((entry) => entry.key !== rule.key),
+                            )
+                          }
+                        />
+                      </span>
+                    ) : null
                   }
                 />
-              ) : (
-                rules.requiredApprovals
-              )}
+              ),
+            )}
+            {/* A rule the screen omitted would be a rule somebody believes is
+                not there. Gitea drops what it cannot read with only a log
+                warning, so this row is the only place it is ever visible. */}
+            {signOff.unreadable.map((line) => (
+              <tr key={`unreadable-${line.line}`}>
+                <td colSpan={3}>
+                  <span className="bs-settings-rules-target bs-row-meta--warn">
+                    <AppIcon icon={AlertTriangle} size="sm" />
+                    <span>
+                      A rule that cannot be read, and enforces nothing:{" "}
+                      <code className="bs-filename">{line.text}</code>
+                    </span>
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {drafting ? (
+          adding ? (
+            <div className="bs-panel-foot">
+              <RulePickers
+                target={newTarget}
+                team={newTeam}
+                folders={signOff.folders}
+                documents={signOff.documents}
+                groups={signOff.groups}
+                busy={proposing}
+                onTarget={setNewTarget}
+                onTeam={setNewTeam}
+              />
+              <button
+                type="button"
+                className="bs-btn bs-btn--sm bs-btn-secondary"
+                aria-label="Add this rule"
+                disabled={proposing || newTarget === "" || newTeam === ""}
+                onClick={() => {
+                  setDraft([
+                    ...draft,
+                    draftFrom({
+                      ...parseTargetValue(newTarget),
+                      teams: [newTeam],
+                      users: [],
+                    }),
+                  ]);
+                  setNewTarget("");
+                  setNewTeam("");
+                  setAdding(false);
+                }}
+              >
+                Add
+              </button>
+              <button
+                type="button"
+                className="bs-btn bs-btn--sm bs-btn--quiet"
+                onClick={() => {
+                  setAdding(false);
+                  setNewTarget("");
+                  setNewTeam("");
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <div className="bs-panel-foot">
+              <button
+                type="button"
+                className="bs-btn bs-btn--sm bs-btn--quiet"
+                onClick={() => setAdding(true)}
+              >
+                <AppIcon icon={Plus} size="sm" />
+                Add a rule for a folder or document
+              </button>
+            </div>
+          )
+        ) : null}
+
+        {/* Why the document picker is short, when it is. A document rule is
+            keyed on the identity in the filename, so a binder filed before
+            that existed offers no documents at all. */}
+        {drafting &&
+        adding &&
+        signOff.documents.length === 0 &&
+        signOff.unnameableDocuments > 0 ? (
+          <div className="bs-panel-foot">
+            {signOff.unnameableDocuments === 1
+              ? "The document in this binder was filed before Bindersnap tracked documents individually, so a rule can only cover its folder."
+              : `The ${signOff.unnameableDocuments} documents in this binder were filed before Bindersnap tracked documents individually, so a rule can only cover their folders.`}
+          </div>
+        ) : null}
+
+        {drafting && changed ? (
+          <div className="bs-panel-foot">
+            <span className="bs-panel-foot-note">
+              Changing a folder or document rule is itself a change to the
+              binder, so it goes through the same approval your documents do.
             </span>
-          </li>
-          <ApproversRow
-            org={org}
-            approvers={rules.approvers}
-            teams={settings.teams}
-            canManage={canManage}
-            saving={saving}
-            onSave={(approvers) => change({ approvers })}
-          />
-          <li className="bs-row">
-            <span className="bs-row-body">
-              <label className="bs-row-name" htmlFor="binder-dismiss-stale">
-                A new version clears the approvals already collected
-              </label>
-              {/* The consequence either way, since both are defensible and
-                  the record reads differently under each. */}
-              <span className="bs-row-meta">
-                {rules.dismissStaleApprovals
-                  ? "When a change request is edited after someone approved it, their approval is cleared and they are asked again. Every approval is for exactly what was published."
-                  : "Approvals stand when a change request is edited afterwards. Reviewers are not asked to look again."}
-              </span>
+            <button
+              type="button"
+              className="bs-btn bs-btn--sm bs-btn--quiet"
+              disabled={proposing}
+              onClick={() => {
+                setEditingRule(null);
+                setDraft(signOff.rules.map(draftFrom));
+              }}
+            >
+              Undo
+            </button>
+            <button
+              type="button"
+              className="bs-btn bs-btn--sm bs-btn-primary"
+              disabled={proposing}
+              onClick={() => void propose()}
+            >
+              {proposing ? "Opening a change…" : "Propose these rules"}
+            </button>
+          </div>
+        ) : canManage && (opened ?? pending) !== null ? (
+          <div className="bs-panel-foot">
+            <span className="bs-panel-foot-note">
+              {opened !== null
+                ? "We opened a change request for these rules. Nothing takes effect until it is published."
+                : "A change to these rules is already waiting for a decision."}
             </span>
-            <span className="bs-row-right bs-settings-value">
-              {canManage ? (
-                <input
-                  id="binder-dismiss-stale"
-                  className="bs-checkbox"
-                  type="checkbox"
-                  checked={rules.dismissStaleApprovals}
-                  disabled={saving}
-                  onChange={(event) =>
-                    void change({ dismissStaleApprovals: event.target.checked })
-                  }
-                />
-              ) : rules.dismissStaleApprovals ? (
-                "Yes"
-              ) : (
-                "No"
-              )}
-            </span>
-          </li>
-          <li className="bs-row">
-            <span className="bs-row-body">
-              <label className="bs-row-name" htmlFor="binder-block-on-threads">
-                Every discussion must be resolved before publishing
-              </label>
-            </span>
-            <span className="bs-row-right bs-settings-value">
-              {canManage ? (
-                <input
-                  id="binder-block-on-threads"
-                  className="bs-checkbox"
-                  type="checkbox"
-                  checked={rules.blockOnUnresolvedThreads}
-                  disabled={saving}
-                  onChange={(event) =>
-                    void change({
-                      blockOnUnresolvedThreads: event.target.checked,
-                    })
-                  }
-                />
-              ) : rules.blockOnUnresolvedThreads ? (
-                "Yes"
-              ) : (
-                "No"
-              )}
-            </span>
-          </li>
-        </ul>
+            <button
+              type="button"
+              className="bs-btn bs-btn--sm bs-btn-secondary"
+              onClick={() => onOpenChange((opened ?? pending)!)}
+            >
+              Review the change
+            </button>
+          </div>
+        ) : null}
       </div>
-    </section>
+
+      <section
+        className="bs-section"
+        aria-labelledby="binder-before-publishing"
+      >
+        <div className="bs-section-head">
+          <h3 className="bs-section-title" id="binder-before-publishing">
+            Before publishing
+          </h3>
+        </div>
+        <div className="bs-panel">
+          <ul className="bs-row-list">
+            <li className="bs-row">
+              <span className="bs-row-body">
+                <label className="bs-row-name" htmlFor="binder-dismiss-stale">
+                  Ask approvers again after the change is edited
+                </label>
+                {/* The consequence either way, since both are defensible and
+                    the record reads differently under each. */}
+                <span className="bs-row-meta">
+                  {rules.dismissStaleApprovals
+                    ? "An edit clears the approvals already given, so every approval is for exactly what was published."
+                    : "Approvals stand when a change is edited afterwards. Approvers are not asked to look again."}
+                </span>
+              </span>
+              <span className="bs-row-right bs-settings-value">
+                {canManage ? (
+                  <input
+                    id="binder-dismiss-stale"
+                    className="bs-checkbox"
+                    type="checkbox"
+                    checked={rules.dismissStaleApprovals}
+                    disabled={saving}
+                    onChange={(event) =>
+                      void change({
+                        dismissStaleApprovals: event.target.checked,
+                      })
+                    }
+                  />
+                ) : rules.dismissStaleApprovals ? (
+                  "Yes"
+                ) : (
+                  "No"
+                )}
+              </span>
+            </li>
+            <li className="bs-row">
+              <span className="bs-row-body">
+                <label
+                  className="bs-row-name"
+                  htmlFor="binder-block-on-threads"
+                >
+                  Every discussion must be resolved
+                </label>
+              </span>
+              <span className="bs-row-right bs-settings-value">
+                {canManage ? (
+                  <input
+                    id="binder-block-on-threads"
+                    className="bs-checkbox"
+                    type="checkbox"
+                    checked={rules.blockOnUnresolvedThreads}
+                    disabled={saving}
+                    onChange={(event) =>
+                      void change({
+                        blockOnUnresolvedThreads: event.target.checked,
+                      })
+                    }
+                  />
+                ) : rules.blockOnUnresolvedThreads ? (
+                  "Yes"
+                ) : (
+                  "No"
+                )}
+              </span>
+            </li>
+          </ul>
+        </div>
+      </section>
+    </>
+  );
+}
+
+/**
+ * The binder's own rule, as the table's first row: who approves every change,
+ * and how many of them must.
+ *
+ * **Who and how many are one row** because they are one rule — "any 3 of the
+ * Board". The list is chosen with a search over the whole organization in
+ * which only those who can read the binder can be picked (Gitea counts nobody
+ * else), and saved as one change rather than per pick: "the Board" then "and
+ * Dr. Okafor" written one at a time would leave the binder, for a moment,
+ * counting the Board alone.
+ */
+function EveryChangeRow({
+  org,
+  binder,
+  settings,
+  canManage,
+  saving,
+  onCount,
+  onApprovers,
+}: {
+  org: string;
+  binder: string;
+  settings: WorkspaceSettingsPayload;
+  canManage: boolean;
+  saving: boolean;
+  onCount: (count: number) => void;
+  onApprovers: (approvers: {
+    groups: string[];
+    people: string[];
+  }) => Promise<boolean>;
+}) {
+  const rules = settings.rules;
+  const approvers: ApproversView | null = rules.approvers;
+  const orgPeople = useQuery(organizationPeopleQuery(org)).data;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<{ groups: string[]; people: string[] }>({
+    groups: [],
+    people: [],
+  });
+
+  const options = approverOptions(
+    (orgPeople?.groups ?? []).map((group) => group.name),
+    orgPeople?.people ?? [],
+  );
+  const canPick = approverReach(
+    settings.teams,
+    (orgPeople?.people ?? [])
+      .filter((person) => person.isOwner)
+      .map((person) => person.login),
+  );
+
+  const groupName = (name: string) =>
+    describeBinderGroup(binder, name, describeGroupName);
+
+  const required = rules.requiredApprovals;
+  const warning =
+    required === null
+      ? null
+      : (noApproversNote(required, approvers) ??
+        unreachableApprovalsNote(
+          required,
+          countChosenApprovers(approvers, settings.teams),
+        ));
+  const chosen = approvers
+    ? approvers.groups.length + approvers.people.length
+    : 0;
+
+  return (
+    <tr>
+      <td>
+        <span className="bs-settings-rules-target">
+          <AppIcon icon={Library} size="sm" />
+          <span>
+            <span className="rev-rules-name">Every change</span>
+            <span className="rev-rules-owners">
+              {required === 0
+                ? "Publishes without an approval"
+                : "The author never counts"}
+            </span>
+          </span>
+        </span>
+      </td>
+      <td>
+        <div className="bs-settings-rules-who">
+          <span id="binder-approvers">
+            {approvers === null
+              ? "Could not be read"
+              : describeApprovers(approvers, options.people, groupName)}
+          </span>
+          {canManage && approvers !== null && !editing ? (
+            <button
+              type="button"
+              className="bs-btn bs-btn--sm bs-btn-secondary"
+              aria-label="Change who approves changes"
+              onClick={() => {
+                setDraft({
+                  groups: [...approvers.groups],
+                  people: [...approvers.people],
+                });
+                setEditing(true);
+              }}
+            >
+              Edit
+            </button>
+          ) : null}
+        </div>
+        {required !== null && required > 1 && chosen > 1 ? (
+          <span className="rev-rules-owners">
+            Any {required} of them together, not {required} from each group.
+          </span>
+        ) : null}
+        {warning ? (
+          <span className="rev-rules-owners bs-row-meta--warning" role="status">
+            {warning}
+          </span>
+        ) : null}
+        {editing ? (
+          <div className="bs-settings-rules-picker">
+            <ApproverPicker
+              id="binder-approver-search"
+              groups={draft.groups}
+              people={draft.people}
+              options={options}
+              canPick={canPick}
+              groupName={groupName}
+              disabled={saving}
+              onChange={setDraft}
+            />
+            <div className="bs-field-row">
+              <button
+                type="button"
+                className="bs-btn bs-btn--sm bs-btn-primary"
+                disabled={saving}
+                onClick={() =>
+                  void onApprovers(draft).then((saved) => {
+                    if (saved) setEditing(false);
+                  })
+                }
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                className="bs-btn bs-btn--sm bs-btn--quiet"
+                disabled={saving}
+                onClick={() => setEditing(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </td>
+      <td className="rev-rules-count bs-settings-rules-count">
+        {required === null ? (
+          "Could not be read"
+        ) : canManage ? (
+          <ApprovalCountField
+            value={required}
+            disabled={saving}
+            onCommit={onCount}
+          />
+        ) : (
+          required
+        )}
+      </td>
+    </tr>
+  );
+}
+
+/** A sign-off rule, as a row of the table: what it covers, who signs it off. */
+function RuleRow({
+  rule,
+  documents,
+  emptyGroups,
+  actions,
+}: {
+  rule: SignOffRuleView;
+  documents: SignOffDocumentView[];
+  emptyGroups: string[];
+  actions: ReactNode;
+}) {
+  const owners = describeOwners(rule, emptyGroups);
+  return (
+    <tr>
+      <td>
+        <span className="bs-settings-rules-target">
+          <AppIcon icon={scopeIcon(rule.scope)} size="sm" />
+          <span className="rev-rules-name">
+            {describeTarget(rule, documents)}
+          </span>
+        </span>
+      </td>
+      <td>
+        <div className="bs-settings-rules-who">
+          <span className={owners.holdingNothing ? "bs-row-meta--warn" : ""}>
+            {owners.text}
+          </span>
+          {actions}
+        </div>
+      </td>
+      {/* Gitea's code-owner gate asks one owner per rule; a count is not
+          something CODEOWNERS can say yet. */}
+      <td className="rev-rules-count bs-settings-rules-count">1</td>
+    </tr>
   );
 }

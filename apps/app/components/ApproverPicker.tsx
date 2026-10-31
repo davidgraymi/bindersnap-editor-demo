@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Users } from "lucide-react";
 
 import { describeGroupName } from "../../../packages/utils/groupName";
 import { searchApprovers, type approverOptions } from "../binderSettings";
 import { AppIcon } from "./AppIcon";
+import { FloatingResults } from "./FloatingResults";
 import { PersonAvatar } from "./PersonAvatar";
 import { RemoveButton } from "./RemoveButton";
 
@@ -25,6 +26,7 @@ export function ApproverPicker({
   people,
   options,
   canPick,
+  groupName = describeGroupName,
   disabled,
   onChange,
 }: {
@@ -33,16 +35,19 @@ export function ApproverPicker({
   people: string[];
   options: Options;
   canPick: (kind: "group" | "person", value: string) => boolean;
+  /** How a group is named here: a binder names its own teams for what they hold. */
+  groupName?: (handle: string) => string;
   disabled: boolean;
   onChange: (next: { groups: string[]; people: string[] }) => void;
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const matches = searchApprovers(
     options,
     query,
     { groups, people },
-    describeGroupName,
+    groupName,
     canPick,
   );
   const nameOf = (login: string) =>
@@ -58,12 +63,12 @@ export function ApproverPicker({
                 <AppIcon icon={Users} size="sm" />
               </span>
               <span className="bs-row-body">
-                <span className="bs-row-name">{describeGroupName(group)}</span>
+                <span className="bs-row-name">{groupName(group)}</span>
                 <span className="bs-row-meta">Group</span>
               </span>
               <span className="bs-row-right">
                 <RemoveButton
-                  label={`Remove ${describeGroupName(group)}`}
+                  label={`Remove ${groupName(group)}`}
                   busy={disabled}
                   onClick={() =>
                     onChange({
@@ -105,6 +110,7 @@ export function ApproverPicker({
         Search for a group or person who approves changes
       </label>
       <input
+        ref={inputRef}
         id={id}
         className="rev-picker-input"
         type="search"
@@ -113,53 +119,66 @@ export function ApproverPicker({
         value={query}
         disabled={disabled}
         onFocus={() => setOpen(true)}
+        onClick={() => setOpen(true)}
+        onKeyDown={(event) => {
+          // A search box clears itself on Escape, and that change would open
+          // the list again. Escape closes the list; the words stay.
+          if (event.key === "Escape" && open) {
+            event.preventDefault();
+            setOpen(false);
+          }
+        }}
         onChange={(event) => {
           setQuery(event.target.value);
           setOpen(true);
         }}
       />
-      {!open ? null : matches.length > 0 ? (
-        <ul className="rev-picker-results">
-          {matches.map((match) => (
-            <li key={`${match.kind}:${match.value}`}>
-              <button
-                type="button"
-                className="rev-picker-result"
-                disabled={disabled || !match.canPick}
-                onClick={() => {
-                  onChange(
-                    match.kind === "group"
-                      ? { groups: [...groups, match.value], people }
-                      : { groups, people: [...people, match.value] },
-                  );
-                  setQuery("");
-                }}
-              >
-                {match.kind === "group" ? (
-                  <AppIcon icon={Users} size="sm" />
-                ) : (
-                  <PersonAvatar
-                    person={{ login: match.login, fullName: match.label }}
-                    size="sm"
-                  />
-                )}
-                <span className="rev-picker-identity">
-                  <span className="rev-picker-name">{match.label}</span>
-                  <span className="rev-picker-login">
-                    {match.canPick
-                      ? match.kind === "group"
-                        ? "Group"
-                        : `@${match.login}`
-                      : "No access to this binder"}
-                  </span>
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="rev-picker-hint">Nothing matches that.</p>
-      )}
+      {open ? (
+        <FloatingResults anchor={inputRef} onClose={() => setOpen(false)}>
+          {matches.length > 0 ? (
+            <ul className="rev-picker-results">
+              {matches.map((match) => (
+                <li key={`${match.kind}:${match.value}`}>
+                  <button
+                    type="button"
+                    className="rev-picker-result"
+                    disabled={disabled || !match.canPick}
+                    onClick={() => {
+                      onChange(
+                        match.kind === "group"
+                          ? { groups: [...groups, match.value], people }
+                          : { groups, people: [...people, match.value] },
+                      );
+                      setQuery("");
+                    }}
+                  >
+                    {match.kind === "group" ? (
+                      <AppIcon icon={Users} size="sm" />
+                    ) : (
+                      <PersonAvatar
+                        person={{ login: match.login, fullName: match.label }}
+                        size="sm"
+                      />
+                    )}
+                    <span className="rev-picker-identity">
+                      <span className="rev-picker-name">{match.label}</span>
+                      <span className="rev-picker-login">
+                        {match.canPick
+                          ? match.kind === "group"
+                            ? "Group"
+                            : `@${match.login}`
+                          : "No access to this binder"}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="rev-picker-hint">Nothing matches that.</p>
+          )}
+        </FloatingResults>
+      ) : null}
     </div>
   );
 }

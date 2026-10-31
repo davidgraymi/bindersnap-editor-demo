@@ -149,6 +149,7 @@ function binderPath(
     case "settings":
     case "people":
     case "sign-off":
+    case "approvals":
       return [here("Settings")];
     case "documents":
     default:

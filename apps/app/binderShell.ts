@@ -24,6 +24,7 @@ export const BINDER_TABS = [
   "changes",
   "people",
   "sign-off",
+  "approvals",
   "history",
   "settings",
 ] as const;
@@ -124,9 +125,11 @@ export function parseBinderAddress(
         tab:
           parts[0] === "people"
             ? "people"
-            : parts[0] === "sign-off"
-              ? "sign-off"
-              : "settings",
+            : parts[0] === "approvals"
+              ? "approvals"
+              : parts[0] === "sign-off"
+                ? "sign-off"
+                : "settings",
       };
     case "archive":
       return { ...HOME, archive: true };
@@ -267,7 +270,7 @@ export function buildBinderUrl(params: {
     path = "/-/history";
   } else if (tab === "settings") {
     path = "/-/settings";
-  } else if (tab === "people" || tab === "sign-off") {
+  } else if (tab === "people" || tab === "sign-off" || tab === "approvals") {
     path = `/-/settings/${tab}`;
   } else {
     path = ref ? `/-/tree/${encodeURIComponent(ref)}` : "";

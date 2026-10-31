@@ -341,6 +341,14 @@ least as well as the letterspacing did.
 
 ### D5 · Settings is one page, one scroll, six blocks
 
+> **Superseded 2026-10-31.** Settings is three tabs — General, People &
+> access, Approvals — because on one scroll the approval rules sat last, under
+> every person and group, and an owner could not find them. People and groups
+> are one list with one search; the binder's approvers and its sign-off rules
+> are one table (Rule · Who approves · Approvals required). See the header of
+> `apps/app/components/BinderSettings.tsx`. The rest of this section is kept as
+> the record of the earlier design.
+
 Name · description · who can see it · people · groups · sign-off rules ·
 approval.
 

@@ -1,16 +1,16 @@
 /**
- * The sign-off rules on a binder's Settings page, when there are none.
+ * The sign-off rules on a binder's Approvals tab, when there are none.
  *
- * Six lines in a full viewport was the review's example of the density
- * problem, and the fix is not a rail: when there are no rules the empty state
- * *is* the page, so it says what a sign-off rule does rather than only that
- * there is none. It disappears the moment a rule exists, which is what keeps it
- * from being the permanent onboarding copy the mockups drew.
+ * They are rows of the one approval table, under the binder's own "Every
+ * change" rule, so a binder with none shows that row and an offer to add one —
+ * not an essay. The page used to open its sign-off section on four sentences
+ * explaining what a rule is, above the binder's actual approval rule, which
+ * was the most-missed setting in the product.
  *
- * The second thing here is an action-hierarchy bug the review's Task 3 missed:
- * "Propose these rules" was pressable with nothing drafted, so pressing it
- * opened a change request that changed nothing. It is pressable only once the
- * rules on screen differ from the ones published.
+ * The second thing here is an action-hierarchy bug: "Propose these rules" was
+ * pressable with nothing drafted, so pressing it opened a change request that
+ * changed nothing. It appears only once the rules on screen differ from the
+ * ones published.
  */
 
 import { expect, test } from "@playwright/test";
@@ -25,65 +25,69 @@ test.beforeAll(async () => {
   await seedDevStack();
 });
 
-test("with no rules, the page says what a rule is", async ({ page }) => {
+test("with no rules, the table offers to add one", async ({ page }) => {
   await signInAsAlice(page);
+  // The address the sign-off rules had before Approvals was a tab still
+  // lands on it.
   await page.goto(`${APP_BASE_URL}/riverside-health/clinical?tab=sign-off`);
 
-  const empty = page.locator("#sign-off .bs-empty");
-  await expect(empty).toBeVisible({ timeout: 30_000 });
-
-  // What it is, and a worked example — a reader who has never set one cannot
-  // act on "nothing needs its own sign-off".
-  await expect(empty).toContainText("Nothing here needs its own sign-off yet");
-  await expect(empty).toContainText(
-    "adds a second requirement to one part of it",
+  await expect(page.getByRole("tab", { name: "Approvals" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+    { timeout: 30_000 },
   );
-  await expect(empty).toContainText("signs off on anything filed in nursing");
-  // And what a rule may cover, which is no longer only a folder — and now
-  // includes the rules themselves, which is the one scope somebody would never
-  // guess was available.
-  await expect(empty).toContainText(
-    "this whole binder, one folder, a single document, or these rules themselves",
-  );
+  await expect(
+    page.locator("#sign-off .rev-rules-name", { hasText: "Every change" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Add a rule for a folder or document" }),
+  ).toBeVisible();
 });
 
 test("nothing to propose means nothing to press", async ({ page }) => {
   await signInAsAlice(page);
-  await page.goto(`${APP_BASE_URL}/riverside-health/clinical?tab=sign-off`);
+  await page.goto(
+    `${APP_BASE_URL}/riverside-health/clinical/-/settings/approvals`,
+  );
 
-  const propose = page.getByRole("button", { name: "Propose these rules" });
-  const addRule = page.getByRole("button", { name: "Add a rule" });
-
-  await expect(propose).toBeVisible({ timeout: 30_000 });
+  await page
+    .getByRole("button", { name: "Add a rule for a folder or document" })
+    .click({ timeout: 30_000 });
 
   // Nothing drafted, so nothing to send — and a rule with no subject and
   // nobody to sign it off is not a rule, so Add waits for both.
-  await expect(propose).toBeDisabled();
-  await expect(addRule).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Propose these rules" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Add this rule" }),
+  ).toBeDisabled();
 });
 
 test("drafting a rule makes Propose pressable", async ({ page }) => {
   await signInAsAlice(page);
-  await page.goto(`${APP_BASE_URL}/riverside-health/clinical?tab=sign-off`);
+  await page.goto(
+    `${APP_BASE_URL}/riverside-health/clinical/-/settings/approvals`,
+  );
 
+  await page
+    .getByRole("button", { name: "Add a rule for a folder or document" })
+    .click({ timeout: 30_000 });
   const foot = page.locator("#sign-off .bs-panel-foot").first();
-  const covers = foot.getByRole("combobox", {
-    name: "What has to be signed off",
-  });
-  await expect(covers).toBeVisible({ timeout: 30_000 });
-  await covers.selectOption("binder");
+  await foot
+    .getByRole("combobox", { name: "What has to be signed off" })
+    .selectOption("binder");
   await foot
     .getByRole("combobox", { name: "Which group signs it off" })
     .selectOption({ index: 1 });
 
-  const addRule = page.getByRole("button", { name: "Add a rule" });
+  const addRule = page.getByRole("button", { name: "Add this rule" });
   await expect(addRule).toBeEnabled();
   await addRule.click();
 
   // On screen as a row, and not yet anything more than that.
-  await expect(page.locator("#sign-off .bs-empty")).toHaveCount(0);
   await expect(
-    page.locator("#sign-off .bs-row-name", {
+    page.locator("#sign-off .rev-rules-name", {
       hasText: "Everything in this binder",
     }),
   ).toBeVisible();
@@ -94,20 +98,5 @@ test("drafting a rule makes Propose pressable", async ({ page }) => {
 
   // And taking it back out leaves nothing to propose again.
   await page.getByRole("button", { name: "Undo" }).click();
-  await expect(propose).toBeDisabled();
-});
-
-test("prose is capped at a measure rather than the width of the column", async ({
-  page,
-}) => {
-  await signInAsAlice(page);
-  await page.goto(`${APP_BASE_URL}/riverside-health/clinical?tab=settings`);
-
-  const note = page.locator("#sign-off .bs-empty p").last();
-  await expect(note).toBeVisible({ timeout: 30_000 });
-
-  // The page column is sized for a list of documents. A sentence in it ran to
-  // about 110 characters, which is well past what a reader tracks a line at.
-  const width = await note.evaluate((el) => el.getBoundingClientRect().width);
-  expect(width).toBeLessThan(760);
+  await expect(propose).toHaveCount(0);
 });
