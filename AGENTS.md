@@ -416,10 +416,15 @@ whose approvals count toward `required_approvals`**.
   Gitea 28 counts nobody's approval with an empty list — no fallback to write
   access — and a new binder needs 0 approvals, so it publishes until its admin
   raises the count and names approvers.
-- Naming a group an approver grants it access, because Gitea counts nobody who
-  cannot read the binder; a person must have access already. A group that
-  loses access comes off the list (`dropApproverGroup`), which also clears the
-  stale entry Gitea keeps hidden.
+- **Never refuse an approver.** Approvers go to Gitea as they are. Gitea keeps
+  only those who can read the binder and drops the rest without an error, so
+  the page shows anyone dropped under **Access**, with a Give access button
+  (settings) or as access granted when the binder is made (the new-binder
+  form's `access`). Nothing gets access silently. A group that loses access
+  comes off the list (`dropApproverGroup`), which also clears the stale entry
+  Gitea keeps hidden.
+- `staff` is the organization's **Everyone** group, kept in step as people join
+  and leave; `describeGroupName` reads it as "Everyone".
 - **Only approvers approve.** The API refuses an approval or a request for
   changes from anyone else ("Only this binder's approvers can approve."), and
   the change page shows them no buttons. Anybody with access can comment.

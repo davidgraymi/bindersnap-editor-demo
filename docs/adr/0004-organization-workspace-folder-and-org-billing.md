@@ -141,7 +141,7 @@ merged, approved pull request — the product's core claim, unchanged from ADR 0
   with `block_on_official_review_requests` so a merge is blocked while a code
   owner's requested review is outstanding. Verified; the pattern syntax is a regex
   rather than a glob, which the last section spells out.
-- **Whose approvals count** is the approvals whitelist: the binder's approvers.
+- **Who approves changes** is the approvals whitelist: the binder's approvers.
   See the amendment below.
 - **Reset approvals on a new version** is `dismiss_stale_approvals`, as today.
 - **Block on unresolved threads** has no Gitea equivalent, so it stays enforced by
@@ -161,8 +161,9 @@ A settings row does not need to.
 > reader's approval counted. Now a binder's **approvers** are an explicit list of
 > groups and people its admin chooses, at creation or in settings, empty by
 > default as Gitea's own whitelist is. Granting access never makes anybody an
-> approver; naming a group an approver grants it access, because Gitea counts
-> nobody who cannot read the binder. Only approvers may approve or ask for
+> approver. Anybody can be named an approver and nothing is refused, but Gitea
+> keeps an approver only once they can read the binder, so the page offers to
+> give access to anyone chosen who cannot yet. Only approvers may approve or ask for
 > changes; everyone with access may comment. "3 approvals from the Board" is
 > `required_approvals: 3` with the Board as the whitelist, enforced by Gitea at
 > the merge. Reviewers stay free: an approver who only reads costs no seat.
