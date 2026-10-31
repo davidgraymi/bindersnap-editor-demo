@@ -161,6 +161,18 @@ async function approveAndPublish(
   });
   expect(added.status, await added.text()).toBeLessThan(300);
 
+  // A new binder names no approvers, and only an approver may approve, so
+  // everyone in the organization — the approver included — is named one.
+  const rules = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/rules`,
+    {
+      method: "PATCH",
+      headers: authHeaders(session),
+      body: JSON.stringify({ approvers: { groups: ["everyone"] } }),
+    },
+  );
+  expect(rules.status, await rules.text()).toBe(200);
+
   let published: Response | null = null;
   for (let attempt = 1; attempt <= 5; attempt += 1) {
     const review = await fetch(
