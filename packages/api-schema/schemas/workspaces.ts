@@ -64,10 +64,20 @@ export const NewWorkspaceBodySchema = z.object({
    */
   openToOrganization: z.boolean().optional(),
   /**
-   * Whose approvals count. Empty, as Gitea's own default is, when absent. A
-   * group named here is granted access to the new binder.
+   * Whose approvals count. Empty, as Gitea's own default is, when absent.
+   * Gitea keeps only approvers who can read the binder, so give them `access`.
    */
   approvers: z
+    .object({
+      groups: z.array(z.string()).optional(),
+      people: z.array(z.string()).optional(),
+    })
+    .optional(),
+  /**
+   * Groups and people to give access to as the binder is made: a group at its
+   * own level, a person as a reviewer. The form's Access section.
+   */
+  access: z
     .object({
       groups: z.array(z.string()).optional(),
       people: z.array(z.string()).optional(),
@@ -957,8 +967,8 @@ export const BinderRulesRequestSchema = z.object({
     .optional(),
   dismissStaleApprovals: z.boolean().optional(),
   /**
-   * Whose approvals count. Empty means nobody's. A group named here is granted
-   * access to the binder; a person must already have it.
+   * Whose approvals count. Empty means nobody's. Gitea keeps only those who
+   * can read the binder; the response says who was kept.
    */
   approvers: z
     .object({
