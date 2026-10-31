@@ -12,9 +12,7 @@ import {
   createOrganization,
   ensureStaffTeam,
   findOrganization,
-  findOrganizationTeam,
   grantTeamOnRepo,
-  OWNERS_TEAM_NAME,
   type GiteaOrganization,
   type GiteaTeam,
 } from "./orgs";
@@ -391,12 +389,6 @@ export interface ProvisionWorkspaceParams {
    * handbook or HR investigations.
    */
   openToOrganization?: boolean;
-  /**
-   * Whose approvals count: groups by name, people by login. Empty by default,
-   * as Gitea's whitelist is. A group named here is granted read on the binder
-   * if it has no access yet, because Gitea counts nobody who cannot read it.
-   */
-  approvers?: { groups: string[]; people: string[] };
 }
 
 /** The repository, `staff` if it is open, and a protected `main`. */
@@ -410,7 +402,6 @@ export async function provisionWorkspace(
     description,
     requiredApprovals,
     openToOrganization = true,
-    approvers = { groups: [], people: [] },
   } = params;
 
   const workspace = await createWorkspaceRepo({
@@ -447,27 +438,13 @@ export async function provisionWorkspace(
     await grantTeamOnRepo({ client, teamId: staff.id, org, repo: name });
   }
 
-  // An approver group has to be able to read the binder, or Gitea refuses to
-  // whitelist it. `staff` and `Owners` already can; any other is granted read.
-  for (const group of approvers.groups) {
-    if (group === OWNERS_TEAM_NAME) continue;
-    if (group === staff.name && openToOrganization) continue;
-    const team =
-      group === staff.name
-        ? staff
-        : await findOrganizationTeam({ client, org, name: group });
-    if (!team) throw new Error(`There is no group called ${group}.`);
-    await grantTeamOnRepo({ client, teamId: team.id, org, repo: name });
-  }
-
-  // Protection last, so every approver group can already read the binder.
+  // Protection last. Nobody approves yet, as with Gitea's own whitelist; a
+  // binder's approvers are written once whoever they are can read it.
   await protectWorkspaceMain({
     client,
     org,
     workspace: name,
     requiredApprovals,
-    approvalsWhitelistTeams: approvers.groups,
-    approvalsWhitelistUsernames: approvers.people,
   });
 
   return { workspace, staff };
