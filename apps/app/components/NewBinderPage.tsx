@@ -1,9 +1,11 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Building2, Lock } from "lucide-react";
 
 import { createBinder } from "../api";
-import { queryKeys } from "../data/queries";
+import { organizationPeopleQuery, queryKeys } from "../data/queries";
+import { approverOptions, approverReach } from "../binderSettings";
+import { ApproverPicker } from "./ApproverPicker";
 import { followInApp } from "../appLink";
 import type { WorkspaceSummary } from "../../../packages/api-schema/schemas/workspaces";
 import { slugifyOrganizationName } from "../../../packages/utils/organizationName";
@@ -75,6 +77,31 @@ export function NewBinderPage({
   // to read in order to attest to it. A default, not an assumption: the
   // question is on the form, and this is the moment its answer is known.
   const [openToOrganization, setOpenToOrganization] = useState(true);
+  // Empty, as Gitea's own approvals whitelist is: a new binder needs no
+  // approvals, and its admin names approvers when it starts to.
+  const [approvers, setApprovers] = useState<{
+    groups: string[];
+    people: string[];
+  }>({ groups: [], people: [] });
+  const orgPeople = useQuery(organizationPeopleQuery(org)).data;
+  const options = approverOptions(
+    (orgPeople?.groups ?? []).map((group) => group.name),
+    orgPeople?.people ?? [],
+  );
+  // Who can read the binder the moment it exists, and so can be picked: the
+  // owners, and Everyone and its members when it is open to the organization.
+  const everyone =
+    (orgPeople?.groups ?? []).find(
+      (group) => group.name === "everyone" || group.name === "staff",
+    )?.name ?? "everyone";
+  const canPick = approverReach(
+    openToOrganization
+      ? [{ name: everyone, members: orgPeople?.people ?? [] }]
+      : [],
+    (orgPeople?.people ?? [])
+      .filter((person) => person.isOwner)
+      .map((person) => person.login),
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -112,6 +139,16 @@ export function NewBinderPage({
               name.trim(),
               description.trim() === "" ? undefined : description.trim(),
               openToOrganization,
+              // Only who can still read it: closing the binder after picking
+              // Everyone would otherwise ask Gitea for one it will not keep.
+              {
+                groups: approvers.groups.filter((group) =>
+                  canPick("group", group),
+                ),
+                people: approvers.people.filter((login) =>
+                  canPick("person", login),
+                ),
+              },
             );
             await queryClient.invalidateQueries({
               queryKey: queryKeys.organizationBinders(org),
@@ -239,6 +276,22 @@ export function NewBinderPage({
               </span>
             </span>
           </label>
+        </fieldset>
+
+        <fieldset className="bs-field">
+          <legend className="bs-field-label new-binder-legend">
+            Who approves changes
+            <span className="bs-field-optional">optional</span>
+          </legend>
+          <ApproverPicker
+            id="new-binder-approvers"
+            groups={approvers.groups}
+            people={approvers.people}
+            options={options}
+            disabled={submitting}
+            canPick={canPick}
+            onChange={setApprovers}
+          />
         </fieldset>
 
         {error ? (
