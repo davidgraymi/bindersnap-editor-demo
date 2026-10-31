@@ -220,7 +220,7 @@ import {
   countBillableSeats,
   createOrganizationGroup,
   createWorkspaceRoleTeam,
-  ensureStaffTeam,
+  ensureEveryoneTeam,
   findOrganization,
   findOrganizationTeam,
   grantTeamOnRepo,
@@ -237,7 +237,7 @@ import {
   removeOrganizationMember,
   removeTeamMember,
   revokeTeamFromRepo,
-  STAFF_TEAM_NAME,
+  isEveryoneTeam,
   WORKSPACE_ROLES,
   workspaceTeamName,
   type WorkspaceRole,
@@ -8312,7 +8312,7 @@ async function handleWorkspaceSettings(
           ).length,
           groups: (orgTeams ?? teams)
             .map((team) => team.name)
-            .filter((name) => name !== STAFF_TEAM_NAME)
+            .filter((name) => !isEveryoneTeam(name))
             .sort((left, right) => left.localeCompare(right)),
           emptyGroups: emptySignOffGroups,
           /**
@@ -9226,6 +9226,19 @@ async function applyApprovers(params: {
   approvers: { groups: string[]; people: string[] };
 }): Promise<RepoBranchProtection> {
   const { client, org, workspace, approvers } = params;
+  // Everyone by whichever name this organization's team has: an organization
+  // whose `staff` team has not been renamed yet still has an Everyone.
+  let groups = approvers.groups;
+  if (groups.some(isEveryoneTeam)) {
+    const everyone = (
+      await listOrganizationTeams({ client, org }).catch(() => [])
+    ).find((team) => isEveryoneTeam(team.name));
+    if (everyone) {
+      groups = groups.map((group) =>
+        isEveryoneTeam(group) ? everyone.name : group,
+      );
+    }
+  }
   // Written with the caller's own token: Gitea lets only a repository admin
   // edit branch protection, so Gitea is what says this person may.
   return updateRepoBranchProtection({
@@ -9234,7 +9247,7 @@ async function applyApprovers(params: {
     repo: workspace,
     ruleName: "main",
     enableApprovalsWhitelist: true,
-    approvalsWhitelistTeams: approvers.groups,
+    approvalsWhitelistTeams: groups,
     approvalsWhitelistUsernames: approvers.people,
   });
 }
@@ -9449,7 +9462,7 @@ async function readOrganizationPeople(
       if (team.name === OWNERS_TEAM_NAME) owners.add(login);
       // `staff` is everybody by definition, so listing it against every name
       // says nothing and crowds out the groups that do.
-      if (team.name === STAFF_TEAM_NAME) continue;
+      if (isEveryoneTeam(team.name)) continue;
       const existing = teamsByLogin.get(login);
       if (existing) {
         existing.push(team.name);
@@ -9478,7 +9491,7 @@ async function readOrganizationPeople(
       // `staff` is the organization's membership, not a group somebody composes
       // — the People count above is already the same number, and its only
       // control is each binder's own "who can see this" switch.
-      .filter(({ team }) => team.name !== STAFF_TEAM_NAME)
+      .filter(({ team }) => !isEveryoneTeam(team.name))
       .map(({ team, members: teamMembers, binders: teamBinders }) => ({
         id: team.id,
         name: team.name,
@@ -10378,6 +10391,19 @@ async function handleCreateOrganizationGroup(
         baseHeaders,
       );
     }
+    // Everyone is the organization itself, kept in step by Bindersnap; a
+    // second group by that name would be a group nobody could tell apart.
+    if (isEveryoneTeam(name) || name === OWNERS_TEAM_NAME.toLowerCase()) {
+      return json(
+        400,
+        {
+          error: `Every organization already has a group called ${
+            isEveryoneTeam(name) ? "Everyone" : "Owners"
+          }. Choose another name.`,
+        },
+        baseHeaders,
+      );
+    }
 
     if (!isGroupLevel(body?.level)) {
       return json(
@@ -10536,7 +10562,7 @@ async function ensureOrganizationMembership(params: {
   username: string;
 }): Promise<void> {
   const { client, org, username } = params;
-  const staff = await ensureStaffTeam({ client, org });
+  const staff = await ensureEveryoneTeam({ client, org });
   await addTeamMember({ client, teamId: staff.id, username });
 }
 
@@ -10676,7 +10702,13 @@ async function readBinderPeople(
       }
 
       if (!ownTeams.has(team.name)) held.groups.push(team.name);
-      if (isHigherAccess(team.codeAccess, held.access)) {
+      // At the same level, the more particular group says more: "through
+      // Quality Committee" rather than "through Everyone", who are everybody.
+      const sameLevelButNamed =
+        team.codeAccess === held.access &&
+        isEveryoneTeam(held.through) &&
+        !isEveryoneTeam(team.name);
+      if (isHigherAccess(team.codeAccess, held.access) || sameLevelButNamed) {
         held.access = team.codeAccess;
         held.through = team.name;
         held.individual = ownTeams.has(team.name);
@@ -10709,7 +10741,7 @@ async function readBinderPeople(
       // "who can see this binder", and a row beside the customer's own
       // committees — with its own Remove button — would make the most
       // consequential access choice in the product look like housekeeping.
-      .filter(({ team }) => team.name !== STAFF_TEAM_NAME)
+      .filter(({ team }) => !isEveryoneTeam(team.name))
       .map(({ team, members }) => ({
         id: team.id,
         name: team.name,
@@ -10723,7 +10755,7 @@ async function readBinderPeople(
       .sort((left, right) => left.name.localeCompare(right.name)),
     // Derived from the unfiltered set, never stored: a copy could disagree with
     // the grant Gitea is the one enforcing.
-    openToOrganization: teams.some((team) => team.name === STAFF_TEAM_NAME),
+    openToOrganization: teams.some((team) => isEveryoneTeam(team.name)),
     organizationMembers: organizationMembers.map((member) => ({
       login: member.login,
       fullName: member.fullName,
@@ -11048,7 +11080,7 @@ async function handleBinderVisibility(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    const staff = await ensureStaffTeam({ client, org: orgName });
+    const staff = await ensureEveryoneTeam({ client, org: orgName });
 
     if (body.openToOrganization) {
       await grantTeamOnRepo({
@@ -14231,8 +14263,6 @@ interface ProvisionBinderPlan {
   openToOrganization: boolean;
   /** Whose approvals count. Absent on a job from before approvers existed. */
   approvers?: { groups: string[]; people: string[] };
-  /** Groups and people to give access to, from the form's Access section. */
-  access?: { groups: string[]; people: string[] };
 }
 
 type ProvisionOutcome =
@@ -14275,9 +14305,7 @@ async function executeProvisionJob(
       description: plan.description,
       openToOrganization: plan.openToOrganization,
     });
-    // The form's Access section, then the approvers: Gitea keeps an approver
-    // only once they can read the binder, so access goes first.
-    await grantNewBinderAccess(client, plan);
+    await writeNewBinderApprovers(client, plan);
     store.complete(job.id, { workspace: provisioned.workspace.name });
     logger.info("Workspace created", {
       username: job.createdBy,
@@ -14348,50 +14376,24 @@ function provisionJobResponse(
 }
 
 /**
- * Give a new binder's Access rows their access, then write its approvers.
+ * Write a new binder's approvers, once it exists.
  *
- * A group gets the binder at its own level, as the Groups section grants it;
- * a person is added as a reviewer. A group that does not exist is skipped —
- * the approvers list then reads back without it, which the page shows.
- * Idempotent, so a resumed job does no harm.
+ * The form offers only approvers who will be able to read the binder — the
+ * owners, and Everyone and its members when the binder is open — so Gitea
+ * keeps them all. Idempotent, so a resumed job does no harm.
  */
-async function grantNewBinderAccess(
+async function writeNewBinderApprovers(
   client: GiteaClient,
   plan: ProvisionBinderPlan,
 ): Promise<void> {
-  const access = plan.access ?? { groups: [], people: [] };
-  for (const group of access.groups) {
-    const team = await findOrganizationTeam({
-      client,
-      org: plan.org,
-      name: group,
-    }).catch(() => null);
-    if (!team) continue;
-    await grantTeamOnRepo({
-      client,
-      teamId: team.id,
-      org: plan.org,
-      repo: plan.name,
-    });
-  }
-  for (const username of access.people) {
-    await addToBinder({
-      client,
-      org: plan.org,
-      workspace: plan.name,
-      username,
-      role: BINDER_LEVEL_ROLES.reviewer!,
-    });
-  }
   const approvers = plan.approvers ?? { groups: [], people: [] };
-  if (approvers.groups.length + approvers.people.length > 0) {
-    await applyApprovers({
-      client,
-      org: plan.org,
-      workspace: plan.name,
-      approvers,
-    });
-  }
+  if (approvers.groups.length + approvers.people.length === 0) return;
+  await applyApprovers({
+    client,
+    org: plan.org,
+    workspace: plan.name,
+    approvers,
+  });
 }
 
 /** The runner's turn at a binder: finish it as the person who created it. */
@@ -14423,7 +14425,6 @@ async function handleCreateWorkspace(
     description?: unknown;
     openToOrganization?: unknown;
     approvers?: unknown;
-    access?: unknown;
   }>(req);
   const approvers =
     payload?.approvers === undefined
@@ -14432,17 +14433,7 @@ async function handleCreateWorkspace(
   if (typeof approvers === "string") {
     return json(400, { error: approvers }, baseHeaders);
   }
-  const access =
-    payload?.access === undefined
-      ? { groups: [], people: [] }
-      : parseApprovers(payload.access);
-  if (typeof access === "string") {
-    return json(
-      400,
-      { error: "Say which groups and people get access." },
-      baseHeaders,
-    );
-  }
+
   const openToOrganization = payload?.openToOrganization !== false;
   const requested =
     typeof payload?.name === "string" ? payload.name.trim() : "";
@@ -14503,7 +14494,6 @@ async function handleCreateWorkspace(
           // anyway.
           openToOrganization,
           approvers,
-          access,
         },
         createdBy: auth.session.username,
         sessionId: sessionStore.reference(auth.session.id),

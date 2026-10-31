@@ -102,7 +102,7 @@ async function createBinder(
       name,
       // Everyone in the organization approves here; a new binder names
       // no approvers, as Gitea's own default.
-      approvers: { groups: ["staff", "Owners"] },
+      approvers: { groups: ["everyone", "Owners"] },
     }),
   });
   const body = await response.text();

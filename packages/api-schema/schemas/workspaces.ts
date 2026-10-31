@@ -64,20 +64,10 @@ export const NewWorkspaceBodySchema = z.object({
    */
   openToOrganization: z.boolean().optional(),
   /**
-   * Whose approvals count. Empty, as Gitea's own default is, when absent.
-   * Gitea keeps only approvers who can read the binder, so give them `access`.
+   * Who approves changes. Empty, as Gitea's own default is, when absent.
+   * Gitea keeps only approvers who can read the binder.
    */
   approvers: z
-    .object({
-      groups: z.array(z.string()).optional(),
-      people: z.array(z.string()).optional(),
-    })
-    .optional(),
-  /**
-   * Groups and people to give access to as the binder is made: a group at its
-   * own level, a person as a reviewer. The form's Access section.
-   */
-  access: z
     .object({
       groups: z.array(z.string()).optional(),
       people: z.array(z.string()).optional(),

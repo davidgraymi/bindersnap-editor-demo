@@ -917,7 +917,7 @@ async function startNamedDraft(
       // to approve can. A new binder names no approvers, as Gitea's own default.
       body: JSON.stringify({
         name,
-        approvers: { groups: ["staff", "Owners"] },
+        approvers: { groups: ["everyone", "Owners"] },
       }),
     },
   );

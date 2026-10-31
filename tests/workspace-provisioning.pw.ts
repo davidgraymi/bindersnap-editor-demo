@@ -223,7 +223,7 @@ test("a member creates the binder, and it belongs to the organization", async ()
     token,
     `/orgs/${org.name}/teams`,
   );
-  expect(teams.map((team) => team.name).sort()).toEqual(["Owners", "staff"]);
+  expect(teams.map((team) => team.name).sort()).toEqual(["Owners", "everyone"]);
 
   const protection = await giteaGet<{
     enable_push: boolean;
@@ -829,7 +829,7 @@ async function addApprover(
     ownerToken,
     `/orgs/${org}/teams`,
   );
-  const staff = teams.find((team) => team.name === "staff");
+  const staff = teams.find((team) => team.name === "everyone");
   expect(staff, `no staff team in ${org}`).toBeTruthy();
 
   const added = await fetch(
@@ -1819,7 +1819,7 @@ test("the binder says who can act in it, and the rules it is under", async () =>
   // people reach it through org teams, which no name convention can be trusted
   // to enumerate. A new binder is granted exactly one: the organization's own
   // `staff`, because it is open to the organization.
-  const staff = payload.teams.find((team) => team.name === "staff");
+  const staff = payload.teams.find((team) => team.name === "everyone");
   expect(staff, JSON.stringify(payload.teams)).toBeTruthy();
   // Read on repo.code is what ADR 0004 promises is free forever.
   expect(staff!.access).toBe("read");
@@ -1882,7 +1882,7 @@ test("a new binder makes no role teams, and opens to the whole staff", async () 
 
   // A new binder is open to the organization, which is the decided default:
   // the common case is a manual everybody must read in order to attest to it.
-  const staff = payload.teams.find((team) => team.name === "staff");
+  const staff = payload.teams.find((team) => team.name === "everyone");
   expect(staff, JSON.stringify(payload.teams)).toBeTruthy();
   // Read, so it costs no seats — a seat is write or better on `repo.code`.
   expect(staff!.access).toBe("read");
@@ -1974,7 +1974,7 @@ test("a member of staff's approval counts once staff are approvers, and not befo
     ownerToken,
     `/orgs/${org.name}/teams`,
   );
-  const staff = teams.find((team) => team.name === "staff");
+  const staff = teams.find((team) => team.name === "everyone");
   expect(staff, JSON.stringify(teams)).toBeTruthy();
   const joined = await fetch(
     `${GITEA_URL}/api/v1/teams/${staff!.id}/members/${staffMember.username}`,
@@ -2026,7 +2026,7 @@ test("a member of staff's approval counts once staff are approvers, and not befo
   expect(
     (
       await setRules(authorCookie, org.name, "clinical", {
-        approvers: { groups: ["staff"] },
+        approvers: { groups: ["everyone"] },
       })
     ).status,
   ).toBe(200);
@@ -2057,7 +2057,7 @@ test("a binder that needs 2 approvals from the Board counts only the Board", asy
     ownerToken,
     `/orgs/${org.name}/teams`,
   );
-  const staff = teams.find((team) => team.name === "staff");
+  const staff = teams.find((team) => team.name === "everyone");
   expect(staff, JSON.stringify(teams)).toBeTruthy();
   const joined = await fetch(
     `${GITEA_URL}/api/v1/teams/${staff!.id}/members/${staffMember.username}`,
@@ -2227,14 +2227,11 @@ test("a binder that needs 2 approvals from the Board counts only the Board", asy
 });
 
 test("a new binder takes its approvers at creation", async () => {
-  // The new-binder form: approvers, and an Access section for the ones who
-  // cannot read the binder yet. Access goes first, so Gitea keeps them.
+  // The new-binder form offers only approvers who can read the binder the
+  // moment it exists: here the creator, an owner, and Everyone.
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
   const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
-  expect(
-    (await createGroup(sessionCookie, org.name, "Board", "reviewer")).status,
-  ).toBe(201);
 
   const created = await fetch(
     `${API_BASE_URL}/api/app/orgs/${org.name}/binders`,
@@ -2243,8 +2240,7 @@ test("a new binder takes its approvers at creation", async () => {
       headers: authHeaders(sessionCookie),
       body: JSON.stringify({
         name: "Governance",
-        approvers: { groups: ["board"], people: [credentials.username] },
-        access: { groups: ["board"] },
+        approvers: { groups: ["everyone"], people: [credentials.username] },
       }),
     },
   );
@@ -2256,12 +2252,7 @@ test("a new binder takes its approvers at creation", async () => {
   );
   expect(
     await readApprovalsWhitelist(ownerToken, org.name, "governance"),
-  ).toEqual(["board"]);
-  expect(
-    (await readBinderPeople(sessionCookie, org.name, "governance")).groups.map(
-      (group) => group.name,
-    ),
-  ).toContain("board");
+  ).toEqual(["everyone"]);
 });
 
 async function setRules(
@@ -2644,7 +2635,7 @@ test("a group says which binders it reaches, from the group's own row", async ()
   // its only control is each binder's own "who can see this" switch. A row
   // beside the customer's own committees would make the most consequential
   // access choice in the product look like housekeeping.
-  expect(named(both, "staff")).toBeUndefined();
+  expect(named(both, "everyone")).toBeUndefined();
 
   expect(
     (await revokeGroup(sessionCookie, org.name, "hr", "quality-committee"))
@@ -2714,7 +2705,7 @@ test("a group that is not there is a 404, on the organization and on a binder", 
       .status,
   ).toBe(404);
   expect(
-    (await grantGroup(sessionCookie, org.name, "no-such-binder", "staff"))
+    (await grantGroup(sessionCookie, org.name, "no-such-binder", "everyone"))
       .status,
   ).toBe(404);
 });
@@ -2727,6 +2718,14 @@ test("a group needs a name Gitea can carry, and one of three levels", async () =
   expect(
     (await createGroup(sessionCookie, org.name, "!!!", "reviewer")).status,
   ).toBe(400);
+  // Everyone is the organization itself, and Owners is Gitea's own: neither
+  // name can be taken by a second group.
+  for (const taken of ["Everyone", "staff", "Owners"]) {
+    expect(
+      (await createGroup(sessionCookie, org.name, taken, "reviewer")).status,
+      taken,
+    ).toBe(400);
+  }
   expect(
     (await createGroup(sessionCookie, org.name, "Quality", "supervisor"))
       .status,
@@ -2955,7 +2954,7 @@ test("a reviewer promoted to editor can push, and demoted cannot", async () => {
   };
   expect(
     after.people.find((row) => row.login === person.username),
-  ).toMatchObject({ through: "staff", individual: false });
+  ).toMatchObject({ through: "everyone", individual: false });
 
   const seen = await readBinderPeople(personCookie, org.name, "clinical");
   expect(seen.openToOrganization).toBe(true);
@@ -3088,7 +3087,7 @@ test("the binder's people is a bounded read, and an owner is not editable there"
   });
   // Owners and staff are both shared teams rather than this binder's own, so
   // both are named — and `through` reports Owners, the higher of the two.
-  expect(people.people[0]?.groups?.sort()).toEqual(["Owners", "staff"]);
+  expect(people.people[0]?.groups?.sort()).toEqual(["Owners", "everyone"]);
   expect(people.openToOrganization).toBe(true);
 });
 
@@ -3143,7 +3142,7 @@ test("a binder can be closed to the organization and opened again", async () => 
   expect(
     (
       await setRules(sessionCookie, org.name, "clinical", {
-        approvers: { groups: ["staff", "Owners"] },
+        approvers: { groups: ["everyone", "Owners"] },
       })
     ).status,
   ).toBe(200);
@@ -3212,7 +3211,7 @@ test("a restricted binder is not readable by a member who was not added", async 
     "investigations",
   );
   expect(people.openToOrganization).toBe(false);
-  expect(people.groups.map((group) => group.name)).not.toContain("staff");
+  expect(people.groups.map((group) => group.name)).not.toContain("everyone");
 
   const ownerToken = await createUserToken(
     credentials.username,

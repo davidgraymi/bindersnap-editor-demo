@@ -495,7 +495,7 @@ async function ensureBinderShell(run: BinderRun): Promise<void> {
     ...new Set([
       ...settings.teams
         .map((team) => team.name)
-        .filter((name) => name !== "staff"),
+        .filter((name) => name !== "everyone" && name !== "staff"),
       "Owners",
     ]),
   ].sort();

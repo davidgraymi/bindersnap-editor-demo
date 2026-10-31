@@ -109,7 +109,7 @@ async function setUp() {
         name: "Policies",
         // Everyone in the organization approves here; a new binder names
         // no approvers, as Gitea's own default.
-        approvers: { groups: ["staff", "Owners"] },
+        approvers: { groups: ["everyone", "Owners"] },
       })
     ).workspace as { name: string }
   ).name;
