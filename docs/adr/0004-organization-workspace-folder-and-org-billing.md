@@ -161,9 +161,10 @@ A settings row does not need to.
 > reader's approval counted. Now a binder's **approvers** are an explicit list of
 > groups and people its admin chooses, at creation or in settings, empty by
 > default as Gitea's own whitelist is. Granting access never makes anybody an
-> approver. Anybody can be named an approver and nothing is refused, but Gitea
-> keeps an approver only once they can read the binder, so the page offers to
-> give access to anyone chosen who cannot yet. Only approvers may approve or ask for
+> approver. The page shows the whole organization when choosing approvers and
+> lets only those who can read the binder be picked, because Gitea keeps no
+> other approver. The organization's read team, once `staff`, is now `everyone`
+> (renamed in place). Only approvers may approve or ask for
 > changes; everyone with access may comment. "3 approvals from the Board" is
 > `required_approvals: 3` with the Board as the whitelist, enforced by Gitea at
 > the merge. Reviewers stay free: an approver who only reads costs no seat.

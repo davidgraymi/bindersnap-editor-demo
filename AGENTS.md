@@ -396,7 +396,7 @@ publishes gets its own tag on the shared merge commit. Retiring a document is
 
 Access is **groups granted onto a binder**: an organization team granted onto
 the repository at a level (admin, write, or read on `repo.code`/`repo.pulls`/
-`repo.issues`). `staff`, everyone in the organization, is granted read when a
+`repo.issues`). `everyone`, everyone in the organization, is granted read when a
 binder is open to the organization. Adding one person to one binder creates a
 per-binder team for that level on first use (`createWorkspaceRoleTeam`); there
 are no teams made up front. Read on both units is all an approver needs to
@@ -416,15 +416,17 @@ whose approvals count toward `required_approvals`**.
   Gitea 28 counts nobody's approval with an empty list — no fallback to write
   access — and a new binder needs 0 approvals, so it publishes until its admin
   raises the count and names approvers.
-- **Never refuse an approver.** Approvers go to Gitea as they are. Gitea keeps
-  only those who can read the binder and drops the rest without an error, so
-  the page shows anyone dropped under **Access**, with a Give access button
-  (settings) or as access granted when the binder is made (the new-binder
-  form's `access`). Nothing gets access silently. A group that loses access
-  comes off the list (`dropApproverGroup`), which also clears the stale entry
-  Gitea keeps hidden.
-- `staff` is the organization's **Everyone** group, kept in step as people join
-  and leave; `describeGroupName` reads it as "Everyone".
+- **The picker shows the whole organization; only who can read the binder can
+  be picked** (`approverReach`). The rest are listed dimmed, "No access to this
+  binder". Gitea keeps an approver only once they can read the binder and
+  drops the rest without an error, so this is what keeps the list honest; the
+  API itself passes approvers through and refuses none. Giving access stays in
+  the People and Groups sections. A group that loses access comes off the list
+  (`dropApproverGroup`), which also clears the stale entry Gitea keeps hidden.
+- `everyone` is the organization's **Everyone** group (`EVERYONE_TEAM_NAME`),
+  kept in step as people join and leave. Organizations made before 2026-10-31
+  have it as `staff`; `ensureEveryoneTeam` renames it in place, and
+  `isEveryoneTeam` accepts either name until it has.
 - **Only approvers approve.** The API refuses an approval or a request for
   changes from anyone else ("Only this binder's approvers can approve."), and
   the change page shows them no buttons. Anybody with access can comment.
