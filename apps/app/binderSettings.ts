@@ -322,3 +322,111 @@ export function searchApprovers(
     ...all.filter((match) => !match.canPick),
   ];
 }
+
+/**
+ * Whether a team is one of this binder's own per-person teams —
+ * `{binder}-admins`, `-authors`, `-reviewers` (`workspaceTeamName` in the
+ * API) — which hold the people added to this binder one by one.
+ *
+ * **Not a group anybody made.** Listed as one, "Clinical Authors · 4 people"
+ * sat under the same four people already listed one by one, so everyone
+ * added individually appeared twice. Their people are the rows; the team is
+ * our bookkeeping.
+ */
+export function isBinderRoleTeam(binder: string, team: string): boolean {
+  const name = team.toLowerCase();
+  return ["admins", "authors", "reviewers"].some(
+    (role) => name === `${binder.toLowerCase()}-${role}`,
+  );
+}
+
+/**
+ * A group's name as a binder's settings say it. A binder's own per-person
+ * teams have no name anybody gave them — `clinical-authors` is our
+ * bookkeeping — so they are said as what they are: the people added to this
+ * binder at that level. Every other group keeps its own name.
+ */
+export function describeBinderGroup(
+  binder: string,
+  name: string,
+  groupName: (handle: string) => string,
+): string {
+  if (!isBinderRoleTeam(binder, name)) return groupName(name);
+  const role = name.slice(binder.length + 1).toLowerCase();
+  return role === "admins"
+    ? "This binder's admins"
+    : role === "authors"
+      ? "This binder's editors"
+      : "This binder's reviewers";
+}
+
+/**
+ * Some binder's per-person team, by the binders the group reaches: Corporate
+ * Authors is the people added to Corporate as editors, not a group to give
+ * another binder.
+ */
+export function isAnyBinderRoleTeam(group: {
+  name: string;
+  binders: readonly string[];
+}): boolean {
+  return group.binders.some((binder) => isBinderRoleTeam(binder, group.name));
+}
+
+/**
+ * Who is in a group, on its row: "Alice Nguyen and Priya Raman", "Hugo, Dan,
+ * Ines and 2 more". A group is a set of people, and the names are what tells
+ * somebody whether the person they are looking for is in.
+ */
+export function describeMembers(
+  members: readonly { login: string; fullName: string }[],
+  shown = 3,
+): string {
+  const names = members.map((member) => member.fullName || member.login);
+  if (names.length === 0) return "Nobody in it yet";
+  if (names.length <= shown) {
+    return names.length === 1
+      ? names[0]!
+      : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  }
+  return `${names.slice(0, shown).join(", ")} and ${names.length - shown} more`;
+}
+
+export type MemberMatch =
+  | { kind: "group"; name: string; label: string; access: string }
+  | { kind: "person"; login: string; label: string };
+
+/**
+ * The one search for adding to a binder: groups and people together, since
+ * giving a committee access and giving one person access are the same act.
+ * Groups first — a binder is usually opened to a committee, then to the odd
+ * person outside it.
+ */
+export function searchMembers(
+  groups: readonly { name: string; access: string }[],
+  people: readonly { login: string; fullName: string }[],
+  query: string,
+  groupName: (handle: string) => string,
+): MemberMatch[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const hit = (...texts: string[]) => {
+    const haystack = texts.join(" ").toLowerCase();
+    return words.every((word) => haystack.includes(word));
+  };
+  return [
+    ...groups
+      .map((group) => ({
+        kind: "group" as const,
+        name: group.name,
+        label: groupName(group.name),
+        access: group.access,
+      }))
+      .filter((match) => hit(match.label, match.name)),
+    ...people
+      .map((person) => ({
+        kind: "person" as const,
+        login: person.login,
+        label: person.fullName || person.login,
+      }))
+      .filter((match) => hit(match.label, match.login)),
+  ];
+}

@@ -2178,6 +2178,30 @@ input {
   color: var(--bs-text-muted);
 }
 
+/* A search box's results, floating under it (`FloatingResults`) so typing
+   never pushes the page down. Fixed for the reason `.rev-picker` is: the box
+   sits in a panel whose rounded corners clip anything that overflows it. */
+.rev-picker-float {
+  position: fixed;
+  z-index: var(--brand-z-overlay);
+  max-height: 320px;
+  overflow-y: auto;
+  padding: var(--brand-space-1);
+  background: var(--bs-surface-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  box-shadow: var(--bs-elevation-menu);
+}
+
+.rev-picker-float .rev-picker-results {
+  max-height: none;
+  overflow: visible;
+}
+
+.rev-picker-float .rev-picker-hint {
+  padding: var(--brand-space-2);
+}
+
 .rev-picker-results {
   display: grid;
   gap: var(--brand-space-0-5);
@@ -10377,6 +10401,72 @@ a.binder-latest-title:focus-visible {
   display: flex;
   flex-direction: column;
   gap: var(--brand-space-4);
+}
+
+/* The binder's settings, as tabs: General, People & access, Approvals. The
+   same strip the organization's page uses, drawn on its own rule because the
+   page header above it has none. */
+.bs-settings--tabbed {
+  gap: var(--brand-space-4);
+}
+
+.bs-settings > .bs-settings-tabs {
+  margin: 0 0 var(--brand-space-2);
+  border-bottom: 1px solid var(--bs-rule-warm);
+}
+
+/* Approvals: one table, Rule · Who approves · Approvals required. The change
+   page's approval table, inside a settings panel. */
+.bs-settings-rules {
+  border-top: none;
+}
+
+.bs-settings-rules-count {
+  width: 9rem;
+  text-align: right;
+}
+
+.bs-settings-rules-target {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--brand-space-2);
+  color: var(--bs-text-muted);
+}
+
+.bs-settings-rules-target .rev-rules-name {
+  color: var(--bs-text-primary);
+}
+
+.bs-settings-rules-who {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--brand-space-2);
+  color: var(--bs-text-primary);
+}
+
+.bs-settings-rules-picker {
+  display: grid;
+  gap: var(--brand-space-2);
+  margin-top: var(--brand-space-2);
+}
+
+.bs-settings-rules-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--brand-space-1);
+}
+
+/* People & access: the search sits in the list's foot, its results under it. */
+.bs-panel-foot.bs-settings-adder {
+  display: grid;
+  align-items: stretch;
+}
+
+.bs-settings-chosen {
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-medium);
 }
 
 /* A member's role and remove sit on the middle of the row, not its top line:
