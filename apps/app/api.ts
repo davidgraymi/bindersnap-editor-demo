@@ -906,15 +906,12 @@ export async function createBinder(
     groups: [],
     people: [],
   },
-  /** Who to give access to as it is made: the form's Access section. */
-  access: { groups: string[]; people: string[] } = { groups: [], people: [] },
 ): Promise<WorkspaceSummary> {
   const response = await BindersClient.createBinder(org, {
     name,
     description,
     openToOrganization,
     approvers,
-    access,
   });
   return response.data.workspace;
 }

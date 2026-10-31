@@ -4,7 +4,7 @@ import { Building2, Lock } from "lucide-react";
 
 import { createBinder } from "../api";
 import { organizationPeopleQuery, queryKeys } from "../data/queries";
-import { approverOptions, needsAccess } from "../binderSettings";
+import { approverOptions, approverReach } from "../binderSettings";
 import { ApproverPicker } from "./ApproverPicker";
 import { followInApp } from "../appLink";
 import type { WorkspaceSummary } from "../../../packages/api-schema/schemas/workspaces";
@@ -88,27 +88,20 @@ export function NewBinderPage({
     (orgPeople?.groups ?? []).map((group) => group.name),
     orgPeople?.people ?? [],
   );
-  // Who will be able to read the new binder without being given access: the
-  // owners, and Everyone when it is open. Anybody else chosen is an Access row,
-  // given access as the binder is made unless it is removed from there.
-  const [skipped, setSkipped] = useState<string[]>([]);
-  const access = needsAccess(
-    approvers,
+  // Who can read the binder the moment it exists, and so can be picked: the
+  // owners, and Everyone and its members when it is open to the organization.
+  const everyone =
+    (orgPeople?.groups ?? []).find(
+      (group) => group.name === "everyone" || group.name === "staff",
+    )?.name ?? "everyone";
+  const canPick = approverReach(
     openToOrganization
-      ? [{ name: "staff", members: orgPeople?.people ?? [] }]
+      ? [{ name: everyone, members: orgPeople?.people ?? [] }]
       : [],
     (orgPeople?.people ?? [])
       .filter((person) => person.isOwner)
       .map((person) => person.login),
   );
-  const grants = {
-    groups: access.groups.filter(
-      (group) => !skipped.includes(`group:${group}`),
-    ),
-    people: access.people.filter(
-      (login) => !skipped.includes(`person:${login}`),
-    ),
-  };
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -146,8 +139,16 @@ export function NewBinderPage({
               name.trim(),
               description.trim() === "" ? undefined : description.trim(),
               openToOrganization,
-              approvers,
-              grants,
+              // Only who can still read it: closing the binder after picking
+              // Everyone would otherwise ask Gitea for one it will not keep.
+              {
+                groups: approvers.groups.filter((group) =>
+                  canPick("group", group),
+                ),
+                people: approvers.people.filter((login) =>
+                  canPick("person", login),
+                ),
+              },
             );
             await queryClient.invalidateQueries({
               queryKey: queryKeys.organizationBinders(org),
@@ -288,12 +289,8 @@ export function NewBinderPage({
             people={approvers.people}
             options={options}
             disabled={submitting}
+            canPick={canPick}
             onChange={setApprovers}
-            access={{
-              ...grants,
-              onSkip: (kind, value) =>
-                setSkipped([...skipped, `${kind}:${value}`]),
-            }}
           />
         </fieldset>
 

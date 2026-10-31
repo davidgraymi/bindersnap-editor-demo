@@ -5,8 +5,7 @@ import {
   countApprovers,
   countChosenApprovers,
   describeApprovers,
-  droppedApproversNote,
-  needsAccess,
+  approverReach,
   noApproversNote,
   describeTeamAccess,
   searchApprovers,
@@ -92,49 +91,29 @@ describe("who approves changes", () => {
       ? "Everyone"
       : handle.charAt(0).toUpperCase() + handle.slice(1);
 
-  test("anybody in the organization can be chosen, Everyone last", () => {
+  test("the whole organization is offered, Everyone last", () => {
     const options = approverOptions(
-      ["finance", "board"],
+      ["finance", "board", "everyone"],
       [
         { login: "nurse", fullName: "Nia Nurse" },
         { login: "okafor", fullName: "" },
       ],
     );
-    expect(options.groups).toEqual(["board", "finance", "Owners", "staff"]);
+    expect(options.groups).toEqual(["board", "finance", "Owners", "everyone"]);
     expect(options.people).toEqual([
       { login: "nurse", name: "Nia Nurse" },
       { login: "okafor", name: "okafor" },
     ]);
   });
 
-  test("whoever cannot read the binder yet is an Access row", () => {
-    expect(
-      needsAccess(
-        {
-          groups: ["board", "finance", "Owners"],
-          people: ["chair", "okafor", "boss"],
-        },
-        teams,
-        ["boss"],
-      ),
-    ).toEqual({ groups: ["finance"], people: ["okafor"] });
-  });
-
-  test("whoever Gitea did not keep is said by name after Save", () => {
-    expect(
-      droppedApproversNote(
-        { groups: ["board", "finance"], people: [] },
-        { groups: ["board"], people: [] },
-        title,
-      ),
-    ).toBe("Finance isn't an approver yet: give them access first.");
-    expect(
-      droppedApproversNote(
-        { groups: ["board"], people: [] },
-        { groups: ["board"], people: [] },
-        title,
-      ),
-    ).toBeNull();
+  test("only who can read the binder can be picked", () => {
+    const canPick = approverReach(teams, ["boss"]);
+    expect(canPick("group", "board")).toBe(true);
+    expect(canPick("group", "Owners")).toBe(true);
+    expect(canPick("group", "finance")).toBe(false);
+    expect(canPick("person", "Chair")).toBe(true);
+    expect(canPick("person", "boss")).toBe(true);
+    expect(canPick("person", "okafor")).toBe(false);
   });
 
   test("nobody reads as nobody yet", () => {
@@ -170,35 +149,44 @@ describe("who approves changes", () => {
 
 describe("searching for approvers", () => {
   const options = approverOptions(
-    ["board-of-directors"],
+    ["board-of-directors", "finance"],
     [
       { login: "nurse", fullName: "Nia Nurse" },
       { login: "okafor", fullName: "Dr. Bola Okafor" },
     ],
   );
   const title = (handle: string) =>
-    handle === "staff"
+    handle === "everyone"
       ? "Everyone"
       : handle
           .split("-")
           .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
           .join(" ");
   const none = { groups: [], people: [] };
+  const canPick = (kind: "group" | "person", value: string) =>
+    !(kind === "group" && value === "finance") &&
+    !(kind === "person" && value === "okafor");
 
-  test("finds nothing until something is typed", () => {
-    expect(searchApprovers(options, "  ", none, title)).toEqual([]);
+  test("with nothing typed, the whole organization", () => {
+    expect(searchApprovers(options, "  ", none, title, canPick)).toHaveLength(
+      6,
+    );
   });
 
   test("finds groups by name and people by name or login", () => {
-    expect(
-      searchApprovers(options, "board", none, title).map((m) => m.value),
-    ).toEqual(["board-of-directors"]);
-    expect(
-      searchApprovers(options, "dr bola", none, title).map((m) => m.value),
-    ).toEqual(["okafor"]);
-    expect(
-      searchApprovers(options, "nurse", none, title).map((m) => m.value),
-    ).toEqual(["nurse"]);
+    const values = (query: string) =>
+      searchApprovers(options, query, none, title, canPick).map((m) => m.value);
+    expect(values("board")).toEqual(["board-of-directors"]);
+    expect(values("dr bola")).toEqual(["okafor"]);
+    expect(values("nurse")).toEqual(["nurse"]);
+  });
+
+  test("shows who has no access, after who can be picked", () => {
+    const found = searchApprovers(options, "", none, title, canPick);
+    expect(found.slice(-2).map((m) => [m.value, m.canPick])).toEqual([
+      ["finance", false],
+      ["okafor", false],
+    ]);
   });
 
   test("leaves out what is already chosen", () => {
@@ -208,13 +196,14 @@ describe("searching for approvers", () => {
         "o",
         { groups: ["board-of-directors"], people: ["okafor"] },
         title,
+        canPick,
       ).map((m) => m.value),
-    ).toEqual(["Owners", "staff"]);
+    ).toEqual(["Owners", "everyone"]);
   });
 
-  test("calls staff everyone, and finds it by that name", () => {
-    expect(searchApprovers(options, "everyone", none, title)).toEqual([
-      { kind: "group", value: "staff", label: "Everyone" },
+  test("calls the whole organization Everyone, and finds it by that name", () => {
+    expect(searchApprovers(options, "everyone", none, title, canPick)).toEqual([
+      { kind: "group", value: "everyone", label: "Everyone", canPick: true },
     ]);
   });
 });

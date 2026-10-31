@@ -9,131 +9,95 @@ import { RemoveButton } from "./RemoveButton";
 
 type Options = ReturnType<typeof approverOptions>;
 
-/** One group or person, as a row. */
-function Who({
-  kind,
-  value,
-  options,
-  right,
-}: {
-  kind: "group" | "person";
-  value: string;
-  options: Options;
-  right: React.ReactNode;
-}) {
-  const name =
-    kind === "group"
-      ? describeGroupName(value)
-      : (options.people.find((person) => person.login === value)?.name ??
-        value);
-  return (
-    <li className="bs-row">
-      {kind === "group" ? (
-        <span className="bs-row-icon">
-          <AppIcon icon={Users} size="sm" />
-        </span>
-      ) : (
-        <PersonAvatar person={{ login: value, fullName: name }} size="sm" />
-      )}
-      <span className="bs-row-body">
-        <span className="bs-row-name">{name}</span>
-        <span className="bs-row-meta">
-          {kind === "group" ? "Group" : `@${value}`}
-        </span>
-      </span>
-      <span className="bs-row-right">{right}</span>
-    </li>
-  );
-}
-
 /**
- * Who approves changes: the chosen groups and people, a search box to add
- * more, and — only when somebody chosen cannot read the binder yet — an
- * Access section with them in it.
+ * Who approves changes: the chosen groups and people, and a search over the
+ * whole organization to add more.
  *
- * Anybody can be chosen; nothing is refused. Gitea keeps an approver only
- * once they can read the binder, which is all the Access section is for. On a
- * binder that exists each row has a Give access button; on the new-binder form
- * the rows are given access when the binder is made, and Remove leaves one out.
+ * **Everybody is shown; only somebody who can read the binder can be picked.**
+ * Gitea counts nobody who cannot read it, so offering them would offer an
+ * approver who approves nothing. They are listed, dimmed, saying why, so
+ * nobody wonders where a colleague went. Shared by a binder's settings and the
+ * new-binder form, so the two cannot drift apart.
  */
 export function ApproverPicker({
   id,
   groups,
   people,
   options,
+  canPick,
   disabled,
   onChange,
-  access,
 }: {
   id: string;
   groups: string[];
   people: string[];
   options: Options;
+  canPick: (kind: "group" | "person", value: string) => boolean;
   disabled: boolean;
   onChange: (next: { groups: string[]; people: string[] }) => void;
-  access?: {
-    groups: string[];
-    people: string[];
-    /** Give access now, on a binder that exists. */
-    onGrant?: (kind: "group" | "person", value: string) => void;
-    /** Leave one out, on a binder about to be made. */
-    onSkip?: (kind: "group" | "person", value: string) => void;
-    busy?: string | null;
-  };
 }) {
   const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
   const matches = searchApprovers(
     options,
     query,
     { groups, people },
     describeGroupName,
+    canPick,
   );
-  const remove = (kind: "group" | "person", value: string) =>
-    onChange(
-      kind === "group"
-        ? { groups: groups.filter((entry) => entry !== value), people }
-        : { groups, people: people.filter((entry) => entry !== value) },
-    );
-  const accessRows = access
-    ? [
-        ...access.groups.map((value) => ({ kind: "group" as const, value })),
-        ...access.people.map((value) => ({ kind: "person" as const, value })),
-      ]
-    : [];
+  const nameOf = (login: string) =>
+    options.people.find((person) => person.login === login)?.name ?? login;
 
   return (
     <div className="bs-fields">
       {groups.length + people.length > 0 ? (
         <ul className="bs-row-list">
           {groups.map((group) => (
-            <Who
-              key={`group:${group}`}
-              kind="group"
-              value={group}
-              options={options}
-              right={
+            <li className="bs-row" key={`group:${group}`}>
+              <span className="bs-row-icon">
+                <AppIcon icon={Users} size="sm" />
+              </span>
+              <span className="bs-row-body">
+                <span className="bs-row-name">{describeGroupName(group)}</span>
+                <span className="bs-row-meta">Group</span>
+              </span>
+              <span className="bs-row-right">
                 <RemoveButton
                   label={`Remove ${describeGroupName(group)}`}
                   busy={disabled}
-                  onClick={() => remove("group", group)}
+                  onClick={() =>
+                    onChange({
+                      groups: groups.filter((entry) => entry !== group),
+                      people,
+                    })
+                  }
                 />
-              }
-            />
+              </span>
+            </li>
           ))}
           {people.map((login) => (
-            <Who
-              key={`person:${login}`}
-              kind="person"
-              value={login}
-              options={options}
-              right={
+            <li className="bs-row" key={`person:${login}`}>
+              <PersonAvatar
+                person={{ login, fullName: nameOf(login) }}
+                size="sm"
+              />
+              <span className="bs-row-body">
+                <span className="bs-row-name">{nameOf(login)}</span>
+                <span className="bs-row-meta">@{login}</span>
+              </span>
+              <span className="bs-row-right">
                 <RemoveButton
-                  label={`Remove ${login}`}
+                  label={`Remove ${nameOf(login)}`}
                   busy={disabled}
-                  onClick={() => remove("person", login)}
+                  onClick={() =>
+                    onChange({
+                      groups,
+                      people: people.filter((entry) => entry !== login),
+                    })
+                  }
                 />
-              }
-            />
+              </span>
+            </li>
           ))}
         </ul>
       ) : null}
@@ -148,16 +112,20 @@ export function ApproverPicker({
         placeholder="Search groups and people…"
         value={query}
         disabled={disabled}
-        onChange={(event) => setQuery(event.target.value)}
+        onFocus={() => setOpen(true)}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setOpen(true);
+        }}
       />
-      {query.trim() === "" ? null : matches.length > 0 ? (
+      {!open ? null : matches.length > 0 ? (
         <ul className="rev-picker-results">
           {matches.map((match) => (
             <li key={`${match.kind}:${match.value}`}>
               <button
                 type="button"
                 className="rev-picker-result"
-                disabled={disabled}
+                disabled={disabled || !match.canPick}
                 onClick={() => {
                   onChange(
                     match.kind === "group"
@@ -178,7 +146,11 @@ export function ApproverPicker({
                 <span className="rev-picker-identity">
                   <span className="rev-picker-name">{match.label}</span>
                   <span className="rev-picker-login">
-                    {match.kind === "group" ? "Group" : `@${match.login}`}
+                    {match.canPick
+                      ? match.kind === "group"
+                        ? "Group"
+                        : `@${match.login}`
+                      : "No access to this binder"}
                   </span>
                 </span>
               </button>
@@ -188,42 +160,6 @@ export function ApproverPicker({
       ) : (
         <p className="rev-picker-hint">Nothing matches that.</p>
       )}
-
-      {accessRows.length > 0 ? (
-        <div className="bs-fields">
-          <span className="bs-field-label">Access</span>
-          <ul className="bs-row-list">
-            {accessRows.map((row) => (
-              <Who
-                key={`access:${row.kind}:${row.value}`}
-                kind={row.kind}
-                value={row.value}
-                options={options}
-                right={
-                  access?.onGrant ? (
-                    <button
-                      type="button"
-                      className="bs-btn bs-btn--sm bs-btn-secondary"
-                      disabled={disabled || Boolean(access.busy)}
-                      onClick={() => access.onGrant?.(row.kind, row.value)}
-                    >
-                      {access.busy === `${row.kind}:${row.value}`
-                        ? "Giving access…"
-                        : "Give access"}
-                    </button>
-                  ) : (
-                    <RemoveButton
-                      label={`Don't give ${row.value} access`}
-                      busy={disabled}
-                      onClick={() => access?.onSkip?.(row.kind, row.value)}
-                    />
-                  )
-                }
-              />
-            ))}
-          </ul>
-        </div>
-      ) : null}
     </div>
   );
 }
