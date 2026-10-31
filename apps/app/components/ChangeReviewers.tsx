@@ -40,13 +40,13 @@ interface ChangeReviewersProps {
    */
   openThreadAuthors: ReadonlySet<string>;
   /**
-   * The reviewers this change is actually held for.
+   * Everyone whose approval counts toward one of the change's approval rules.
    *
-   * **Only "Required" is marked.** A reviewer with no marker is one nothing is
-   * waiting on, which is what optional means; printing the word on every other
-   * row is labelling the absence of a constraint.
+   * A reviewer who is one is tagged "Approver". **Being asked to review and
+   * counting are different things**, the way they are in GitLab: this list is
+   * who was asked, and the approval panel at the top is who counts.
    */
-  requiredReviewers?: readonly string[];
+  approvers?: readonly string[];
   /**
    * Open the binder's sign-off rules.
    *
@@ -103,8 +103,8 @@ export function ChangeReviewers({
   reviewers,
   currentUser,
   openThreadAuthors,
-  requiredReviewers = [],
-  onOpenSignOffRules = null,
+  approvers = [],
+  onOpenSignOffRules: _onOpenSignOffRules = null,
   canManage: canManageProp,
   onChanged,
   decided = false,
@@ -133,14 +133,21 @@ export function ChangeReviewers({
    */
   const [at, setAt] = useState<{ left: number; top: number } | null>(null);
 
-  const reviewerLogins = useMemo(
-    () => new Set(reviewers.map((reviewer) => reviewer.login)),
+  // **Only the people asked.** Somebody who reviewed without being asked is
+  // in the timeline, and — if their approval counts — in the approval panel.
+  const asked = useMemo(
+    () => reviewers.filter((reviewer) => reviewer.requested),
     [reviewers],
   );
 
-  const required = useMemo(
-    () => new Set(requiredReviewers.map((login) => login.toLowerCase())),
-    [requiredReviewers],
+  const reviewerLogins = useMemo(
+    () => new Set(asked.map((reviewer) => reviewer.login)),
+    [asked],
+  );
+
+  const approverSet = useMemo(
+    () => new Set(approvers.map((login) => login.toLowerCase())),
+    [approvers],
   );
 
   // The people who can review this are overwhelmingly the people already on
@@ -296,7 +303,7 @@ export function ChangeReviewers({
 
   return (
     <div className="rev-reviewers" ref={sectionRef}>
-      {reviewers.length === 0 ? (
+      {asked.length === 0 ? (
         <p className="bs-empty">
           {decided
             ? "Nobody was asked to review this."
@@ -304,7 +311,7 @@ export function ChangeReviewers({
         </p>
       ) : (
         <ul className="bs-row-list rev-reviewer-list">
-          {reviewers.map((reviewer) => {
+          {asked.map((reviewer) => {
             const status = resolveReviewerDisplayStatus(
               reviewer,
               openThreadAuthors,
@@ -320,8 +327,8 @@ export function ChangeReviewers({
                 <PersonAvatar person={reviewer} size="sm" />
                 <span className="bs-row-body">
                   <span className="bs-row-name">{name}</span>
-                  {required.has(reviewer.login.toLowerCase()) ? (
-                    <span className="bs-required">Required</span>
+                  {approverSet.has(reviewer.login.toLowerCase()) ? (
+                    <span className="bs-required">Approver</span>
                   ) : null}
                 </span>
                 <span
@@ -341,7 +348,7 @@ export function ChangeReviewers({
                     title={`Withdraw the review request for ${getReviewerDisplayName(reviewer)}`}
                     onClick={() =>
                       void save(
-                        reviewers
+                        asked
                           .filter(
                             (candidate) => candidate.login !== reviewer.login,
                           )
@@ -364,7 +371,7 @@ export function ChangeReviewers({
       {/* **The button and its caveat share one panel foot**, the way the
           mockup draws them. It used to sit on the reviewer row itself, flush
           against the panel's right edge with nothing around it. */}
-      {canManage || (requiredReviewers.length > 0 && onOpenSignOffRules) ? (
+      {canManage ? (
         <div className="bs-panel-foot rev-reviewers-foot">
           {canManage ? (
             <button
@@ -379,22 +386,6 @@ export function ChangeReviewers({
               <Plus size={13} strokeWidth={2} aria-hidden="true" />
               Reviewer
             </button>
-          ) : null}
-
-          {/* The answer to "why is Priya on this" is one click from the row
-              that raises it, rather than a sentence saying the rules exist. */}
-          {requiredReviewers.length > 0 && onOpenSignOffRules ? (
-            <p className="bs-panel-foot-note">
-              Required reviewers come from this binder&rsquo;s{" "}
-              <button
-                type="button"
-                className="bs-linkbtn"
-                onClick={onOpenSignOffRules}
-              >
-                sign-off rules
-              </button>
-              .
-            </p>
           ) : null}
 
           {picking ? (
@@ -437,7 +428,7 @@ export function ChangeReviewers({
                           disabled={busy}
                           onClick={() =>
                             void save([
-                              ...reviewers.map((reviewer) => reviewer.login),
+                              ...asked.map((reviewer) => reviewer.login),
                               user.login,
                             ])
                           }

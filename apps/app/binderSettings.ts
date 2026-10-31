@@ -140,3 +140,173 @@ export function parseApprovalCount(text: string): number | null {
   const count = Number(trimmed);
   return Number.isSafeInteger(count) ? count : null;
 }
+
+/** The organization's built-in team, which is never granted onto a binder. */
+const OWNERS = "Owners";
+/** Everyone at the organization, granted onto an open binder. */
+const STAFF = "staff";
+
+interface ApproverTeam {
+  name: string;
+  members: readonly { login: string; fullName?: string }[];
+}
+
+/** Whose approvals count, as the rules read reports it. */
+export interface ApproversView {
+  groups: readonly string[];
+  people: readonly string[];
+}
+
+/**
+ * What a search for approvers can find.
+ *
+ * **Any group in the organization**, granted here or not: naming a group an
+ * approver gives it access, because Gitea counts nobody who cannot read the
+ * binder. Owners and everyone (`staff`) are always offered. **People only if
+ * they can already read the binder** — giving one person access means making
+ * a team for them, so that is done on the People section first.
+ */
+export function approverOptions(
+  teams: readonly ApproverTeam[],
+  orgGroups: readonly string[] = [],
+): {
+  groups: string[];
+  people: { login: string; name: string }[];
+} {
+  const groups = [
+    ...new Set([
+      ...orgGroups,
+      ...teams.map((team) => team.name),
+      OWNERS,
+      STAFF,
+    ]),
+  ].sort((left, right) => {
+    if (left === STAFF) return 1;
+    if (right === STAFF) return -1;
+    return left.localeCompare(right);
+  });
+
+  const people = new Map<string, string>();
+  for (const team of teams) {
+    for (const member of team.members) {
+      if (!people.has(member.login)) {
+        people.set(member.login, member.fullName || member.login);
+      }
+    }
+  }
+
+  return {
+    groups,
+    people: [...people.entries()]
+      .map(([login, name]) => ({ login, name }))
+      .sort((left, right) => left.name.localeCompare(right.name)),
+  };
+}
+
+/**
+ * How many people's approvals count, for the "can never be met" warning: the
+ * people named, plus everyone in a group named that the page can see into.
+ * Owners' members are not on the settings read, so a binder relying on them
+ * alone is under-counted — which errs toward warning, the safer way to be
+ * wrong.
+ */
+export function countChosenApprovers(
+  approvers: ApproversView | null,
+  teams: readonly ApproverTeam[],
+): number {
+  if (!approvers) return 0;
+  const people = new Set(approvers.people);
+  for (const team of teams) {
+    if (!approvers.groups.includes(team.name)) continue;
+    for (const member of team.members) people.add(member.login);
+  }
+  return people.size;
+}
+
+/** The approvers in a sentence: "Board and Dr. Okafor", or "Nobody yet". */
+export function describeApprovers(
+  approvers: ApproversView,
+  teams: readonly ApproverTeam[],
+  groupName: (handle: string) => string,
+): string {
+  const { people } = approverOptions(teams);
+  const names = [
+    ...approvers.groups.map((group) =>
+      group === STAFF ? "everyone at the organization" : groupName(group),
+    ),
+    ...approvers.people.map(
+      (login) => people.find((person) => person.login === login)?.name ?? login,
+    ),
+  ];
+  if (names.length === 0) return "Nobody yet";
+  const text =
+    names.length === 1
+      ? names[0]!
+      : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+}
+
+/**
+ * What to say when approvals are needed and nobody can give them.
+ *
+ * Allowed — an admin may be about to name approvers, and Gitea itself accepts
+ * an empty list — but said, because otherwise the first sign is a change that
+ * never publishes.
+ */
+export function noApproversNote(
+  required: number | null,
+  approvers: ApproversView | null,
+): string | null {
+  if (!required || !approvers) return null;
+  if (approvers.groups.length + approvers.people.length > 0) return null;
+  return "Nobody can approve changes in this binder, so nothing can be published until you choose approvers.";
+}
+
+/** One thing a search for approvers can find: a group or a person. */
+export type ApproverMatch =
+  | { kind: "group"; value: string; label: string }
+  | { kind: "person"; value: string; label: string; login: string };
+
+/**
+ * What a search for approvers finds: groups and people whose name or login
+ * contains every word typed, not already chosen, groups first.
+ *
+ * Nothing until something is typed. A list of everyone at the organization is
+ * the thing the search replaces.
+ */
+export function searchApprovers(
+  options: ReturnType<typeof approverOptions>,
+  query: string,
+  chosen: { groups: readonly string[]; people: readonly string[] },
+  groupName: (handle: string) => string,
+  limit = 8,
+): ApproverMatch[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [];
+  const hit = (...texts: string[]) => {
+    const haystack = texts.join(" ").toLowerCase();
+    return words.every((word) => haystack.includes(word));
+  };
+
+  const groups: ApproverMatch[] = options.groups
+    .filter((group) => !chosen.groups.includes(group))
+    .map((group) => ({
+      kind: "group" as const,
+      value: group,
+      label:
+        group === STAFF ? "Everyone at the organization" : groupName(group),
+    }))
+    .filter((match) => hit(match.label, match.value));
+
+  const people: ApproverMatch[] = options.people
+    .filter((person) => !chosen.people.includes(person.login))
+    .filter((person) => hit(person.name, person.login))
+    .map((person) => ({
+      kind: "person" as const,
+      value: person.login,
+      label: person.name,
+      login: person.login,
+    }));
+
+  return [...groups, ...people].slice(0, limit);
+}

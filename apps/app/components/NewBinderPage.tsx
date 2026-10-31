@@ -1,9 +1,11 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Building2, Lock } from "lucide-react";
 
 import { createBinder } from "../api";
-import { queryKeys } from "../data/queries";
+import { organizationPeopleQuery, queryKeys } from "../data/queries";
+import { approverOptions } from "../binderSettings";
+import { ApproverPicker } from "./ApproverPicker";
 import { followInApp } from "../appLink";
 import type { WorkspaceSummary } from "../../../packages/api-schema/schemas/workspaces";
 import { slugifyOrganizationName } from "../../../packages/utils/organizationName";
@@ -75,6 +77,22 @@ export function NewBinderPage({
   // to read in order to attest to it. A default, not an assumption: the
   // question is on the form, and this is the moment its answer is known.
   const [openToOrganization, setOpenToOrganization] = useState(true);
+  // Empty, as Gitea's own approvals whitelist is: a new binder needs no
+  // approvals, and its admin names approvers when it starts to.
+  const [approvers, setApprovers] = useState<{
+    groups: string[];
+    people: string[];
+  }>({ groups: [], people: [] });
+  const orgPeople = useQuery(organizationPeopleQuery(org)).data;
+  // People only if they will be able to read the binder: everyone when it is
+  // open, otherwise the owners. A group named here is given access.
+  const readers = (orgPeople?.people ?? []).filter(
+    (person) => openToOrganization || person.isOwner,
+  );
+  const options = approverOptions(
+    [{ name: "staff", members: readers }],
+    (orgPeople?.groups ?? []).map((group) => group.name),
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -112,6 +130,12 @@ export function NewBinderPage({
               name.trim(),
               description.trim() === "" ? undefined : description.trim(),
               openToOrganization,
+              {
+                groups: approvers.groups,
+                people: approvers.people.filter((login) =>
+                  readers.some((person) => person.login === login),
+                ),
+              },
             );
             await queryClient.invalidateQueries({
               queryKey: queryKeys.organizationBinders(org),
@@ -239,6 +263,26 @@ export function NewBinderPage({
               </span>
             </span>
           </label>
+        </fieldset>
+
+        <fieldset className="bs-field">
+          <legend className="bs-field-label new-binder-legend">
+            Who approves changes
+            <span className="bs-field-optional">optional</span>
+          </legend>
+          <p className="bs-field-hint">
+            Only these people's approvals count. A new binder needs no
+            approvals, so you can leave this empty and choose later in its
+            settings. A group you choose can read the binder.
+          </p>
+          <ApproverPicker
+            id="new-binder-approvers"
+            groups={approvers.groups}
+            people={approvers.people}
+            options={options}
+            disabled={submitting}
+            onChange={setApprovers}
+          />
         </fieldset>
 
         {error ? (

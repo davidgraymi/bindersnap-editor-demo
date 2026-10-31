@@ -45,12 +45,18 @@ import type {
   WorkspaceSettingsPayload,
 } from "../../../packages/api-schema/schemas/workspaces";
 import {
-  countApprovers,
+  approverOptions,
+  countChosenApprovers,
+  describeApprovers,
   GROUP_LEVELS,
   groupLevelLabel,
+  noApproversNote,
   parseApprovalCount,
   unreachableApprovalsNote,
+  type ApproversView,
 } from "../binderSettings";
+import { ApproverPicker } from "./ApproverPicker";
+import { RemoveButton } from "./RemoveButton";
 import { formatDocumentName } from "../documentDisplay";
 import { describeGroupName } from "../../../packages/utils/groupName";
 import { AppIcon } from "./AppIcon";
@@ -593,8 +599,8 @@ function PeopleSections({
                   Everyone at {orgDisplayName}
                 </span>
                 <span className="bs-choice-note">
-                  They can read it and comment on changes — and approve them,
-                  because reading a change is what approving one costs.
+                  They can read it and comment on changes. Only the approvers
+                  you choose can approve them.
                 </span>
               </span>
             </label>
@@ -706,29 +712,6 @@ function PeopleSections({
         onChanged={(act) => void run(act)}
       />
     </>
-  );
-}
-
-function RemoveButton({
-  label,
-  busy,
-  onClick,
-}: {
-  label: string;
-  busy: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      className="bs-rowact bs-rowact--danger"
-      disabled={busy}
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-    >
-      <AppIcon icon={X} size="sm" />
-    </button>
   );
 }
 
@@ -1648,6 +1631,112 @@ function ApprovalCountField({
 }
 
 /**
+ * Whose approvals count toward the number needed.
+ *
+ * A list the binder's admin keeps, as Gitea keeps its approvals whitelist:
+ * nobody until somebody is named. Naming a group gives it access to the
+ * binder; a person has to have access already.
+ *
+ * Saved as one change rather than per pick: "the Board" then "and Dr. Okafor"
+ * written one at a time would leave the binder, for a moment, counting the
+ * Board alone.
+ */
+function ApproversRow({
+  approvers,
+  teams,
+  orgGroups,
+  canManage,
+  saving,
+  onSave,
+}: {
+  approvers: ApproversView | null;
+  teams: WorkspaceSettingsPayload["teams"];
+  orgGroups: readonly string[];
+  canManage: boolean;
+  saving: boolean;
+  onSave: (approvers: {
+    groups: string[];
+    people: string[];
+  }) => Promise<boolean>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<{ groups: string[]; people: string[] }>({
+    groups: [],
+    people: [],
+  });
+
+  return (
+    <li className="bs-row">
+      <span className="bs-row-body">
+        <span className="bs-row-name" id="binder-approvers">
+          Whose approvals count
+        </span>
+        <span className="bs-row-meta">
+          {approvers === null
+            ? "Could not be read"
+            : describeApprovers(approvers, teams, describeGroupName)}
+        </span>
+        {editing ? (
+          <>
+            <span className="bs-row-meta">
+              Only these people can approve. Everyone else with access can still
+              review and comment.
+            </span>
+            <ApproverPicker
+              id="binder-approver-search"
+              groups={draft.groups}
+              people={draft.people}
+              options={approverOptions(teams, orgGroups)}
+              disabled={saving}
+              onChange={setDraft}
+            />
+            <div className="bs-panel-foot">
+              <button
+                type="button"
+                className="bs-btn bs-btn--sm bs-btn-primary"
+                disabled={saving}
+                onClick={() =>
+                  void onSave(draft).then((saved) => {
+                    if (saved) setEditing(false);
+                  })
+                }
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                className="bs-btn bs-btn--sm bs-btn--quiet"
+                disabled={saving}
+                onClick={() => setEditing(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </>
+        ) : null}
+      </span>
+      <span className="bs-row-right bs-settings-value">
+        {canManage && approvers !== null && !editing ? (
+          <button
+            type="button"
+            className="bs-btn bs-btn--sm bs-btn-secondary"
+            onClick={() => {
+              setDraft({
+                groups: [...approvers.groups],
+                people: [...approvers.people],
+              });
+              setEditing(true);
+            }}
+          >
+            Change
+          </button>
+        ) : null}
+      </span>
+    </li>
+  );
+}
+
+/**
  * The rules every change in the binder meets, as rows rather than a bulleted
  * paragraph.
  *
@@ -1674,17 +1763,19 @@ function ApprovalSection({
   const unreachable =
     rules.requiredApprovals === null
       ? null
-      : unreachableApprovalsNote(
+      : (noApproversNote(rules.requiredApprovals, rules.approvers) ??
+        unreachableApprovalsNote(
           rules.requiredApprovals,
-          countApprovers(settings.teams),
-        );
+          countChosenApprovers(rules.approvers, settings.teams),
+        ));
   const [notice, setNotice] = useState<string | null>(null);
 
   async function change(next: {
     blockOnUnresolvedThreads?: boolean;
     requiredApprovals?: number;
     dismissStaleApprovals?: boolean;
-  }) {
+    approvers?: { groups: string[]; people: string[] };
+  }): Promise<boolean> {
     setSaving(true);
     setNotice(null);
     try {
@@ -1698,10 +1789,13 @@ function ApprovalSection({
             updated.requiredApprovals ?? rules.requiredApprovals,
           dismissStaleApprovals:
             updated.dismissStaleApprovals ?? rules.dismissStaleApprovals,
+          approvers: updated.approvers ?? rules.approvers,
         },
       });
+      return true;
     } catch (err: unknown) {
       setNotice(errorMessage(err, "Unable to change the rules."));
+      return false;
     } finally {
       setSaving(false);
     }
@@ -1742,6 +1836,16 @@ function ApprovalSection({
                   ? "Anyone who can publish may do so without an approval. Right for a binder only you work in."
                   : "Nobody can approve their own change, so the author never counts toward this."}
               </span>
+              {rules.requiredApprovals !== null &&
+              rules.requiredApprovals > 1 &&
+              rules.approvers &&
+              rules.approvers.groups.length + rules.approvers.people.length >
+                1 ? (
+                <span className="bs-row-meta">
+                  Any {rules.requiredApprovals} of the approvers below together,
+                  not {rules.requiredApprovals} from each group.
+                </span>
+              ) : null}
               {unreachable ? (
                 <span
                   className="bs-row-meta bs-row-meta--warning"
@@ -1767,6 +1871,14 @@ function ApprovalSection({
               )}
             </span>
           </li>
+          <ApproversRow
+            approvers={rules.approvers}
+            teams={settings.teams}
+            orgGroups={settings.signOff.groups}
+            canManage={canManage}
+            saving={saving}
+            onSave={(approvers) => change({ approvers })}
+          />
           <li className="bs-row">
             <span className="bs-row-body">
               <label className="bs-row-name" htmlFor="binder-dismiss-stale">

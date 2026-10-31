@@ -1934,6 +1934,113 @@ input {
   color: var(--bs-text-muted);
 }
 
+/* ── Approval rules ──────────────────────────────────────────────────────
+   GitLab's approval widget: one line saying what the change still needs and
+   who has approved, opening into a row per rule. Green only when a rule is
+   met — green means approval in this product and nothing else. */
+.rev-rules {
+  margin-bottom: var(--brand-space-4);
+}
+
+.rev-rules-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  width: 100%;
+  padding: var(--brand-space-3) var(--brand-space-4);
+  border: none;
+  background: none;
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.rev-rules-summary:disabled {
+  cursor: default;
+}
+
+.rev-rules--met .rev-rules-summary > svg:first-child {
+  color: var(--brand-green);
+}
+
+.rev-rules-line {
+  flex: 1;
+  min-width: 0;
+}
+
+.rev-rules-line strong {
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.rev-rules-approved-label {
+  color: var(--bs-text-muted);
+}
+
+.rev-rules-faces {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--brand-space-1);
+}
+
+.rev-rules-more,
+.rev-rules-empty {
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.rev-rules-table {
+  width: 100%;
+  border-collapse: collapse;
+  border-top: 1px solid var(--bs-rule);
+  font-size: var(--brand-text-sm);
+}
+
+.rev-rules-table th,
+.rev-rules-table td {
+  padding: var(--brand-space-3) var(--brand-space-4);
+  border-bottom: 1px solid var(--bs-rule);
+  text-align: left;
+  vertical-align: top;
+}
+
+.rev-rules-table thead th {
+  white-space: nowrap;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.rev-rules-table tbody tr:last-child > * {
+  border-bottom: none;
+}
+
+.rev-rules-name {
+  display: block;
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-medium);
+}
+
+.rev-rules-owners {
+  display: block;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+  font-weight: var(--brand-weight-regular);
+}
+
+.rev-rules-count {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--bs-text-secondary);
+}
+
+.rev-rules-row--met .rev-rules-count {
+  color: var(--brand-green-dark);
+  font-weight: var(--brand-weight-semibold);
+}
+
 /* How a closed change ended, stated once, at the top of its record. */
 .rev-outcome {
   margin: 0;

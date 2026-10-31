@@ -1,8 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  approverOptions,
   countApprovers,
+  countChosenApprovers,
+  describeApprovers,
+  noApproversNote,
   describeTeamAccess,
+  searchApprovers,
   parseApprovalCount,
   unreachableApprovalsNote,
 } from "./binderSettings";
@@ -58,5 +63,124 @@ describe("approval counts", () => {
     for (const text of ["", "-1", "1.5", "two", "99999999999999999999"]) {
       expect(parseApprovalCount(text)).toBeNull();
     }
+  });
+});
+
+describe("whose approvals count", () => {
+  const teams = [
+    {
+      name: "staff",
+      access: "read",
+      members: [
+        { login: "nurse", fullName: "Nia Nurse" },
+        { login: "chair", fullName: "Cam Chair" },
+      ],
+    },
+    {
+      name: "board",
+      access: "read",
+      members: [
+        { login: "chair", fullName: "Cam Chair" },
+        { login: "treasurer", fullName: "" },
+      ],
+    },
+  ];
+  const title = (handle: string) =>
+    handle.charAt(0).toUpperCase() + handle.slice(1);
+
+  test("offers every group in the organization, Owners, and everyone last", () => {
+    // Naming a group gives it access, so it need not have any yet.
+    expect(approverOptions(teams, ["finance"]).groups).toEqual([
+      "board",
+      "finance",
+      "Owners",
+      "staff",
+    ]);
+  });
+
+  test("offers only people who can already read the binder, once each", () => {
+    expect(approverOptions(teams).people).toEqual([
+      { login: "chair", name: "Cam Chair" },
+      { login: "nurse", name: "Nia Nurse" },
+      { login: "treasurer", name: "treasurer" },
+    ]);
+  });
+
+  test("nobody reads as nobody yet", () => {
+    expect(describeApprovers({ groups: [], people: [] }, teams, title)).toBe(
+      "Nobody yet",
+    );
+  });
+
+  test("a choice reads as names", () => {
+    expect(
+      describeApprovers({ groups: ["board"], people: ["nurse"] }, teams, title),
+    ).toBe("Board and Nia Nurse");
+  });
+
+  test("the warning counts only the people whose approvals count", () => {
+    expect(countChosenApprovers({ groups: ["board"], people: [] }, teams)).toBe(
+      2,
+    );
+    expect(countChosenApprovers(null, teams)).toBe(0);
+  });
+
+  test("approvals needed and nobody to give them is said", () => {
+    const none = { groups: [], people: [] };
+    expect(noApproversNote(1, none)).toContain("Nobody can approve");
+    expect(noApproversNote(0, none)).toBeNull();
+    expect(noApproversNote(1, { groups: ["board"], people: [] })).toBeNull();
+  });
+});
+
+describe("searching for approvers", () => {
+  const options = approverOptions([
+    {
+      name: "staff",
+      members: [
+        { login: "nurse", fullName: "Nia Nurse" },
+        { login: "okafor", fullName: "Dr. Bola Okafor" },
+      ],
+    },
+    { name: "board-of-directors", members: [] },
+  ]);
+  const title = (handle: string) =>
+    handle
+      .split("-")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+  const none = { groups: [], people: [] };
+
+  test("finds nothing until something is typed", () => {
+    expect(searchApprovers(options, "  ", none, title)).toEqual([]);
+  });
+
+  test("finds groups by name and people by name or login", () => {
+    expect(
+      searchApprovers(options, "board", none, title).map((m) => m.value),
+    ).toEqual(["board-of-directors"]);
+    expect(
+      searchApprovers(options, "dr bola", none, title).map((m) => m.value),
+    ).toEqual(["okafor"]);
+    expect(
+      searchApprovers(options, "nurse", none, title).map((m) => m.value),
+    ).toEqual(["nurse"]);
+  });
+
+  test("leaves out what is already chosen", () => {
+    expect(
+      searchApprovers(
+        options,
+        "o",
+        { groups: ["board-of-directors"], people: ["okafor"] },
+        title,
+      ).map((m) => m.value),
+    ).toEqual(["Owners", "staff"]);
+  });
+
+  test("calls staff everyone, and finds it by that name", () => {
+    expect(searchApprovers(options, "everyone", none, title)).toEqual([
+      { kind: "group", value: "staff", label: "Everyone at the organization" },
+    ]);
   });
 });
