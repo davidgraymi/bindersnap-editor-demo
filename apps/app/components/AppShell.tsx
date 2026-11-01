@@ -27,6 +27,7 @@ import { BindersnapLogoMark } from "./BindersnapLogoMark";
 import { DocumentsPage } from "./DocumentsPage";
 import { ReviewQueuePage } from "./ReviewQueuePage";
 import { AppSidebar, type SidebarBinder } from "./AppSidebar";
+import { BindersPage } from "./BindersPage";
 import { BinderExplorer } from "./BinderExplorer";
 import { AppBottomNav } from "./AppBottomNav";
 import {
@@ -532,6 +533,15 @@ export function AppShell({
                   }
                   onBrowseDocuments={() => onNavigate({ kind: "documents" })}
                 />
+              ) : route.kind === "binders" ? (
+                <BindersPage
+                  onOpenBinder={(org, binder) =>
+                    onNavigate({ kind: "binder", org, binder })
+                  }
+                  onCreateOrganization={() =>
+                    onNavigate({ kind: "createOrganization" })
+                  }
+                />
               ) : route.kind === "documents" ? (
                 <DocumentsPage
                   onSelectDocument={(org, binder, documentPath) =>
@@ -626,12 +636,7 @@ export function AppShell({
                     onNavigate({ kind: "binder", org, binder })
                   }
                   onOpenChanges={() => onNavigate({ kind: "changes" })}
-                  onOpenBinders={
-                    sidebarOrg
-                      ? () =>
-                          onNavigate({ kind: "organization", org: sidebarOrg })
-                      : null
-                  }
+                  onOpenBinders={() => onNavigate({ kind: "binders" })}
                 />
               )}
             </main>
@@ -641,7 +646,7 @@ export function AppShell({
 
       {/* Below 768px the sidebar is not rendered and this is the navigation.
           Fixed to the bottom, so it sits outside the scrolling body. */}
-      <AppBottomNav route={route} org={sidebarOrg} onNavigate={onNavigate} />
+      <AppBottomNav route={route} onNavigate={onNavigate} />
 
       {feedbackOpen ? (
         <FeedbackDialog

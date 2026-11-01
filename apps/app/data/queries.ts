@@ -29,6 +29,7 @@ import {
   fetchOrganizationMembers,
   fetchOrganizationPeople,
   fetchOrganizations,
+  fetchBinders,
   fetchHomeFeed,
   getHomeChanges,
   type HomeFeedPayload,
@@ -111,6 +112,8 @@ export const queryKeys = {
 
   /** The changes this person is part of, everywhere — home and the queue. */
   homeChanges: () => ["home-changes"] as const,
+  /** Every binder this person can open, across their organizations. */
+  binders: () => ["binders"] as const,
   /** Home's feed — what has been happening in your binders. */
   homeFeed: () => ["home-feed"] as const,
   library: (query: string) => ["library", query] as const,
@@ -179,6 +182,14 @@ export function homeChangesQuery() {
   return queryOptions({
     queryKey: queryKeys.homeChanges(),
     queryFn: ({ signal }) => getHomeChanges({ signal }),
+  });
+}
+
+/** Every binder this person can open, across their organizations. */
+export function bindersQuery() {
+  return queryOptions({
+    queryKey: queryKeys.binders(),
+    queryFn: () => fetchBinders(),
   });
 }
 

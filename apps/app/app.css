@@ -12116,3 +12116,135 @@ html.bs-writing .app-main {
     display: none;
   }
 }
+
+/* ── YOUR BINDERS ─────────────────────────────────────────────
+   Every binder you can open, as tiles: GitHub's list of your
+   repositories, for binders.
+──────────────────────────────────────────────────────────────── */
+
+.binders-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--brand-space-3);
+}
+
+.binders-filter {
+  flex: 1 1 16rem;
+  max-width: 24rem;
+}
+
+.binders-group {
+  display: grid;
+  gap: var(--brand-space-3);
+}
+
+.binders-group-title {
+  margin: 0;
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-ui-lg);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.binders-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  gap: var(--brand-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.binders-tile-item {
+  display: flex;
+}
+
+.binders-tile {
+  display: grid;
+  flex: 1;
+  grid-template-rows: auto 1fr auto;
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-4);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  color: var(--bs-text-secondary);
+  text-decoration: none;
+  transition:
+    border-color var(--brand-transition-base),
+    background var(--brand-transition-base);
+}
+
+.binders-tile:hover {
+  border-color: var(--bs-coral-border, var(--bs-rule));
+  background: var(--bs-surface-2);
+}
+
+.binders-tile:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 2px;
+}
+
+.binders-tile-head {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  min-width: 0;
+}
+
+.binders-tile-mark {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: var(--brand-space-8);
+  height: var(--brand-space-8);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-coral-dim);
+  color: var(--bs-coral-text);
+}
+
+.binders-tile-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-ui-lg);
+  font-weight: var(--brand-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* What you may do here: a quiet label, not a badge competing with the name. */
+.binders-tile-access {
+  flex-shrink: 0;
+  padding: 0 var(--brand-space-2);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-full);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-xs);
+  line-height: var(--brand-space-5);
+}
+
+.binders-tile-description {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: var(--brand-text-ui-md);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.binders-tile-facts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--brand-space-2);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.binders-tile-changes {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+}

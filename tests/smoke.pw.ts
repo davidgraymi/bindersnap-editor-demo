@@ -247,7 +247,7 @@ test.describe("app shell routes", () => {
     // The shell's navigation. At this viewport that is the sidebar — the top
     // bar's own links are for widths where the sidebar is not rendered.
     await expect(
-      page.locator(".app-sidebar").getByRole("link", { name: "Documents" }),
+      page.locator(".app-sidebar").getByRole("link", { name: "Binders" }),
     ).toBeVisible();
   });
 

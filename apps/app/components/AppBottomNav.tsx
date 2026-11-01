@@ -1,4 +1,4 @@
-import { FilePen, FileText, Home, Library } from "lucide-react";
+import { FilePen, Home, Library } from "lucide-react";
 
 import { followInApp } from "../appLink";
 import { routeToPath, type AppRoute } from "../routes";
@@ -20,19 +20,17 @@ import { routeToPath, type AppRoute } from "../routes";
  * carries the four destinations somebody navigates *between*, and everything
  * under Manage and Settings stays one level in, on the pages that own it.
  *
- * **Binders needs an organization**, and a page that names none has to be told
- * which. It is dropped rather than disabled when there is no answer yet: a
- * dead tab in a bar of four is worse than a bar of three.
+ * Three of them: Home, Changes and Binders — the same "Your work" the sidebar
+ * shows on your own pages. Binders is every binder you can open, so it needs
+ * no organization to point at.
  */
 
 interface AppBottomNavProps {
   route: AppRoute;
-  /** The organization Binders points at, or null before one is known. */
-  org: string | null;
   onNavigate: (route: AppRoute) => void;
 }
 
-export function AppBottomNav({ route, org, onNavigate }: AppBottomNavProps) {
+export function AppBottomNav({ route, onNavigate }: AppBottomNavProps) {
   const entries: Array<{
     key: string;
     label: string;
@@ -55,27 +53,21 @@ export function AppBottomNav({ route, org, onNavigate }: AppBottomNavProps) {
       isActive: route.kind === "changes",
     },
     {
-      key: "documents",
-      label: "Documents",
-      icon: FileText,
-      to: { kind: "documents" },
-      isActive: route.kind === "documents",
-    },
-  ];
-
-  if (org) {
-    entries.push({
+      // Every binder you can open, whichever organization it is in — so it
+      // needs no organization to point at, and is always there.
       key: "binders",
       label: "Binders",
       icon: Library,
-      to: { kind: "organization", org },
-      // A binder, and a document inside one, are both reached through here.
+      to: { kind: "binders" },
+      // A binder, a document inside one, and an organization's own pages are
+      // all reached through here.
       isActive:
+        route.kind === "binders" ||
         route.kind === "organization" ||
         route.kind === "binder" ||
         route.kind === "binderDocument",
-    });
-  }
+    },
+  ];
 
   return (
     <nav className="app-bottom-nav" aria-label="Sections">

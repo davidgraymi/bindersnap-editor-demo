@@ -39,7 +39,7 @@ test("the sidebar shows the level you are in: yours, then the organization's", a
   // organizations you are in as places to go — not one organization's pages
   // under a heading, beside entries that span all of them.
   await expect(sidebar.getByText("Your work", { exact: true })).toBeVisible();
-  for (const label of ["Home", "Change requests", "Documents"] as const) {
+  for (const label of ["Home", "Change requests", "Binders"] as const) {
     await expect(sidebar.getByRole("link", { name: label })).toBeVisible();
   }
   const organizations = sidebar.getByRole("navigation", {
@@ -104,11 +104,15 @@ test("the sidebar navigates, and marks where you are", async ({ page }) => {
     sidebar.getByRole("link", { name: "Change requests" }),
   ).toHaveAttribute("aria-current", "page");
 
-  await sidebar.getByRole("link", { name: "Documents" }).click();
-  await expect(page).toHaveURL(/\/documents$/, { timeout: 30_000 });
-  await expect(
-    sidebar.getByRole("link", { name: "Documents" }),
-  ).toHaveAttribute("aria-current", "page");
+  // Binders, not documents: a binder is one scope, and a list mixing every
+  // binder's files answered nothing.
+  await expect(sidebar.getByRole("link", { name: "Documents" })).toHaveCount(0);
+  await sidebar.getByRole("link", { name: "Binders" }).click();
+  await expect(page).toHaveURL(/\/-\/binders$/, { timeout: 30_000 });
+  await expect(sidebar.getByRole("link", { name: "Binders" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
 
   // **No entry for a page that does not exist yet.** Activity was a "coming
   // soon" placeholder in the map, which a reader who has never used GitHub

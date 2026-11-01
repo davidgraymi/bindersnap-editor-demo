@@ -229,11 +229,13 @@ export function AppSidebar({
       count: changeCount,
     },
     {
-      key: "documents",
-      label: "Documents",
-      icon: FileText,
-      route: { kind: "documents" },
-      isActive: (r) => r.kind === "documents",
+      // Binders, not documents: a binder is one scope, with its own rules and
+      // people, and a list mixing every binder's files answered nothing.
+      key: "binders",
+      label: "Binders",
+      icon: Library,
+      route: { kind: "binders" },
+      isActive: (r) => r.kind === "binders",
     },
   ];
 

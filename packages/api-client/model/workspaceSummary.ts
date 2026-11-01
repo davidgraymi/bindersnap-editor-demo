@@ -4,6 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { WorkspaceSummaryAccess } from './workspaceSummaryAccess.ts';
 
 export interface WorkspaceSummary {
   id: number;
@@ -13,4 +14,5 @@ export interface WorkspaceSummary {
   description: string;
   openChangeCount: number;
   updatedAt: string;
+  access?: WorkspaceSummaryAccess;
 }

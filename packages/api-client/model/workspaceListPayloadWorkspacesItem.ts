@@ -4,6 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { WorkspaceListPayloadWorkspacesItemAccess } from './workspaceListPayloadWorkspacesItemAccess.ts';
 
 export type WorkspaceListPayloadWorkspacesItem = {
   id: number;
@@ -13,4 +14,5 @@ export type WorkspaceListPayloadWorkspacesItem = {
   description: string;
   openChangeCount: number;
   updatedAt: string;
+  access?: WorkspaceListPayloadWorkspacesItemAccess;
 };
