@@ -7660,6 +7660,33 @@ a.cmp-file-act {
    exactly one of them.
 ──────────────────────────────────────────────────────────────── */
 
+/* **Tabs with counts, in a list's own bar** — a binder's change requests,
+   "Open 3 · Closed". The count is a small grey pill after the word, in
+   figures that do not shift as they change. */
+.queue-counter {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  white-space: nowrap;
+}
+
+.queue-counter-value {
+  min-width: 18px;
+  padding: 0 var(--brand-space-1-5);
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-surface-3);
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-sm);
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+  text-align: center;
+}
+
+.queue-counter[aria-pressed="true"] .queue-counter-value {
+  background: var(--bs-surface-1);
+}
+
 /* An empty section is one quiet line, not a panel-sized hole: the place a
    state lives is worth knowing before anything is in it. */
 .queue-section-empty {
