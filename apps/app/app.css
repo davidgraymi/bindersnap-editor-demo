@@ -12014,3 +12014,12 @@ html.bs-writing .app-main {
     border-bottom: none;
   }
 }
+
+/* Your own pages span every organization, and the sidebar lists them, so the
+   top bar names none of them — except on a phone, where there is no sidebar
+   and the switcher is the way to an organization. */
+@media (min-width: 769px) {
+  .app-trail-org--yours {
+    display: none;
+  }
+}

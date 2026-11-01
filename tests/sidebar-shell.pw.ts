@@ -180,18 +180,28 @@ test("exactly one navigation exists at any width", async ({ page }) => {
 
   const sidebar = page.locator(".app-sidebar");
   const bottomNav = page.locator(".app-bottom-nav");
-  // Which organization you are looking at is a control, not a link, and is
-  // wanted at both widths — it is why the switcher sits outside the nav.
+  // Which organization you are in is a control, not a link — it is why the
+  // switcher sits outside the nav.
   const switcher = page.locator(".app-topnav-org");
 
+  // Home spans every organization, and its sidebar lists them, so the top
+  // bar names none of them...
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(sidebar).toBeVisible();
   await expect(bottomNav).toBeHidden();
-  await expect(switcher).toBeVisible();
+  await expect(switcher).toBeHidden();
 
+  // ...except on a phone, where there is no sidebar and the switcher is the
+  // way to an organization.
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(sidebar).toBeHidden();
   await expect(bottomNav).toBeVisible();
+  await expect(switcher).toBeVisible();
+
+  // Inside an organization it names it at every width.
+  await page.goto(`${APP_BASE_URL}/riverside-health`);
+  await expect(switcher).toBeVisible({ timeout: 30_000 });
+  await page.setViewportSize({ width: 1440, height: 900 });
   await expect(switcher).toBeVisible();
 
   // The top bar's own links are the navigation at neither width now. They were
