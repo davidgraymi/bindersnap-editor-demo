@@ -1,19 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import { type HomeOpenDocument } from "../api";
 import { homeChangesQuery } from "../data/queries";
 import {
   buildQueueRows,
-  countQueueRows,
   describeQueue,
-  filterQueueRows,
-  initialQueueFilter,
-  QUEUE_FILTERS,
-  QUEUE_FILTER_LABELS,
-  type QueueFilter,
-  type QueueRow,
+  groupQueueRows,
+  QUEUE_SECTION_EMPTY,
+  QUEUE_SECTION_LABELS,
+  QUEUE_SECTIONS,
 } from "../reviewQueue";
+import { decidedRowsFrom } from "../homeChanges";
 import { SkeletonPanel } from "./Skeleton";
 import { buildBinderUrl } from "../binderShell";
 import { ChangeRowView } from "./ChangeRow";
@@ -26,15 +24,12 @@ import { ChangeRowView } from "./ChangeRow";
  * one binder. Neither answers "what is going on", which is the question
  * somebody with four binders opens the app with.
  *
- * The counters are the filters. They are not decoration: each one is the
- * number of rows you get by pressing it, which is asserted in
- * reviewQueue.test.ts so the two can never drift.
- *
- * **They sit in the list's own bar, as tabs with counts** — GitLab's "Open 65
- * · Merged · Closed · All", and this binder's own Changes tab's "Open 3 ·
- * Closed". They were five tiles the size of dashboard metrics above the list,
- * which made the page read as a report about change requests rather than a
- * list of them, and pushed the first row halfway down the screen.
+ * **A column of sections, one per state**, the way Home is laid out: what is
+ * waiting on your review, what was sent back, what is ready to publish, what
+ * is waiting on somebody else, and what was decided lately. Every change is in
+ * exactly one, so the counts add up to the whole. They were filter tabs over
+ * one list, and "Waiting on you" cut across the others — a change ready to
+ * publish was listed under both.
  */
 
 interface ReviewQueuePageProps {
@@ -59,26 +54,15 @@ export function ReviewQueuePage({
   const error = home.error
     ? home.error.message || "Unable to load your change requests."
     : null;
-  // Null until the rows land, because which filter to open on depends on
-  // whether anything is waiting — see initialQueueFilter.
-  const [filter, setFilter] = useState<QueueFilter | null>(null);
 
   const rows = useMemo(
     () => (documents ? buildQueueRows(documents, currentUsername) : []),
     [documents, currentUsername],
   );
-  const counts = useMemo(() => countQueueRows(rows), [rows]);
-
-  useEffect(() => {
-    if (documents !== null && filter === null) {
-      setFilter(initialQueueFilter(counts));
-    }
-  }, [documents, filter, counts]);
-
-  const activeFilter = filter ?? "all";
-  const visible = useMemo(
-    () => filterQueueRows(rows, activeFilter),
-    [rows, activeFilter],
+  const groups = useMemo(() => groupQueueRows(rows), [rows]);
+  const decided = useMemo(
+    () => (home.data ? decidedRowsFrom(home.data, currentUsername) : []),
+    [home.data, currentUsername],
   );
 
   return (
@@ -89,7 +73,7 @@ export function ReviewQueuePage({
           <p className="bs-subtitle">
             {documents === null
               ? "Gathering what is in flight…"
-              : describeQueue(counts)}
+              : describeQueue(groups)}
           </p>
         </div>
       </div>
@@ -98,7 +82,7 @@ export function ReviewQueuePage({
 
       {documents === null ? (
         <SkeletonPanel label="Loading change requests" rows={3} bar right />
-      ) : rows.length === 0 ? (
+      ) : rows.length === 0 && decided.length === 0 ? (
         <div className="home-empty">
           <p>Nothing is in flight right now.</p>
           <button
@@ -110,75 +94,105 @@ export function ReviewQueuePage({
           </button>
         </div>
       ) : (
-        // The same panel and the same row as a binder's own list: a change
-        // request looks like one wherever it is listed. The binder leads the
-        // line under the title, because this list spans all of them.
-        <section className="bs-panel queue-panel" aria-label="Change requests">
-          {/* Counters and filters are the same control. A number you cannot
-              press is a number you have to go somewhere else to act on. */}
-          <div className="bs-panel-bar">
-            <div
-              className="bs-segmented queue-counters"
-              role="group"
-              aria-label="Filter changes"
-            >
-              {(["all", ...QUEUE_FILTERS] as const).map((entry) => (
-                <button
-                  key={entry}
-                  type="button"
-                  className={`bs-seg queue-counter queue-counter--${entry}`}
-                  aria-pressed={activeFilter === entry}
-                  onClick={() => setFilter(entry)}
-                >
-                  <span className="queue-counter-label">
-                    {QUEUE_FILTER_LABELS[entry]}
-                  </span>
-                  {/* Coral only for the one count that is somebody's turn —
-                      the same coral count Home's "Waiting on you" carries. */}
+        <>
+          {/* **One section per state, every change in exactly one**, in the
+              order somebody acts on them. An empty section stays, one line
+              long: the place a state lives is worth knowing before anything
+              is in it. */}
+          {QUEUE_SECTIONS.map((section) => {
+            const listed = groups[section];
+            return (
+              <section
+                key={section}
+                className={`bs-panel queue-section queue-section--${section}`}
+                aria-label={QUEUE_SECTION_LABELS[section]}
+              >
+                <div className="bs-panel-bar">
+                  <h2 className="bs-panel-bar-title">
+                    {QUEUE_SECTION_LABELS[section]}
+                  </h2>
+                  {/* Coral only for the one count that is your turn — the
+                      same coral Home's own count carries. */}
                   <span
-                    className={`queue-counter-value${
-                      entry === "waiting" && counts.waiting > 0
-                        ? " queue-counter-value--yours"
+                    className={`bs-section-count${
+                      section === "your_review" && listed.length > 0
+                        ? " bs-section-count--attention"
                         : ""
                     }`}
                   >
-                    {counts[entry]}
+                    {listed.length}
                   </span>
-                </button>
-              ))}
-            </div>
-          </div>
+                </div>
+                {listed.length === 0 ? (
+                  <p className="queue-section-empty">
+                    {QUEUE_SECTION_EMPTY[section]}
+                  </p>
+                ) : (
+                  <ul className="bs-row-list">
+                    {listed.map((row) => (
+                      <ChangeRowView
+                        key={row.key}
+                        title={row.title}
+                        context={row.binderName}
+                        meta={row.meta}
+                        tone={row.tone}
+                        standing={row.standing}
+                        commentCount={row.commentCount}
+                        href={changeHref(row)}
+                        onOpen={() =>
+                          onOpenChange(row.owner, row.repo, row.number)
+                        }
+                      />
+                    ))}
+                  </ul>
+                )}
+              </section>
+            );
+          })}
 
-          {visible.length === 0 ? (
-            <div className="bs-empty">
-              <p>
-                Nothing here — {QUEUE_FILTER_LABELS[activeFilter]} is empty.
-              </p>
+          <section
+            className="bs-panel queue-section queue-section--decided"
+            aria-label="Recently decided"
+          >
+            <div className="bs-panel-bar">
+              <h2 className="bs-panel-bar-title">Recently decided</h2>
             </div>
-          ) : (
-            <ul className="bs-row-list">
-              {visible.map((row) => (
-                <ChangeRowView
-                  key={row.key}
-                  title={row.title}
-                  context={row.binderName}
-                  meta={row.meta}
-                  tone={row.tone}
-                  standing={row.standing}
-                  commentCount={row.commentCount}
-                  href={buildBinderUrl({
-                    org: row.owner,
-                    binder: row.repo,
-                    tab: "changes",
-                    change: row.number,
-                  })}
-                  onOpen={() => onOpenChange(row.owner, row.repo, row.number)}
-                />
-              ))}
-            </ul>
-          )}
-        </section>
+            {decided.length === 0 ? (
+              <p className="queue-section-empty">
+                Nothing you are part of has been decided yet.
+              </p>
+            ) : (
+              <ul className="bs-row-list">
+                {decided.map((row) => (
+                  <ChangeRowView
+                    key={row.key}
+                    title={row.title}
+                    context={row.documentName}
+                    meta={row.meta}
+                    tone={row.tone}
+                    standing={row.standing}
+                    outcome={
+                      row.outcome === "published" ? "published" : "declined"
+                    }
+                    href={changeHref(row)}
+                    onOpen={() => onOpenChange(row.owner, row.repo, row.number)}
+                  />
+                ))}
+              </ul>
+            )}
+          </section>
+        </>
       )}
     </div>
   );
+}
+
+/** Where a row goes: the change, on its binder. */
+function changeHref(row: { owner: string; repo: string; number: number }) {
+  return buildBinderUrl({
+    org: row.owner,
+    binder: row.repo,
+    tab: "changes",
+    change: row.number,
+  });
 }

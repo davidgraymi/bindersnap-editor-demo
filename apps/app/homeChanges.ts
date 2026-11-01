@@ -1,5 +1,6 @@
 import type {
   ClosedChange,
+  HomeChangesPayload,
   HomeOpenDocument,
   PullRequestWithApprovalState,
 } from "./api";
@@ -440,4 +441,34 @@ export function getGreetingName(
   const source = fullName.trim() || username;
   const first = source.split(/[\s\-_]+/).filter(Boolean)[0] ?? "";
   return capitalizeFirst(first);
+}
+
+/**
+ * The changes decided lately that the reader was part of, from the one
+ * payload Home and the change requests page both read.
+ *
+ * A binder whose owner is the reader counts as theirs, so its decisions are
+ * listed even where they never reviewed.
+ */
+export function decidedRowsFrom(
+  payload: HomeChangesPayload,
+  username: string,
+  limit: number = MAX_DECIDED_ROWS,
+): HomeDecidedRow[] {
+  const { open, decided } = payload;
+  const ownedRepos = new Set(
+    [
+      ...open.map((document) => ({
+        owner: document.repo.owner.login,
+        repo: document.repo.name,
+      })),
+      ...decided.map((document) => ({
+        owner: document.owner,
+        repo: document.repo,
+      })),
+    ]
+      .filter((ref) => ref.owner === username)
+      .map((ref) => `${ref.owner}/${ref.repo}`),
+  );
+  return buildDecidedChangeRows(decided, username, ownedRepos, limit);
 }

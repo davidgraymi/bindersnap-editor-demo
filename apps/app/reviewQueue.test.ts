@@ -2,11 +2,11 @@ import { expect, test } from "bun:test";
 
 import type { HomeOpenDocument } from "./api";
 import {
+  QUEUE_SECTIONS,
   buildQueueRows,
-  countQueueRows,
   describeQueue,
-  filterQueueRows,
-  initialQueueFilter,
+  groupQueueRows,
+  queueSection,
 } from "./reviewQueue";
 
 type PendingPR = HomeOpenDocument["pendingPRs"][number];
@@ -159,7 +159,7 @@ test("every approval in reads as approved, in one word", () => {
   expect(row?.tone).toBe("approved");
 });
 
-test("a requested reviewer who has not answered is waiting on", () => {
+test("a requested reviewer who has not answered has it waiting on their review", () => {
   const rows = buildQueueRows(
     [
       binder("clinical", [
@@ -170,9 +170,9 @@ test("a requested reviewer who has not answered is waiting on", () => {
     NOW,
   );
 
-  expect(rows[0]?.waitingOnYou).toBe(true);
+  expect(rows[0]?.section).toBe("your_review");
 
-  // And not for anybody else.
+  // And nobody else does: to them it is in review.
   const others = buildQueueRows(
     [
       binder("clinical", [
@@ -182,10 +182,10 @@ test("a requested reviewer who has not answered is waiting on", () => {
     "carol",
     NOW,
   );
-  expect(others[0]?.waitingOnYou).toBe(false);
+  expect(others[0]?.section).toBe("in_review");
 });
 
-test("a reviewer who already answered is no longer waiting on", () => {
+test("a reviewer who already answered no longer has it waiting on them", () => {
   const rows = buildQueueRows(
     [
       binder("clinical", [
@@ -196,10 +196,13 @@ test("a reviewer who already answered is no longer waiting on", () => {
     NOW,
   );
 
-  expect(rows[0]?.waitingOnYou).toBe(false);
+  expect(rows[0]?.section).toBe("in_review");
 });
 
-test("a ready change waits on whoever can publish it", () => {
+test("a change ready to publish is ready to publish, for its author too", () => {
+  // It used to be "Waiting on you" for whoever could publish it as well,
+  // which put it in two places and made the counts add up to more than the
+  // whole.
   const ready = change({
     approvalCount: 1,
     requiredApprovals: 1,
@@ -207,19 +210,15 @@ test("a ready change waits on whoever can publish it", () => {
     user: { login: "alice" },
   });
 
-  // The submitter can publish it.
   expect(
-    buildQueueRows([binder("clinical", [ready])], "alice", NOW)[0]
-      ?.waitingOnYou,
-  ).toBe(true);
-
-  // A reviewer who already approved cannot, and is not waiting on.
+    buildQueueRows([binder("clinical", [ready])], "alice", NOW)[0]?.section,
+  ).toBe("ready");
   expect(
-    buildQueueRows([binder("clinical", [ready])], "bob", NOW)[0]?.waitingOnYou,
-  ).toBe(false);
+    buildQueueRows([binder("clinical", [ready])], "bob", NOW)[0]?.section,
+  ).toBe("ready");
 });
 
-test("an unanswered request is waiting on, even on a change ready to publish", () => {
+test("an unanswered request outranks every other state", () => {
   // A binder that needs no approvals: Gitea would merge this now, and the
   // person asked to review it has still not been heard from.
   const ready = {
@@ -230,16 +229,12 @@ test("an unanswered request is waiting on, even on a change ready to publish", (
     }),
     isApproved: true,
   };
-
   expect(
-    buildQueueRows([binder("clinical", [ready])], "bob", NOW)[0]?.waitingOnYou,
-  ).toBe(true);
-});
+    buildQueueRows([binder("clinical", [ready])], "bob", NOW)[0]?.section,
+  ).toBe("your_review");
 
-test("a change can be blocked and waiting on you at once", () => {
-  // Both facts are true and neither is safe to hide, which is why waitingOnYou
-  // cuts across status rather than being one of its values.
-  const [row] = buildQueueRows(
+  // And a change somebody else sent back is still waiting on what you think.
+  const [sentBack] = buildQueueRows(
     [
       binder("clinical", [
         change({
@@ -253,9 +248,21 @@ test("a change can be blocked and waiting on you at once", () => {
     "bob",
     NOW,
   );
+  expect(sentBack?.status).toBe("blocked");
+  expect(sentBack?.section).toBe("your_review");
+});
 
-  expect(row?.status).toBe("blocked");
-  expect(row?.waitingOnYou).toBe(true);
+test("the section order is the order the rules are tried", () => {
+  expect(queueSection("in_review", true)).toBe("your_review");
+  expect(queueSection("blocked", false)).toBe("changes_requested");
+  expect(queueSection("ready", false)).toBe("ready");
+  expect(queueSection("in_review", false)).toBe("in_review");
+  expect(QUEUE_SECTIONS).toEqual([
+    "your_review",
+    "changes_requested",
+    "ready",
+    "in_review",
+  ]);
 });
 
 test("rows span binders and sort by what moved last", () => {
@@ -287,10 +294,10 @@ test("nothing is dropped — the queue keeps changes Home would not show", () =>
   );
 
   expect(rows).toHaveLength(1);
-  expect(rows[0]?.waitingOnYou).toBe(false);
+  expect(rows[0]?.section).toBe("in_review");
 });
 
-test("counts break the queue down, and waiting cuts across", () => {
+test("every change has one home: the sections partition the queue", () => {
   const rows = buildQueueRows(
     [
       binder("clinical", [
@@ -306,81 +313,54 @@ test("counts break the queue down, and waiting cuts across", () => {
           reviewers: [reviewer("carol", "approved")],
           user: { login: "bob" },
         }),
+        change({ number: 4, user: { login: "carol" } }),
       ]),
     ],
     "bob",
     NOW,
   );
 
-  const counts = countQueueRows(rows);
-  expect(counts.all).toBe(3);
-  expect(counts.in_review).toBe(1);
-  expect(counts.blocked).toBe(1);
-  expect(counts.ready).toBe(1);
-  // Two of the three want something from Bob: the one he owes a review on and
-  // the one he can publish. The three statuses partition; waiting does not.
-  expect(counts.waiting).toBe(2);
-});
-
-test("filtering returns what the count promised", () => {
-  const rows = buildQueueRows(
-    [
-      binder("clinical", [
-        change({ number: 1, reviewers: [reviewer("bob", "awaiting")] }),
-        change({
-          number: 2,
-          reviewers: [reviewer("carol", "changes_requested")],
-        }),
-      ]),
-    ],
-    "bob",
-    NOW,
-  );
-  const counts = countQueueRows(rows);
-
-  for (const filter of [
-    "all",
-    "waiting",
-    "in_review",
-    "ready",
-    "blocked",
-  ] as const) {
-    expect(filterQueueRows(rows, filter)).toHaveLength(counts[filter]);
-  }
+  const groups = groupQueueRows(rows);
+  expect(groups.your_review.map((row) => row.number)).toEqual([1]);
+  expect(groups.changes_requested.map((row) => row.number)).toEqual([2]);
+  expect(groups.ready.map((row) => row.number)).toEqual([3]);
+  expect(groups.in_review.map((row) => row.number)).toEqual([4]);
+  const listed = QUEUE_SECTIONS.flatMap((section) => groups[section]);
+  expect(listed).toHaveLength(rows.length);
+  expect(new Set(listed.map((row) => row.key)).size).toBe(rows.length);
 });
 
 test("the queue describes itself without lying about an empty desk", () => {
-  expect(
-    describeQueue({ all: 0, waiting: 0, in_review: 0, ready: 0, blocked: 0 }),
-  ).toBe("Nothing is in flight right now.");
-  expect(
-    describeQueue({ all: 1, waiting: 0, in_review: 1, ready: 0, blocked: 0 }),
-  ).toBe("1 change in flight. None of them is waiting on you.");
-  expect(
-    describeQueue({ all: 4, waiting: 2, in_review: 2, ready: 1, blocked: 1 }),
-  ).toBe("4 changes in flight · 2 waiting on you.");
-});
-
-test("the page opens on the reader's own work, or on everything", () => {
-  expect(
-    initialQueueFilter({
-      all: 4,
-      waiting: 2,
-      in_review: 2,
-      ready: 1,
-      blocked: 1,
-    }),
-  ).toBe("waiting");
-  // Opening on an empty "waiting on you" would read as an empty product.
-  expect(
-    initialQueueFilter({
-      all: 4,
-      waiting: 0,
-      in_review: 4,
-      ready: 0,
-      blocked: 0,
-    }),
-  ).toBe("all");
+  const rows = (numbers: number[]) =>
+    buildQueueRows(
+      [
+        binder(
+          "clinical",
+          numbers.map((number) => change({ number })),
+        ),
+      ],
+      "alice",
+      NOW,
+    );
+  expect(describeQueue(groupQueueRows([]))).toBe(
+    "Nothing is in flight right now.",
+  );
+  expect(describeQueue(groupQueueRows(rows([1])))).toBe(
+    "1 change in flight. None of them is waiting on your review.",
+  );
+  const asked = buildQueueRows(
+    [
+      binder("clinical", [
+        change({ number: 1, reviewers: [reviewer("alice", "awaiting")] }),
+        change({ number: 2 }),
+      ]),
+    ],
+    "alice",
+    NOW,
+  );
+  expect(describeQueue(groupQueueRows(asked))).toBe(
+    "2 changes in flight · 1 waiting on your review.",
+  );
 });
 
 /** Your own name on every row of your own work is noise. */
