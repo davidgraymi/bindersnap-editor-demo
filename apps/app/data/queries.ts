@@ -116,7 +116,7 @@ export const queryKeys = {
   /** The changes this person is part of, everywhere — home and the queue. */
   homeChanges: () => ["home-changes"] as const,
   /** Every binder this person can open, across their organizations. */
-  binders: () => ["binders"] as const,
+  myBinders: () => ["my-binders"] as const,
   /** Home's feed — what has been happening in your binders. */
   homeFeed: () => ["home-feed"] as const,
   library: (query: string) => ["library", query] as const,
@@ -191,7 +191,7 @@ export function homeChangesQuery() {
 /** Every binder this person can open, across their organizations. */
 export function bindersQuery() {
   return queryOptions({
-    queryKey: queryKeys.binders(),
+    queryKey: queryKeys.myBinders(),
     queryFn: () => fetchBinders(),
   });
 }
