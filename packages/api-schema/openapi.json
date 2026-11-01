@@ -5484,6 +5484,84 @@
         }
       }
     },
+    "/api/app/changes/search": {
+      "get": {
+        "operationId": "searchChanges",
+        "tags": [
+          "notifications"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "q",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Change requests whose title holds what was typed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "changes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "org": {
+                            "type": "string"
+                          },
+                          "binder": {
+                            "type": "string"
+                          },
+                          "number": {
+                            "type": "number"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "open",
+                              "published",
+                              "closed"
+                            ]
+                          },
+                          "author": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "org",
+                          "binder",
+                          "number",
+                          "title",
+                          "state",
+                          "author",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "changes"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/app/home/feed": {
       "get": {
         "operationId": "getHomeFeed",

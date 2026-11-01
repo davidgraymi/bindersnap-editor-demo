@@ -22,7 +22,8 @@ import { formatDocumentName } from "./documentDisplay";
  */
 
 /** What a row points at. Decides its icon, its group and where Enter goes. */
-export type QuickFindKind = "document" | "binder" | "person";
+export type QuickFindKind =
+  "document" | "change" | "binder" | "organization" | "person";
 
 /** One row in the panel, and the one line that identifies it. */
 export interface QuickFindResult {
@@ -48,6 +49,8 @@ export interface QuickFindResult {
   slugPath?: string;
   /** Set on a person. */
   username?: string;
+  /** Set on a change request: its number in its binder. */
+  changeNumber?: number;
 }
 
 /** How many results one page holds. Two lands of them fill the panel. */
@@ -108,6 +111,53 @@ export function buildBinderResult(
   };
 }
 
+/** One change request, as a row: where it is, its number, how it stands. */
+export function buildChangeResult(change: {
+  org: string;
+  binder: string;
+  number: number;
+  title: string;
+  state: "open" | "published" | "closed";
+  author: string;
+}): QuickFindResult {
+  const standing =
+    change.state === "open"
+      ? "Open"
+      : change.state === "published"
+        ? "Published"
+        : "Closed";
+  return {
+    key: `change:${change.org}/${change.binder}#${change.number}`,
+    kind: "change",
+    organization: change.org,
+    binder: change.binder,
+    changeNumber: change.number,
+    name: change.title || `Change ${change.number}`,
+    meta: [
+      formatDocumentName(change.binder),
+      `#${change.number}`,
+      standing,
+      change.author,
+    ]
+      .filter((part) => part !== "")
+      .join(" · "),
+  };
+}
+
+/** One organization, as a row. */
+export function buildOrganizationResult(organization: {
+  name: string;
+  displayName: string;
+}): QuickFindResult {
+  return {
+    key: `organization:${organization.name}`,
+    kind: "organization",
+    organization: organization.name,
+    name: organization.displayName || organization.name,
+    meta: "Organization",
+  };
+}
+
 /** One person, as a row. */
 export function buildPersonResult(
   organization: string,
@@ -138,8 +188,10 @@ export function buildPersonResult(
  */
 const KIND_ORDER: Record<QuickFindKind, number> = {
   document: 0,
-  binder: 1,
-  person: 2,
+  change: 1,
+  binder: 2,
+  organization: 3,
+  person: 4,
 };
 
 export function orderQuickFindResults(
@@ -194,6 +246,8 @@ export function describeQuickFindEmptyState(query: string): string {
 /** The heading above each run of rows. Absent when a kind has none. */
 export const QUICK_FIND_GROUP_LABELS: Record<QuickFindKind, string> = {
   document: "Documents",
+  change: "Change requests",
   binder: "Binders",
+  organization: "Organizations",
   person: "People",
 };

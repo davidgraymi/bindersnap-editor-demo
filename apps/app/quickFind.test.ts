@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import type { LibraryDocument } from "./api";
 import {
   buildBinderResult,
+  buildChangeResult,
+  buildOrganizationResult,
   buildPersonResult,
   buildQuickFindResults,
   describeQuickFindEmptyState,
@@ -184,4 +186,53 @@ describe("binders and people are findable too", () => {
     // otherwise list every binder and person the moment it opened.
     expect(matchesQuickFindQuery("Clinical Policies", "   ")).toBe(false);
   });
+});
+
+test("a change request says where it is, its number and how it stands", () => {
+  expect(
+    buildChangeResult({
+      org: "riverside-health",
+      binder: "corporate",
+      number: 20,
+      title: "Retire the 2019 supplier terms",
+      state: "published",
+      author: "Bob Okafor",
+    }),
+  ).toMatchObject({
+    kind: "change",
+    binder: "corporate",
+    changeNumber: 20,
+    name: "Retire the 2019 supplier terms",
+    meta: "Corporate · #20 · Published · Bob Okafor",
+  });
+});
+
+test("an organization is named as its owner named it", () => {
+  expect(
+    buildOrganizationResult({
+      name: "riverside-health",
+      displayName: "Riverside Health",
+    }),
+  ).toMatchObject({
+    kind: "organization",
+    organization: "riverside-health",
+    name: "Riverside Health",
+  });
+});
+
+test("documents, then change requests, binders, organizations, people", () => {
+  const ordered = orderQuickFindResults([
+    { key: "p", kind: "person", organization: "o", name: "", meta: "" },
+    { key: "o", kind: "organization", organization: "o", name: "", meta: "" },
+    { key: "b", kind: "binder", organization: "o", name: "", meta: "" },
+    { key: "c", kind: "change", organization: "o", name: "", meta: "" },
+    { key: "d", kind: "document", organization: "o", name: "", meta: "" },
+  ]);
+  expect(ordered.map((result) => result.key)).toEqual([
+    "d",
+    "c",
+    "b",
+    "o",
+    "p",
+  ]);
 });

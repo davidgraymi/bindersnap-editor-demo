@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import {
   Fragment,
   useCallback,
@@ -11,13 +11,17 @@ import { createPortal } from "react-dom";
 import { CornerDownLeft, Search } from "lucide-react";
 
 import {
-  organizationBindersQuery,
+  bindersQuery,
+  changeSearchQuery,
   organizationMembersQuery,
+  organizationsQuery,
   searchQuery,
 } from "../data/queries";
 import type { QuickFindResult } from "../quickFind";
 import {
   buildBinderResult,
+  buildChangeResult,
+  buildOrganizationResult,
   buildPersonResult,
   buildQuickFindResults,
   describeQuickFindEmptyState,
@@ -157,60 +161,103 @@ export function NavSearch({
     ...searchQuery(settled ?? "", QUICK_FIND_PAGE_SIZE),
     enabled: asking,
   });
-  const binders = useQuery({
-    ...organizationBindersQuery(org ?? ""),
-    enabled: asking && Boolean(org),
+  // Change requests are searched by Gitea, by title, like documents. Binders,
+  // organizations and people are the reader's own short lists, across every
+  // organization they are in — not only the one the page is about.
+  const changes = useQuery({
+    ...changeSearchQuery(settled ?? ""),
+    enabled: asking,
   });
-  const people = useQuery({
-    // Names and owners only: the People page's read answers for every group
-    // too, which quick find never shows.
-    ...organizationMembersQuery(org ?? ""),
-    enabled: asking && Boolean(org),
+  const binders = useQuery({ ...bindersQuery(), enabled: asking });
+  const organizations = useQuery({ ...organizationsQuery(), enabled: asking });
+  const memberLists = useQueries({
+    queries: (organizations.data ?? []).map((organization) => ({
+      // Names and owners only: the People page's read answers for every
+      // group too, which quick find never shows.
+      ...organizationMembersQuery(organization.name),
+      enabled: asking,
+    })),
   });
+  const membersPending = memberLists.some((list) => list.isPending);
   const ready =
     found.data !== undefined &&
-    (!org || (!binders.isPending && !people.isPending));
+    !changes.isPending &&
+    !binders.isPending &&
+    !organizations.isPending &&
+    !membersPending;
 
   const results = useMemo<QuickFindResult[]>(() => {
     if (settled === null || !ready || !found.data) return [];
     const asked = settled;
 
-    const binderRows = org
-      ? (binders.data ?? [])
-          .filter((binder) =>
-            matchesQuickFindQuery(
-              `${binder.name} ${binder.description ?? ""}`,
-              asked,
-            ),
-          )
-          .slice(0, QUICK_FIND_KIND_LIMIT)
-          .map((binder) => buildBinderResult(org, binder))
-      : [];
+    const changeRows = (changes.data ?? []).map(buildChangeResult);
 
-    const personRows = org
-      ? (people.data?.people ?? [])
-          .filter((person) =>
-            matchesQuickFindQuery(`${person.login} ${person.fullName}`, asked),
-          )
-          .slice(0, QUICK_FIND_KIND_LIMIT)
-          .map((person) =>
-            buildPersonResult(org, {
-              username: person.login,
-              fullName: person.fullName,
-              // What they are in this organization. An owner is the one fact
-              // worth saying on a one-line result; everything else is a
-              // question the People tab answers.
-              role: person.isOwner ? "Owner" : undefined,
-            }),
-          )
-      : [];
+    const binderRows = (binders.data ?? [])
+      .filter((binder) =>
+        matchesQuickFindQuery(
+          `${binder.name} ${binder.description ?? ""}`,
+          asked,
+        ),
+      )
+      .slice(0, QUICK_FIND_KIND_LIMIT)
+      .map((binder) => buildBinderResult(binder.owner, binder));
+
+    const organizationRows = (organizations.data ?? [])
+      .filter((organization) =>
+        matchesQuickFindQuery(
+          `${organization.name} ${organization.displayName}`,
+          asked,
+        ),
+      )
+      .slice(0, QUICK_FIND_KIND_LIMIT)
+      .map(buildOrganizationResult);
+
+    // Somebody in two of your organizations is one person, listed once.
+    const seen = new Set<string>();
+    const personRows = (organizations.data ?? [])
+      .flatMap((organization, index) =>
+        (memberLists[index]?.data?.people ?? []).map((person) => ({
+          organization: organization.name,
+          person,
+        })),
+      )
+      .filter(({ person }) => {
+        if (seen.has(person.login)) return false;
+        seen.add(person.login);
+        return matchesQuickFindQuery(
+          `${person.login} ${person.fullName}`,
+          asked,
+        );
+      })
+      .slice(0, QUICK_FIND_KIND_LIMIT)
+      .map(({ organization, person }) =>
+        buildPersonResult(organization, {
+          username: person.login,
+          fullName: person.fullName,
+          // An owner is the one fact worth saying on a one-line result;
+          // everything else is a question the People page answers.
+          role: person.isOwner ? "Owner" : undefined,
+        }),
+      );
 
     return orderQuickFindResults([
       ...buildQuickFindResults(found.data.documents),
+      ...changeRows,
       ...binderRows,
+      ...organizationRows,
       ...personRows,
     ]);
-  }, [settled, ready, found.data, binders.data, people.data, org]);
+    // memberLists is a new array every render; its data is what matters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    settled,
+    ready,
+    found.data,
+    changes.data,
+    binders.data,
+    organizations.data,
+    memberLists.map((list) => list.dataUpdatedAt).join(","),
+  ]);
 
   const hasMore = asking && (found.data?.hasMore ?? false);
   const failed = asking && found.isError;
@@ -224,8 +271,27 @@ export function NavSearch({
     setHighlight(-1);
   }, [results]);
 
+  /** The person whose username was just copied, so their row can say so. */
+  const [copied, setCopied] = useState<string | null>(null);
+  useEffect(() => setCopied(null), [settled]);
+
   const openResult = useCallback(
     (result: QuickFindResult) => {
+      // **A person is copied, not opened.** There is no page for one person,
+      // and a person in two organizations has no one People page to go to.
+      // What somebody looking a person up does next is name them somewhere
+      // — ask them to review, add them to a binder or a group — and every
+      // one of those boxes takes a username. So the panel stays open and
+      // says what it did.
+      if (result.kind === "person" && result.username) {
+        const username = result.username;
+        void navigator.clipboard
+          ?.writeText(username)
+          .then(() => setCopied(result.key))
+          .catch(() => setCopied(null));
+        return;
+      }
+
       closeOverlay();
 
       if (result.kind === "binder" && result.binder) {
@@ -237,15 +303,19 @@ export function NavSearch({
         return;
       }
 
-      if (result.kind === "person") {
-        // There is no page for one person. The organization's People tab is
-        // where every question about somebody is answered, so that is where
-        // picking them goes.
+      if (result.kind === "change" && result.binder && result.changeNumber) {
         onNavigate({
-          kind: "organization",
+          kind: "binder",
           org: result.organization,
-          tab: "people",
+          binder: result.binder,
+          tab: "changes",
+          change: result.changeNumber,
         });
+        return;
+      }
+
+      if (result.kind === "organization") {
+        onNavigate({ kind: "organization", org: result.organization });
         return;
       }
 
@@ -348,7 +418,7 @@ export function NavSearch({
         className="quick-find-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label="Search binders, documents, or people"
+        aria-label="Search documents, change requests, binders and people"
         ref={dialogRef}
         onKeyDown={handleDialogKeyDown}
       >
@@ -367,8 +437,8 @@ export function NavSearch({
             ref={inputRef}
             className="quick-find-input"
             type="text"
-            placeholder="Search binders, documents, or people"
-            aria-label="Search binders, documents, or people"
+            placeholder="Search documents, change requests, binders and people"
+            aria-label="Search documents, change requests, binders and people"
             role="combobox"
             aria-expanded={searching}
             aria-controls="quick-find-results"
@@ -426,7 +496,11 @@ export function NavSearch({
                         {result.name}
                       </span>
                       <span className="quick-find-result-meta">
-                        {result.meta}
+                        {copied === result.key
+                          ? `Copied ${result.username} — paste it wherever you add somebody`
+                          : result.kind === "person" && index === highlight
+                            ? `${result.meta} · Enter copies the username`
+                            : result.meta}
                       </span>
                     </span>
                     {index === highlight && (
@@ -443,9 +517,18 @@ export function NavSearch({
             </ul>
           )}
 
+          {/* Said aloud as well as on the row: a copy happens nowhere a
+              screen reader would otherwise look. */}
+          <p className="sr-only" role="status">
+            {copied
+              ? `Copied ${results.find((result) => result.key === copied)?.username ?? ""}`
+              : ""}
+          </p>
+
           {hasMore && (
             <p className="quick-find-note" role="status">
-              More match than fit here — keep typing, or open Documents.
+              More match than fit here — keep typing, or press Enter to search
+              every document.
             </p>
           )}
 
@@ -502,7 +585,7 @@ export function NavSearch({
         onClick={() => setOpen(true)}
         // Named here rather than by its own text: on a phone the label and the
         // shortcut hint are gone and only the icon is left.
-        aria-label="Search binders, documents, or people"
+        aria-label="Search documents, change requests, binders and people"
         aria-haspopup="dialog"
         aria-expanded={open}
       >
@@ -513,7 +596,8 @@ export function NavSearch({
           strokeWidth={1.5}
         />
         <span className="app-nav-search-trigger-label">
-          {query.trim() || "Search binders, documents, or people"}
+          {query.trim() ||
+            "Search documents, change requests, binders and people"}
         </span>
         {/* ⌘K, not "/". Both open it and always have — but the hint is the half
             a reader learns from, and "/" is a reflex from vim and GitHub while

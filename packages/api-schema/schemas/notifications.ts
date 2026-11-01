@@ -87,3 +87,20 @@ export const HomeFeedPayloadSchema = z.object({
   nextPage: z.number().nullable(),
 });
 export type HomeFeedPayload = z.infer<typeof HomeFeedPayloadSchema>;
+
+/** A change request quick find turned up — see `services/api/change-search.ts`. */
+export const FoundChangeSchema = z.object({
+  org: z.string(),
+  binder: z.string(),
+  number: z.number(),
+  title: z.string(),
+  state: z.enum(["open", "published", "closed"]),
+  author: z.string(),
+  updatedAt: z.string(),
+});
+export type FoundChange = z.infer<typeof FoundChangeSchema>;
+
+export const ChangeSearchPayloadSchema = z.object({
+  changes: z.array(FoundChangeSchema),
+});
+export type ChangeSearchPayload = z.infer<typeof ChangeSearchPayloadSchema>;

@@ -28,7 +28,7 @@ async function ask(page: import("@playwright/test").Page, query: string) {
   await page.locator(".app-nav-search-trigger").click();
   // A combobox, not a textbox — it drives the result listbox below it.
   const field = page.getByRole("combobox", {
-    name: "Search binders, documents, or people",
+    name: "Search documents, change requests, binders and people",
   });
   await expect(field).toBeVisible({ timeout: 30_000 });
   await field.fill(query);
@@ -44,7 +44,7 @@ async function ask(page: import("@playwright/test").Page, query: string) {
   ).not.toHaveCount(0, { timeout: 30_000 });
 }
 
-test("one query reaches policies, binders and people at once", async ({
+test("one query reaches documents, binders and people at once", async ({
   page,
 }) => {
   await signInAsAlice(page);
@@ -101,21 +101,62 @@ test("picking a binder opens the binder", async ({ page }) => {
   await expect(page.locator(".app-sidebar-binder-name")).toHaveText("Clinical");
 });
 
-test("picking a person opens the organization's people", async ({ page }) => {
-  // There is no page for one person, so the question "who is this" is answered
-  // where every question about somebody is answered.
+test("picking a person copies their username, and says so", async ({
+  page,
+  context,
+}) => {
+  // There is no page for one person, and somebody in two organizations has
+  // no one People page. What a person looked up is needed for next is a
+  // username to paste — into a review request, a binder, a group.
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await signInAsAlice(page);
   await page.goto(APP_BASE_URL);
 
   await ask(page, "carol");
-  await page
+  const carol = page
     .locator(".quick-find-dialog")
-    .getByRole("option", { name: /Carol/ })
-    .click();
+    .getByRole("option", { name: /Carol/ });
+  await carol.hover();
+  await expect(carol).toContainText("Enter copies the username");
+  await carol.click();
 
-  await expect(page).toHaveURL(/\/riverside-health\/-\/people$/, {
-    timeout: 30_000,
-  });
+  // The panel stays where it was, and the row says what happened.
+  await expect(carol).toContainText("Copied carol", { timeout: 10_000 });
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+    "carol",
+  );
+});
+
+test("change requests and organizations are found too", async ({ page }) => {
+  await signInAsAlice(page);
+  await page.goto(APP_BASE_URL);
+
+  // A change request by its title, opened on its own binder.
+  await ask(page, "supplier terms");
+  const dialog = page.locator(".quick-find-dialog");
+  await expect(dialog.locator(".quick-find-group")).toContainText(
+    ["Change requests"],
+    { timeout: 30_000 },
+  );
+  const change = dialog
+    .getByRole("option", { name: /Retire the 2019 supplier terms/ })
+    .first();
+  await expect(change).toContainText("Corporate · #");
+  await change.click();
+  await expect(page).toHaveURL(
+    /\/riverside-health\/corporate\/-\/changes\/\d+$/,
+    {
+      timeout: 30_000,
+    },
+  );
+
+  // An organization by its name.
+  await ask(page, "riverside");
+  await dialog
+    .getByRole("option", { name: /Riverside Health/ })
+    .filter({ hasText: "Organization" })
+    .click();
+  await expect(page).toHaveURL(/\/riverside-health$/, { timeout: 30_000 });
 });
 
 test("the shortcut the panel advertises is the one this audience knows", async ({
@@ -132,7 +173,7 @@ test("the shortcut the panel advertises is the one this audience knows", async (
   await page.keyboard.press("/");
   await expect(
     page.getByRole("combobox", {
-      name: "Search binders, documents, or people",
+      name: "Search documents, change requests, binders and people",
     }),
   ).toBeVisible({ timeout: 30_000 });
 });

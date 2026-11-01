@@ -16,6 +16,7 @@ import {
   NotificationListPayloadSchema,
   ReadNotificationsBodySchema,
   HomeFeedPayloadSchema,
+  ChangeSearchPayloadSchema,
 } from "./schemas/notifications";
 import {
   SessionAuthStateSchema,
@@ -474,6 +475,20 @@ registry.registerPath({
       content: {
         "application/json": { schema: HomeChangesPayloadSchema },
       },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/changes/search",
+  operationId: "searchChanges",
+  tags: ["notifications"],
+  request: { query: z.object({ q: z.string().optional() }) },
+  responses: {
+    200: {
+      description: "Change requests whose title holds what was typed",
+      content: { "application/json": { schema: ChangeSearchPayloadSchema } },
     },
   },
 });
