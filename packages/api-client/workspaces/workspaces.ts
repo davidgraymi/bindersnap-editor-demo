@@ -50,6 +50,8 @@ import type {
   ListBinderDocumentsParams,
   ListBinders200,
   ListOrganizationBinders200,
+  ListOrganizationChanges200,
+  ListOrganizationChangesParams,
   OpenBinderDraft201,
   OpenBinderDraftBody,
   ProposeBinderDraft201,
@@ -341,6 +343,47 @@ export const proposeBinderDraft = async (org: string,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(proposeBinderDraftBody)
+  }
+);}
+
+
+export type listOrganizationChangesResponse200 = {
+  data: ListOrganizationChanges200
+  status: 200
+}
+
+export type listOrganizationChangesResponseSuccess = (listOrganizationChangesResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listOrganizationChangesResponse = (listOrganizationChangesResponseSuccess)
+
+export const getListOrganizationChangesUrl = (org: string,
+    params?: ListOrganizationChangesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/app/orgs/${org}/changes?${stringifiedParams}` : `/api/app/orgs/${org}/changes`
+}
+
+export const listOrganizationChanges = async (org: string,
+    params?: ListOrganizationChangesParams, options?: Parameters<typeof customFetch>[1]): Promise<listOrganizationChangesResponse> => {
+
+  return customFetch<listOrganizationChangesResponse>(getListOrganizationChangesUrl(org,params),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 

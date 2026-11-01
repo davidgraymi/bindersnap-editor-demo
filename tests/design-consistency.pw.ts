@@ -263,6 +263,7 @@ test("every row of controls in the product is one size", async ({ page }) => {
     ["the binder's settings", `${APP_BASE_URL}/${org}/${binder}?tab=settings`],
     ["the change requests", `${APP_BASE_URL}/${org}/${binder}?tab=changes`],
     ["the organization's people", `${APP_BASE_URL}/${org}?tab=people`],
+    ["the organization's change requests", `${APP_BASE_URL}/${org}/-/changes`],
     ["the library", `${APP_BASE_URL}/-/documents`],
     ["your binders", `${APP_BASE_URL}/-/binders`],
     ["home", `${APP_BASE_URL}/home`],

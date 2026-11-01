@@ -181,6 +181,19 @@ test("an organization's own screens are behind `-` too", () => {
       tab: "people",
     }),
   ).toBe("/riverside-health/-/people");
+  // Every change request in its binders, as a binder's are at its own.
+  expect(getRoute("/riverside-health/-/changes")).toEqual({
+    kind: "organization",
+    org: "riverside-health",
+    tab: "changes",
+  });
+  expect(
+    routeToPath({
+      kind: "organization",
+      org: "riverside-health",
+      tab: "changes",
+    }),
+  ).toBe("/riverside-health/-/changes");
 });
 
 test("an address from before `/-/` is rewritten to the one that replaced it", () => {

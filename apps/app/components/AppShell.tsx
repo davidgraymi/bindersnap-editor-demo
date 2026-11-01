@@ -562,6 +562,15 @@ export function AppShell({
                   onOpenBinder={(binder) =>
                     onNavigate({ kind: "binder", org: route.org, binder })
                   }
+                  onOpenChange={(binder, change) =>
+                    onNavigate({
+                      kind: "binder",
+                      org: route.org,
+                      binder,
+                      tab: "changes",
+                      change,
+                    })
+                  }
                 />
               ) : route.kind === "binder" || route.kind === "binderDocument" ? (
                 // One shell for both: a document is a file inside the binder,

@@ -115,6 +115,7 @@ import {
   WorkspaceListPayloadSchema,
   WorkspaceSummarySchema,
   DeleteBinderBodySchema,
+  OrganizationChangeListPayloadSchema,
 } from "./schemas/workspaces";
 import {
   BillingActionBodySchema,
@@ -885,6 +886,25 @@ registry.registerPath({
       description: "The binder's change requests, open or closed",
       content: {
         "application/json": { schema: WorkspaceChangeListPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/orgs/{org}/changes",
+  operationId: "listOrganizationChanges",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string() }),
+    query: z.object({ state: z.enum(["open", "closed"]).optional() }),
+  },
+  responses: {
+    200: {
+      description: "Every change request in the organization's binders",
+      content: {
+        "application/json": { schema: OrganizationChangeListPayloadSchema },
       },
     },
   },

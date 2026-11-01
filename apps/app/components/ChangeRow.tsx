@@ -34,6 +34,8 @@ interface ChangeRowProps {
   /** The change's own address, so the row is a link that opens in a tab. */
   href: string;
   onOpen: () => void;
+  /** What leads the line under the title — the binder, in a list spanning several. */
+  context?: string | null;
 }
 
 /**
@@ -77,11 +79,17 @@ function ChangeIcon({ outcome }: { outcome: ChangeRowInput["outcome"] }) {
   );
 }
 
-export function ChangeRow({ change, href, onOpen }: ChangeRowProps) {
+export function ChangeRow({
+  change,
+  href,
+  onOpen,
+  context = null,
+}: ChangeRowProps) {
   const facts = describeChangeRow(change);
   return (
     <ChangeRowView
       title={change.title}
+      context={context}
       meta={facts.meta}
       tone={facts.tone}
       standing={facts.standing}

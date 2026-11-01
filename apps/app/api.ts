@@ -24,29 +24,30 @@ import type {
 import type {
   BinderArchivePayload,
   BinderDraftPayload,
-  ChangeConflictsPayload,
-  BinderShapeChangePayload,
-  CreatedWorkspaceDocumentPayload,
   BinderGroupsPayload,
   BinderPeoplePayload,
   BinderRulesPayload,
+  BinderShapeChangePayload,
+  ChangeConflictsPayload,
   CreatedOrganizationGroupPayload,
+  CreatedWorkspaceDocumentPayload,
   LibraryPayload,
   LibrarySearchPayload,
+  OrganizationChangeListPayload,
   OrganizationMembersPayload,
   OrganizationPeoplePayload,
+  ProposedDraftPayload,
   PublishedWorkspaceChangePayload,
+  SignOffRuleView,
   WorkspaceChangeDetailPayload,
   WorkspaceChangeListPayload,
+  WorkspaceDocumentDetailPayload,
+  WorkspaceDocumentListPayload,
   WorkspaceHistoryEntry,
   WorkspaceHistoryPayload,
   WorkspaceOverviewPayload,
   WorkspaceSettingsPayload,
-  WorkspaceDocumentDetailPayload,
-  WorkspaceDocumentListPayload,
   WorkspaceSummary,
-  ProposedDraftPayload,
-  SignOffRuleView,
 } from "../../packages/api-schema/schemas/workspaces";
 
 // Import generated types
@@ -941,6 +942,20 @@ export async function fetchBinderChanges(
     request,
   );
   return response.data;
+}
+
+/** Every change request in an organization's binders, open or closed. */
+export async function fetchOrganizationChanges(
+  org: string,
+  state: "open" | "closed" = "open",
+  request?: ReadRequest,
+): Promise<OrganizationChangeListPayload> {
+  const response = await BindersClient.listOrganizationChanges(
+    org,
+    { state },
+    request,
+  );
+  return response.data as OrganizationChangeListPayload;
 }
 
 /**

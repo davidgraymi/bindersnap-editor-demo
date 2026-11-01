@@ -30,6 +30,7 @@ import {
   fetchOrganizationPeople,
   fetchOrganizations,
   fetchBinders,
+  fetchOrganizationChanges,
   fetchHomeFeed,
   getHomeChanges,
   type HomeFeedPayload,
@@ -77,6 +78,8 @@ export const queryKeys = {
     ["binders", org, binder, "overview"] as const,
   binderChanges: (org: string, binder: string, state: "open" | "closed") =>
     ["binders", org, binder, "changes", state] as const,
+  organizationChanges: (org: string, state: "open" | "closed") =>
+    ["organizations", org, "changes", state] as const,
   binderChange: (org: string, binder: string, number: number) =>
     ["binders", org, binder, "change", number] as const,
   binderDocuments: (org: string, binder: string, at: BinderRef = {}) =>
@@ -252,6 +255,17 @@ export function binderQuery(org: string, binder: string) {
 }
 
 /** A binder's change requests, open or closed. */
+/** Every change request in an organization's binders, open or closed. */
+export function organizationChangesQuery(
+  org: string,
+  state: "open" | "closed" = "open",
+) {
+  return queryOptions({
+    queryKey: queryKeys.organizationChanges(org, state),
+    queryFn: ({ signal }) => fetchOrganizationChanges(org, state, { signal }),
+  });
+}
+
 export function binderChangesQuery(
   org: string,
   binder: string,

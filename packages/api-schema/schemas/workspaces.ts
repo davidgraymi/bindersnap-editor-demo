@@ -707,6 +707,19 @@ export type WorkspaceChangeListPayload = z.infer<
 >;
 
 /**
+ * Every change request in an organization's binders: the binder's list, for
+ * every binder the reader can see, each row naming its binder.
+ */
+export const OrganizationChangeListPayloadSchema = z.object({
+  organization: z.string(),
+  state: z.enum(["open", "closed"]),
+  changes: z.array(WorkspaceChangeSummarySchema.extend({ binder: z.string() })),
+});
+export type OrganizationChangeListPayload = z.infer<
+  typeof OrganizationChangeListPayloadSchema
+>;
+
+/**
  * One published version, as the binder's history reads it.
  *
  * ADR 0004: "who approved v4 of infection control is answered by tag → commit
