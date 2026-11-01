@@ -279,6 +279,7 @@ import { isSupportedReaction } from "./gitea-client/reactions";
 import { buildAuditPacket } from "./export/auditPacket";
 import { onboardingState, type OnboardingOrganization } from "./onboarding";
 import { pullKey, readSubjectUrl, toAppNotifications } from "./notifications";
+import { changesNeedingTitles, toFeedEvents } from "./home-feed";
 import type { components } from "./gitea-client/spec/gitea";
 import { gatherAuditRecord } from "./export/auditRecord";
 import {
@@ -4414,6 +4415,97 @@ async function handleListNotifications(
       err,
       baseHeaders,
       "Unable to read your notifications.",
+    );
+  }
+}
+
+/** How many of Gitea's actions one page of the feed reads. */
+const FEED_PAGE = 50;
+
+/**
+ * What has been happening in your binders: Home's feed, from Gitea's own.
+ *
+ * Read with the person's own token, so Gitea answers with what they can see
+ * and nothing else. One read of the feed, one of their organizations, and one
+ * of each change whose title the feed does not carry.
+ */
+async function handleHomeFeed(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { client, session } = auth;
+
+  const requested = Number(new URL(req.url).searchParams.get("page") ?? "1");
+  const page = Number.isInteger(requested) && requested > 0 ? requested : 1;
+
+  try {
+    const [activities, orgs] = await Promise.all([
+      unwrap(
+        client.GET("/users/{username}/activities/feeds", {
+          params: {
+            path: { username: session.username },
+            query: { "only-performed-by": false, page, limit: FEED_PAGE },
+          },
+        }),
+      ) as Promise<components["schemas"]["Activity"][] | undefined>,
+      unwrap(
+        client.GET("/user/orgs", { params: { query: { limit: 50 } } }),
+      ) as Promise<{ username?: string; name?: string }[] | undefined>,
+    ]);
+    const organizations = new Set(
+      (orgs ?? [])
+        .map((org) => org.username ?? org.name ?? "")
+        .filter((name) => name !== ""),
+    );
+    const raw = activities ?? [];
+
+    const titles = new Map(
+      await Promise.all(
+        changesNeedingTitles(raw, organizations).map(async (change) => {
+          const pull = await client
+            .GET("/repos/{owner}/{repo}/pulls/{index}", {
+              params: {
+                path: {
+                  owner: change.org,
+                  repo: change.binder,
+                  index: change.number,
+                },
+              },
+            })
+            .then((response) => response.data ?? null)
+            .catch(() => null);
+          return [
+            `${change.org}/${change.binder}#${change.number}`,
+            pull?.title ?? "",
+          ] as const;
+        }),
+      ),
+    );
+
+    return json(
+      200,
+      {
+        events: toFeedEvents(
+          raw,
+          organizations,
+          new Map([...titles].filter(([, title]) => title !== "")),
+        ),
+        // A full page may have more behind it; a short one is the end.
+        nextPage: raw.length === FEED_PAGE ? page + 1 : null,
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to read the activity feed", {
+      username: session.username,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to read what has been happening.",
     );
   }
 }
@@ -16754,6 +16846,8 @@ async function handleRequest(req: Request): Promise<Response> {
     response = await handleAdminRunActivityBuild(req, baseHeaders);
   } else if (pathname === "/api/app/home/changes" && method === "GET") {
     response = await handleHomeChanges(req, baseHeaders);
+  } else if (pathname === "/api/app/home/feed" && method === "GET") {
+    response = await handleHomeFeed(req, baseHeaders);
   } else if (pathname === "/api/app/documents" && method === "GET") {
     response = await handleLibraryDocuments(req, baseHeaders);
   } else if (pathname === "/api/app/documents/search" && method === "GET") {

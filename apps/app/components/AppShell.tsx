@@ -622,7 +622,10 @@ export function AppShell({
                       change: changeNumber,
                     })
                   }
-                  onBrowseDocuments={() => onNavigate({ kind: "documents" })}
+                  onOpenBinder={(org, binder) =>
+                    onNavigate({ kind: "binder", org, binder })
+                  }
+                  onOpenChanges={() => onNavigate({ kind: "changes" })}
                   onOpenBinders={
                     sidebarOrg
                       ? () =>
