@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  BINDER_SETTINGS_PAGES,
+  binderSettingsSection,
   approverOptions,
   countApprovers,
   countChosenApprovers,
@@ -284,4 +286,16 @@ describe("a binder's members", () => {
       "quinn",
     ]);
   });
+});
+
+test("every binder screen under Settings opens one settings page", () => {
+  expect(binderSettingsSection("settings")).toBe("general");
+  expect(binderSettingsSection("people")).toBe("access");
+  expect(binderSettingsSection("change-requests")).toBe("change-requests");
+  expect(binderSettingsSection("sign-off")).toBe("change-requests");
+  expect(binderSettingsSection("history")).toBeNull();
+  // And each page's own tab opens it again.
+  for (const page of BINDER_SETTINGS_PAGES) {
+    expect(binderSettingsSection(page.tab)).toBe(page.section);
+  }
 });

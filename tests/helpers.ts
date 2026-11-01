@@ -567,8 +567,8 @@ export async function expectOpenChangeCount(
   // `.last()`: Your work has a Change requests entry of its own, above the
   // binder's.
   const entry = page
-    .locator(".app-sidebar")
-    .getByRole("link", { name: /^Change requests/ })
+    .locator(SIDEBAR_SCREEN)
+    .filter({ hasText: /^Change requests/ })
     .last();
   if (count === 0) {
     await expect(entry.locator(".app-sidebar-item-count")).toHaveCount(0, {
@@ -582,14 +582,21 @@ export async function expectOpenChangeCount(
   );
 }
 
+/**
+ * A screen's entry in the sidebar, and not one of Settings' pages under it —
+ * Settings › Change requests is the binder's rules, not its change requests.
+ */
+const SIDEBAR_SCREEN =
+  ".app-sidebar a.app-sidebar-item:not(.app-sidebar-item--sub)";
+
 /** Open one of the binder's screens from the sidebar's own section of it. */
 export async function openBinderSection(
   page: Page,
-  section: "Change requests" | "History" | "Settings",
+  section: "Documents" | "Change requests" | "History" | "Settings",
 ): Promise<void> {
   const entry = page
-    .locator(".app-sidebar")
-    .getByRole("link", { name: new RegExp(`^${section}`) })
+    .locator(SIDEBAR_SCREEN)
+    .filter({ hasText: new RegExp(`^${section}`) })
     .last();
   await expect(entry).toBeVisible({ timeout: 15_000 });
   await entry.click();

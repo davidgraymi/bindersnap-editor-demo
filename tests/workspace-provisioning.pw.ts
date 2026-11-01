@@ -3839,7 +3839,9 @@ test("the settings page takes a typed approval count, and says when nobody could
     ).status,
   ).toBe(200);
 
-  await page.goto(`${APP_BASE_URL}/${org.name}/clinical/-/settings/approvals`);
+  await page.goto(
+    `${APP_BASE_URL}/${org.name}/clinical/-/settings/change-requests`,
+  );
   const count = page.getByLabel("Approvals required");
   // A new binder needs none, and none is something anybody can meet.
   await expect(count).toHaveValue("0");

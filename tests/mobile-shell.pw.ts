@@ -94,7 +94,8 @@ test("every one of the binder's screens is reachable on a phone", async ({
   await settings.scrollIntoViewIfNeeded();
   await settings.click();
 
-  await expect(page.getByRole("tab", { name: "Approvals" })).toBeVisible({
+  // No sidebar at this width, so Settings' pages are tabs on the page.
+  await expect(page.getByRole("tab", { name: "Change requests" })).toBeVisible({
     timeout: 30_000,
   });
 });

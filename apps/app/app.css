@@ -5578,9 +5578,12 @@ a.bs-knot {
   align-items: center;
   gap: var(--brand-space-2);
   padding: 0 var(--brand-space-2);
-  height: 32px;
+  /* GitLab's measure: a row a finger can hit, in type a reader does not
+     squint at. At 32px and 14px the map read as a list of footnotes, with
+     half the column empty under it. */
+  height: var(--brand-space-10);
   border-radius: var(--brand-radius-md);
-  font-size: var(--brand-text-ui-md);
+  font-size: var(--brand-text-ui-lg);
   color: var(--bs-text-secondary);
   cursor: pointer;
   border: none;
@@ -5620,6 +5623,20 @@ a.bs-knot {
   font-size: var(--brand-text-ui-xs);
   color: var(--bs-text-muted);
   font-variant-numeric: tabular-nums;
+}
+
+/* One of Settings' pages, under it: no icon, its words where Settings' words
+   start, so the indent says whose page it is. */
+.app-sidebar-item--sub {
+  height: var(--brand-space-8);
+  padding-left: calc(var(--brand-space-2) * 2 + var(--brand-space-4));
+  font-size: var(--brand-text-ui-md);
+}
+
+.app-sidebar-item-chevron {
+  display: flex;
+  margin-left: auto;
+  color: var(--bs-text-muted);
 }
 
 .app-sidebar-item--muted {
@@ -8914,56 +8931,65 @@ a.bs-row:focus-visible {
   padding-top: var(--brand-space-2);
 }
 
-/* The binder's own entry, and its contents: pressing it opens what is filed
-   in the binder, the way pressing a folder opens the folder. No "Policies"
-   child — a row repeating its parent one indent further in is a second row
-   going to the same place. */
+/* The way back up, above the binder's name: small and quiet, because it
+   leaves the binder rather than moving inside it. */
+.app-sidebar-back {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  min-width: 0;
+  height: var(--brand-space-8);
+  padding: 0 var(--brand-space-2);
+  border-radius: var(--brand-radius-md);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+  text-decoration: none;
+}
+
+.app-sidebar-back:hover {
+  color: var(--bs-text-primary);
+  background: var(--bs-surface-3);
+}
+
+.app-sidebar-back:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: -2px;
+}
+
+.app-sidebar-back svg {
+  flex-shrink: 0;
+}
+
+.app-sidebar-back-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The binder's name, heading everything under it — GitLab's project row.
+   Not a link: Documents, under it, is the way to its contents. */
 .app-sidebar-binder {
   display: flex;
   align-items: center;
   gap: var(--brand-space-2);
   width: 100%;
-  min-height: 38px;
-  margin-bottom: var(--brand-space-0-5);
+  min-height: var(--brand-space-10);
+  margin: var(--brand-space-1) 0 var(--brand-space-1);
   padding: 0 var(--brand-space-2);
-  border: none;
-  border-radius: var(--brand-radius-md);
-  background: none;
   color: var(--bs-text-primary);
   font-family: var(--brand-font-sans);
-  font-size: var(--brand-text-ui-md);
+  font-size: var(--brand-text-ui-lg);
   font-weight: var(--brand-weight-semibold);
-  text-align: left;
-  text-decoration: none;
   box-sizing: border-box;
-  cursor: pointer;
-}
-
-.app-sidebar-binder:hover {
-  background: var(--bs-surface-2);
-}
-
-.app-sidebar-binder--active {
-  background: var(--bs-surface-2);
-}
-
-.app-sidebar-binder:focus-visible {
-  outline: 2px solid var(--brand-coral);
-  outline-offset: -2px;
 }
 
 .app-sidebar-binder-mark {
   display: grid;
   flex-shrink: 0;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: var(--brand-space-6);
+  height: var(--brand-space-6);
   border-radius: var(--brand-radius-sm);
-  background: var(--bs-coral-dim);
-  color: var(--bs-coral-text);
-}
-
-.app-sidebar-binder--active .app-sidebar-binder-mark {
   background: var(--brand-coral);
   color: var(--brand-on-brand);
 }
@@ -9612,6 +9638,8 @@ a.bs-row:focus-visible {
 .app-sidebar--collapsed .app-sidebar-item-count,
 .app-sidebar--collapsed .app-sidebar-label,
 .app-sidebar--collapsed .app-sidebar-binder-name,
+.app-sidebar--collapsed .app-sidebar-back-label,
+.app-sidebar--collapsed .app-sidebar-item-chevron,
 .app-sidebar--collapsed .app-sidebar-foot-label {
   position: absolute;
   width: 1px;
@@ -9626,6 +9654,7 @@ a.bs-row:focus-visible {
 /* A row with one thing in it centres it, rather than leaving the icon where
    the text used to start. */
 .app-sidebar--collapsed .app-sidebar-item,
+.app-sidebar--collapsed .app-sidebar-back,
 .app-sidebar--collapsed .app-sidebar-binder {
   justify-content: center;
   padding: 0;
@@ -10413,6 +10442,14 @@ a.binder-latest-title:focus-visible {
 .bs-settings > .bs-settings-tabs {
   margin: 0 0 var(--brand-space-2);
   border-bottom: 1px solid var(--bs-rule-warm);
+}
+
+/* The sidebar lists the settings pages wherever there is a sidebar, so the
+   strip is a phone's alone. */
+@media (min-width: 769px) {
+  .bs-settings > .bs-settings-tabs {
+    display: none;
+  }
 }
 
 /* Approvals: one table, Rule · Who approves · Approvals required. The change
@@ -11946,4 +11983,10 @@ html.bs-writing .app-main {
 .org-invitation-row .bs-row-right {
   display: flex;
   gap: var(--brand-space-1);
+}
+
+/* Collapsed, Settings' pages have no icon to be, and Settings itself is the
+   way to them. */
+.app-sidebar--collapsed .app-sidebar-item--sub {
+  display: none;
 }

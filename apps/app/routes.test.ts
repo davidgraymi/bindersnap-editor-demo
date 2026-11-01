@@ -119,8 +119,8 @@ test("every screen of a binder sits behind the `-` no binder can be called", () 
   expect(at("history")).toBe("/riverside-health/clinical/-/history");
   expect(at("settings")).toBe("/riverside-health/clinical/-/settings");
   expect(at("people")).toBe("/riverside-health/clinical/-/settings/people");
-  expect(at("approvals")).toBe(
-    "/riverside-health/clinical/-/settings/approvals",
+  expect(at("change-requests")).toBe(
+    "/riverside-health/clinical/-/settings/change-requests",
   );
 });
 

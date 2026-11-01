@@ -1,5 +1,6 @@
 /**
- * The sign-off rules on a binder's Approvals tab, when there are none.
+ * The sign-off rules on a binder's Change requests settings, when there are
+ * none.
  *
  * They are rows of the one approval table, under the binder's own "Every
  * change" rule, so a binder with none shows that row and an offer to add one —
@@ -27,15 +28,13 @@ test.beforeAll(async () => {
 
 test("with no rules, the table offers to add one", async ({ page }) => {
   await signInAsAlice(page);
-  // The address the sign-off rules had before Approvals was a tab still
-  // lands on it.
+  // The address the sign-off rules had before they joined the approval table
+  // still lands on it.
   await page.goto(`${APP_BASE_URL}/riverside-health/clinical?tab=sign-off`);
 
-  await expect(page.getByRole("tab", { name: "Approvals" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-    { timeout: 30_000 },
-  );
+  await expect(page.locator("h1.bs-title")).toHaveText("Change requests", {
+    timeout: 30_000,
+  });
   await expect(
     page.locator("#sign-off .rev-rules-name", { hasText: "Every change" }),
   ).toBeVisible();
@@ -47,7 +46,7 @@ test("with no rules, the table offers to add one", async ({ page }) => {
 test("nothing to propose means nothing to press", async ({ page }) => {
   await signInAsAlice(page);
   await page.goto(
-    `${APP_BASE_URL}/riverside-health/clinical/-/settings/approvals`,
+    `${APP_BASE_URL}/riverside-health/clinical/-/settings/change-requests`,
   );
 
   await page
@@ -67,7 +66,7 @@ test("nothing to propose means nothing to press", async ({ page }) => {
 test("drafting a rule makes Propose pressable", async ({ page }) => {
   await signInAsAlice(page);
   await page.goto(
-    `${APP_BASE_URL}/riverside-health/clinical/-/settings/approvals`,
+    `${APP_BASE_URL}/riverside-health/clinical/-/settings/change-requests`,
   );
 
   await page

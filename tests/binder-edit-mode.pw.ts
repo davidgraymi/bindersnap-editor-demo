@@ -1603,7 +1603,7 @@ test("a policy is read beside its own file panel, at the page's full width", asy
 
   // The map is still the map: its own entries are untouched by any of this.
   await expect(
-    page.locator(".app-sidebar-item", { hasText: "Binders" }),
+    page.locator(".app-sidebar-item", { hasText: "Documents" }),
   ).toBeVisible();
 });
 

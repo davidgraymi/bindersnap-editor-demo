@@ -58,7 +58,9 @@ import {
   parseApprovalCount,
   searchMembers,
   unreachableApprovalsNote,
+  BINDER_SETTINGS_PAGES,
   type ApproversView,
+  type BinderSettingsSection,
   type MemberMatch,
 } from "../binderSettings";
 import { ApproverPicker } from "./ApproverPicker";
@@ -72,18 +74,22 @@ import { SettingsGroup } from "./SettingsGroup";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 /**
- * How this binder is governed, in three tabs: General, People & access, and
- * Approvals.
+ * How this binder is governed, on three pages: General, People & access, and
+ * Change requests.
  *
- * **Three tabs, because one scroll hid the point of the page.** On one page
+ * **Three pages, because one scroll hid the point of the page.** On one page
  * the approval rules — the product's one promise — sat under the name form,
  * the visibility choice, every person and every group, and an empty-state
  * essay about sign-off rules. An owner of the product could not find them.
- * The tabs are the questions somebody arrives with: what is it called, who is
- * in it, and what has to happen before a change is published. Each tab has
- * one name and no second heading saying it again.
+ * The pages are the questions somebody arrives with: what is it called, who is
+ * in it, and what has to happen before a change is published.
  *
- * **Approvals is one table.** The binder's approvers and its sign-off rules
+ * **The sidebar lists them, the way GitLab lists a project's settings.** The
+ * page names itself in its title and says what it decides in a sentence under
+ * it (`BINDER_SETTINGS_PAGES`). On a phone there is no sidebar, so the pages
+ * are a strip of tabs at the top — drawn at every width, shown only there.
+ *
+ * **The approval rules are one table.** The binder's approvers and its sign-off rules
  * answer the same question — who has to approve what — so they are rows of
  * one table, Rule · Who approves · Approvals required, the way GitLab lists a
  * project's approval rules. How many and who are on the same row, because
@@ -94,19 +100,10 @@ import { SkeletonGroup, SkeletonLine } from "./Skeleton";
  * organization can read it is one switch above the list.
  */
 
-export type BinderSettingsSection = "general" | "access" | "approvals";
-
-const SECTIONS: ReadonlyArray<{ id: BinderSettingsSection; label: string }> = [
-  { id: "general", label: "General" },
-  // The organization's word for the same question, on its own tab.
-  { id: "access", label: "People & access" },
-  { id: "approvals", label: "Approvals" },
-];
-
 interface BinderSettingsProps {
   org: string;
   binder: string;
-  /** The tab on show: `/-/settings`, `/-/settings/people`, `/-/settings/approvals`. */
+  /** The page on show: `/-/settings`, `/-/settings/people`, `/-/settings/change-requests`. */
   section: BinderSettingsSection;
   onSection: (section: BinderSettingsSection) => void;
   /**
@@ -187,14 +184,14 @@ export function BinderSettings({
       role="tablist"
       aria-label="Settings"
     >
-      {SECTIONS.map((entry) => (
+      {BINDER_SETTINGS_PAGES.map((entry) => (
         <button
-          key={entry.id}
+          key={entry.section}
           type="button"
           role="tab"
-          className={`doc-tab${section === entry.id ? " doc-tab--active" : ""}`}
-          aria-selected={section === entry.id}
-          onClick={() => onSection(entry.id)}
+          className={`doc-tab${section === entry.section ? " doc-tab--active" : ""}`}
+          aria-selected={section === entry.section}
+          onClick={() => onSection(entry.section)}
         >
           {entry.label}
         </button>
@@ -249,7 +246,7 @@ export function BinderSettings({
           canManage={canManagePeople}
           onChanged={setPeople}
         />
-      ) : section === "approvals" ? (
+      ) : section === "change-requests" ? (
         <ApprovalsTab
           org={org}
           binder={binder}

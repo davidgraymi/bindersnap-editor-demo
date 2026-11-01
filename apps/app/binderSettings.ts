@@ -430,3 +430,66 @@ export function searchMembers(
       .filter((match) => hit(match.label, match.login)),
   ];
 }
+
+/** One of a binder's settings pages. */
+export type BinderSettingsSection = "general" | "access" | "change-requests";
+
+/**
+ * A binder's settings pages, in the order the sidebar lists them.
+ *
+ * **One list, read by the sidebar and by the page**, so the entry you click
+ * and the title of the page it opens can never disagree. Each page says in
+ * one sentence what it decides, the way GitLab's settings pages do. That
+ * sentence is what tells "People & access" from "Change requests" without
+ * opening either.
+ *
+ * **Change requests is named for what it governs.** Who approves, the sign-off
+ * rules, whether an edit clears the approvals, and whether every discussion
+ * must be resolved are all rules about a change request. Named Approvals, the
+ * last two looked like they had wandered in.
+ */
+export const BINDER_SETTINGS_PAGES: ReadonlyArray<{
+  section: BinderSettingsSection;
+  /** The binder screen it is, so it has an address. */
+  tab: "settings" | "people" | "change-requests";
+  label: string;
+  description: string;
+}> = [
+  {
+    section: "general",
+    tab: "settings",
+    label: "General",
+    description: "What this binder is called, and deleting it.",
+  },
+  {
+    section: "access",
+    tab: "people",
+    label: "People & access",
+    description: "Who can read this binder, and who can change it.",
+  },
+  {
+    section: "change-requests",
+    tab: "change-requests",
+    label: "Change requests",
+    description:
+      "Who approves a change, and what has to be true before it is published.",
+  },
+];
+
+/** The settings page a binder screen opens, or null when it opens none. */
+export function binderSettingsSection(
+  tab: string | null | undefined,
+): BinderSettingsSection | null {
+  switch (tab) {
+    case "settings":
+      return "general";
+    case "people":
+      return "access";
+    // Where the sign-off rules were before they joined the approval table.
+    case "sign-off":
+    case "change-requests":
+      return "change-requests";
+    default:
+      return null;
+  }
+}
