@@ -1,10 +1,10 @@
 /**
  * The global sidebar.
  *
- * Two things worth guarding. That the sidebar is a map of the whole product —
- * the destinations the top bar never carried are on it. And that inside a
- * binder it is the binder's alone, the way GitLab's is the project's: a
- * binder is a place, which is ADR 0004's reason for the level.
+ * What is worth guarding is that it shows one level at a time, the level you
+ * are in, the way GitLab's does: your work on Home, an organization's pages
+ * inside it, and a binder's inside a binder — each naming the place, with one
+ * step back up.
  *
  * The third is the breakpoint. The sidebar is display:none below 768px and the
  * top bar's own links are hidden above it, so exactly one navigation exists at
@@ -26,7 +26,7 @@ test.beforeAll(async () => {
   await seedDevStack();
 });
 
-test("the sidebar is the map, grouped by scope: yours, then the organization's", async ({
+test("the sidebar shows the level you are in: yours, then the organization's", async ({
   page,
 }) => {
   await signInAsAlice(page);
@@ -35,40 +35,58 @@ test("the sidebar is the map, grouped by scope: yours, then the organization's",
   const sidebar = page.locator(".app-sidebar");
   await expect(sidebar).toBeVisible({ timeout: 30_000 });
 
-  // The destinations the top bar never had are the point of the whole thing.
-  for (const label of [
-    "Home",
-    "Change requests",
-    "Documents",
-    "Binders",
-    "People & access",
-    "Billing",
-  ] as const) {
+  // On Home it is your work, across every organization, and the
+  // organizations you are in as places to go — not one organization's pages
+  // under a heading, beside entries that span all of them.
+  await expect(sidebar.getByText("Your work", { exact: true })).toBeVisible();
+  for (const label of ["Home", "Change requests", "Documents"] as const) {
     await expect(sidebar.getByRole("link", { name: label })).toBeVisible();
   }
+  const organizations = sidebar.getByRole("navigation", {
+    name: "Your organizations",
+  });
+  await expect(
+    organizations.getByRole("link", { name: "Riverside Health" }),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(sidebar.getByRole("link", { name: "Billing" })).toHaveCount(0);
 
-  // The grouping is the teaching, and each group is a scope with a name: your
-  // work spans every organization; Binders, People and Billing are one
-  // organization's, and the heading says which.
-  await expect(sidebar.getByText("Your work", { exact: true })).toBeVisible();
+  // Into the organization, and the sidebar is its: named once, its own pages
+  // under it, and one step back to Home.
+  await organizations.getByRole("link", { name: "Riverside Health" }).click();
+  await expect(page).toHaveURL(/\/riverside-health$/, { timeout: 30_000 });
   const organization = sidebar.getByRole("navigation", {
     name: "Riverside Health",
   });
-  await expect(organization).toContainText("Riverside Health");
-  for (const label of ["Binders", "People & access", "Billing"] as const) {
+  for (const label of [
+    "Binders",
+    "People & access",
+    "Billing",
+    "Settings",
+  ] as const) {
     await expect(organization.getByRole("link", { name: label })).toBeVisible();
   }
+  await expect(sidebar.getByText("Your work", { exact: true })).toHaveCount(0);
+  await expect(
+    organization.getByRole("link", { name: "Binders" }),
+  ).toHaveAttribute("aria-current", "page");
+
+  // Its pages are the sidebar's, so the page has no row of tabs repeating
+  // them, and each is titled for itself.
+  await organization.getByRole("link", { name: "Settings" }).click();
+  await expect(page).toHaveURL(/\/riverside-health\/-\/settings$/);
+  await expect(page.locator(".doc-header-title")).toHaveText("Settings");
+  await expect(page.locator(".org-tabs")).toBeHidden();
 
   // **One destination per entry.** "Organization" opened the organization's
-  // page, which is the binder list, which "Binders" above it opens, which the
-  // org button in the top bar also opens: three entries, one destination, and
-  // the customer read the map and concluded two of them were broken. It is
-  // gone rather than repointed — "Binders" is the organization's home and
-  // "People & access" is the rest of it, so there was nothing left for a
-  // third entry to mean.
+  // page, which "Binders" also opens; the customer read the map and
+  // concluded one of them was broken.
   await expect(sidebar.getByRole("link", { name: "Organization" })).toHaveCount(
     0,
   );
+
+  await organization.getByRole("link", { name: "Home" }).click();
+  await expect(page).toHaveURL(/\/$/, { timeout: 30_000 });
+  await expect(sidebar.getByText("Your work", { exact: true })).toBeVisible();
 });
 
 test("the sidebar navigates, and marks where you are", async ({ page }) => {
