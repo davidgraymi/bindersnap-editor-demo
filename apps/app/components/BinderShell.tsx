@@ -61,6 +61,10 @@ import { BinderChangePage } from "./BinderChangePage";
 import { BinderChanges } from "./BinderChanges";
 import { BinderHistory } from "./BinderHistory";
 import { BinderSettings } from "./BinderSettings";
+import {
+  BINDER_SETTINGS_PAGES,
+  binderSettingsSection,
+} from "../binderSettings";
 import { BinderDocumentPage } from "./BinderDocumentPage";
 import { BinderBranchSummary } from "./BinderBranchSummary";
 import { DocumentEditorPage } from "./DocumentEditorPage";
@@ -898,11 +902,11 @@ export function BinderShell({
   };
 
   // A document is a file in the binder, so Documents stays the tab you are on.
-  // People & access and Approvals are tabs of Settings, under its own
+  // People & access and Change requests are pages of Settings, under its own
   // addresses; the binder's screen is Settings for all three.
   const activeTab: BinderTab = documentPath
     ? "documents"
-    : tab === "people" || tab === "sign-off" || tab === "approvals"
+    : tab === "people" || tab === "sign-off" || tab === "change-requests"
       ? "settings"
       : tab;
 
@@ -993,7 +997,9 @@ export function BinderShell({
       org,
       binder,
       name: binderName,
-      section: activeTab,
+      // Which of Settings' pages, not only Settings: the sidebar lists them
+      // and marks the one that is open.
+      section: activeTab === "settings" ? tab : activeTab,
       openChangeCount: overview?.openChangeCount ?? null,
       // The active row is the address, not what the read happened to return:
       // the read is slower than the click, and a tree that marks the row a
@@ -1015,6 +1021,7 @@ export function BinderShell({
     binder,
     binderName,
     activeTab,
+    tab,
     overview?.openChangeCount,
     contents,
     reading,
@@ -1079,7 +1086,16 @@ export function BinderShell({
                     "Every change this binder has published, and what each one did.",
                 }
               : activeTab === "settings"
-                ? { title: "Settings" }
+                ? // The page is named for the settings page it is, as the
+                  // sidebar entry that opened it is, with the one sentence
+                  // that says what that page decides.
+                  (() => {
+                    const page =
+                      BINDER_SETTINGS_PAGES.find(
+                        (entry) => entry.section === binderSettingsSection(tab),
+                      ) ?? BINDER_SETTINGS_PAGES[0]!;
+                    return { title: page.label, subtitle: page.description };
+                  })()
                 : {
                     title: binderName,
                     ...(editMode === "editing"
@@ -1391,7 +1407,7 @@ export function BinderShell({
           view={changeView}
           onViewChange={(next) => openChangeNumber(openChange, next)}
           onBackToChanges={() => goTo("changes")}
-          onOpenSignOffRules={() => goTo("approvals")}
+          onOpenSignOffRules={() => goTo("change-requests")}
           /* The document's own address, on this change's branch — the binder
              at another ref rather than a panel inside the change. */
           /* **The branch, not the change.** A file lives on a branch, which
@@ -1463,20 +1479,11 @@ export function BinderShell({
         <BinderSettings
           org={org}
           binder={binder}
-          section={
-            tab === "people"
-              ? "access"
-              : tab === "approvals" || tab === "sign-off"
-                ? "approvals"
-                : "general"
-          }
+          section={binderSettingsSection(tab) ?? "general"}
           onSection={(section) =>
             goTo(
-              section === "access"
-                ? "people"
-                : section === "approvals"
-                  ? "approvals"
-                  : "settings",
+              BINDER_SETTINGS_PAGES.find((page) => page.section === section)
+                ?.tab ?? "settings",
             )
           }
           onOpenChange={openChangeNumber}

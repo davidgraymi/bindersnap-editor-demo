@@ -1,5 +1,8 @@
 import {
+  ArrowLeft,
   Building2,
+  ChevronDown,
+  ChevronRight,
   CircleHelp,
   CreditCard,
   FileText,
@@ -17,6 +20,10 @@ import {
 import type { BinderTab } from "../binderShell";
 import type { DocumentRefView } from "../documentRefs";
 import { followInApp } from "../appLink";
+import {
+  BINDER_SETTINGS_PAGES,
+  binderSettingsSection,
+} from "../binderSettings";
 import { routeToPath, type AppRoute, type OrganizationTab } from "../routes";
 import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
 import { useCollapsedSidebar } from "../useCollapsedSidebar";
@@ -36,6 +43,14 @@ import { siteUrl } from "../siteLink";
  * organization, then this organization's binders, people and billing, then
  * the binder you are in. A reader always knows whose page an entry opens.
  *
+ * **Inside a binder, the sidebar is the binder's, and nothing else** — the
+ * way GitLab's is the project's once you are in one. It used to stack all
+ * three scopes, so a binder showed two "Change requests" entries and two
+ * highlighted rows, and its settings were tabs on a page behind a third. Now
+ * it names the binder, lists the binder's own screens with Settings' pages
+ * under it, and offers one step back up to the organization. Home is the
+ * logo, and every other place is the search.
+ *
  * **The binder you are in is a section of this, and it was a tab bar** (D1,
  * the customer's call). A binder is still a place — one set of rules, one set
  * of people, which is ADR 0004's whole reason for the level — and owning a
@@ -45,9 +60,9 @@ import { siteUrl } from "../siteLink";
  * instead of both sitting under a heading naming the binder they are visibly
  * inside.
  *
- * **There is no "Policies" entry, because the binder's own name is it.** A
- * binder is its contents: pressing Clinical opens what is filed in Clinical,
- * the way pressing a folder opens the folder.
+ * **Its contents are an entry, Documents, like its other screens.** The
+ * binder's name used to be the way in to them, which read as a heading
+ * rather than a place to go.
  *
  * **Below 768px this is not rendered at all** (`.app-sidebar` is
  * `display: none`); the bottom bar carries the places people move between
@@ -159,6 +174,10 @@ type Entry = {
   route: AppRoute | null;
   isActive: (route: AppRoute) => boolean;
   count?: number | null;
+  /** One of Settings' pages, drawn under it without an icon of its own. */
+  sub?: boolean;
+  /** Settings, whose pages are listed under it while one is open. */
+  expanded?: boolean;
 };
 
 export function AppSidebar({
@@ -210,12 +229,35 @@ export function AppSidebar({
   ];
 
   /**
-   * The binder's own screens. Three, not six: People and Sign-off rules are
-   * sections of Settings (D5), and its contents are the binder's own entry
-   * above them rather than a child repeating its parent's name.
+   * The binder on screen. Named from the address until the binder has been
+   * read, so the sidebar is the binder's from the first frame rather than
+   * the organization's for one and the binder's after.
    */
-  const binderEntries: Entry[] = binder
+  const scope: SidebarBinder | null =
+    binder ??
+    (route.kind === "binder" || route.kind === "binderDocument"
+      ? {
+          org: route.org,
+          binder: route.binder,
+          name: route.binder,
+          section:
+            route.kind === "binder" ? (route.tab ?? "documents") : "documents",
+        }
+      : null);
+  const settingsPage = scope ? binderSettingsSection(scope.section) : null;
+
+  /** The binder's own screens, and Settings' pages under it. */
+  const binderEntries: Entry[] = scope
     ? [
+        {
+          key: "binder-documents",
+          label: "Documents",
+          icon: FileText,
+          route: { kind: "binder", org: scope.org, binder: scope.binder },
+          // A policy open in the binder is one of its documents.
+          isActive: (r) =>
+            r.kind === "binderDocument" || scope.section === "documents",
+        },
         {
           key: "binder-changes",
           // What the page it opens is titled, and what the same list is
@@ -225,12 +267,12 @@ export function AppSidebar({
           icon: FilePen,
           route: {
             kind: "binder",
-            org: binder.org,
-            binder: binder.binder,
+            org: scope.org,
+            binder: scope.binder,
             tab: "changes",
           },
-          isActive: () => binder.section === "changes",
-          count: binder.openChangeCount ?? null,
+          isActive: (r) => r.kind === "binder" && scope.section === "changes",
+          count: scope.openChangeCount ?? null,
         },
         {
           key: "binder-history",
@@ -238,11 +280,11 @@ export function AppSidebar({
           icon: History,
           route: {
             kind: "binder",
-            org: binder.org,
-            binder: binder.binder,
+            org: scope.org,
+            binder: scope.binder,
             tab: "history",
           },
-          isActive: () => binder.section === "history",
+          isActive: (r) => r.kind === "binder" && scope.section === "history",
         },
         {
           key: "binder-settings",
@@ -250,18 +292,32 @@ export function AppSidebar({
           icon: Settings,
           route: {
             kind: "binder",
-            org: binder.org,
-            binder: binder.binder,
+            org: scope.org,
+            binder: scope.binder,
             tab: "settings",
           },
-          // People and Sign-off rules are sections of this page, and their
-          // addresses still resolve — so they mark it too.
-          isActive: () =>
-            binder.section === "settings" ||
-            binder.section === "people" ||
-            binder.section === "sign-off" ||
-            binder.section === "approvals",
+          // Never marked itself: open, the page under it is the one marked,
+          // as GitLab marks Settings › Merge requests and not Settings.
+          isActive: () => false,
+          expanded: settingsPage !== null,
         },
+        // **Its pages, in the sidebar, while one of them is open.** They
+        // were tabs on the page, a second navigation under the first.
+        ...(settingsPage !== null
+          ? BINDER_SETTINGS_PAGES.map((page): Entry => ({
+              key: `binder-settings-${page.section}`,
+              label: page.label,
+              icon: Settings,
+              sub: true,
+              route: {
+                kind: "binder",
+                org: scope.org,
+                binder: scope.binder,
+                tab: page.tab,
+              },
+              isActive: () => settingsPage === page.section,
+            }))
+          : []),
       ]
     : [];
 
@@ -278,12 +334,7 @@ export function AppSidebar({
       label: "Binders",
       icon: Library,
       route: orgRoute(),
-      // A binder and a document inside it are both "in" the binders section —
-      // you got there through it, and the sidebar should not lose your place.
-      isActive: (r) =>
-        (r.kind === "organization" && !isOrganizationPeople(r)) ||
-        r.kind === "binder" ||
-        r.kind === "binderDocument",
+      isActive: (r) => r.kind === "organization" && !isOrganizationPeople(r),
     },
     {
       key: "people",
@@ -317,9 +368,9 @@ export function AppSidebar({
         key={entry.key}
         href={entry.route ? routeToPath(entry.route) : undefined}
         aria-disabled={disabled || undefined}
-        className={`app-sidebar-item${active ? " app-sidebar-item--active" : ""}${
-          disabled ? " app-sidebar-item--muted" : ""
-        }`}
+        className={`app-sidebar-item${entry.sub ? " app-sidebar-item--sub" : ""}${
+          active ? " app-sidebar-item--active" : ""
+        }${disabled ? " app-sidebar-item--muted" : ""}`}
         aria-current={active ? "page" : undefined}
         // Collapsed, the icon is the whole of the row, so the name has to be
         // reachable some other way. The label stays in the DOM and is hidden
@@ -332,11 +383,22 @@ export function AppSidebar({
           if (to) followInApp(event, () => onNavigate(to));
         }}
       >
-        <Icon size={15} strokeWidth={1.75} aria-hidden="true" />
+        {entry.sub ? null : (
+          <Icon size={16} strokeWidth={1.75} aria-hidden="true" />
+        )}
         <span className="app-sidebar-item-label">{entry.label}</span>
         {typeof entry.count === "number" && entry.count > 0 ? (
           <span className="app-sidebar-item-count">{entry.count}</span>
         ) : null}
+        {entry.expanded === undefined ? null : (
+          <span className="app-sidebar-item-chevron" aria-hidden="true">
+            {entry.expanded ? (
+              <ChevronDown size={14} strokeWidth={1.75} />
+            ) : (
+              <ChevronRight size={14} strokeWidth={1.75} />
+            )}
+          </span>
+        )}
       </a>
     );
   };
@@ -345,62 +407,63 @@ export function AppSidebar({
     <aside
       className={`app-sidebar${collapsed ? " app-sidebar--collapsed" : ""}`}
     >
-      <nav className="app-sidebar-section" aria-label="Your work">
-        <div className="app-sidebar-label">Your work</div>
-        {work.map(renderEntry)}
-      </nav>
-
-      {/* The organization's, under its own name — outermost to innermost:
-          your work, this organization, the binder you are in. */}
-      <nav
-        className="app-sidebar-section"
-        aria-label={orgName ? orgName : "Organization"}
-      >
-        <div className="app-sidebar-label app-sidebar-label--scope">
-          <Building2 size={12} strokeWidth={2} aria-hidden="true" />
-          <span className="app-sidebar-label-text">
-            {orgName || "Organization"}
-          </span>
-        </div>
-        {organization.map(renderEntry)}
-      </nav>
-
-      {binder ? (
+      {scope ? (
         <nav
           className="app-sidebar-section app-sidebar-section--binder"
-          aria-label={binder.name}
+          aria-label={scope.name}
         >
+          {/* **One step back up**, to the organization the binder is in.
+              GitLab leaves it to the breadcrumbs, which a person who has
+              never used GitLab does not read as a way out. */}
           <a
-            href={routeToPath({
-              kind: "binder",
-              org: binder.org,
-              binder: binder.binder,
-            })}
-            className={`app-sidebar-binder${
-              binder.section === "documents"
-                ? " app-sidebar-binder--active"
-                : ""
-            }`}
-            aria-current={binder.section === "documents" ? "page" : undefined}
+            className="app-sidebar-back"
+            href={routeToPath({ kind: "organization", org: scope.org })}
+            title={collapsed ? orgName || scope.org : undefined}
             onClick={(event) =>
               followInApp(event, () =>
-                onNavigate({
-                  kind: "binder",
-                  org: binder.org,
-                  binder: binder.binder,
-                }),
+                onNavigate({ kind: "organization", org: scope.org }),
               )
             }
           >
+            <ArrowLeft size={14} strokeWidth={1.75} aria-hidden="true" />
+            <span className="app-sidebar-back-label">
+              {orgName || scope.org}
+            </span>
+          </a>
+
+          {/* The binder's name, as the heading of everything under it. A
+              heading and not a link: Documents is the way to its contents. */}
+          <div className="app-sidebar-binder">
             <span className="app-sidebar-binder-mark" aria-hidden="true">
               <Library size={14} strokeWidth={1.75} />
             </span>
-            <span className="app-sidebar-binder-name">{binder.name}</span>
-          </a>
+            <span className="app-sidebar-binder-name">{scope.name}</span>
+          </div>
 
           {binderEntries.map(renderEntry)}
         </nav>
-      ) : null}
+      ) : (
+        <>
+          <nav className="app-sidebar-section" aria-label="Your work">
+            <div className="app-sidebar-label">Your work</div>
+            {work.map(renderEntry)}
+          </nav>
+
+          {/* The organization's, under its own name. */}
+          <nav
+            className="app-sidebar-section"
+            aria-label={orgName ? orgName : "Organization"}
+          >
+            <div className="app-sidebar-label app-sidebar-label--scope">
+              <Building2 size={12} strokeWidth={2} aria-hidden="true" />
+              <span className="app-sidebar-label-text">
+                {orgName || "Organization"}
+              </span>
+            </div>
+            {organization.map(renderEntry)}
+          </nav>
+        </>
+      )}
 
       <div className="app-sidebar-spacer" />
 

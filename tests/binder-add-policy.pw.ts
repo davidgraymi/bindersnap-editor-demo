@@ -458,19 +458,24 @@ test("the binder's tabs still work once a document is open", async ({
   );
 
   // Leaving the document by the sidebar, which is where the binder's own
-  // screens live now. People & access is a tab of Settings, not a screen of
-  // its own.
+  // screens live now — and Settings' pages with them, listed under it the
+  // way GitLab lists a project's.
   await openBinderSection(page, "Settings");
+  const sidebar = page.locator(".app-sidebar");
+  const settingsPage = (name: string) =>
+    sidebar.locator(".app-sidebar-item--sub", { hasText: name });
 
-  await expect(page.getByRole("tab", { name: "General" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-    { timeout: 30_000 },
+  await expect(settingsPage("General")).toHaveAttribute(
+    "aria-current",
+    "page",
+    {
+      timeout: 30_000,
+    },
   );
-  // The document is gone, not merely covered: the page is Settings now, and
-  // the binder is named once, in the sidebar, by the name it was given rather
-  // than by the slug the repository is addressed by.
-  await expect(page.locator("h1.bs-title")).toHaveText("Settings");
+  // The document is gone, not merely covered: the page is Settings' General
+  // now, and the binder is named once, in the sidebar, by the name it was
+  // given rather than by the slug the repository is addressed by.
+  await expect(page.locator("h1.bs-title")).toHaveText("General");
   await expect(page.locator(".app-sidebar-binder-name")).toHaveText(
     binderTitle,
   );
@@ -479,7 +484,7 @@ test("the binder's tabs still work once a document is open", async ({
   // Who can act here is a question about people, not about billing. The seat
   // chip on every row and the "N people · N seats · N free" line above them
   // both said the same thing twice and neither belonged on this page.
-  await page.getByRole("tab", { name: "People & access" }).click();
+  await settingsPage("People & access").click();
   await expect(page).toHaveURL(
     new RegExp(`/${org}/${binder}/-/settings/people$`),
   );
@@ -489,21 +494,24 @@ test("the binder's tabs still work once a document is open", async ({
   await expect(page.getByText(/\d+ seats? · \d+ free/)).toHaveCount(0);
   await expect(page.getByText("Seat", { exact: true })).toHaveCount(0);
 
-  // The approval rules are a tab of the same page — plus the one thing it
-  // must never say. Gitea is our plumbing, and naming it on a page a
-  // compliance manager reads explains nothing.
-  await page.getByRole("tab", { name: "Approvals" }).click();
+  // The approval rules are Settings' Change requests page — named for what
+  // they govern — plus the one thing it must never say. Gitea is our
+  // plumbing, and naming it on a page a compliance manager reads explains
+  // nothing.
+  await settingsPage("Change requests").click();
   await expect(page).toHaveURL(
-    new RegExp(`/${org}/${binder}/-/settings/approvals$`),
+    new RegExp(`/${org}/${binder}/-/settings/change-requests$`),
   );
+  await expect(page.locator("h1.bs-title")).toHaveText("Change requests");
   await expect(
     page.getByRole("columnheader", { name: "Who approves" }),
   ).toBeVisible({ timeout: 30_000 });
   await expect(page.locator("#sign-off").getByText("Gitea")).toHaveCount(0);
 
-  // And a second screen, to prove the first was not a one-off.
+  // And a second screen, to prove the first was not a one-off — and that
+  // Settings' pages fold away when you leave it.
   await openBinderSection(page, "History");
-  await expect(page.getByRole("tab", { name: "Approvals" })).toHaveCount(0, {
+  await expect(sidebar.locator(".app-sidebar-item--sub")).toHaveCount(0, {
     timeout: 30_000,
   });
 });
@@ -535,7 +543,7 @@ test("the header's one filled button belongs to the tab it sits above", async ({
   }
 
   // Back to the binder's contents and it returns: scoped, not deleted.
-  await page.locator(".app-sidebar-binder").click();
+  await openBinderSection(page, "Documents");
   await expect(addAPolicy).toBeVisible({ timeout: 30_000 });
 });
 

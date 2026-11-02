@@ -2,10 +2,9 @@
  * The global sidebar.
  *
  * Two things worth guarding. That the sidebar is a map of the whole product —
- * the destinations the top bar never carried are on it. And that it did not eat
- * the binder: a binder is a place with its own tabs, which is ADR 0004's reason
- * for the level, and the mockups this came from had no binder-scoped screen at
- * all.
+ * the destinations the top bar never carried are on it. And that inside a
+ * binder it is the binder's alone, the way GitLab's is the project's: a
+ * binder is a place, which is ADR 0004's reason for the level.
  *
  * The third is the breakpoint. The sidebar is display:none below 768px and the
  * top bar's own links are hidden above it, so exactly one navigation exists at
@@ -99,40 +98,58 @@ test("the sidebar navigates, and marks where you are", async ({ page }) => {
   await expect(sidebar.getByRole("link", { name: "Activity" })).toHaveCount(0);
 });
 
-test("the sidebar took the binder, and gives it a section of its own", async ({
-  page,
-}) => {
+test("inside a binder, the sidebar is the binder's alone", async ({ page }) => {
   await signInAsAlice(page);
   await page.goto(`${APP_BASE_URL}/riverside-health/clinical`);
 
-  // A binder is still a place: it owns a labelled section of the map, named
-  // once, with its own screens under it — and no "Policies" entry, because
-  // the binder's own name is it.
+  // GitLab's project sidebar: the place named once, its own screens under it,
+  // and nothing from the levels above — they put two "Change requests" and
+  // two marked rows on screen at once.
   const sidebar = page.locator(".app-sidebar");
   await expect(sidebar.locator(".app-sidebar-binder-name")).toHaveText(
     "Clinical",
     { timeout: 30_000 },
   );
-  for (const entry of ["Change requests", "History", "Settings"] as const) {
+  for (const entry of [
+    "Documents",
+    "Change requests",
+    "History",
+    "Settings",
+  ] as const) {
     await expect(
-      sidebar.getByRole("link", { name: new RegExp(`^${entry}`) }).last(),
-    ).toBeVisible();
+      sidebar.getByRole("link", { name: new RegExp(`^${entry}`) }),
+    ).toHaveCount(1);
   }
+  await expect(sidebar.getByText("Your work", { exact: true })).toHaveCount(0);
+  await expect(sidebar.getByRole("link", { name: "Billing" })).toHaveCount(0);
+  await expect(
+    sidebar.getByRole("link", { name: "Documents" }),
+  ).toHaveAttribute("aria-current", "page");
+  await expect(sidebar.locator("[aria-current='page']")).toHaveCount(1);
 
-  // And the page's one title is the binder's contents, not a heading naming
-  // the binder you are visibly inside.
+  // The page's one title is the binder's contents.
   await expect(page.locator("h1.bs-title")).toHaveText("Clinical");
 
-  // It goes when you leave.
-  await sidebar.getByRole("link", { name: "Home" }).click();
-  await expect(sidebar.locator(".app-sidebar-binder")).toHaveCount(0, {
-    timeout: 30_000,
-  });
+  // Settings lists its pages under it while one is open, and the page is
+  // titled for the one you are on.
+  await sidebar.getByRole("link", { name: /^Settings/ }).click();
+  const pages = sidebar.locator(".app-sidebar-item--sub");
+  await expect(pages).toHaveText(
+    ["General", "People & access", "Change requests"],
+    { timeout: 30_000 },
+  );
+  await pages.filter({ hasText: "Change requests" }).click();
+  await expect(page).toHaveURL(/\/-\/settings\/change-requests$/);
+  await expect(page.locator("h1.bs-title")).toHaveText("Change requests");
+  await expect(sidebar.locator("[aria-current='page']")).toHaveText(
+    "Change requests",
+  );
 
-  await page.goto(`${APP_BASE_URL}/riverside-health/clinical`);
-
-  // And the sidebar keeps your place rather than losing it: a binder, and a
-  // document inside one, are both "in" Binders.
+  // One step back up, to the organization the binder is in, and the
+  // organization's own map comes back.
+  await sidebar.getByRole("link", { name: "Riverside Health" }).click();
+  await expect(page).toHaveURL(/\/riverside-health$/, { timeout: 30_000 });
+  await expect(sidebar.locator(".app-sidebar-binder")).toHaveCount(0);
   await expect(sidebar.getByRole("link", { name: "Binders" })).toHaveAttribute(
     "aria-current",
     "page",
@@ -228,10 +245,9 @@ test("sidebar entries are links, so they open in a new tab", async ({
   await page.goto(`${APP_BASE_URL}/riverside-health/clinical`);
 
   const sidebar = page.locator(".app-sidebar");
-  await expect(sidebar.getByRole("link", { name: "Home" })).toHaveAttribute(
-    "href",
-    "/",
-  );
+  await expect(
+    sidebar.getByRole("link", { name: "Riverside Health" }),
+  ).toHaveAttribute("href", "/riverside-health");
   await expect(sidebar.getByRole("link", { name: /^History/ })).toHaveAttribute(
     "href",
     "/riverside-health/clinical/-/history",

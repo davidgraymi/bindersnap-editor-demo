@@ -22,7 +22,9 @@ test("every screen the binder has is addressable", () => {
   expect(tabOf("/-/history")).toBe("history");
   expect(tabOf("/-/settings")).toBe("settings");
   expect(tabOf("/-/settings/people")).toBe("people");
-  expect(tabOf("/-/settings/approvals")).toBe("approvals");
+  expect(tabOf("/-/settings/change-requests")).toBe("change-requests");
+  // Its address while it was called Approvals.
+  expect(tabOf("/-/settings/approvals")).toBe("change-requests");
   // Where the sign-off rules were before Approvals was a tab; it still lands.
   expect(tabOf("/-/settings/sign-off")).toBe("sign-off");
   expect(parseBinderAddress("/-/archive")?.archive).toBe(true);
