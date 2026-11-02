@@ -18,6 +18,7 @@ import {
   renameBinderDocument,
   renameBinderDraft,
   renameBinderFolder,
+  reviseBinderDocument,
   type ActTarget,
 } from "../api";
 import {
@@ -51,6 +52,13 @@ import {
 } from "../binderDocument";
 import { formatDocumentName } from "../documentDisplay";
 import { copyName } from "../copyName";
+import {
+  convertibleKind,
+  convertToEditorDocument,
+  editorDocumentFile,
+  type ConvertedDocument,
+} from "../convertToEditor";
+import { ConvertDocumentModal } from "./ConvertDocumentModal";
 import { AddPolicyModal } from "./AddPolicyModal";
 import { NewFolderModal } from "./NewFolderModal";
 import { BinderArchive } from "./BinderArchive";
@@ -184,6 +192,12 @@ export function BinderShell({
   /** Opened from the editor's New: start on Write, in the open policy's folder. */
   const [addingFromEditor, setAddingFromEditor] = useState(false);
   const [addingFolder, setAddingFolder] = useState(false);
+  /** A Word file or PDF being read into the editor's format (issue 883). */
+  const [converting, setConverting] = useState<{
+    slugPath: string;
+    path: string;
+    name: string;
+  } | null>(null);
   /** The folder a new document or folder goes in, from a folder's menu. */
   const [addingIn, setAddingIn] = useState<string | null>(null);
 
@@ -788,6 +802,62 @@ export function BinderShell({
     setEditMode("writing");
   };
 
+  /**
+   * Read a Word file or PDF as an editor document. Nothing is written: the
+   * dialog shows what the conversion loses first. Read where the person is —
+   * their draft when they are editing, the record otherwise.
+   */
+  const loadConversion = async (target: { path: string }) => {
+    const ref = editMode !== "off" ? draft?.draft?.branch : undefined;
+    const file = await downloadBinderDocument(
+      org,
+      binder,
+      target.path,
+      ref ?? undefined,
+    );
+    return convertToEditorDocument(file, target.path);
+  };
+
+  /**
+   * Put the converted document into the draft as the next version of the same
+   * document, and open the editor on it. The server keeps the identity segment
+   * of the filename and removes the old file (ADR 0005), so version numbering
+   * carries on; nothing reaches `main` until the draft is proposed and approved.
+   */
+  const confirmConversion = async (
+    target: { path: string },
+    converted: ConvertedDocument,
+  ) => {
+    let branch = editMode !== "off" ? draft?.draft?.branch : undefined;
+    if (!branch) {
+      const payload = await openBinderDraft(org, binder);
+      branch = payload.draft?.branch ?? undefined;
+      setDraft(payload);
+      setDraftBranch(branch ?? null);
+    }
+    if (!branch) throw new Error("Unable to open your draft.");
+
+    const revised = await reviseBinderDocument(
+      org,
+      binder,
+      editorDocumentFile(converted.document, target.path),
+      target.path,
+      { draft: branch },
+      "converted",
+    );
+    setConverting(null);
+    refreshDraft();
+    moveTo(
+      buildDocumentEditUrl({
+        org,
+        binder,
+        documentPath: revised.slugPath,
+        draft: branch,
+      }),
+    );
+    setEditMode("writing");
+  };
+
   const restoreInEditor = (uid: string) =>
     actInEditor((into) => restoreBinderDocument(org, binder, uid, into));
 
@@ -1142,6 +1212,10 @@ export function BinderShell({
   const editDocument = useWriteAction(
     (slugPath: string) => void writeDocument(slugPath),
   );
+  const convertDocument = useWriteAction(
+    (target: { slugPath: string; path: string; name: string }) =>
+      setConverting(target),
+  );
 
   if (missing) {
     const orgHref = routeToPath({ kind: "organization", org });
@@ -1370,6 +1444,7 @@ export function BinderShell({
           onArchiveFile={archiveInEditor}
           onRestoreFile={restoreInEditor}
           onCopyFile={copyInEditor}
+          onConvertFile={convertDocument}
           onReadArchive={readArchiveInEditor}
           onNewFolder={(parent) => {
             setAddingIn(parent ?? null);
@@ -1394,6 +1469,7 @@ export function BinderShell({
           draftName={editMode === "off" ? null : (draft?.draft?.name ?? null)}
           drafts={draftChoices}
           onEditDocument={editDocument}
+          onConvertDocument={convertDocument}
           editing={startingEdit}
           onOpenBinder={onOpenBinder}
           onOpenChange={openChangeNumber}
@@ -1660,6 +1736,16 @@ export function BinderShell({
           onPropose={() => goToEdit("proposing")}
           onDiscard={() => void discard()}
           onOpenChange={(changeNumber) => openChangeNumber(changeNumber)}
+        />
+      ) : null}
+
+      {converting && convertibleKind(converting.path) ? (
+        <ConvertDocumentModal
+          name={converting.name}
+          kind={convertibleKind(converting.path) ?? "word"}
+          load={() => loadConversion(converting)}
+          onConfirm={(converted) => confirmConversion(converting, converted)}
+          onClose={() => setConverting(null)}
         />
       ) : null}
 

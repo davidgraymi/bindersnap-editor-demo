@@ -1641,8 +1641,11 @@ export async function reviseBinderDocument(
   documentPath: string,
   /** An open change or a draft to put it in, instead of opening one. */
   target?: ActTarget,
-  /** Written in the editor, so recorded as an edit rather than an upload. */
-  source?: "editor",
+  /**
+   * Written in the editor, so recorded as an edit rather than an upload — or
+   * a Word file or PDF read into the editor's format, recorded as a conversion.
+   */
+  source?: "editor" | "converted",
 ): Promise<CreatedWorkspaceDocumentPayload> {
   try {
     const response = await BindersClient.reviseBinderDocument(org, binder, {

@@ -14167,7 +14167,9 @@ async function handleReviseWorkspaceDocument(
   const documentPath = parseOptionalString(form.get("documentPath"));
   const joinRaw = parseOptionalString(form.get("changeNumber"));
   const draftRaw = parseOptionalString(form.get("draft"));
-  const fromEditor = parseOptionalString(form.get("source")) === "editor";
+  const source = parseOptionalString(form.get("source"));
+  const fromEditor = source === "editor";
+  const converted = source === "converted";
 
   if (!file || !documentPath) {
     return json(
@@ -14287,6 +14289,14 @@ async function handleReviseWorkspaceDocument(
       // the draft bar lists and the change request's description prefills.
       ...(fromEditor
         ? { subject: `Edit ${formatDocumentName(existing.name)}` }
+        : {}),
+      // A Word file or PDF read into the editor's format (issue 883): said
+      // as what it is, so the draft's history and the change request show a
+      // conversion rather than an upload or an edit.
+      ...(converted
+        ? {
+            subject: `Convert ${formatDocumentName(existing.name)} to a Bindersnap document`,
+          }
         : {}),
     });
 
