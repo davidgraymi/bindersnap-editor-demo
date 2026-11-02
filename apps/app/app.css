@@ -7520,30 +7520,14 @@ a.cmp-file-act {
 }
 
 /* ── THE REVIEW QUEUE ─────────────────────────────────────────
-   Every change in flight, across every binder. The counters are
-   the filters: a number you cannot press is a number you have to
-   go somewhere else to act on.
+   Every change in flight, across every binder, as Home is laid
+   out: a column of sections, one per state, every change in
+   exactly one of them.
 ──────────────────────────────────────────────────────────────── */
 
-/* The list sits a step below the page's heading, as every other list does. */
-.queue-panel {
-  margin-top: var(--brand-space-3);
-}
-
-/* **Tabs with counts, in the list's own bar.** The segmented control a
-   binder's Changes tab already uses, so "which of these am I looking at" is
-   answered the same way on both. Five of them do not fit a phone, so the row
-   scrolls sideways rather than wrapping into a block of buttons. */
-.queue-counters {
-  max-width: 100%;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.queue-counters::-webkit-scrollbar {
-  display: none;
-}
-
+/* **Tabs with counts, in a list's own bar** — a binder's change requests,
+   "Open 3 · Closed". The count is a small grey pill after the word, in
+   figures that do not shift as they change. */
 .queue-counter {
   display: inline-flex;
   flex-shrink: 0;
@@ -7552,8 +7536,6 @@ a.cmp-file-act {
   white-space: nowrap;
 }
 
-/* The count, as a code host's tab carries one: a small grey pill after the
-   word, in figures that do not shift as they change. */
 .queue-counter-value {
   min-width: 18px;
   padding: 0 var(--brand-space-1-5);
@@ -7570,10 +7552,13 @@ a.cmp-file-act {
   background: var(--bs-surface-1);
 }
 
-.queue-counter-value--yours,
-.queue-counter[aria-pressed="true"] .queue-counter-value--yours {
-  background: var(--bs-coral-dim);
-  color: var(--bs-coral-text);
+/* An empty section is one quiet line, not a panel-sized hole: the place a
+   state lives is worth knowing before anything is in it. */
+.queue-section-empty {
+  margin: 0;
+  padding: var(--brand-space-3) var(--brand-space-4);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
 }
 
 /* Two acts side by side in a page header — "New folder" beside "Add a policy",

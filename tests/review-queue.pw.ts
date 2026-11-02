@@ -28,21 +28,29 @@ test.beforeAll(async () => {
   await seedDevStack();
 });
 
-test("the queue gathers changes from every binder into one list", async ({
+const SECTIONS = [
+  "Waiting on your review",
+  "Changes requested",
+  "Ready to publish",
+  "In review",
+] as const;
+
+test("the queue gathers changes from every binder, a section per state", async ({
   page,
 }) => {
   await signInAsAlice(page);
   await page.goto(`${APP_BASE_URL}/-/changes`);
 
   await expect(
-    page.getByRole("heading", { name: "Change requests" }),
+    page.getByRole("heading", { name: "Change requests", level: 1 }),
   ).toBeVisible({ timeout: 30_000 });
 
-  // Show everything, whichever filter the page opened on.
-  await page
-    .locator(".queue-counters")
-    .getByRole("button", { name: /All changes/ })
-    .click();
+  // Every state has a place on the page, in the order somebody acts on them,
+  // whether or not anything is in it yet — then what was decided lately.
+  await expect(page.locator(".queue-section .bs-panel-bar-title")).toHaveText(
+    [...SECTIONS, "Recently decided"],
+    { timeout: 30_000 },
+  );
 
   const rows = page.locator(".change-row");
   await expect(rows.first()).toBeVisible({ timeout: 30_000 });
@@ -54,66 +62,63 @@ test("the queue gathers changes from every binder into one list", async ({
   await expect(meta.filter({ hasText: "Corporate" }).first()).toBeVisible();
 
   // A row says who asked and when, and does not name a document. A change can
-  // touch three; naming one of them is a claim about the other two, and the
-  // customer caught exactly that: *"the summary breaks with multiple
-  // documents"*. Which documents it touches is on the change's own page.
-  await expect(meta.first()).toHaveText(/#\d+ · \S+.* (opened|· updated) /);
+  // touch three; naming one of them is a claim about the other two.
+  await expect(
+    page
+      .locator(
+        ".queue-section--in_review .bs-row-meta, .queue-section--ready .bs-row-meta, .queue-section--your_review .bs-row-meta, .queue-section--changes_requested .bs-row-meta",
+      )
+      .first(),
+  ).toHaveText(/#\d+ · \S+.* (opened|· updated) /);
 });
 
-test("the counters are the filters, and they agree with the list", async ({
+test("every change has one home, and each count is its section's rows", async ({
   page,
 }) => {
   await signInAsAlice(page);
   await page.goto(`${APP_BASE_URL}/-/changes`);
-  await expect(
-    page.getByRole("heading", { name: "Change requests" }),
-  ).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".change-row").first()).toBeVisible({
+    timeout: 30_000,
+  });
 
-  // Every counter shows the number of rows pressing it produces. A number you
-  // cannot press is a number you have to go somewhere else to act on, and a
-  // number that disagrees with its own list is worse than no number.
-  for (const label of [
-    "All changes",
-    "Waiting on you",
-    "In review",
-    "Ready to publish",
-    "Blocked",
-  ] as const) {
-    // Scoped to the counter group on purpose: a row carrying the "Waiting on
-    // you" flag has the same accessible name as the counter that filters to it.
-    const counter = page
-      .locator(".queue-counters")
-      .getByRole("button", { name: new RegExp(label) });
-
-    await counter.click();
-    await expect(counter).toHaveAttribute("aria-pressed", "true");
-
-    // Counter and rows are read in the same tick and compared as a pair. Read
-    // separately, another suite publishing one of Alice's changes between the
-    // two reads would fail this for a disagreement that never existed — the
-    // files of this suite run in parallel against one seeded stack.
-    await expect
-      .poll(
-        async () => {
-          const [shown, rows] = await Promise.all([
-            counter.locator(".queue-counter-value").innerText(),
-            page.locator(".change-row").count(),
-          ]);
-          return `${Number(shown.trim())}/${rows}`;
-        },
-        { timeout: 30_000 },
-      )
-      .toMatch(/^(\d+)\/\1$/);
-  }
+  // A change ready to publish used to be "Waiting on you" as well, so it was
+  // listed twice. Now no change is in two sections, and each section's count
+  // is the number of rows in it — read in one tick, because other files of
+  // this suite publish Alice's changes while it runs.
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(
+          (labels) => {
+            const keys: string[] = [];
+            const mismatched: string[] = [];
+            for (const section of document.querySelectorAll(".queue-section")) {
+              const label = section.getAttribute("aria-label") ?? "";
+              if (!labels.includes(label)) continue;
+              const rows = section.querySelectorAll(".change-row");
+              const count = Number(
+                section.querySelector(".bs-section-count")?.textContent ?? "-1",
+              );
+              if (count !== rows.length) mismatched.push(label);
+              for (const row of rows) {
+                keys.push(row.querySelector("a")?.getAttribute("href") ?? "");
+              }
+            }
+            return {
+              mismatched,
+              duplicated: keys.length - new Set(keys).size,
+            };
+          },
+          [...SECTIONS],
+        ),
+      { timeout: 30_000 },
+    )
+    .toEqual({ mismatched: [], duplicated: 0 });
 });
 
 test("a row opens the change it names", async ({ page }) => {
   await signInAsAlice(page);
   await page.goto(`${APP_BASE_URL}/-/changes`);
-  await page
-    .locator(".queue-counters")
-    .getByRole("button", { name: /All changes/ })
-    .click();
 
   const firstRow = page.locator(".change-row-open").first();
   await expect(firstRow).toBeVisible({ timeout: 30_000 });
@@ -135,19 +140,13 @@ test("a row's standing is one word, and the row says nothing else", async ({
 }) => {
   await signInAsAlice(page);
   await page.goto(`${APP_BASE_URL}/-/changes`);
-  await page
-    .locator(".queue-counters")
-    .getByRole("button", { name: /All changes/ })
-    .click();
   await expect(page.locator(".change-row").first()).toBeVisible({
     timeout: 30_000,
   });
 
-  // **The customer's instruction, as an assertion.** *"I hate the 'X of X
-  // approvals · Ready to publish · Becomes vX'. That is WAYYY too much text.
-  // KEEP IT STUPID SIMPLE."* So: a word a reader already knows, and nothing
-  // arithmetic beside it. The approval count and the version it becomes are
-  // on the change's own page, where there is room to say them properly.
+  // **The customer's instruction, as an assertion.** *"KEEP IT STUPID
+  // SIMPLE."* So: a word a reader already knows, and nothing arithmetic
+  // beside it.
   const standings = page.locator(".change-row .change-standing");
   await expect(standings.first()).toBeVisible();
 
@@ -162,11 +161,8 @@ test("a row's standing is one word, and the row says nothing else", async ({
     ]).toContain(text.trim());
   }
 
-  // And "Waiting on you" is not a standing — it is a statement about the
-  // reader, and it was being printed on changes that were approved and ready.
-  // Which counter you are under says who it waits on. Scoped to the list on
-  // purpose: the counter that filters to them is legitimately named that.
+  // Whose turn it is is the section a row is in, never words on the row.
   await expect(
-    page.locator(".queue-list").getByText(/Waiting on you|approvals|becomes v/),
+    page.locator(".change-row").getByText(/Waiting on|approvals|becomes v/),
   ).toHaveCount(0);
 });

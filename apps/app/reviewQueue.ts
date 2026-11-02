@@ -7,8 +7,12 @@
  * only way to see a change was to remember which binder it was in and open
  * that binder's own tab, which is a question nobody arrives with.
  *
- * The queue is the other half. Same data, no dropping, four counters that are
- * also filters.
+ * The queue is the other half. Same data, no dropping, and **every change in
+ * exactly one section** — the state it is in, read in the order somebody
+ * acts: what is waiting on your review, what was sent back, what can be
+ * published, and what is waiting on somebody else. "Waiting on you" used to
+ * cut across the others, so a change ready to publish was in two places and
+ * the counts did not add up to the whole.
  *
  * **Where the rows come from.** `GET /api/app/home/changes` already returns
  * every open change on every binder the reader is involved in — Home filters
@@ -59,15 +63,11 @@ export interface QueueRow {
    */
   meta: string;
   status: QueueStatus;
+  /** The one section of the page it is listed in. */
+  section: QueueSection;
   /** Where it stands, in one word. */
   standing: string;
   tone: ChangeStandingTone;
-  /**
-   * A decision of the reader's is outstanding. Cuts across `status` rather
-   * than being one of its values: a change can be both blocked and waiting on
-   * you, and hiding either fact would be the wrong one to hide.
-   */
-  waitingOnYou: boolean;
   /**
    * How many comments are on it — the count Home and a binder's own list put
    * beside the same change. A row that showed it in two lists and not the
@@ -78,21 +78,31 @@ export interface QueueRow {
   movedAt: number;
 }
 
-/** The filters, in the order they appear across the top of the page. */
-export const QUEUE_FILTERS = [
-  "waiting",
-  "in_review",
+/**
+ * The sections of the page, top to bottom. Exclusive: a change is in the
+ * first one whose rule it meets, and in no other.
+ */
+export const QUEUE_SECTIONS = [
+  "your_review",
+  "changes_requested",
   "ready",
-  "blocked",
+  "in_review",
 ] as const;
-export type QueueFilter = (typeof QUEUE_FILTERS)[number] | "all";
+export type QueueSection = (typeof QUEUE_SECTIONS)[number];
 
-export const QUEUE_FILTER_LABELS: Record<QueueFilter, string> = {
-  all: "All changes",
-  waiting: "Waiting on you",
-  in_review: "In review",
+export const QUEUE_SECTION_LABELS: Record<QueueSection, string> = {
+  your_review: "Waiting on your review",
+  changes_requested: "Changes requested",
   ready: "Ready to publish",
-  blocked: "Blocked",
+  in_review: "In review",
+};
+
+/** What an empty section says — that it is empty, and why that is fine. */
+export const QUEUE_SECTION_EMPTY: Record<QueueSection, string> = {
+  your_review: "Nobody is waiting on your review.",
+  changes_requested: "No change has been sent back.",
+  ready: "Nothing is ready to publish.",
+  in_review: "Nothing is waiting on anybody else.",
 };
 
 function toTime(timestamp: string | null | undefined): number {
@@ -102,36 +112,32 @@ function toTime(timestamp: string | null | undefined): number {
 }
 
 /**
- * Is a decision of this reader's outstanding?
+ * Has this reader been asked to review it, and not yet answered?
  *
- * Two ways for that to be true, and they are different questions. Either they
- * are a requested reviewer who has not answered — or every approval is in and
- * they are the one who can publish it, which is the submitter or the person
- * who owns the document.
+ * Asked and not answered is your turn whatever else is true of the change: a
+ * binder that needs no approvals reads "ready" with a request still open, and
+ * a change somebody else sent back is still waiting on what you think.
  */
-function isWaitingOnReader(
-  document: HomeOpenDocument,
+function isAwaitingReader(
   change: HomeOpenDocument["pendingPRs"][number],
   username: string,
-  status: QueueStatus,
 ): boolean {
   const login = username.toLowerCase();
-
-  // Asked and not yet answered is waiting on them whatever the status says:
-  // a binder that needs no approvals is "ready" with a request still open.
-  const asked = change.reviewers.some(
+  return change.reviewers.some(
     (reviewer) =>
       reviewer.login.toLowerCase() === login && reviewer.status === "awaiting",
   );
-  if (asked) return true;
+}
 
-  if (status === "ready") {
-    const isMine = change.user?.login?.toLowerCase() === login;
-    const ownsDocument = document.repo.owner.login.toLowerCase() === login;
-    return isMine || ownsDocument;
-  }
-
-  return false;
+/** The one section a change is listed in. */
+export function queueSection(
+  status: QueueStatus,
+  awaitingReader: boolean,
+): QueueSection {
+  if (awaitingReader) return "your_review";
+  if (status === "blocked") return "changes_requested";
+  if (status === "ready") return "ready";
+  return "in_review";
 }
 
 function statusFromStanding(standing: ChangeStanding | null): QueueStatus {
@@ -188,6 +194,7 @@ export function buildQueueRows(
           now,
         ),
         status,
+        section: queueSection(status, isAwaitingReader(change, username)),
         ...describeChangeStandingWord({
           number: change.number,
           submittedBy: change.user?.login ?? "",
@@ -197,7 +204,6 @@ export function buildQueueRows(
           isRejected: standing?.tone === "blocked",
           isApproved: change.isApproved,
         }),
-        waitingOnYou: isWaitingOnReader(document, change, username, status),
         // Gitea's own count on the pull request, passed through as Home reads it.
         commentCount: (change as { comments?: number }).comments ?? 0,
         movedAt,
@@ -208,43 +214,31 @@ export function buildQueueRows(
   return rows.sort((a, b) => b.movedAt - a.movedAt);
 }
 
-/** How many rows each filter would show. */
-export function countQueueRows(rows: QueueRow[]): Record<QueueFilter, number> {
-  return {
-    all: rows.length,
-    waiting: rows.filter((row) => row.waitingOnYou).length,
-    in_review: rows.filter((row) => row.status === "in_review").length,
-    ready: rows.filter((row) => row.status === "ready").length,
-    blocked: rows.filter((row) => row.status === "blocked").length,
-  };
-}
-
-export function filterQueueRows(
+/** The rows of each section, in the order the page lists them. */
+export function groupQueueRows(
   rows: QueueRow[],
-  filter: QueueFilter,
-): QueueRow[] {
-  if (filter === "all") return rows;
-  if (filter === "waiting") return rows.filter((row) => row.waitingOnYou);
-  return rows.filter((row) => row.status === filter);
+): Record<QueueSection, QueueRow[]> {
+  const groups = Object.fromEntries(
+    QUEUE_SECTIONS.map((section) => [section, [] as QueueRow[]]),
+  ) as Record<QueueSection, QueueRow[]>;
+  for (const row of rows) groups[row.section].push(row);
+  return groups;
 }
 
 /** The sentence under the page title. */
-export function describeQueue(counts: Record<QueueFilter, number>): string {
-  if (counts.all === 0) return "Nothing is in flight right now.";
+export function describeQueue(
+  groups: Record<QueueSection, QueueRow[]>,
+): string {
+  const total = QUEUE_SECTIONS.reduce(
+    (sum, section) => sum + groups[section].length,
+    0,
+  );
+  if (total === 0) return "Nothing is in flight right now.";
 
-  const changes = counts.all === 1 ? "1 change" : `${counts.all} changes`;
-  if (counts.waiting === 0) {
-    return `${changes} in flight. None of them is waiting on you.`;
+  const changes = total === 1 ? "1 change" : `${total} changes`;
+  const yours = groups.your_review.length;
+  if (yours === 0) {
+    return `${changes} in flight. None of them is waiting on your review.`;
   }
-  return `${changes} in flight · ${counts.waiting} waiting on you.`;
-}
-
-/** Which filter a page should open on, given what is in the queue. */
-export function initialQueueFilter(
-  counts: Record<QueueFilter, number>,
-): QueueFilter {
-  // Land on the reader's own work when there is any — it is why they came —
-  // and on everything when there is not, because an empty list under a filter
-  // reads as an empty product.
-  return counts.waiting > 0 ? "waiting" : "all";
+  return `${changes} in flight · ${yours} waiting on your review.`;
 }
