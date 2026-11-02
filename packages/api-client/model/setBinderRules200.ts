@@ -4,6 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { SetBinderRules200Approvers } from './setBinderRules200Approvers.ts';
 
 export type SetBinderRules200 = {
   organization: string;
@@ -13,4 +14,6 @@ export type SetBinderRules200 = {
   requiredApprovals: number | null;
   /** @nullable */
   dismissStaleApprovals: boolean | null;
+  /** @nullable */
+  approvers: SetBinderRules200Approvers;
 };

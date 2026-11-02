@@ -12,6 +12,7 @@ interface Handlers {
   GET?: Record<string, Handler>;
   POST?: Record<string, Handler>;
   PUT?: Record<string, Handler>;
+  PATCH?: Record<string, Handler>;
   DELETE?: Record<string, Handler>;
 }
 
@@ -36,6 +37,7 @@ function createMockClient(handlers: Handlers) {
   const mockGet = method("GET");
   const mockPost = method("POST");
   const mockPut = method("PUT");
+  const mockPatch = method("PATCH");
   const mockDelete = method("DELETE");
 
   return {
@@ -43,12 +45,14 @@ function createMockClient(handlers: Handlers) {
       GET: mockGet,
       POST: mockPost,
       PUT: mockPut,
+      PATCH: mockPatch,
       DELETE: mockDelete,
       use: mock(),
     } as unknown as GiteaClient,
     mockGet,
     mockPost,
     mockPut,
+    mockPatch,
     mockDelete,
   };
 }
@@ -410,4 +414,69 @@ test("listBillableSeats counts a team past Gitea's 50-per-page ceiling", async (
 
   const { countBillableSeats } = await import("./orgs");
   expect(await countBillableSeats({ client, org: "mercy-health" })).toBe(60);
+});
+
+test("an organization's staff team is renamed to everyone, keeping its id", async () => {
+  // The migration. Renamed in place, so its members, every binder it is
+  // granted onto and every approvals whitelist naming it — which Gitea keeps
+  // by id — carry over untouched.
+  const { client, mockPatch, mockPost } = createMockClient({
+    GET: {
+      "/orgs/{org}/teams": () => [
+        { id: 7, name: "staff", permission: "read" },
+        { id: 1, name: "Owners", permission: "owner" },
+      ],
+    },
+    PATCH: {
+      "/teams/{id}": (init: { body: { name: string } }) => ({
+        id: 7,
+        name: init.body.name,
+        permission: "read",
+      }),
+    },
+  });
+
+  const { ensureEveryoneTeam } = await import("./orgs");
+  const team = await ensureEveryoneTeam({ client, org: "mercy-health" });
+
+  expect(team).toMatchObject({ id: 7, name: "everyone" });
+  expect(
+    (
+      mockPatch.mock.calls[0] as [string, { params: { path: { id: number } } }]
+    )[1].params.path.id,
+  ).toBe(7);
+  expect(mockPost).not.toHaveBeenCalled();
+});
+
+test("a staff team only an owner can rename is still Everyone meanwhile", async () => {
+  const { client } = createMockClient({
+    GET: {
+      "/orgs/{org}/teams": () => [{ id: 7, name: "staff", permission: "read" }],
+    },
+  });
+
+  const { ensureEveryoneTeam, isEveryoneTeam } = await import("./orgs");
+  const team = await ensureEveryoneTeam({ client, org: "mercy-health" });
+
+  expect(team.name).toBe("staff");
+  expect(isEveryoneTeam(team.name)).toBe(true);
+});
+
+test("a new organization gets a team called everyone", async () => {
+  const { client, mockPost } = createMockClient({
+    GET: { "/orgs/{org}/teams": () => [] },
+    POST: {
+      "/orgs/{org}/teams": (init: { body: { name: string } }) => ({
+        id: 9,
+        name: init.body.name,
+        permission: "read",
+      }),
+    },
+  });
+
+  const { ensureEveryoneTeam } = await import("./orgs");
+  expect((await ensureEveryoneTeam({ client, org: "mercy-health" })).name).toBe(
+    "everyone",
+  );
+  expect(mockPost).toHaveBeenCalledTimes(1);
 });

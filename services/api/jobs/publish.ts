@@ -90,6 +90,7 @@ export interface PublishDeps {
     plan: PublishPlan,
   ): Promise<{
     requiredApprovals: number | null;
+    approvers: { groups: string[]; people: string[] } | null;
     approvedBy: string[];
     signOffEnforced: boolean;
   }>;

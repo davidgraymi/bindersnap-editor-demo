@@ -17,6 +17,7 @@ function policy(overrides: Partial<PublishedPolicy> = {}): PublishedPolicy {
     path: "nursing/infection-control.01J8XZ4K7MQ9V3B0RN7YHS2E1D.pdf",
     version: 4,
     requiredApprovals: 2,
+    approvers: { groups: ["board"], people: ["dr-okafor"] },
     approvedBy: ["carol", "dan"],
     blockOnUnresolvedThreads: true,
     signOffEnforced: true,
@@ -61,6 +62,9 @@ describe("the policy in force", () => {
     const stamp = buildVersionStamp(policy());
 
     expect(stamp).toContain("Approvals required: 2");
+    expect(stamp).toContain(
+      "Approvals counted from: groups board; people dr-okafor",
+    );
     expect(stamp).toContain("Approved by: carol, dan");
     expect(stamp).toContain("Unresolved discussions blocked publishing: yes");
     expect(stamp).toContain("Per-folder sign-off enforced: yes");
@@ -98,6 +102,14 @@ describe("the policy in force", () => {
     // very different statement from "we could not tell".
     expect(buildVersionStamp(policy({ requiredApprovals: null }))).toContain(
       "Approvals required: unknown",
+    );
+  });
+
+  test("unreadable approvers say unknown rather than guessing everyone", () => {
+    // "2 approvals" from the board and from anybody are different rules, and a
+    // stamp that could not tell which must not pick one.
+    expect(buildVersionStamp(policy({ approvers: null }))).toContain(
+      "Approvals counted from: unknown",
     );
   });
 

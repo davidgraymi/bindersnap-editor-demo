@@ -32,7 +32,9 @@ export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
 export const OWNERS_TEAM_NAME = "Owners";
 
 /**
- * The organization's read team: every member of the org, once.
+ * The organization's Everyone team: every member of the org, once, kept in
+ * step as people join (`ensureOrganizationMembership`) and leave (Gitea takes
+ * a person off every team when they leave the organization).
  *
  * Issue #371 needs every employee to read the policy manual in order to attest
  * to it, and ADR 0004 §6 makes read uniform within a binder — which together
@@ -45,7 +47,19 @@ export const OWNERS_TEAM_NAME = "Owners";
  * that is open to them — and it costs no seats, because a seat is write or
  * better on `repo.code` and this is read.
  */
-export const STAFF_TEAM_NAME = "staff";
+export const EVERYONE_TEAM_NAME = "everyone";
+
+/**
+ * What the Everyone team was called until 2026-10-31. An organization made
+ * before then still has a `staff` team until {@link ensureEveryoneTeam} next
+ * runs in it and renames it; until then it is Everyone all the same.
+ */
+export const LEGACY_EVERYONE_TEAM_NAME = "staff";
+
+/** Whether a team is the organization's Everyone team, by either name. */
+export function isEveryoneTeam(name: string): boolean {
+  return name === EVERYONE_TEAM_NAME || name === LEGACY_EVERYONE_TEAM_NAME;
+}
 
 /**
  * Access levels Gitea reports for a team, ordered. Anything at `write` or above
@@ -336,38 +350,56 @@ export async function createWorkspaceRoleTeam(
   return normalizeTeam(team);
 }
 
+const EVERYONE_DESCRIPTION =
+  "Everyone at this organization, kept up to date as people join and leave.";
+
 /**
- * The organization's `staff` team, created if it is not there yet.
+ * The organization's Everyone team, created if it is not there yet, and
+ * renamed from `staff` if it is there under its old name.
  *
  * **`includes_all_repositories` is false, and that single field is what keeps
  * the design honest.** With it true, every binder is readable by everyone
  * forever and there is no way back — an HR investigation binder becomes
  * impossible, and the only remedy is a second organization, which breaks
- * billing. With it false, granting `staff` is a per-binder act, and the product
- * gets a switch instead of a law.
+ * billing. With it false, granting Everyone is a per-binder act, and the
+ * product gets a switch instead of a law.
  *
- * Idempotent, because organizations created before this existed have no staff
+ * Idempotent, because organizations created before this existed have no such
  * team and the first binder provisioned in one has to be able to make it.
+ *
+ * **The rename is the migration.** A `staff` team is renamed in place, so its
+ * id, its members and every binder it is granted onto — and every approvals
+ * whitelist naming it, which Gitea keeps by id — carry over untouched. Only an
+ * owner can rename a team; for anybody else the old team is returned as it is,
+ * and the next owner to pass through renames it.
  */
-export async function ensureStaffTeam(
+export async function ensureEveryoneTeam(
   params: OrganizationParams,
 ): Promise<GiteaTeam> {
   const { client, org } = params;
 
-  const existing = await findOrganizationTeam({
-    client,
-    org,
-    name: STAFF_TEAM_NAME,
-  });
-  if (existing) return existing;
+  const teams = await listOrganizationTeams({ client, org });
+  const current = teams.find((team) => team.name === EVERYONE_TEAM_NAME);
+  if (current) return current;
+
+  const legacy = teams.find((team) => team.name === LEGACY_EVERYONE_TEAM_NAME);
+  if (legacy) {
+    const { data, response } = await client.PATCH("/teams/{id}", {
+      params: { path: { id: legacy.id } },
+      body: {
+        name: EVERYONE_TEAM_NAME,
+        description: EVERYONE_DESCRIPTION,
+      },
+    });
+    return response.ok && data ? normalizeTeam(data) : legacy;
+  }
 
   const team = await unwrap(
     client.POST("/orgs/{org}/teams", {
       params: { path: { org } },
       body: {
-        name: STAFF_TEAM_NAME,
-        description:
-          "Everyone at this organization. Granted onto a binder to let the whole staff read it.",
+        name: EVERYONE_TEAM_NAME,
+        description: EVERYONE_DESCRIPTION,
         permission: "read",
         includes_all_repositories: false,
         can_create_org_repo: false,

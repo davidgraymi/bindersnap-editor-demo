@@ -4,6 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { SetBinderRulesBodyApprovers } from './setBinderRulesBodyApprovers.ts';
 
 export type SetBinderRulesBody = {
   blockOnUnresolvedThreads?: boolean;
@@ -13,4 +14,5 @@ export type SetBinderRulesBody = {
      */
   requiredApprovals?: number;
   dismissStaleApprovals?: boolean;
+  approvers?: SetBinderRulesBodyApprovers;
 };

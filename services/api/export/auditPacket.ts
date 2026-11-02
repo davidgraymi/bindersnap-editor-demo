@@ -380,7 +380,7 @@ export async function buildAuditPdf(
       .split("\n")
       .map((text) => text.trim())
       .filter((text) =>
-        /^(Approvals required|Approved by|Published by|Unresolved discussions|Per-folder sign-off)/.test(
+        /^(Approvals required|Approvals counted from|Approved by|Published by|Unresolved discussions|Per-folder sign-off)/.test(
           text,
         ),
       );

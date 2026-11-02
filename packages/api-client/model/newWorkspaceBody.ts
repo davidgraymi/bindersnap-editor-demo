@@ -4,10 +4,12 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { NewWorkspaceBodyApprovers } from './newWorkspaceBodyApprovers.ts';
 
 export interface NewWorkspaceBody {
   /** @minLength 1 */
   name: string;
   description?: string;
   openToOrganization?: boolean;
+  approvers?: NewWorkspaceBodyApprovers;
 }

@@ -222,7 +222,7 @@ test("provisionSignup creates the organization and its staff team", async () => 
   // One team, and only one: `staff`, which every member of the organization
   // belongs to. It exists from the organization's first moment rather than
   // being conjured by whichever binder happens to be created first.
-  expect(created.teams).toEqual(["staff"]);
+  expect(created.teams).toEqual(["everyone"]);
 
   expect(result.organization.giteaOrgId).toBe(77);
   expect(result.organization.createdBy).toBe("alice");
@@ -347,7 +347,7 @@ test("provisionSignup finishes the founder's own half-made organization instead 
           : NOT_FOUND,
       "/orgs/{org}/teams": () => [
         { id: 9, name: "Owners", permission: "owner" },
-        { id: 10, name: "staff", permission: "read" },
+        { id: 10, name: "everyone", permission: "read" },
       ],
       "/teams/{id}/members": () => [{ id: 1, login: "alice" }],
     },

@@ -87,7 +87,7 @@ beforeEach(() => {
       return json({ id: 9, name: NAME, owner: { login: ORG } }, 201);
     }
     if (path === `/api/v1/orgs/${ORG}/teams` && method === "GET") {
-      return json([{ id: 7, name: "staff", permission: "read" }]);
+      return json([{ id: 7, name: "everyone", permission: "read" }]);
     }
     if (
       path === `/api/v1/repos/${ORG}/${NAME}/branch_protections` &&

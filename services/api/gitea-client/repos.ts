@@ -477,6 +477,7 @@ export interface UpdateRepoBranchProtectionParams {
   requiredApprovals?: number;
   enableApprovalsWhitelist?: boolean;
   approvalsWhitelistUsernames?: string[];
+  approvalsWhitelistTeams?: string[];
   enableMergeWhitelist?: boolean;
   mergeWhitelistUsernames?: string[];
   dismissStaleApprovals?: boolean;
@@ -493,6 +494,8 @@ export async function updateRepoBranchProtection(
     body.enable_approvals_whitelist = rest.enableApprovalsWhitelist;
   if (rest.approvalsWhitelistUsernames !== undefined)
     body.approvals_whitelist_username = rest.approvalsWhitelistUsernames;
+  if (rest.approvalsWhitelistTeams !== undefined)
+    body.approvals_whitelist_teams = rest.approvalsWhitelistTeams;
   if (rest.enableMergeWhitelist !== undefined)
     body.enable_merge_whitelist = rest.enableMergeWhitelist;
   if (rest.mergeWhitelistUsernames !== undefined)

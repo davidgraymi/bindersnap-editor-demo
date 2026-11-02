@@ -84,6 +84,7 @@ function fakeGitea(state: {
     merge,
     stampedPolicy: async () => ({
       requiredApprovals: 1,
+      approvers: { groups: ["Owners"], people: [] },
       approvedBy: ["Bob (bob)"],
       signOffEnforced: false,
     }),

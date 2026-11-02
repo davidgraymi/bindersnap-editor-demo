@@ -10,13 +10,9 @@ import { bootstrapEmptyMainBranch } from "./repos";
 import {
   addTeamMember,
   createOrganization,
-  ensureStaffTeam,
+  ensureEveryoneTeam,
   findOrganization,
   grantTeamOnRepo,
-  listRepoTeams,
-  OWNERS_TEAM_NAME,
-  workspaceTeamName,
-  WORKSPACE_ROLES,
   type GiteaOrganization,
   type GiteaTeam,
 } from "./orgs";
@@ -264,10 +260,12 @@ export interface ProtectWorkspaceMainParams {
   workspace: string;
   requiredApprovals?: number;
   /**
-   * The teams whose members' approvals count. Defaults to the workspace's three
-   * role teams, which is what makes a free reviewer's approval real.
+   * The groups whose members' approvals count — the binder's approvers.
+   * Defaults to none, as Gitea's own whitelist does.
    */
   approvalsWhitelistTeams?: string[];
+  /** People whose approvals count, by login. Defaults to none. */
+  approvalsWhitelistUsernames?: string[];
 }
 
 /**
@@ -279,10 +277,15 @@ export interface ProtectWorkspaceMainParams {
  * whitelist off it resolves "official reviewer" as "has write access on
  * repo.code" — which a free reviewer does not have. Their approval would be
  * recorded, shown in the UI, and satisfy nothing; their rejection would block
- * nothing; and a CODEOWNERS request would block no merge. Listing the role
- * teams here makes officialness team membership instead. Do not remove it as
- * redundant: `tests/gitea-permission-model.pw.ts` fails if you do, and the
+ * nothing; and a CODEOWNERS request would block no merge. With it on,
+ * officialness is being on the list: the binder's approvers. Do not remove it
+ * as redundant: `tests/gitea-permission-model.pw.ts` fails if you do, and the
  * failure is the point.
+ *
+ * **An empty list is a real answer.** Verified against Gitea 28: with the
+ * whitelist on and nobody on it, nobody's approval counts — there is no
+ * fallback to write access — so a binder needing approvals publishes nothing
+ * until its admin names approvers, and a binder needing none is unaffected.
  */
 export async function protectWorkspaceMain(
   params: ProtectWorkspaceMainParams,
@@ -294,15 +297,15 @@ export async function protectWorkspaceMain(
     requiredApprovals = DEFAULT_REQUIRED_APPROVALS,
   } = params;
 
-  const approvalsWhitelistTeams =
-    params.approvalsWhitelistTeams ??
-    WORKSPACE_ROLES.map((role) => workspaceTeamName(workspace, role));
+  const approvalsWhitelistTeams = params.approvalsWhitelistTeams ?? [];
+  const approvalsWhitelistUsernames = params.approvalsWhitelistUsernames ?? [];
 
   const body = {
     rule_name: "main",
     required_approvals: requiredApprovals,
     enable_approvals_whitelist: true,
     approvals_whitelist_teams: approvalsWhitelistTeams,
+    approvals_whitelist_username: approvalsWhitelistUsernames,
     enable_merge_whitelist: false,
     block_on_rejected_reviews: true,
     // **Off, and on purpose.** This is the 1.27 gate. It was only ever on to
@@ -388,52 +391,7 @@ export interface ProvisionWorkspaceParams {
   openToOrganization?: boolean;
 }
 
-/** The repository, its three role teams, and a protected `main`. */
-/**
- * Rewrite a binder's approvals whitelist from the teams granted onto it.
- *
- * `enable_approvals_whitelist` is what makes a free reviewer's approval count
- * (ADR 0004, "Verified Against Gitea"): with it on, officialness resolves as
- * membership of a whitelisted team rather than as write access. The cost is
- * that the whitelist has to name every team whose members may approve, or their
- * approvals are recorded, displayed, and satisfy nothing — which is a failure
- * with no error message anywhere.
- *
- * So it is derived, never guessed: read the teams Gitea says are granted here,
- * and use those names.
- *
- * **Plus `Owners`, unconditionally.** Gitea gives the Owners team admin over
- * the whole organization implicitly — it is never granted onto a repository,
- * so a whitelist derived from the granted teams alone omits it and an
- * **owner's** approval silently stops counting. Whether that endpoint happens
- * to report `Owners` is not the point and must not be relied on; append it and
- * let a duplicate be harmless.
- */
-export async function recomputeApprovalsWhitelist(params: {
-  client: GiteaClient;
-  org: string;
-  workspace: string;
-}): Promise<string[]> {
-  const { client, org, workspace } = params;
-
-  const granted = await listRepoTeams({ client, owner: org, repo: workspace });
-  const names = [
-    ...new Set([...granted.map((team) => team.name), OWNERS_TEAM_NAME]),
-  ];
-
-  await unwrap(
-    client.PATCH("/repos/{owner}/{repo}/branch_protections/{name}", {
-      params: { path: { owner: org, repo: workspace, name: "main" } },
-      body: {
-        enable_approvals_whitelist: true,
-        approvals_whitelist_teams: names,
-      },
-    }),
-  );
-
-  return names;
-}
-
+/** The repository, `staff` if it is open, and a protected `main`. */
 export async function provisionWorkspace(
   params: ProvisionWorkspaceParams,
 ): Promise<ProvisionedWorkspace> {
@@ -475,23 +433,18 @@ export async function provisionWorkspace(
   // `staff` is still ensured either way: it is the organization's membership
   // list, and a restricted binder is a binder it is not granted onto — not a
   // reason for it to be missing.
-  const staff = await ensureStaffTeam({ client, org });
+  const staff = await ensureEveryoneTeam({ client, org });
   if (openToOrganization) {
     await grantTeamOnRepo({ client, teamId: staff.id, org, repo: name });
   }
 
-  // Protection last, and its whitelist stated rather than recomputed: at this
-  // moment the granted set is exactly what was just granted, and `Owners` is
-  // never granted but must always be on the list. `recomputeApprovalsWhitelist`
-  // is for afterwards, when a grant actually changes the set.
+  // Protection last. Nobody approves yet, as with Gitea's own whitelist; a
+  // binder's approvers are written once whoever they are can read it.
   await protectWorkspaceMain({
     client,
     org,
     workspace: name,
     requiredApprovals,
-    approvalsWhitelistTeams: openToOrganization
-      ? [staff.name, OWNERS_TEAM_NAME]
-      : [OWNERS_TEAM_NAME],
   });
 
   return { workspace, staff };
@@ -543,7 +496,7 @@ export async function provisionOrganization(
   //
   // Best-effort: an organization without `staff` is still an organization, and
   // `provisionWorkspace` makes it if it has to.
-  await ensureStaffTeam({ client, org: organization.name })
+  await ensureEveryoneTeam({ client, org: organization.name })
     .then((staff) =>
       addTeamMember({ client, teamId: staff.id, username: owner }),
     )

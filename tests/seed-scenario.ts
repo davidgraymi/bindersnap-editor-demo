@@ -350,7 +350,7 @@ export interface SeedBinder {
   /**
    * Whether the whole organization can read this binder.
    *
-   * Grants the org's `staff` team, which is the product's "open to the
+   * Grants the org's Everyone team, which is the product's "open to the
    * organization" switch rather than Gitea's repository visibility. Left off,
    * a binder is readable only by the people in its own teams — which is what
    * makes an HR investigation binder possible at all.
