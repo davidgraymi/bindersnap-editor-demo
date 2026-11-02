@@ -80,16 +80,15 @@ interface DocumentChangeDetailProps {
   /** Who, what and from where: the line under the title, shared with Changes. */
   byline?: React.ReactNode;
   /**
-   * The reviewers this change is actually held for.
-   *
-   * **Real state, not a label we invent.** A sign-off rule puts its owners on
-   * a change automatically; whether their request blocks is branch
-   * protection's answer, and the server reads it. Only "Required" is marked —
-   * a reviewer with no marker is one nothing is waiting on, which is what
-   * "optional" means, and printing the word on every other row is labelling
-   * the absence of a constraint.
+   * Everyone whose approval counts toward one of the change's approval rules,
+   * so a reviewer who is one is tagged "Approver" in the Reviewers list.
    */
-  requiredReviewers?: readonly string[];
+  approvers?: readonly string[];
+  /**
+   * The approval rules panel at the top of the change: what has to be true
+   * before it can be published, and who has met each rule.
+   */
+  approvalPanel?: React.ReactNode;
   /** Rewrite the title and description. The author's, while it is open. */
   onEditSubject?:
     ((subject: { title: string; body: string }) => Promise<void>) | null;
@@ -258,7 +257,8 @@ export function DocumentChangeDetail({
   onChanged,
   onViewChange,
   onBackToList,
-  requiredReviewers = [],
+  approvers = [],
+  approvalPanel = null,
   onEditSubject = null,
   onOpenSignOffRules = null,
   banner = null,
@@ -366,8 +366,7 @@ export function DocumentChangeDetail({
     decisionRights && !decisionRights.canApprove
       ? {
           allowed: false,
-          reason:
-            "Your approval would not count in this binder. A binder admin can add you to a group that reviews it.",
+          reason: "Only this binder's approvers can approve.",
         }
       : canUserReview(currentUser, change.submittedBy, branchProtection);
   const mergePerms =
@@ -611,7 +610,7 @@ export function DocumentChangeDetail({
 
         <div className="bs-panel">
           <div className="bs-panel-bar">
-            <h2 className="bs-panel-bar-title">Approvals</h2>
+            <h2 className="bs-panel-bar-title">Reviewers</h2>
             <span className="bs-panel-bar-spacer" />
             <ApprovalBars change={change} />
           </div>
@@ -622,7 +621,7 @@ export function DocumentChangeDetail({
             reviewers={change.reviewers}
             currentUser={currentUser}
             openThreadAuthors={openThreadAuthors}
-            requiredReviewers={requiredReviewers}
+            approvers={approvers}
             /* The button and the caveat share one foot, the way the mockup
                draws them — so the list owns both rather than having a second
                foot stacked under its own. */
@@ -740,6 +739,14 @@ export function DocumentChangeDetail({
                   {mergePerms.reason}
                 </p>
               </>
+            ) : reviewDecision === "review-locked" &&
+              decisionRights &&
+              !decisionRights.canApprove ? (
+              /* **Hidden, not dimmed, for somebody who is not an approver.**
+                 Approving is not theirs to do in this binder, and a greyed
+                 button invites "why can't I?" every visit. They comment in
+                 the discussion; one line says why there is nothing here. */
+              <p className="rev-decision-locked">{reviewPerms.reason}</p>
             ) : reviewDecision === "review-locked" ? (
               <>
                 <button
@@ -817,6 +824,8 @@ export function DocumentChangeDetail({
         ) : null}
 
         {banner}
+        {approvalPanel}
+
         {documentPicker}
 
         <ReviewTimeline

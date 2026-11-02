@@ -25,6 +25,7 @@ import { ChangeByline } from "./ChangeByline";
 import { ChangeComparisonPage } from "./ChangeComparisonPage";
 import { ChangeConflictsPage } from "./ChangeConflictsPage";
 import { ChangeStateBadge, ChangeTabs } from "./ChangeTabs";
+import { ApprovalRules } from "./ApprovalRules";
 import { DocumentChangeDetail } from "./DocumentChangeDetail";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
@@ -595,7 +596,14 @@ export function BinderChangePage({
             </div>
           ) : null
         }
-        requiredReviewers={detail.requiredReviewers.users}
+        approvers={[
+          ...new Set(
+            detail.approvalRules.flatMap((rule) =>
+              rule.eligible.map((user) => user.login),
+            ),
+          ),
+        ]}
+        approvalPanel={<ApprovalRules rules={detail.approvalRules} />}
         onOpenSignOffRules={onOpenSignOffRules}
         onEditSubject={async (subject) => {
           await editBinderChange(org, binder, changeNumber, subject);

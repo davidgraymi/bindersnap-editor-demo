@@ -51,6 +51,9 @@ export function slugifyGroupName(input: string): string {
  * re-spelling it would make the same team look like two.
  */
 export function describeGroupName(handle: string): string {
+  // Everyone in the organization, kept in step as people join and leave. The
+  // team is `staff` in Gitea; a person reads it as Everyone.
+  if (handle === "staff") return "Everyone";
   if (handle === "" || /[A-Z]/.test(handle)) return handle;
 
   return handle

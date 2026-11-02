@@ -38,7 +38,11 @@ describe("slugifyGroupName", () => {
 describe("describeGroupName", () => {
   test("says a handle the way a person would", () => {
     expect(describeGroupName("quality-committee")).toBe("Quality Committee");
-    expect(describeGroupName("staff")).toBe("Staff");
+  });
+
+  test("calls the whole organization Everyone", () => {
+    // `staff` in Gitea, kept in step as people join and leave.
+    expect(describeGroupName("staff")).toBe("Everyone");
   });
 
   test("leaves Gitea's own spelling alone", () => {
