@@ -12,4 +12,6 @@ export interface NewWorkspaceBody {
   description?: string;
   openToOrganization?: boolean;
   approvers?: NewWorkspaceBodyApprovers;
+  /** @minimum 0 */
+  requiredApprovals?: number;
 }

@@ -1206,14 +1206,19 @@ function RulePickers({
  * field is left or Enter is pressed, not on every keystroke, so typing "12"
  * never briefly asks for one approval. Escape puts it back.
  */
-function ApprovalCountField({
+export function ApprovalCountField({
   value,
   disabled,
   onCommit,
+  id = "binder-approvals",
+  label = "Approvals required",
 }: {
   value: number;
   disabled: boolean;
   onCommit: (count: number) => void;
+  /** Set where the field is not a binder's own: an organization's default. */
+  id?: string;
+  label?: string;
 }) {
   const [text, setText] = useState(String(value));
   useEffect(() => setText(String(value)), [value]);
@@ -1229,8 +1234,8 @@ function ApprovalCountField({
 
   return (
     <input
-      id="binder-approvals"
-      aria-label="Approvals required"
+      id={id}
+      aria-label={label}
       className="bs-input bs-input--sm bs-settings-count"
       type="number"
       inputMode="numeric"

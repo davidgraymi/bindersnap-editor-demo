@@ -3,8 +3,17 @@ import { useMemo, useState } from "react";
 import { Building2, Lock } from "lucide-react";
 
 import { createBinder } from "../api";
-import { organizationPeopleQuery, queryKeys } from "../data/queries";
-import { approverOptions, approverReach } from "../binderSettings";
+import {
+  organizationPeopleQuery,
+  organizationSettingsQuery,
+  queryKeys,
+} from "../data/queries";
+import {
+  approverOptions,
+  approverReach,
+  noApproversNote,
+  parseApprovalCount,
+} from "../binderSettings";
 import { ApproverPicker } from "./ApproverPicker";
 import { followInApp } from "../appLink";
 import type { WorkspaceSummary } from "../../../packages/api-schema/schemas/workspaces";
@@ -102,6 +111,27 @@ export function NewBinderPage({
       .filter((person) => person.isOwner)
       .map((person) => person.login),
   );
+  // What a new binder here starts with: the organization's defaults. The
+  // count is asked on the form, filled in with the default, because it is the
+  // one that needs approvers chosen beside it to mean anything.
+  const defaults = useQuery(organizationSettingsQuery(org)).data?.newBinders;
+  const [approvalsText, setApprovalsText] = useState<string | null>(null);
+  const approvalsShown =
+    approvalsText ?? String(defaults?.requiredApprovals ?? 0);
+  const approvals = parseApprovalCount(approvalsShown);
+  const nobodyCanApprove = noApproversNote(approvals, {
+    groups: approvers.groups.filter((group) => canPick("group", group)),
+    people: approvers.people.filter((login) => canPick("person", login)),
+  });
+  // Only what differs from how any binder starts: the defaults an owner chose.
+  const otherDefaults = [
+    ...(defaults?.dismissStaleApprovals === false
+      ? ["an edit keeps the approvals already given"]
+      : []),
+    ...(defaults?.blockOnUnresolvedThreads
+      ? ["every discussion must be resolved before publishing"]
+      : []),
+  ];
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -110,7 +140,10 @@ export function NewBinderPage({
     [org, name, existing],
   );
   const canSubmit =
-    address.slug !== "" && address.problem === null && !submitting;
+    address.slug !== "" &&
+    address.problem === null &&
+    approvals !== null &&
+    !submitting;
 
   return (
     <section className="docw-page">
@@ -149,6 +182,7 @@ export function NewBinderPage({
                   canPick("person", login),
                 ),
               },
+              approvals ?? undefined,
             );
             await queryClient.invalidateQueries({
               queryKey: queryKeys.organizationBinders(org),
@@ -293,6 +327,37 @@ export function NewBinderPage({
             onChange={setApprovers}
           />
         </fieldset>
+
+        <div className="bs-field">
+          <label className="bs-field-label" htmlFor="new-binder-approvals">
+            Approvals required
+          </label>
+          <input
+            className="bs-input bs-input--sm bs-settings-count"
+            id="new-binder-approvals"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            step={1}
+            value={approvalsShown}
+            disabled={submitting}
+            aria-invalid={approvals === null}
+            aria-describedby="new-binder-approvals-hint"
+            onChange={(event) => setApprovalsText(event.target.value)}
+          />
+          <p className="bs-field-hint" id="new-binder-approvals-hint">
+            {approvals === null
+              ? "A whole number, 0 or more."
+              : nobodyCanApprove
+                ? "Nobody above can approve, so nothing could be published until somebody is chosen."
+                : approvals === 0
+                  ? "Changes publish without an approval until you raise this in its settings."
+                  : `Any ${approvals === 1 ? "one" : approvals} of the approvers above, together, before a change is published.`}
+            {otherDefaults.length > 0
+              ? ` Like every new binder in ${orgDisplayName}, ${otherDefaults.join(", and ")}.`
+              : ""}
+          </p>
+        </div>
 
         {error ? (
           <p className="bs-note bs-note--danger" role="alert">

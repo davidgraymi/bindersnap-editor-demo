@@ -2345,6 +2345,10 @@
                 }
               }
             }
+          },
+          "requiredApprovals": {
+            "type": "integer",
+            "minimum": 0
           }
         },
         "required": [
@@ -6241,6 +6245,202 @@
         }
       }
     },
+    "/api/app/orgs/{org}/settings": {
+      "get": {
+        "operationId": "getOrganizationSettings",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "What it is called, what it is for, and what a new binder starts with",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "number"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "displayName": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "displayName",
+                        "description"
+                      ]
+                    },
+                    "canManage": {
+                      "type": "boolean"
+                    },
+                    "newBinders": {
+                      "type": "object",
+                      "properties": {
+                        "requiredApprovals": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "dismissStaleApprovals": {
+                          "type": "boolean"
+                        },
+                        "blockOnUnresolvedThreads": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "requiredApprovals",
+                        "dismissStaleApprovals",
+                        "blockOnUnresolvedThreads"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "canManage",
+                    "newBinders"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateOrganizationSettings",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "displayName": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "newBinders": {
+                    "type": "object",
+                    "properties": {
+                      "requiredApprovals": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "dismissStaleApprovals": {
+                        "type": "boolean"
+                      },
+                      "blockOnUnresolvedThreads": {
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The settings as they are now",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "number"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "displayName": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "displayName",
+                        "description"
+                      ]
+                    },
+                    "canManage": {
+                      "type": "boolean"
+                    },
+                    "newBinders": {
+                      "type": "object",
+                      "properties": {
+                        "requiredApprovals": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "dismissStaleApprovals": {
+                          "type": "boolean"
+                        },
+                        "blockOnUnresolvedThreads": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "requiredApprovals",
+                        "dismissStaleApprovals",
+                        "blockOnUnresolvedThreads"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "canManage",
+                    "newBinders"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/app/orgs/{org}/deletion": {
       "get": {
         "operationId": "getOrganizationDeletion",
@@ -6896,6 +7096,10 @@
                         }
                       }
                     }
+                  },
+                  "requiredApprovals": {
+                    "type": "integer",
+                    "minimum": 0
                   }
                 },
                 "required": [

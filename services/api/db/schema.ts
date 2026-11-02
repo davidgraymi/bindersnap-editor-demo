@@ -170,6 +170,41 @@ export const workspaceSettings = sqliteTable("workspace_settings", {
 });
 
 /**
+ * What a new binder in an organization starts with: the approval count,
+ * whether an edit asks approvers again, and whether every discussion must be
+ * resolved before publishing.
+ *
+ * **Configuration, not evidence** (ADR 0004): a default is read once, when a
+ * binder is made, and written onto that binder — its branch protection and
+ * its `workspace_settings` row, each recorded in `settings_events` as any
+ * other change to its rules is. What a binder's rules are is always the
+ * binder's own answer, never this row's.
+ *
+ * Keyed on the Gitea organization id, as `organizations` is: Gitea renames
+ * organizations. No row means the product's own defaults.
+ */
+export const organizationSettings = sqliteTable("organization_settings", {
+  giteaOrgId: integer("gitea_org_id").primaryKey(),
+  newBinderRequiredApprovals: integer("new_binder_required_approvals")
+    .notNull()
+    .default(0),
+  newBinderDismissStaleApprovals: integer(
+    "new_binder_dismiss_stale_approvals",
+    { mode: "boolean" },
+  )
+    .notNull()
+    .default(true),
+  newBinderBlockOnUnresolvedThreads: integer(
+    "new_binder_block_on_unresolved_threads",
+    { mode: "boolean" },
+  )
+    .notNull()
+    .default(false),
+  updatedBy: text("updated_by").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+/**
  * Who changed a binder's rules, when, and to what. Append-only.
  *
  * ADR 0004: "A settings *change* is still worth recording — who relaxed the
