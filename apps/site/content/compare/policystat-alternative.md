@@ -1,7 +1,7 @@
 ---
 title: Bindersnap vs. PolicyStat (RLDatix) for small providers
 description: RLDatix PolicyStat is built for hospitals and health systems and sold through a demo. Bindersnap is for small providers: free reviewers and a self-serve trial.
-updated: 2026-10-07
+updated: 2026-10-30
 crumb: PolicyStat
 related: /pricing, /compare/powerdms-alternative, /compare/shared-drive, /compare/policytech-alternative
 ---
@@ -23,6 +23,7 @@ _Based on RLDatix's public website as of October 7, 2026. Products change, so ch
 | Price                                        | Not published; book a demo                                                 | $39/month per person who writes policies; reviewers and readers free. See [pricing](/pricing) |
 | How you buy                                  | Book a live demo                                                           | Sign up and start a 14-day free trial, no card                                                |
 | Revision tracking and approval workflows     | Yes                                                                        | Yes: every change approved before it takes effect, every version kept with its approvals      |
+| Approval rules                               | Check with vendor                                                          | Any number of approvals from the groups and people you choose, such as 3 of 5 board members   |
 | Manufacturer documents and standards         | Available, sold separately                                                 | No                                                                                            |
 | Connects to incident reporting               | Yes, with RLDatix RL6                                                      | No                                                                                            |
 | Write in the browser, or upload Word and PDF | Check with vendor                                                          | Both                                                                                          |

@@ -1,7 +1,7 @@
 ---
 title: Bindersnap vs. PowerDMS for small healthcare providers
 description: PowerDMS is a broad platform quoted after a demo. Bindersnap is a policy manual with an approval record for small providers, and reviewers are free.
-updated: 2026-10-07
+updated: 2026-10-30
 crumb: PowerDMS
 related: /pricing, /compare/policystat-alternative, /compare/shared-drive, /compare/policytech-alternative
 ---
@@ -24,6 +24,7 @@ _Based on PowerDMS's public website as of October 7, 2026. Products change, so c
 | Price                                          | Annual subscription quoted by request, based on organization size, products and integrations       | $39/month per person who writes policies; reviewers and readers free. See [pricing](/pricing)                |
 | How you buy                                    | Request a demo                                                                                     | Sign up and start a 14-day free trial, no card                                                               |
 | Policy revisions                               | Revise a policy and release it to staff; ask about approval workflows and version history          | Every change proposed and approved before it takes effect; every version kept, with who approved it and when |
+| Approval rules                                 | Check with vendor                                                                                  | Any number of approvals from the groups and people you choose, such as 3 of your 5 board members             |
 | Staff read-and-sign acknowledgments            | Yes                                                                                                | No                                                                                                           |
 | Training, tests and courses linked to policies | Yes                                                                                                | No                                                                                                           |
 | Accreditation management                       | Yes; its site says healthcare facilities use it for "accredited status and daily survey readiness" | No                                                                                                           |

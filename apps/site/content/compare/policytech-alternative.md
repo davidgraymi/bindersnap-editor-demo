@@ -1,7 +1,7 @@
 ---
 title: Bindersnap vs. PolicyTech for small healthcare providers
 description: NAVEX PolicyTech is a broad compliance platform priced on request. Bindersnap is a policy manual with an approval record, $39 per writer.
-updated: 2026-10-08
+updated: 2026-10-30
 crumb: PolicyTech
 related: /pricing, /compare/powerdms-alternative, /compare/policystat-alternative
 ---
@@ -21,28 +21,29 @@ NAVEX has renamed PolicyTech **NAVEX One Policy & Procedure Management**. Its si
 
 ## Side by side
 
-|                                         | PolicyTech (NAVEX One Policy & Procedure Management)                                                           | Bindersnap                                                                                               |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Who it's built for                      | HR, compliance and audit teams in organizations of all sizes; NAVEX says 6,000+ small businesses use its tools | Small healthcare providers: ASCs, clinics, home health, hospice, behavioral health                       |
-| Owner                                   | NAVEX                                                                                                          | Solid Gray LLC                                                                                           |
-| Price                                   | Not published; "Request pricing"                                                                               | $39/month per person who writes policies; reviewers and readers free. See [pricing](/pricing)            |
-| How you buy                             | Request pricing or a demo                                                                                      | Sign up and start a 14-day free trial, no card                                                           |
-| Writing and editing                     | Microsoft Word, or NAVEX's own editor; the current version stays live while you edit                           | Bindersnap's editor, or upload Word and PDF files                                                        |
-| Approvals                               | Custom approval workflows, including thresholds such as "3 out of 5 people"                                    | Every change proposed and approved before it takes effect, by the approvers you name for each binder     |
-| Version history                         | Compare versions and see who changed what; prove which version was active on a date                            | Every version kept, with who approved it and when; changes shown side by side for policies written in it |
-| Staff attestations (read and sign)      | Yes, with electronic signature and automated reminders                                                         | No                                                                                                       |
-| Linked training and AI policy assistant | Yes                                                                                                            | No                                                                                                       |
-| Starter policies                        | Six sample policies, such as anti-bribery and workplace harassment                                             | Free [healthcare policy templates](/templates), downloadable as Word files                               |
-| Reviewers and readers                   | Check with vendor                                                                                              | Free, in any number                                                                                      |
-| After you stop paying                   | Check with vendor                                                                                              | Reading and exporting stay free while the account is open                                                |
+|                                         | PolicyTech (NAVEX One Policy & Procedure Management)                                                           | Bindersnap                                                                                                                                                                                       |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Who it's built for                      | HR, compliance and audit teams in organizations of all sizes; NAVEX says 6,000+ small businesses use its tools | Small healthcare providers: ASCs, clinics, home health, hospice, behavioral health                                                                                                               |
+| Owner                                   | NAVEX                                                                                                          | Solid Gray LLC                                                                                                                                                                                   |
+| Price                                   | Not published; "Request pricing"                                                                               | $39/month per person who writes policies; reviewers and readers free. See [pricing](/pricing)                                                                                                    |
+| How you buy                             | Request pricing or a demo                                                                                      | Sign up and start a 14-day free trial, no card                                                                                                                                                   |
+| Writing and editing                     | Microsoft Word, or NAVEX's own editor; the current version stays live while you edit                           | Bindersnap's editor, or upload Word and PDF files                                                                                                                                                |
+| Approvals                               | Custom approval workflows, including thresholds such as "3 out of 5 people"                                    | Your rule, enforced: any number of approvals from the groups and people you choose, such as 3 of your 5 board members, plus a named sign-off for any folder. Nothing takes effect until it's met |
+| Version history                         | Compare versions and see who changed what; prove which version was active on a date                            | Every version kept, with who approved it and when; changes shown side by side for policies written in it                                                                                         |
+| Staff attestations (read and sign)      | Yes, with electronic signature and automated reminders                                                         | No                                                                                                                                                                                               |
+| Linked training and AI policy assistant | Yes                                                                                                            | No                                                                                                                                                                                               |
+| Starter policies                        | Six sample policies, such as anti-bribery and workplace harassment                                             | Free [healthcare policy templates](/templates), downloadable as Word files                                                                                                                       |
+| Reviewers and readers                   | Check with vendor                                                                                              | Free, in any number                                                                                                                                                                              |
+| After you stop paying                   | Check with vendor                                                                                              | Reading and exporting stay free while the account is open                                                                                                                                        |
 
 ## Where PolicyTech does more
 
-PolicyTech is a broader product, and NAVEX has been building it for a long time. Staff can attest to each policy with an electronic signature, and reminders chase anyone who hasn't. Approval workflows can be shaped per topic, with thresholds. Policies link to training, and an AI assistant answers employees' questions from your approved policies in many languages. If you have a compliance team that will run attestation campaigns and training across a large or multi-site workforce, that breadth is worth paying for, and Bindersnap doesn't offer it.
+PolicyTech is a broader product, and NAVEX has been building it for a long time. Staff can attest to each policy with an electronic signature, and reminders chase anyone who hasn't. Policies link to training, and an AI assistant answers employees' questions from your approved policies in many languages. If you have a compliance team that will run attestation campaigns and training across a large or multi-site workforce, that breadth is worth paying for, and Bindersnap doesn't offer it.
 
 ## Where Bindersnap fits better
 
 - **It's built for healthcare surveys.** Our [requirements guides](/requirements) and [templates](/templates) are written for what CMS surveyors and accreditors ask small providers for, and the [required policies checklist](/tools/required-policies-checklist) shows which policies your facility needs.
+- **Your approval rules hold.** Require 3 of your 5 board members, the medical director alone, or the laboratory director for every lab procedure. A change can't be published until the rule is met, and each version records the rule it met and who approved it.
 - **You pay for writers, not readers.** $39 a month for each person who writes and publishes policies. Reviewers and staff who only read are free, and there's no long contract.
 - **You can start today.** Create an account, upload the Word and PDF files you already have, and invite your approvers. The [getting started guide](/help/getting-started) shows how.
 - **It does one thing completely.** A change to a policy is proposed, reviewed and approved before it becomes the policy, and every version keeps its approvals for as long as the binder exists. See [how a change becomes the record](/help/approvals).
@@ -57,6 +58,10 @@ NAVEX has renamed it NAVEX One Policy & Procedure Management. Its website still 
 ### Does NAVEX publish PolicyTech's prices?
 
 Not as of October 8, 2026. Its pages offer "Request pricing" and a demo instead of a price list.
+
+### Can Bindersnap require 3 out of 5 board members to approve?
+
+Yes. In a binder's settings, set how many approvals a change needs and whose approvals count: groups, people or both. Choose your board and ask for 3, and no change is published until three board members approve it. Others can still review and comment. Add a sign-off rule when one group must always approve a folder, such as the laboratory director for lab procedures. Every published version records the rule it met.
 
 ### Does Bindersnap do policy attestations?
 

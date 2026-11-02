@@ -1,7 +1,7 @@
 ---
 title: Who has to approve healthcare policies?
 description: Under CMS rules the governing body is responsible for policies; some rules name a specific approver, such as the CLIA lab director. Here is who signs what.
-updated: 2026-10-07
+updated: 2026-10-30
 crumb: Who approves policies
 facilities: ambulatory-surgery-centers, home-health-agencies, hospices, medical-practices, rural-health-clinics
 related: /templates/policy-review-and-approval, /requirements/how-often-to-review-policies, /help/approvals
@@ -45,13 +45,17 @@ An approval is good evidence when it is:
 
 ## How Bindersnap records approvals
 
-Each binder names its approvers. A change to a policy is proposed, and it becomes the policy only when the required approvers approve it. Each approval is recorded with the person and the date against that exact version, and every earlier version keeps its own approvals. See [how a change becomes the record](/help/approvals). Reviewers approve without a paid seat, so you can name the medical director, the lab director or an outside RHC group member without paying for them.
+Each binder has its own approval rule: how many approvals a change needs, and whose count. Choose your governing body and ask for 3, and a change becomes the policy only when three of its members have approved it. Add a sign-off rule when a named approver must always sign a folder, such as the laboratory director for lab procedures. Each approval is recorded with the person and the date against that exact version, and every earlier version keeps its own approvals. See [how a change becomes the record](/help/approvals). Reviewers approve without a paid seat, so you can name the medical director, the lab director or an outside RHC group member without paying for them.
 
 ## Frequently asked questions
 
 ### Does the board have to approve every policy?
 
 CMS makes the governing body responsible for the organization's policies, but most organizations have the board approve a policy on policies and the most important policies, and delegate the rest to named leaders. Write the delegation down, and follow it.
+
+### Can a policy require approval from several board members?
+
+Yes, if your policy on policies says so. In Bindersnap, choose the board as the group whose approvals count and set the number, for example 3 of 5. No change is published until that many board members approve it, and the version records who they were.
 
 ### Who signs laboratory procedures?
 
