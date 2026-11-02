@@ -259,7 +259,8 @@ export function AppSidebar({
           isActive: () =>
             binder.section === "settings" ||
             binder.section === "people" ||
-            binder.section === "sign-off",
+            binder.section === "sign-off" ||
+            binder.section === "approvals",
         },
       ]
     : [];

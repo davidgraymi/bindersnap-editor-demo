@@ -94,9 +94,9 @@ test("every one of the binder's screens is reachable on a phone", async ({
   await settings.scrollIntoViewIfNeeded();
   await settings.click();
 
-  await expect(
-    page.getByRole("heading", { name: "How changes are approved" }),
-  ).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("tab", { name: "Approvals" })).toBeVisible({
+    timeout: 30_000,
+  });
 });
 
 test("the bottom bar does not sit on top of the last row of content", async ({

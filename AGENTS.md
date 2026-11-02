@@ -421,7 +421,7 @@ whose approvals count toward `required_approvals`**.
   binder". Gitea keeps an approver only once they can read the binder and
   drops the rest without an error, so this is what keeps the list honest; the
   API itself passes approvers through and refuses none. Giving access stays in
-  the People and Groups sections. A group that loses access comes off the list
+  the binder's People & access tab. A group that loses access comes off the list
   (`dropApproverGroup`), which also clears the stale entry Gitea keeps hidden.
 - `everyone` is the organization's **Everyone** group (`EVERYONE_TEAM_NAME`),
   kept in step as people join and leave. Organizations made before 2026-10-31

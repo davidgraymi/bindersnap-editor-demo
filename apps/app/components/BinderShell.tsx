@@ -898,11 +898,11 @@ export function BinderShell({
   };
 
   // A document is a file in the binder, so Documents stays the tab you are on.
-  // People and Sign-off rules were tabs of their own and are sections of
-  // Settings now; their addresses still resolve, to the section.
+  // People & access and Approvals are tabs of Settings, under its own
+  // addresses; the binder's screen is Settings for all three.
   const activeTab: BinderTab = documentPath
     ? "documents"
-    : tab === "people" || tab === "sign-off"
+    : tab === "people" || tab === "sign-off" || tab === "approvals"
       ? "settings"
       : tab;
 
@@ -1391,7 +1391,7 @@ export function BinderShell({
           view={changeView}
           onViewChange={(next) => openChangeNumber(openChange, next)}
           onBackToChanges={() => goTo("changes")}
-          onOpenSignOffRules={() => goTo("sign-off")}
+          onOpenSignOffRules={() => goTo("approvals")}
           /* The document's own address, on this change's branch — the binder
              at another ref rather than a panel inside the change. */
           /* **The branch, not the change.** A file lives on a branch, which
@@ -1463,7 +1463,22 @@ export function BinderShell({
         <BinderSettings
           org={org}
           binder={binder}
-          focus={tab === "people" || tab === "sign-off" ? tab : undefined}
+          section={
+            tab === "people"
+              ? "access"
+              : tab === "approvals" || tab === "sign-off"
+                ? "approvals"
+                : "general"
+          }
+          onSection={(section) =>
+            goTo(
+              section === "access"
+                ? "people"
+                : section === "approvals"
+                  ? "approvals"
+                  : "settings",
+            )
+          }
           onOpenChange={openChangeNumber}
           onDescribed={loadOverview}
           onDeleted={() => {
