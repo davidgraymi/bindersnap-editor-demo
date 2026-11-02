@@ -8037,88 +8037,12 @@ async function handleListWorkspaceChanges(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    const [entries, mergeRules, versionsByDocument] = await Promise.all([
-      listPullRequestsWithReviews({
-        client,
-        owner: orgName,
-        repo: workspaceName,
-        state,
-      }),
-      readMergeRules(orgName, workspaceName),
-      listVersionsByDocument({
-        client,
-        org: orgName,
-        workspace: workspaceName,
-      }),
-    ]);
-
-    // Tags keyed the other way round: a merge commit carries one tag per
-    // document the change published, which is what names a closed change.
-    const versionsByCommit = new Map<
-      string,
-      Array<{ slugPath: string; version: number }>
-    >();
-    for (const [slugPath, versions] of versionsByDocument) {
-      for (const version of versions) {
-        const existing = versionsByCommit.get(version.commitSha);
-        const entry = { slugPath, version: version.version };
-        if (existing) {
-          existing.push(entry);
-        } else {
-          versionsByCommit.set(version.commitSha, [entry]);
-        }
-      }
-    }
-
-    const changes = entries
-      .map(({ pullRequest, reviews }) => {
-        const row = buildPendingChangeRow({ pullRequest, reviews }, mergeRules);
-        const isOpen = pullRequest.state === "open";
-        const decided = isOpen
-          ? null
-          : resolveClosedOutcome(pullRequest, reviews);
-        const mergeCommitSha =
-          (pullRequest as { merge_commit_sha?: string }).merge_commit_sha ??
-          null;
-
-        return {
-          number: row.number ?? 0,
-          title: pullRequest.title ?? "",
-          body: pullRequest.body ?? "",
-          branchName: row.branchName,
-          submittedBy: pullRequest.user?.login ?? "",
-          submittedAt: pullRequest.created_at ?? "",
-          // Gitea gives both on the pull request itself, so a list of changes
-          // reads "updated 2 hours ago · 3 comments" without a call per row.
-          updatedAt:
-            (pullRequest as { updated_at?: string }).updated_at ??
-            pullRequest.created_at ??
-            "",
-          commentCount: (pullRequest as { comments?: number }).comments ?? 0,
-          closedAt: isOpen
-            ? null
-            : ((pullRequest as { merged_at?: string; closed_at?: string })
-                .merged_at ??
-              (pullRequest as { closed_at?: string }).closed_at ??
-              null),
-          outcome: decided ? decided.outcome : ("open" as const),
-          decidedBy: decided ? decided.decidedBy : null,
-          approvalState: row.approvalState,
-          approvalCount: row.approvalCount,
-          requiredApprovals: row.requiredApprovals,
-          isApproved: row.isApproved,
-          isRejected: row.isRejected,
-          reviews: toVersionReviews(reviews),
-          reviewers: row.reviewers,
-          assignee: row.assignee,
-          documents: describeChangeDocuments({
-            branchName: row.branchName,
-            mergeCommitSha,
-            versionsByCommit,
-          }),
-        };
-      })
-      .sort((left, right) => right.number - left.number);
+    const changes = await listWorkspaceChangeSummaries(
+      client,
+      orgName,
+      workspaceName,
+      state,
+    );
 
     return json(
       200,
@@ -8135,6 +8059,152 @@ async function handleListWorkspaceChanges(
     });
     return responseFromError(err, baseHeaders, "Unable to list the changes.");
   }
+}
+
+/**
+ * Every change request in an organization's binders, open or closed.
+ *
+ * The binder's list, for every binder the reader can see in the
+ * organization, newest-moved first, each row naming its binder. A binder
+ * the reader cannot read is not in Gitea's answer to begin with, and one
+ * that fails to read is left out rather than failing the whole list.
+ */
+async function handleListOrganizationChanges(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client } = auth;
+  const state =
+    new URL(req.url).searchParams.get("state") === "closed" ? "closed" : "open";
+
+  try {
+    const workspaces = await listOrganizationWorkspaces({
+      client,
+      org: orgName,
+    });
+    const perBinder = await Promise.all(
+      workspaces.map((workspace) =>
+        listWorkspaceChangeSummaries(client, orgName, workspace.name, state)
+          .then((changes) =>
+            changes.map((change) => ({ ...change, binder: workspace.name })),
+          )
+          .catch(() => []),
+      ),
+    );
+    const changes = perBinder
+      .flat()
+      .sort(
+        (left, right) =>
+          (Date.parse(right.updatedAt) || 0) -
+          (Date.parse(left.updatedAt) || 0),
+      );
+
+    return json(200, { organization: orgName, state, changes }, baseHeaders);
+  } catch (err) {
+    logger.error("Failed to list an organization's changes", {
+      username: auth.session.username,
+      organization: orgName,
+      state,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to list the changes.");
+  }
+}
+
+/** One binder's change requests, as its list and its organization's read them. */
+async function listWorkspaceChangeSummaries(
+  client: GiteaClient,
+  orgName: string,
+  workspaceName: string,
+  state: "open" | "closed",
+) {
+  const [entries, mergeRules, versionsByDocument] = await Promise.all([
+    listPullRequestsWithReviews({
+      client,
+      owner: orgName,
+      repo: workspaceName,
+      state,
+    }),
+    readMergeRules(orgName, workspaceName),
+    listVersionsByDocument({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+    }),
+  ]);
+
+  // Tags keyed the other way round: a merge commit carries one tag per
+  // document the change published, which is what names a closed change.
+  const versionsByCommit = new Map<
+    string,
+    Array<{ slugPath: string; version: number }>
+  >();
+  for (const [slugPath, versions] of versionsByDocument) {
+    for (const version of versions) {
+      const existing = versionsByCommit.get(version.commitSha);
+      const entry = { slugPath, version: version.version };
+      if (existing) {
+        existing.push(entry);
+      } else {
+        versionsByCommit.set(version.commitSha, [entry]);
+      }
+    }
+  }
+
+  const changes = entries
+    .map(({ pullRequest, reviews }) => {
+      const row = buildPendingChangeRow({ pullRequest, reviews }, mergeRules);
+      const isOpen = pullRequest.state === "open";
+      const decided = isOpen
+        ? null
+        : resolveClosedOutcome(pullRequest, reviews);
+      const mergeCommitSha =
+        (pullRequest as { merge_commit_sha?: string }).merge_commit_sha ?? null;
+
+      return {
+        number: row.number ?? 0,
+        title: pullRequest.title ?? "",
+        body: pullRequest.body ?? "",
+        branchName: row.branchName,
+        submittedBy: pullRequest.user?.login ?? "",
+        submittedAt: pullRequest.created_at ?? "",
+        // Gitea gives both on the pull request itself, so a list of changes
+        // reads "updated 2 hours ago · 3 comments" without a call per row.
+        updatedAt:
+          (pullRequest as { updated_at?: string }).updated_at ??
+          pullRequest.created_at ??
+          "",
+        commentCount: (pullRequest as { comments?: number }).comments ?? 0,
+        closedAt: isOpen
+          ? null
+          : ((pullRequest as { merged_at?: string; closed_at?: string })
+              .merged_at ??
+            (pullRequest as { closed_at?: string }).closed_at ??
+            null),
+        outcome: decided ? decided.outcome : ("open" as const),
+        decidedBy: decided ? decided.decidedBy : null,
+        approvalState: row.approvalState,
+        approvalCount: row.approvalCount,
+        requiredApprovals: row.requiredApprovals,
+        isApproved: row.isApproved,
+        isRejected: row.isRejected,
+        reviews: toVersionReviews(reviews),
+        reviewers: row.reviewers,
+        assignee: row.assignee,
+        documents: describeChangeDocuments({
+          branchName: row.branchName,
+          mergeCommitSha,
+          versionsByCommit,
+        }),
+      };
+    })
+    .sort((left, right) => right.number - left.number);
+
+  return changes;
 }
 
 /**
@@ -17051,6 +17121,9 @@ async function handleRequest(req: Request): Promise<Response> {
       /^\/api\/app\/orgs\/([^/]+)\/deletion$/,
     );
     const organizationMatch = pathname.match(/^\/api\/app\/orgs\/([^/]+)$/);
+    const organizationChangesMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/changes$/,
+    );
     const organizationPersonMatch = pathname.match(
       /^\/api\/app\/orgs\/([^/]+)\/people\/([^/]+)$/,
     );
@@ -17110,6 +17183,12 @@ async function handleRequest(req: Request): Promise<Response> {
         req,
         baseHeaders,
         organizationDeletionMatch[1]!,
+      );
+    } else if (organizationChangesMatch && method === "GET") {
+      response = await handleListOrganizationChanges(
+        req,
+        baseHeaders,
+        organizationChangesMatch[1]!,
       );
     } else if (organizationMatch && method === "DELETE") {
       response = await handleDeleteOrganization(

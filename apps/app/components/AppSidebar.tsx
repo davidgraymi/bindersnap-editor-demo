@@ -26,7 +26,7 @@ import {
   BINDER_SETTINGS_PAGES,
   binderSettingsSection,
 } from "../binderSettings";
-import { organizationsQuery } from "../data/queries";
+import { organizationBindersQuery, organizationsQuery } from "../data/queries";
 import { routeToPath, type AppRoute, type OrganizationTab } from "../routes";
 import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
 import { useCollapsedSidebar } from "../useCollapsedSidebar";
@@ -87,7 +87,9 @@ function organizationTab(route: AppRoute): OrganizationTab | null {
   if (route.kind !== "organization") return null;
   const tab =
     route.tab ?? new URLSearchParams(window.location.search).get("tab");
-  return tab === "people" || tab === "settings" ? tab : "binders";
+  return tab === "people" || tab === "settings" || tab === "changes"
+    ? tab
+    : "binders";
 }
 
 /** The binder on screen, as its own section of the map. */
@@ -207,6 +209,15 @@ export function AppSidebar({
   // a map that changes shape as you walk around it is not a map.
   const orgName = useOrganizationDisplayName(org ?? "");
   const organizations = useQuery(organizationsQuery()).data ?? [];
+  // The organization's open change requests, counted from the binder list its
+  // own page already reads — Gitea carries each binder's count on it.
+  const orgBinders = useQuery({
+    ...organizationBindersQuery(org ?? ""),
+    enabled: org !== null && route.kind === "organization",
+  }).data;
+  const orgOpenChanges = orgBinders
+    ? orgBinders.reduce((sum, binder) => sum + binder.openChangeCount, 0)
+    : null;
   const orgRoute = (tab?: OrganizationTab): AppRoute | null =>
     org === null
       ? null
@@ -351,6 +362,16 @@ export function AppSidebar({
       icon: Library,
       route: orgRoute(),
       isActive: (r) => organizationTab(r) === "binders",
+    },
+    {
+      // Every change request in its binders — the binder's own list, one
+      // level up, the way a GitLab group lists its projects' merge requests.
+      key: "org-changes",
+      label: "Change requests",
+      icon: FilePen,
+      route: orgRoute("changes"),
+      isActive: (r) => organizationTab(r) === "changes",
+      count: orgOpenChanges,
     },
     {
       key: "people",

@@ -1,4 +1,4 @@
-import type { ChangeRecord } from "../documentDisplay";
+import { formatDocumentName, type ChangeRecord } from "../documentDisplay";
 import { nameFor, usePeopleNames } from "../usePeopleNames";
 import { ChangeRow } from "./ChangeRow";
 import { SkeletonGroup, SkeletonLine, SkeletonShape } from "./Skeleton";
@@ -25,12 +25,19 @@ interface DocumentChangesProps {
    */
   describeSubject?: (changeNumber: number) => string | null;
   onFilterChange: (filter: ChangeFilter) => void;
-  onOpenChange: (pullNumber: number) => void;
+  onOpenChange: (pullNumber: number, binder?: string) => void;
   /** The address of one change, so each row is a link. */
-  changeHref: (pullNumber: number) => string;
+  changeHref: (pullNumber: number, binder?: string) => string;
   onRetryClosed: () => void;
   /** Whose people these are, so a row names its author, not their login. */
   org: string;
+  /**
+   * The binder a change is in, when the list spans several — an
+   * organization's. Rows are then told apart by binder as well as number,
+   * each leads its meta line with its binder, and `changeHref` and
+   * `onOpenChange` are told which binder it is.
+   */
+  binderOf?: (change: ChangeRecord) => string | null;
 }
 
 /**
@@ -50,12 +57,14 @@ function BinderChangeRow({
   change,
   authorName,
   href,
-  onOpenChange,
+  context,
+  onOpen,
 }: {
   change: ChangeRecord;
   authorName: string;
   href: string;
-  onOpenChange: (pullNumber: number) => void;
+  context: string | null;
+  onOpen: () => void;
 }) {
   return (
     <ChangeRow
@@ -73,7 +82,8 @@ function BinderChangeRow({
         isRejected: change.isRejected,
       }}
       href={href}
-      onOpen={() => onOpenChange(change.number)}
+      context={context}
+      onOpen={onOpen}
     />
   );
 }
@@ -99,6 +109,7 @@ export function DocumentChanges({
   changeHref,
   onRetryClosed,
   org,
+  binderOf,
 }: DocumentChangesProps) {
   const rows = filter === "open" ? openChanges : (closedChanges ?? []);
   const names = usePeopleNames(org);
@@ -180,15 +191,19 @@ export function DocumentChanges({
         </div>
       ) : (
         <ul className="bs-row-list">
-          {rows.map((change) => (
-            <BinderChangeRow
-              key={change.number}
-              change={change}
-              authorName={nameFor(names, change.submittedBy)}
-              href={changeHref(change.number)}
-              onOpenChange={onOpenChange}
-            />
-          ))}
+          {rows.map((change) => {
+            const binder = binderOf?.(change) ?? undefined;
+            return (
+              <BinderChangeRow
+                key={binder ? `${binder}#${change.number}` : change.number}
+                change={change}
+                authorName={nameFor(names, change.submittedBy)}
+                href={changeHref(change.number, binder)}
+                context={binder ? formatDocumentName(binder) : null}
+                onOpen={() => onOpenChange(change.number, binder)}
+              />
+            );
+          })}
         </ul>
       )}
     </section>

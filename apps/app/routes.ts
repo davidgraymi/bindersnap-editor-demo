@@ -109,7 +109,7 @@ export type DocumentChangeView =
   /** The documents that conflict with the binder, and resolving them. */
   | "conflicts";
 /** The organization's own tabs. Binders is the one it opens on. */
-export type OrganizationTab = "binders" | "people" | "settings";
+export type OrganizationTab = "binders" | "changes" | "people" | "settings";
 
 /** The admin console's sections, in the order its tabs show them. */
 export const ADMIN_SECTIONS = [
@@ -238,7 +238,9 @@ export function getRoute(pathname: string): AppRoute {
         ? { tab: "people" as const }
         : screen === "settings"
           ? { tab: "settings" as const }
-          : {}),
+          : screen === "changes"
+            ? { tab: "changes" as const }
+            : {}),
     };
   }
 

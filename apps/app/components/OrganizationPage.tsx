@@ -12,16 +12,18 @@ import { buildBinderUrl } from "../binderShell";
 import { formatAge, formatDocumentName } from "../documentDisplay";
 import { OrganizationSettings } from "./OrganizationSettings";
 import { NewBinderPage } from "./NewBinderPage";
+import { OrganizationChanges } from "./OrganizationChanges";
 import { OrganizationPeople } from "./OrganizationPeople";
 import { SkeletonPanel } from "./Skeleton";
 
 /** The organization's tabs. Binders is the one it opens on. */
-const ORG_TABS = ["binders", "people", "settings"] as const;
+const ORG_TABS = ["binders", "changes", "people", "settings"] as const;
 type OrgTab = (typeof ORG_TABS)[number];
 
 /** `/{org}/-/people` is People; anything else of the organization's is Binders. */
 function orgTabFromPath(pathname: string): OrgTab {
   if (/^\/[^/]+\/-\/people\/?$/.test(pathname)) return "people";
+  if (/^\/[^/]+\/-\/changes\/?$/.test(pathname)) return "changes";
   if (/^\/[^/]+\/-\/settings\/?$/.test(pathname)) return "settings";
   return "binders";
 }
@@ -59,6 +61,11 @@ function orgPageHead(
         title: "People & access",
         subtitle: `Who is in ${displayName}, the groups they are in, and which binders each group can open.`,
       };
+    case "changes":
+      return {
+        title: "Change requests",
+        subtitle: `Every change request in ${displayName}'s binders.`,
+      };
     case "settings":
       return {
         title: "Settings",
@@ -72,9 +79,15 @@ function orgPageHead(
 interface OrganizationPageProps {
   org: string;
   onOpenBinder: (binder: string) => void;
+  /** Open one change request, on its binder. */
+  onOpenChange: (binder: string, changeNumber: number) => void;
 }
 
-export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
+export function OrganizationPage({
+  org,
+  onOpenBinder,
+  onOpenChange,
+}: OrganizationPageProps) {
   const isReadOnly = useIsReadOnly();
   const displayName = useOrganizationDisplayName(org);
   const [tab, setTab] = useState<OrgTab>(() =>
@@ -169,9 +182,11 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
                 screen made "People" and "People & access" read as two. */}
             {entry === "binders"
               ? "Binders"
-              : entry === "people"
-                ? "People & access"
-                : "Settings"}
+              : entry === "changes"
+                ? "Change requests"
+                : entry === "people"
+                  ? "People & access"
+                  : "Settings"}
             {entry === "binders" && binders !== null && binders.length > 0 ? (
               <span className="doc-tab-count">{binders.length}</span>
             ) : null}
@@ -210,6 +225,15 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
       <section className="docw-page">
         {header}
         <OrganizationSettings org={org} displayName={displayName} />
+      </section>
+    );
+  }
+
+  if (tab === "changes") {
+    return (
+      <section className="docw-page">
+        {header}
+        <OrganizationChanges org={org} onOpenChange={onOpenChange} />
       </section>
     );
   }
