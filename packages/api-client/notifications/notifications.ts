@@ -11,7 +11,9 @@ import type {
   ListNotifications200,
   ListNotificationsParams,
   ReadNotifications200,
-  ReadNotificationsBody
+  ReadNotificationsBody,
+  SearchChanges200,
+  SearchChangesParams
 } from '../model';
 
 import { customFetch } from '.././mutator.ts';
@@ -150,6 +152,45 @@ export const getGetHomeFeedUrl = (params?: GetHomeFeedParams,) => {
 export const getHomeFeed = async (params?: GetHomeFeedParams, options?: Parameters<typeof customFetch>[1]): Promise<getHomeFeedResponse> => {
 
   return customFetch<getHomeFeedResponse>(getGetHomeFeedUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type searchChangesResponse200 = {
+  data: SearchChanges200
+  status: 200
+}
+
+export type searchChangesResponseSuccess = (searchChangesResponse200) & {
+  headers: Headers;
+};
+;
+
+export type searchChangesResponse = (searchChangesResponseSuccess)
+
+export const getSearchChangesUrl = (params?: SearchChangesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/app/changes/search?${stringifiedParams}` : `/api/app/changes/search`
+}
+
+export const searchChanges = async (params?: SearchChangesParams, options?: Parameters<typeof customFetch>[1]): Promise<searchChangesResponse> => {
+
+  return customFetch<searchChangesResponse>(getSearchChangesUrl(params),
   {
     ...options,
     method: 'GET'

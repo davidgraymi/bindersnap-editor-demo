@@ -30,6 +30,7 @@ import {
   fetchOrganizationPeople,
   fetchOrganizations,
   fetchBinders,
+  searchChanges,
   fetchOrganizationChanges,
   fetchHomeFeed,
   getHomeChanges,
@@ -120,6 +121,7 @@ export const queryKeys = {
   /** Home's feed — what has been happening in your binders. */
   homeFeed: () => ["home-feed"] as const,
   library: (query: string) => ["library", query] as const,
+  changeSearch: (query: string) => ["change-search", query] as const,
   search: (query: string, limit: number) =>
     ["library", "search", query, limit] as const,
 
@@ -215,6 +217,14 @@ export function libraryQuery(query: string) {
 }
 
 /** Quick find: the best few matches. */
+/** Change requests whose title holds what was typed. */
+export function changeSearchQuery(query: string) {
+  return queryOptions({
+    queryKey: queryKeys.changeSearch(query),
+    queryFn: ({ signal }) => searchChanges(query, { signal }),
+  });
+}
+
 export function searchQuery(query: string, limit = 8) {
   return queryOptions({
     queryKey: queryKeys.search(query, limit),

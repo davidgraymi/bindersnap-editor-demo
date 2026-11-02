@@ -18,6 +18,7 @@ import * as LegalClient from "../../packages/api-client/legal/legal";
 import type { OnboardingPayload } from "../../packages/api-schema/schemas/onboarding";
 import type {
   AppNotification,
+  ChangeSearchPayload,
   HomeFeedPayload,
   NotificationCountPayload,
 } from "../../packages/api-schema/schemas/notifications";
@@ -2153,6 +2154,18 @@ export async function fetchNotifications(
 }
 
 export type { HomeFeedPayload };
+
+/** Change requests whose title holds what was typed: quick find's. */
+export async function searchChanges(
+  query: string,
+  request?: ReadRequest,
+): Promise<ChangeSearchPayload["changes"]> {
+  const response = await NotificationsClient.searchChanges(
+    { q: query },
+    request,
+  );
+  return (response.data as ChangeSearchPayload).changes;
+}
 
 /** One page of Home's feed: what has been happening in your binders. */
 export async function fetchHomeFeed(

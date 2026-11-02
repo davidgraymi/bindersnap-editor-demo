@@ -280,6 +280,7 @@ import { buildAuditPacket } from "./export/auditPacket";
 import { onboardingState, type OnboardingOrganization } from "./onboarding";
 import { pullKey, readSubjectUrl, toAppNotifications } from "./notifications";
 import { changesNeedingTitles, toFeedEvents } from "./home-feed";
+import { toFoundChanges } from "./change-search";
 import type { components } from "./gitea-client/spec/gitea";
 import { gatherAuditRecord } from "./export/auditRecord";
 import {
@@ -4415,6 +4416,75 @@ async function handleListNotifications(
       err,
       baseHeaders,
       "Unable to read your notifications.",
+    );
+  }
+}
+
+/** How many change requests one quick find lists. */
+const CHANGE_SEARCH_LIMIT = 5;
+
+/**
+ * Change requests whose title holds what was typed, for quick find.
+ *
+ * Gitea's issue search, with the reader's token, so it reaches what they can
+ * see and nothing else; open and decided alike, newest-moved first.
+ */
+async function handleSearchChanges(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { client, session } = auth;
+
+  const q = (new URL(req.url).searchParams.get("q") ?? "").trim();
+  if (q === "") return json(200, { changes: [] }, baseHeaders);
+
+  try {
+    const [issues, orgs] = await Promise.all([
+      unwrap(
+        client.GET("/repos/issues/search", {
+          params: {
+            query: {
+              q,
+              type: "pulls",
+              state: "all",
+              // Read past what is shown: repositories outside the reader's
+              // organizations are dropped after the read.
+              limit: CHANGE_SEARCH_LIMIT * 4,
+            },
+          },
+        }),
+      ) as Promise<components["schemas"]["Issue"][] | undefined>,
+      unwrap(
+        client.GET("/user/orgs", { params: { query: { limit: 50 } } }),
+      ) as Promise<{ username?: string; name?: string }[] | undefined>,
+    ]);
+    const organizations = new Set(
+      (orgs ?? [])
+        .map((org) => org.username ?? org.name ?? "")
+        .filter((name) => name !== ""),
+    );
+    return json(
+      200,
+      {
+        changes: toFoundChanges(
+          issues ?? [],
+          organizations,
+          CHANGE_SEARCH_LIMIT,
+        ),
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to search change requests", {
+      username: session.username,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to search change requests.",
     );
   }
 }
@@ -16937,6 +17007,8 @@ async function handleRequest(req: Request): Promise<Response> {
     response = await handleAdminRunActivityBuild(req, baseHeaders);
   } else if (pathname === "/api/app/home/changes" && method === "GET") {
     response = await handleHomeChanges(req, baseHeaders);
+  } else if (pathname === "/api/app/changes/search" && method === "GET") {
+    response = await handleSearchChanges(req, baseHeaders);
   } else if (pathname === "/api/app/home/feed" && method === "GET") {
     response = await handleHomeFeed(req, baseHeaders);
   } else if (pathname === "/api/app/documents" && method === "GET") {
