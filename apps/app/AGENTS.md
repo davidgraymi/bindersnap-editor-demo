@@ -26,7 +26,10 @@ written. Confirming revises the same document with `source: "converted"`
 into the author's draft — the server keeps the filename's identity segment
 and removes the original (ADR 0005), so version numbering carries on, the
 original stays in the record, and a reviewer reads the conversion as a diff.
-It is never done automatically. Legacy `.doc`, `.xlsx`, `.pptx` and a PDF
+The same conversion is offered on upload — "Make it editable in Bindersnap"
+in Add a document (one file or a batch) and in Upload new version
+(`ConvertOnUploadField`) — **unticked, every time**: a file is often uploaded
+to be kept exactly as it is. It is never done automatically. Legacy `.doc`, `.xlsx`, `.pptx` and a PDF
 with no text layer are not convertible.
 
 The editor opens **full page**:
