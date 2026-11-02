@@ -18,6 +18,7 @@ import * as LegalClient from "../../packages/api-client/legal/legal";
 import type { OnboardingPayload } from "../../packages/api-schema/schemas/onboarding";
 import type {
   AppNotification,
+  HomeFeedPayload,
   NotificationCountPayload,
 } from "../../packages/api-schema/schemas/notifications";
 import type {
@@ -2134,6 +2135,20 @@ export async function fetchNotifications(
     { ...request, cache: "no-store" },
   );
   return response.data.notifications;
+}
+
+export type { HomeFeedPayload };
+
+/** One page of Home's feed: what has been happening in your binders. */
+export async function fetchHomeFeed(
+  page = 1,
+  request?: ReadRequest,
+): Promise<HomeFeedPayload> {
+  const response = await NotificationsClient.getHomeFeed(
+    page > 1 ? { page: String(page) } : undefined,
+    request,
+  );
+  return response.data as HomeFeedPayload;
 }
 
 /** How many are unread: the number on the bell. */

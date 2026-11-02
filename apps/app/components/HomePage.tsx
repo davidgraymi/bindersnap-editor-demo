@@ -1,31 +1,30 @@
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { type ReactNode, useMemo } from "react";
 
-import { type HomeOpenDocument } from "../api";
-import { homeChangesQuery } from "../data/queries";
+import { homeChangesQuery, homeFeedQuery } from "../data/queries";
+import { getGreeting, getGreetingName } from "../homeChanges";
 import {
-  buildDecidedChangeRows,
-  buildOpenChangeRows,
-  describeWaitingCount,
-  getGreeting,
-  getGreetingName,
-  selectSubmissions,
-  selectWaitingOnYou,
-  type HomeChangeRow,
-  type HomeDecidedRow,
-} from "../homeChanges";
+  describeFeedEvent,
+  feedTime,
+  groupFeedByDay,
+  type FeedEvent,
+} from "../homeFeed";
+import { buildQueueRows, groupQueueRows } from "../reviewQueue";
 import { followInApp } from "../appLink";
 import { buildBinderUrl } from "../binderShell";
 import { routeToPath } from "../routes";
-import { ChangeRowView } from "./ChangeRow";
+import { PersonAvatar } from "./PersonAvatar";
 import { SkeletonPanel } from "./Skeleton";
 
 interface HomePageProps {
   currentUsername: string;
   currentUserFullName?: string;
-  /** Open one change request — the only thing a row on this page links to. */
+  /** Open one change request — where an event about one leads. */
   onOpenChange: (owner: string, repo: string, changeNumber: number) => void;
-  onBrowseDocuments: () => void;
+  /** Open a binder — where an event about making one leads. */
+  onOpenBinder: (org: string, binder: string) => void;
+  /** The change requests page, where the work waiting on you is listed. */
+  onOpenChanges: () => void;
   /** The organization's binders, where a document is added. */
   onOpenBinders: (() => void) | null;
   /** The getting-started guide, first thing on the page while it has steps left. */
@@ -33,74 +32,47 @@ interface HomePageProps {
 }
 
 /**
- * Home is the reader's queue of change requests.
+ * Home is what has been happening in your binders.
  *
- * Every row is a change they are part of — never a document link. The only
- * path from here into the library is the "Browse documents" link, because a
- * list of documents answers a question nobody arrives with.
+ * It was a second list of change requests, beside the page that lists them —
+ * the same rows, cut down. Now it is a feed, GitHub's dashboard for a policy
+ * manual: who opened, approved, sent back, discussed, published or closed
+ * what, a day at a time, newest first, as far back as you scroll. What is
+ * waiting on your review is one line at the top that leads to the change
+ * requests page, where every state has its place.
+ *
+ * The feed is Gitea's own (`/api/app/home/feed`), read with your token, so it
+ * holds what you can see and nothing else.
  */
-const EMPTY_OPEN: HomeOpenDocument[] = [];
-
 export function HomePage({
   currentUsername,
   currentUserFullName = "",
   onOpenChange,
-  onBrowseDocuments,
+  onOpenBinder,
+  onOpenChanges,
   onOpenBinders,
   guide = null,
 }: HomePageProps) {
-  // One request. Home is a query — "the changes I am part of" — and the
-  // server answers it against every document at once, so the page does not
-  // walk the workspace or ask each document for its own history. The review
-  // queue asks the same question and shares the answer.
-  const home = useQuery(homeChangesQuery());
-  const isLoading = home.isPending;
-  const error = home.error
-    ? home.error.message || "Unable to load your change requests."
-    : null;
-  const documents = home.data?.open ?? EMPTY_OPEN;
-
-  const decided = useMemo(() => {
-    if (!home.data) return [];
-    const { open, decided: decidedDocuments } = home.data;
-    const ownedRepos = new Set(
-      [
-        ...open.map((document) => ({
-          owner: document.repo.owner.login,
-          repo: document.repo.name,
-        })),
-        ...decidedDocuments.map((document) => ({
-          owner: document.owner,
-          repo: document.repo,
-        })),
-      ]
-        .filter((ref) => ref.owner === currentUsername)
-        .map((ref) => `${ref.owner}/${ref.repo}`),
-    );
-    return buildDecidedChangeRows(
-      decidedDocuments,
-      currentUsername,
-      ownedRepos,
-    );
-  }, [home.data, currentUsername]);
-
-  const openRows = buildOpenChangeRows(documents, currentUsername);
-  const waitingOnYou = selectWaitingOnYou(openRows);
-  const submissions = selectSubmissions(openRows);
-  const hasAnything =
-    waitingOnYou.length > 0 || submissions.length > 0 || decided.length > 0;
-
-  // "Browse documents" is a place, so it is a link: it opens in a new tab and
-  // shows where it goes, which a button that moved the address bar did not.
-  const browseLink = (
-    <a
-      className="home-section-link"
-      href={routeToPath({ kind: "documents" })}
-      onClick={(event) => followInApp(event, onBrowseDocuments)}
-    >
-      Browse documents →
-    </a>
+  const feed = useInfiniteQuery(homeFeedQuery());
+  const events = useMemo(
+    () => feed.data?.pages.flatMap((page) => page.events) ?? [],
+    [feed.data],
   );
+  const days = useMemo(() => groupFeedByDay(events), [events]);
+
+  // How many changes wait on your review: the same rule, from the same
+  // payload, as the change requests page's first section.
+  const home = useQuery(homeChangesQuery());
+  const waiting = useMemo(
+    () =>
+      home.data
+        ? groupQueueRows(buildQueueRows(home.data.open, currentUsername))
+            .your_review.length
+        : 0,
+    [home.data, currentUsername],
+  );
+
+  const changesHref = routeToPath({ kind: "changes" });
 
   return (
     <div className="docw-page home-page">
@@ -111,52 +83,59 @@ export function HomePage({
             {getGreetingName(currentUsername, currentUserFullName)}.
           </h1>
           <p className="bs-subtitle">
-            {isLoading
-              ? "Gathering the change requests you are part of."
-              : describeWaitingCount(waitingOnYou.length)}
+            Here is what has been happening in your binders.
           </p>
         </div>
       </div>
 
       {guide}
 
-      {error ? (
+      {/* The one thing on Home that is yours to do, as a way to it rather
+          than a second copy of the list it leads to. */}
+      {waiting > 0 ? (
+        <a
+          className="home-waiting"
+          href={changesHref}
+          onClick={(event) => followInApp(event, onOpenChanges)}
+        >
+          <span className="bs-section-count bs-section-count--attention">
+            {waiting}
+          </span>
+          <span className="home-waiting-text">
+            {waiting === 1
+              ? "change request is waiting on your review"
+              : "change requests are waiting on your review"}
+          </span>
+          <span className="home-waiting-go" aria-hidden="true">
+            →
+          </span>
+        </a>
+      ) : null}
+
+      {feed.error ? (
         <section className="bs-panel">
-          <div className="bs-panel-bar">
-            <h2 className="bs-panel-bar-title">Something went wrong</h2>
-          </div>
           <div className="home-empty">
-            <p>{error}</p>
+            <p>
+              {feed.error.message || "Unable to read what has been happening."}
+            </p>
             <button
               type="button"
               className="bs-btn bs-btn-secondary bs-btn--sm"
-              onClick={() => void home.refetch()}
+              onClick={() => void feed.refetch()}
             >
               Try again
             </button>
           </div>
         </section>
-      ) : isLoading ? (
-        <SkeletonPanel
-          label="Loading your change requests"
-          rows={3}
-          bar
-          right
-        />
-      ) : !hasAnything ? (
+      ) : feed.isPending ? (
+        <SkeletonPanel label="Reading what has been happening" rows={4} bar />
+      ) : events.length === 0 ? (
         <section className="bs-panel">
-          <div className="bs-panel-bar">
-            <h2 className="bs-panel-bar-title">Waiting on you</h2>
-            <span className="bs-panel-bar-spacer" />
-            {browseLink}
-          </div>
           <div className="home-empty">
             <p>
-              No change requests yet. Submit a new version of a document and it
-              will show up here the moment someone has to look at it.
+              Nothing has happened in your binders yet. When somebody proposes a
+              change, approves one or publishes it, it shows up here.
             </p>
-            {/* A document is added on its binder's page, where the binder and
-                its rules are already on screen. */}
             {onOpenBinders ? (
               <button
                 type="button"
@@ -169,132 +148,105 @@ export function HomePage({
           </div>
         </section>
       ) : (
-        <>
-          {waitingOnYou.length > 0 ? (
-            <section className="bs-panel">
-              <div className="bs-panel-bar">
-                <h2 className="bs-panel-bar-title">Waiting on you</h2>
-                <span className="bs-section-count bs-section-count--attention">
-                  {waitingOnYou.length}
-                </span>
-              </div>
-              <ul className="bs-row-list">
-                {waitingOnYou.map((row) => (
-                  <HomeChangeRowItem
-                    key={row.key}
-                    row={row}
-                    onOpen={onOpenChange}
+        <div className="home-feed">
+          {days.map((day) => (
+            <section
+              key={day.label}
+              className="home-feed-day"
+              aria-label={day.label}
+            >
+              <h2 className="home-feed-day-label">{day.label}</h2>
+              <ol className="bs-panel home-feed-list">
+                {day.events.map((event) => (
+                  <FeedItem
+                    key={event.id}
+                    event={event}
+                    onOpenChange={onOpenChange}
+                    onOpenBinder={onOpenBinder}
                   />
                 ))}
-              </ul>
+              </ol>
             </section>
-          ) : null}
+          ))}
 
-          {submissions.length > 0 ? (
-            <section className="bs-panel">
-              <div className="bs-panel-bar">
-                <h2 className="bs-panel-bar-title">Your submissions</h2>
-                {/* Counted like the section above it, in the quiet colour:
-                    these are waiting on somebody else, not on you. */}
-                <span className="bs-section-count">{submissions.length}</span>
-              </div>
-              <ul className="bs-row-list">
-                {submissions.map((row) => (
-                  <HomeChangeRowItem
-                    key={row.key}
-                    row={row}
-                    onOpen={onOpenChange}
-                  />
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          <section className="bs-panel">
-            <div className="bs-panel-bar">
-              <h2 className="bs-panel-bar-title">Recently decided</h2>
-              <span className="bs-panel-bar-spacer" />
-              {browseLink}
-            </div>
-            {decided.length === 0 ? (
-              <div className="home-empty">
-                <p>Nothing has been decided yet.</p>
-              </div>
-            ) : (
-              <ul className="bs-row-list">
-                {decided.map((row) => (
-                  <HomeDecidedRowItem
-                    key={row.key}
-                    row={row}
-                    onOpen={onOpenChange}
-                  />
-                ))}
-              </ul>
-            )}
-          </section>
-        </>
+          {feed.hasNextPage ? (
+            <button
+              type="button"
+              className="bs-btn bs-btn-secondary home-feed-more"
+              disabled={feed.isFetchingNextPage}
+              onClick={() => void feed.fetchNextPage()}
+            >
+              {feed.isFetchingNextPage ? "Reading further back…" : "Show older"}
+            </button>
+          ) : (
+            <p className="home-feed-end">That is everything.</p>
+          )}
+        </div>
       )}
     </div>
   );
 }
 
 /**
- * One change request on Home — the same row every other list draws.
- *
- * Home used to draw its own: a tinted icon tile, the document in bold, and a
- * Review button that did exactly what clicking the row did. Three lists, three
- * rows, one object. What Home knows that the others do not is which document
- * the change is about and whose turn it is; the first leads the meta line, the
- * second is the section the row is in.
+ * One event: who did what to which change, where, and when — with what they
+ * wrote under it. The whole row is a link to the change, or to the binder for
+ * a binder being made.
  */
-/** Where a row on Home goes: the change, on its binder. */
-function changeHref(row: { owner: string; repo: string; number: number }) {
-  return buildBinderUrl({
-    org: row.owner,
-    binder: row.repo,
-    tab: "changes",
-    change: row.number,
-  });
-}
-
-function HomeChangeRowItem({
-  row,
-  onOpen,
+function FeedItem({
+  event,
+  onOpenChange,
+  onOpenBinder,
 }: {
-  row: HomeChangeRow;
-  onOpen: (owner: string, repo: string, changeNumber: number) => void;
+  event: FeedEvent;
+  onOpenChange: (owner: string, repo: string, changeNumber: number) => void;
+  onOpenBinder: (org: string, binder: string) => void;
 }) {
-  return (
-    <ChangeRowView
-      title={row.title}
-      context={row.documentName}
-      meta={row.meta}
-      tone={row.tone}
-      standing={row.standing}
-      commentCount={row.commentCount}
-      href={changeHref(row)}
-      onOpen={() => onOpen(row.owner, row.repo, row.number)}
-    />
-  );
-}
+  const line = describeFeedEvent(event);
+  const change = event.changeNumber;
+  const href =
+    change === null
+      ? buildBinderUrl({ org: event.org, binder: event.binder })
+      : buildBinderUrl({
+          org: event.org,
+          binder: event.binder,
+          tab: "changes",
+          change,
+        });
 
-function HomeDecidedRowItem({
-  row,
-  onOpen,
-}: {
-  row: HomeDecidedRow;
-  onOpen: (owner: string, repo: string, changeNumber: number) => void;
-}) {
   return (
-    <ChangeRowView
-      title={row.title}
-      context={row.documentName}
-      meta={row.meta}
-      tone={row.tone}
-      standing={row.standing}
-      outcome={row.outcome === "published" ? "published" : "declined"}
-      href={changeHref(row)}
-      onOpen={() => onOpen(row.owner, row.repo, row.number)}
-    />
+    <li className={`home-feed-item home-feed-item--${line.tone}`}>
+      <a
+        className="home-feed-link"
+        href={href}
+        onClick={(click) =>
+          followInApp(click, () =>
+            change === null
+              ? onOpenBinder(event.org, event.binder)
+              : onOpenChange(event.org, event.binder, change),
+          )
+        }
+      >
+        <PersonAvatar
+          person={{ login: event.actor, fullName: event.actorName }}
+          size="sm"
+        />
+        <span className="home-feed-body">
+          <span className="home-feed-line">
+            <strong className="home-feed-actor">{line.actor}</strong>{" "}
+            {line.verb}{" "}
+            <strong className="home-feed-subject">{line.subject}</strong>
+            {line.binder ? (
+              <span className="home-feed-where"> in {line.binder}</span>
+            ) : null}
+          </span>
+          {event.excerpt ? (
+            <span className="home-feed-excerpt">{event.excerpt}</span>
+          ) : null}
+        </span>
+        <time className="home-feed-time" dateTime={event.createdAt}>
+          {feedTime(event.createdAt)}
+        </time>
+      </a>
+    </li>
   );
 }

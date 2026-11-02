@@ -47,3 +47,43 @@ export const ReadNotificationsBodySchema = z.object({
     .optional(),
 });
 export type ReadNotificationsBody = z.infer<typeof ReadNotificationsBodySchema>;
+
+/**
+ * One thing that happened in a binder you can see, for Home's feed.
+ *
+ * Gitea's own activity feed, kept to what a person reading Home cares about
+ * and said the way the product does — see `services/api/home-feed.ts`.
+ */
+export const FeedEventSchema = z.object({
+  id: z.number(),
+  kind: z.enum([
+    "opened",
+    "approved",
+    "changes_requested",
+    "commented",
+    "started_discussion",
+    "replied",
+    "resolved",
+    "reopened_discussion",
+    "published",
+    "closed",
+    "reopened",
+    "binder_created",
+  ]),
+  actor: z.string(),
+  actorName: z.string(),
+  org: z.string(),
+  binder: z.string(),
+  changeNumber: z.number().nullable(),
+  title: z.string().nullable(),
+  excerpt: z.string().nullable(),
+  createdAt: z.string(),
+});
+export type FeedEvent = z.infer<typeof FeedEventSchema>;
+
+export const HomeFeedPayloadSchema = z.object({
+  events: z.array(FeedEventSchema),
+  /** The page to ask for next, or null at the end of the feed. */
+  nextPage: z.number().nullable(),
+});
+export type HomeFeedPayload = z.infer<typeof HomeFeedPayloadSchema>;

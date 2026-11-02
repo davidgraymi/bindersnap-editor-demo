@@ -279,6 +279,7 @@ import { isSupportedReaction } from "./gitea-client/reactions";
 import { buildAuditPacket } from "./export/auditPacket";
 import { onboardingState, type OnboardingOrganization } from "./onboarding";
 import { pullKey, readSubjectUrl, toAppNotifications } from "./notifications";
+import { changesNeedingTitles, toFeedEvents } from "./home-feed";
 import type { components } from "./gitea-client/spec/gitea";
 import { gatherAuditRecord } from "./export/auditRecord";
 import {
@@ -4414,6 +4415,118 @@ async function handleListNotifications(
       err,
       baseHeaders,
       "Unable to read your notifications.",
+    );
+  }
+}
+
+/** How many of Gitea's actions one page of the feed reads. */
+const FEED_PAGE = 50;
+/** Events worth a page, and the most raw pages read to find them. */
+const FEED_WANTED = 20;
+const FEED_MAX_READS = 6;
+
+/**
+ * What has been happening in your binders: Home's feed, from Gitea's own.
+ *
+ * Read with the person's own token, so Gitea answers with what they can see
+ * and nothing else. One read of the feed, one of their organizations, and one
+ * of each change whose title the feed does not carry.
+ */
+async function handleHomeFeed(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { client, session } = auth;
+
+  const requested = Number(new URL(req.url).searchParams.get("page") ?? "1");
+  const page = Number.isInteger(requested) && requested > 0 ? requested : 1;
+
+  try {
+    const orgs = (await unwrap(
+      client.GET("/user/orgs", { params: { query: { limit: 50 } } }),
+    )) as { username?: string; name?: string }[] | undefined;
+    const organizations = new Set(
+      (orgs ?? [])
+        .map((org) => org.username ?? org.name ?? "")
+        .filter((name) => name !== ""),
+    );
+
+    // **A page of Gitea's feed is mostly noise.** Commits, tags and deleted
+    // branches fill it, and a busy binder can write fifty of them between two
+    // approvals. One raw page may hold no event at all, so read on until
+    // there are enough to show or the feed ends. `nextPage` is the raw page
+    // after the last one read, so "Show more" carries on from there.
+    const events: ReturnType<typeof toFeedEvents> = [];
+    let raw: components["schemas"]["Activity"][] = [];
+    let read = page;
+    for (let reads = 0; reads < FEED_MAX_READS; reads += 1) {
+      raw =
+        ((await unwrap(
+          client.GET("/users/{username}/activities/feeds", {
+            params: {
+              path: { username: session.username },
+              query: {
+                "only-performed-by": false,
+                page: read,
+                limit: FEED_PAGE,
+              },
+            },
+          }),
+        )) as components["schemas"]["Activity"][] | undefined) ?? [];
+
+      const titles = new Map(
+        await Promise.all(
+          changesNeedingTitles(raw, organizations).map(async (change) => {
+            const pull = await client
+              .GET("/repos/{owner}/{repo}/pulls/{index}", {
+                params: {
+                  path: {
+                    owner: change.org,
+                    repo: change.binder,
+                    index: change.number,
+                  },
+                },
+              })
+              .then((response) => response.data ?? null)
+              .catch(() => null);
+            return [
+              `${change.org}/${change.binder}#${change.number}`,
+              pull?.title ?? "",
+            ] as const;
+          }),
+        ),
+      );
+      events.push(
+        ...toFeedEvents(
+          raw,
+          organizations,
+          new Map([...titles].filter(([, title]) => title !== "")),
+        ),
+      );
+      read += 1;
+      if (raw.length < FEED_PAGE || events.length >= FEED_WANTED) break;
+    }
+
+    return json(
+      200,
+      {
+        events,
+        // A full page may have more behind it; a short one is the end.
+        nextPage: raw.length === FEED_PAGE ? read : null,
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to read the activity feed", {
+      username: session.username,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to read what has been happening.",
     );
   }
 }
@@ -16754,6 +16867,8 @@ async function handleRequest(req: Request): Promise<Response> {
     response = await handleAdminRunActivityBuild(req, baseHeaders);
   } else if (pathname === "/api/app/home/changes" && method === "GET") {
     response = await handleHomeChanges(req, baseHeaders);
+  } else if (pathname === "/api/app/home/feed" && method === "GET") {
+    response = await handleHomeFeed(req, baseHeaders);
   } else if (pathname === "/api/app/documents" && method === "GET") {
     response = await handleLibraryDocuments(req, baseHeaders);
   } else if (pathname === "/api/app/documents/search" && method === "GET") {

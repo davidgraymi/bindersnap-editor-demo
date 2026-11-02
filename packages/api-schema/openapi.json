@@ -5454,6 +5454,113 @@
         }
       }
     },
+    "/api/app/home/feed": {
+      "get": {
+        "operationId": "getHomeFeed",
+        "tags": [
+          "notifications"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "What has been happening in the binders the reader can see",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "opened",
+                              "approved",
+                              "changes_requested",
+                              "commented",
+                              "started_discussion",
+                              "replied",
+                              "resolved",
+                              "reopened_discussion",
+                              "published",
+                              "closed",
+                              "reopened",
+                              "binder_created"
+                            ]
+                          },
+                          "actor": {
+                            "type": "string"
+                          },
+                          "actorName": {
+                            "type": "string"
+                          },
+                          "org": {
+                            "type": "string"
+                          },
+                          "binder": {
+                            "type": "string"
+                          },
+                          "changeNumber": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "title": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "excerpt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "kind",
+                          "actor",
+                          "actorName",
+                          "org",
+                          "binder",
+                          "changeNumber",
+                          "title",
+                          "excerpt",
+                          "createdAt"
+                        ]
+                      }
+                    },
+                    "nextPage": {
+                      "type": "number",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "events",
+                    "nextPage"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/app/documents/search": {
       "get": {
         "operationId": "searchDocuments",

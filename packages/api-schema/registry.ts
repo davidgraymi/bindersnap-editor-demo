@@ -15,6 +15,7 @@ import {
   NotificationCountPayloadSchema,
   NotificationListPayloadSchema,
   ReadNotificationsBodySchema,
+  HomeFeedPayloadSchema,
 } from "./schemas/notifications";
 import {
   SessionAuthStateSchema,
@@ -472,6 +473,20 @@ registry.registerPath({
       content: {
         "application/json": { schema: HomeChangesPayloadSchema },
       },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/home/feed",
+  operationId: "getHomeFeed",
+  tags: ["notifications"],
+  request: { query: z.object({ page: z.string().optional() }) },
+  responses: {
+    200: {
+      description: "What has been happening in the binders the reader can see",
+      content: { "application/json": { schema: HomeFeedPayloadSchema } },
     },
   },
 });

@@ -1615,7 +1615,7 @@ input {
 .doc-preview-prose h6 {
   margin: var(--brand-space-6) 0 var(--brand-space-3);
   font-family: var(--brand-font-serif);
-  line-height: var(--brand-leading-snug);
+  line-height: var(--brand-leading-normal);
   color: var(--bs-text-primary);
 }
 
@@ -3126,7 +3126,7 @@ a.bs-knot {
   margin: 0;
   font-family: var(--brand-font-serif);
   font-size: var(--brand-text-h3);
-  line-height: var(--brand-leading-snug);
+  line-height: var(--brand-leading-normal);
   color: var(--bs-text-primary);
   overflow-wrap: anywhere;
 }
@@ -3295,7 +3295,7 @@ a.bs-knot {
   margin: 0;
   font-family: var(--brand-font-serif);
   font-size: var(--brand-text-h3);
-  line-height: var(--brand-leading-snug);
+  line-height: var(--brand-leading-normal);
 }
 
 .collaborators-panel-meta {
@@ -6275,8 +6275,143 @@ a.admin-console-primary:hover {
 }
 
 /* ═════════════════════════════════════════════════════════════
-   HOME — the reader's queue of change requests
+   HOME — what has been happening in your binders
    ═════════════════════════════════════════════════════════════ */
+
+/* The one thing on Home that is yours to do: a way to the change requests
+   page, not a second copy of it. */
+.home-waiting {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-3) var(--brand-space-4);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-ui-lg);
+  font-weight: var(--brand-weight-medium);
+  text-decoration: none;
+}
+
+.home-waiting:hover {
+  background: var(--bs-surface-2);
+}
+
+.home-waiting:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 2px;
+}
+
+.home-waiting-go {
+  margin-left: auto;
+  color: var(--bs-coral-text);
+}
+
+.home-feed {
+  display: grid;
+  gap: var(--brand-space-5);
+}
+
+.home-feed-day {
+  display: grid;
+  gap: var(--brand-space-2);
+}
+
+.home-feed-day-label {
+  margin: 0;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.home-feed-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home-feed-item + .home-feed-item {
+  border-top: 1px solid var(--bs-rule-warm);
+}
+
+.home-feed-link {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-3) var(--brand-space-4);
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-md);
+  text-decoration: none;
+}
+
+.home-feed-link:hover {
+  background: var(--bs-surface-2);
+}
+
+.home-feed-link:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: -2px;
+}
+
+.home-feed-body {
+  display: grid;
+  gap: var(--brand-space-1);
+  min-width: 0;
+}
+
+.home-feed-line {
+  line-height: var(--brand-leading-normal);
+}
+
+.home-feed-actor,
+.home-feed-subject {
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.home-feed-where {
+  color: var(--bs-text-muted);
+}
+
+/* What they wrote, a line or two of it, set apart from the sentence about
+   it. The change holds the rest. */
+.home-feed-excerpt {
+  display: -webkit-box;
+  overflow: hidden;
+  padding-left: var(--brand-space-3);
+  border-left: 2px solid var(--bs-rule);
+  color: var(--bs-text-muted);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.home-feed-item--decision .home-feed-excerpt {
+  border-left-color: var(--bs-green-border);
+}
+
+.home-feed-item--blocked .home-feed-excerpt {
+  border-left-color: var(--brand-coral);
+}
+
+.home-feed-time {
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.home-feed-more {
+  justify-self: center;
+}
+
+.home-feed-end {
+  margin: 0;
+  color: var(--bs-text-faint);
+  font-size: var(--brand-text-ui-sm);
+  text-align: center;
+}
 
 .home-section-link {
   font-size: var(--brand-text-ui-md);
@@ -8066,7 +8201,7 @@ a.cmp-file-act {
   font-size: 26px;
   font-weight: var(--brand-weight-semibold);
   letter-spacing: var(--brand-tracking-snug);
-  line-height: var(--brand-leading-snug);
+  line-height: var(--brand-leading-normal);
   color: var(--bs-text-primary);
 }
 
@@ -8119,7 +8254,7 @@ a.cmp-file-act {
   font-size: 15px;
   font-weight: var(--brand-weight-semibold);
   letter-spacing: -0.006em;
-  line-height: var(--brand-leading-snug);
+  line-height: var(--brand-leading-normal);
 }
 
 .bs-section-count {
@@ -10412,7 +10547,7 @@ a.binder-latest-title:focus-visible {
   font-size: 1.25rem;
   font-weight: var(--brand-weight-semibold);
   letter-spacing: -0.012em;
-  line-height: var(--brand-leading-snug);
+  line-height: var(--brand-leading-normal);
 }
 
 .bs-settings-group-note {
@@ -10880,7 +11015,7 @@ html.bs-writing .app-main {
   font-family: var(--brand-font-serif);
   font-size: var(--brand-text-body-lg);
   font-weight: var(--brand-weight-semibold);
-  line-height: var(--brand-leading-snug);
+  line-height: var(--brand-leading-normal);
   color: var(--bs-text-primary);
   text-overflow: ellipsis;
   white-space: nowrap;

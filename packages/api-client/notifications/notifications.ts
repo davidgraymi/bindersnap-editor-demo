@@ -6,6 +6,8 @@
  */
 import type {
   CountNotifications200,
+  GetHomeFeed200,
+  GetHomeFeedParams,
   ListNotifications200,
   ListNotificationsParams,
   ReadNotifications200,
@@ -117,3 +119,41 @@ export const readNotifications = async (readNotificationsBody?: ReadNotification
 );}
 
 
+
+export type getHomeFeedResponse200 = {
+  data: GetHomeFeed200
+  status: 200
+}
+
+export type getHomeFeedResponseSuccess = (getHomeFeedResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getHomeFeedResponse = (getHomeFeedResponseSuccess)
+
+export const getGetHomeFeedUrl = (params?: GetHomeFeedParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/app/home/feed?${stringifiedParams}` : `/api/app/home/feed`
+}
+
+export const getHomeFeed = async (params?: GetHomeFeedParams, options?: Parameters<typeof customFetch>[1]): Promise<getHomeFeedResponse> => {
+
+  return customFetch<getHomeFeedResponse>(getGetHomeFeedUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}

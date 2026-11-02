@@ -6,7 +6,7 @@
  * invalidate the lot with one prefix instead of naming each screen's query.
  */
 
-import { queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import {
   fetchBinder,
@@ -29,7 +29,9 @@ import {
   fetchOrganizationMembers,
   fetchOrganizationPeople,
   fetchOrganizations,
+  fetchHomeFeed,
   getHomeChanges,
+  type HomeFeedPayload,
   listChangeDiscussions,
   listChangeUpdates,
   listDocumentCollaborators,
@@ -109,6 +111,8 @@ export const queryKeys = {
 
   /** The changes this person is part of, everywhere — home and the queue. */
   homeChanges: () => ["home-changes"] as const,
+  /** Home's feed — what has been happening in your binders. */
+  homeFeed: () => ["home-feed"] as const,
   library: (query: string) => ["library", query] as const,
   search: (query: string, limit: number) =>
     ["library", "search", query, limit] as const,
@@ -175,6 +179,16 @@ export function homeChangesQuery() {
   return queryOptions({
     queryKey: queryKeys.homeChanges(),
     queryFn: ({ signal }) => getHomeChanges({ signal }),
+  });
+}
+
+/** Home's feed, a page at a time, newest first. */
+export function homeFeedQuery() {
+  return infiniteQueryOptions({
+    queryKey: queryKeys.homeFeed(),
+    queryFn: ({ pageParam, signal }) => fetchHomeFeed(pageParam, { signal }),
+    initialPageParam: 1,
+    getNextPageParam: (last: HomeFeedPayload) => last.nextPage,
   });
 }
 
