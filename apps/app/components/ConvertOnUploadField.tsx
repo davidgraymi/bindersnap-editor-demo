@@ -44,7 +44,7 @@ export function ConvertOnUploadField({
       </label>
       <p className="bs-field-hint">
         {checked
-          ? "It is read here, in your browser, and added as a Bindersnap document you can edit. Layout, headers and footers do not come across, and a PDF’s headings are guessed from type size, so read it through before it is reviewed."
+          ? "Read in your browser and added as a document you can edit. Layout does not come across, so read it through before it is reviewed."
           : "Left unticked, it is kept exactly as the file you chose."}
       </p>
     </div>
