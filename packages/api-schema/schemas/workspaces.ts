@@ -37,6 +37,11 @@ export const WorkspaceSummarySchema = z.object({
   openChangeCount: z.number(),
   /** When anything last moved in it (ISO); "" when Gitea does not say. */
   updatedAt: z.string(),
+  /**
+   * What the reader may do in it, as Gitea answers on the same read: change
+   * its documents (`push`), and run it (`admin`). Neither is reading only.
+   */
+  access: z.object({ push: z.boolean(), admin: z.boolean() }).optional(),
 });
 export type WorkspaceSummary = z.infer<typeof WorkspaceSummarySchema>;
 

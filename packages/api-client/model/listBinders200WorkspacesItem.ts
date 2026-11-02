@@ -4,6 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { ListBinders200WorkspacesItemAccess } from './listBinders200WorkspacesItemAccess.ts';
 
 export type ListBinders200WorkspacesItem = {
   id: number;
@@ -13,4 +14,5 @@ export type ListBinders200WorkspacesItem = {
   description: string;
   openChangeCount: number;
   updatedAt: string;
+  access?: ListBinders200WorkspacesItemAccess;
 };

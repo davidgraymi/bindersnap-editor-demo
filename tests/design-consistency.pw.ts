@@ -264,6 +264,7 @@ test("every row of controls in the product is one size", async ({ page }) => {
     ["the change requests", `${APP_BASE_URL}/${org}/${binder}?tab=changes`],
     ["the organization's people", `${APP_BASE_URL}/${org}?tab=people`],
     ["the library", `${APP_BASE_URL}/-/documents`],
+    ["your binders", `${APP_BASE_URL}/-/binders`],
     ["home", `${APP_BASE_URL}/home`],
   ];
 
@@ -381,6 +382,7 @@ test("every page begins in the same place, at the same size", async ({
   const screens: Array<[string, string]> = [
     ["home", `${APP_BASE_URL}/home`],
     ["the library", `${APP_BASE_URL}/-/documents`],
+    ["your binders", `${APP_BASE_URL}/-/binders`],
     ["the review queue", `${APP_BASE_URL}/-/changes`],
     ["the binder", `${APP_BASE_URL}/${org}/${binder}`],
     ["the organization", `${APP_BASE_URL}/${org}`],
@@ -547,6 +549,7 @@ test("the marketing eyebrow never labels a field in the app", async ({
     ["the organization", `${APP_BASE_URL}/${org}`],
     ["the organization's people", `${APP_BASE_URL}/${org}?tab=people`],
     ["the library", `${APP_BASE_URL}/-/documents`],
+    ["your binders", `${APP_BASE_URL}/-/binders`],
   ];
 
   for (const [where, url] of screens) {
@@ -653,6 +656,7 @@ test("no heading on a page outranks the page's own title", async ({ page }) => {
   const screens: Array<[string, string]> = [
     ["home", `${APP_BASE_URL}/home`],
     ["the library", `${APP_BASE_URL}/-/documents`],
+    ["your binders", `${APP_BASE_URL}/-/binders`],
     ["the review queue", `${APP_BASE_URL}/-/changes`],
     ["the binder", `${APP_BASE_URL}/${org}/${binder}`],
     ["the organization", `${APP_BASE_URL}/${org}`],

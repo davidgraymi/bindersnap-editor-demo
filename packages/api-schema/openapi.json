@@ -2228,6 +2228,21 @@
           },
           "updatedAt": {
             "type": "string"
+          },
+          "access": {
+            "type": "object",
+            "properties": {
+              "push": {
+                "type": "boolean"
+              },
+              "admin": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "push",
+              "admin"
+            ]
           }
         },
         "required": [
@@ -2268,6 +2283,21 @@
                 },
                 "updatedAt": {
                   "type": "string"
+                },
+                "access": {
+                  "type": "object",
+                  "properties": {
+                    "push": {
+                      "type": "boolean"
+                    },
+                    "admin": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "push",
+                    "admin"
+                  ]
                 }
               },
               "required": [
@@ -6614,6 +6644,21 @@
                           },
                           "updatedAt": {
                             "type": "string"
+                          },
+                          "access": {
+                            "type": "object",
+                            "properties": {
+                              "push": {
+                                "type": "boolean"
+                              },
+                              "admin": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "push",
+                              "admin"
+                            ]
                           }
                         },
                         "required": [
@@ -6687,6 +6732,21 @@
                           },
                           "updatedAt": {
                             "type": "string"
+                          },
+                          "access": {
+                            "type": "object",
+                            "properties": {
+                              "push": {
+                                "type": "boolean"
+                              },
+                              "admin": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "push",
+                              "admin"
+                            ]
                           }
                         },
                         "required": [
@@ -6798,6 +6858,21 @@
                         },
                         "updatedAt": {
                           "type": "string"
+                        },
+                        "access": {
+                          "type": "object",
+                          "properties": {
+                            "push": {
+                              "type": "boolean"
+                            },
+                            "admin": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "push",
+                            "admin"
+                          ]
                         }
                       },
                       "required": [
@@ -6876,6 +6951,21 @@
                         },
                         "updatedAt": {
                           "type": "string"
+                        },
+                        "access": {
+                          "type": "object",
+                          "properties": {
+                            "push": {
+                              "type": "boolean"
+                            },
+                            "admin": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "push",
+                            "admin"
+                          ]
                         }
                       },
                       "required": [

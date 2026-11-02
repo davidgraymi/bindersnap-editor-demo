@@ -4,6 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { CreateBinder201WorkspaceAccess } from './createBinder201WorkspaceAccess.ts';
 
 export type CreateBinder201Workspace = {
   id: number;
@@ -13,4 +14,5 @@ export type CreateBinder201Workspace = {
   description: string;
   openChangeCount: number;
   updatedAt: string;
+  access?: CreateBinder201WorkspaceAccess;
 };

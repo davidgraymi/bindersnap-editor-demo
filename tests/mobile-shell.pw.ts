@@ -39,9 +39,10 @@ test("a phone gets a bottom bar instead of the sidebar", async ({ page }) => {
   await expect(bottom).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(".app-sidebar")).toBeHidden();
 
-  for (const label of ["Home", "Changes", "Documents", "Binders"] as const) {
+  for (const label of ["Home", "Changes", "Binders"] as const) {
     await expect(bottom.getByRole("link", { name: label })).toBeVisible();
   }
+  await expect(bottom.getByRole("link", { name: "Documents" })).toHaveCount(0);
 });
 
 test("the bottom bar navigates and marks where you are", async ({ page }) => {

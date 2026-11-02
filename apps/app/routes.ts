@@ -25,6 +25,8 @@ export type AppRoute =
   | { kind: "callback" }
   | { kind: "workspace" }
   | { kind: "documents" }
+  /** Every binder you can open, across your organizations: `/-/binders`. */
+  | { kind: "binders" }
   | { kind: "changes" }
   /**
    * The site admin's console, `/-/admin` and its sections: everyone, every
@@ -174,6 +176,7 @@ const APP_PAGES: Readonly<Record<string, AppRoute>> = {
   "/-/unsubscribe": { kind: "unsubscribe" },
   "/-/verify_email": { kind: "verifyEmail" },
   "/-/documents": { kind: "documents" },
+  "/-/binders": { kind: "binders" },
   // Every change in flight, across every binder. The counterpart to a
   // binder's own Change requests tab, which can only answer for one binder.
   "/-/changes": { kind: "changes" },
@@ -300,6 +303,8 @@ export function routeToPath(route: AppRoute): string {
       return "/auth/callback";
     case "documents":
       return "/-/documents";
+    case "binders":
+      return "/-/binders";
     case "changes":
       return "/-/changes";
     case "accountSettings":
@@ -427,6 +432,7 @@ export function isProtectedAppRoute(route: AppRoute): boolean {
     route.kind === "home" ||
     route.kind === "workspace" ||
     route.kind === "documents" ||
+    route.kind === "binders" ||
     route.kind === "changes" ||
     route.kind === "accountSettings" ||
     route.kind === "admin" ||
