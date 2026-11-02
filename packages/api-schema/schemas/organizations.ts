@@ -64,3 +64,40 @@ export const DeleteOrganizationBodySchema = z.object({
 export type DeleteOrganizationBody = z.infer<
   typeof DeleteOrganizationBodySchema
 >;
+
+/** What a new binder in an organization starts with. */
+export const NewBinderDefaultsSchema = z.object({
+  requiredApprovals: z.number().int().min(0),
+  /** Whether an edit to a change clears the approvals already given. */
+  dismissStaleApprovals: z.boolean(),
+  /** Whether every discussion must be resolved before publishing. */
+  blockOnUnresolvedThreads: z.boolean(),
+});
+export type NewBinderDefaults = z.infer<typeof NewBinderDefaultsSchema>;
+
+/** An organization's General settings. */
+export const OrganizationSettingsPayloadSchema = z.object({
+  organization: z.object({
+    id: z.number(),
+    /** Its address — every link to it. */
+    name: z.string(),
+    /** What every page calls it. */
+    displayName: z.string(),
+    description: z.string(),
+  }),
+  /** Whether the reader owns it, and so may change these. */
+  canManage: z.boolean(),
+  newBinders: NewBinderDefaultsSchema,
+});
+export type OrganizationSettingsPayload = z.infer<
+  typeof OrganizationSettingsPayloadSchema
+>;
+
+export const UpdateOrganizationSettingsBodySchema = z.object({
+  displayName: z.string().optional(),
+  description: z.string().optional(),
+  newBinders: NewBinderDefaultsSchema.partial().optional(),
+});
+export type UpdateOrganizationSettingsBody = z.infer<
+  typeof UpdateOrganizationSettingsBodySchema
+>;

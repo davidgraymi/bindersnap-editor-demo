@@ -75,6 +75,8 @@ import {
   OrganizationSummarySchema,
   DeleteOrganizationBodySchema,
   OrganizationDeletionSchema,
+  OrganizationSettingsPayloadSchema,
+  UpdateOrganizationSettingsBodySchema,
 } from "./schemas/organizations";
 import {
   PublishedWorkspaceChangePayloadSchema,
@@ -663,6 +665,46 @@ registry.registerPath({
     409: {
       description: "This person is the only owner of an organization",
       content: { "application/json": { schema: AccountRefusalSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/orgs/{org}/settings",
+  operationId: "getOrganizationSettings",
+  tags: ["organizations"],
+  request: { params: z.object({ org: z.string() }) },
+  responses: {
+    200: {
+      description:
+        "What it is called, what it is for, and what a new binder starts with",
+      content: {
+        "application/json": { schema: OrganizationSettingsPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "patch",
+  path: "/api/app/orgs/{org}/settings",
+  operationId: "updateOrganizationSettings",
+  tags: ["organizations"],
+  request: {
+    params: z.object({ org: z.string() }),
+    body: {
+      content: {
+        "application/json": { schema: UpdateOrganizationSettingsBodySchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "The settings as they are now",
+      content: {
+        "application/json": { schema: OrganizationSettingsPayloadSchema },
+      },
     },
   },
 });

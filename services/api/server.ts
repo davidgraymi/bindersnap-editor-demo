@@ -281,6 +281,11 @@ import { onboardingState, type OnboardingOrganization } from "./onboarding";
 import { pullKey, readSubjectUrl, toAppNotifications } from "./notifications";
 import { changesNeedingTitles, toFeedEvents } from "./home-feed";
 import { toFoundChanges } from "./change-search";
+import {
+  organizationSettingsStore,
+  PRODUCT_NEW_BINDER_DEFAULTS,
+  type NewBinderDefaults,
+} from "./organization-settings";
 import type { components } from "./gitea-client/spec/gitea";
 import { gatherAuditRecord } from "./export/auditRecord";
 import {
@@ -8832,6 +8837,209 @@ async function handleDeleteOrganization(
   }
 }
 
+/** An organization's own settings, as its General page reads them. */
+async function readOrganizationSettings(
+  client: GiteaClient,
+  org: string,
+  username: string,
+) {
+  const organization = await findOrganization({ client, org });
+  if (!organization) throw new GiteaApiError(404, "No such organization.");
+  const [canManage, newBinders] = await Promise.all([
+    isOrganizationOwnerDirect({ client, org, username }).catch(() => false),
+    organizationSettingsStore.newBinderDefaults(organization.id),
+  ]);
+  return {
+    organization: {
+      id: organization.id,
+      name: organization.name,
+      displayName: organization.fullName || organization.name,
+      description: organization.description,
+    },
+    canManage,
+    newBinders,
+  };
+}
+
+/**
+ * An organization's General settings: what it is called, what it is for, and
+ * what a new binder in it starts with.
+ */
+async function handleReadOrganizationSettings(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  try {
+    return json(
+      200,
+      await readOrganizationSettings(
+        auth.client,
+        orgName,
+        auth.session.username,
+      ),
+      baseHeaders,
+    );
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to read this organization's settings.",
+    );
+  }
+}
+
+/**
+ * Change an organization's name, its description, or what its new binders
+ * start with. Owners only.
+ *
+ * **The name is the one people read, not the address.** Gitea keeps both: the
+ * organization's username is every link to it, and its full name is what
+ * every page says. This changes the second, which is safe to change any day.
+ * The name and the description are Gitea's own, written with the owner's
+ * token, so Gitea is what says they may; the defaults are configuration in
+ * SQLite, and the owner check here is what guards them.
+ */
+async function handleUpdateOrganizationSettings(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { client, session } = auth;
+
+  const body = await readJson<{
+    displayName?: unknown;
+    description?: unknown;
+    newBinders?: unknown;
+  }>(req);
+  if (!body || typeof body !== "object") {
+    return json(400, { error: "Say what to change." }, baseHeaders);
+  }
+
+  const displayName =
+    body.displayName === undefined
+      ? undefined
+      : typeof body.displayName === "string"
+        ? body.displayName.trim()
+        : null;
+  if (displayName === null || displayName === "") {
+    return json(400, { error: "An organization needs a name." }, baseHeaders);
+  }
+  if (displayName !== undefined && displayName.length > 100) {
+    return json(
+      400,
+      { error: "A name can be at most 100 characters." },
+      baseHeaders,
+    );
+  }
+  const description =
+    body.description === undefined
+      ? undefined
+      : typeof body.description === "string"
+        ? body.description.trim()
+        : null;
+  if (description === null || (description?.length ?? 0) > 255) {
+    return json(
+      400,
+      { error: "A description is a sentence or two, at most 255 characters." },
+      baseHeaders,
+    );
+  }
+
+  let newBinders: Partial<NewBinderDefaults> | undefined;
+  if (body.newBinders !== undefined) {
+    const parsed = parseBinderRulesRequest(
+      body.newBinders as Parameters<typeof parseBinderRulesRequest>[0],
+    );
+    if (typeof parsed === "string") {
+      return json(400, { error: parsed }, baseHeaders);
+    }
+    if (parsed.approvers !== undefined) {
+      return json(
+        400,
+        { error: "Who approves is chosen for each binder, not by default." },
+        baseHeaders,
+      );
+    }
+    newBinders = parsed;
+  }
+  if (
+    displayName === undefined &&
+    description === undefined &&
+    newBinders === undefined
+  ) {
+    return json(400, { error: "Say what to change." }, baseHeaders);
+  }
+
+  try {
+    const organization = await findOrganization({ client, org: orgName });
+    if (!organization) {
+      return json(404, { error: "No such organization." }, baseHeaders);
+    }
+    const owner = await isOrganizationOwnerDirect({
+      client,
+      org: orgName,
+      username: session.username,
+    }).catch(() => false);
+    if (!owner) {
+      return json(
+        403,
+        { error: "Only an owner can change the organization's settings." },
+        baseHeaders,
+      );
+    }
+
+    if (displayName !== undefined || description !== undefined) {
+      await unwrap(
+        client.PATCH("/orgs/{org}", {
+          params: { path: { org: orgName } },
+          body: {
+            ...(displayName !== undefined ? { full_name: displayName } : {}),
+            ...(description !== undefined ? { description } : {}),
+          },
+        }),
+      );
+    }
+    if (newBinders !== undefined) {
+      await organizationSettingsStore.setNewBinderDefaults({
+        giteaOrgId: organization.id,
+        defaults: newBinders,
+        changedBy: session.username,
+      });
+    }
+    logger.info("Organization settings changed", {
+      username: session.username,
+      organization: orgName,
+      fields: [
+        ...(displayName !== undefined ? ["displayName"] : []),
+        ...(description !== undefined ? ["description"] : []),
+        ...Object.keys(newBinders ?? {}).map((key) => `newBinders.${key}`),
+      ],
+    });
+
+    return json(
+      200,
+      await readOrganizationSettings(client, orgName, session.username),
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to change an organization's settings", {
+      username: session.username,
+      organization: orgName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to change this organization's settings.",
+    );
+  }
+}
+
 /**
  * The most approvals a binder can ask for: whatever Gitea stores.
  *
@@ -14495,6 +14703,12 @@ interface ProvisionBinderPlan {
   openToOrganization: boolean;
   /** Whose approvals count. Absent on a job from before approvers existed. */
   approvers?: { groups: string[]; people: string[] };
+  /**
+   * The rules it starts with: its organization's defaults for a new binder,
+   * with the count the form asked for. Absent on a job from before
+   * organizations had defaults, which leaves Gitea's own.
+   */
+  rules?: NewBinderDefaults;
 }
 
 type ProvisionOutcome =
@@ -14538,6 +14752,12 @@ async function executeProvisionJob(
       openToOrganization: plan.openToOrganization,
     });
     await writeNewBinderApprovers(client, plan);
+    await writeNewBinderRules(
+      client,
+      plan,
+      provisioned.workspace,
+      job.createdBy,
+    );
     store.complete(job.id, { workspace: provisioned.workspace.name });
     logger.info("Workspace created", {
       username: job.createdBy,
@@ -14628,6 +14848,76 @@ async function writeNewBinderApprovers(
   });
 }
 
+/**
+ * Write the rules a new binder starts with, once it exists.
+ *
+ * Its organization's defaults, written onto the binder itself — Gitea's
+ * branch protection for the count and for clearing approvals on an edit, the
+ * binder's settings row for discussions — and recorded as the creator's
+ * change, as any later change to them would be. Only what differs from what a
+ * binder is made with is written. Idempotent, so a resumed job does no harm.
+ */
+async function writeNewBinderRules(
+  client: GiteaClient,
+  plan: ProvisionBinderPlan,
+  workspace: WorkspaceSummary,
+  createdBy: string,
+): Promise<void> {
+  const rules = plan.rules;
+  if (!rules) return;
+  const now = Math.floor(Date.now() / 1000);
+
+  if (rules.blockOnUnresolvedThreads) {
+    await workspaceSettingsStore.set({
+      giteaRepoId: workspace.id,
+      organization: plan.org,
+      workspace: plan.name,
+      settings: { blockOnUnresolvedThreads: true },
+      changedBy: createdBy,
+      now,
+    });
+  }
+
+  const before = await readWorkspaceProtection(plan.org, plan.name);
+  if (
+    before &&
+    before.requiredApprovals === rules.requiredApprovals &&
+    before.dismissStaleApprovals === rules.dismissStaleApprovals
+  ) {
+    return;
+  }
+  const after = await updateRepoBranchProtection({
+    client,
+    owner: plan.org,
+    repo: plan.name,
+    ruleName: "main",
+    requiredApprovals: rules.requiredApprovals,
+    dismissStaleApprovals: rules.dismissStaleApprovals,
+  });
+  const recorded: SettingsEventRecord[] = [];
+  if (before?.requiredApprovals !== after.requiredApprovals) {
+    recorded.push({
+      giteaRepoId: workspace.id,
+      setting: "requiredApprovals",
+      previousValue: before ? String(before.requiredApprovals) : null,
+      newValue: String(after.requiredApprovals),
+      changedBy: createdBy,
+      changedAt: now,
+    });
+  }
+  if (before?.dismissStaleApprovals !== after.dismissStaleApprovals) {
+    recorded.push({
+      giteaRepoId: workspace.id,
+      setting: "dismissStaleApprovals",
+      previousValue: before ? String(before.dismissStaleApprovals) : null,
+      newValue: String(after.dismissStaleApprovals),
+      changedBy: createdBy,
+      changedAt: now,
+    });
+  }
+  await workspaceSettingsStore.record(recorded);
+}
+
 /** The runner's turn at a binder: finish it as the person who created it. */
 async function resumeProvisionJob(job: JobRecord): Promise<void> {
   const session = job.sessionId
@@ -14657,7 +14947,22 @@ async function handleCreateWorkspace(
     description?: unknown;
     openToOrganization?: unknown;
     approvers?: unknown;
+    requiredApprovals?: unknown;
   }>(req);
+  const askedApprovals = payload?.requiredApprovals;
+  if (
+    askedApprovals !== undefined &&
+    (typeof askedApprovals !== "number" ||
+      !Number.isInteger(askedApprovals) ||
+      askedApprovals < 0 ||
+      askedApprovals > MAX_REQUIRED_APPROVALS)
+  ) {
+    return json(
+      400,
+      { error: "Approvals needed must be a whole number, 0 or more." },
+      baseHeaders,
+    );
+  }
   const approvers =
     payload?.approvers === undefined
       ? { groups: [], people: [] }
@@ -14713,6 +15018,26 @@ async function handleCreateWorkspace(
         );
       }
 
+      // What its organization starts a binder with, and the count the form
+      // asked for if it asked. An organization that cannot be read starts it
+      // with the product's own, rather than refusing to make it.
+      const organization = await findOrganization({
+        client: auth.client,
+        org: orgName,
+      }).catch(() => null);
+      const defaults = organization
+        ? await organizationSettingsStore.newBinderDefaults(organization.id)
+        : null;
+      const rules =
+        defaults === null && askedApprovals === undefined
+          ? undefined
+          : {
+              ...(defaults ?? PRODUCT_NEW_BINDER_DEFAULTS),
+              ...(typeof askedApprovals === "number"
+                ? { requiredApprovals: askedApprovals }
+                : {}),
+            };
+
       const job = jobStore().create<ProvisionBinderPlan>({
         kind: "provision-binder",
         groupKey,
@@ -14726,6 +15051,7 @@ async function handleCreateWorkspace(
           // anyway.
           openToOrganization,
           approvers,
+          rules,
         },
         createdBy: auth.session.username,
         sessionId: sessionStore.reference(auth.session.id),
@@ -17172,6 +17498,9 @@ async function handleRequest(req: Request): Promise<Response> {
       /^\/api\/app\/orgs\/([^/]+)\/deletion$/,
     );
     const organizationMatch = pathname.match(/^\/api\/app\/orgs\/([^/]+)$/);
+    const organizationSettingsMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/settings$/,
+    );
     const organizationChangesMatch = pathname.match(
       /^\/api\/app\/orgs\/([^/]+)\/changes$/,
     );
@@ -17234,6 +17563,18 @@ async function handleRequest(req: Request): Promise<Response> {
         req,
         baseHeaders,
         organizationDeletionMatch[1]!,
+      );
+    } else if (organizationSettingsMatch && method === "GET") {
+      response = await handleReadOrganizationSettings(
+        req,
+        baseHeaders,
+        organizationSettingsMatch[1]!,
+      );
+    } else if (organizationSettingsMatch && method === "PATCH") {
+      response = await handleUpdateOrganizationSettings(
+        req,
+        baseHeaders,
+        organizationSettingsMatch[1]!,
       );
     } else if (organizationChangesMatch && method === "GET") {
       response = await handleListOrganizationChanges(

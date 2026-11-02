@@ -78,6 +78,11 @@ export const NewWorkspaceBodySchema = z.object({
       people: z.array(z.string()).optional(),
     })
     .optional(),
+  /**
+   * How many approvals it asks for from the start. Absent means its
+   * organization's default for a new binder.
+   */
+  requiredApprovals: z.number().int().min(0).optional(),
 });
 export type NewWorkspaceBody = z.infer<typeof NewWorkspaceBodySchema>;
 

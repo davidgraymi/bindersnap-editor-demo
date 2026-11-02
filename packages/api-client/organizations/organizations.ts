@@ -22,13 +22,16 @@ import type {
   GetOrganizationDeletion200,
   GetOrganizationMembers200,
   GetOrganizationPeople200,
+  GetOrganizationSettings200,
   ListOrganizationInvitations200,
   ListOrganizations200,
   RemoveOrganizationGroupMember200,
   RemoveOrganizationPerson200,
   ResendOrganizationInvitation200,
   SetOrganizationPersonRole200,
-  SetOrganizationPersonRoleBody
+  SetOrganizationPersonRoleBody,
+  UpdateOrganizationSettings200,
+  UpdateOrganizationSettingsBody
 } from '../model';
 
 import { customFetch } from '.././mutator.ts';
@@ -646,3 +649,66 @@ export const removeOrganizationGroupMember = async (org: string,
 );}
 
 
+export type getOrganizationSettingsResponse200 = {
+  data: GetOrganizationSettings200
+  status: 200
+}
+
+export type getOrganizationSettingsResponseSuccess = (getOrganizationSettingsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getOrganizationSettingsResponse = (getOrganizationSettingsResponseSuccess)
+
+export const getGetOrganizationSettingsUrl = (org: string,) => {
+
+
+
+
+  return `/api/app/orgs/${org}/settings`
+}
+
+export const getOrganizationSettings = async (org: string, options?: Parameters<typeof customFetch>[1]): Promise<getOrganizationSettingsResponse> => {
+
+  return customFetch<getOrganizationSettingsResponse>(getGetOrganizationSettingsUrl(org),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type updateOrganizationSettingsResponse200 = {
+  data: UpdateOrganizationSettings200
+  status: 200
+}
+
+export type updateOrganizationSettingsResponseSuccess = (updateOrganizationSettingsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type updateOrganizationSettingsResponse = (updateOrganizationSettingsResponseSuccess)
+
+export const getUpdateOrganizationSettingsUrl = (org: string,) => {
+
+
+
+
+  return `/api/app/orgs/${org}/settings`
+}
+
+export const updateOrganizationSettings = async (org: string,
+    updateOrganizationSettingsBody: UpdateOrganizationSettingsBody, options?: Parameters<typeof customFetch>[1]): Promise<updateOrganizationSettingsResponse> => {
+
+  return customFetch<updateOrganizationSettingsResponse>(getUpdateOrganizationSettingsUrl(org),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateOrganizationSettingsBody)
+  }
+);}

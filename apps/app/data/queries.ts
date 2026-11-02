@@ -32,6 +32,7 @@ import {
   fetchBinders,
   searchChanges,
   fetchOrganizationChanges,
+  fetchOrganizationSettings,
   fetchHomeFeed,
   getHomeChanges,
   type HomeFeedPayload,
@@ -79,6 +80,8 @@ export const queryKeys = {
     ["binders", org, binder, "overview"] as const,
   binderChanges: (org: string, binder: string, state: "open" | "closed") =>
     ["binders", org, binder, "changes", state] as const,
+  organizationSettings: (org: string) =>
+    ["organizations", org, "settings"] as const,
   organizationChanges: (org: string, state: "open" | "closed") =>
     ["organizations", org, "changes", state] as const,
   binderChange: (org: string, binder: string, number: number) =>
@@ -265,6 +268,14 @@ export function binderQuery(org: string, binder: string) {
 }
 
 /** A binder's change requests, open or closed. */
+/** An organization's General settings, and what a new binder starts with. */
+export function organizationSettingsQuery(org: string) {
+  return queryOptions({
+    queryKey: queryKeys.organizationSettings(org),
+    queryFn: ({ signal }) => fetchOrganizationSettings(org, { signal }),
+  });
+}
+
 /** Every change request in an organization's binders, open or closed. */
 export function organizationChangesQuery(
   org: string,

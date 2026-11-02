@@ -52,7 +52,11 @@ import type {
 } from "../../packages/api-schema/schemas/workspaces";
 
 // Import generated types
-import type { OrganizationDeletion } from "../../packages/api-schema/schemas/organizations";
+import type {
+  OrganizationDeletion,
+  OrganizationSettingsPayload,
+  UpdateOrganizationSettingsBody,
+} from "../../packages/api-schema/schemas/organizations";
 import type { AccountBlockers } from "../../packages/api-schema/schemas/account";
 import type {
   SessionAuthState,
@@ -909,12 +913,15 @@ export async function createBinder(
     groups: [],
     people: [],
   },
+  /** How many approvals it asks for; absent means the organization's default. */
+  requiredApprovals?: number,
 ): Promise<WorkspaceSummary> {
   const response = await BindersClient.createBinder(org, {
     name,
     description,
     openToOrganization,
     approvers,
+    ...(requiredApprovals === undefined ? {} : { requiredApprovals }),
   });
   return response.data.workspace;
 }
@@ -943,6 +950,30 @@ export async function fetchBinderChanges(
     request,
   );
   return response.data;
+}
+
+/** An organization's General settings. */
+export async function fetchOrganizationSettings(
+  org: string,
+  request?: ReadRequest,
+): Promise<OrganizationSettingsPayload> {
+  const response = await OrganizationsClient.getOrganizationSettings(
+    org,
+    request,
+  );
+  return response.data as OrganizationSettingsPayload;
+}
+
+/** Change an organization's name, description, or new-binder defaults. */
+export async function updateOrganizationSettings(
+  org: string,
+  body: UpdateOrganizationSettingsBody,
+): Promise<OrganizationSettingsPayload> {
+  const response = await OrganizationsClient.updateOrganizationSettings(
+    org,
+    body,
+  );
+  return response.data as OrganizationSettingsPayload;
 }
 
 /** Every change request in an organization's binders, open or closed. */

@@ -12,4 +12,6 @@ export type CreateBinderBody = {
   description?: string;
   openToOrganization?: boolean;
   approvers?: CreateBinderBodyApprovers;
+  /** @minimum 0 */
+  requiredApprovals?: number;
 };
