@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Building2,
@@ -13,6 +14,7 @@ import {
   MessageSquarePlus,
   PanelLeftClose,
   PanelLeftOpen,
+  Plus,
   Settings,
   Users,
 } from "lucide-react";
@@ -24,6 +26,7 @@ import {
   BINDER_SETTINGS_PAGES,
   binderSettingsSection,
 } from "../binderSettings";
+import { organizationsQuery } from "../data/queries";
 import { routeToPath, type AppRoute, type OrganizationTab } from "../routes";
 import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
 import { useCollapsedSidebar } from "../useCollapsedSidebar";
@@ -38,18 +41,23 @@ import { siteUrl } from "../siteLink";
  * own page — was reachable only by first entering a binder or by typing a URL,
  * so a new reader had no way to learn what the product contained.
  *
- * The grouping is the teaching, and it is worth more than the links. **Each
- * group is a scope, named, outermost first**: your work across every
- * organization, then this organization's binders, people and billing, then
- * the binder you are in. A reader always knows whose page an entry opens.
+ * **It shows one level at a time, the level you are in** — the way GitLab's
+ * is the project's once you are in a project, and the group's in a group. It
+ * used to stack all three, so a binder showed two "Change requests" entries
+ * and two highlighted rows, and every level's own pages were tabs on the page
+ * as well, a second navigation under the first. Now:
  *
- * **Inside a binder, the sidebar is the binder's, and nothing else** — the
- * way GitLab's is the project's once you are in one. It used to stack all
- * three scopes, so a binder showed two "Change requests" entries and two
- * highlighted rows, and its settings were tabs on a page behind a third. Now
- * it names the binder, lists the binder's own screens with Settings' pages
- * under it, and offers one step back up to the organization. Home is the
- * logo, and every other place is the search.
+ * - **Your work**, everywhere that is nobody's but yours: Home, Change
+ *   requests, Documents, and the organizations you are in.
+ * - **An organization**: a step back to Home, its name, and its Binders,
+ *   People & access, Billing and Settings.
+ * - **A binder**: a step back to its organization, its name, and its
+ *   Documents, Change requests, History and Settings, with Settings' pages
+ *   listed under it while one is open.
+ *
+ * Each level names the place it is in and offers one step back up, because
+ * breadcrumbs alone are not read as a way out by somebody who has never used
+ * GitLab. Home is also the logo, and every other place is the search.
  *
  * **The binder you are in is a section of this, and it was a tab bar** (D1,
  * the customer's call). A binder is still a place — one set of rules, one set
@@ -70,16 +78,16 @@ import { siteUrl } from "../siteLink";
  */
 
 /**
- * Whether the organization's People tab is the page.
+ * Which of the organization's pages is open, or null when none is.
  *
  * The route carries the tab only when the app navigated there itself; an
  * address that was typed, reloaded or opened in a new tab says it in the query.
  */
-function isOrganizationPeople(route: AppRoute): boolean {
-  if (route.kind !== "organization") return false;
+function organizationTab(route: AppRoute): OrganizationTab | null {
+  if (route.kind !== "organization") return null;
   const tab =
     route.tab ?? new URLSearchParams(window.location.search).get("tab");
-  return tab === "people";
+  return tab === "people" || tab === "settings" ? tab : "binders";
 }
 
 /** The binder on screen, as its own section of the map. */
@@ -198,6 +206,7 @@ export function AppSidebar({
   // organization is on screen. Rendered muted and inert rather than hidden:
   // a map that changes shape as you walk around it is not a map.
   const orgName = useOrganizationDisplayName(org ?? "");
+  const organizations = useQuery(organizationsQuery()).data ?? [];
   const orgRoute = (tab?: OrganizationTab): AppRoute | null =>
     org === null
       ? null
@@ -322,26 +331,31 @@ export function AppSidebar({
     : [];
 
   /**
-   * **The organization's own entries, under its name.** They were split
-   * across "Manage" and "Settings" headings between the binder and the foot,
-   * with nothing saying which organization they belonged to — beside Home and
-   * Change requests, which span every organization you are in. Now each scope
-   * is a labelled group: yours, this organization's, this binder's.
+   * The organization on screen, when the page is one of its own: its binders,
+   * its people, its billing or its settings.
    */
+  const orgScope: string | null =
+    route.kind === "organization"
+      ? route.org
+      : route.kind === "billing" && route.org
+        ? route.org
+        : null;
+
+  /** The organization's own pages, which were also tabs on its page. */
   const organization: Entry[] = [
     {
       key: "binders",
       label: "Binders",
       icon: Library,
       route: orgRoute(),
-      isActive: (r) => r.kind === "organization" && !isOrganizationPeople(r),
+      isActive: (r) => organizationTab(r) === "binders",
     },
     {
       key: "people",
       label: "People & access",
       icon: Users,
       route: orgRoute("people"),
-      isActive: isOrganizationPeople,
+      isActive: (r) => organizationTab(r) === "people",
     },
     {
       key: "billing",
@@ -352,7 +366,38 @@ export function AppSidebar({
       route: org === null ? null : { kind: "billing", org },
       isActive: (r) => r.kind === "billing",
     },
+    {
+      key: "settings",
+      label: "Settings",
+      icon: Settings,
+      route: orgRoute("settings"),
+      isActive: (r) => organizationTab(r) === "settings",
+    },
   ];
+
+  /**
+   * **The organizations you are in, as places to go.** Your work spans all of
+   * them, so from here an organization is somewhere you go into rather than a
+   * heading over its pages. With none, the one thing to do is make one.
+   */
+  const yourOrganizations: Entry[] =
+    organizations.length > 0
+      ? organizations.map((organization): Entry => ({
+          key: `org-${organization.name}`,
+          label: organization.displayName || organization.name,
+          icon: Building2,
+          route: { kind: "organization", org: organization.name },
+          isActive: () => false,
+        }))
+      : [
+          {
+            key: "new-organization",
+            label: "New organization",
+            icon: Plus,
+            route: { kind: "createOrganization" },
+            isActive: (r) => r.kind === "createOrganization",
+          },
+        ];
 
   const renderEntry = (entry: Entry) => {
     const Icon = entry.icon;
@@ -409,7 +454,7 @@ export function AppSidebar({
     >
       {scope ? (
         <nav
-          className="app-sidebar-section app-sidebar-section--binder"
+          className="app-sidebar-section app-sidebar-section--scoped"
           aria-label={scope.name}
         >
           {/* **One step back up**, to the organization the binder is in.
@@ -442,6 +487,34 @@ export function AppSidebar({
 
           {binderEntries.map(renderEntry)}
         </nav>
+      ) : orgScope ? (
+        <nav
+          className="app-sidebar-section app-sidebar-section--scoped"
+          aria-label={orgName || orgScope}
+        >
+          <a
+            className="app-sidebar-back"
+            href={routeToPath({ kind: "workspace" })}
+            title={collapsed ? "Home" : undefined}
+            onClick={(event) =>
+              followInApp(event, () => onNavigate({ kind: "workspace" }))
+            }
+          >
+            <ArrowLeft size={14} strokeWidth={1.75} aria-hidden="true" />
+            <span className="app-sidebar-back-label">Home</span>
+          </a>
+
+          <div className="app-sidebar-scope">
+            <span className="app-sidebar-scope-mark" aria-hidden="true">
+              <Building2 size={14} strokeWidth={1.75} />
+            </span>
+            <span className="app-sidebar-scope-name">
+              {orgName || orgScope}
+            </span>
+          </div>
+
+          {organization.map(renderEntry)}
+        </nav>
       ) : (
         <>
           <nav className="app-sidebar-section" aria-label="Your work">
@@ -449,18 +522,9 @@ export function AppSidebar({
             {work.map(renderEntry)}
           </nav>
 
-          {/* The organization's, under its own name. */}
-          <nav
-            className="app-sidebar-section"
-            aria-label={orgName ? orgName : "Organization"}
-          >
-            <div className="app-sidebar-label app-sidebar-label--scope">
-              <Building2 size={12} strokeWidth={2} aria-hidden="true" />
-              <span className="app-sidebar-label-text">
-                {orgName || "Organization"}
-              </span>
-            </div>
-            {organization.map(renderEntry)}
+          <nav className="app-sidebar-section" aria-label="Your organizations">
+            <div className="app-sidebar-label">Organizations</div>
+            {yourOrganizations.map(renderEntry)}
           </nav>
         </>
       )}

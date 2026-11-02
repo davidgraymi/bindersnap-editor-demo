@@ -41,9 +41,33 @@ function isCreatingFromPath(pathname: string): boolean {
  * customer's binders from a list that is sorted by what you personally owe.
  *
  * Laid out like the binder, and for the same reason: an organization is a
- * Gitea organization, its page is a name and a row of tabs, and following the
- * shape people already know beats inventing one per screen.
+ * Gitea organization, and following the shape people already know beats
+ * inventing one per screen. **Its pages are listed in the sidebar**, the way
+ * GitLab lists a group's, so each is titled for itself with one sentence
+ * saying what it is for. On a phone there is no sidebar, and they are a row
+ * of tabs under the title — drawn at every width, shown only there.
  */
+
+/** Each of the organization's pages, as its title and what it is for. */
+function orgPageHead(
+  tab: OrgTab,
+  displayName: string,
+): { title: string; subtitle: string | null } {
+  switch (tab) {
+    case "people":
+      return {
+        title: "People & access",
+        subtitle: `Who is in ${displayName}, the groups they are in, and which binders each group can open.`,
+      };
+    case "settings":
+      return {
+        title: "Settings",
+        subtitle: `Changes to ${displayName} as a whole.`,
+      };
+    default:
+      return { title: displayName, subtitle: null };
+  }
+}
 
 interface OrganizationPageProps {
   org: string;
@@ -100,11 +124,15 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
   // Drawn while the organization cannot write, and answered with the paywall.
   const newBinder = useWriteAction(openNewBinder);
 
+  const head = orgPageHead(tab, displayName);
   const header = (
-    <header className="doc-header">
+    <header className="doc-header org-header">
       <div className="doc-header-top">
         <div className="doc-header-identity">
-          <h1 className="doc-header-title">{displayName}</h1>
+          <h1 className="doc-header-title">{head.title}</h1>
+          {head.subtitle ? (
+            <p className="bs-subtitle">{head.subtitle}</p>
+          ) : null}
         </div>
 
         {/* The one coral element on this page, and the same place the binder
@@ -123,7 +151,11 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
         ) : null}
       </div>
 
-      <nav className="doc-tabs" role="tablist" aria-label="Organization">
+      <nav
+        className="doc-tabs org-tabs"
+        role="tablist"
+        aria-label="Organization"
+      >
         {ORG_TABS.map((entry) => (
           <button
             key={entry}

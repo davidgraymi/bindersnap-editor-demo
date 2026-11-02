@@ -58,6 +58,12 @@ interface LocationTrailProps {
  * The organization is the switcher it already was; the binder follows when the
  * page is inside one. Where in the binder is `PagePath`'s job, inside the page.
  *
+ * **On your own pages it names no organization, where there is a sidebar.**
+ * Home, Change requests, Documents and your account span every organization
+ * you are in, and the sidebar there lists them all. Naming one in the top bar
+ * claimed a scope the page does not have. On a phone there is no sidebar, so
+ * the switcher stays: it is the only way to an organization there.
+ *
  * Re-rendered on every navigation because the shell is: the app re-reads its
  * route on `popstate`, which every in-app move dispatches, so reading the
  * query here at render time is reading the address the page is showing.
@@ -77,13 +83,21 @@ export function LocationTrail({
   const { organizationIsCurrent } = trail;
   const binderRoute =
     route.kind === "binder" || route.kind === "binderDocument" ? route : null;
+  const inOrganization =
+    binderRoute !== null ||
+    route.kind === "organization" ||
+    (route.kind === "billing" && Boolean(route.org));
 
   return (
     <nav className="app-trail" aria-label="Organization and binder">
       <ol className="app-trail-list">
         {/* Kept as its own box with its old name, because it is wanted at
             every width even where the binder folds away. */}
-        <li className="app-trail-org app-topnav-org">
+        <li
+          className={`app-trail-org app-topnav-org${
+            inOrganization ? "" : " app-trail-org--yours"
+          }`}
+        >
           <OrganizationSwitcher
             currentOrg={org ?? undefined}
             isCurrentPage={organizationIsCurrent}

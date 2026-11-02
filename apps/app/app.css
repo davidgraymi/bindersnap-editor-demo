@@ -8927,7 +8927,7 @@ a.bs-row:focus-visible {
    tabs on every page it contains. That is what lets each page's one title
    name its own subject. */
 
-.app-sidebar-section--binder {
+.app-sidebar-section--scoped {
   padding-top: var(--brand-space-2);
 }
 
@@ -8966,9 +8966,11 @@ a.bs-row:focus-visible {
   white-space: nowrap;
 }
 
-/* The binder's name, heading everything under it — GitLab's project row.
-   Not a link: Documents, under it, is the way to its contents. */
-.app-sidebar-binder {
+/* The place's name, heading everything under it — GitLab's project or group
+   row. Not a link: the first entry under it is the way in. A binder's mark is
+   coral, an organization's is quiet: the binder is where the work is. */
+.app-sidebar-binder,
+.app-sidebar-scope {
   display: flex;
   align-items: center;
   gap: var(--brand-space-2);
@@ -8983,7 +8985,8 @@ a.bs-row:focus-visible {
   box-sizing: border-box;
 }
 
-.app-sidebar-binder-mark {
+.app-sidebar-binder-mark,
+.app-sidebar-scope-mark {
   display: grid;
   flex-shrink: 0;
   place-items: center;
@@ -8994,7 +8997,13 @@ a.bs-row:focus-visible {
   color: var(--brand-on-brand);
 }
 
-.app-sidebar-binder-name {
+.app-sidebar-scope-mark {
+  background: var(--bs-surface-3);
+  color: var(--bs-text-secondary);
+}
+
+.app-sidebar-binder-name,
+.app-sidebar-scope-name {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -9638,6 +9647,7 @@ a.bs-row:focus-visible {
 .app-sidebar--collapsed .app-sidebar-item-count,
 .app-sidebar--collapsed .app-sidebar-label,
 .app-sidebar--collapsed .app-sidebar-binder-name,
+.app-sidebar--collapsed .app-sidebar-scope-name,
 .app-sidebar--collapsed .app-sidebar-back-label,
 .app-sidebar--collapsed .app-sidebar-item-chevron,
 .app-sidebar--collapsed .app-sidebar-foot-label {
@@ -9655,7 +9665,8 @@ a.bs-row:focus-visible {
    the text used to start. */
 .app-sidebar--collapsed .app-sidebar-item,
 .app-sidebar--collapsed .app-sidebar-back,
-.app-sidebar--collapsed .app-sidebar-binder {
+.app-sidebar--collapsed .app-sidebar-binder,
+.app-sidebar--collapsed .app-sidebar-scope {
   justify-content: center;
   padding: 0;
 }
@@ -11989,4 +12000,26 @@ html.bs-writing .app-main {
    way to them. */
 .app-sidebar--collapsed .app-sidebar-item--sub {
   display: none;
+}
+
+/* The organization's pages are listed in the sidebar wherever there is one,
+   so its row of tabs is a phone's alone — and the rule under the header goes
+   with them, since it was the tabs' baseline. */
+@media (min-width: 769px) {
+  .org-header > .org-tabs {
+    display: none;
+  }
+
+  .doc-header.org-header {
+    border-bottom: none;
+  }
+}
+
+/* Your own pages span every organization, and the sidebar lists them, so the
+   top bar names none of them — except on a phone, where there is no sidebar
+   and the switcher is the way to an organization. */
+@media (min-width: 769px) {
+  .app-trail-org--yours {
+    display: none;
+  }
 }
