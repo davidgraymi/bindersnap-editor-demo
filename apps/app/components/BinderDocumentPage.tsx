@@ -21,6 +21,7 @@ import {
   resolveDocumentRef,
 } from "../binderDocument";
 import { buildBinderUrl } from "../binderShell";
+import { convertibleKind } from "../convertToEditor";
 import { buildReadableRefs, type DocumentRefView } from "../documentRefs";
 import {
   formatDocumentName,
@@ -101,6 +102,15 @@ interface BinderDocumentPageProps {
    * editor wrote; absent where the page has nowhere to put an edit.
    */
   onEditDocument?: (slugPath: string) => void;
+  /**
+   * Read a Word file or PDF into the editor's format, in your draft. Offered
+   * only for those two, on the record, as the file is now.
+   */
+  onConvertDocument?: (target: {
+    slugPath: string;
+    path: string;
+    name: string;
+  }) => void;
   /** The draft is being opened for an edit. */
   editing?: boolean;
   onOpenBinder: () => void;
@@ -133,6 +143,7 @@ export function BinderDocumentPage({
   documentRef = null,
   onRefsChange,
   onEditDocument,
+  onConvertDocument,
   editing = false,
   onOpenBinder,
   onOpenChange,
@@ -335,6 +346,14 @@ export function BinderDocumentPage({
     state !== "proposed" &&
     documentRef === null &&
     change === null;
+  // The other way to a document the editor writes: a Word file or PDF read
+  // into it. The same conditions as Edit, for the same reasons.
+  const canConvert =
+    onConvertDocument !== undefined &&
+    convertibleKind(document.path) !== null &&
+    canRevise &&
+    documentRef === null &&
+    change === null;
 
   return (
     <div className="binder-pane">
@@ -398,7 +417,7 @@ export function BinderDocumentPage({
               right, or ending up with two policies instead of two versions.
               Only offered on the record: revising an earlier version would
               silently discard everything published since. */}
-        {canRevise || canWrite ? (
+        {canRevise || canWrite || canConvert ? (
           <div className="bs-pagehead-actions">
             {canRevise ? (
               <>
@@ -423,6 +442,26 @@ export function BinderDocumentPage({
                   </button>
                 )}
               </>
+            ) : null}
+            {/* **A file the editor cannot open is not a dead end.** A Word
+                file or PDF can be read into a Bindersnap document in your
+                draft, and goes through review like any other change. Said as
+                what it does, and never done to a file without being asked. */}
+            {canConvert ? (
+              <button
+                type="button"
+                className="bs-btn bs-btn-secondary"
+                disabled={editing}
+                onClick={() =>
+                  onConvertDocument?.({
+                    slugPath: document.slugPath,
+                    path: document.path,
+                    name: formatDocumentName(document.name),
+                  })
+                }
+              >
+                Edit in Bindersnap
+              </button>
             ) : null}
             {/* **A policy written here is edited here.** Uploading a new
                 version of one meant exporting nothing, because there was

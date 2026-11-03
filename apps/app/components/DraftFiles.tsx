@@ -30,6 +30,7 @@ import type {
   WorkspaceDocumentListEntry,
 } from "../../../packages/api-schema/schemas/workspaces";
 import { isEditorDocumentFile } from "../binderDocument";
+import { convertibleKind } from "../convertToEditor";
 import {
   buildBinderTree,
   folderPaths,
@@ -121,6 +122,15 @@ interface DraftFilesProps {
   archivedCount?: number;
   /** A copy of a policy, beside it in the same folder, opened. */
   onCopy?: (slugPath: string) => void;
+  /**
+   * Read a Word file or PDF into the editor's format, in this draft. Offered
+   * on those rows only; absent where the tree cannot write.
+   */
+  onConvert?: (target: {
+    slugPath: string;
+    path: string;
+    name: string;
+  }) => void;
   onReadArchive?: () => Promise<BinderArchivePayload["documents"]>;
   onRestore?: (uid: string) => Promise<boolean>;
   /** An act is being saved: nothing else starts until it lands. */
@@ -209,6 +219,7 @@ export function DraftFiles({
   onArchive,
   archivedCount = 0,
   onCopy,
+  onConvert,
   onReadArchive,
   onRestore,
   busy = false,
@@ -577,6 +588,25 @@ export function DraftFiles({
         run: () => {
           setFloating(false);
           onCopy(node.document.slugPath);
+        },
+      });
+    }
+    if (
+      onConvert &&
+      node.kind === "document" &&
+      convertibleKind(node.document.path) !== null
+    ) {
+      items.push({
+        label: "Edit in Bindersnap",
+        icon: FileText,
+        disabled: busy,
+        run: () => {
+          setFloating(false);
+          onConvert({
+            slugPath: node.document.slugPath,
+            path: node.document.path,
+            name: label,
+          });
         },
       });
     }

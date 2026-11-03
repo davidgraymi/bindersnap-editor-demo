@@ -10,4 +10,5 @@ export type ReviseBinderDocumentBodySource = typeof ReviseBinderDocumentBodySour
 
 export const ReviseBinderDocumentBodySource = {
   editor: 'editor',
+  converted: 'converted',
 } as const;

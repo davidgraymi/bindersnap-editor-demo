@@ -15,8 +15,21 @@ bar. `apps/app/components/DocumentEditorPage.tsx` is the page around it, at
 the author's draft** through the ordinary revise endpoint, so the version on
 record does not move until the draft is proposed and published. Edit on a
 document's page opens (or resumes) that draft first. Only a file the editor
-writes — `*.json` — is offered it; a Word file or a PDF is edited in the
-program that made it and uploaded as a new version. It opens **full page**:
+writes — `*.json` — is opened in it. A Word file or a PDF is edited in the
+program that made it and uploaded as a new version, **or converted on request**:
+"Edit in Bindersnap" (the document's page, the editor's file panel, and the
+editor's own "not a Bindersnap document" screen) opens
+`ConvertDocumentModal`, which reads the file in the browser
+(`convertToEditor.ts`: mammoth for `.docx`, pdf.js for a PDF, then the
+editor's own schema) and says what the conversion loses _before_ anything is
+written. Confirming revises the same document with `source: "converted"`
+into the author's draft — the server keeps the filename's identity segment
+and removes the original (ADR 0005), so version numbering carries on, the
+original stays in the record, and a reviewer reads the conversion as a diff.
+It is never done automatically. Legacy `.doc`, `.xlsx`, `.pptx` and a PDF
+with no text layer are not convertible.
+
+The editor opens **full page**:
 while it is mounted it sets `bs-writing` on `<html>`, and the shell drops the
 sidebar and the binder's file panel so Letter fits at 100% on a laptop. The
 editor has **its own file panel** (`components/DraftFiles.tsx`), read at the
