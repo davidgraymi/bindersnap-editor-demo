@@ -34,7 +34,8 @@ for (const [path, body] of files) {
   writeFileSync(target, body);
 }
 
-// Each template as a Word file, beside its page: /templates/{slug}.docx.
+// Each template as a Word file, beside its page (/templates/{slug}.docx),
+// and the one-pager the share page offers (/bindersnap-one-pager.pdf).
 const binaries = await publicSiteBinaryFiles();
 for (const [path, bytes] of binaries) {
   const target = join(outDir, path.slice(1));

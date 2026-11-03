@@ -11,6 +11,7 @@ import { readLegalDocuments } from "./apps/legal/legalDocuments";
 import { legalFiles } from "./apps/legal/renderLegal";
 import { publicSiteBinaryFiles, publicSiteFiles } from "./apps/site/publicSite";
 import { siteContentType } from "./apps/site/renderSite";
+import { ONE_PAGER_PDF, ONE_PAGER_PREVIEW } from "./apps/site/sharePage";
 import { SITE_COLLECTIONS } from "./apps/site/siteContent";
 
 /**
@@ -39,6 +40,14 @@ function serveLegal(req: Request): Response {
       });
 }
 
+/** The public site's downloads: the templates and the one-pager. */
+const BINARY_TYPES: Record<string, string> = {
+  ".docx":
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".pdf": "application/pdf",
+  ".png": "image/png",
+};
+
 /**
  * The public site — pricing, templates and the other marketing pages, the
  * sitemap, robots.txt and the llms files — read on each request, so an edit to
@@ -47,15 +56,13 @@ function serveLegal(req: Request): Response {
  */
 async function serveSite(req: Request): Promise<Response> {
   const path = new URL(req.url).pathname.replace(/\/+$/, "") || "/";
-  if (path.endsWith(".docx")) {
+  const binaryType = BINARY_TYPES[path.slice(path.lastIndexOf("."))];
+  if (binaryType) {
     const bytes = (await publicSiteBinaryFiles()).get(path);
     return bytes === undefined
       ? new Response("No such page.", { status: 404 })
       : new Response(Buffer.from(bytes), {
-          headers: {
-            "Content-Type":
-              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          },
+          headers: { "Content-Type": binaryType },
         });
   }
   const body = publicSiteFiles().get(path);
@@ -72,6 +79,9 @@ async function serveSite(req: Request): Promise<Response> {
  */
 const siteRoutes = Object.fromEntries([
   ...[...publicSiteFiles().keys()].map((path) => [path, serveSite] as const),
+  ...[ONE_PAGER_PDF, ONE_PAGER_PREVIEW].map(
+    (path) => [path, serveSite] as const,
+  ),
   ...SITE_COLLECTIONS.filter((collection) => collection.prefix).map(
     (collection) => [`/${collection.prefix}/*`, serveSite] as const,
   ),

@@ -70,6 +70,7 @@ export const FOOTER_COLUMNS: readonly {
       },
       { href: "/compare", label: "Compare" },
       { href: "/glossary", label: "Glossary" },
+      { href: "/share", label: "Share with a colleague" },
     ],
   },
   {
