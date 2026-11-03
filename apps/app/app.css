@@ -9086,6 +9086,13 @@ a.bs-row:focus-visible {
   white-space: nowrap;
 }
 
+/* The level's title — Organization, Binder — set as Your work is, with room
+   above it so it reads as the head of what follows rather than the foot of
+   the way back. */
+.app-sidebar-back + .app-sidebar-label {
+  margin-top: var(--brand-space-2);
+}
+
 /* The place's name, heading everything under it — GitLab's project or group
    row. Not a link: the first entry under it is the way in. A binder's mark is
    coral, an organization's is quiet: the binder is where the work is. */
