@@ -3,6 +3,7 @@ import { helpHref, renderGuideMarkdown } from "../help/renderHelp";
 import { readLegalDocuments } from "../legal/legalDocuments";
 import { legalHref } from "../legal/renderLegal";
 import { siteFiles, type ListedPage } from "./renderSite";
+import { onePagerFiles } from "./sharePage";
 import { TOOLS } from "./requiredPolicies";
 import { templateFiles } from "./templateDocument";
 import { readSitePages, type SitePage } from "./siteContent";
@@ -15,9 +16,17 @@ export function publicSitePages(): SitePage[] {
   });
 }
 
-/** The files that are not text: each template as a Word document. */
-export function publicSiteBinaryFiles(): Promise<Map<string, Uint8Array>> {
-  return templateFiles(publicSitePages());
+/**
+ * The files that are not text: each template as a Word document, and the
+ * one-pager the share page offers.
+ */
+export async function publicSiteBinaryFiles(): Promise<
+  Map<string, Uint8Array>
+> {
+  return new Map([
+    ...(await templateFiles(publicSitePages())),
+    ...(await onePagerFiles()),
+  ]);
 }
 
 /**

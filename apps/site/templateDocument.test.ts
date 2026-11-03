@@ -98,6 +98,8 @@ describe("the Word downloads", () => {
         `href="${page.path}.docx" download="${page.slug}.docx"`,
       );
     }
-    expect(binaries.size).toBe(templates.length);
+    expect(
+      [...binaries.keys()].filter((path) => path.endsWith(".docx")),
+    ).toHaveLength(templates.length);
   });
 });

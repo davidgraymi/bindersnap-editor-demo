@@ -5,39 +5,44 @@
     <title>Bindersnap — Policy management for small healthcare providers</title>
     <link
       rel="stylesheet"
-      href="../../packages/ui-tokens/css/bindersnap-tokens.css"
+      href="../../../packages/ui-tokens/css/bindersnap-tokens.css"
     />
     <style>
       @font-face {
         font-family: "Lora";
         font-style: normal;
         font-weight: 400 700;
-        src: url(../../apps/app/public/fonts/lora-latin-wght-normal.woff2)
+        src: url(../../../apps/app/public/fonts/lora-latin-wght-normal.woff2)
           format("woff2");
       }
       @font-face {
         font-family: "Lora";
         font-style: italic;
         font-weight: 400 700;
-        src: url(../../apps/app/public/fonts/lora-latin-wght-italic.woff2)
+        src: url(../../../apps/app/public/fonts/lora-latin-wght-italic.woff2)
           format("woff2");
       }
       @font-face {
         font-family: "Geist";
         font-weight: 100 900;
-        src: url(../../apps/app/public/fonts/geist-latin-wght-normal.woff2)
+        src: url(../../../apps/app/public/fonts/geist-latin-wght-normal.woff2)
           format("woff2");
       }
       @font-face {
         font-family: "Geist Mono";
         font-weight: 100 900;
-        src: url(../../apps/app/public/fonts/geist-mono-latin-wght-normal.woff2)
+        src: url(../../../apps/app/public/fonts/geist-mono-latin-wght-normal.woff2)
           format("woff2");
       }
 
       @page {
         size: 8.5in 11in;
         margin: 0;
+      }
+      /* The token file's paper grain: a PDF can only carry it as a
+         full-page image, which made the file 3 MB. */
+      body::after {
+        display: none;
       }
       * {
         box-sizing: border-box;

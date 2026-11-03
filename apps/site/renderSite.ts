@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { stripTags } from "../../packages/utils/stripTags";
 import { analyticsTag, trackAttributes } from "./analytics";
 import { SIGNUP_SOURCE_SCRIPT } from "./signupSource";
+import { shareHtml } from "./sharePage";
 import { appOrigin, appUrl } from "./appLink";
 import { renderHelpCss } from "../help/renderHelp";
 import { renderLegalBody } from "../legal/renderLegal";
@@ -459,7 +460,7 @@ ${
   page.collection.notice
     ? `<p class="site-notice">${escape(page.collection.notice)}</p>\n`
     : ""
-}${page.tool?.html ?? ""}${rest}
+}${page.meta.share ? shareHtml() : ""}${page.tool?.html ?? ""}${rest}
 </article>
 ${facilityHtml(page, pages)}
 ${relatedHtml(page, pages, listed)}`,
