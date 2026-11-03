@@ -57,6 +57,30 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"$CLAUDE_PROJECT_DIR/scripts/claude-hooks/session-stack.ts\"",
+            "timeout": 600,
+            "statusMessage": "Installing dependencies"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"$CLAUDE_PROJECT_DIR/scripts/claude-hooks/session-stack.ts\"",
+            "timeout": 180,
+            "statusMessage": "Tearing down this worktree's stack"
+          }
+        ]
+      }
     ]
   },
   "enabledPlugins": {
