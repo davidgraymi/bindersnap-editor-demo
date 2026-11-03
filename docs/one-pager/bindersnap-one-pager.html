@@ -1,0 +1,1062 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <title>Bindersnap — Policy management for small healthcare providers</title>
+    <link
+      rel="stylesheet"
+      href="../../packages/ui-tokens/css/bindersnap-tokens.css"
+    />
+    <style>
+      @font-face {
+        font-family: "Lora";
+        font-style: normal;
+        font-weight: 400 700;
+        src: url(../../apps/app/public/fonts/lora-latin-wght-normal.woff2)
+          format("woff2");
+      }
+      @font-face {
+        font-family: "Lora";
+        font-style: italic;
+        font-weight: 400 700;
+        src: url(../../apps/app/public/fonts/lora-latin-wght-italic.woff2)
+          format("woff2");
+      }
+      @font-face {
+        font-family: "Geist";
+        font-weight: 100 900;
+        src: url(../../apps/app/public/fonts/geist-latin-wght-normal.woff2)
+          format("woff2");
+      }
+      @font-face {
+        font-family: "Geist Mono";
+        font-weight: 100 900;
+        src: url(../../apps/app/public/fonts/geist-mono-latin-wght-normal.woff2)
+          format("woff2");
+      }
+
+      @page {
+        size: 8.5in 11in;
+        margin: 0;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body {
+        background: var(--bs-surface-3);
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      body {
+        font-family: var(--brand-font-sans);
+        color: var(--bs-text-secondary);
+        font-size: 10.5pt;
+        line-height: var(--brand-leading-normal);
+      }
+      .page {
+        width: 8.5in;
+        height: 11in;
+        margin: 0 auto;
+        background: var(--bs-page-bg);
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      .page::before {
+        /* the hero's ambient coral wash */
+        content: "";
+        position: absolute;
+        top: -2.2in;
+        right: -1.6in;
+        width: 5.5in;
+        height: 5.5in;
+        border-radius: var(--brand-radius-full);
+        background: radial-gradient(
+          circle,
+          var(--brand-coral-wash-1) 0%,
+          var(--brand-coral-wash-2) 40%,
+          transparent 70%
+        );
+      }
+      .inner {
+        padding: 0 0.6in;
+        position: relative;
+      }
+
+      /* ── Masthead ── */
+      .mast {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-top: 0.3in;
+      }
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: var(--brand-space-2);
+        font-family: var(--brand-font-serif);
+        font-weight: var(--brand-weight-bold);
+        font-size: 17pt;
+        color: var(--bs-text-primary);
+        letter-spacing: var(--brand-tracking-snug);
+        text-decoration: none;
+      }
+      .logo-mark {
+        width: 30px;
+        height: 30px;
+        border-radius: var(--brand-radius-md);
+        background: var(--brand-ink);
+        color: var(--brand-on-dark-primary);
+        display: grid;
+        place-items: center;
+      }
+      .mast-url {
+        font-family: var(--brand-font-mono);
+        font-size: 8.5pt;
+        letter-spacing: var(--brand-tracking-wide);
+        color: var(--bs-text-muted);
+        text-decoration: none;
+      }
+
+      /* ── Hero ── */
+      .eyebrow {
+        font-family: var(--brand-font-mono);
+        font-size: 7.5pt;
+        font-weight: var(--brand-weight-medium);
+        text-transform: uppercase;
+        letter-spacing: var(--brand-tracking-widest);
+        color: var(--bs-coral-text);
+        display: flex;
+        align-items: center;
+        gap: var(--brand-space-2);
+      }
+      .eyebrow::before {
+        content: "";
+        width: 18px;
+        height: 1px;
+        background: var(--brand-coral);
+      }
+      .hero {
+        padding-top: 0.2in;
+      }
+      h1 {
+        font-family: var(--brand-font-serif);
+        font-weight: var(--brand-weight-bold);
+        font-size: 28pt;
+        line-height: var(--brand-leading-tight);
+        letter-spacing: var(--brand-tracking-tight);
+        color: var(--bs-text-primary);
+        margin-top: var(--brand-space-3);
+        max-width: 7.1in;
+      }
+      h1 em {
+        font-style: italic;
+        color: var(--bs-coral-text);
+      }
+      .lede {
+        font-size: 10.5pt;
+        line-height: var(--brand-leading-normal);
+        color: var(--bs-text-secondary);
+        margin-top: var(--brand-space-3);
+        max-width: 7.3in;
+      }
+      .lede strong {
+        color: var(--bs-text-primary);
+        font-weight: var(--brand-weight-semibold);
+      }
+
+      /* ── Before / after ── */
+      .contrast {
+        margin-top: 0.18in;
+        display: grid;
+        grid-template-columns: 1fr 34px 1.18fr;
+        align-items: stretch;
+      }
+      .chaos {
+        background: var(--brand-ink);
+        border-radius: var(--brand-radius-xl);
+        padding: var(--brand-space-4) var(--brand-space-5);
+        color: var(--brand-on-dark-primary);
+        position: relative;
+        overflow: hidden;
+      }
+      .panel-tag {
+        font-family: var(--brand-font-mono);
+        font-size: 7pt;
+        text-transform: uppercase;
+        letter-spacing: var(--brand-tracking-widest);
+        color: var(--brand-on-dark-secondary);
+      }
+      .chaos-tag {
+        margin-bottom: var(--brand-space-3);
+      }
+      .chaos h3 {
+        font-family: var(--brand-font-serif);
+        font-weight: var(--brand-weight-semibold);
+        font-size: 13pt;
+        margin: 2px 0 var(--brand-space-3);
+        color: var(--brand-on-dark-primary);
+      }
+      .file {
+        display: flex;
+        align-items: center;
+        gap: var(--brand-space-2);
+        font-family: var(--brand-font-mono);
+        font-size: 7.6pt;
+        background: var(--brand-on-dark-wash);
+        border: 1px solid var(--brand-on-dark-wash-border);
+        border-radius: var(--brand-radius-sm);
+        padding: var(--brand-space-1) var(--brand-space-2-5);
+        margin-bottom: var(--brand-space-1-5);
+        white-space: nowrap;
+        color: var(--brand-on-dark-primary);
+      }
+      .file svg {
+        flex: none;
+        color: var(--brand-on-dark-secondary);
+      }
+      .file:nth-child(3) {
+        transform: rotate(-1.4deg) translateX(6px);
+      }
+      .file:nth-child(4) {
+        transform: rotate(1.1deg) translateX(-2px);
+      }
+      .file:nth-child(5) {
+        transform: rotate(-0.6deg) translateX(10px);
+      }
+      .file.mail {
+        font-family: var(--brand-font-sans);
+        font-size: 8pt;
+      }
+      .chaos-q {
+        margin-top: var(--brand-space-2-5);
+        font-family: var(--brand-font-serif);
+        font-style: italic;
+        font-size: 11pt;
+        color: var(--brand-on-dark-secondary);
+      }
+
+      .arrow {
+        display: grid;
+        place-items: center;
+        color: var(--brand-coral);
+      }
+
+      .record {
+        background: var(--bs-surface-1);
+        border: 1px solid var(--bs-rule);
+        border-radius: var(--brand-radius-xl);
+        box-shadow: var(--bs-shadow-md);
+        overflow: hidden;
+      }
+      .record-bar {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        padding: var(--brand-space-2) var(--brand-space-3);
+        background: var(--bs-surface-2);
+        border-bottom: 1px solid var(--bs-rule);
+      }
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: var(--brand-radius-full);
+      }
+      .record-bar .crumb {
+        margin-left: var(--brand-space-2);
+        font-family: var(--brand-font-mono);
+        font-size: 7pt;
+        color: var(--bs-text-muted);
+      }
+      .record-body {
+        padding: var(--brand-space-4) var(--brand-space-5) var(--brand-space-4);
+      }
+      .doc-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: var(--brand-space-3);
+      }
+      .doc-title {
+        font-family: var(--brand-font-serif);
+        font-weight: var(--brand-weight-bold);
+        font-size: 13pt;
+        color: var(--bs-text-primary);
+        line-height: var(--brand-leading-snug);
+      }
+      .doc-meta {
+        font-family: var(--brand-font-mono);
+        font-size: 7pt;
+        color: var(--bs-text-muted);
+        margin-top: 2px;
+      }
+      .pill-ok {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 7.5pt;
+        font-weight: var(--brand-weight-semibold);
+        color: var(--bs-status-ok-fg);
+        background: var(--bs-status-ok-bg);
+        border: 1px solid var(--bs-status-ok-border);
+        border-radius: var(--brand-radius-full);
+        padding: 2px var(--brand-space-2);
+      }
+      .timeline {
+        list-style: none;
+        margin-top: var(--brand-space-3);
+        position: relative;
+      }
+      .timeline::before {
+        content: "";
+        position: absolute;
+        left: 9px;
+        top: 10px;
+        bottom: 10px;
+        width: 1px;
+        background: var(--bs-rule);
+      }
+      .timeline li {
+        display: grid;
+        grid-template-columns: 20px 1fr auto;
+        gap: var(--brand-space-2-5);
+        align-items: center;
+        padding: 3px 0;
+        position: relative;
+      }
+      .node {
+        width: 19px;
+        height: 19px;
+        border-radius: var(--brand-radius-full);
+        display: grid;
+        place-items: center;
+        background: var(--bs-surface-2);
+        color: var(--bs-text-muted);
+        border: 1px solid var(--bs-rule);
+      }
+      .node.ok {
+        background: var(--brand-green);
+        border-color: var(--brand-green);
+        color: var(--brand-on-brand);
+      }
+      .node.pub {
+        background: var(--brand-coral);
+        border-color: var(--brand-coral);
+        color: var(--brand-on-coral);
+      }
+      .ev {
+        font-size: 8.5pt;
+        color: var(--bs-text-primary);
+        font-weight: var(--brand-weight-medium);
+        line-height: 1.25;
+      }
+      .ev span {
+        display: block;
+        font-weight: var(--brand-weight-regular);
+        color: var(--bs-text-muted);
+        font-size: 7.5pt;
+      }
+      .when {
+        font-family: var(--brand-font-mono);
+        font-size: 7pt;
+        color: var(--bs-text-muted);
+      }
+
+      /* ── How it works ── */
+      .section {
+        margin-top: 0.2in;
+      }
+      .steps {
+        margin-top: var(--brand-space-2-5);
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: var(--brand-space-4);
+      }
+      .step {
+        background: var(--bs-surface-1);
+        border: 1px solid var(--bs-rule);
+        border-radius: var(--brand-radius-lg);
+        padding: var(--brand-space-3) var(--brand-space-4);
+        position: relative;
+      }
+      .step-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: var(--brand-space-2);
+      }
+      .icon {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--brand-radius-md);
+        background: var(--bs-coral-dim);
+        color: var(--bs-coral-text);
+        display: grid;
+        place-items: center;
+      }
+      .num {
+        font-family: var(--brand-font-mono);
+        font-size: 8pt;
+        color: var(--bs-text-faint);
+        letter-spacing: var(--brand-tracking-wide);
+      }
+      .step h4 {
+        font-family: var(--brand-font-serif);
+        font-weight: var(--brand-weight-bold);
+        font-size: 11.5pt;
+        color: var(--bs-text-primary);
+        line-height: var(--brand-leading-snug);
+      }
+      .step p {
+        font-size: 8.4pt;
+        margin-top: var(--brand-space-1);
+        line-height: 1.4;
+      }
+
+      /* ── Facts strip ── */
+      .facts {
+        margin-top: 0.16in;
+        display: grid;
+        grid-template-columns: 1.55fr 1fr;
+        gap: var(--brand-space-4);
+      }
+      .who,
+      .price {
+        border-radius: var(--brand-radius-lg);
+        padding: var(--brand-space-3) var(--brand-space-5);
+      }
+      .who {
+        background: var(--bs-surface-2);
+      }
+      .box-title {
+        font-family: var(--brand-font-serif);
+        font-weight: var(--brand-weight-bold);
+        font-size: 11.5pt;
+        color: var(--bs-text-primary);
+        margin-bottom: var(--brand-space-2);
+      }
+      .tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--brand-space-1-5);
+      }
+      .tag {
+        font-size: 7.9pt;
+        font-weight: var(--brand-weight-medium);
+        color: var(--bs-text-primary);
+        background: var(--bs-surface-1);
+        border: 1px solid var(--bs-rule);
+        border-radius: var(--brand-radius-sm);
+        padding: 3px var(--brand-space-2);
+      }
+      .who p {
+        font-size: 8.3pt;
+        margin-top: var(--brand-space-2);
+        color: var(--bs-text-secondary);
+      }
+      .price {
+        background: var(--bs-surface-1);
+        border: 1px solid var(--bs-rule);
+      }
+      .price-figure {
+        display: flex;
+        align-items: baseline;
+        gap: var(--brand-space-1-5);
+      }
+      .price-figure b {
+        font-family: var(--brand-font-serif);
+        font-size: 21pt;
+        font-weight: var(--brand-weight-bold);
+        color: var(--bs-text-primary);
+        line-height: 1;
+      }
+      .price-figure span {
+        font-size: 8.5pt;
+        color: var(--bs-text-muted);
+      }
+      .checks {
+        list-style: none;
+        margin-top: var(--brand-space-1-5);
+      }
+      .checks li {
+        display: flex;
+        gap: var(--brand-space-2);
+        align-items: flex-start;
+        font-size: 8.5pt;
+        padding: 2px 0;
+        color: var(--bs-text-secondary);
+      }
+      .checks svg {
+        flex: none;
+        margin-top: 3px;
+        color: var(--brand-green);
+      }
+
+      /* ── Founder + CTA footer ── */
+      .foot {
+        margin-top: auto;
+        background: var(--brand-ink);
+        color: var(--brand-on-dark-primary);
+        padding: 0.17in 0.6in 0.27in;
+        display: grid;
+        grid-template-columns: 1.35fr 1fr;
+        gap: 0.4in;
+        align-items: center;
+      }
+      .foot .panel-tag {
+        margin-bottom: var(--brand-space-2);
+      }
+      .quote {
+        font-family: var(--brand-font-serif);
+        font-size: 9.8pt;
+        line-height: 1.5;
+        color: var(--brand-on-dark-primary);
+      }
+      .quote em {
+        font-style: italic;
+        color: var(--brand-on-dark-primary);
+      }
+      .sig {
+        margin-top: var(--brand-space-2);
+        font-size: 8.5pt;
+        color: var(--brand-on-dark-secondary);
+      }
+      .sig a {
+        color: var(--brand-on-dark-primary);
+        text-decoration: none;
+        border-bottom: 1px solid var(--brand-on-dark-secondary);
+      }
+      .cta-title {
+        font-family: var(--brand-font-serif);
+        font-weight: var(--brand-weight-bold);
+        font-size: 15pt;
+        line-height: var(--brand-leading-snug);
+        color: var(--brand-on-dark-primary);
+      }
+      .cta {
+        display: inline-block;
+        margin-top: var(--brand-space-3);
+        background: var(--brand-coral);
+        color: var(--brand-on-coral);
+        font-weight: var(--brand-weight-semibold);
+        font-size: 10pt;
+        padding: var(--brand-space-2-5) var(--brand-space-4);
+        border-radius: var(--brand-radius-md);
+        text-decoration: none;
+      }
+      .cta-note {
+        margin-top: var(--brand-space-2);
+        font-size: 7.8pt;
+        color: var(--brand-on-dark-secondary);
+      }
+      .legal {
+        position: absolute;
+        bottom: 0.1in;
+        left: 0.6in;
+        right: 0.6in;
+        display: flex;
+        justify-content: space-between;
+        font-family: var(--brand-font-mono);
+        font-size: 6.3pt;
+        letter-spacing: var(--brand-tracking-wide);
+        color: var(--brand-on-dark-secondary);
+      }
+
+      @media screen {
+        body {
+          padding: 0.4in 0;
+        }
+        .page {
+          box-shadow: var(--bs-shadow-lg);
+        }
+      }
+      @media print {
+        body {
+          padding: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <div class="inner">
+        <header class="mast">
+          <a class="logo" href="https://bindersnap.com/">
+            <span class="logo-mark">
+              <svg
+                viewBox="0 0 18 18"
+                width="18"
+                height="18"
+                fill="none"
+                aria-hidden="true"
+              >
+                <rect
+                  x="2"
+                  y="1"
+                  width="9"
+                  height="13"
+                  rx="1.5"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                />
+                <rect
+                  x="6"
+                  y="4"
+                  width="9"
+                  height="13"
+                  rx="1.5"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                />
+              </svg>
+            </span>
+            Bindersnap
+          </a>
+          <a class="mast-url" href="https://bindersnap.com/">BINDERSNAP.COM</a>
+        </header>
+
+        <section class="hero">
+          <div class="eyebrow">
+            Policy management for small healthcare providers
+          </div>
+          <h1>
+            The surveyor asks which version you approved.
+            <em>Show&nbsp;them.</em>
+          </h1>
+          <p class="lede">
+            Bindersnap is where your policy manual lives. Every policy keeps its
+            current approved version and
+            <strong
+              >its own approval record: who signed off, when, and on exactly
+              which version.</strong
+            >
+          </p>
+        </section>
+
+        <section class="contrast">
+          <div class="chaos">
+            <div class="panel-tag chaos-tag">Today · Which one is current?</div>
+            <div class="file">
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8l6 6v12a2 2 0 0 1-2 2z"
+                />
+                <path d="M14 2v6h6" />
+              </svg>
+              IC_Policy_FINAL.docx
+            </div>
+            <div class="file">
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8l6 6v12a2 2 0 0 1-2 2z"
+                />
+                <path d="M14 2v6h6" />
+              </svg>
+              IC_Policy_FINAL_APPROVED_Mar14.docx
+            </div>
+            <div class="file">
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8l6 6v12a2 2 0 0 1-2 2z"
+                />
+                <path d="M14 2v6h6" />
+              </svg>
+              IC_Policy_rev3_FINAL(2).docx
+            </div>
+            <div class="file mail">
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <rect x="2" y="4" width="20" height="16" rx="2" />
+                <path d="m22 7-10 6L2 7" />
+              </svg>
+              RE: RE: FW: is this the approved one??
+            </div>
+            <div class="file mail">
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <rect x="2" y="4" width="20" height="16" rx="2" />
+                <path d="m22 7-10 6L2 7" />
+              </svg>
+              RE: signed off? (see attached, I think)
+            </div>
+            <p class="chaos-q">“Who approved this one, and when?”</p>
+          </div>
+
+          <div class="arrow" aria-hidden="true">
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.25"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M5 12h14" />
+              <path d="m13 6 6 6-6 6" />
+            </svg>
+          </div>
+
+          <div class="record">
+            <div class="record-bar">
+              <span class="dot" style="background: var(--brand-mac-red)"></span>
+              <span
+                class="dot"
+                style="background: var(--brand-mac-yellow)"
+              ></span>
+              <span
+                class="dot"
+                style="background: var(--brand-mac-green)"
+              ></span>
+              <span class="crumb">Clinical policies / Infection control</span>
+            </div>
+            <div class="record-body">
+              <div class="doc-head">
+                <div>
+                  <div class="doc-title">Infection Control Policy</div>
+                  <div class="doc-meta">VERSION 4 · CURRENT</div>
+                </div>
+                <span class="pill-ok">
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="3"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                  Approved
+                </span>
+              </div>
+              <ol class="timeline">
+                <li>
+                  <span class="node">
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                      stroke-linecap="round"
+                    >
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                    </svg>
+                  </span>
+                  <div class="ev">
+                    Change proposed<span
+                      >Renee Alvarez, RN · Isolation section rewritten</span
+                    >
+                  </div>
+                  <span class="when">Oct 09</span>
+                </li>
+                <li>
+                  <span class="node ok">
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                  </span>
+                  <div class="ev">
+                    Approved<span>Quality Director · read version 4</span>
+                  </div>
+                  <span class="when">Oct 14 · 16:41</span>
+                </li>
+                <li>
+                  <span class="node ok">
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                  </span>
+                  <div class="ev">
+                    Approved<span>Medical Director · read version 4</span>
+                  </div>
+                  <span class="when">Oct 14 · 17:08</span>
+                </li>
+                <li>
+                  <span class="node pub">
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <rect x="5" y="11" width="14" height="10" rx="2" />
+                      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                    </svg>
+                  </span>
+                  <div class="ev">
+                    Published &amp; locked<span
+                      >Changes now need a new, reviewed version</span
+                    >
+                  </div>
+                  <span class="when">Oct 14 · 17:09</span>
+                </li>
+              </ol>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="eyebrow">How it works</div>
+          <div class="steps">
+            <div class="step">
+              <div class="step-top">
+                <span class="icon">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.75"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"
+                    />
+                  </svg>
+                </span>
+                <span class="num">01</span>
+              </div>
+              <h4>Every policy, one place</h4>
+              <p>
+                Upload the Word and PDF files you already have, or write in
+                Bindersnap. Staff get one link.
+              </p>
+            </div>
+            <div class="step">
+              <div class="step-top">
+                <span class="icon">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.75"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" />
+                    <path d="m9 12 2 2 4-4" />
+                  </svg>
+                </span>
+                <span class="num">02</span>
+              </div>
+              <h4>Sign-off that can’t be back-dated</h4>
+              <p>
+                The approvers you name review each change. Each sign-off is
+                stamped with name, date and version.
+              </p>
+            </div>
+            <div class="step">
+              <div class="step-top">
+                <span class="icon">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.75"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M9 11l3 3L22 4" />
+                    <path
+                      d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"
+                    />
+                  </svg>
+                </span>
+                <span class="num">03</span>
+              </div>
+              <h4>Evidence while they wait</h4>
+              <p>
+                Every version and who approved it is on the page while the
+                surveyor is still in the room.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section class="facts">
+          <div class="who">
+            <div class="box-title">Built for small providers</div>
+            <div class="tags">
+              <span class="tag">Ambulatory surgery centers</span>
+              <span class="tag">Clinics &amp; physician practices</span>
+              <span class="tag">Home health</span>
+              <span class="tag">Hospice</span>
+              <span class="tag">Behavioral health</span>
+              <span class="tag">Rural health clinics</span>
+            </div>
+            <p>
+              Set up in an afternoon. No demo call, no implementation project.
+            </p>
+          </div>
+          <div class="price">
+            <div class="price-figure">
+              <b>$39</b><span>a month per writer</span>
+            </div>
+            <ul class="checks">
+              <li>
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 6 9 17l-5-5" /></svg
+                >Reviewers and staff readers are free
+              </li>
+              <li>
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 6 9 17l-5-5" /></svg
+                >14-day free trial, no card
+              </li>
+              <li>
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 6 9 17l-5-5" /></svg
+                >Stop paying, still read and export it all
+              </li>
+              <li>
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 6 9 17l-5-5" /></svg
+                >Policies only, never patient data
+              </li>
+            </ul>
+          </div>
+        </section>
+      </div>
+
+      <footer class="foot">
+        <div>
+          <div class="panel-tag">Why it exists</div>
+          <p class="quote">
+            “My wife came home frustrated with her policy system often enough
+            that I started asking questions.
+            <em
+              >She needed what software teams take for granted: a record of who
+              approved which version. So I built it for her.</em
+            >”
+          </p>
+          <p class="sig">
+            David Gray, founder ·
+            <a href="mailto:david@bindersnap.com">david@bindersnap.com</a>
+          </p>
+        </div>
+        <div>
+          <div class="cta-title">Be ready for the next survey.</div>
+          <a class="cta" href="https://bindersnap.com/"
+            >Start free at bindersnap.com&nbsp;→</a
+          >
+          <p class="cta-note">
+            Questions first? Email David. He answers personally.
+          </p>
+        </div>
+        <div class="legal">
+          <span>© 2026 SOLID GRAY LLC</span>
+          <span>FOR POLICIES AND PROCEDURES · NEVER PATIENT RECORDS</span>
+        </div>
+      </footer>
+    </main>
+  </body>
+</html>
