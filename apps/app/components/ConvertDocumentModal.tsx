@@ -16,26 +16,26 @@ import type { ConvertedDocument } from "../convertToEditor";
  * as it is, and a PDF cannot be converted without guessing at its structure.
  */
 
-interface ConvertDocumentModalProps {
+interface ConvertDocumentModalProps<T extends ConvertedDocument> {
   /** The document's name, for the heading. */
   name: string;
   /** What kind of file it is, for the wording. */
   kind: "word" | "pdf";
   /** Read the file and convert it. Rejects with the reason it cannot be. */
-  load: () => Promise<ConvertedDocument>;
+  load: () => Promise<T>;
   /** Write the converted document into the draft and open the editor. */
-  onConfirm: (converted: ConvertedDocument) => Promise<void>;
+  onConfirm: (converted: T) => Promise<void>;
   onClose: () => void;
 }
 
-export function ConvertDocumentModal({
+export function ConvertDocumentModal<T extends ConvertedDocument>({
   name,
   kind,
   load,
   onConfirm,
   onClose,
-}: ConvertDocumentModalProps) {
-  const [converted, setConverted] = useState<ConvertedDocument | null>(null);
+}: ConvertDocumentModalProps<T>) {
+  const [converted, setConverted] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 

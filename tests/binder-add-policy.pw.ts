@@ -706,3 +706,75 @@ test("a Word file added as it is stays a Word file", async ({ page }) => {
   ).documents.map((entry) => entry.path);
   expect(paths[0]).toMatch(/\.docx$/);
 });
+
+test("a Word file's converted new version is compared with the Word file, as a document", async ({
+  page,
+}) => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(
+    sessionCookie,
+    `Riverbend ${randomUUID().slice(0, 6)}`,
+  );
+  const binder = await createBinder(sessionCookie, org, "Clinical Policies");
+  const word = (sentence: string) =>
+    Packer.toBuffer(
+      new Document({
+        sections: [
+          {
+            children: [
+              new Paragraph({
+                heading: HeadingLevel.HEADING_1,
+                children: [new TextRun("Hand Hygiene")],
+              }),
+              new Paragraph({ children: [new TextRun(sentence)] }),
+            ],
+          },
+        ],
+      }),
+    );
+  const wordFile = {
+    name: "hand-hygiene.docx",
+    mimeType:
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  };
+
+  // On the record as a Word file first: a revision is read against it.
+  await signInBrowser(page, sessionCookie);
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Add a document" }).click();
+  await page
+    .locator("#add-policy-file")
+    .setInputFiles({ ...wordFile, buffer: await word("Wash before care.") });
+  await page.getByRole("button", { name: "Add document", exact: true }).click();
+  await expect(page).toHaveURL(/\/-\/changes\/\d+/, { timeout: 60_000 });
+  await publishTheOpenChange(sessionCookie, org, binder);
+
+  // Its next version, made editable as it is uploaded.
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/-/blob/main/hand-hygiene`);
+  await page
+    .getByRole("button", { name: "Upload new version" })
+    .click({ timeout: 30_000 });
+  await page.locator("#revise-document-file").setInputFiles({
+    ...wordFile,
+    buffer: await word("Wash before and after care."),
+  });
+  await page
+    .getByRole("checkbox", { name: "Make it editable in Bindersnap" })
+    .check();
+  await page.getByRole("button", { name: "Propose this version" }).click();
+  await expect(page).toHaveURL(/\/-\/changes\/(\d+)/, { timeout: 60_000 });
+  const changeUrl = page
+    .url()
+    .replace(/[?#].*$/, "")
+    .replace(/\/diffs$/, "");
+
+  // **The bug this guards.** Read by the new `.json` name, the Word file it
+  // replaces was diffed as the bytes of a ZIP. Each side read as what it is,
+  // the comparison is the policy with the new words marked.
+  await page.goto(`${changeUrl}/diffs`);
+  await expect(page.getByText("after care", { exact: false })).toBeVisible({
+    timeout: 60_000,
+  });
+  await expect(page.getByText("[Content_Types]")).toHaveCount(0);
+});

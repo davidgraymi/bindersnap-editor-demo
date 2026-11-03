@@ -29,8 +29,15 @@ original stays in the record, and a reviewer reads the conversion as a diff.
 The same conversion is offered on upload — "Make it editable in Bindersnap"
 in Add a document (one file or a batch) and in Upload new version
 (`ConvertOnUploadField`) — **unticked, every time**: a file is often uploaded
-to be kept exactly as it is. It is never done automatically. Legacy `.doc`, `.xlsx`, `.pptx` and a PDF
-with no text layer are not convertible.
+to be kept exactly as it is. In a batch, a file that will not convert is
+added as the file it is, and the dialog lists it. It is never done
+automatically. Legacy `.doc`, `.xlsx`, `.pptx` and a PDF with no text layer are
+not convertible. A Word file's pictures come across, scaled and embedded as
+the editor embeds them; one the editor would refuse is left out and named in
+the notes. "Edit in Bindersnap" reads the file from the draft it will write
+into, never the record while a draft holds a newer copy, and is not offered on
+a change request. The comparison of a converted version sniffs each side's
+bytes (`sniffDocumentKind`), because only the new `.json` name is known.
 
 The editor opens **full page**:
 while it is mounted it sets `bs-writing` on `<html>`, and the shell drops the

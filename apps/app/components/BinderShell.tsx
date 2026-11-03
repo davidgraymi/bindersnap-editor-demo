@@ -54,8 +54,7 @@ import { formatDocumentName } from "../documentDisplay";
 import { copyName } from "../copyName";
 import {
   convertibleKind,
-  convertToEditorDocument,
-  editorDocumentFile,
+  convertToEditorFile,
   type ConvertedDocument,
 } from "../convertToEditor";
 import { ConvertDocumentModal } from "./ConvertDocumentModal";
@@ -125,6 +124,13 @@ function moveTo(url: string): void {
   window.history.pushState({}, "", url);
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
+
+/** A conversion read and waiting for a yes: the file, and where it was read. */
+type LoadedConversion = ConvertedDocument & {
+  file: File;
+  /** The draft it was read from; null for the record. */
+  readFrom: string | null;
+};
 
 interface BinderShellProps {
   org: string;
@@ -804,18 +810,30 @@ export function BinderShell({
 
   /**
    * Read a Word file or PDF as an editor document. Nothing is written: the
-   * dialog shows what the conversion loses first. Read where the person is —
-   * their draft when they are editing, the record otherwise.
+   * dialog shows what the conversion loses first.
+   *
+   * **Read from the draft it will be written into.** The conversion replaces
+   * the document in your draft, so converting the version on record while
+   * your draft holds a newer one would overwrite that work with an older copy.
+   * Not editing, that is the draft Edit would resume — your newest — and the
+   * record only when you have none. `readFrom` goes with the result so
+   * {@link confirmConversion} can tell if the draft it opens is another one.
    */
-  const loadConversion = async (target: { path: string }) => {
-    const ref = editMode !== "off" ? draft?.draft?.branch : undefined;
+  const loadConversion = async (target: {
+    path: string;
+  }): Promise<LoadedConversion> => {
+    const readFrom =
+      (editMode !== "off"
+        ? draft?.draft?.branch
+        : readingDrafts?.draft?.branch) ?? null;
     const file = await downloadBinderDocument(
       org,
       binder,
       target.path,
-      ref ?? undefined,
+      readFrom ?? undefined,
     );
-    return convertToEditorDocument(file, target.path);
+    const source = new File([file], target.path, { type: file.type });
+    return { ...(await convertToEditorFile(source)), readFrom };
   };
 
   /**
@@ -826,7 +844,7 @@ export function BinderShell({
    */
   const confirmConversion = async (
     target: { path: string },
-    converted: ConvertedDocument,
+    converted: LoadedConversion,
   ) => {
     let branch = editMode !== "off" ? draft?.draft?.branch : undefined;
     if (!branch) {
@@ -834,13 +852,25 @@ export function BinderShell({
       branch = payload.draft?.branch ?? undefined;
       setDraft(payload);
       setDraftBranch(branch ?? null);
+      // Read from one draft, about to be written into another: what was read
+      // may not be what that draft holds. A new draft starts from the record,
+      // which is what was read when there was none.
+      if (
+        branch &&
+        converted.readFrom !== null &&
+        branch !== converted.readFrom
+      ) {
+        throw new Error(
+          "Your draft changed while this was open. Close this and try again.",
+        );
+      }
     }
     if (!branch) throw new Error("Unable to open your draft.");
 
     const revised = await reviseBinderDocument(
       org,
       binder,
-      editorDocumentFile(converted.document, target.path),
+      converted.file,
       target.path,
       { draft: branch },
       "converted",
@@ -1216,6 +1246,8 @@ export function BinderShell({
     (target: { slugPath: string; path: string; name: string }) =>
       setConverting(target),
   );
+
+  const convertingKind = converting ? convertibleKind(converting.path) : null;
 
   if (missing) {
     const orgHref = routeToPath({ kind: "organization", org });
@@ -1739,10 +1771,10 @@ export function BinderShell({
         />
       ) : null}
 
-      {converting && convertibleKind(converting.path) ? (
+      {converting && convertingKind ? (
         <ConvertDocumentModal
           name={converting.name}
-          kind={convertibleKind(converting.path) ?? "word"}
+          kind={convertingKind}
           load={() => loadConversion(converting)}
           onConfirm={(converted) => confirmConversion(converting, converted)}
           onClose={() => setConverting(null)}

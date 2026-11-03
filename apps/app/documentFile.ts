@@ -64,6 +64,27 @@ export function classifyDocumentFile(
 }
 
 /**
+ * What a file holds, read from its first bytes rather than its name: a Word
+ * file (a ZIP), a PDF, or anything else, which is read as text.
+ *
+ * For the one place a name is not enough. A Word file or PDF converted into an
+ * editor document (issue 883) keeps its identity and changes its extension, so
+ * the version a change replaces is a different kind of file from the one it
+ * proposes, and only the name of the newer one is known.
+ */
+export async function sniffDocumentKind(
+  file: Blob,
+): Promise<"word" | "pdf" | "text"> {
+  const head = new Uint8Array(await file.slice(0, 5).arrayBuffer());
+  const starts = (bytes: number[]) =>
+    bytes.every((byte, index) => head[index] === byte);
+  // "PK\x03\x04", every ZIP's first local header, and "%PDF-".
+  if (starts([0x50, 0x4b, 0x03, 0x04])) return "word";
+  if (starts([0x25, 0x50, 0x44, 0x46, 0x2d])) return "pdf";
+  return "text";
+}
+
+/**
  * A human label for a file type — "Word document", not "application/vnd…".
  * Used on the card shown when a file has no inline preview.
  */

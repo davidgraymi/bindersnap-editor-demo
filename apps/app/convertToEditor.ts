@@ -10,7 +10,8 @@
  * document, in a draft, so it goes through review like anything else.
  *
  * **It is a conversion, not a copy, and it says so.** A Word file keeps its
- * headings, lists, tables and emphasis but not its page layout; a PDF has no
+ * headings, lists, tables, emphasis and pictures (embedded as the editor
+ * embeds them, `imageFiles.ts`) but not its page layout; a PDF has no
  * structure at all, so headings are recovered from type size. {@link notes}
  * lists what was lost so the person is told to read it before proposing it.
  * The original stays in the record: the converted version is a diff a
@@ -19,10 +20,12 @@
 
 import type { JSONContent } from "@tiptap/core";
 
+import { validateUploadFile } from "./api";
 import { blocksToHtml } from "./documentBlocks";
 import { fileExtension } from "./documentFile";
 import { docxToHtml } from "./docxHtml";
 import { sanitizeHtml } from "../../packages/utils/sanitizer";
+import { pictureToDataUrl } from "../../packages/editor/imageFiles";
 
 export type ConvertibleKind = "word" | "pdf";
 
@@ -50,9 +53,14 @@ export class ConversionError extends Error {}
 const PDF_NOTE =
   "A PDF carries no headings, lists or tables, only text on a page. Headings were guessed from type size and the rest is plain paragraphs, so read it through before you propose it.";
 const WORD_NOTE =
-  "Page layout, headers, footers, page numbers and text boxes do not come across. Headings, lists, tables and emphasis do.";
-const IMAGE_NOTE =
-  "Pictures are left out of the converted copy. Add them back in the editor if the document needs them.";
+  "Page layout, headers, footers, page numbers and text boxes do not come across. Headings, lists, tables, emphasis and pictures do.";
+
+/** What became of the pictures that could not come across, in plain words. */
+function picturesNote(leftOut: number): string {
+  return leftOut === 1
+    ? "One picture could not come across: only PNG, JPEG, GIF and WebP pictures up to 1.5 MB, once scaled, go in a document. Add it back in the editor if the document needs it."
+    : `${leftOut} pictures could not come across: only PNG, JPEG, GIF and WebP pictures up to 1.5 MB, once scaled, go in a document. Add them back in the editor if the document needs them.`;
+}
 
 let parser: Promise<(html: string) => JSONContent> | null = null;
 
@@ -123,14 +131,27 @@ export async function convertToEditorDocument(
   const notes: string[] = [];
 
   if (kind === "word") {
-    html = await docxToHtml(file).catch(() => {
+    // Each picture scaled and embedded as the editor would on a paste; one it
+    // would refuse is left out and counted, so the notes can say so.
+    let leftOut = 0;
+    html = await docxToHtml(file, {
+      picture: async (image) => {
+        try {
+          return await pictureToDataUrl(
+            new File([image], "picture", { type: image.type }),
+          );
+        } catch {
+          leftOut += 1;
+          return null;
+        }
+      },
+    }).catch(() => {
       throw new ConversionError(
         "That Word file could not be read. Save it again as .docx and try again.",
       );
     });
     notes.push(WORD_NOTE);
-    // docxToHtml removes pictures; say so when there were any.
-    if (await docxHasPictures(file)) notes.push(IMAGE_NOTE);
+    if (leftOut > 0) notes.push(picturesNote(leftOut));
   } else {
     const { extractPdfBlocks } = await import("./pdfText");
     const blocks = await extractPdfBlocks(file).catch(() => {
@@ -153,22 +174,6 @@ export async function convertToEditorDocument(
   return { document, notes };
 }
 
-/** Whether the Word file holds pictures, so the notes can say they were left out. */
-async function docxHasPictures(file: Blob): Promise<boolean> {
-  // A .docx is a ZIP; pictures live under word/media/. The names are stored
-  // uncompressed in the central directory, so a byte search finds them
-  // without unzipping anything.
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const needle = new TextEncoder().encode("word/media/");
-  outer: for (let i = 0; i <= bytes.length - needle.length; i += 1) {
-    for (let j = 0; j < needle.length; j += 1) {
-      if (bytes[i + j] !== needle[j]) continue outer;
-    }
-    return true;
-  }
-  return false;
-}
-
 /**
  * The converted document as the file the editor writes.
  *
@@ -184,4 +189,28 @@ export function editorDocumentFile(
   return new File([JSON.stringify(document)], `${base}.json`, {
     type: "application/json",
   });
+}
+
+/**
+ * A Word file or PDF read into the file the editor writes, ready to send.
+ *
+ * Checked against the same limit as any upload: pictures now come across, and
+ * a converted document carries them as text, so it can outgrow the original.
+ *
+ * @throws {ConversionError} as {@link convertToEditorDocument} does, or when
+ *   the converted document is too large to upload.
+ */
+export async function convertToEditorFile(
+  source: File,
+): Promise<ConvertedDocument & { file: File }> {
+  const converted = await convertToEditorDocument(source, source.name);
+  const file = editorDocumentFile(converted.document, source.name);
+  const validation = validateUploadFile(file);
+  if (!validation.valid) {
+    const sizeMiB = (file.size / (1024 * 1024)).toFixed(1);
+    throw new ConversionError(
+      `Converted, with its pictures, it comes to ${sizeMiB} MiB, over the 25 MiB a document can be. Add it as the file it is, or make its pictures smaller in Word first.`,
+    );
+  }
+  return { ...converted, file };
 }

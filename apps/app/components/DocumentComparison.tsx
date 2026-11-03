@@ -15,7 +15,11 @@ import {
   diffWords,
   summarizeSegments,
 } from "../documentComparison";
-import { classifyDocumentFile, describeFileKind } from "../documentFile";
+import {
+  classifyDocumentFile,
+  describeFileKind,
+  sniffDocumentKind,
+} from "../documentFile";
 import { docxToHtml } from "../docxHtml";
 import { editorDocumentToHtml } from "../editorDocumentHtml";
 import { markdownToHtml } from "../markdown";
@@ -115,6 +119,20 @@ async function readText(blob: Blob): Promise<{ text: string; cut: boolean }> {
 }
 
 /**
+ * One side of a comparison as HTML, read as what it really is. Null when it is
+ * text that is not a document the editor wrote, or too long to read inline.
+ */
+async function renderSide(
+  blob: Blob,
+  kind: "word" | "pdf" | "text",
+): Promise<string | null> {
+  if (kind === "word") return docxToHtml(blob);
+  if (kind === "pdf") return blocksToHtml(await extractPdfBlocks(blob));
+  const { text, cut } = await readText(blob);
+  return cut ? null : editorDocumentToHtml(text);
+}
+
+/**
  * The proposed file against the one it replaces, marked up.
  *
  * The point of the screen is that nobody downloads two files and reads them
@@ -154,6 +172,39 @@ export function DocumentComparison({
           downloadDocument(scope, headRef),
         ]);
         if (cancelled) return;
+
+        // **A converted version replaces a different kind of file.** A Word
+        // file or PDF turned into an editor document (issue 883) keeps its
+        // identity, so its change is a revision, but the name here is the new
+        // `.json` one: read by it, the Word file it replaces would be diffed
+        // as the bytes of a ZIP. Each side is read as what it holds, and the
+        // two documents compared as documents.
+        if (kind === "text" || kind === "word" || kind === "pdf") {
+          const [beforeKind, afterKind] = await Promise.all([
+            sniffDocumentKind(before),
+            sniffDocumentKind(after),
+          ]);
+          if (cancelled) return;
+          if (beforeKind !== afterKind) {
+            const [leftHtml, rightHtml] = await Promise.all([
+              renderSide(before, beforeKind),
+              renderSide(after, afterKind),
+            ]);
+            if (cancelled) return;
+            if (leftHtml === null || rightHtml === null) {
+              setState({ status: "unsupported" });
+              return;
+            }
+            setState(
+              renderedComparison(
+                leftHtml,
+                rightHtml,
+                diffWords(htmlToText(leftHtml), htmlToText(rightHtml)),
+              ),
+            );
+            return;
+          }
+        }
 
         if (kind === "markdown") {
           const [left, right] = await Promise.all([
