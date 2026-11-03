@@ -12358,7 +12358,8 @@
                   "source": {
                     "type": "string",
                     "enum": [
-                      "editor"
+                      "editor",
+                      "converted"
                     ]
                   }
                 },

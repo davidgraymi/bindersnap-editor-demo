@@ -15,8 +15,31 @@ bar. `apps/app/components/DocumentEditorPage.tsx` is the page around it, at
 the author's draft** through the ordinary revise endpoint, so the version on
 record does not move until the draft is proposed and published. Edit on a
 document's page opens (or resumes) that draft first. Only a file the editor
-writes — `*.json` — is offered it; a Word file or a PDF is edited in the
-program that made it and uploaded as a new version. It opens **full page**:
+writes — `*.json` — is opened in it. A Word file or a PDF is edited in the
+program that made it and uploaded as a new version, **or converted on request**:
+"Edit in Bindersnap" (the document's page, the editor's file panel, and the
+editor's own "not a Bindersnap document" screen) opens
+`ConvertDocumentModal`, which reads the file in the browser
+(`convertToEditor.ts`: mammoth for `.docx`, pdf.js for a PDF, then the
+editor's own schema) and says what the conversion loses _before_ anything is
+written. Confirming revises the same document with `source: "converted"`
+into the author's draft — the server keeps the filename's identity segment
+and removes the original (ADR 0005), so version numbering carries on, the
+original stays in the record, and a reviewer reads the conversion as a diff.
+The same conversion is offered on upload — "Make it editable in Bindersnap"
+in Add a document (one file or a batch) and in Upload new version
+(`ConvertOnUploadField`) — **unticked, every time**: a file is often uploaded
+to be kept exactly as it is. In a batch, a file that will not convert is
+added as the file it is, and the dialog lists it. It is never done
+automatically. Legacy `.doc`, `.xlsx`, `.pptx` and a PDF with no text layer are
+not convertible. A Word file's pictures come across, scaled and embedded as
+the editor embeds them; one the editor would refuse is left out and named in
+the notes. "Edit in Bindersnap" reads the file from the draft it will write
+into, never the record while a draft holds a newer copy, and is not offered on
+a change request. The comparison of a converted version sniffs each side's
+bytes (`sniffDocumentKind`), because only the new `.json` name is known.
+
+The editor opens **full page**:
 while it is mounted it sets `bs-writing` on `<html>`, and the shell drops the
 sidebar and the binder's file panel so Letter fits at 100% on a laptop. The
 editor has **its own file panel** (`components/DraftFiles.tsx`), read at the

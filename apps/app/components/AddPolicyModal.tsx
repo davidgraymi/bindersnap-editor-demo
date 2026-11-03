@@ -21,6 +21,12 @@ import {
   planBulkUpload,
   type BulkSource,
 } from "../bulkUpload";
+import {
+  ConversionError,
+  convertibleKind,
+  convertToEditorFile,
+} from "../convertToEditor";
+import { anyConvertible, ConvertOnUploadField } from "./ConvertOnUploadField";
 import { binderDocumentsQuery } from "../data/queries";
 import { formatFileSize } from "../documentFile";
 import { formatDocumentName } from "../documentDisplay";
@@ -148,6 +154,8 @@ export function AddPolicyModal({
   const [mode, setMode] = useState<"upload" | "write">(initialMode);
   const writing = mode === "write" && onWrite !== undefined;
   const [file, setFile] = useState<File | null>(null);
+  /** Read Word files and PDFs into the editor's format as they are added. */
+  const [convert, setConvert] = useState(false);
   const [name, setName] = useState("");
   const [folder, setFolder] = useState(initialFolder);
   /** Who the change this opens is sent to. */
@@ -182,6 +190,18 @@ export function AddPolicyModal({
   );
   /** The change a bulk upload opened, once some of it has landed. */
   const [bulkChange, setBulkChange] = useState<number | null>(null);
+  /**
+   * Word files and PDFs a batch was asked to convert and could not, added as
+   * the files they are instead. Said once the batch is done, which keeps the
+   * dialog open for it.
+   */
+  const [keptAsFiles, setKeptAsFiles] = useState<
+    { name: string; reason: string }[]
+  >([]);
+  /** A batch that has run, and where it went: nothing more to add. */
+  const [batchDone, setBatchDone] = useState<{ opened: number | null } | null>(
+    null,
+  );
   const [changeNumber, setChangeNumber] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -265,6 +285,7 @@ export function AddPolicyModal({
   const canSubmit = plan
     ? plan.items.length > 0 &&
       !submitting &&
+      batchDone === null &&
       (folder !== NEW_FOLDER || newFolder.trim() !== "")
     : (writing || file !== null) &&
       slugPath !== "" &&
@@ -290,7 +311,9 @@ export function AddPolicyModal({
     setSubmitting(true);
     setError(null);
     setFailures([]);
+    setKeptAsFiles([]);
     const failed: { name: string; reason: string }[] = [];
+    const kept: { name: string; reason: string }[] = [];
     const added: typeof plan.items = [];
     const subject = describeBulkChange(plan.items);
 
@@ -321,10 +344,18 @@ export function AddPolicyModal({
     for (const [index, item] of plan.items.entries()) {
       setProgress({ done: index, total: plan.items.length });
       try {
+        // **A file that will not convert is still added.** Dropping a scanned
+        // PDF from forty files would leave the person to find it and upload it
+        // again; it goes in as the file it is, and the dialog says so.
+        const toSend = await maybeConverted(item.file).catch((err: unknown) => {
+          if (!(err instanceof ConversionError)) throw err;
+          kept.push({ name: item.relativePath, reason: err.message });
+          return item.file;
+        });
         await createBinderDocument(
           org,
           binder,
-          item.file,
+          toSend,
           item.name,
           item.folder || undefined,
           target,
@@ -372,12 +403,25 @@ export function AddPolicyModal({
     }
     setProgress(null);
 
-    if (failed.length === 0) {
+    if (failed.length === 0 && kept.length === 0) {
       onAdded(draft ? null : opened);
       return;
     }
     setFailures(failed);
+    setKeptAsFiles(kept);
+    if (failed.length === 0) setBatchDone({ opened: draft ? null : opened });
     setSubmitting(false);
+  };
+
+  /**
+   * The file as it will be added: read into the editor's format when the
+   * person asked for that and it is a Word file or a PDF, otherwise untouched.
+   * Rejects with a {@link ConversionError} saying why a file cannot be
+   * converted: one file says so and waits, a batch adds it as it is.
+   */
+  const maybeConverted = async (source: File): Promise<File> => {
+    if (!convert || convertibleKind(source.name) === null) return source;
+    return (await convertToEditorFile(source)).file;
   };
 
   const handleSubmit = async () => {
@@ -397,7 +441,7 @@ export function AddPolicyModal({
       const created = await createBinderDocument(
         org,
         binder,
-        file,
+        await maybeConverted(file),
         name.trim(),
         filedIn || undefined,
         draft ? { draft } : changeNumber ? { changeNumber } : undefined,
@@ -565,6 +609,8 @@ export function AddPolicyModal({
               onClear={() => {
                 setSources(null);
                 setFailures([]);
+                setKeptAsFiles([]);
+                setBatchDone(null);
               }}
             />
           ) : file ? (
@@ -668,6 +714,24 @@ export function AddPolicyModal({
             </>
           )}
 
+          {/* Only when there is a Word file or PDF to convert, and never
+              ticked for the person: see `ConvertOnUploadField`. */}
+          {!writing &&
+          anyConvertible(
+            plan
+              ? plan.items.map((item) => item.file.name)
+              : file
+                ? [file.name]
+                : [],
+          ) ? (
+            <ConvertOnUploadField
+              checked={convert}
+              onChange={setConvert}
+              disabled={submitting}
+              plural={plan !== null}
+            />
+          ) : null}
+
           <div className="bs-field">
             <label className="bs-field-label" htmlFor="add-policy-folder">
               {plan ? "Where they go" : "Where it goes"}
@@ -769,13 +833,43 @@ export function AddPolicyModal({
                   </li>
                 ))}
               </ul>
-              {bulkChange !== null ? (
+              {bulkChange !== null && keptAsFiles.length === 0 ? (
                 <button
                   type="button"
                   className="bs-btn bs-btn--sm bs-btn-secondary"
                   onClick={() => onAdded(bulkChange)}
                 >
                   Open the change request with the others
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {keptAsFiles.length > 0 ? (
+            <div className="bs-note bs-note--warn" role="status">
+              <p>
+                {keptAsFiles.length === 1
+                  ? "One file could not be made editable, so it was added as the file it is:"
+                  : `${keptAsFiles.length} files could not be made editable, so they were added as the files they are:`}
+              </p>
+              <ul className="bulk-failures">
+                {keptAsFiles.map((entry) => (
+                  <li key={entry.name}>
+                    <strong>{entry.name}</strong> — {entry.reason}
+                  </li>
+                ))}
+              </ul>
+              {bulkChange !== null || batchDone !== null ? (
+                <button
+                  type="button"
+                  className="bs-btn bs-btn--sm bs-btn-secondary"
+                  onClick={() =>
+                    onAdded(bulkChange ?? batchDone?.opened ?? null)
+                  }
+                >
+                  {(bulkChange ?? batchDone?.opened ?? null) !== null
+                    ? "Open the change request"
+                    : "Done"}
                 </button>
               ) : null}
             </div>

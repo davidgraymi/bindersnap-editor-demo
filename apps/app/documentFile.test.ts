@@ -5,6 +5,7 @@ import {
   describeFileKind,
   fileExtension,
   formatFileSize,
+  sniffDocumentKind,
 } from "./documentFile";
 
 test("fileExtension reads the last suffix, lower-cased", () => {
@@ -46,4 +47,12 @@ test("formatFileSize scales into readable units", () => {
   expect(formatFileSize(15 * 1024)).toBe("15 KB");
   expect(formatFileSize(3 * 1024 * 1024)).toBe("3.0 MB");
   expect(formatFileSize(-1)).toBe("");
+});
+
+test("a file's kind is read from its first bytes, whatever it is called", async () => {
+  const zip = new Blob([new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00])]);
+  expect(await sniffDocumentKind(zip)).toBe("word");
+  expect(await sniffDocumentKind(new Blob(["%PDF-1.7\n"]))).toBe("pdf");
+  expect(await sniffDocumentKind(new Blob(['{"type":"doc"}']))).toBe("text");
+  expect(await sniffDocumentKind(new Blob([]))).toBe("text");
 });

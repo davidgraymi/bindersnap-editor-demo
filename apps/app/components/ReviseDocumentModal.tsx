@@ -3,7 +3,9 @@ import { useState } from "react";
 import { reviseBinderDocument, validateUploadFile } from "../api";
 import { formatDocumentName } from "../documentDisplay";
 import { formatFileSize } from "../documentFile";
+import { convertToEditorFile } from "../convertToEditor";
 import { ChangeTargetField } from "./ChangeTargetField";
+import { anyConvertible, ConvertOnUploadField } from "./ConvertOnUploadField";
 
 /**
  * A new version of a policy that is already in the binder.
@@ -48,6 +50,7 @@ export function ReviseDocumentModal({
   onProposed,
 }: ReviseDocumentModalProps) {
   const [file, setFile] = useState<File | null>(null);
+  const [convert, setConvert] = useState(false);
   const [changeNumber, setChangeNumber] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,12 +81,17 @@ export function ReviseDocumentModal({
     setError(null);
 
     try {
+      // Read into the editor's format first, when asked: the next version is
+      // then a Bindersnap document, and the editor opens on it from here on.
+      // Recorded as a conversion, as Edit in Bindersnap records one.
+      const converting = convert && anyConvertible([file.name]);
       const proposed = await reviseBinderDocument(
         org,
         binder,
-        file,
+        converting ? (await convertToEditorFile(file)).file : file,
         slugPath,
         changeNumber ? { changeNumber } : undefined,
+        converting ? "converted" : undefined,
       );
       onProposed(proposed.pullRequestNumber ?? 0);
     } catch (err) {
@@ -140,6 +148,14 @@ export function ReviseDocumentModal({
               <strong>Selected:</strong> {file.name} (
               {formatFileSize(file.size)})
             </p>
+          ) : null}
+
+          {file && anyConvertible([file.name]) ? (
+            <ConvertOnUploadField
+              checked={convert}
+              onChange={setConvert}
+              disabled={submitting}
+            />
           ) : null}
 
           <ChangeTargetField

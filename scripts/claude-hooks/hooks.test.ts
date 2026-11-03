@@ -2,6 +2,11 @@ import { describe, expect, test } from "bun:test";
 
 import { shouldFormat } from "./format-edited";
 import { refusalFor } from "./guard-bash";
+import {
+  isLinkedWorktree,
+  shouldInstall,
+  shouldTeardown,
+} from "./session-stack";
 
 describe("guard-bash", () => {
   test.each([
@@ -53,5 +58,35 @@ describe("format-edited", () => {
   test("leaves other files alone", () => {
     expect(shouldFormat("/repo/deploy/deploy.py", "/repo")).toBe(false);
     expect(shouldFormat("/elsewhere/notes.md", "/repo")).toBe(false);
+  });
+});
+
+describe("session-stack", () => {
+  test.each(["startup", "resume", undefined])("installs on %s", (source) => {
+    expect(shouldInstall(source)).toBe(true);
+  });
+
+  test.each(["clear", "compact"])("does not install on %s", (source) => {
+    expect(shouldInstall(source)).toBe(false);
+  });
+
+  test.each(["logout", "prompt_input_exit", "other", undefined])(
+    "tears down on %s",
+    (reason) => {
+      expect(shouldTeardown(reason)).toBe(true);
+    },
+  );
+
+  test("leaves the stack up on /clear", () => {
+    // The session object ends but the developer is still working in it.
+    expect(shouldTeardown("clear")).toBe(false);
+  });
+
+  test("only tears down inside a linked worktree", () => {
+    expect(
+      isLinkedWorktree("/repo/.git/worktrees/bridge-cse_01WmYDxJ64NEu9MW8B8ox"),
+    ).toBe(true);
+    expect(isLinkedWorktree("/repo/.git")).toBe(false);
+    expect(isLinkedWorktree("")).toBe(false);
   });
 });

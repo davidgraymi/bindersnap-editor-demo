@@ -73,7 +73,13 @@ breaking one, stop and open a `human-needed` issue. Each is explained under
 3. **File uploads flow browser → BFF → Gitea.** ADR 0001 is law, except its
    "one document = one repository", superseded by ADR 0004.
 4. **Two independent workflows.** The file vault (uploaded Word, PDF and other
-   files) and the inline editor are separate. Do not conflate them.
+   files) and the inline editor are separate. Do not conflate them. The one
+   crossing is deliberate and asked for: a `.docx` or PDF can be converted,
+   in the browser, into an editor document (`apps/app/convertToEditor.ts`) —
+   from "Edit in Bindersnap" as the next version in the author's draft, or as
+   it is uploaded when the person ticks "Make it editable" — and is then
+   reviewed like any change. It is never automatic, and a vault file is never
+   opened in the editor as itself.
 5. **Editor UI changes need a flag.** If you change `packages/editor/` visuals,
    note it in your PR.
 6. **`deploy/` configures the host; Terraform does not.** No serverless backend,
@@ -625,8 +631,13 @@ The file vault takes files written elsewhere — Word, Excel, PDF — and puts
 version control and approvals on top of them through Gitea pull requests. The
 inline editor (`packages/editor/`) is a separate workflow for documents written
 inside Bindersnap, saved as `*.json`. A Word file or a PDF is never opened in
-the editor; it is edited in the program that made it and uploaded as a new
-version. Do not conflate the two.
+the editor as itself: it is edited in the program that made it and uploaded as
+a new version — or, when the person asks, converted once into an editor
+document: "Edit in Bindersnap" makes it the document's next version in their
+draft, and "Make it editable in Bindersnap" (unticked every time) converts it as
+it is uploaded. Never convert without being asked, and never on open. A
+converted version's comparison reads each side as what it holds, the Word file
+or PDF against the editor document. Do not conflate the two.
 
 ---
 

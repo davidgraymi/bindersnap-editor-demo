@@ -4215,6 +4215,11 @@ a.bs-knot {
   width: min(100%, 540px);
   display: grid;
   gap: var(--brand-space-5);
+  /* Scrolls inside itself on a short screen. The backdrop is fixed and
+     centres its child, so a modal taller than the window lost its top and its
+     buttons at once, with no way to reach either. */
+  max-height: calc(100dvh - 2 * var(--brand-space-6));
+  overflow-y: auto;
 }
 
 .upload-modal h2 {

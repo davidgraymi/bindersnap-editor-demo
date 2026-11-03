@@ -1740,7 +1740,7 @@ registry.registerPath({
              * editor, so the draft reads "Edit Hand Hygiene" rather than
              * "Upload: document.json" — a file name nobody chose.
              */
-            source: z.enum(["editor"]).optional(),
+            source: z.enum(["editor", "converted"]).optional(),
           }),
         },
       },

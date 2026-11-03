@@ -1,4 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { convertibleKind } from "../convertToEditor";
 import {
   lazy,
   Suspense,
@@ -129,6 +130,12 @@ interface DocumentEditorPageProps {
   onArchiveFile: (slugPath: string) => Promise<void>;
   /** A copy of a policy, in the draft, opened in the editor. */
   onCopyFile: (slugPath: string) => Promise<void>;
+  /** Read a Word file or PDF into the editor's format, in the draft. */
+  onConvertFile: (target: {
+    slugPath: string;
+    path: string;
+    name: string;
+  }) => void;
   /** Bring an archived policy back, into the draft. */
   onRestoreFile: (uid: string) => Promise<void>;
   /** What is archived, as the draft stands. */
@@ -250,6 +257,7 @@ export function DocumentEditorPage({
   onRestoreFile,
   onReadArchive,
   onCopyFile,
+  onConvertFile,
   onNewFolder,
 }: DocumentEditorPageProps) {
   const queryClient = useQueryClient();
@@ -907,11 +915,37 @@ export function DocumentEditorPage({
       <div className="doc-editor-state">
         <div className="bs-empty">
           <h2 className="bs-title">{name} is not a Bindersnap document</h2>
-          <p>
-            It was uploaded as a file, so it is edited in the program that made
-            it. Make your changes there, then use Upload new version on the
-            document's page.
-          </p>
+          {/* Not on a change request: the conversion goes into a draft, and
+              this is somebody's change, saved into in place. */}
+          {!change && convertibleKind(load.detail.document.path) !== null ? (
+            <>
+              <p>
+                It was uploaded as a file. You can turn it into a Bindersnap
+                document and edit it here, in your draft, or edit it in the
+                program that made it and use Upload new version on the
+                document's page.
+              </p>
+              <button
+                type="button"
+                className="bs-btn bs-btn-primary bs-btn--sm"
+                onClick={() =>
+                  onConvertFile({
+                    slugPath: load.detail.document.slugPath,
+                    path: load.detail.document.path,
+                    name,
+                  })
+                }
+              >
+                Edit in Bindersnap
+              </button>
+            </>
+          ) : (
+            <p>
+              It was uploaded as a file, so it is edited in the program that
+              made it. Make your changes there, then use Upload new version on
+              the document's page.
+            </p>
+          )}
           <button
             type="button"
             className="bs-btn bs-btn-secondary bs-btn--sm"
@@ -1315,6 +1349,7 @@ export function DocumentEditorPage({
                       "Unable to archive that.",
                     )
             }
+            onConvert={change ? undefined : onConvertFile}
             onCopy={
               change
                 ? undefined
