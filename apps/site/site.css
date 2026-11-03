@@ -485,10 +485,6 @@
   cursor: pointer;
 }
 
-.site-article .site-share-button[hidden] {
-  display: none;
-}
-
 .site-article .site-share-primary {
   border-color: var(--brand-coral);
   background: var(--brand-coral);
@@ -508,8 +504,4 @@
   margin: 0;
   font-size: var(--brand-text-sm);
   color: var(--bs-text-muted);
-}
-
-.site-share-actions p:empty {
-  display: none;
 }

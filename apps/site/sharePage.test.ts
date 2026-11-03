@@ -8,7 +8,6 @@ import {
   ONE_PAGER_PREVIEW,
   SHARE_EMAIL,
   flyerHtml,
-  shareEmailHtml,
   shareMailto,
 } from "./sharePage";
 import { readSitePages } from "./siteContent";
@@ -40,33 +39,16 @@ describe("the share page", () => {
     expect(publicSiteFiles().has(FLYER_PATH)).toBe(true);
   });
 
-  test("offers the copied email, the mailto and the PDF", () => {
+  test("offers the email, the flyer and the PDF, and nothing to run", () => {
     const html = publicSiteFiles().get("/share")!;
-    expect(html).toMatch(/<button[^>]*id="share-copy"[^>]*hidden/);
-    expect(html).toContain(`href="${ONE_PAGER_PDF}" download`);
-    expect(html).toContain(`src="${ONE_PAGER_PREVIEW}"`);
-    expect(html).toContain(`href="${shareMailto()}"`);
-  });
-
-  test("the copied email carries the words and the one-pager as a picture", () => {
-    const html = shareEmailHtml();
-    for (const paragraph of SHARE_EMAIL.body.slice(0, -1)) {
-      expect(html).toContain(paragraph.replace(/&/g, "&amp;"));
-    }
-    // Absolute addresses: the email is read far from bindersnap.com.
-    expect(html).toContain(
-      `<a href="https://bindersnap.com${FLYER_PATH}"><img src="https://bindersnap.com${ONE_PAGER_PREVIEW}"`,
-    );
-    expect(html).not.toMatch(/(?:src|href)="\//);
-  });
-
-  test("the copy script cannot be ended early by the email inside it", () => {
-    const html = publicSiteFiles().get("/share")!;
-    const script = html.match(
-      /<script>(\(function\(\)\{\s*var button=[\s\S]*?)<\/script>/,
-    );
-    expect(script).not.toBeNull();
-    expect(script![1]).not.toContain("</");
+    const share = html.match(
+      /<div class="site-share">[\s\S]*?<\/div>\n<\/div>/,
+    )![0];
+    expect(share).toContain(`href="${shareMailto()}"`);
+    expect(share).toContain(`href="${FLYER_PATH}"`);
+    expect(share).toContain(`href="${ONE_PAGER_PDF}" download`);
+    expect(share).toContain(`src="${ONE_PAGER_PREVIEW}"`);
+    expect(share).not.toContain("<script");
   });
 
   test("the mailto carries the subject and body intact", () => {
@@ -107,8 +89,9 @@ describe("the flyer", () => {
     expect(html).toMatch(/<meta name="description" content="[^"]{50,160}">/);
   });
 
-  test("offers the PDF and the trial on screen, and prints the sheet alone", () => {
+  test("offers the PDF, the email and the trial on screen, and prints the sheet alone", () => {
     expect(html).toContain('<nav class="flyer-bar"');
+    expect(html).toContain(`href="${shareMailto()}"`);
     expect(html).toContain(`href="${ONE_PAGER_PDF}" download`);
     expect(html).toMatch(/@media print \{\s*\.flyer-bar \{\s*display: none;/);
   });

@@ -25,10 +25,9 @@ const SITE = "https://bindersnap.com";
 const FLYER_URL = `${SITE}${FLYER_PATH}`;
 
 /**
- * The email, in the sender's voice, not ours. The share page prints the same
- * words for anyone who cannot use the buttons; `sharePage.test.ts` holds the
- * two equal. The last line is where the one-pager goes: a link in plain text,
- * the picture of it in the copied email.
+ * The email both email links fill in, in the sender's voice, not ours. The
+ * share page prints the same words for anyone who would rather write their
+ * own; `sharePage.test.ts` holds the two equal. It ends with the flyer's link.
  */
 export const SHARE_EMAIL = {
   subject: "Thought of you: Bindersnap",
@@ -41,13 +40,6 @@ export const SHARE_EMAIL = {
   ],
 } as const;
 
-const escapeHtml = (text: string) =>
-  text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-
 /**
  * A `mailto:` can carry only plain text (RFC 6068), so the email it opens
  * links to the flyer rather than showing it.
@@ -58,68 +50,16 @@ export function shareMailto(): string {
   )}&body=${encodeURIComponent(SHARE_EMAIL.body.join("\n\n"))}`;
 }
 
-/**
- * The email as HTML, for the clipboard: the words, then the one-pager itself
- * as a picture linking to the flyer. Pasted into Gmail, Outlook or Apple Mail
- * it arrives as written. Email programs ignore stylesheets and most layout,
- * so this is paragraphs and an image with absolute addresses, nothing more.
- */
-export function shareEmailHtml(): string {
-  const words = SHARE_EMAIL.body.slice(0, -1);
-  return `${words.map((line) => `<p>${escapeHtml(line)}</p>`).join("")}<p>Here's a one-page overview (<a href="${FLYER_URL}">open it in your browser</a>):</p><p><a href="${FLYER_URL}"><img src="${SITE}${ONE_PAGER_PREVIEW}" width="600" alt="Bindersnap: the surveyor asks which version you approved. Show them." style="max-width:100%;height:auto;border:0"></a></p>`;
-}
-
-/**
- * Copies the email, picture and all, as rich text and plain text. The button
- * stays hidden until this runs, so without it the page offers only what
- * works. `</` is escaped in the inlined strings so neither can end the script.
- */
-function copyScript(): string {
-  const json = (value: string) =>
-    JSON.stringify(value).replace(/</g, "\\u003c");
-  return `(function(){
-  var button=document.getElementById("share-copy");
-  var status=document.getElementById("share-copy-status");
-  if(!button||!status)return;
-  var html=${json(shareEmailHtml())};
-  var text=${json(SHARE_EMAIL.body.join("\n\n"))};
-  function done(ok){
-    status.textContent=ok?"Copied. Paste it into a new email: the one-pager comes with it.":"Your browser would not copy it. Use the email below instead.";
-  }
-  function fallback(){
-    var box=document.createElement("div");
-    box.contentEditable="true";box.innerHTML=html;
-    box.style.position="fixed";box.style.left="-9999px";
-    document.body.appendChild(box);
-    var range=document.createRange();range.selectNodeContents(box);
-    var sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
-    var ok=false;try{ok=document.execCommand("copy");}catch(e){}
-    sel.removeAllRanges();box.remove();done(ok);
-  }
-  button.hidden=false;
-  button.addEventListener("click",function(){
-    if(navigator.clipboard&&window.ClipboardItem){
-      navigator.clipboard.write([new ClipboardItem({
-        "text/html":new Blob([html],{type:"text/html"}),
-        "text/plain":new Blob([text],{type:"text/plain"})
-      })]).then(function(){done(true);},fallback);
-    }else{fallback();}
-  });
-})();`;
-}
-
 /** The preview and the ways to send it, under the share page's lede. */
 export function shareHtml(): string {
   return `<div class="site-share">
 <a class="site-share-preview" href="${FLYER_PATH}"${trackAttributes("share_click", { method: "preview" })}><img src="${ONE_PAGER_PREVIEW}" width="408" height="528" alt="The Bindersnap one-pager: the surveyor headline, a policy's approval record, how it works, who it is for and the price." loading="lazy"></a>
 <div class="site-share-actions">
-<button type="button" id="share-copy" class="site-share-button site-share-primary" hidden${trackAttributes("share_click", { method: "copy" })}>Copy the email</button>
-<p id="share-copy-status" role="status"></p>
-<a class="site-share-button" href="${shareMailto()}"${trackAttributes("share_click", { method: "email" })}>Open it in my email program</a>
+<a class="site-share-button site-share-primary" href="${shareMailto()}"${trackAttributes("share_click", { method: "email" })}>Email the flyer</a>
+<a class="site-share-button" href="${FLYER_PATH}"${trackAttributes("share_click", { method: "flyer" })}>Open the flyer</a>
 <a class="site-share-button" href="${ONE_PAGER_PDF}" download${trackAttributes("share_click", { method: "pdf" })}>Download the PDF</a>
-<p>Copy the email to paste it, one-pager and all, into Gmail, Outlook or any other email. Your email program opens it as plain text, with a link to the one-pager at <a href="${FLYER_PATH}">bindersnap.com${FLYER_PATH}</a>. Nothing about who you send it to comes to us.</p>
+<p>Or send the link yourself, in a text, a chat or your own email: <a href="${FLYER_PATH}">bindersnap.com${FLYER_PATH}</a>. Nothing about who you send it to comes to us.</p>
 </div>
-<script>${copyScript()}</script>
 </div>`;
 }
 
@@ -130,7 +70,7 @@ const FLYER_DESCRIPTION =
  * The one-pager as a page of the site, at /flyer: the same HTML the PDF is
  * printed from, with the token stylesheet inlined and the fonts pointed at
  * the site's own copies. A bar above the sheet, on screen only, offers the
- * PDF and the trial; printing the page prints the sheet alone.
+ * PDF, the same email as the share page, and the trial; printing the page prints the sheet alone.
  */
 export function flyerHtml(
   measurementId = process.env.BINDERSNAP_GA_MEASUREMENT_ID,
@@ -166,7 +106,7 @@ export function flyerHtml(
 ${analyticsTag(measurementId, FLYER_PATH)}`;
   const bar = `<nav class="flyer-bar" aria-label="Flyer">
 <a class="flyer-link" href="${ONE_PAGER_PDF}" download${trackAttributes("share_click", { method: "flyer_pdf" })}>Download the PDF</a>
-<a class="flyer-link" href="/share">Send it to someone</a>
+<a class="flyer-link" href="${shareMailto()}"${trackAttributes("share_click", { method: "flyer_email" })}>Email it to someone</a>
 <a class="flyer-cta" href="${appUrl("/-/signup")}"${trackAttributes("cta_click", { cta: "flyer" })}>Start free trial</a>
 </nav>`;
   return source
