@@ -17,9 +17,15 @@ One page, sized for US Letter, that someone can read in a minute or print for th
 - **How it works.** Every policy in one place, sign-off that cannot be back-dated, and the evidence on the page while the surveyor waits.
 - **Who it's for and what it costs.** $39 a month for each person who writes policies. Reviewers and staff who only read are free, and the trial is 14 days with no card.
 
-## The email, if you'd rather paste it
+## Three ways to send it
 
-"Write the email" opens a new message in your email program with the subject and the words filled in. Add your colleague's address, change anything you like, and send it. If your email lives in a browser tab, copy it from here instead:
+- **Copy the email.** It copies the message below with the one-pager itself as a picture under it. Open a new email in Gmail, Outlook or whatever you use, paste, add your colleague's address and send.
+- **Open it in my email program.** It starts a new message with the subject and words filled in. An email link can only carry plain text, so the one-pager comes as a link rather than a picture.
+- **Send the link.** The one-pager is a page of its own at [bindersnap.com/flyer](/flyer), for a text message, a chat or a newsletter. It prints on one sheet, too.
+
+## The email
+
+Change anything you like before you send it. If neither button works for you, copy it from here:
 
 > **Subject:** Thought of you: Bindersnap
 >
@@ -31,7 +37,7 @@ One page, sized for US Letter, that someone can read in a minute or print for th
 >
 > It's made for small providers: $39 a month for each person who writes policies, and reviewers and staff who only read are free. There's a 14-day free trial, no card needed.
 >
-> Here's a one-page overview: https://bindersnap.com/bindersnap-one-pager.pdf
+> Here's a one-page overview: https://bindersnap.com/flyer
 
 ## Who to send it to
 

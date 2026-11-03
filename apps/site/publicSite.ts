@@ -3,7 +3,7 @@ import { helpHref, renderGuideMarkdown } from "../help/renderHelp";
 import { readLegalDocuments } from "../legal/legalDocuments";
 import { legalHref } from "../legal/renderLegal";
 import { siteFiles, type ListedPage } from "./renderSite";
-import { onePagerFiles } from "./sharePage";
+import { FLYER_PATH, flyerHtml, onePagerFiles } from "./sharePage";
 import { TOOLS } from "./requiredPolicies";
 import { templateFiles } from "./templateDocument";
 import { readSitePages, type SitePage } from "./siteContent";
@@ -59,9 +59,13 @@ export function publicSiteFiles(): Map<string, string> {
       ? document.version
       : undefined,
   }));
-  return siteFiles(publicSitePages(), {
+  const files = siteFiles(publicSitePages(), {
     help,
     legal,
     helpMarkdown: HELP_GUIDES.map(renderGuideMarkdown),
   });
+  // The one-pager as a page, for linking straight to it. Not a Markdown page,
+  // so it stays out of the sitemap and the llms files: /share describes it.
+  files.set(FLYER_PATH, flyerHtml());
+  return files;
 }

@@ -479,8 +479,14 @@
   border-radius: var(--brand-radius-md);
   background: var(--bs-surface-1);
   color: var(--bs-text-primary);
+  font: inherit;
   font-weight: var(--brand-weight-semibold);
   text-decoration: none;
+  cursor: pointer;
+}
+
+.site-article .site-share-button[hidden] {
+  display: none;
 }
 
 .site-article .site-share-primary {
@@ -502,4 +508,8 @@
   margin: 0;
   font-size: var(--brand-text-sm);
   color: var(--bs-text-muted);
+}
+
+.site-share-actions p:empty {
+  display: none;
 }

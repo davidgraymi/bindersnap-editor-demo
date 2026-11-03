@@ -4,3 +4,6 @@
 # be listed: 404.html links those to the app.
 /-/*    https://app.bindersnap.com/-/:splat    301
 /auth/* https://app.bindersnap.com/auth/:splat 301
+
+# The one-pager, spelled the other way too: people say "flier" as often.
+/flier  /flyer  301
