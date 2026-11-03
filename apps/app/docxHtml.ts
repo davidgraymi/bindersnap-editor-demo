@@ -38,20 +38,43 @@ async function loadMammoth() {
  * mammoth's own output is safe because that output is the only thing here
  * that produced a tag — and the result is sanitized before it reaches the DOM
  * regardless.
+ *
+ * Converting a Word file into an editor document wants its pictures, which the
+ * editor embeds: `picture` is handed each one and returns its `data:` source,
+ * or null to leave that one out.
  */
-export async function docxToHtml(file: Blob): Promise<string> {
+export async function docxToHtml(
+  file: Blob,
+  options: { picture?: (image: Blob) => Promise<string | null> } = {},
+): Promise<string> {
   const lib = await loadMammoth();
   const bytes = await file.arrayBuffer();
+  const { picture } = options;
 
   // Mammoth ships two readers and picks between them with package.json's
   // `browser` field: the browser one takes `arrayBuffer`, the Node one takes
   // `buffer`. The app always gets the browser build; the unit tests run under
   // Bun and get the other. Handing over both keys means one function works in
   // both places — each build reads the key it knows and ignores the other.
-  const result = await lib.convertToHtml({
-    arrayBuffer: bytes,
-    buffer: new Uint8Array(bytes),
-  } as Parameters<typeof lib.convertToHtml>[0]);
+  const result = await lib.convertToHtml(
+    {
+      arrayBuffer: bytes,
+      buffer: new Uint8Array(bytes),
+    } as Parameters<typeof lib.convertToHtml>[0],
+    picture
+      ? {
+          convertImage: lib.images.imgElement(async (image) => {
+            const blob = new Blob([await image.readAsArrayBuffer()], {
+              type: image.contentType,
+            });
+            return { src: (await picture(blob).catch(() => null)) ?? "" };
+          }),
+        }
+      : undefined,
+  );
 
-  return result.value.replace(/<img\b[^>]*>/gi, "");
+  // Every picture when none were asked for; otherwise the ones left out.
+  return picture
+    ? result.value.replace(/<img\b[^>]*\bsrc=""[^>]*>/gi, "")
+    : result.value.replace(/<img\b[^>]*>/gi, "");
 }

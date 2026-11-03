@@ -915,7 +915,9 @@ export function DocumentEditorPage({
       <div className="doc-editor-state">
         <div className="bs-empty">
           <h2 className="bs-title">{name} is not a Bindersnap document</h2>
-          {convertibleKind(load.detail.document.path) !== null ? (
+          {/* Not on a change request: the conversion goes into a draft, and
+              this is somebody's change, saved into in place. */}
+          {!change && convertibleKind(load.detail.document.path) !== null ? (
             <>
               <p>
                 It was uploaded as a file. You can turn it into a Bindersnap

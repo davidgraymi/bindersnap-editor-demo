@@ -3,10 +3,7 @@ import { useState } from "react";
 import { reviseBinderDocument, validateUploadFile } from "../api";
 import { formatDocumentName } from "../documentDisplay";
 import { formatFileSize } from "../documentFile";
-import {
-  convertToEditorDocument,
-  editorDocumentFile,
-} from "../convertToEditor";
+import { convertToEditorFile } from "../convertToEditor";
 import { ChangeTargetField } from "./ChangeTargetField";
 import { anyConvertible, ConvertOnUploadField } from "./ConvertOnUploadField";
 
@@ -86,19 +83,15 @@ export function ReviseDocumentModal({
     try {
       // Read into the editor's format first, when asked: the next version is
       // then a Bindersnap document, and the editor opens on it from here on.
-      const toSend =
-        convert && anyConvertible([file.name])
-          ? editorDocumentFile(
-              (await convertToEditorDocument(file, file.name)).document,
-              file.name,
-            )
-          : file;
+      // Recorded as a conversion, as Edit in Bindersnap records one.
+      const converting = convert && anyConvertible([file.name]);
       const proposed = await reviseBinderDocument(
         org,
         binder,
-        toSend,
+        converting ? (await convertToEditorFile(file)).file : file,
         slugPath,
         changeNumber ? { changeNumber } : undefined,
+        converting ? "converted" : undefined,
       );
       onProposed(proposed.pullRequestNumber ?? 0);
     } catch (err) {
