@@ -21,6 +21,12 @@ import {
   planBulkUpload,
   type BulkSource,
 } from "../bulkUpload";
+import {
+  convertibleKind,
+  convertToEditorDocument,
+  editorDocumentFile,
+} from "../convertToEditor";
+import { anyConvertible, ConvertOnUploadField } from "./ConvertOnUploadField";
 import { binderDocumentsQuery } from "../data/queries";
 import { formatFileSize } from "../documentFile";
 import { formatDocumentName } from "../documentDisplay";
@@ -148,6 +154,8 @@ export function AddPolicyModal({
   const [mode, setMode] = useState<"upload" | "write">(initialMode);
   const writing = mode === "write" && onWrite !== undefined;
   const [file, setFile] = useState<File | null>(null);
+  /** Read Word files and PDFs into the editor's format as they are added. */
+  const [convert, setConvert] = useState(false);
   const [name, setName] = useState("");
   const [folder, setFolder] = useState(initialFolder);
   /** Who the change this opens is sent to. */
@@ -324,7 +332,7 @@ export function AddPolicyModal({
         await createBinderDocument(
           org,
           binder,
-          item.file,
+          await maybeConverted(item.file),
           item.name,
           item.folder || undefined,
           target,
@@ -380,6 +388,18 @@ export function AddPolicyModal({
     setSubmitting(false);
   };
 
+  /**
+   * The file as it will be added: read into the editor's format when the
+   * person asked for that and it is a Word file or a PDF, otherwise untouched.
+   * Rejects with the reason a file cannot be converted, so a batch lists it
+   * with the files it could not add.
+   */
+  const maybeConverted = async (source: File): Promise<File> => {
+    if (!convert || convertibleKind(source.name) === null) return source;
+    const { document } = await convertToEditorDocument(source, source.name);
+    return editorDocumentFile(document, source.name);
+  };
+
   const handleSubmit = async () => {
     if (writing) {
       await startWriting();
@@ -397,7 +417,7 @@ export function AddPolicyModal({
       const created = await createBinderDocument(
         org,
         binder,
-        file,
+        await maybeConverted(file),
         name.trim(),
         filedIn || undefined,
         draft ? { draft } : changeNumber ? { changeNumber } : undefined,
@@ -667,6 +687,24 @@ export function AddPolicyModal({
               </div>
             </>
           )}
+
+          {/* Only when there is a Word file or PDF to convert, and never
+              ticked for the person: see `ConvertOnUploadField`. */}
+          {!writing &&
+          anyConvertible(
+            plan
+              ? plan.items.map((item) => item.file.name)
+              : file
+                ? [file.name]
+                : [],
+          ) ? (
+            <ConvertOnUploadField
+              checked={convert}
+              onChange={setConvert}
+              disabled={submitting}
+              plural={plan !== null}
+            />
+          ) : null}
 
           <div className="bs-field">
             <label className="bs-field-label" htmlFor="add-policy-folder">
