@@ -55,6 +55,10 @@ import { siteUrl } from "../siteLink";
  *   Documents, Change requests, History and Settings, with Settings' pages
  *   listed under it while one is open.
  *
+ * Each level is titled for its kind — Your work, Organization, Binder — the
+ * same label in the same type, so the sidebar always says what kind of place
+ * it is showing before it says which one.
+ *
  * Each level names the place it is in and offers one step back up, because
  * breadcrumbs alone are not read as a way out by somebody who has never used
  * GitLab. Home is also the logo, and every other place is the search.
@@ -499,6 +503,10 @@ export function AppSidebar({
             </span>
           </a>
 
+          {/* **Titled for the level, as Your work is**, so each of the three
+              says what kind of place it is before it says which one. */}
+          <div className="app-sidebar-label">Binder</div>
+
           {/* The binder's name, as the heading of everything under it. A
               heading and not a link: Documents is the way to its contents. */}
           <div className="app-sidebar-binder">
@@ -526,6 +534,8 @@ export function AppSidebar({
             <ArrowLeft size={14} strokeWidth={1.75} aria-hidden="true" />
             <span className="app-sidebar-back-label">Home</span>
           </a>
+
+          <div className="app-sidebar-label">Organization</div>
 
           <div className="app-sidebar-scope">
             <span className="app-sidebar-scope-mark" aria-hidden="true">

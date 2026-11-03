@@ -66,6 +66,10 @@ test("the sidebar shows the level you are in: yours, then the organization's", a
     await expect(organization.getByRole("link", { name: label })).toBeVisible();
   }
   await expect(sidebar.getByText("Your work", { exact: true })).toHaveCount(0);
+  // Titled for its level, as Home's is "Your work".
+  await expect(
+    organization.getByText("Organization", { exact: true }),
+  ).toBeVisible();
   await expect(
     organization.getByRole("link", { name: "Binders" }),
   ).toHaveAttribute("aria-current", "page");
@@ -143,6 +147,10 @@ test("inside a binder, the sidebar is the binder's alone", async ({ page }) => {
     ).toHaveCount(1);
   }
   await expect(sidebar.getByText("Your work", { exact: true })).toHaveCount(0);
+  await expect(sidebar.getByText("Binder", { exact: true })).toBeVisible();
+  await expect(sidebar.getByText("Organization", { exact: true })).toHaveCount(
+    0,
+  );
   await expect(sidebar.getByRole("link", { name: "Billing" })).toHaveCount(0);
   await expect(
     sidebar.getByRole("link", { name: "Documents" }),
