@@ -479,8 +479,10 @@
   border-radius: var(--brand-radius-md);
   background: var(--bs-surface-1);
   color: var(--bs-text-primary);
+  font: inherit;
   font-weight: var(--brand-weight-semibold);
   text-decoration: none;
+  cursor: pointer;
 }
 
 .site-article .site-share-primary {

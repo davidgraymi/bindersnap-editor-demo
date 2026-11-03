@@ -3,9 +3,11 @@ import { describe, expect, test } from "bun:test";
 import { FOOTER_COLUMNS } from "./chrome";
 import { publicSiteBinaryFiles, publicSiteFiles } from "./publicSite";
 import {
+  FLYER_PATH,
   ONE_PAGER_PDF,
   ONE_PAGER_PREVIEW,
   SHARE_EMAIL,
+  flyerHtml,
   shareMailto,
 } from "./sharePage";
 import { readSitePages } from "./siteContent";
@@ -30,17 +32,23 @@ describe("the share page", () => {
     }
   });
 
-  test("the email links to the PDF the site serves", () => {
-    expect(SHARE_EMAIL.body.join(" ")).toContain(
-      `https://bindersnap.com${ONE_PAGER_PDF}`,
+  test("the email links to the flyer the site serves", () => {
+    expect(SHARE_EMAIL.body.at(-1)).toContain(
+      `https://bindersnap.com${FLYER_PATH}`,
     );
+    expect(publicSiteFiles().has(FLYER_PATH)).toBe(true);
   });
 
-  test("offers the PDF and the email", () => {
+  test("offers the email, the flyer and the PDF, and nothing to run", () => {
     const html = publicSiteFiles().get("/share")!;
-    expect(html).toContain(`href="${ONE_PAGER_PDF}" download`);
-    expect(html).toContain(`src="${ONE_PAGER_PREVIEW}"`);
-    expect(html).toContain(`href="${shareMailto()}"`);
+    const share = html.match(
+      /<div class="site-share">[\s\S]*?<\/div>\n<\/div>/,
+    )![0];
+    expect(share).toContain(`href="${shareMailto()}"`);
+    expect(share).toContain(`href="${FLYER_PATH}"`);
+    expect(share).toContain(`href="${ONE_PAGER_PDF}" download`);
+    expect(share).toContain(`src="${ONE_PAGER_PREVIEW}"`);
+    expect(share).not.toContain("<script");
   });
 
   test("the mailto carries the subject and body intact", () => {
@@ -57,5 +65,39 @@ describe("the share page", () => {
     expect([...png.slice(1, 4)]).toEqual([0x50, 0x4e, 0x47]);
     // The token file's paper grain once made it 3 MB; keep it light to send.
     expect(pdf.length).toBeLessThan(1024 * 1024);
+  });
+});
+
+describe("the flyer", () => {
+  const html = flyerHtml("G-ABC123XYZ");
+
+  test("loads nothing from outside the site", () => {
+    expect(html).not.toContain("../");
+    expect(html).toContain("url(/fonts/lora-latin-wght-normal.woff2)");
+    // The token stylesheet is inlined, not linked.
+    expect(html).toContain("--brand-coral:");
+    expect(html).not.toMatch(/<link[^>]+bindersnap-tokens\.css/);
+  });
+
+  test("names itself for search and link previews", () => {
+    expect(html).toContain(
+      `<link rel="canonical" href="https://bindersnap.com${FLYER_PATH}">`,
+    );
+    expect(html).toContain(
+      `<meta property="og:image" content="https://bindersnap.com${ONE_PAGER_PREVIEW}">`,
+    );
+    expect(html).toMatch(/<meta name="description" content="[^"]{50,160}">/);
+  });
+
+  test("offers the PDF, the email and the trial on screen, and prints the sheet alone", () => {
+    expect(html).toContain('<nav class="flyer-bar"');
+    expect(html).toContain(`href="${shareMailto()}"`);
+    expect(html).toContain(`href="${ONE_PAGER_PDF}" download`);
+    expect(html).toMatch(/@media print \{\s*\.flyer-bar \{\s*display: none;/);
+  });
+
+  test("carries the Google tag like every other public page", () => {
+    expect(html).toContain("G-ABC123XYZ");
+    expect(flyerHtml("")).not.toContain("googletagmanager");
   });
 });
