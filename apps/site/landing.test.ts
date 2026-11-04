@@ -197,12 +197,12 @@ test("a section skipped over by a jump is shown at once, without a fade", async 
 
 test("the editor window is zoomed to fit its column", () => {
   const dom = new JSDOM(
-    `<div class="editor-window" style="--edw-width: 1400px"><div class="edw-stage"></div></div>`,
+    `<div class="editor-window" style="--edw-width: 1180px"><div class="edw-stage"></div></div>`,
     { url: "https://bindersnap.com/", pretendToBeVisual: true },
   );
   const doc = dom.window.document;
   const frame = doc.querySelector(".editor-window") as HTMLElement;
-  Object.defineProperty(frame, "clientWidth", { value: 700 });
+  Object.defineProperty(frame, "clientWidth", { value: 590 });
 
   installEditorDemoZoom(doc);
 

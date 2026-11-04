@@ -1262,8 +1262,8 @@ body::after {
 /* ─────────────────────────────────────
    THE EDITOR
 
-   One full-width copy of the real editor, then a numbered legend. The window
-   is laid out at a laptop's width (.edw-stage, --edw-width) and zoomed to
+   One full-width copy of the real editor — its ribbon, page and status bar —
+   then a line of notes. The window is laid out at a laptop's width (.edw-stage, --edw-width) and zoomed to
    fit its column by installEditorDemoZoom (landing.ts); without the script it
    keeps a fixed zoom and crops its right edge. Its chrome takes the --bs-*
    tokens, as the app's does, and flips with the theme; the sheet takes the
@@ -1316,7 +1316,7 @@ body::after {
 }
 
 .editor-window {
-  --edw-width: 1400px;
+  --edw-width: 1180px;
   /* The ribbon's button height, 28px, as the editor's own. */
   --edw-control: calc(var(--brand-space-6) + var(--brand-space-1));
   --editor-zoom: 0.85;
@@ -1333,6 +1333,7 @@ body::after {
 .edw-stage {
   width: var(--edw-width);
   zoom: var(--editor-zoom);
+  background: var(--bs-surface-1);
   font-family: var(--brand-font-sans);
   font-size: var(--brand-text-ui-md);
   color: var(--bs-text-primary);
@@ -1354,271 +1355,11 @@ body::after {
   margin: 0;
 }
 
-.edw-browser {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-4);
-  padding: var(--brand-space-3) var(--brand-space-5);
-  background: var(--bs-surface-2);
-  border-bottom: 1px solid var(--bs-rule);
-}
-
-.edw-address {
-  position: relative;
-  flex: 1;
-  padding: var(--brand-space-1-5) var(--brand-space-4);
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-md);
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-ui-sm);
-  white-space: nowrap;
-}
-
-.edw-address > span:not(.edw-pin) {
-  color: var(--bs-text-muted);
-}
-
-.edw-app {
-  padding: 0 var(--brand-space-2) var(--brand-space-2);
-  background: var(--bs-surface-2);
-}
-
-.edw-appbar {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-8);
-  height: var(--brand-space-16);
-  padding: 0 var(--brand-space-6);
-}
-
-.edw-logo {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--brand-space-2-5);
-  font-family: var(--brand-font-serif);
-  font-size: var(--brand-text-body-lg);
-  font-weight: var(--brand-weight-semibold);
-}
-
-.edw-logo-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--edw-control);
-  height: var(--edw-control);
-  border-radius: var(--brand-radius-md);
-  background: var(--brand-coral);
-  color: var(--brand-on-brand);
-}
-
-.edw-crumbs,
-.edw-top-meta,
 .edw-line,
-.edw-paste,
-.edw-search {
+.edw-paste {
   display: inline-flex;
   align-items: center;
   gap: var(--brand-space-1-5);
-}
-
-.edw-crumbs {
-  color: var(--bs-text-secondary);
-}
-
-.edw-crumb-sep {
-  margin: 0 var(--brand-space-2);
-  color: var(--bs-text-faint);
-}
-
-.edw-appbar-end {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--brand-space-3);
-  margin-left: auto;
-}
-
-.edw-search {
-  width: calc(var(--brand-space-30) * 2.1);
-  padding: var(--brand-space-1-5) var(--brand-space-3);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-md);
-  background: var(--bs-surface-1);
-  color: var(--bs-text-faint);
-  font-size: var(--brand-text-ui-sm);
-}
-
-.edw-search kbd {
-  margin-left: auto;
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-ui-xs);
-}
-
-.edw-avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--brand-space-8);
-  height: var(--brand-space-8);
-  border-radius: var(--brand-radius-full);
-  background: var(--bs-green-dim);
-  color: var(--brand-green);
-  font-size: var(--brand-text-ui-xs);
-  font-weight: var(--brand-weight-semibold);
-}
-
-/* The editor's panel: a card on the app's warm ground. Nothing clips it, so
-   the pins on its top bar can stand above the bar. */
-.edw-panel {
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-lg);
-  background: var(--bs-surface-1);
-}
-
-.edw-top {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-4);
-  height: var(--brand-space-12);
-  padding: 0 var(--brand-space-3) 0 var(--brand-space-6);
-  border-bottom: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-lg) var(--brand-radius-lg) 0 0;
-  background: var(--bs-page-bg);
-  font-size: var(--brand-text-ui-sm);
-  white-space: nowrap;
-}
-
-.edw-title {
-  margin-right: var(--brand-space-4);
-  font-family: var(--brand-font-serif);
-  font-size: var(--brand-text-body-lg);
-  font-weight: var(--brand-weight-semibold);
-}
-
-.edw-top-meta {
-  color: var(--bs-text-muted);
-}
-
-.edw-draft {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--brand-space-1);
-  margin-left: calc(-1 * var(--brand-space-2));
-  padding: var(--brand-space-1) var(--brand-space-2);
-  border: 1px solid var(--bs-coral-border);
-  border-radius: var(--brand-radius-md);
-  background: var(--bs-coral-dim);
-  color: var(--bs-text-muted);
-}
-
-.edw-draft b {
-  color: var(--bs-text-primary);
-  font-weight: var(--brand-weight-semibold);
-}
-
-.edw-top-note {
-  margin-left: calc(-1 * var(--brand-space-2));
-  color: var(--bs-text-muted);
-}
-
-.edw-top-actions {
-  display: inline-flex;
-  gap: var(--brand-space-2);
-  margin-left: auto;
-}
-
-.edw-action {
-  position: relative;
-  padding: var(--brand-space-1-5) var(--brand-space-4);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-md);
-  background: var(--bs-surface-1);
-  font-weight: var(--brand-weight-semibold);
-}
-
-.edw-action-save {
-  color: var(--bs-text-muted);
-}
-
-.edw-action-primary {
-  border-color: transparent;
-  background: var(--bs-cta-fill);
-  color: var(--brand-on-brand);
-}
-
-.edw-body {
-  display: grid;
-  grid-template-columns: calc(var(--brand-space-30) * 2) minmax(0, 1fr);
-}
-
-.edw-files {
-  padding: var(--brand-space-3);
-  border-right: 1px solid var(--bs-rule);
-}
-
-.edw-files-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 var(--brand-space-1) var(--brand-space-3);
-  font-weight: var(--brand-weight-semibold);
-}
-
-.edw-files-head span {
-  display: inline-flex;
-}
-
-.edw-goto {
-  margin-bottom: var(--brand-space-3);
-  padding: var(--brand-space-1-5) var(--brand-space-3);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-md);
-  color: var(--bs-text-faint);
-  font-size: var(--brand-text-ui-sm);
-}
-
-.edw-tree {
-  display: flex;
-  flex-direction: column;
-  gap: var(--brand-space-0-5);
-}
-
-.edw-node {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-1-5);
-  padding: var(--brand-space-1) var(--brand-space-2);
-  border-radius: var(--brand-radius-md);
-  color: var(--bs-text-secondary);
-}
-
-.edw-node svg:first-child {
-  color: var(--bs-text-faint);
-}
-
-.edw-node-file {
-  padding-left: var(--brand-space-10);
-}
-
-.edw-node-top {
-  padding-left: var(--brand-space-2);
-}
-
-.edw-node.is-on {
-  background: var(--bs-surface-2);
-  color: var(--bs-text-primary);
-  font-weight: var(--brand-weight-medium);
-}
-
-/* The dot a file gets while it has edits not yet in the draft. */
-.edw-dirty {
-  width: var(--brand-space-1-5);
-  height: var(--brand-space-1-5);
-  margin-left: var(--brand-space-1);
-  border-radius: var(--brand-radius-full);
-  background: var(--brand-coral);
-  opacity: 0;
 }
 
 .edw-main {
@@ -1982,9 +1723,6 @@ body::after {
 .editor-demo.in .edw-typed span {
   animation: edw-type 1.4s steps(27, end) 1s both;
 }
-.editor-demo.in .edw-dirty {
-  animation: edw-show-dot 1ms linear 1s both;
-}
 .editor-demo.in .edw-saved > span:nth-child(1) {
   animation: edw-hide 1ms linear 1s both;
 }
@@ -1993,12 +1731,8 @@ body::after {
     edw-show 1ms linear 1s both,
     edw-hide 1ms linear 3.3s forwards;
 }
-.editor-demo.in .edw-saved > span:nth-child(3),
-.editor-demo.in .edw-count > span:nth-child(2) {
+.editor-demo.in .edw-saved > span:nth-child(3) {
   animation: edw-show 1ms linear 3.3s both;
-}
-.editor-demo.in .edw-count > span:nth-child(1) {
-  animation: edw-hide 1ms linear 3.3s both;
 }
 
 @keyframes edw-type {
@@ -2030,77 +1764,16 @@ body::after {
     opacity: 0;
   }
 }
-@keyframes edw-show-dot {
-  to {
-    opacity: 1;
-  }
-}
 
-/* ── The numbered pins in the window, and the legend under it ── */
-
-.edw-pin,
-.editor-notes li::before {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  border-radius: var(--brand-radius-full);
-  background: var(--bs-text-primary);
-  color: var(--bs-page-bg);
-  font-family: var(--brand-font-mono);
-  font-style: normal;
-  font-weight: var(--brand-weight-medium);
-  line-height: 1;
-}
-
-/* A pin is drawn inside the zoomed stage, so it is sized up by the zoom to
-   land at the legend's size on screen. */
-.edw-pin {
-  position: absolute;
-  z-index: 1;
-  width: calc(var(--brand-space-6) / var(--editor-zoom));
-  height: calc(var(--brand-space-6) / var(--editor-zoom));
-  font-size: calc(var(--brand-text-ui-sm) / var(--editor-zoom));
-  box-shadow: 0 0 0 calc(3px / var(--editor-zoom)) var(--bs-surface-1);
-}
-
-.edw-pin-1 {
-  right: calc(-1 * var(--brand-space-3));
-  top: calc(-1 * var(--brand-space-3));
-}
-.edw-pin-2 {
-  left: calc(var(--brand-space-30) * 2.3);
-  top: calc(-1 * var(--brand-space-6));
-}
-.edw-pin-3,
-.edw-pin-4 {
-  right: calc(-1 * var(--brand-space-3));
-  top: calc(-1 * var(--brand-space-6));
-}
+/* ── The notes under the window ── */
 
 .editor-notes {
   list-style: none;
-  counter-reset: editor-note;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--brand-space-8);
   margin: var(--brand-space-10) 0 0;
   padding: 0;
-}
-
-.editor-notes li {
-  counter-increment: editor-note;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  column-gap: var(--brand-space-3);
-}
-
-.editor-notes li::before {
-  content: counter(editor-note);
-  grid-row: span 2;
-  width: var(--brand-space-6);
-  height: var(--brand-space-6);
-  font-size: var(--brand-text-ui-sm);
 }
 
 .editor-notes h3 {
@@ -2921,10 +2594,6 @@ body::after {
     max-width: var(--brand-max-width-text);
   }
 
-  .editor-notes {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .review-strip {
     grid-template-columns: 1fr;
   }
@@ -3084,18 +2753,11 @@ body::after {
 
 /* The sign-off row is a small portrait beside two short lines, so it survives
    narrow widths that the old two-column letter could not. Just tighten it. */
-/* A phone: the legend becomes one column, and the window's pins shrink so
-   they mark the ribbon and the draft without covering them. */
+/* A phone: the notes stack. */
 @media (max-width: 600px) {
   .editor-notes {
     grid-template-columns: 1fr;
     gap: var(--brand-space-5);
-  }
-  .edw-pin {
-    width: calc(var(--brand-space-3) / var(--editor-zoom));
-    height: calc(var(--brand-space-3) / var(--editor-zoom));
-    font-size: calc(var(--brand-text-ui-xs) * 0.7 / var(--editor-zoom));
-    box-shadow: 0 0 0 calc(2px / var(--editor-zoom)) var(--bs-surface-1);
   }
 }
 

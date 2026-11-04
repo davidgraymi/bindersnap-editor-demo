@@ -63,7 +63,7 @@ silhouette, on purpose**:
 | The Record     | one framed chain diagram + a divided claims line    | tinted |
 | Before / after | one ledger, the pairs answering across each row     | paper  |
 | The Review     | a three-column strip divided by hairlines           | tinted |
-| The Editor     | a full-width copy of the editor + a numbered legend | paper  |
+| The Editor     | a full-width copy of the editor + a line of notes   | paper  |
 
 They used to be four consecutive "centred header, then a row of bordered
 cards" sections. The eye pattern-matches that by the second one and starts
@@ -80,13 +80,14 @@ never two competing CTAs.
 
 ### The editor window
 
-The Editor section's window is a copy of the real editor, drawn in HTML
-(`.edw-*` in `landing.css`): the app header, the top bar with its "Saving to"
-draft and Close / Save / Propose, the Files pane, the grouped ribbon, the sheet
-and the status bar, with lucide's icons as the editor uses. It is laid out at a
-laptop's width and zoomed to fit by `installEditorDemoZoom` (`landing.ts`).
-When the editor's look changes, change this copy with it, or the landing page
-is showing customers something the product doesn't look like.
+The Editor section's window is a copy of the real editor, and only the
+editor, drawn in HTML (`.edw-*` in `landing.css`): the ribbon, the sheet and
+the status bar, with lucide's icons as the editor uses. No app chrome, no Files
+pane, no top bar: the section's one job is to show there is an editor and that
+it looks good. It is laid out at a laptop's width and zoomed to fit by
+`installEditorDemoZoom` (`landing.ts`). When the editor's look changes, change
+this copy with it, or the landing page is showing customers something the
+product doesn't look like.
 
 ### Scroll reveal
 
