@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { useIsReadOnly } from "../readOnlyContext";
 import {
   CircleHelp,
@@ -42,6 +48,12 @@ import { CreateMenu } from "./CreateMenu";
 import { AccountSettingsPage } from "./AccountSettingsPage";
 import { AvatarFace } from "./PersonAvatar";
 import { siteUrl } from "../siteLink";
+import { useCollapsedSidebar } from "../useCollapsedSidebar";
+import { formatDocumentName } from "../documentDisplay";
+import type {
+  QuickFindActionContext,
+  QuickFindCommand,
+} from "../quickFindActions";
 
 interface AppShellProps {
   user: SessionUser | null;
@@ -57,12 +69,32 @@ interface AppShellProps {
   billing?: ReactNode;
 }
 
-function toggleTheme() {
-  const html = document.documentElement;
-  const isDark = html.getAttribute("data-theme") === "dark";
-  const next = isDark ? "light" : "dark";
-  html.setAttribute("data-theme", next);
-  localStorage.setItem("bs-theme", next);
+type Theme = "light" | "dark";
+
+/** The theme on screen, which `index.html` chose before React started. */
+function readTheme(): Theme {
+  return document.documentElement.getAttribute("data-theme") === "dark"
+    ? "dark"
+    : "light";
+}
+
+function applyTheme(next: Theme) {
+  document.documentElement.setAttribute("data-theme", next);
+  try {
+    localStorage.setItem("bs-theme", next);
+  } catch {
+    // Private browsing: the page still changes, it just is not remembered.
+  }
+}
+
+/**
+ * Below this the sidebar is not drawn (see `AppSidebar`), so there is nothing
+ * for quick find to collapse.
+ */
+const SIDEBAR_MEDIA = "(min-width: 768px)";
+
+function sidebarShown(): boolean {
+  return window.matchMedia?.(SIDEBAR_MEDIA).matches ?? true;
 }
 
 /**
@@ -184,6 +216,15 @@ export function AppShell({
     [route],
   );
   const [profileOpen, setProfileOpen] = useState(false);
+  const [theme, setTheme] = useState<Theme>(readTheme);
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    applyTheme(next);
+    setTheme(next);
+  };
+  // A policy open in the page is three panels wide — the map, the binder's
+  // files, and the policy — and the map is the one nobody is reading.
+  const sidebar = useCollapsedSidebar(route.kind === "binderDocument");
   const canSendFeedback = feedbackEnabled();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const sidebarOrgName = useOrganizationDisplayName(sidebarOrg ?? "");
@@ -198,6 +239,71 @@ export function AppShell({
   const newBinder = useWriteAction((org: string) =>
     navigateToHref(`/${org}/-/binders/new`),
   );
+
+  const binderScope =
+    route.kind === "binder" || route.kind === "binderDocument"
+      ? {
+          org: route.org,
+          binder: route.binder,
+          name: sidebarBinder?.name ?? formatDocumentName(route.binder),
+        }
+      : null;
+  const guideHidden =
+    onboarding.hidden &&
+    onboarding.state !== null &&
+    !onboarding.state.complete;
+
+  /** What quick find offers beyond what is in the binders — see issue 648. */
+  const actionContext = useMemo<QuickFindActionContext>(
+    () => ({
+      org: sidebarOrg,
+      orgName: sidebarOrgName,
+      binder: binderScope,
+      isSiteAdmin: user?.isAdmin === true,
+      theme,
+      sidebarCollapsed: sidebarShown() ? sidebar.collapsed : null,
+      canSendFeedback,
+      canShowGuide: guideHidden,
+    }),
+    // binderScope is rebuilt every render; its three fields are what matter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      sidebarOrg,
+      sidebarOrgName,
+      binderScope?.org,
+      binderScope?.binder,
+      binderScope?.name,
+      user?.isAdmin,
+      theme,
+      sidebar.collapsed,
+      canSendFeedback,
+      guideHidden,
+    ],
+  );
+
+  const runCommand = (command: QuickFindCommand) => {
+    switch (command) {
+      case "toggleTheme":
+        toggleTheme();
+        return;
+      case "toggleSidebar":
+        sidebar.toggle();
+        return;
+      case "sendFeedback":
+        setFeedbackOpen(true);
+        return;
+      case "showGuide":
+        onboarding.setHidden(false);
+        onNavigate({ kind: "workspace" });
+        return;
+      case "newBinder":
+        if (sidebarOrg) newBinder(sidebarOrg);
+        return;
+      case "signOut":
+        void onSignOut();
+        return;
+    }
+  };
 
   // Leaving a binder takes its section with it, so the map does not keep
   // offering the screens of a binder you are no longer in.
@@ -250,6 +356,8 @@ export function AppShell({
             initialQuery={initialSearch}
             onNavigate={onNavigate}
             onSearchLibrary={navigateToSearch}
+            actionContext={actionContext}
+            onCommand={runCommand}
           />
 
           {/* What happened on the changes you are part of — Gitea's own
@@ -488,6 +596,8 @@ export function AppShell({
           org={sidebarOrg}
           binder={sidebarBinder}
           onSendFeedback={canSendFeedback ? () => setFeedbackOpen(true) : null}
+          collapsed={sidebar.collapsed}
+          onToggleCollapsed={sidebar.toggle}
           onNavigate={onNavigate}
         />
 
@@ -670,8 +780,7 @@ export function AppShell({
             state: {
               readOnly: isReadOnly,
               siteAdmin: user?.isAdmin === true,
-              theme:
-                document.documentElement.getAttribute("data-theme") ?? "light",
+              theme,
               binderMissing: missingBinder !== null,
             },
           }}
