@@ -53,9 +53,9 @@ the token file.
 
 ### Scroll rhythm
 
-The four sections between the chaos strip and the founder note — The Solution,
-The Record, the before/after, The Review — each have a **different silhouette,
-on purpose**:
+The five sections between the chaos strip and the founder note — The Solution,
+The Record, the before/after, The Review, The Editor — each have a **different
+silhouette, on purpose**:
 
 | Section        | Shape                                               | Tone   |
 | -------------- | --------------------------------------------------- | ------ |
@@ -63,6 +63,7 @@ on purpose**:
 | The Record     | one framed chain diagram + a divided claims line    | tinted |
 | Before / after | one ledger, the pairs answering across each row     | paper  |
 | The Review     | a three-column strip divided by hairlines           | tinted |
+| The Editor     | one large drawn editor window + numbered notes      | paper  |
 
 They used to be four consecutive "centred header, then a row of bordered
 cards" sections. The eye pattern-matches that by the second one and starts

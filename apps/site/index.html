@@ -1429,6 +1429,201 @@
         </section>
 
         <!--
+          THE EDITOR
+
+          The writing half of the story, between the review ("the review
+          happens on the policy") and the founder note, whose first paragraph
+          is about reviewing in Word "which not everyone had". Plain paper,
+          after The Review's tinted band.
+
+          Its shape is one large product window with numbered notes beside it.
+          Nothing adjacent is a single big frame: The Review is a divided
+          strip and the founder note is a letter.
+
+          The window is drawn, not a screenshot, so it stays sharp, weighs
+          nothing and is text a crawler can read. Chrome takes the --bs-*
+          tokens and flips with the theme; the sheet takes the fixed
+          --brand-mockup-* tokens and stays white, as the real editor's page
+          does. The numbers in the window match the notes beside it.
+
+          When it scrolls into view, "every" is struck through and "each" is
+          typed in, the way a reviewer sees the change. Reduced motion shows
+          the finished state (the global rule at the end of landing.css).
+        -->
+        <section class="section-editor" aria-labelledby="editor-heading">
+          <div class="editor-inner">
+            <div class="editor-header reveal">
+              <div class="eyebrow-tag">The Editor</div>
+              <h2 id="editor-heading">
+                Write the policy right here.<br /><em
+                  >No Word license required.</em
+                >
+              </h2>
+              <p>
+                A word processor that works the way Word does, in the browser
+                you already have. Nobody installs anything, nobody needs an
+                Office license, and every word you write becomes part of the
+                record.
+              </p>
+            </div>
+
+            <figure class="editor-demo reveal reveal-d1">
+              <div class="editor-window" aria-hidden="true">
+                <div class="editor-chrome">
+                  <div class="mockup-dots">
+                    <span></span><span></span><span></span>
+                  </div>
+                  <div class="editor-address">
+                    app.bindersnap.com<span class="editor-address-path"
+                      >/sunrise-asc/infection-control</span
+                    >
+                    <span class="editor-pin">1</span>
+                  </div>
+                </div>
+
+                <div class="editor-ribbon">
+                  <div class="editor-tabs">
+                    <span class="editor-tab is-active">Home</span>
+                    <span class="editor-tab">Insert</span>
+                    <span class="editor-tab">View</span>
+                    <span class="editor-pin">2</span>
+                  </div>
+                  <div class="editor-tools">
+                    <span class="editor-select">Geist</span>
+                    <span class="editor-select editor-select-sm">12</span>
+                    <span class="editor-sep"></span>
+                    <span class="editor-tool editor-tool-b">B</span>
+                    <span class="editor-tool editor-tool-i">I</span>
+                    <span class="editor-tool editor-tool-u">U</span>
+                    <span class="editor-tool editor-tool-s">S</span>
+                    <span class="editor-sep editor-hide-sm"></span>
+                    <span class="editor-tool editor-hide-sm">H1</span>
+                    <span class="editor-tool editor-hide-sm is-active">H2</span>
+                    <span class="editor-sep editor-hide-sm"></span>
+                    <span class="editor-tool editor-hide-sm"
+                      ><svg viewBox="0 0 24 24">
+                        <path d="M3 12h.01" />
+                        <path d="M3 18h.01" />
+                        <path d="M3 6h.01" />
+                        <path d="M8 12h13" />
+                        <path d="M8 18h13" />
+                        <path d="M8 6h13" /></svg
+                    ></span>
+                    <span class="editor-tool editor-hide-sm"
+                      ><svg viewBox="0 0 24 24">
+                        <path d="M10 12h11" />
+                        <path d="M10 18h11" />
+                        <path d="M10 6h11" />
+                        <path d="M4 10h2" />
+                        <path d="M4 6h1v4" />
+                        <path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" /></svg
+                    ></span>
+                    <span class="editor-tool editor-hide-sm"
+                      ><svg viewBox="0 0 24 24">
+                        <path d="m3 17 2 2 4-4" />
+                        <path d="m3 7 2 2 4-4" />
+                        <path d="M13 6h8" />
+                        <path d="M13 12h8" />
+                        <path d="M13 18h8" /></svg
+                    ></span>
+                    <span class="editor-sep editor-hide-sm"></span>
+                    <span class="editor-tool editor-hide-sm"
+                      ><svg viewBox="0 0 24 24">
+                        <path d="M12 3v18" />
+                        <rect width="18" height="18" x="3" y="3" rx="2" />
+                        <path d="M3 9h18" />
+                        <path d="M3 15h18" /></svg
+                    ></span>
+                    <span class="editor-tool editor-hide-sm"
+                      ><svg viewBox="0 0 24 24">
+                        <rect width="18" height="18" x="3" y="3" rx="2" />
+                        <circle cx="9" cy="9" r="2" />
+                        <path
+                          d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"
+                        /></svg
+                    ></span>
+                    <span class="editor-tool editor-hide-sm"
+                      ><svg viewBox="0 0 24 24">
+                        <circle cx="11" cy="11" r="8" />
+                        <path d="m21 21-4.3-4.3" /></svg
+                    ></span>
+                  </div>
+                </div>
+
+                <div class="editor-desk">
+                  <div class="editor-sheet">
+                    <p class="editor-doc-label">
+                      IC-04 &middot; Infection Control
+                    </p>
+                    <p class="editor-doc-h">4.2 Hand Hygiene</p>
+                    <p class="editor-doc-p">
+                      Staff perform hand hygiene before and after
+                      <del class="editor-del">every</del>
+                      <ins class="editor-ins"><span>each</span></ins
+                      ><span class="editor-caret"></span>
+                      patient contact, and after removing gloves.
+                      <span class="editor-pin">3</span>
+                    </p>
+                    <p class="editor-doc-h editor-doc-h3">4.2.1 Method</p>
+                    <ul class="editor-doc-list">
+                      <li>Alcohol-based hand rub is the default.</li>
+                      <li>Soap and water when hands are visibly soiled.</li>
+                      <li>Rub for at least 20 seconds.</li>
+                    </ul>
+                    <div class="editor-doc-fade"></div>
+                  </div>
+                </div>
+
+                <div class="editor-status">
+                  <span>Page 1 of 3 &middot; 412 words</span>
+                  <span class="editor-saved"
+                    ><span class="editor-saved-dot"></span>Saved to your
+                    draft<span class="editor-pin">4</span></span
+                  >
+                </div>
+              </div>
+
+              <figcaption>
+                <ol class="editor-notes">
+                  <li>
+                    <h3>Nothing to install</h3>
+                    <p>
+                      It runs in the browser you already have. No add-in, no
+                      plugin, no IT ticket.
+                    </p>
+                  </li>
+                  <li>
+                    <h3>Works like Word</h3>
+                    <p>
+                      A ribbon, styles, numbered sections, tables, pictures and
+                      the shortcuts your team already knows.
+                    </p>
+                  </li>
+                  <li>
+                    <h3>Every change, marked</h3>
+                    <p>
+                      Reviewers see exactly which words changed, inside the
+                      policy, not in a list of edits.
+                    </p>
+                  </li>
+                  <li>
+                    <h3>Every save is a draft</h3>
+                    <p>
+                      Nothing becomes the policy until your approvers sign off
+                      on it.
+                    </p>
+                  </li>
+                </ol>
+              </figcaption>
+            </figure>
+
+            <a class="review-link reveal" href="/editor"
+              >See everything the editor does &rarr;</a
+            >
+          </div>
+        </section>
+
+        <!--
           FOUNDER NOTE
           The page's remaining objection down here is trust, not fit: nothing
           else on it names a human. Deliberately quiet — no coral, no card
