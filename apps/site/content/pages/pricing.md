@@ -22,7 +22,7 @@ Most policy management software is built for hospital systems and sold the way t
 
 A person counts once, however many binders they write in. The People page shows how many paid seats your organization has and what they cost, and wherever you give someone a role, the role says whether it uses a seat.
 
-So a clinic where one administrator writes the policies and forty staff read them pays **$39 a month**. A surgery center with three writers, a medical director who approves and sixty staff pays **$117 a month**. There is one price, with no tiers, setup fees or long contract.
+So a clinic where one administrator writes the policies and forty staff read them pays **$39 a month**. A surgery center with three writers, a medical director who approves and sixty staff pays **$117 a month**. There is one price, with no tiers, setup fees or long contract. That's [our promise](/promise): no hidden costs, and nothing held back for a higher plan.
 
 When you add or remove a writer, your next invoice changes to match, prorated to the day. Changing a reviewer or a reader never changes what you pay.
 
