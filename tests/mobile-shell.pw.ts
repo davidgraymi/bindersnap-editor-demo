@@ -72,7 +72,7 @@ test("search and the account are reachable on a phone", async ({ page }) => {
   await trigger.click();
   await expect(
     page.getByRole("combobox", {
-      name: "Search documents, change requests, binders and people",
+      name: "Search Bindersnap",
     }),
   ).toBeVisible({ timeout: 30_000 });
 });

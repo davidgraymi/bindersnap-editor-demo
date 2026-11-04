@@ -495,3 +495,90 @@ test("a linked search is named on the nav button", async () => {
 
   await view.unmount();
 });
+
+/** Everything on offer: an organization, a binder, a sidebar, feedback. */
+function everywhere(overrides: Record<string, unknown> = {}) {
+  return {
+    org: "riverside-health",
+    orgName: "Riverside Health",
+    binder: { org: "riverside-health", binder: "clinical", name: "Clinical" },
+    isSiteAdmin: false,
+    theme: "light" as const,
+    sidebarCollapsed: false,
+    canSendFeedback: true,
+    canShowGuide: false,
+    ...overrides,
+  };
+}
+
+test("“help” finds Help and guides, and opens it beside the app", async () => {
+  const opened: unknown[][] = [];
+  const realOpen = window.open;
+  window.open = ((...args: unknown[]) => {
+    opened.push(args);
+    return null;
+  }) as typeof window.open;
+
+  const view = await render(createElement(NavSearch, props()));
+  await openOverlay(view.container);
+  const input = await type(view.container, "help");
+
+  const first = rows()[0]!;
+  expect(first.textContent).toContain("Help and guides");
+  expect(overlay()!.textContent).toContain("Pages and actions");
+
+  await press(input, "ArrowDown");
+  await submit(input);
+
+  expect(opened).toEqual([["/help", "_blank", "noopener"]]);
+  expect(overlay()).toBeNull();
+
+  window.open = realOpen;
+  await view.unmount();
+});
+
+test("a page is opened like any other result", async () => {
+  const visited: AppRoute[] = [];
+  const view = await render(
+    createElement(
+      NavSearch,
+      props({
+        org: "riverside-health",
+        actionContext: everywhere(),
+        onNavigate: (route: AppRoute) => visited.push(route),
+      }),
+    ),
+  );
+  await openOverlay(view.container);
+  const input = await type(view.container, "billing");
+
+  await press(input, "ArrowDown");
+  await submit(input);
+
+  expect(visited).toEqual([{ kind: "billing", org: "riverside-health" }]);
+
+  await view.unmount();
+});
+
+test("a control is handed to the shell to carry out", async () => {
+  const commands: string[] = [];
+  const view = await render(
+    createElement(
+      NavSearch,
+      props({
+        actionContext: everywhere(),
+        onCommand: (command: string) => commands.push(command),
+      }),
+    ),
+  );
+  await openOverlay(view.container);
+  const input = await type(view.container, "collapse");
+
+  expect(rows()[0]!.textContent).toContain("Collapse the navigation");
+  await press(input, "ArrowDown");
+  await submit(input);
+
+  expect(commands).toEqual(["toggleSidebar"]);
+
+  await view.unmount();
+});
