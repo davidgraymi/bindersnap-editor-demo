@@ -53,6 +53,7 @@ export const FOOTER_COLUMNS: readonly {
     heading: "Product",
     links: [
       { href: "/pricing", label: "Pricing" },
+      { href: "/editor", label: "The editor" },
       { href: "/for", label: "Who it's for" },
       { href: "/help", label: "Help and guides" },
       SIGN_IN,

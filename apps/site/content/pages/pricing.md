@@ -1,7 +1,7 @@
 ---
 title: Bindersnap pricing — $39 per writer, readers free
 description: Bindersnap costs $39 a month for each person who writes and publishes policies. Reviewers and staff who only read are free. 14-day trial.
-updated: 2026-10-08
+updated: 2026-11-03
 crumb: Pricing
 price: 39
 ---
@@ -32,7 +32,7 @@ When you add or remove a writer, your next invoice changes to match, prorated to
 - **Approvals before anything changes.** A change is proposed, reviewed by the approvers you name, and only then becomes the policy.
 - **Every version kept**, with who approved it and when.
 - **Exports**: any version to PDF or Word, plus an audit packet of versions and approvals.
-- **Write in Bindersnap's editor**, or upload the Word and PDF files you already have.
+- **Write in [Bindersnap's editor](/editor)**, in your browser with no Word license, or upload the Word and PDF files you already have.
 
 ## What happens when the trial ends
 
