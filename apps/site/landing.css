@@ -1593,6 +1593,23 @@ body::after {
   transition: color var(--brand-transition-base);
 }
 
+/* The ethos, set apart from the story: Lora italic between two hairlines, in
+   ink rather than coral, so the note stays quiet and the CTA below keeps the
+   region's only emphasis. */
+.founder-pledge {
+  margin: 0;
+  padding: var(--brand-space-5) 0;
+  border-top: 1px solid var(--bs-rule);
+  border-bottom: 1px solid var(--bs-rule);
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-body-lg);
+  font-style: italic;
+  line-height: var(--brand-leading-snug);
+  color: var(--bs-text-primary);
+  transition: var(--bs-mode-transition);
+}
+
+.founder-pledge a,
 .founder-contact a {
   color: var(--bs-coral-text);
   text-decoration: underline;
@@ -1601,6 +1618,7 @@ body::after {
   transition: text-decoration-color var(--brand-transition-base);
 }
 
+.founder-pledge a:hover,
 .founder-contact a:hover {
   text-decoration-color: currentColor;
 }
