@@ -28,7 +28,7 @@ async function ask(page: import("@playwright/test").Page, query: string) {
   await page.locator(".app-nav-search-trigger").click();
   // A combobox, not a textbox — it drives the result listbox below it.
   const field = page.getByRole("combobox", {
-    name: "Search documents, change requests, binders and people",
+    name: "Search Bindersnap",
   });
   await expect(field).toBeVisible({ timeout: 30_000 });
   await field.fill(query);
@@ -173,7 +173,62 @@ test("the shortcut the panel advertises is the one this audience knows", async (
   await page.keyboard.press("/");
   await expect(
     page.getByRole("combobox", {
-      name: "Search documents, change requests, binders and people",
+      name: "Search Bindersnap",
     }),
   ).toBeVisible({ timeout: 30_000 });
+});
+
+test("Bindersnap's own pages and controls are found too", async ({
+  page,
+  context,
+}) => {
+  await signInAsAlice(page);
+  await page.goto(`${APP_BASE_URL}/riverside-health/clinical`);
+  const dialog = page.locator(".quick-find-dialog");
+  const field = page.getByRole("combobox", { name: "Search Bindersnap" });
+
+  // "help" is Help and guides, which opens beside the app as the menus open it.
+  await ask(page, "help");
+  const help = dialog.getByRole("option").first();
+  await expect(help).toContainText("Help and guides", { timeout: 30_000 });
+  const [helpTab] = await Promise.all([
+    context.waitForEvent("page"),
+    help.click(),
+  ]);
+  expect(new URL(helpTab.url()).pathname).toBe("/help");
+  await helpTab.close();
+
+  // A control does what it says, and the next search offers the way back.
+  const theme = () =>
+    page.evaluate(() => document.documentElement.getAttribute("data-theme"));
+  const before = await theme();
+  await ask(page, "theme");
+  await field.press("ArrowDown");
+  await field.press("Enter");
+  await expect.poll(theme).not.toBe(before);
+
+  await ask(page, "collapse");
+  await expect(dialog.getByRole("option").first()).toContainText(
+    "Collapse the navigation",
+  );
+  await field.press("ArrowDown");
+  await field.press("Enter");
+  await expect(page.locator(".app-sidebar")).toHaveClass(
+    /app-sidebar--collapsed/,
+  );
+  await ask(page, "sidebar");
+  await expect(dialog.getByRole("option").first()).toContainText(
+    "Expand the navigation",
+  );
+  await field.press("ArrowDown");
+  await field.press("Enter");
+  await expect(page.locator(".app-sidebar")).not.toHaveClass(
+    /app-sidebar--collapsed/,
+  );
+
+  // A page is a place, like any other result.
+  await ask(page, "billing");
+  await field.press("ArrowDown");
+  await field.press("Enter");
+  await expect(page).toHaveURL(/\/riverside-health\/-\/billing$/);
 });

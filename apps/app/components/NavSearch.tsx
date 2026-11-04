@@ -19,6 +19,7 @@ import {
 } from "../data/queries";
 import type { QuickFindResult } from "../quickFind";
 import {
+  buildActionResult,
   buildBinderResult,
   buildChangeResult,
   buildOrganizationResult,
@@ -33,6 +34,12 @@ import {
   QUICK_FIND_GROUP_LABELS,
   QUICK_FIND_PAGE_SIZE,
 } from "../quickFind";
+import {
+  listQuickFindActions,
+  matchQuickFindActions,
+  type QuickFindActionContext,
+  type QuickFindCommand,
+} from "../quickFindActions";
 import type { AppRoute } from "../routes";
 
 /**
@@ -43,6 +50,17 @@ import type { AppRoute } from "../routes";
  * and the policy they were after.
  */
 const QUICK_FIND_KIND_LIMIT = 4;
+
+/**
+ * How many of Bindersnap's own pages and controls one search may list.
+ *
+ * One more than the other short lists: "people" is the organization's People
+ * & access and the binder's, and "help" is the help index and its guides.
+ */
+const QUICK_FIND_ACTION_LIMIT = 5;
+
+/** The search's name, on the button, the field and the dialog alike. */
+const SEARCH_LABEL = "Search Bindersnap";
 
 interface NavSearchProps {
   /** Whose workspace this is, so a row can say "You own" instead of a name. */
@@ -59,6 +77,13 @@ interface NavSearchProps {
   onNavigate: (route: AppRoute) => void;
   /** Fall back to the library, for a search too broad to answer in a list. */
   onSearchLibrary: (query: string) => void;
+  /**
+   * Where the reader is and what they may do, which decides the pages and
+   * controls on offer. Absent, only the pages everyone has are.
+   */
+  actionContext?: QuickFindActionContext;
+  /** Carry out a control picked from the list: the theme, the sidebar… */
+  onCommand?: (command: QuickFindCommand) => void;
 }
 
 /**
@@ -85,6 +110,8 @@ export function NavSearch({
   initialQuery,
   onNavigate,
   onSearchLibrary,
+  actionContext,
+  onCommand = () => undefined,
 }: NavSearchProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState(initialQuery);
@@ -186,7 +213,29 @@ export function NavSearch({
     !organizations.isPending &&
     !membersPending;
 
-  const results = useMemo<QuickFindResult[]>(() => {
+  // Bindersnap's own pages and controls are a list held right here, so they
+  // are matched on every keystroke rather than after the debounce: "help" is
+  // on screen as the last letter lands, whatever the server is doing.
+  const actionRows = useMemo<QuickFindResult[]>(() => {
+    if (!open || !isQuickFindQuery(query)) return [];
+    const offered = listQuickFindActions(
+      actionContext ?? {
+        org,
+        orgName: "",
+        binder: null,
+        isSiteAdmin: false,
+        theme: "light",
+        sidebarCollapsed: null,
+        canSendFeedback: false,
+        canShowGuide: false,
+      },
+    );
+    return matchQuickFindActions(offered, query, QUICK_FIND_ACTION_LIMIT).map(
+      buildActionResult,
+    );
+  }, [open, query, actionContext, org]);
+
+  const foundRows = useMemo<QuickFindResult[]>(() => {
     if (settled === null || !ready || !found.data) return [];
     const asked = settled;
 
@@ -259,6 +308,15 @@ export function NavSearch({
     memberLists.map((list) => list.dataUpdatedAt).join(","),
   ]);
 
+  // Already in order: the actions first, then what was found.
+  const results = useMemo(
+    () => [...actionRows, ...foundRows],
+    [actionRows, foundRows],
+  );
+  // What the list holds, rather than the list: a new action context with the
+  // same rows in it is not a new answer, and should not lose the highlight.
+  const resultKeys = results.map((result) => result.key).join("\n");
+
   const hasMore = asking && (found.data?.hasMore ?? false);
   const failed = asking && found.isError;
   const loading =
@@ -269,7 +327,7 @@ export function NavSearch({
 
   useEffect(() => {
     setHighlight(-1);
-  }, [results]);
+  }, [resultKeys]);
 
   /** The person whose username was just copied, so their row can say so. */
   const [copied, setCopied] = useState<string | null>(null);
@@ -293,6 +351,17 @@ export function NavSearch({
       }
 
       closeOverlay();
+
+      if (result.action) {
+        const target = result.action.target;
+        if (target.kind === "route") onNavigate(target.route);
+        // Beside the app, as the menus open help: reading about a step should
+        // never lose the place where you were doing it.
+        else if (target.kind === "link")
+          window.open(target.href, "_blank", "noopener");
+        else onCommand(target.command);
+        return;
+      }
 
       if (result.kind === "binder" && result.binder) {
         onNavigate({
@@ -328,7 +397,7 @@ export function NavSearch({
         });
       }
     },
-    [closeOverlay, onNavigate],
+    [closeOverlay, onCommand, onNavigate],
   );
 
   const searchLibrary = useCallback(() => {
@@ -418,7 +487,7 @@ export function NavSearch({
         className="quick-find-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label="Search documents, change requests, binders and people"
+        aria-label={SEARCH_LABEL}
         ref={dialogRef}
         onKeyDown={handleDialogKeyDown}
       >
@@ -437,8 +506,8 @@ export function NavSearch({
             ref={inputRef}
             className="quick-find-input"
             type="text"
-            placeholder="Search documents, change requests, binders and people"
-            aria-label="Search documents, change requests, binders and people"
+            placeholder="Search documents, people, pages and settings"
+            aria-label={SEARCH_LABEL}
             role="combobox"
             aria-expanded={searching}
             aria-controls="quick-find-results"
@@ -534,13 +603,14 @@ export function NavSearch({
 
           {!searching && (
             <p className="quick-find-note">
-              Type to search every document you can see.
+              Type to search every document you can see, and Bindersnap’s own
+              pages and settings.
             </p>
           )}
 
-          {searching && loading && results.length === 0 && (
+          {searching && loading && foundRows.length === 0 && (
             <p className="quick-find-note" role="status">
-              Searching…
+              {actionRows.length > 0 ? "Searching documents…" : "Searching…"}
             </p>
           )}
 
@@ -585,7 +655,7 @@ export function NavSearch({
         onClick={() => setOpen(true)}
         // Named here rather than by its own text: on a phone the label and the
         // shortcut hint are gone and only the icon is left.
-        aria-label="Search documents, change requests, binders and people"
+        aria-label={SEARCH_LABEL}
         aria-haspopup="dialog"
         aria-expanded={open}
       >
@@ -596,8 +666,7 @@ export function NavSearch({
           strokeWidth={1.5}
         />
         <span className="app-nav-search-trigger-label">
-          {query.trim() ||
-            "Search documents, change requests, binders and people"}
+          {query.trim() || SEARCH_LABEL}
         </span>
         {/* ⌘K, not "/". Both open it and always have — but the hint is the half
             a reader learns from, and "/" is a reflex from vim and GitHub while
