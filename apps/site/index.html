@@ -1436,19 +1436,26 @@
           is about reviewing in Word "which not everyone had". Plain paper,
           after The Review's tinted band.
 
-          Its shape is one large product window with numbered notes beside it.
-          Nothing adjacent is a single big frame: The Review is a divided
-          strip and the founder note is a letter.
+          Its shape is one full-width product window with a numbered legend
+          under it. Nothing adjacent is a single big frame: The Review is a
+          divided strip and the founder note is a letter.
 
-          The window is drawn, not a screenshot, so it stays sharp, weighs
-          nothing and is text a crawler can read. Chrome takes the --bs-*
-          tokens and flips with the theme; the sheet takes the fixed
-          --brand-mockup-* tokens and stays white, as the real editor's page
-          does. The numbers in the window match the notes beside it.
+          The window is a copy of the real editor, drawn in HTML so it stays
+          sharp, weighs little and flips with the theme: the app header, the
+          editor's top bar with its "Saving to" draft, the Files pane, the
+          grouped ribbon (packages/editor/ribbon), the white US Letter sheet
+          on the desk, and the status bar. The icons are lucide's, the set the
+          editor uses. Keep it in step when the editor changes.
 
-          When it scrolls into view, "every" is struck through and "each" is
-          typed in, the way a reviewer sees the change. Reduced motion shows
-          the finished state (the global rule at the end of landing.css).
+          It is laid out at the width of a laptop screen (.edw-stage) and
+          zoomed to fit by installEditorDemoZoom in landing.ts.
+
+          When it scrolls into view it does what the editor does: a clause is
+          typed, the status bar says "Unsaved changes" and the file gets a
+          dot, then the save lands — "Saved just now", and the draft goes
+          from 0 changes to 1. Reduced motion shows the saved state; a page
+          whose script never runs shows the sheet before the edit, which is
+          a whole sentence too.
         -->
         <section class="section-editor" aria-labelledby="editor-heading">
           <div class="editor-inner">
@@ -1469,117 +1476,649 @@
 
             <figure class="editor-demo reveal reveal-d1">
               <div class="editor-window" aria-hidden="true">
-                <div class="editor-chrome">
-                  <div class="mockup-dots">
-                    <span></span><span></span><span></span>
+                <div class="edw-stage">
+                  <div class="edw-browser">
+                    <div class="mockup-dots">
+                      <span></span><span></span><span></span>
+                    </div>
+                    <div class="edw-address">
+                      app.bindersnap.com<span
+                        >/riverside-health/clinical/-/blob/main/infection-control/hand-hygiene</span
+                      >
+                      <span class="edw-pin edw-pin-1">1</span>
+                    </div>
                   </div>
-                  <div class="editor-address">
-                    app.bindersnap.com<span class="editor-address-path"
-                      >/sunrise-asc/infection-control</span
-                    >
-                    <span class="editor-pin">1</span>
-                  </div>
-                </div>
 
-                <div class="editor-ribbon">
-                  <div class="editor-tabs">
-                    <span class="editor-tab is-active">Home</span>
-                    <span class="editor-tab">Insert</span>
-                    <span class="editor-tab">View</span>
-                    <span class="editor-pin">2</span>
-                  </div>
-                  <div class="editor-tools">
-                    <span class="editor-select">Geist</span>
-                    <span class="editor-select editor-select-sm">12</span>
-                    <span class="editor-sep"></span>
-                    <span class="editor-tool editor-tool-b">B</span>
-                    <span class="editor-tool editor-tool-i">I</span>
-                    <span class="editor-tool editor-tool-u">U</span>
-                    <span class="editor-tool editor-tool-s">S</span>
-                    <span class="editor-sep editor-hide-sm"></span>
-                    <span class="editor-tool editor-hide-sm">H1</span>
-                    <span class="editor-tool editor-hide-sm is-active">H2</span>
-                    <span class="editor-sep editor-hide-sm"></span>
-                    <span class="editor-tool editor-hide-sm"
-                      ><svg viewBox="0 0 24 24">
-                        <path d="M3 12h.01" />
-                        <path d="M3 18h.01" />
-                        <path d="M3 6h.01" />
-                        <path d="M8 12h13" />
-                        <path d="M8 18h13" />
-                        <path d="M8 6h13" /></svg
-                    ></span>
-                    <span class="editor-tool editor-hide-sm"
-                      ><svg viewBox="0 0 24 24">
-                        <path d="M10 12h11" />
-                        <path d="M10 18h11" />
-                        <path d="M10 6h11" />
-                        <path d="M4 10h2" />
-                        <path d="M4 6h1v4" />
-                        <path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" /></svg
-                    ></span>
-                    <span class="editor-tool editor-hide-sm"
-                      ><svg viewBox="0 0 24 24">
-                        <path d="m3 17 2 2 4-4" />
-                        <path d="m3 7 2 2 4-4" />
-                        <path d="M13 6h8" />
-                        <path d="M13 12h8" />
-                        <path d="M13 18h8" /></svg
-                    ></span>
-                    <span class="editor-sep editor-hide-sm"></span>
-                    <span class="editor-tool editor-hide-sm"
-                      ><svg viewBox="0 0 24 24">
-                        <path d="M12 3v18" />
-                        <rect width="18" height="18" x="3" y="3" rx="2" />
-                        <path d="M3 9h18" />
-                        <path d="M3 15h18" /></svg
-                    ></span>
-                    <span class="editor-tool editor-hide-sm"
-                      ><svg viewBox="0 0 24 24">
-                        <rect width="18" height="18" x="3" y="3" rx="2" />
-                        <circle cx="9" cy="9" r="2" />
-                        <path
-                          d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"
-                        /></svg
-                    ></span>
-                    <span class="editor-tool editor-hide-sm"
-                      ><svg viewBox="0 0 24 24">
-                        <circle cx="11" cy="11" r="8" />
-                        <path d="m21 21-4.3-4.3" /></svg
-                    ></span>
-                  </div>
-                </div>
+                  <div class="edw-app">
+                    <div class="edw-appbar">
+                      <span class="edw-logo"
+                        ><span class="edw-logo-mark"
+                          ><svg viewBox="0 0 18 18">
+                            <rect x="2" y="1" width="9" height="13" rx="1.5" />
+                            <rect
+                              x="6"
+                              y="4"
+                              width="9"
+                              height="13"
+                              rx="1.5"
+                            /></svg></span
+                        >Bindersnap</span
+                      >
+                      <span class="edw-crumbs"
+                        ><svg viewBox="0 0 24 24">
+                          <path d="M10 12h4" />
+                          <path d="M10 8h4" />
+                          <path d="M14 21v-3a2 2 0 0 0-4 0v3" />
+                          <path
+                            d="M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2"
+                          />
+                          <path
+                            d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"
+                          /></svg
+                        >Riverside Health<span class="edw-crumb-sep">/</span
+                        >Clinical<svg viewBox="0 0 24 24">
+                          <path d="m6 9 6 6 6-6" /></svg
+                      ></span>
+                      <span class="edw-appbar-end">
+                        <span class="edw-search"
+                          ><svg viewBox="0 0 24 24">
+                            <path d="m21 21-4.34-4.34" />
+                            <circle cx="11" cy="11" r="8" /></svg
+                          >Search documents, changes…<kbd>⌘K</kbd></span
+                        >
+                        <span class="edw-btn"
+                          ><svg viewBox="0 0 24 24">
+                            <path d="M10.268 21a2 2 0 0 0 3.464 0" />
+                            <path
+                              d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"
+                            /></svg></span
+                        ><span class="edw-btn"
+                          ><svg viewBox="0 0 24 24">
+                            <path d="M5 12h14" />
+                            <path d="M12 5v14" /></svg></span
+                        ><span class="edw-avatar">AN</span>
+                      </span>
+                    </div>
 
-                <div class="editor-desk">
-                  <div class="editor-sheet">
-                    <p class="editor-doc-label">
-                      IC-04 &middot; Infection Control
-                    </p>
-                    <p class="editor-doc-h">4.2 Hand Hygiene</p>
-                    <p class="editor-doc-p">
-                      Staff perform hand hygiene before and after
-                      <del class="editor-del">every</del>
-                      <ins class="editor-ins"><span>each</span></ins
-                      ><span class="editor-caret"></span>
-                      patient contact, and after removing gloves.
-                      <span class="editor-pin">3</span>
-                    </p>
-                    <p class="editor-doc-h editor-doc-h3">4.2.1 Method</p>
-                    <ul class="editor-doc-list">
-                      <li>Alcohol-based hand rub is the default.</li>
-                      <li>Soap and water when hands are visibly soiled.</li>
-                      <li>Rub for at least 20 seconds.</li>
-                    </ul>
-                    <div class="editor-doc-fade"></div>
-                  </div>
-                </div>
+                    <div class="edw-panel">
+                      <div class="edw-top">
+                        <span class="edw-title">Hand Hygiene</span>
+                        <span class="edw-top-meta"
+                          ><svg viewBox="0 0 24 24">
+                            <path
+                              d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                            /></svg
+                          >Infection control</span
+                        >
+                        <span class="edw-top-meta"
+                          ><svg viewBox="0 0 24 24">
+                            <path d="M15 6a9 9 0 0 0-9 9V3" />
+                            <circle cx="18" cy="6" r="3" />
+                            <circle cx="6" cy="18" r="3" /></svg
+                          >Saving to</span
+                        >
+                        <span class="edw-draft"
+                          ><svg viewBox="0 0 24 24">
+                            <circle cx="5" cy="6" r="3" />
+                            <path d="M5 9v12" />
+                            <circle cx="19" cy="18" r="3" />
+                            <path d="m15 9-3-3 3-3" />
+                            <path d="M12 6h5a2 2 0 0 1 2 2v7" /></svg
+                          ><b>Draft of 4 November</b>&nbsp;&middot;&nbsp;<span
+                            class="edw-swap edw-count"
+                            ><span>0 changes</span><span>1 change</span></span
+                          ><svg viewBox="0 0 24 24">
+                            <path d="m6 9 6 6 6-6" /></svg
+                          ><span class="edw-pin edw-pin-3">3</span></span
+                        >
+                        <span class="edw-top-note"
+                          >&middot; nothing on record changes until it is
+                          approved</span
+                        >
+                        <span class="edw-top-actions">
+                          <span class="edw-action">Close</span>
+                          <span class="edw-action edw-action-save">Save</span>
+                          <span class="edw-action edw-action-primary"
+                            >Propose<span class="edw-pin edw-pin-4"
+                              >4</span
+                            ></span
+                          >
+                        </span>
+                      </div>
 
-                <div class="editor-status">
-                  <span>Page 1 of 3 &middot; 412 words</span>
-                  <span class="editor-saved"
-                    ><span class="editor-saved-dot"></span>Saved to your
-                    draft<span class="editor-pin">4</span></span
-                  >
+                      <div class="edw-body">
+                        <div class="edw-files">
+                          <div class="edw-files-head">
+                            Files<span
+                              ><span class="edw-btn"
+                                ><svg viewBox="0 0 24 24">
+                                  <path
+                                    d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+                                  />
+                                  <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+                                  <path d="M9 15h6" />
+                                  <path d="M12 18v-6" /></svg></span
+                              ><span class="edw-btn"
+                                ><svg viewBox="0 0 24 24">
+                                  <path d="M12 10v6" />
+                                  <path d="M9 13h6" />
+                                  <path
+                                    d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                                  /></svg></span
+                              ><span class="edw-btn"
+                                ><svg viewBox="0 0 24 24">
+                                  <rect
+                                    width="18"
+                                    height="18"
+                                    x="3"
+                                    y="3"
+                                    rx="2"
+                                  />
+                                  <path d="M9 3v18" /></svg></span
+                            ></span>
+                          </div>
+                          <div class="edw-goto">Go to file</div>
+                          <div class="edw-tree">
+                            <span class="edw-node"
+                              ><svg viewBox="0 0 24 24">
+                                <path d="m9 18 6-6-6-6" /></svg
+                              ><svg viewBox="0 0 24 24">
+                                <path
+                                  d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                                /></svg
+                              >Administrative</span
+                            >
+                            <span class="edw-node is-open"
+                              ><svg viewBox="0 0 24 24">
+                                <path d="m6 9 6 6 6-6" /></svg
+                              ><svg viewBox="0 0 24 24">
+                                <path
+                                  d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                                /></svg
+                              >Infection control</span
+                            >
+                            <span class="edw-node edw-node-file is-on"
+                              ><svg viewBox="0 0 24 24">
+                                <path
+                                  d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+                                />
+                                <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+                                <path d="M10 9H8" />
+                                <path d="M16 13H8" />
+                                <path d="M16 17H8" /></svg
+                              >Hand Hygiene<span class="edw-dirty"></span
+                            ></span>
+                            <span class="edw-node edw-node-file"
+                              ><svg viewBox="0 0 24 24">
+                                <path
+                                  d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+                                />
+                                <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+                                <path d="M10 9H8" />
+                                <path d="M16 13H8" />
+                                <path d="M16 17H8" /></svg
+                              >Isolation Precautions</span
+                            >
+                            <span class="edw-node edw-node-file"
+                              ><svg viewBox="0 0 24 24">
+                                <path
+                                  d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+                                />
+                                <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+                                <path d="M10 9H8" />
+                                <path d="M16 13H8" />
+                                <path d="M16 17H8" /></svg
+                              >Sharps Disposal</span
+                            >
+                            <span class="edw-node"
+                              ><svg viewBox="0 0 24 24">
+                                <path d="m9 18 6-6-6-6" /></svg
+                              ><svg viewBox="0 0 24 24">
+                                <path
+                                  d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                                /></svg
+                              >Nursing</span
+                            >
+                            <span class="edw-node"
+                              ><svg viewBox="0 0 24 24">
+                                <path d="m9 18 6-6-6-6" /></svg
+                              ><svg viewBox="0 0 24 24">
+                                <path
+                                  d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                                /></svg
+                              >Training</span
+                            >
+                            <span class="edw-node edw-node-top"
+                              ><svg viewBox="0 0 24 24">
+                                <path
+                                  d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+                                />
+                                <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+                                <path d="M10 9H8" />
+                                <path d="M16 13H8" />
+                                <path d="M16 17H8" /></svg
+                              >Code of Conduct</span
+                            >
+                          </div>
+                        </div>
+
+                        <div class="edw-main">
+                          <div class="edw-tabs">
+                            <span class="edw-quick"
+                              ><span class="edw-btn"
+                                ><svg viewBox="0 0 24 24">
+                                  <path d="M9 14 4 9l5-5" />
+                                  <path
+                                    d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"
+                                  /></svg></span
+                              ><span class="edw-btn is-off"
+                                ><svg viewBox="0 0 24 24">
+                                  <path d="m15 14 5-5-5-5" />
+                                  <path
+                                    d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13"
+                                  /></svg></span
+                            ></span>
+                            <span class="edw-tab is-on">Home</span>
+                            <span class="edw-tab">Insert</span>
+                            <span class="edw-tab">View</span>
+                          </div>
+
+                          <div class="edw-ribbon">
+                            <span class="edw-pin edw-pin-2">2</span>
+                            <div class="edw-group">
+                              <div class="edw-group-body">
+                                <span class="edw-paste"
+                                  ><svg viewBox="0 0 24 24">
+                                    <path d="M11 14h10" />
+                                    <path d="M16 4h2a2 2 0 0 1 2 2v1.344" />
+                                    <path d="m17 18 4-4-4-4" />
+                                    <path
+                                      d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 1.793-1.113"
+                                    />
+                                    <rect
+                                      x="8"
+                                      y="2"
+                                      width="8"
+                                      height="4"
+                                      rx="1"
+                                    /></svg
+                                  >Paste<svg viewBox="0 0 24 24">
+                                    <path d="m6 9 6 6 6-6" /></svg
+                                ></span>
+                                <span class="edw-stack">
+                                  <span class="edw-line is-off"
+                                    ><svg viewBox="0 0 24 24">
+                                      <circle cx="6" cy="6" r="3" />
+                                      <path d="M8.12 8.12 12 12" />
+                                      <path d="M20 4 8.12 15.88" />
+                                      <circle cx="6" cy="18" r="3" />
+                                      <path d="M14.8 14.8 20 20" /></svg
+                                    >Cut</span
+                                  >
+                                  <span class="edw-line is-off"
+                                    ><svg viewBox="0 0 24 24">
+                                      <rect
+                                        width="14"
+                                        height="14"
+                                        x="8"
+                                        y="8"
+                                        rx="2"
+                                        ry="2"
+                                      />
+                                      <path
+                                        d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"
+                                      /></svg
+                                    >Copy</span
+                                  >
+                                  <span class="edw-line"
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="m14.622 17.897-10.68-2.913" />
+                                      <path
+                                        d="M18.376 2.622a1 1 0 1 1 3.002 3.002L17.36 9.643a.5.5 0 0 0 0 .707l.944.944a2.41 2.41 0 0 1 0 3.408l-.944.944a.5.5 0 0 1-.707 0L8.354 7.348a.5.5 0 0 1 0-.707l.944-.944a2.41 2.41 0 0 1 3.408 0l.944.944a.5.5 0 0 0 .707 0z"
+                                      />
+                                      <path
+                                        d="M9 8c-1.804 2.71-3.97 3.46-6.583 3.948a.507.507 0 0 0-.302.819l7.32 8.883a1 1 0 0 0 1.185.204C12.735 20.405 16 16.792 16 15"
+                                      /></svg
+                                    >Format Painter</span
+                                  >
+                                </span>
+                              </div>
+                              <div class="edw-group-label">Clipboard</div>
+                            </div>
+                            <div class="edw-group">
+                              <div class="edw-group-body edw-rows">
+                                <span class="edw-row">
+                                  <span class="edw-select edw-select-font"
+                                    >Default<svg viewBox="0 0 24 24">
+                                      <path d="m6 9 6 6 6-6" /></svg
+                                  ></span>
+                                  <span class="edw-select edw-select-size"
+                                    >11<svg viewBox="0 0 24 24">
+                                      <path d="m6 9 6 6 6-6" /></svg
+                                  ></span>
+                                  <span class="edw-btn"
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="m14 11 4-4 4 4" />
+                                      <path d="M18 16V7" />
+                                      <path
+                                        d="m2 16 4.039-9.69a.5.5 0 0 1 .923 0L11 16"
+                                      />
+                                      <path d="M3.304 13h6.392" /></svg></span
+                                  ><span class="edw-btn"
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="m14 12 4 4 4-4" />
+                                      <path d="M18 16V7" />
+                                      <path
+                                        d="m2 16 4.039-9.69a.5.5 0 0 1 .923 0L11 16"
+                                      />
+                                      <path d="M3.304 13h6.392" /></svg></span
+                                  ><span class="edw-btn"
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="M4 7V4h16v3" />
+                                      <path d="M5 20h6" />
+                                      <path d="M13 4 8 20" />
+                                      <path d="m15 15 5 5" />
+                                      <path d="m20 15-5 5" /></svg
+                                  ></span>
+                                </span>
+                                <span class="edw-row">
+                                  <span class="edw-btn"
+                                    ><svg viewBox="0 0 24 24">
+                                      <path
+                                        d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8"
+                                      /></svg></span
+                                  ><span class="edw-btn"
+                                    ><svg viewBox="0 0 24 24">
+                                      <line x1="19" x2="10" y1="4" y2="4" />
+                                      <line x1="14" x2="5" y1="20" y2="20" />
+                                      <line
+                                        x1="15"
+                                        x2="9"
+                                        y1="4"
+                                        y2="20"
+                                      /></svg></span
+                                  ><span class="edw-btn"
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="M6 4v6a6 6 0 0 0 12 0V4" />
+                                      <line
+                                        x1="4"
+                                        x2="20"
+                                        y1="20"
+                                        y2="20"
+                                      /></svg></span
+                                  ><span class="edw-btn"
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="M16 4H9a3 3 0 0 0-2.83 4" />
+                                      <path d="M14 12a4 4 0 0 1 0 8H6" />
+                                      <line
+                                        x1="4"
+                                        x2="20"
+                                        y1="12"
+                                        y2="12"
+                                      /></svg></span
+                                  ><span class="edw-btn"
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="m4 5 8 8" />
+                                      <path d="m12 5-8 8" />
+                                      <path
+                                        d="M20 19h-4c0-1.5.44-2 1.5-2.5S20 15.33 20 14c0-.47-.17-.93-.48-1.29a2.11 2.11 0 0 0-2.62-.44c-.42.24-.74.62-.9 1.07"
+                                      /></svg></span
+                                  ><span class="edw-btn"
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="m4 19 8-8" />
+                                      <path d="m12 19-8-8" />
+                                      <path
+                                        d="M20 12h-4c0-1.5.442-2 1.5-2.5S20 8.334 20 7.002c0-.472-.17-.93-.484-1.29a2.105 2.105 0 0 0-2.617-.436c-.42.239-.738.614-.899 1.06"
+                                      /></svg
+                                  ></span>
+                                  <span class="edw-btn edw-btn-drop"
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="M4 20h16" />
+                                      <path d="m6 16 6-12 6 12" />
+                                      <path d="M8 12h8" /></svg
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="m6 9 6 6 6-6" /></svg></span
+                                  ><span class="edw-btn edw-btn-drop"
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="m9 11-6 6v3h9l3-3" />
+                                      <path
+                                        d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"
+                                      /></svg
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="m6 9 6 6 6-6" /></svg></span
+                                  ><span class="edw-btn edw-btn-drop"
+                                    ><svg viewBox="0 0 24 24">
+                                      <path
+                                        d="m2 16 4.039-9.69a.5.5 0 0 1 .923 0L11 16"
+                                      />
+                                      <path d="M22 9v7" />
+                                      <path d="M3.304 13h6.392" />
+                                      <circle
+                                        cx="18.5"
+                                        cy="12.5"
+                                        r="3.5"
+                                      /></svg
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="m6 9 6 6 6-6" /></svg
+                                  ></span>
+                                </span>
+                              </div>
+                              <div class="edw-group-label">Font</div>
+                            </div>
+                            <div class="edw-group">
+                              <div class="edw-group-body edw-rows">
+                                <span class="edw-row"
+                                  ><span class="edw-btn"
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="M3 5h.01" />
+                                      <path d="M3 12h.01" />
+                                      <path d="M3 19h.01" />
+                                      <path d="M8 5h13" />
+                                      <path d="M8 12h13" />
+                                      <path d="M8 19h13" /></svg></span
+                                  ><span class="edw-btn"
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="M11 5h10" />
+                                      <path d="M11 12h10" />
+                                      <path d="M11 19h10" />
+                                      <path d="M4 4h1v5" />
+                                      <path d="M4 9h2" />
+                                      <path
+                                        d="M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02"
+                                      /></svg></span
+                                  ><span class="edw-btn"
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="M13 5h8" />
+                                      <path d="M13 12h8" />
+                                      <path d="M13 19h8" />
+                                      <path d="m3 17 2 2 4-4" />
+                                      <path d="m3 7 2 2 4-4" /></svg></span
+                                  ><span class="edw-btn"
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="M21 5H11" />
+                                      <path d="M21 12H11" />
+                                      <path d="M21 19H11" />
+                                      <path d="m7 8-4 4 4 4" /></svg></span
+                                  ><span class="edw-btn"
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="M21 5H11" />
+                                      <path d="M21 12H11" />
+                                      <path d="M21 19H11" />
+                                      <path d="m3 8 4 4-4 4" /></svg></span
+                                ></span>
+                                <span class="edw-row"
+                                  ><span class="edw-btn is-on"
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="M21 5H3" />
+                                      <path d="M15 12H3" />
+                                      <path d="M17 19H3" /></svg></span
+                                  ><span class="edw-btn"
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="M21 5H3" />
+                                      <path d="M17 12H7" />
+                                      <path d="M19 19H5" /></svg></span
+                                  ><span class="edw-btn"
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="M21 5H3" />
+                                      <path d="M21 12H9" />
+                                      <path d="M21 19H7" /></svg></span
+                                  ><span class="edw-btn"
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="M3 5h18" />
+                                      <path d="M3 12h18" />
+                                      <path d="M3 19h18" /></svg></span
+                                  ><span class="edw-btn edw-btn-drop"
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="m16 16-3 3 3 3" />
+                                      <path d="M3 12h14.5a1 1 0 0 1 0 7H13" />
+                                      <path d="M3 19h6" />
+                                      <path d="M3 5h18" /></svg
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="m6 9 6 6 6-6" /></svg></span
+                                ></span>
+                              </div>
+                              <div class="edw-group-label">Paragraph</div>
+                            </div>
+                            <div class="edw-group">
+                              <div class="edw-group-body">
+                                <span class="edw-style is-on"
+                                  ><span>AaBbCc</span>Normal</span
+                                >
+                                <span class="edw-style edw-style-h"
+                                  ><span>AaBbCc</span>Heading 1</span
+                                >
+                                <span class="edw-style-more"
+                                  ><svg viewBox="0 0 24 24">
+                                    <path d="m6 9 6 6 6-6" /></svg
+                                ></span>
+                              </div>
+                              <div class="edw-group-label">Styles</div>
+                            </div>
+                            <div class="edw-group">
+                              <div class="edw-group-body">
+                                <span class="edw-stack">
+                                  <span class="edw-line"
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="m21 21-4.34-4.34" />
+                                      <circle cx="11" cy="11" r="8" /></svg
+                                    >Find</span
+                                  >
+                                  <span class="edw-line"
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="M14 4a1 1 0 0 1 1-1" />
+                                      <path d="M15 10a1 1 0 0 1-1-1" />
+                                      <path d="M21 4a1 1 0 0 0-1-1" />
+                                      <path d="M21 9a1 1 0 0 1-1 1" />
+                                      <path d="m3 7 3 3 3-3" />
+                                      <path d="M6 10V5a2 2 0 0 1 2-2h2" />
+                                      <rect
+                                        x="3"
+                                        y="14"
+                                        width="7"
+                                        height="7"
+                                        rx="1"
+                                      /></svg
+                                    >Replace</span
+                                  >
+                                  <span class="edw-line"
+                                    ><svg viewBox="0 0 24 24">
+                                      <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+                                      <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+                                      <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+                                      <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+                                      <path d="M7 8h8" />
+                                      <path d="M7 12h10" />
+                                      <path d="M7 16h6" /></svg
+                                    >Select all</span
+                                  >
+                                </span>
+                              </div>
+                              <div class="edw-group-label">Editing</div>
+                            </div>
+                            <span class="edw-fold"
+                              ><svg viewBox="0 0 24 24">
+                                <path d="m18 15-6-6-6 6" /></svg
+                            ></span>
+                          </div>
+
+                          <div class="edw-desk">
+                            <div class="edw-sheet">
+                              <p class="edw-h1">Hand Hygiene</p>
+                              <p>
+                                Clean hands are the single most effective way to
+                                stop infection spreading between patients and
+                                staff. This policy applies to everyone who works
+                                in a clinical area.
+                              </p>
+                              <p class="edw-h2">When to clean your hands</p>
+                              <p>
+                                Staff clean their hands before and after each
+                                patient contact<span class="edw-typed"
+                                  ><span
+                                    >, and after removing gloves</span
+                                  ></span
+                                ><span class="edw-caret"></span>.
+                              </p>
+                              <p class="edw-h2">How to clean them</p>
+                              <ul>
+                                <li>Alcohol-based hand rub is the default.</li>
+                                <li>
+                                  Use soap and water when hands are visibly
+                                  soiled.
+                                </li>
+                                <li>
+                                  Rub every surface for at least 20 seconds.
+                                </li>
+                              </ul>
+                            </div>
+                          </div>
+
+                          <div class="edw-status">
+                            <span class="edw-status-start">
+                              <span>Page 1 of 2</span><span>214 words</span>
+                              <span class="edw-swap edw-saved"
+                                ><span>No changes yet</span
+                                ><span class="edw-unsaved">Unsaved changes</span
+                                ><span>Saved just now</span></span
+                              >
+                            </span>
+                            <span class="edw-status-end">
+                              <span class="edw-btn is-on"
+                                ><svg viewBox="0 0 24 24">
+                                  <path
+                                    d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+                                  />
+                                  <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+                                  <path d="M10 9H8" />
+                                  <path d="M16 13H8" />
+                                  <path d="M16 17H8" /></svg></span
+                              ><span class="edw-btn"
+                                ><svg viewBox="0 0 24 24">
+                                  <rect
+                                    width="18"
+                                    height="18"
+                                    x="3"
+                                    y="3"
+                                    rx="2"
+                                  />
+                                  <path d="M9 3v18" />
+                                  <path d="M15 3v18" /></svg
+                              ></span>
+                              <span class="edw-btn"
+                                ><svg viewBox="0 0 24 24">
+                                  <path d="M5 12h14" /></svg></span
+                              ><span class="edw-zoom"><span></span></span
+                              ><span class="edw-btn"
+                                ><svg viewBox="0 0 24 24">
+                                  <path d="M5 12h14" />
+                                  <path d="M12 5v14" /></svg></span
+                              ><span>100%</span>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1595,22 +2134,22 @@
                   <li>
                     <h3>Works like Word</h3>
                     <p>
-                      A ribbon, styles, numbered sections, tables, pictures and
+                      A ribbon, styles, numbered headings, tables, pictures and
                       the shortcuts your team already knows.
-                    </p>
-                  </li>
-                  <li>
-                    <h3>Every change, marked</h3>
-                    <p>
-                      Reviewers see exactly which words changed, inside the
-                      policy, not in a list of edits.
                     </p>
                   </li>
                   <li>
                     <h3>Every save is a draft</h3>
                     <p>
-                      Nothing becomes the policy until your approvers sign off
-                      on it.
+                      Your work goes into your own draft. Nothing on record
+                      changes until it is approved.
+                    </p>
+                  </li>
+                  <li>
+                    <h3>Propose when it&rsquo;s ready</h3>
+                    <p>
+                      Your approvers see exactly which words changed, and sign
+                      off on the policy itself.
                     </p>
                   </li>
                 </ol>

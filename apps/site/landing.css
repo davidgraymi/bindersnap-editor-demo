@@ -1262,10 +1262,12 @@ body::after {
 /* ─────────────────────────────────────
    THE EDITOR
 
-   One large product window with numbered notes beside it, on plain paper
-   after The Review's tinted band. The chrome flips with the theme; the sheet
-   is fixed white (--brand-mockup-*), as the real editor's page is. Numbered
-   pins in the window answer to the notes.
+   One full-width copy of the real editor, then a numbered legend. The window
+   is laid out at a laptop's width (.edw-stage, --edw-width) and zoomed to
+   fit its column by installEditorDemoZoom (landing.ts); without the script it
+   keeps a fixed zoom and crops its right edge. Its chrome takes the --bs-*
+   tokens, as the app's does, and flips with the theme; the sheet takes the
+   fixed --brand-mockup-* tokens and stays white, as the editor's page does.
 ───────────────────────────────────── */
 
 .section-editor {
@@ -1309,120 +1311,36 @@ body::after {
 }
 
 .editor-demo {
-  display: grid;
-  grid-template-columns: minmax(0, 2.6fr) minmax(0, 1fr);
-  gap: var(--brand-space-10);
-  align-items: center;
   margin: 0;
   text-align: left;
 }
 
-/* ── The window ── */
-
 .editor-window {
+  --edw-width: 1400px;
+  /* The ribbon's button height, 28px, as the editor's own. */
+  --edw-control: calc(var(--brand-space-6) + var(--brand-space-1));
+  --editor-zoom: 0.85;
   border: 1px solid var(--bs-rule);
   border-radius: var(--brand-radius-xl);
   overflow: hidden;
-  background: var(--bs-surface-1);
+  background: var(--bs-page-bg);
   box-shadow: var(--bs-shadow-xl);
   transition: var(--bs-mode-transition);
 }
 
-.editor-chrome {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-3);
-  padding: var(--brand-space-3) var(--brand-space-4);
-  background: var(--bs-surface-2);
-  border-bottom: 1px solid var(--bs-rule);
-  transition: var(--bs-mode-transition);
-}
+/* ── The stage: everything inside is the app at its own size ── */
 
-.editor-address {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-  padding: var(--brand-space-1) var(--brand-space-3);
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-md);
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-ui-xs);
+.edw-stage {
+  width: var(--edw-width);
+  zoom: var(--editor-zoom);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-md);
   color: var(--bs-text-primary);
-  white-space: nowrap;
-  overflow: visible;
-  transition: var(--bs-mode-transition);
+  line-height: var(--brand-leading-normal);
 }
 
-.editor-address-path {
-  color: var(--bs-text-muted);
-}
-
-.editor-ribbon {
-  position: relative;
-  padding: var(--brand-space-2) var(--brand-space-4) var(--brand-space-2-5);
-  border-bottom: 1px solid var(--bs-rule);
-  transition: var(--bs-mode-transition);
-}
-
-.editor-tabs {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-1);
-  margin-bottom: var(--brand-space-2);
-}
-
-.editor-tab {
-  padding: var(--brand-space-1) var(--brand-space-2-5);
-  border-radius: var(--brand-radius-sm);
-  font-size: var(--brand-text-ui-sm);
-  font-weight: var(--brand-weight-medium);
-  color: var(--bs-text-muted);
-}
-
-.editor-tab.is-active {
-  background: var(--bs-surface-2);
-  color: var(--bs-text-primary);
-}
-
-.editor-tools {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-1);
-  overflow: hidden;
-}
-
-.editor-select {
-  display: inline-flex;
-  align-items: center;
-  height: var(--brand-space-8);
-  padding: 0 var(--brand-space-2-5);
-  min-width: var(--brand-space-20);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-sm);
-  font-size: var(--brand-text-ui-xs);
-  color: var(--bs-text-primary);
-}
-
-.editor-select-sm {
-  min-width: var(--brand-space-10);
-}
-
-.editor-tool {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.edw-stage svg {
   flex: none;
-  min-width: var(--brand-space-8);
-  height: var(--brand-space-8);
-  padding: 0 var(--brand-space-1);
-  border-radius: var(--brand-radius-sm);
-  font-size: var(--brand-text-ui-sm);
-  font-weight: var(--brand-weight-medium);
-  color: var(--bs-text-secondary);
-}
-
-.editor-tool svg {
   width: var(--brand-icon-sm);
   height: var(--brand-icon-sm);
   fill: none;
@@ -1432,282 +1350,742 @@ body::after {
   stroke-linejoin: round;
 }
 
-.editor-tool.is-active {
-  background: var(--bs-surface-2);
-  color: var(--bs-text-primary);
-}
-
-.editor-tool-b {
-  font-weight: var(--brand-weight-bold);
-}
-.editor-tool-i {
-  font-style: italic;
-  font-family: var(--brand-font-serif);
-}
-.editor-tool-u {
-  text-decoration: underline;
-}
-.editor-tool-s {
-  text-decoration: line-through;
-}
-
-.editor-sep {
-  flex: none;
-  width: 1px;
-  height: var(--brand-space-5);
-  margin: 0 var(--brand-space-1-5);
-  background: var(--bs-rule);
-}
-
-/* The desk the sheet sits on, then the sheet: white paper whatever the
-   theme, cut off at the bottom by a fade so it reads as a page that goes on. */
-.editor-desk {
-  padding: var(--brand-space-8) var(--brand-space-10) 0;
-  background: var(--bs-surface-2);
-  transition: var(--bs-mode-transition);
-}
-
-.editor-sheet {
-  position: relative;
-  max-width: calc(var(--brand-space-30) * 4.5);
-  margin: 0 auto;
-  padding: var(--brand-space-10) var(--brand-space-12) var(--brand-space-6);
-  background: var(--brand-mockup-bg);
-  border: 1px solid var(--brand-mockup-rule);
-  border-bottom: none;
-  border-radius: var(--brand-radius-xs) var(--brand-radius-xs) 0 0;
-  box-shadow: var(--bs-shadow-md);
-  color: var(--brand-mockup-ink-soft);
-  font-size: var(--brand-text-ui-md);
-  line-height: var(--brand-leading-relaxed);
-}
-
-.editor-sheet p {
+.edw-stage p {
   margin: 0;
 }
 
-.editor-doc-label {
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-ui-xs);
-  letter-spacing: var(--brand-tracking-wide);
-  text-transform: uppercase;
-  color: var(--brand-mockup-muted);
+.edw-browser {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-4);
+  padding: var(--brand-space-3) var(--brand-space-5);
+  background: var(--bs-surface-2);
+  border-bottom: 1px solid var(--bs-rule);
 }
 
-.editor-doc-h {
-  margin-top: var(--brand-space-2) !important;
+.edw-address {
+  position: relative;
+  flex: 1;
+  padding: var(--brand-space-1-5) var(--brand-space-4);
+  background: var(--bs-surface-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-sm);
+  white-space: nowrap;
+}
+
+.edw-address > span:not(.edw-pin) {
+  color: var(--bs-text-muted);
+}
+
+.edw-app {
+  padding: 0 var(--brand-space-2) var(--brand-space-2);
+  background: var(--bs-surface-2);
+}
+
+.edw-appbar {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-8);
+  height: var(--brand-space-16);
+  padding: 0 var(--brand-space-6);
+}
+
+.edw-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-2-5);
+  font-family: var(--brand-font-serif);
   font-size: var(--brand-text-body-lg);
   font-weight: var(--brand-weight-semibold);
-  line-height: var(--brand-leading-snug);
-  color: var(--brand-mockup-ink);
 }
 
-.editor-doc-h3 {
-  margin-top: var(--brand-space-5) !important;
+.edw-logo-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--edw-control);
+  height: var(--edw-control);
+  border-radius: var(--brand-radius-md);
+  background: var(--brand-coral);
+  color: var(--brand-on-brand);
+}
+
+.edw-crumbs,
+.edw-top-meta,
+.edw-line,
+.edw-paste,
+.edw-search {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+}
+
+.edw-crumbs {
+  color: var(--bs-text-secondary);
+}
+
+.edw-crumb-sep {
+  margin: 0 var(--brand-space-2);
+  color: var(--bs-text-faint);
+}
+
+.edw-appbar-end {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-3);
+  margin-left: auto;
+}
+
+.edw-search {
+  width: calc(var(--brand-space-30) * 2.1);
+  padding: var(--brand-space-1-5) var(--brand-space-3);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-1);
+  color: var(--bs-text-faint);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.edw-search kbd {
+  margin-left: auto;
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-xs);
+}
+
+.edw-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--brand-space-8);
+  height: var(--brand-space-8);
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-green-dim);
+  color: var(--brand-green);
+  font-size: var(--brand-text-ui-xs);
+  font-weight: var(--brand-weight-semibold);
+}
+
+/* The editor's panel: a card on the app's warm ground. Nothing clips it, so
+   the pins on its top bar can stand above the bar. */
+.edw-panel {
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+}
+
+.edw-top {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-4);
+  height: var(--brand-space-12);
+  padding: 0 var(--brand-space-3) 0 var(--brand-space-6);
+  border-bottom: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg) var(--brand-radius-lg) 0 0;
+  background: var(--bs-page-bg);
+  font-size: var(--brand-text-ui-sm);
+  white-space: nowrap;
+}
+
+.edw-title {
+  margin-right: var(--brand-space-4);
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-body-lg);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.edw-top-meta {
+  color: var(--bs-text-muted);
+}
+
+.edw-draft {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  margin-left: calc(-1 * var(--brand-space-2));
+  padding: var(--brand-space-1) var(--brand-space-2);
+  border: 1px solid var(--bs-coral-border);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-coral-dim);
+  color: var(--bs-text-muted);
+}
+
+.edw-draft b {
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.edw-top-note {
+  margin-left: calc(-1 * var(--brand-space-2));
+  color: var(--bs-text-muted);
+}
+
+.edw-top-actions {
+  display: inline-flex;
+  gap: var(--brand-space-2);
+  margin-left: auto;
+}
+
+.edw-action {
+  position: relative;
+  padding: var(--brand-space-1-5) var(--brand-space-4);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-1);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.edw-action-save {
+  color: var(--bs-text-muted);
+}
+
+.edw-action-primary {
+  border-color: transparent;
+  background: var(--bs-cta-fill);
+  color: var(--brand-on-brand);
+}
+
+.edw-body {
+  display: grid;
+  grid-template-columns: calc(var(--brand-space-30) * 2) minmax(0, 1fr);
+}
+
+.edw-files {
+  padding: var(--brand-space-3);
+  border-right: 1px solid var(--bs-rule);
+}
+
+.edw-files-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--brand-space-1) var(--brand-space-3);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.edw-files-head span {
+  display: inline-flex;
+}
+
+.edw-goto {
+  margin-bottom: var(--brand-space-3);
+  padding: var(--brand-space-1-5) var(--brand-space-3);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  color: var(--bs-text-faint);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.edw-tree {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-0-5);
+}
+
+.edw-node {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  padding: var(--brand-space-1) var(--brand-space-2);
+  border-radius: var(--brand-radius-md);
+  color: var(--bs-text-secondary);
+}
+
+.edw-node svg:first-child {
+  color: var(--bs-text-faint);
+}
+
+.edw-node-file {
+  padding-left: var(--brand-space-10);
+}
+
+.edw-node-top {
+  padding-left: var(--brand-space-2);
+}
+
+.edw-node.is-on {
+  background: var(--bs-surface-2);
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-medium);
+}
+
+/* The dot a file gets while it has edits not yet in the draft. */
+.edw-dirty {
+  width: var(--brand-space-1-5);
+  height: var(--brand-space-1-5);
+  margin-left: var(--brand-space-1);
+  border-radius: var(--brand-radius-full);
+  background: var(--brand-coral);
+  opacity: 0;
+}
+
+.edw-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.edw-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: var(--brand-space-1);
+  height: var(--brand-space-10);
+  padding: 0 var(--brand-space-2);
+  border-bottom: 1px solid var(--bs-rule-warm);
+}
+
+.edw-quick {
+  display: inline-flex;
+  align-items: center;
+  padding-right: var(--brand-space-2);
+  margin-right: var(--brand-space-2);
+  border-right: 1px solid var(--bs-rule-warm);
+}
+
+.edw-tab {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--brand-space-3);
+  border-bottom: 2px solid transparent;
+  color: var(--bs-text-muted);
+  font-weight: var(--brand-weight-medium);
+}
+
+.edw-tab.is-on {
+  color: var(--bs-text-primary);
+  border-bottom-color: var(--brand-coral);
+}
+
+.edw-ribbon {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  padding: var(--brand-space-2) var(--brand-space-2) var(--brand-space-1);
+  border-bottom: 1px solid var(--bs-rule);
+}
+
+.edw-group {
+  display: flex;
+  flex-direction: column;
+  padding: 0 var(--brand-space-3);
+  border-right: 1px solid var(--bs-rule-warm);
+}
+
+.edw-group-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+}
+
+.edw-group-label {
+  padding-top: var(--brand-space-1);
+  text-align: center;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-xs);
+}
+
+.edw-rows {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--brand-space-1);
+}
+
+.edw-row {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-0-5);
+}
+
+.edw-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--brand-space-0-5);
+  min-width: var(--edw-control);
+  height: var(--edw-control);
+  padding: 0 var(--brand-space-1);
+  border-radius: var(--brand-radius-sm);
+  color: var(--bs-text-secondary);
+}
+
+.edw-btn-drop svg + svg {
+  width: var(--brand-icon-xs);
+  height: var(--brand-icon-xs);
+}
+
+.edw-btn.is-on {
+  background: var(--bs-coral-dim);
+  color: var(--bs-coral-text);
+}
+
+.edw-btn.is-off,
+.edw-line.is-off {
+  color: var(--bs-text-faint);
+}
+
+.edw-paste {
+  flex-direction: column;
+  gap: var(--brand-space-0-5);
+  padding: 0 var(--brand-space-2);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.edw-paste svg:first-child {
+  width: var(--brand-icon-md);
+  height: var(--brand-icon-md);
+}
+
+.edw-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-1);
+}
+
+.edw-line {
+  white-space: nowrap;
+  font-size: var(--brand-text-ui-sm);
+  color: var(--bs-text-secondary);
+}
+
+.edw-select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--edw-control);
+  padding: 0 var(--brand-space-2);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-sm);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.edw-select-font {
+  width: calc(var(--brand-space-30) + var(--brand-space-12));
+}
+
+.edw-select-size {
+  width: var(--brand-space-16);
+  margin-right: var(--brand-space-1);
+}
+
+.edw-style {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--brand-space-1);
+  width: calc(var(--brand-space-24) + var(--brand-space-1));
+  height: var(--brand-space-16);
+  padding: 0 var(--brand-space-2-5);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-sm);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-xs);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.edw-style span {
+  color: var(--bs-text-primary);
   font-size: var(--brand-text-ui-md);
 }
 
-.editor-doc-p {
+.edw-style-h span {
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-body-lg);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.edw-style.is-on {
+  border: 2px solid var(--brand-coral);
+}
+
+.edw-style-more {
+  display: inline-flex;
+  align-items: center;
+  align-self: stretch;
+  padding: 0 var(--brand-space-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-sm);
+  color: var(--bs-text-muted);
+}
+
+.edw-fold {
+  align-self: flex-end;
+  margin-left: auto;
+  color: var(--bs-text-muted);
+}
+
+/* The desk and the sheet: US Letter, an inch of margin, white in either
+   theme. The desk is cut to a window's height, so the page runs off the
+   bottom as a long policy does. */
+.edw-desk {
+  height: calc(var(--brand-space-30) * 3.6);
+  overflow: hidden;
+  padding: var(--brand-space-6) var(--brand-space-6) 0;
+  background: var(--bs-surface-3);
+}
+
+.edw-sheet {
+  box-sizing: border-box;
+  width: 8.5in;
+  min-height: 11in;
+  margin: 0 auto;
+  padding: 0.8in 1in;
+  background: var(--brand-mockup-bg);
+  color: var(--brand-mockup-ink);
+  box-shadow:
+    0 0 0 1px var(--brand-mockup-rule),
+    var(--bs-shadow-md);
+  font-size: 11pt;
+  line-height: var(--brand-leading-normal);
+}
+
+.edw-sheet p + p,
+.edw-sheet ul {
+  margin-top: var(--brand-space-2-5);
+}
+
+.edw-sheet .edw-h1 {
+  font-family: var(--brand-font-serif);
+  font-size: 22pt;
+  font-weight: var(--brand-weight-semibold);
+  line-height: var(--brand-leading-snug);
+}
+
+.edw-sheet .edw-h2 {
+  margin-top: var(--brand-space-5);
+  font-family: var(--brand-font-serif);
+  font-size: 15pt;
+  font-weight: var(--brand-weight-semibold);
+  line-height: var(--brand-leading-snug);
+}
+
+/* Bullets drawn as the sheet's own text, so they keep their place at any
+   zoom; a list marker drifts from its line when the stage is zoomed far out. */
+.edw-sheet ul {
+  list-style: none;
+  padding-left: var(--brand-space-6);
+}
+
+.edw-sheet li {
   position: relative;
-  margin-top: var(--brand-space-3) !important;
 }
 
-.editor-doc-list {
-  margin: var(--brand-space-2) 0 0;
-  padding-left: var(--brand-space-5);
-}
-
-.editor-doc-fade {
+.edw-sheet li::before {
+  content: "•";
   position: absolute;
-  inset: auto 0 0;
-  height: var(--brand-space-12);
-  background: linear-gradient(transparent, var(--brand-mockup-bg));
+  left: calc(-1 * var(--brand-space-4));
 }
 
-/* The change, marked the way the comparison marks it: struck through and
-   underlined, so colour never carries the difference alone. Before the
-   section is revealed the sentence reads "before and after every patient
-   contact", whole, so a page whose script never runs still makes sense. */
-.editor-del,
-.editor-ins {
-  border-radius: var(--brand-radius-xs);
-  text-decoration: none;
+.edw-sheet li + li {
+  margin-top: var(--brand-space-1);
 }
 
-.editor-del {
-  position: relative;
-  padding: 0 var(--brand-space-0-5);
-}
-
-.editor-del::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 55%;
-  height: 1.5px;
-  background: var(--brand-coral-dark);
-  transform: scaleX(0);
-  transform-origin: left;
-}
-
-.editor-ins {
+/* The edit: typed in place, with the editor's caret. */
+.edw-typed span {
   display: inline-block;
-  vertical-align: bottom;
-  color: var(--brand-green);
-}
-
-.editor-ins span {
-  display: inline-block;
-  text-decoration: underline;
   max-width: 0;
   overflow: hidden;
   white-space: nowrap;
   vertical-align: bottom;
 }
 
-.editor-caret {
+.edw-caret {
   display: inline-block;
   width: 1.5px;
-  height: 1.1em;
-  margin-left: 1px;
+  height: 1.15em;
+  margin: 0 1px;
   vertical-align: text-bottom;
   background: var(--brand-mockup-ink);
   opacity: 0;
 }
 
-.editor-demo.in .editor-del {
-  animation: editor-strike-bg 0.3s ease 0.7s both;
-}
-.editor-demo.in .editor-del::after {
-  animation: editor-strike 0.35s ease 0.7s both;
-}
-.editor-demo.in .editor-ins span {
-  animation: editor-type 0.6s steps(4, end) 1.4s both;
-}
-.editor-demo.in .editor-ins {
-  animation: editor-ins-mark 0.3s ease 2.1s both;
-}
-.editor-demo.in .editor-caret {
-  animation: editor-caret 0.5s steps(1, end) 1.1s 3 both;
+.edw-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--brand-space-4);
+  min-height: 30px;
+  padding: 0 var(--brand-space-3);
+  border-top: 1px solid var(--bs-rule);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
 }
 
-@keyframes editor-strike {
+.edw-status-start,
+.edw-status-end {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-4);
+}
+
+.edw-status-end {
+  gap: var(--brand-space-1);
+}
+
+.edw-zoom {
+  position: relative;
+  width: var(--brand-space-24);
+  height: var(--brand-space-1);
+  margin: 0 var(--brand-space-1);
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-surface-3);
+}
+
+.edw-zoom span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 40%;
+  border-radius: inherit;
+  background: var(--brand-coral);
+}
+
+.edw-zoom span::after {
+  content: "";
+  position: absolute;
+  right: calc(-1 * var(--brand-space-1-5));
+  top: 50%;
+  width: var(--brand-space-3);
+  height: var(--brand-space-3);
+  border-radius: var(--brand-radius-full);
+  background: var(--brand-coral);
+  transform: translateY(-50%);
+}
+
+.edw-unsaved {
+  color: var(--bs-status-warn-fg);
+}
+
+/* Text that changes as the edit lands: every state is laid in the same cell,
+   and only one is visible at a time. */
+.edw-swap {
+  display: inline-grid;
+}
+
+.edw-swap > span {
+  grid-area: 1 / 1;
+}
+
+.edw-swap > span + span {
+  opacity: 0;
+}
+
+/* ── The timeline, once the window scrolls into view ── */
+
+.editor-demo.in .edw-caret {
+  animation: edw-blink 1s steps(1, end) 0.8s 4 both;
+}
+.editor-demo.in .edw-typed span {
+  animation: edw-type 1.4s steps(27, end) 1s both;
+}
+.editor-demo.in .edw-dirty {
+  animation: edw-show-dot 1ms linear 1s both;
+}
+.editor-demo.in .edw-saved > span:nth-child(1) {
+  animation: edw-hide 1ms linear 1s both;
+}
+.editor-demo.in .edw-saved > span:nth-child(2) {
+  animation:
+    edw-show 1ms linear 1s both,
+    edw-hide 1ms linear 3.3s forwards;
+}
+.editor-demo.in .edw-saved > span:nth-child(3),
+.editor-demo.in .edw-count > span:nth-child(2) {
+  animation: edw-show 1ms linear 3.3s both;
+}
+.editor-demo.in .edw-count > span:nth-child(1) {
+  animation: edw-hide 1ms linear 3.3s both;
+}
+
+@keyframes edw-type {
   to {
-    transform: scaleX(1);
+    max-width: 27ch;
   }
 }
-@keyframes editor-strike-bg {
-  to {
-    background: var(--brand-coral-wash-2);
-    color: var(--brand-coral-dark);
-  }
-}
-@keyframes editor-type {
-  to {
-    max-width: 4ch;
-  }
-}
-@keyframes editor-ins-mark {
-  to {
-    background: var(--brand-green-dim);
-    padding: 0 var(--brand-space-0-5);
-  }
-}
-@keyframes editor-caret {
+@keyframes edw-blink {
   0% {
     opacity: 1;
   }
   50% {
     opacity: 0;
   }
-  100% {
+}
+@keyframes edw-show {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes edw-hide {
+  from {
+    opacity: 1;
+  }
+  to {
     opacity: 0;
   }
 }
-
-.editor-status {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--brand-space-4);
-  padding: var(--brand-space-2) var(--brand-space-4);
-  border-top: 1px solid var(--bs-rule);
-  font-size: var(--brand-text-ui-xs);
-  color: var(--bs-text-muted);
-  transition: var(--bs-mode-transition);
+@keyframes edw-show-dot {
+  to {
+    opacity: 1;
+  }
 }
 
-.editor-saved {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--brand-space-1-5);
-  color: var(--bs-text-secondary);
-}
+/* ── The numbered pins in the window, and the legend under it ── */
 
-.editor-saved-dot {
-  width: var(--brand-space-1-5);
-  height: var(--brand-space-1-5);
-  border-radius: var(--brand-radius-full);
-  background: var(--brand-green);
-}
-
-/* The numbered pins, and the notes they answer to. Ink, not coral: the
-   section's one emphasis is its headline accent. */
-.editor-pin,
+.edw-pin,
 .editor-notes li::before {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: none;
-  width: var(--brand-space-5);
-  height: var(--brand-space-5);
   border-radius: var(--brand-radius-full);
   background: var(--bs-text-primary);
   color: var(--bs-page-bg);
   font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-ui-xs);
   font-style: normal;
   font-weight: var(--brand-weight-medium);
   line-height: 1;
-  text-decoration: none;
-  box-shadow: 0 0 0 3px var(--bs-surface-1);
 }
 
-.editor-pin {
+/* A pin is drawn inside the zoomed stage, so it is sized up by the zoom to
+   land at the legend's size on screen. */
+.edw-pin {
   position: absolute;
   z-index: 1;
+  width: calc(var(--brand-space-6) / var(--editor-zoom));
+  height: calc(var(--brand-space-6) / var(--editor-zoom));
+  font-size: calc(var(--brand-text-ui-sm) / var(--editor-zoom));
+  box-shadow: 0 0 0 calc(3px / var(--editor-zoom)) var(--bs-surface-1);
 }
 
-.editor-address .editor-pin {
-  right: calc(-1 * var(--brand-space-2-5));
-  top: calc(-1 * var(--brand-space-2-5));
+.edw-pin-1 {
+  right: calc(-1 * var(--brand-space-3));
+  top: calc(-1 * var(--brand-space-3));
 }
-.editor-tabs .editor-pin {
-  right: var(--brand-space-4);
-  top: var(--brand-space-2);
+.edw-pin-2 {
+  left: calc(var(--brand-space-30) * 2.3);
+  top: calc(-1 * var(--brand-space-6));
 }
-.editor-doc-p .editor-pin {
-  right: calc(-1 * var(--brand-space-8));
-  top: 0;
-  /* On the sheet, which stays white in both themes. */
-  background: var(--brand-ink);
-  color: var(--brand-on-brand);
-  box-shadow: 0 0 0 3px var(--brand-mockup-bg);
-}
-.editor-saved .editor-pin {
-  position: static;
-  margin-left: var(--brand-space-1-5);
+.edw-pin-3,
+.edw-pin-4 {
+  right: calc(-1 * var(--brand-space-3));
+  top: calc(-1 * var(--brand-space-6));
 }
 
 .editor-notes {
   list-style: none;
   counter-reset: editor-note;
-  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--brand-space-8);
+  margin: var(--brand-space-10) 0 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
 }
 
 .editor-notes li {
@@ -1715,20 +2093,14 @@ body::after {
   display: grid;
   grid-template-columns: auto 1fr;
   column-gap: var(--brand-space-3);
-  padding: var(--brand-space-5) 0;
-  border-top: 1px solid var(--bs-rule);
-}
-
-.editor-notes li:first-child {
-  border-top: none;
-  padding-top: 0;
 }
 
 .editor-notes li::before {
   content: counter(editor-note);
   grid-row: span 2;
-  margin-top: var(--brand-space-0-5);
-  box-shadow: none;
+  width: var(--brand-space-6);
+  height: var(--brand-space-6);
+  font-size: var(--brand-text-ui-sm);
 }
 
 .editor-notes h3 {
@@ -2549,9 +2921,8 @@ body::after {
     max-width: var(--brand-max-width-text);
   }
 
-  .editor-demo {
-    grid-template-columns: 1fr;
-    gap: var(--brand-space-8);
+  .editor-notes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .review-strip {
@@ -2713,22 +3084,18 @@ body::after {
 
 /* The sign-off row is a small portrait beside two short lines, so it survives
    narrow widths that the old two-column letter could not. Just tighten it. */
-/* A phone: the window keeps the ribbon's first row of tools and the sheet
-   takes the full width of the desk. */
+/* A phone: the legend becomes one column, and the window's pins shrink so
+   they mark the ribbon and the draft without covering them. */
 @media (max-width: 600px) {
-  .editor-hide-sm,
-  .editor-address-path {
-    display: none;
+  .editor-notes {
+    grid-template-columns: 1fr;
+    gap: var(--brand-space-5);
   }
-  .editor-desk {
-    padding: var(--brand-space-5) var(--brand-space-3) 0;
-  }
-  .editor-sheet {
-    padding: var(--brand-space-6) var(--brand-space-5) var(--brand-space-4);
-  }
-  .editor-doc-p .editor-pin {
-    right: calc(-1 * var(--brand-space-4));
-    top: calc(-1 * var(--brand-space-5));
+  .edw-pin {
+    width: calc(var(--brand-space-3) / var(--editor-zoom));
+    height: calc(var(--brand-space-3) / var(--editor-zoom));
+    font-size: calc(var(--brand-text-ui-xs) * 0.7 / var(--editor-zoom));
+    box-shadow: 0 0 0 calc(2px / var(--editor-zoom)) var(--bs-surface-1);
   }
 }
 

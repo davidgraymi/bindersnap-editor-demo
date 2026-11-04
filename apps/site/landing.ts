@@ -147,3 +147,33 @@ export function installScrollReveal(doc: Document = document): void {
   // A page opened at #signup starts below everything before it.
   onScroll();
 }
+
+/**
+ * The landing page's editor window is the app laid out at a laptop's width
+ * (`--edw-width` on `.editor-window`), so its ribbon and page sit where the
+ * real editor's do. This zooms it to whatever width its column has, and
+ * again whenever that changes. Without it the CSS keeps a fixed zoom and the
+ * window crops its right edge.
+ */
+export function installEditorDemoZoom(doc: Document = document): void {
+  const frame = doc.querySelector<HTMLElement>(".editor-window");
+  const view = doc.defaultView;
+  if (!frame || !view) return;
+  const designWidth = parseFloat(
+    view.getComputedStyle(frame).getPropertyValue("--edw-width"),
+  );
+  if (!(designWidth > 0)) return;
+
+  const fit = () => {
+    const width = frame.clientWidth;
+    if (width > 0) {
+      frame.style.setProperty("--editor-zoom", String(width / designWidth));
+    }
+  };
+  fit();
+  if (typeof ResizeObserver !== "undefined") {
+    new ResizeObserver(fit).observe(frame);
+  } else {
+    view.addEventListener("resize", fit, { passive: true });
+  }
+}
