@@ -2,6 +2,7 @@ import { retargetAppLinks } from "./appLink";
 import { tagSignupLinks } from "./signupSource";
 import {
   bindSignupEnterKeys,
+  installEditorDemoZoom,
   installScrollReveal,
   restoreTheme,
   routeLandingSignup,
@@ -25,6 +26,7 @@ retargetAppLinks();
 tagSignupLinks(window);
 
 installScrollReveal();
+installEditorDemoZoom();
 
 window.toggleTheme = () => {
   toggleTheme();

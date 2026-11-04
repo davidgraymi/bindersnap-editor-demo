@@ -1,9 +1,9 @@
 ---
 title: Bindersnap vs. PolicyTech for small healthcare providers
 description: NAVEX PolicyTech is a broad compliance platform priced on request. Bindersnap is a policy manual with an approval record, $39 per writer.
-updated: 2026-10-30
+updated: 2026-11-03
 crumb: PolicyTech
-related: /pricing, /compare/powerdms-alternative, /compare/policystat-alternative
+related: /pricing, /editor, /compare/powerdms-alternative, /compare/policystat-alternative
 ---
 
 PolicyTech is one of the best-known names in policy management. If you're a small healthcare provider looking at it, you're weighing a mature compliance platform built for organizations of every size against what you need: one place for your policies, a record of who approved each version, and an answer ready for the surveyor. Here is an honest comparison, including where PolicyTech does more.
@@ -45,6 +45,7 @@ PolicyTech is a broader product, and NAVEX has been building it for a long time.
 - **It's built for healthcare surveys.** Our [requirements guides](/requirements) and [templates](/templates) are written for what CMS surveyors and accreditors ask small providers for, and the [required policies checklist](/tools/required-policies-checklist) shows which policies your facility needs.
 - **Your approval rules hold.** Require 3 of your 5 board members, the medical director alone, or the laboratory director for every lab procedure. A change can't be published until the rule is met, and each version records the rule it met and who approved it.
 - **You pay for writers, not readers.** $39 a month for each person who writes and publishes policies. Reviewers and staff who only read are free, and there's no long contract.
+- **Nobody needs Word.** Write and format policies in [Bindersnap's editor](/editor), which runs in the browser, or upload the Word and PDF files you already have. Reviewers and readers open every policy in their browser.
 - **You can start today.** Create an account, upload the Word and PDF files you already have, and invite your approvers. The [getting started guide](/help/getting-started) shows how.
 - **It does one thing completely.** A change to a policy is proposed, reviewed and approved before it becomes the policy, and every version keeps its approvals for as long as the binder exists. See [how a change becomes the record](/help/approvals).
 - **Your record stays yours.** If you stop paying, you can still read and export every version and its approval history.

@@ -1124,10 +1124,7 @@ body::after {
 ───────────────────────────────────── */
 
 .section-review {
-  /* Bottom padding is trimmed (vs. the standard section rhythm) because the
-     founder coda follows immediately and supplies its own pause. */
-  padding: var(--brand-section-padding-y) var(--brand-page-padding-x)
-    var(--brand-space-16);
+  padding: var(--brand-section-padding-y) var(--brand-page-padding-x);
 }
 
 .review-inner {
@@ -1260,6 +1257,539 @@ body::after {
   border-top: 1px solid var(--bs-rule);
   border-bottom: 1px solid var(--bs-rule);
   transition: var(--bs-mode-transition);
+}
+
+/* ─────────────────────────────────────
+   THE EDITOR
+
+   One full-width copy of the real editor — its ribbon, page and status bar —
+   then a line of notes. The window is laid out at a laptop's width (.edw-stage, --edw-width) and zoomed to
+   fit its column by installEditorDemoZoom (landing.ts); without the script it
+   keeps a fixed zoom and crops its right edge. Its chrome takes the --bs-*
+   tokens, as the app's does, and flips with the theme; the sheet takes the
+   fixed --brand-mockup-* tokens and stays white, as the editor's page does.
+───────────────────────────────────── */
+
+.section-editor {
+  /* Bottom padding is trimmed: the founder coda follows immediately and
+     supplies its own pause. */
+  padding: var(--brand-section-padding-y) var(--brand-page-padding-x)
+    var(--brand-space-16);
+}
+
+.editor-inner {
+  max-width: var(--brand-max-width);
+  margin: 0 auto;
+  text-align: center;
+}
+
+.editor-header {
+  margin-bottom: var(--brand-space-12);
+}
+
+.editor-header h2 {
+  font-family: var(--brand-font-serif);
+  font-size: clamp(30px, 3.5vw, 46px);
+  font-weight: var(--brand-weight-semibold);
+  line-height: var(--brand-leading-snug);
+  color: var(--bs-text-primary);
+  margin: var(--brand-space-4) 0;
+  transition: color var(--brand-transition-base);
+}
+
+.editor-header h2 em {
+  font-style: italic;
+  color: var(--bs-coral-text);
+}
+
+.editor-header p {
+  font-size: var(--brand-text-body);
+  line-height: var(--brand-leading-relaxed);
+  color: var(--bs-text-secondary);
+  max-width: var(--brand-max-width-text);
+  margin: 0 auto;
+}
+
+.editor-demo {
+  margin: 0;
+  text-align: left;
+}
+
+.editor-window {
+  --edw-width: 1180px;
+  /* The ribbon's button height, 28px, as the editor's own. */
+  --edw-control: calc(var(--brand-space-6) + var(--brand-space-1));
+  --editor-zoom: 0.85;
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-xl);
+  overflow: hidden;
+  background: var(--bs-page-bg);
+  box-shadow: var(--bs-shadow-xl);
+  transition: var(--bs-mode-transition);
+}
+
+/* ── The stage: everything inside is the app at its own size ── */
+
+.edw-stage {
+  width: var(--edw-width);
+  zoom: var(--editor-zoom);
+  background: var(--bs-surface-1);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-md);
+  color: var(--bs-text-primary);
+  line-height: var(--brand-leading-normal);
+}
+
+.edw-stage svg {
+  flex: none;
+  width: var(--brand-icon-sm);
+  height: var(--brand-icon-sm);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--brand-icon-stroke);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.edw-stage p {
+  margin: 0;
+}
+
+.edw-line,
+.edw-paste {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+}
+
+.edw-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.edw-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: var(--brand-space-1);
+  height: var(--brand-space-10);
+  padding: 0 var(--brand-space-2);
+  border-bottom: 1px solid var(--bs-rule-warm);
+}
+
+.edw-quick {
+  display: inline-flex;
+  align-items: center;
+  padding-right: var(--brand-space-2);
+  margin-right: var(--brand-space-2);
+  border-right: 1px solid var(--bs-rule-warm);
+}
+
+.edw-tab {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--brand-space-3);
+  border-bottom: 2px solid transparent;
+  color: var(--bs-text-muted);
+  font-weight: var(--brand-weight-medium);
+}
+
+.edw-tab.is-on {
+  color: var(--bs-text-primary);
+  border-bottom-color: var(--brand-coral);
+}
+
+.edw-ribbon {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  padding: var(--brand-space-2) var(--brand-space-2) var(--brand-space-1);
+  border-bottom: 1px solid var(--bs-rule);
+}
+
+.edw-group {
+  display: flex;
+  flex-direction: column;
+  padding: 0 var(--brand-space-3);
+  border-right: 1px solid var(--bs-rule-warm);
+}
+
+.edw-group-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+}
+
+.edw-group-label {
+  padding-top: var(--brand-space-1);
+  text-align: center;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-xs);
+}
+
+.edw-rows {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--brand-space-1);
+}
+
+.edw-row {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-0-5);
+}
+
+.edw-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--brand-space-0-5);
+  min-width: var(--edw-control);
+  height: var(--edw-control);
+  padding: 0 var(--brand-space-1);
+  border-radius: var(--brand-radius-sm);
+  color: var(--bs-text-secondary);
+}
+
+.edw-btn-drop svg + svg {
+  width: var(--brand-icon-xs);
+  height: var(--brand-icon-xs);
+}
+
+.edw-btn.is-on {
+  background: var(--bs-coral-dim);
+  color: var(--bs-coral-text);
+}
+
+.edw-btn.is-off,
+.edw-line.is-off {
+  color: var(--bs-text-faint);
+}
+
+.edw-paste {
+  flex-direction: column;
+  gap: var(--brand-space-0-5);
+  padding: 0 var(--brand-space-2);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.edw-paste svg:first-child {
+  width: var(--brand-icon-md);
+  height: var(--brand-icon-md);
+}
+
+.edw-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-1);
+}
+
+.edw-line {
+  white-space: nowrap;
+  font-size: var(--brand-text-ui-sm);
+  color: var(--bs-text-secondary);
+}
+
+.edw-select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--edw-control);
+  padding: 0 var(--brand-space-2);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-sm);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.edw-select-font {
+  width: calc(var(--brand-space-30) + var(--brand-space-12));
+}
+
+.edw-select-size {
+  width: var(--brand-space-16);
+  margin-right: var(--brand-space-1);
+}
+
+.edw-style {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--brand-space-1);
+  width: calc(var(--brand-space-24) + var(--brand-space-1));
+  height: var(--brand-space-16);
+  padding: 0 var(--brand-space-2-5);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-sm);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-xs);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.edw-style span {
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-ui-md);
+}
+
+.edw-style-h span {
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-body-lg);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.edw-style.is-on {
+  border: 2px solid var(--brand-coral);
+}
+
+.edw-style-more {
+  display: inline-flex;
+  align-items: center;
+  align-self: stretch;
+  padding: 0 var(--brand-space-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-sm);
+  color: var(--bs-text-muted);
+}
+
+.edw-fold {
+  align-self: flex-end;
+  margin-left: auto;
+  color: var(--bs-text-muted);
+}
+
+/* The desk and the sheet: US Letter, an inch of margin, white in either
+   theme. The desk is cut to a window's height, so the page runs off the
+   bottom as a long policy does. */
+.edw-desk {
+  height: calc(var(--brand-space-30) * 3.6);
+  overflow: hidden;
+  padding: var(--brand-space-6) var(--brand-space-6) 0;
+  background: var(--bs-surface-3);
+}
+
+.edw-sheet {
+  box-sizing: border-box;
+  width: 8.5in;
+  min-height: 11in;
+  margin: 0 auto;
+  padding: 0.8in 1in;
+  background: var(--brand-mockup-bg);
+  color: var(--brand-mockup-ink);
+  box-shadow:
+    0 0 0 1px var(--brand-mockup-rule),
+    var(--bs-shadow-md);
+  font-size: 11pt;
+  line-height: var(--brand-leading-normal);
+}
+
+.edw-sheet p + p,
+.edw-sheet ul {
+  margin-top: var(--brand-space-2-5);
+}
+
+.edw-sheet .edw-h1 {
+  font-family: var(--brand-font-serif);
+  font-size: 22pt;
+  font-weight: var(--brand-weight-semibold);
+  line-height: var(--brand-leading-snug);
+}
+
+.edw-sheet .edw-h2 {
+  margin-top: var(--brand-space-5);
+  font-family: var(--brand-font-serif);
+  font-size: 15pt;
+  font-weight: var(--brand-weight-semibold);
+  line-height: var(--brand-leading-snug);
+}
+
+/* Bullets drawn as the sheet's own text, so they keep their place at any
+   zoom; a list marker drifts from its line when the stage is zoomed far out. */
+.edw-sheet ul {
+  list-style: none;
+  padding-left: var(--brand-space-6);
+}
+
+.edw-sheet li {
+  position: relative;
+}
+
+.edw-sheet li::before {
+  content: "•";
+  position: absolute;
+  left: calc(-1 * var(--brand-space-4));
+}
+
+.edw-sheet li + li {
+  margin-top: var(--brand-space-1);
+}
+
+/* The edit: typed in place, with the editor's caret. */
+.edw-typed span {
+  display: inline-block;
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.edw-caret {
+  display: inline-block;
+  width: 1.5px;
+  height: 1.15em;
+  margin: 0 1px;
+  vertical-align: text-bottom;
+  background: var(--brand-mockup-ink);
+  opacity: 0;
+}
+
+.edw-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--brand-space-4);
+  min-height: 30px;
+  padding: 0 var(--brand-space-3);
+  border-top: 1px solid var(--bs-rule);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.edw-status-start,
+.edw-status-end {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-4);
+}
+
+.edw-status-end {
+  gap: var(--brand-space-1);
+}
+
+.edw-zoom {
+  position: relative;
+  width: var(--brand-space-24);
+  height: var(--brand-space-1);
+  margin: 0 var(--brand-space-1);
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-surface-3);
+}
+
+.edw-zoom span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 40%;
+  border-radius: inherit;
+  background: var(--brand-coral);
+}
+
+.edw-zoom span::after {
+  content: "";
+  position: absolute;
+  right: calc(-1 * var(--brand-space-1-5));
+  top: 50%;
+  width: var(--brand-space-3);
+  height: var(--brand-space-3);
+  border-radius: var(--brand-radius-full);
+  background: var(--brand-coral);
+  transform: translateY(-50%);
+}
+
+.edw-unsaved {
+  color: var(--bs-status-warn-fg);
+}
+
+/* Text that changes as the edit lands: every state is laid in the same cell,
+   and only one is visible at a time. */
+.edw-swap {
+  display: inline-grid;
+}
+
+.edw-swap > span {
+  grid-area: 1 / 1;
+}
+
+.edw-swap > span + span {
+  opacity: 0;
+}
+
+/* ── The timeline, once the window scrolls into view ── */
+
+.editor-demo.in .edw-caret {
+  animation: edw-blink 1s steps(1, end) 0.8s 4 both;
+}
+.editor-demo.in .edw-typed span {
+  animation: edw-type 1.4s steps(27, end) 1s both;
+}
+.editor-demo.in .edw-saved > span:nth-child(1) {
+  animation: edw-hide 1ms linear 1s both;
+}
+.editor-demo.in .edw-saved > span:nth-child(2) {
+  animation:
+    edw-show 1ms linear 1s both,
+    edw-hide 1ms linear 3.3s forwards;
+}
+.editor-demo.in .edw-saved > span:nth-child(3) {
+  animation: edw-show 1ms linear 3.3s both;
+}
+
+@keyframes edw-type {
+  to {
+    max-width: 27ch;
+  }
+}
+@keyframes edw-blink {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+@keyframes edw-show {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes edw-hide {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* ── The notes under the window ── */
+
+.editor-notes {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--brand-space-8);
+  margin: var(--brand-space-10) 0 0;
+  padding: 0;
+}
+
+.editor-notes h3 {
+  margin: 0 0 var(--brand-space-1);
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-body-lg);
+  font-weight: var(--brand-weight-semibold);
+  line-height: var(--brand-leading-snug);
+  color: var(--bs-text-primary);
+}
+
+.editor-notes p {
+  margin: 0;
+  font-size: var(--brand-text-sm);
+  line-height: var(--brand-leading-relaxed);
+  color: var(--bs-text-secondary);
 }
 
 /* ─────────────────────────────────────
@@ -1593,6 +2123,23 @@ body::after {
   transition: color var(--brand-transition-base);
 }
 
+/* The ethos, set apart from the story: Lora italic between two hairlines, in
+   ink rather than coral, so the note stays quiet and the CTA below keeps the
+   region's only emphasis. */
+.founder-pledge {
+  margin: 0;
+  padding: var(--brand-space-5) 0;
+  border-top: 1px solid var(--bs-rule);
+  border-bottom: 1px solid var(--bs-rule);
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-body-lg);
+  font-style: italic;
+  line-height: var(--brand-leading-snug);
+  color: var(--bs-text-primary);
+  transition: var(--bs-mode-transition);
+}
+
+.founder-pledge a,
 .founder-contact a {
   color: var(--bs-coral-text);
   text-decoration: underline;
@@ -1601,6 +2148,7 @@ body::after {
   transition: text-decoration-color var(--brand-transition-base);
 }
 
+.founder-pledge a:hover,
 .founder-contact a:hover {
   text-decoration-color: currentColor;
 }
@@ -2130,6 +2678,9 @@ body::after {
   }
 
   .section-review {
+    padding: var(--brand-section-padding-y-sm) var(--brand-page-padding-x);
+  }
+  .section-editor {
     /* Trimmed bottom — the founder coda follows immediately (see desktop). */
     padding: var(--brand-section-padding-y-sm) var(--brand-page-padding-x)
       var(--brand-space-8);
@@ -2202,6 +2753,14 @@ body::after {
 
 /* The sign-off row is a small portrait beside two short lines, so it survives
    narrow widths that the old two-column letter could not. Just tighten it. */
+/* A phone: the notes stack. */
+@media (max-width: 600px) {
+  .editor-notes {
+    grid-template-columns: 1fr;
+    gap: var(--brand-space-5);
+  }
+}
+
 @media (max-width: 600px) {
   .founder-inner {
     gap: var(--brand-space-6);

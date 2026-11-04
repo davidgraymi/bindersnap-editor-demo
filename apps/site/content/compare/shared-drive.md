@@ -1,7 +1,7 @@
 ---
 title: Policy software vs. a shared drive or SharePoint
 description: A shared drive stores policy files. It doesn't record who approved which version. When that matters, and when a shared drive is enough.
-updated: 2026-10-07
+updated: 2026-11-03
 crumb: Shared drive or SharePoint
 related: /pricing, /requirements/who-approves-policies, /requirements/how-long-to-keep-old-policies
 ---
@@ -58,7 +58,7 @@ SharePoint libraries keep version history and can run approval flows, if they ar
 
 ### Can we keep our files in Word?
 
-Yes. Upload Word and PDF files to Bindersnap and edit them in Word as before, uploading each revision as a new version. Or write new policies in Bindersnap's editor.
+Yes. Upload Word and PDF files to Bindersnap and edit them in Word as before, uploading each revision as a new version. Or write new policies in [Bindersnap's editor](/editor), in your browser, with no Word license needed.
 
 ## Sources
 
