@@ -10,10 +10,10 @@ exactly.
 ## Why This Exists
 
 The nav's search (quick find, `apps/app/components/NavSearch.tsx`) is one box
-that finds five kinds of thing: documents, changes, binders, organizations and
-people. Each kind is answered differently today, and the document answer is
-the weak one. A reader opens Bindersnap to find out what the policy says, and
-search cannot help them with that.
+that finds six kinds of thing: Bindersnap's own pages and controls, documents,
+changes, binders, organizations and people. Each kind is answered differently
+today, and the document answer is the weak one. A reader opens Bindersnap to
+find out what the policy says, and search cannot help them with that.
 
 - **It matches document titles only.** `readLibrary`
   (`services/api/server.ts`) filters on a document's name, its path and its
@@ -31,31 +31,37 @@ contents become searchable.
 
 ## Decision
 
-**One box, one panel, five kinds. Each kind is read from the place that already
+**One box, one panel, six kinds. Each kind is read from the place that already
 holds it. Documents are the one kind that needs an index of our own: the text
 of each document as it is on `main` today, in SQLite, derived from Gitea.**
 
 ### What the box finds
 
-| Kind         | Matched on                     | Read from                                                                                |
-| ------------ | ------------------------------ | ---------------------------------------------------------------------------------------- |
-| Document     | Title, path and **contents**   | The document index, `search.db` (§1–§6 below)                                            |
-| Change       | Title and description          | Gitea's issue indexer, `/repos/issues/search`, kept to the reader's organizations        |
-| Binder       | Name and description           | The reader's own list of binders, matched in the browser                                 |
-| Organization | Name                           | The reader's own list of organizations, matched in the browser                           |
-| Person       | Name and username, never email | Members of the reader's organizations, matched in the browser; never Gitea's user search |
+| Kind           | Matched on                            | Read from                                                                                |
+| -------------- | ------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Page or action | Name and the words people type for it | A fixed list in the app (`apps/app/quickFindActions.ts`), matched in the browser         |
+| Document       | Title, path and **contents**          | The document index, `search.db` (§1–§6 below)                                            |
+| Change         | Title and description                 | Gitea's issue indexer, `/repos/issues/search`, kept to the reader's organizations        |
+| Binder         | Name and description                  | The reader's own list of binders, matched in the browser                                 |
+| Organization   | Name                                  | The reader's own list of organizations, matched in the browser                           |
+| Person         | Name and username, never email        | Members of the reader's organizations, matched in the browser; never Gitea's user search |
 
 The rules that hold for every kind:
 
-- **Nothing is copied to be searchable when Gitea already answers.** Changes,
-  binders, organizations and people are Gitea's (ADR 0004, question 1), so they
-  are searched where they live. Only document contents need an index, because
-  Gitea cannot search them for us (see "Not Now").
+- **Nothing is copied to be searchable when its source already answers.**
+  Pages and actions are the app's own list. Changes, binders, organizations and
+  people are Gitea's (ADR 0004, question 1), so they are searched where they
+  live. Only document contents need an index, because Gitea cannot search them
+  for us (see "Not Now").
 - **Every kind is scoped to the reader.** A result is only ever something the
   reader can already open. People are their colleagues, not every account.
-- **One panel.** Results are grouped by kind, documents first, because that is
-  what people look for most. Each group pages on its own, and one group failing
-  never empties the others.
+- **One panel.** Results are grouped by kind in the order of
+  `orderQuickFindResults` (`apps/app/quickFind.ts`): pages and actions first,
+  because one matches only when a word of its name was typed, then documents,
+  because that is what people look for most. Searching contents makes this
+  order matter more: "billing" will now also match every policy that mentions
+  billing, and the Billing page must still come first. Each group pages on its
+  own, and one group failing never empties the others.
 - **The query is read the same way for every kind**: split into words, each
   word must match, case, accents and punctuation ignored. A query that finds
   "Hand Hygiene Policy" as a document finds a change titled the same.
@@ -230,14 +236,16 @@ sits behind one module so that swapping the store does not touch its callers.
 
 ### The other kinds
 
+Pages and actions are a short fixed list and have no limit worth stating.
 Changes, binders, organizations and people are not indexed by us, so their
 limits are Gitea's and the browser's:
 
 - **Binders, organizations and people** are matched in the browser from lists
-  the reader already holds. That is right, by estimate, while a reader belongs to fewer than
-  about **200 binders** or **2,000 colleagues**. Past either, the lists are too
-  long to fetch and match on every search: move the matching to the API, which
-  asks Gitea with the query rather than for the whole list.
+  the reader already holds. That is right, by estimate, while a reader
+  belongs to fewer than about **200 binders** or **2,000 colleagues**. Past
+  either, the lists are too long to fetch and match on every search: move the
+  matching to the API, which asks Gitea with the query rather than for the
+  whole list.
 - **Changes** are searched by Gitea's issue indexer, then filtered to the
   reader's organizations. The API reads four times the rows it shows to leave
   room for that filter (`handleSearchChanges`). If the filter regularly leaves
