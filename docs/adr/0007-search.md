@@ -1,20 +1,24 @@
-# ADR 0007: Search Reads What Is on `main`, From a Derived Index
+# ADR 0007: One Search Box, and an Index of What Is on `main`
 
 Status: Proposed (design; nothing built yet)
 Date: 2026-11-04
-Amends: nothing. This is the second derived index under
+Amends: nothing. The document index is the second derived index under
 [ADR 0004](0004-organization-workspace-folder-and-org-billing.md)'s rule, after
 the activity dataset (`services/api/activity.ts`), and it follows that rule
 exactly.
 
 ## Why This Exists
 
-A reader opens Bindersnap to find out what the policy says. Today search
-cannot help them with that.
+The nav's search (quick find, `apps/app/components/NavSearch.tsx`) is one box
+that finds five kinds of thing: documents, changes, binders, organizations and
+people. Each kind is answered differently today, and the document answer is
+the weak one. A reader opens Bindersnap to find out what the policy says, and
+search cannot help them with that.
 
-- **It matches titles only.** `readLibrary` (`services/api/server.ts`) filters
-  on a document's name, its path and its binder's name. A policy titled "Hand
-  Hygiene" is invisible to a search for "alcohol-based rub".
+- **It matches document titles only.** `readLibrary`
+  (`services/api/server.ts`) filters on a document's name, its path and its
+  binder's name. A policy titled "Hand Hygiene" is invisible to a search for
+  "alcohol-based rub".
 - **It matches one exact string.** "hand policy" does not find "Hand Hygiene
   Policy". Nothing is ranked; results are sorted by binder, then path.
 - **Every keystroke reads the whole library.** Quick find lists every binder in
@@ -22,15 +26,47 @@ cannot help them with that.
   changes and tags. The cost grows with the number of binders, and the panel
   asks again as the person types.
 
-Change search is a separate path (`/repos/issues/search`, Gitea's issue
-indexer) and is not part of this decision.
+This ADR decides what the box searches for each kind, and how document
+contents become searchable.
 
 ## Decision
 
-**Search reads one thing: the text of each document as it is on `main` today,
-from a full-text index in SQLite that the API derives from Gitea.**
+**One box, one panel, five kinds. Each kind is read from the place that already
+holds it. Documents are the one kind that needs an index of our own: the text
+of each document as it is on `main` today, in SQLite, derived from Gitea.**
 
-### 1. Only `main`, only the current version
+### What the box finds
+
+| Kind         | Matched on                     | Read from                                                                                |
+| ------------ | ------------------------------ | ---------------------------------------------------------------------------------------- |
+| Document     | Title, path and **contents**   | The document index, `search.db` (§1–§6 below)                                            |
+| Change       | Title and description          | Gitea's issue indexer, `/repos/issues/search`, kept to the reader's organizations        |
+| Binder       | Name and description           | The reader's own list of binders, matched in the browser                                 |
+| Organization | Name                           | The reader's own list of organizations, matched in the browser                           |
+| Person       | Name and username, never email | Members of the reader's organizations, matched in the browser; never Gitea's user search |
+
+The rules that hold for every kind:
+
+- **Nothing is copied to be searchable when Gitea already answers.** Changes,
+  binders, organizations and people are Gitea's (ADR 0004, question 1), so they
+  are searched where they live. Only document contents need an index, because
+  Gitea cannot search them for us (see "Not Now").
+- **Every kind is scoped to the reader.** A result is only ever something the
+  reader can already open. People are their colleagues, not every account.
+- **One panel.** Results are grouped by kind, documents first, because that is
+  what people look for most. Each group pages on its own, and one group failing
+  never empties the others.
+- **The query is read the same way for every kind**: split into words, each
+  word must match, case, accents and punctuation ignored. A query that finds
+  "Hand Hygiene Policy" as a document finds a change titled the same.
+
+Changes are the one kind that is not limited to `main`: a change is by nature
+in flight, and finding it is the point. Their contents (the documents they
+change) are not searched; their title and description are.
+
+The rest of this decision is about documents.
+
+### 1. Document contents: only `main`, only the current version
 
 - A draft or an open change is not searched. It has not been approved, and a
   reader who finds unapproved text has found the wrong answer.
@@ -127,6 +163,8 @@ no longer reads every binder on every keystroke.
 
 ## How Far This Goes
 
+### The document index
+
 These numbers are for **the whole deployment**: one host serves every
 organization, so one index holds every binder. They are estimates from typical
 policy sizes. Before building, a benchmark against a scaled-up seed must confirm
@@ -140,7 +178,7 @@ three times the text, so **about 50 KB per document**. Extraction costs about
 Production is one t4g.medium (4 GiB, 30 GB root volume, burstable CPU; see
 `infra/compute/main.tf`).
 
-### Green: this architecture as written
+#### Green: this architecture as written
 
 Up to **10,000 documents** on `main` across the deployment, about **1 million
 passages**, an index under **1 GB**.
@@ -152,7 +190,7 @@ passages**, an index under **1 GB**.
 The first customers are small providers with 50–300 policies each. Green holds
 for roughly 30–200 of them.
 
-### Amber: start planning, change nothing yet
+#### Amber: start planning, change nothing yet
 
 When **any** of these is true:
 
@@ -174,7 +212,7 @@ Amber has fixes that keep the same design:
 - **Throttle the job**: extract a few files at a time, so a rebuild cannot
   starve the API.
 
-### Red: move to a dedicated search engine
+#### Red: move to a dedicated search engine
 
 When **any** of these is true, Amber's fixes in place:
 
@@ -190,6 +228,24 @@ needs its own ADR. Because extraction, the passage model, the permission check
 and the result links all stay the same, only the store changes. The index code
 sits behind one module so that swapping the store does not touch its callers.
 
+### The other kinds
+
+Changes, binders, organizations and people are not indexed by us, so their
+limits are Gitea's and the browser's:
+
+- **Binders, organizations and people** are matched in the browser from lists
+  the reader already holds. That is right, by estimate, while a reader belongs to fewer than
+  about **200 binders** or **2,000 colleagues**. Past either, the lists are too
+  long to fetch and match on every search: move the matching to the API, which
+  asks Gitea with the query rather than for the whole list.
+- **Changes** are searched by Gitea's issue indexer, then filtered to the
+  reader's organizations. The API reads four times the rows it shows to leave
+  room for that filter (`handleSearchChanges`). If the filter regularly leaves
+  fewer rows than fit the panel, pass the reader's repositories to Gitea's
+  search instead of filtering after it. Gitea's issue indexer is on its
+  default, bleve, on disk. If change search slows past p95 300 ms, that is a
+  Gitea configuration question first, not a reason to index changes ourselves.
+
 ### Knowing which zone we are in
 
 These numbers are useless if nobody can see them. The site admin's system page
@@ -197,16 +253,15 @@ These numbers are useless if nobody can see them. The site admin's system page
 p95 search time over the last day and the last rebuild's duration, each marked
 against the thresholds above.
 
-## Rejected
+## Not Now: Gitea's Repository Indexer
 
-### Gitea's repository indexer
-
-Gitea can index repository contents (`[indexer] REPO_INDEXER_ENABLED`). It does
-not fit:
+Gitea can index repository contents (`[indexer] REPO_INDEXER_ENABLED`). If it
+could answer document search, we would rather use it than keep an index of our
+own: one less thing to build, run and rebuild. Today it cannot:
 
 - **No API.** Gitea 28 exposes no code search endpoint
   (`services/api/gitea-client/spec/`), so the API would have to scrape Gitea's
-  HTML pages.
+  HTML pages. Gitea has work in progress to add one.
 - **It indexes the wrong content.** Editor documents are Tiptap JSON, so markup
   is indexed with the words and snippets come back as JSON. Word files and
   PDFs are binary and skipped. Large files are skipped, and embedded pictures
@@ -214,20 +269,24 @@ not fit:
 - **It is keyword search.** Its "fuzzy" mode tolerates typos. It does not
   understand meaning.
 
-### Querying the indexer's Elasticsearch index directly
+Querying its Elasticsearch index (`gitea_codes`, with
+`REPO_INDEXER_TYPE = elasticsearch`) directly would get round the missing API,
+and it does index only the default branch. It costs 1–2 GiB of heap on a 4 GiB
+host, reads an internal format that a Gitea upgrade may change, and holds the
+same JSON markup and the same gaps.
 
-With `REPO_INDEXER_TYPE = elasticsearch`, Gitea writes an index (`gitea_codes`)
-the API could query itself, with no Gitea API in the way. It does index only
-the default branch, which is what we want. It is still wrong:
+**Revisit when** Gitea ships a code search API. Even then, it is worth using
+only for what it can read well: it would still see an editor document as JSON
+and skip every Word file and PDF. Unless Gitea can also index text extracted
+from a file rather than its raw bytes, it could at best serve Markdown, and
+this index stays. Writing a plain-text copy of each document into the binder
+so Gitea could index it is not an option: a binder holds evidence, and a copy
+made for search is not.
 
-- **Memory.** Elasticsearch or OpenSearch wants 1–2 GiB of heap. The host has
-  4 GiB, chosen because 2 GiB left too little room for what already runs there.
-- **The content is the same.** Querying the index directly changes how we read
-  it, not what Gitea put in it: JSON markup, no Word, no PDF, no large files.
-- **`gitea_codes` is Gitea's internal format.** Its name and fields are not a
-  public contract, so a Gitea image bump could break search without warning.
+The index code sits behind one module, so moving any part of document search to
+Gitea later does not touch its callers.
 
-### Searching every version
+## Rejected: Searching Every Version
 
 Rejected for readers in §1. It would also multiply the index by the number of
 versions each document has had.
@@ -252,7 +311,8 @@ versions each document has had.
   build.
 - The passage walker moves to `packages/utils` and is shared by the index job
   and the reader.
-- `readLibrary` keeps answering the library page. Quick find moves to the
-  index.
+- `readLibrary` keeps answering the library page. Quick find's documents move
+  to the index; its other kinds keep their sources, and all of them read the
+  query the same way.
 - `AGENTS.md`, which names the activity dataset as the one derived index built
   so far, names this one too once it is built.
