@@ -1,5 +1,6 @@
 import type { LibraryDocument } from "./api";
 import { formatDocumentName } from "./documentDisplay";
+import type { QuickFindAction } from "./quickFindActions";
 
 /**
  * Quick find, decided here so the panel only renders.
@@ -23,7 +24,7 @@ import { formatDocumentName } from "./documentDisplay";
 
 /** What a row points at. Decides its icon, its group and where Enter goes. */
 export type QuickFindKind =
-  "document" | "change" | "binder" | "organization" | "person";
+  "action" | "document" | "change" | "binder" | "organization" | "person";
 
 /** One row in the panel, and the one line that identifies it. */
 export interface QuickFindResult {
@@ -51,6 +52,8 @@ export interface QuickFindResult {
   username?: string;
   /** Set on a change request: its number in its binder. */
   changeNumber?: number;
+  /** Set on one of Bindersnap's own pages or controls: what picking it does. */
+  action?: QuickFindAction;
 }
 
 /** How many results one page holds. Two lands of them fill the panel. */
@@ -144,6 +147,23 @@ export function buildChangeResult(change: {
   };
 }
 
+/**
+ * One of Bindersnap's own pages or controls, as a row.
+ *
+ * It belongs to no organization, so `organization` is empty; where it goes is
+ * in the action itself.
+ */
+export function buildActionResult(action: QuickFindAction): QuickFindResult {
+  return {
+    key: `action:${action.id}`,
+    kind: "action",
+    organization: "",
+    name: action.name,
+    meta: action.meta,
+    action,
+  };
+}
+
 /** One organization, as a row. */
 export function buildOrganizationResult(organization: {
   name: string;
@@ -179,19 +199,23 @@ export function buildPersonResult(
 }
 
 /**
- * Everything matching, documents first.
+ * Everything matching: Bindersnap's own pages first, then documents.
  *
- * The order is the answer to "what did you most likely mean". Documents are
- * what this was built for and what people look for most; a binder or a person
- * is the rarer thing you reach for when the document is not what you wanted.
- * Within a kind the server's order is kept.
+ * The order is the answer to "what did you most likely mean". A page or a
+ * control only matches when a word of its name was typed — "help", "billing",
+ * "dark" — and somebody who typed one is asking for that, not for every
+ * document that mentions it. After those, documents are what this was built
+ * for and what people look for most; a binder or a person is the rarer thing
+ * you reach for when the document is not what you wanted. Within a kind the
+ * order it arrived in is kept.
  */
 const KIND_ORDER: Record<QuickFindKind, number> = {
-  document: 0,
-  change: 1,
-  binder: 2,
-  organization: 3,
-  person: 4,
+  action: 0,
+  document: 1,
+  change: 2,
+  binder: 3,
+  organization: 4,
+  person: 5,
 };
 
 export function orderQuickFindResults(
@@ -245,6 +269,7 @@ export function describeQuickFindEmptyState(query: string): string {
 
 /** The heading above each run of rows. Absent when a kind has none. */
 export const QUICK_FIND_GROUP_LABELS: Record<QuickFindKind, string> = {
+  action: "Pages and actions",
   document: "Documents",
   change: "Change requests",
   binder: "Binders",

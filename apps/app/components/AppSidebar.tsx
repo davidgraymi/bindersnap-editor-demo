@@ -29,7 +29,6 @@ import {
 import { organizationBindersQuery, organizationsQuery } from "../data/queries";
 import { routeToPath, type AppRoute, type OrganizationTab } from "../routes";
 import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
-import { useCollapsedSidebar } from "../useCollapsedSidebar";
 import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
 import { siteUrl } from "../siteLink";
 
@@ -178,6 +177,12 @@ interface AppSidebarProps {
   onSendFeedback?: (() => void) | null;
   /** How many changes are in flight, once the queue has counted them. */
   changeCount?: number | null;
+  /**
+   * Whether the map is down to its icons, and the way to change it — held by
+   * the shell (`useCollapsedSidebar`) because quick find can change it too.
+   */
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
   onNavigate: (route: AppRoute) => void;
 }
 
@@ -200,14 +205,10 @@ export function AppSidebar({
   binder = null,
   onSendFeedback = null,
   changeCount = null,
+  collapsed,
+  onToggleCollapsed,
   onNavigate,
 }: AppSidebarProps) {
-  // A policy open in the page is three panels wide — the map, the binder's
-  // files, and the policy — and the map is the one nobody is reading.
-  const { collapsed, toggle } = useCollapsedSidebar(
-    route.kind === "binderDocument",
-  );
-
   // The org-scoped entries have nowhere to point until we know which
   // organization is on screen. Rendered muted and inert rather than hidden:
   // a map that changes shape as you walk around it is not a map.
@@ -614,7 +615,7 @@ export function AppSidebar({
             collapsed ? "Expand the navigation" : "Collapse the navigation"
           }
           title={collapsed ? "Expand" : "Collapse"}
-          onClick={toggle}
+          onClick={onToggleCollapsed}
         >
           {collapsed ? (
             <PanelLeftOpen size={15} strokeWidth={1.75} aria-hidden="true" />
