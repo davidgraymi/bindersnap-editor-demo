@@ -115,6 +115,22 @@ lives in `packages/utils`, beside the sanitizer, so neither side can drift.
 - **SQLite FTS5**, through Bun's own `bun:sqlite`. FTS5 gives relevance ranking
   (BM25), English stemming ("disinfecting" finds "disinfect"), prefix queries
   for typing, and highlighted snippets.
+- **One FTS5 row per passage**, with `detail=full`, the Porter stemmer, one
+  indexed column (the passage text) and the text stored. A row is not a bag of
+  words: the index keeps each word's positions, which is what makes a phrase
+  (`"hand hygiene"`) match only where the words are adjacent, and what places
+  the highlight in a snippet. Measured, a row per passage costs about 1.4× the
+  index of a row per document, because the index grows with the words, not the
+  rows ([research](../research/search-sizing/report.md)). `detail=column`,
+  `detail=none`, the trigram tokenizer and a second indexed column all cost
+  more than they save, and are not used.
+- **Titles in a table of their own**, one row per document, so a title match
+  needs no second indexed column on every passage, and quick find can answer
+  from titles alone.
+- **Row numbers in blocks per organization.** Every passage of one
+  organization falls inside one range of rowids. Nothing uses this at first;
+  it is what lets a search be limited to one organization later by changing
+  the query, not by rebuilding the index (see Amber).
 - **Its own file, `search.db`**, beside `sessions.db` and not in it. It is not
   replicated by Litestream and not backed up. Losing it loses speed, not
   evidence: the job rebuilds it from Gitea. Keeping it out of `sessions.db`
@@ -144,7 +160,9 @@ is never subtly wrong.
 
 **The index decides what matches, never who may see it.** A search first asks
 Gitea which binders the person can read, as `readLibrary` does today, and the
-query is limited to those binders. A person removed from a binder stops seeing
+query is limited to those binders. It covers **every organization the reader
+belongs to**, as quick find does today, and is limited to one organization only
+if that becomes too slow (see Amber). A person removed from a binder stops seeing
 its results on their next search, whatever the index holds.
 
 **The index serves browsing; Gitea serves proving.** No publish gate, approval
@@ -167,31 +185,64 @@ check or audit export reads `search.db`.
 Quick find gets faster as a side effect: titles come from the index too, so it
 no longer reads every binder on every keystroke.
 
+### 7. Healthcare synonyms
+
+A short list of the words these customers use for the same thing: hand hygiene
+and handwashing, C. diff and Clostridioides difficile, PPE and personal
+protective equipment. It is applied to the query, not the index:
+"handwashing" is searched as `handwashing OR "hand hygiene"`. That leaves
+the index unchanged when the list changes, and costs nothing to store.
+
+The list is configuration, in the repository beside the code that reads it,
+and is reviewed like code. It ships with the index, because for these
+customers it does much of what search by meaning would, at none of the cost.
+
 ## How Far This Goes
 
 ### The document index
 
 These numbers are for **the whole deployment**: one host serves every
-organization, so one index holds every binder. They are estimates from typical
-policy sizes. Before building, a benchmark against a scaled-up seed must confirm
-them, and confirm that mammoth and pdfjs run under Bun on the server as they
-do in the browser. This section is corrected with what it finds.
+organization, so one index holds every binder. They come from the research in
+[`docs/research/search-sizing/`](../research/search-sizing/report.md): sizes
+and timings measured with its benchmark (`bench/`) on an Apple M1 with
+synthetic 3,000-word policies, and estimated for the t4g.medium at 1.5–2.5×
+slower. Before building, the benchmark runs on a real t4g.medium against a
+scaled-up seed, with mammoth and pdfjs extracting on the server under Bun, and
+this section is corrected with what it finds. The report lists every run that
+is still owed.
 
-**The sizing assumptions.** A policy runs 2,000–4,000 words, about 15–25 KB of
-text in 40–100 passages. FTS5 stores the text and its index at roughly two to
-three times the text, so **about 50 KB per document**. Extraction costs about
-0.1–0.5 s of CPU for an editor or Word document and 20–50 ms a page for a PDF.
-Production is one t4g.medium (4 GiB, 30 GB root volume, burstable CPU; see
+**The sizing, measured.** A policy of about 3,000 words is about 18 KB of text
+in about 70 passages. A row per passage costs about **10 KB of index per
+document, and about 29 KB with the text stored**:
+
+| Documents | Passages | Index   | `search.db` with text |
+| --------- | -------- | ------- | --------------------- |
+| 10,000    | 0.7M     | 98 MiB  | 284 MiB               |
+| 25,000    | 1.8M     | 244 MiB | 708 MiB               |
+| 100,000   | 7.0M     | 972 MiB | 2.8 GiB               |
+
+Replacing one document's passages takes about 1 ms. Extraction, not the
+index, is most of a rebuild: about 0.1–0.5 s of CPU for an editor or Word
+document and 20–50 ms a page for a PDF (estimated). Production is one
+t4g.medium (4 GiB, 30 GB root volume, burstable CPU; see
 `infra/compute/main.tf`).
+
+**What grows is query time, not size.** BM25 scores every row that matches
+before it keeps the best ten. A rare word costs under a millisecond at any
+scale. A word in most documents, searched across the whole deployment, cost
+147 ms per document and 542 ms per passage at 100k documents on the M1. Limited
+to one 5,000-document organization's rowid block, the same search cost at most
+30 ms. That is why the rowids are laid out per organization from the start.
 
 #### Green: this architecture as written
 
-Up to **10,000 documents** on `main` across the deployment, about **1 million
-passages**, an index under **1 GB**.
+Up to **10,000 documents** on `main` across the deployment, about **0.7
+million passages**, `search.db` under **0.5 GB**.
 
-- A search answers in under 100 ms at p95.
+- A search across every organization the reader belongs to answers in under
+  100 ms at p95.
 - A full rebuild finishes in under an hour.
-- The index uses under 5% of the root volume.
+- `search.db` uses under 2% of the root volume.
 
 The first customers are small providers with 50–300 policies each. Green holds
 for roughly 30–200 of them.
@@ -200,18 +251,21 @@ for roughly 30–200 of them.
 
 When **any** of these is true:
 
-- 25,000 documents, or 2.5 million passages
-- `search.db` over 2 GB
+- 25,000 documents, or 2 million passages. This is about where a common word
+  searched across the deployment is estimated to pass 200 ms on the t4g.
+- `search.db` over 1 GB
 - p95 search over 200 ms
 - a full rebuild over 2 hours, or one that exhausts the host's CPU credits
 - the API container's memory approaches its limit while a pass runs
 
 Amber has fixes that keep the same design:
 
-- **Partition by organization**: one FTS table, or one file, per organization.
-  A query then never ranks another organization's matches before discarding
-  them. This is the first fix to make, because cost today grows with
-  everyone's documents, not the searcher's.
+- **Limit search to one organization**: the one on screen, with a way to
+  search the reader's others. The query adds that organization's rowid range,
+  so it never ranks another organization's matches, and its cost follows the
+  size of that organization, not the deployment. No rebuild is needed. This is
+  the first fix to make. If one organization alone grows too large, the next
+  step is one FTS table, or one file, per organization.
 - **Cap a document's passages.** One 600-page manual should not cost what 100
   policies cost. Index its first N passages and record that it was cut short.
 - **Put `search.db` on its own volume**, and move the host up one size.
@@ -222,7 +276,7 @@ Amber has fixes that keep the same design:
 
 When **any** of these is true, Amber's fixes in place:
 
-- 100,000 documents, or 10 million passages
+- 100,000 documents, or 7 million passages (a `search.db` of about 3 GB)
 - p95 search over 500 ms
 - a full rebuild no longer fits overnight
 - a feature FTS5 cannot do well: typo tolerance across a large index, meaning
@@ -301,14 +355,23 @@ versions each document has had.
 
 ## Later, Not Now
 
-- **Synonyms for healthcare vocabulary**: hand hygiene and handwashing, C. diff
-  and Clostridioides, PPE and personal protective equipment. A short list
-  applied to the query, which helps more than anything else for these
-  customers.
-- **Search by meaning**: embeddings on the same passage rows (for example
-  `sqlite-vec`). Computing embeddings sends policy text to a provider, which
-  adds a subprocessor and changes the legal pages, or runs a model on the host,
-  which costs memory it does not have. Its own ADR.
+- **Search by meaning**, its own ADR, and only if a set of about 40 labelled
+  queries shows it finds what keyword search with synonyms misses. The
+  research sets out the shape it would take:
+  - **Sections, not passages.** A vector per passage is 0.7M–7M vectors and
+    does not fit this host at any scale studied. A vector per section (split
+    at headings, at most about 512 tokens, about 8–9 per document) is 123 MB,
+    307 MB and 1.2 GB of float32 at 10k, 25k and 100k documents, and a quarter
+    of that as int8. The passage is still found by this index.
+  - **Embedded off the host.** A small model (bge-small class) would fit in
+    memory here, but embedding every document is estimated at 7–17 hours at
+    10k documents and 3–7 days at 100k on the host's two burstable cores,
+    which breaks the promise that the index rebuilds from Gitea. Amazon
+    Bedrock's Titan Text Embeddings V2 embeds all 100k for about $10. AWS is
+    already a subprocessor; whether a new AWS service needs the DPA's notice
+    is for `legal-reviewer`.
+  - **Combined with keyword results** by reciprocal rank fusion, in
+    `sqlite-vec` beside this index.
 - **Typo tolerance**: FTS5's trigram tokenizer, at the cost of a larger index.
 
 ## Consequences
@@ -319,6 +382,8 @@ versions each document has had.
   build.
 - The passage walker moves to `packages/utils` and is shared by the index job
   and the reader.
+- The healthcare synonym list is a new file to keep, and it ships with the
+  index.
 - `readLibrary` keeps answering the library page. Quick find's documents move
   to the index; its other kinds keep their sources, and all of them read the
   query the same way.
