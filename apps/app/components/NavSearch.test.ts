@@ -63,18 +63,15 @@ inputPrototype.detachEvent = () => {};
 
 type SearchResponse = {
   documents: {
-    path: string | null;
+    path: string;
     slugPath: string;
     name: string;
+    uid: string | null;
     folder: string;
-    size: number | null;
-    sha: string | null;
-    state: "published" | "proposed";
-    openChangeCount: number;
-    latestVersion: null;
     organization: string;
     binder: string;
-    binderDescription: string;
+    matched: "title" | "contents";
+    snippet: null;
   }[];
   limit: number;
   hasMore: boolean;
@@ -130,15 +127,12 @@ function found(names: string[], hasMore = false): SearchResponse {
       path: `nursing/${name}.docx`,
       slugPath: `nursing/${name}`,
       name,
+      uid: null,
       folder: "nursing",
-      size: 10,
-      sha: "abc",
-      state: "published" as const,
-      openChangeCount: 0,
-      latestVersion: null,
       organization: "riverside-health",
       binder: "clinical",
-      binderDescription: "",
+      matched: "title" as const,
+      snippet: null,
     })),
     limit: 8,
     hasMore,

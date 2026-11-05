@@ -9,12 +9,9 @@
  * paragraph under it.
  */
 
-export interface DocumentBlock {
-  kind: "heading" | "paragraph";
-  /** 1 for the document's title, 2 for a section heading. Ignored on paragraphs. */
-  level: 1 | 2;
-  text: string;
-}
+import type { DocumentBlock } from "../../packages/utils/documentPassages";
+
+export type { DocumentBlock };
 
 function escapeHtml(value: string): string {
   return value

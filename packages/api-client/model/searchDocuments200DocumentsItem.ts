@@ -4,26 +4,19 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { SearchDocuments200DocumentsItemLastChange } from './searchDocuments200DocumentsItemLastChange.ts';
-import type { SearchDocuments200DocumentsItemLatestVersion } from './searchDocuments200DocumentsItemLatestVersion.ts';
-import type { SearchDocuments200DocumentsItemState } from './searchDocuments200DocumentsItemState.ts';
+import type { SearchDocuments200DocumentsItemMatched } from './searchDocuments200DocumentsItemMatched.ts';
+import type { SearchDocuments200DocumentsItemSnippet } from './searchDocuments200DocumentsItemSnippet.ts';
 
 export type SearchDocuments200DocumentsItem = {
+  organization: string;
+  binder: string;
   path: string;
   slugPath: string;
   name: string;
   /** @nullable */
   uid: string | null;
   folder: string;
-  size: number;
-  sha: string;
-  state: SearchDocuments200DocumentsItemState;
-  openChangeCount: number;
+  matched: SearchDocuments200DocumentsItemMatched;
   /** @nullable */
-  latestVersion: SearchDocuments200DocumentsItemLatestVersion;
-  /** @nullable */
-  lastChange: SearchDocuments200DocumentsItemLastChange;
-  organization: string;
-  binder: string;
-  binderDescription: string;
+  snippet: SearchDocuments200DocumentsItemSnippet;
 };

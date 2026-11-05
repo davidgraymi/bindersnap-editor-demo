@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { LibraryDocument } from "./api";
+import type { DocumentSearchHit } from "./api";
 import {
   buildBinderResult,
   buildChangeResult,
@@ -14,27 +14,19 @@ import {
   orderQuickFindResults,
 } from "./quickFind";
 
-function policy(overrides: Partial<LibraryDocument> = {}): LibraryDocument {
+function policy(overrides: Partial<DocumentSearchHit> = {}): DocumentSearchHit {
   return {
     path: "nursing/infection-control.docx",
     slugPath: "nursing/infection-control",
     name: "Infection Control Policy",
+    uid: null,
     folder: "nursing",
-    size: 1024,
-    sha: "abc",
-    state: "published",
-    openChangeCount: 0,
-    latestVersion: {
-      tag: "nursing/infection-control/v3",
-      version: 3,
-      commitSha: "abc",
-      publishedAt: "2026-08-25T10:00:00Z",
-    },
     organization: "riverside-health",
     binder: "clinical",
-    binderDescription: "Clinical and administrative policies",
+    matched: "title",
+    snippet: null,
     ...overrides,
-  } as LibraryDocument;
+  };
 }
 
 describe("building rows", () => {
@@ -54,7 +46,7 @@ describe("building rows", () => {
       binder: "clinical",
       slugPath: "nursing/infection-control",
       name: "Infection Control Policy",
-      meta: "Clinical · nursing · v3",
+      meta: "Clinical · nursing",
     });
   });
 
@@ -62,12 +54,22 @@ describe("building rows", () => {
     const [result] = buildQuickFindResults([
       policy({ folder: "", slugPath: "handbook" }),
     ]);
-    expect(result?.meta).toBe("Clinical · v3");
+    expect(result?.meta).toBe("Clinical");
   });
 
-  test("a policy with no version says so rather than showing a blank", () => {
-    const [result] = buildQuickFindResults([policy({ latestVersion: null })]);
-    expect(result?.meta).toBe("Clinical · nursing · no published version");
+  test("a policy found by its words carries the passage that matched", () => {
+    const parts = [
+      { text: "Use an ", match: false },
+      { text: "alcohol", match: true },
+      { text: "-based rub.", match: false },
+    ];
+    const [result] = buildQuickFindResults([
+      policy({
+        matched: "contents",
+        snippet: { ordinal: 4, heading: "Procedure", parts },
+      }),
+    ]);
+    expect(result?.excerpt).toEqual(parts);
   });
 
   test("two binders can hold a policy of the same name without colliding", () => {

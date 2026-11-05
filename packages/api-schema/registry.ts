@@ -92,7 +92,7 @@ import {
   AddOrganizationPersonRequestSchema,
   OrganizationPersonRoleRequestSchema,
   LibraryPayloadSchema,
-  LibrarySearchPayloadSchema,
+  DocumentSearchPayloadSchema,
   BinderRulesPayloadSchema,
   BinderRulesRequestSchema,
   OrganizationMembersPayloadSchema,
@@ -522,9 +522,10 @@ registry.registerPath({
   },
   responses: {
     200: {
-      description: "The best matches, capped — quick find, not the library",
+      description:
+        "The best matches in titles and contents, capped — quick find, not the library",
       content: {
-        "application/json": { schema: LibrarySearchPayloadSchema },
+        "application/json": { schema: DocumentSearchPayloadSchema },
       },
     },
   },

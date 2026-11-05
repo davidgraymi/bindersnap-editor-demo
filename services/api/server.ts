@@ -42,6 +42,13 @@ import {
   collectActivity,
   type ActivityBuild,
 } from "./activity";
+import { SearchIndexer } from "./search/indexer";
+import {
+  buildSearchQuery,
+  matchesSearchWords,
+  searchWords,
+} from "./search/query";
+import { searchStore } from "./search/store";
 import {
   LEGAL_ACCEPT_AGAIN_VERSION,
   LEGAL_VERSION,
@@ -310,6 +317,7 @@ import {
 import type { ClosedChange } from "../../packages/api-schema/schemas/documents";
 import type {
   BinderPeoplePayload,
+  DocumentSearchHit,
   OrganizationMembersPayload,
   OrganizationPeoplePayload,
   DocumentVersion,
@@ -3887,21 +3895,20 @@ async function handleAvatar(
 }
 
 /**
- * Quick find: one page of documents whose name or description matches.
+ * Quick find's documents: those whose title, place or words match, from the
+ * document index (ADR 0007).
  *
- * Deliberately not the library listing. That call fans out per repo for tags,
- * open changes and approval policy, which is the right answer for a page and
- * far too much for a panel that reopens on every keystroke. This returns the
- * repo rows only, in pages, so the panel can render the first results while
- * the reader is still typing and ask for more as they scroll.
- */
-/**
- * Quick find, in the nav.
+ * **Gitea decides who sees what; the index decides what matches.** The
+ * binders come from Gitea, as the reader — every organization they are in —
+ * and the query is limited to those, so a person removed from a binder stops
+ * finding it on their next search, whatever the index holds. That is one call
+ * per organization: the per-binder reads of tree, tags and open changes that
+ * the library makes are what this no longer pays on every keystroke.
  *
- * The same question the library page asks, asked shorter — so it runs through
- * the same reader. Two implementations of "where is that policy" would
- * eventually disagree about which binders count, and the one that disagreed
- * would be the one nobody tested.
+ * A binder the index has not read yet — made since its last pass — is matched
+ * on its titles from its tree, as quick find did before the index, and the
+ * index is asked to read it. So a new binder is never missing from search,
+ * only its words are, for the moment it takes.
  *
  * A read, so it is never gated.
  */
@@ -3922,13 +3929,114 @@ async function handleDocumentSearch(
   if (!query) {
     return json(400, { error: "q is required." }, baseHeaders);
   }
+  const ftsQuery = buildSearchQuery(query);
+  if (!ftsQuery) {
+    return json(200, { documents: [], limit, hasMore: false }, baseHeaders);
+  }
 
   try {
-    const found = await readLibrary({ client: auth.client, query, limit });
+    const started = performance.now();
+    const organizations = await listSessionOrganizations(auth.client);
+    const binders = (
+      await Promise.all(
+        organizations.map((organization) =>
+          listOrganizationWorkspaces({
+            client: auth.client,
+            org: organization.name,
+          }).catch(() => []),
+        ),
+      )
+    ).flat();
+    const byRepo = new Map(binders.map((binder) => [binder.id, binder]));
+
+    const store = searchStore();
+    const indexed = store.indexedRepoIds([...byRepo.keys()]);
+    const found = store.search({
+      query: ftsQuery,
+      repoIds: [...indexed],
+      limit,
+    });
+
+    const hits: DocumentSearchHit[] = found.hits.flatMap((hit) => {
+      const binder = byRepo.get(hit.document.repoId);
+      if (!binder) return [];
+      return [
+        {
+          // Today's names, from Gitea: the index keys on ids, and a binder
+          // or an organization renamed since its last pass is still found.
+          organization: binder.owner,
+          binder: binder.name,
+          path: hit.document.path,
+          slugPath: hit.document.slugPath,
+          name: hit.document.name,
+          uid: hit.document.uid,
+          folder: hit.document.folder,
+          matched: hit.matched,
+          snippet: hit.snippet,
+        },
+      ];
+    });
+
+    const unread = binders.filter((binder) => !indexed.has(binder.id));
+    if (unread.length > 0) {
+      const words = searchWords(query);
+      const titled = (
+        await Promise.all(
+          unread.map(async (binder) => {
+            void searchIndexer.refresh(binder.owner, binder.name).catch((err) =>
+              logger.warn("Search index could not read a new binder", {
+                organization: binder.owner,
+                binder: binder.name,
+                error: err instanceof Error ? err.message : String(err),
+              }),
+            );
+            const tree = await readWorkspaceTree({
+              client: auth.client,
+              org: binder.owner,
+              workspace: binder.name,
+            }).catch(() => ({ documents: [] }));
+            return tree.documents
+              .filter((document) =>
+                matchesSearchWords(
+                  `${document.name} ${document.folder} ${binder.name}`,
+                  words,
+                ),
+              )
+              .map((document): DocumentSearchHit => ({
+                organization: binder.owner,
+                binder: binder.name,
+                path: document.path,
+                slugPath: document.slugPath,
+                name: document.name,
+                uid: document.uid,
+                folder: document.folder,
+                matched: "title",
+                snippet: null,
+              }));
+          }),
+        )
+      ).flat();
+      // Among the title matches, after the index's own.
+      const firstWords = hits.findIndex((hit) => hit.matched === "contents");
+      hits.splice(firstWords === -1 ? hits.length : firstWords, 0, ...titled);
+    }
+
+    const ms = Math.round(performance.now() - started);
+    if (ms > 200) {
+      logger.warn("A document search was slow", {
+        ms,
+        binders: binders.length,
+        unread: unread.length,
+      });
+    }
 
     return json(
       200,
-      { documents: found.documents, limit, hasMore: found.hasMore },
+      {
+        documents: hits.slice(0, limit),
+        limit,
+        hasMore: found.hasMore || hits.length > limit,
+      },
       baseHeaders,
     );
   } catch (err) {
@@ -6507,6 +6615,14 @@ async function executePublishJob(
   try {
     const result = await runPublish({ client, plan, deps: publishDeps });
     store.complete(job.id, result);
+    // What was just published is what a reader goes looking for next.
+    void searchIndexer.refresh(plan.org, plan.repo).catch((err) =>
+      logger.warn("Search index could not read a published binder", {
+        organization: plan.org,
+        workspace: plan.repo,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
     notifyPublished({
       owner: plan.org,
       repo: plan.repo,
@@ -16352,6 +16468,17 @@ async function runReconcilerPass(): Promise<void> {
   });
 }
 
+/**
+ * Keeps the document index (`search/`) in step with `main`, with the service
+ * account's read access: a sweep of every binder on a timer, and one binder
+ * at once after it is published. One pass at a time.
+ */
+const searchIndexer = new SearchIndexer({
+  client: createPrivilegedGiteaClient,
+  store: searchStore,
+  organizations: () => organizationStore.list(),
+});
+
 /** The activity pass in flight, so the timer and Rebuild now never overlap. */
 let activityPass: Promise<ActivityBuild | null> | null = null;
 
@@ -18366,6 +18493,18 @@ if (import.meta.main) {
     );
   setTimeout(buildActivity, 3 * 60_000);
   setInterval(buildActivity, 6 * 60 * 60_000);
+  // Bring the document index up to `main` — see `search/indexer.ts`. Soon
+  // after startup, so a new deploy (or an emptied `search.db`) is searchable
+  // within a minute, then every ten: a binder whose `main` has not moved
+  // costs one read, so a sweep of a quiet deployment is cheap.
+  const sweepSearch = () =>
+    void searchIndexer.sweep().catch((err) =>
+      logger.error("Search index pass failed", {
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+  setTimeout(sweepSearch, 20_000);
+  setInterval(sweepSearch, 10 * 60_000);
   logger.info("Bindersnap API listening", {
     url: `http://localhost:${server.port}`,
     port: server.port,

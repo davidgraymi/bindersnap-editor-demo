@@ -5101,6 +5101,24 @@ a.bs-knot {
   white-space: nowrap;
 }
 
+/* The passage a document matched in, two lines at most. The matched words
+   are marked the way the editor's own Find marks them. */
+.quick-find-result-excerpt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: var(--brand-text-ui-sm);
+  color: var(--bs-text-secondary);
+}
+
+.quick-find-result-excerpt mark {
+  background: var(--bs-status-warn-bg);
+  box-shadow: 0 0 0 1px var(--bs-status-warn-border);
+  border-radius: 1px;
+  color: inherit;
+}
+
 .quick-find-result-enter {
   flex-shrink: 0;
   color: var(--bs-text-faint);

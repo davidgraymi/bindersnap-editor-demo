@@ -571,6 +571,20 @@ export function NavSearch({
                             ? `${result.meta} · Enter copies the username`
                             : result.meta}
                       </span>
+                      {/* The passage that matched, as text: the marks are
+                          elements React builds, never markup from the
+                          server. */}
+                      {result.excerpt && (
+                        <span className="quick-find-result-excerpt">
+                          {result.excerpt.map((part, partIndex) =>
+                            part.match ? (
+                              <mark key={partIndex}>{part.text}</mark>
+                            ) : (
+                              <Fragment key={partIndex}>{part.text}</Fragment>
+                            ),
+                          )}
+                        </span>
+                      )}
                     </span>
                     {index === highlight && (
                       <CornerDownLeft

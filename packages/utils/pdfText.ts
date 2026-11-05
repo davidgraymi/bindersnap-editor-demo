@@ -1,10 +1,13 @@
 /**
- * Reading a PDF back as a document, in the browser.
+ * Reading a PDF back as a document.
  *
  * A PDF renders fine in an iframe and tells you nothing about what changed, so
  * the comparison screen needs its words. pdf.js does that, and it is a large
  * library for something most readers never open — so it is imported on demand
  * and only the first PDF comparison in a session pays for it.
+ *
+ * The same reading runs on the API, for search (ADR 0007): the passages a
+ * search finds in a PDF are the blocks recovered here, in the browser or not.
  *
  * What pdf.js hands back is glyph runs at coordinates, not prose: no
  * paragraphs, no headings, not even lines. Joining it all with spaces is what
@@ -14,7 +17,7 @@
  * and which face it was set in.
  */
 
-import type { DocumentBlock } from "./documentBlocks";
+import type { DocumentBlock } from "./documentPassages";
 
 /** The loaded library, kept so a second comparison is instant. */
 let pdfjs: Promise<typeof import("pdfjs-dist/legacy/build/pdf.mjs")> | null =
@@ -241,6 +244,10 @@ export async function extractPdfBlocks(file: Blob): Promise<DocumentBlock[]> {
     // Only the words are wanted, so pdf.js is told not to install web fonts
     // it will never paint with.
     disableFontFace: true,
+    // Errors only. Its warnings are about painting — fonts it was not given —
+    // and on the API, which reads every PDF for search, they were a line in
+    // the log per file.
+    verbosity: lib.VerbosityLevel.ERRORS,
   });
   const document = await loading.promise;
 

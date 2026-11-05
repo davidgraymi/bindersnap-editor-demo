@@ -32,8 +32,8 @@ import type {
   ChangeConflictsPayload,
   CreatedOrganizationGroupPayload,
   CreatedWorkspaceDocumentPayload,
+  DocumentSearchPayload,
   LibraryPayload,
-  LibrarySearchPayload,
   OrganizationChangeListPayload,
   OrganizationMembersPayload,
   OrganizationPeoplePayload,
@@ -196,8 +196,9 @@ export type {
 export type {
   WorkspaceHistoryEntry,
   LibraryDocument,
+  DocumentSearchHit,
+  DocumentSearchPayload,
   LibraryPayload,
-  LibrarySearchPayload,
   WorkspaceSummary,
 } from "../../packages/api-schema/schemas/workspaces";
 
@@ -519,19 +520,16 @@ export async function getHomeChanges(
 }
 
 /**
- * Quick-find matches, capped.
- *
- * The same question the library asks, asked shorter, and answered by the same
- * server-side read — so the two cannot disagree about which binders count.
- * There is no page to ask for: the read walks every binder once, so a second
- * page would repeat the whole thing. It returns the best few and says whether
- * there were more.
+ * Quick-find matches, capped: documents whose title, place or words match,
+ * best first, each with the passage that matched (ADR 0007). The server limits
+ * them to the binders the reader can read. It returns the best few and says
+ * whether there were more.
  */
 export async function searchDocuments(
   query: string,
   limit = 8,
   request?: ReadRequest,
-): Promise<LibrarySearchPayload> {
+): Promise<DocumentSearchPayload> {
   try {
     const response = await DocumentsClient.searchDocuments(
       { q: query, limit: String(limit) },

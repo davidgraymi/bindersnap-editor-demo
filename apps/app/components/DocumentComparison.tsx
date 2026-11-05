@@ -23,7 +23,7 @@ import {
 import { docxToHtml } from "../docxHtml";
 import { editorDocumentToHtml } from "../editorDocumentHtml";
 import { markdownToHtml } from "../markdown";
-import { extractPdfBlocks } from "../pdfText";
+import { extractPdfBlocks } from "../../../packages/utils/pdfText";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 interface DocumentComparisonProps {

@@ -5699,7 +5699,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The best matches, capped — quick find, not the library",
+            "description": "The best matches in titles and contents, capped — quick find, not the library",
             "content": {
               "application/json": {
                 "schema": {
@@ -5710,6 +5710,12 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "organization": {
+                            "type": "string"
+                          },
+                          "binder": {
+                            "type": "string"
+                          },
                           "path": {
                             "type": "string"
                           },
@@ -5726,91 +5732,60 @@
                           "folder": {
                             "type": "string"
                           },
-                          "size": {
-                            "type": "number"
-                          },
-                          "sha": {
-                            "type": "string"
-                          },
-                          "state": {
+                          "matched": {
                             "type": "string",
                             "enum": [
-                              "published",
-                              "proposed"
-                            ]
-                          },
-                          "openChangeCount": {
-                            "type": "number"
-                          },
-                          "latestVersion": {
-                            "type": "object",
-                            "nullable": true,
-                            "properties": {
-                              "tag": {
-                                "type": "string"
-                              },
-                              "version": {
-                                "type": "number"
-                              },
-                              "commitSha": {
-                                "type": "string"
-                              },
-                              "publishedAt": {
-                                "type": "string"
-                              }
-                            },
-                            "required": [
-                              "tag",
-                              "version",
-                              "commitSha",
-                              "publishedAt"
-                            ]
-                          },
-                          "lastChange": {
-                            "type": "object",
-                            "nullable": true,
-                            "properties": {
-                              "number": {
-                                "type": "number"
-                              },
-                              "title": {
-                                "type": "string"
-                              },
-                              "publishedAt": {
-                                "type": "string"
-                              }
-                            },
-                            "required": [
-                              "number",
                               "title",
-                              "publishedAt"
+                              "contents"
                             ]
                           },
-                          "organization": {
-                            "type": "string"
-                          },
-                          "binder": {
-                            "type": "string"
-                          },
-                          "binderDescription": {
-                            "type": "string"
+                          "snippet": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "ordinal": {
+                                "type": "number"
+                              },
+                              "heading": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "parts": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "text": {
+                                      "type": "string"
+                                    },
+                                    "match": {
+                                      "type": "boolean"
+                                    }
+                                  },
+                                  "required": [
+                                    "text",
+                                    "match"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "ordinal",
+                              "heading",
+                              "parts"
+                            ]
                           }
                         },
                         "required": [
+                          "organization",
+                          "binder",
                           "path",
                           "slugPath",
                           "name",
                           "uid",
                           "folder",
-                          "size",
-                          "sha",
-                          "state",
-                          "openChangeCount",
-                          "latestVersion",
-                          "lastChange",
-                          "organization",
-                          "binder",
-                          "binderDescription"
+                          "matched",
+                          "snippet"
                         ]
                       }
                     },

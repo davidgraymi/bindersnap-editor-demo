@@ -153,7 +153,7 @@ export async function convertToEditorDocument(
     notes.push(WORD_NOTE);
     if (leftOut > 0) notes.push(picturesNote(leftOut));
   } else {
-    const { extractPdfBlocks } = await import("./pdfText");
+    const { extractPdfBlocks } = await import("../../packages/utils/pdfText");
     const blocks = await extractPdfBlocks(file).catch(() => {
       throw new ConversionError(
         "That PDF could not be read. It may be damaged or protected.",

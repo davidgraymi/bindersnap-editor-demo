@@ -293,12 +293,47 @@ export const LibraryPayloadSchema = z.object({
 });
 export type LibraryPayload = z.infer<typeof LibraryPayloadSchema>;
 
-export const LibrarySearchPayloadSchema = z.object({
-  documents: z.array(LibraryDocumentSchema),
+/**
+ * One document quick find found, from the document index (ADR 0007).
+ *
+ * Where it is filed and what it is called — enough to open it — and, when
+ * its words matched, the passage that did. No version and no open changes:
+ * those are reads of Gitea per binder, and the index exists so a keystroke
+ * does not pay for them.
+ */
+export const DocumentSearchHitSchema = z.object({
+  organization: z.string(),
+  binder: z.string(),
+  /** `clinical/infection-control.01J8XZ4K7M….pdf`, on `main`. */
+  path: z.string(),
+  /** `clinical/infection-control` — the address a link carries. */
+  slugPath: z.string(),
+  name: z.string(),
+  uid: z.string().nullable(),
+  /** `clinical`, or "" at the binder's root. */
+  folder: z.string(),
+  /** Its title or where it is filed matched, or only its words did. */
+  matched: z.enum(["title", "contents"]),
+  /** The best passage that matched, when its words did. */
+  snippet: z
+    .object({
+      /** The passage's place in the document, from 0. */
+      ordinal: z.number(),
+      /** The heading it sits under. */
+      heading: z.string().nullable(),
+      /** The passage around the match, the matched words marked. */
+      parts: z.array(z.object({ text: z.string(), match: z.boolean() })),
+    })
+    .nullable(),
+});
+export type DocumentSearchHit = z.infer<typeof DocumentSearchHitSchema>;
+
+export const DocumentSearchPayloadSchema = z.object({
+  documents: z.array(DocumentSearchHitSchema),
   limit: z.number(),
   hasMore: z.boolean(),
 });
-export type LibrarySearchPayload = z.infer<typeof LibrarySearchPayloadSchema>;
+export type DocumentSearchPayload = z.infer<typeof DocumentSearchPayloadSchema>;
 
 export const WorkspaceDocumentListPayloadSchema = z.object({
   organization: z.string().optional(),

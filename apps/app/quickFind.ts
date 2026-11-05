@@ -1,4 +1,4 @@
-import type { LibraryDocument } from "./api";
+import type { DocumentSearchHit } from "./api";
 import { formatDocumentName } from "./documentDisplay";
 import type { QuickFindAction } from "./quickFindActions";
 
@@ -54,6 +54,11 @@ export interface QuickFindResult {
   changeNumber?: number;
   /** Set on one of Bindersnap's own pages or controls: what picking it does. */
   action?: QuickFindAction;
+  /**
+   * Set on a document found by its words: the passage that matched, the
+   * matched words marked. Plain text, never markup.
+   */
+  excerpt?: { text: string; match: boolean }[];
 }
 
 /** How many results one page holds. Two lands of them fill the panel. */
@@ -65,20 +70,24 @@ export const QUICK_FIND_DEBOUNCE_MS = 180;
 /** A query shorter than this is not yet a question worth asking. */
 export const QUICK_FIND_MIN_QUERY = 2;
 
-/** "Clinical · nursing · v3", or as much of it as is known. */
-function describeResult(document: LibraryDocument): string {
+/** "Clinical · nursing": which binder, then which folder. */
+function describeResult(document: DocumentSearchHit): string {
   // The binder as a person writes it, not the repository slug — the same name
   // its own page and the sidebar show.
   const parts = [formatDocumentName(document.binder)];
   if (document.folder) parts.push(document.folder);
-  if (document.latestVersion) parts.push(`v${document.latestVersion.version}`);
-  else parts.push("no published version");
   return parts.join(" · ");
 }
 
-/** One document, as a row. */
+/**
+ * One document, as a row.
+ *
+ * A document found by its words carries the passage that matched, so the
+ * reader can tell which of five policies that mention "sharps" is the one
+ * about disposal before they open any of them.
+ */
 export function buildQuickFindResult(
-  document: LibraryDocument,
+  document: DocumentSearchHit,
 ): QuickFindResult {
   return {
     key: `document:${document.organization}/${document.binder}/${document.slugPath}`,
@@ -88,11 +97,14 @@ export function buildQuickFindResult(
     slugPath: document.slugPath,
     name: formatDocumentName(document.name),
     meta: describeResult(document),
+    ...(document.snippet && document.snippet.parts.length > 0
+      ? { excerpt: document.snippet.parts }
+      : {}),
   };
 }
 
 export function buildQuickFindResults(
-  documents: LibraryDocument[],
+  documents: DocumentSearchHit[],
 ): QuickFindResult[] {
   return documents.map(buildQuickFindResult);
 }

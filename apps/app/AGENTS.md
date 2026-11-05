@@ -188,9 +188,9 @@ Markdown, Word files and PDFs all end up on the same path: render both
 versions to HTML, diff the markup, sanitize. That is what makes the answer a
 readable policy with the change marked inside it rather than two columns of
 source. A PDF carries no headings — only glyphs at coordinates — so
-`apps/app/pdfText.ts` recovers the structure from the page itself: lines from
-baselines, paragraphs from the vertical gaps between them, headings from type
-size and face relative to whatever the body of _that_ document is set in.
+`packages/utils/pdfText.ts` recovers the structure from the page itself: lines
+from baselines, paragraphs from the vertical gaps between them, headings from
+type size and face relative to whatever the body of _that_ document is set in.
 Without that step a policy's title, its first heading and its opening sentence
 run together into one line.
 
