@@ -69,8 +69,8 @@ The names, as the token file defines them:
 --brand-text-h1, --brand-text-h2, --brand-text-h3
 --brand-text-body-lg, --brand-text-body, --brand-text-sm, --brand-text-xs
 --brand-text-label
---brand-text-ui-xs, --brand-text-ui-sm, --brand-text-ui-md  /* dense UI: 12/13/14px */
---brand-text-ui-lg                   /* 15px: the name a row is about */
+--brand-text-ui-xs, --brand-text-ui-sm, --brand-text-ui-md  /* dense UI: 13/14/15px */
+--brand-text-ui-lg                   /* 16px: the name a row is about */
 
 /* Spacing (--brand-space-*): the number × 4px, so -6 is 24px */
 --brand-space-0-5, --brand-space-1, --brand-space-1-5, --brand-space-2,
