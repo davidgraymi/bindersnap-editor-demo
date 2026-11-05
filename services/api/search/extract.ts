@@ -119,9 +119,75 @@ export async function htmlBlocks(html: string): Promise<TextBlock[]> {
   }));
 }
 
+/** What a Word file may unpack to before it is not opened at all. */
+const MAX_DOCX_ENTRY_BYTES = 64 * 1024 * 1024;
+const MAX_DOCX_TOTAL_BYTES = 160 * 1024 * 1024;
+const MAX_DOCX_ENTRIES = 5_000;
+
+/** Pages of a PDF read for search; the rest is found by its title and first pages. */
+export const MAX_PDF_PAGES = 1_000;
+
+/**
+ * Refuse a Word file that says it unpacks to far more than any policy does.
+ *
+ * A .docx is a ZIP, and a ZIP of a few megabytes can inflate to gigabytes:
+ * opened in the API's process, that is the API gone. The central directory
+ * declares every entry's size, so it is read — without inflating anything —
+ * and a file past the limits, or one that will not say (ZIP64), is not
+ * opened. A file can lie in its directory; that is what the job's record of
+ * files that never finished is for (`SearchStore.beginExtraction`).
+ */
+export function checkZipSizes(bytes: Uint8Array): void {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  // The end-of-central-directory record: in the last 64 KiB plus its own 22.
+  let end = -1;
+  for (
+    let at = bytes.byteLength - 22;
+    at >= Math.max(0, bytes.byteLength - 22 - 0xffff);
+    at -= 1
+  ) {
+    if (view.getUint32(at, true) === 0x06054b50) {
+      end = at;
+      break;
+    }
+  }
+  if (end === -1) throw new Error("Not a Word file: no ZIP directory.");
+
+  const entries = view.getUint16(end + 10, true);
+  const offset = view.getUint32(end + 16, true);
+  if (entries === 0xffff || offset === 0xffffffff) {
+    throw new Error("A Word file too large to read for search (ZIP64).");
+  }
+  if (entries > MAX_DOCX_ENTRIES) {
+    throw new Error("A Word file with too many parts to read for search.");
+  }
+
+  let total = 0;
+  let at = offset;
+  for (let index = 0; index < entries; index += 1) {
+    if (at + 46 > bytes.byteLength || view.getUint32(at, true) !== 0x02014b50) {
+      throw new Error("A Word file whose ZIP directory is damaged.");
+    }
+    const size = view.getUint32(at + 24, true);
+    if (size === 0xffffffff || size > MAX_DOCX_ENTRY_BYTES) {
+      throw new Error("A Word file with a part too large to read for search.");
+    }
+    total += size;
+    if (total > MAX_DOCX_TOTAL_BYTES) {
+      throw new Error("A Word file that unpacks too large to read for search.");
+    }
+    at +=
+      46 +
+      view.getUint16(at + 28, true) +
+      view.getUint16(at + 30, true) +
+      view.getUint16(at + 32, true);
+  }
+}
+
 async function docxPassages(
   bytes: Uint8Array<ArrayBuffer>,
 ): Promise<Passage[]> {
+  checkZipSizes(bytes);
   const mammoth = await import("mammoth");
   // Mammoth's Node reader takes a buffer. Pictures are left out: search reads
   // the words, and an inlined picture is megabytes of base64 for nothing.
@@ -134,7 +200,9 @@ async function docxPassages(
 
 async function pdfPassages(bytes: Uint8Array<ArrayBuffer>): Promise<Passage[]> {
   const { extractPdfBlocks } = await import("../../../packages/utils/pdfText");
-  return passagesFromBlocks(await extractPdfBlocks(new Blob([bytes])));
+  return passagesFromBlocks(
+    await extractPdfBlocks(new Blob([bytes]), { maxPages: MAX_PDF_PAGES }),
+  );
 }
 
 /**

@@ -2,7 +2,14 @@ import { describe, expect, test } from "bun:test";
 
 import { renderSeedDocumentFile } from "../../../tests/seed-documents";
 import type { SeedDocumentFormat } from "../../../tests/seed-scenario";
-import { extractPassages, htmlBlocks, readableFormat } from "./extract";
+import JSZip from "jszip";
+
+import {
+  checkZipSizes,
+  extractPassages,
+  htmlBlocks,
+  readableFormat,
+} from "./extract";
 
 /**
  * Against the files the seed writes — a real Word file, a real PDF — because
@@ -77,5 +84,44 @@ describe("htmlBlocks", () => {
       { kind: "paragraph", text: "" },
       { kind: "paragraph", text: "A B" },
     ]);
+  });
+});
+
+describe("checkZipSizes", () => {
+  /** A ZIP whose one entry claims to unpack to `size` bytes. */
+  async function zipClaiming(size: number): Promise<Uint8Array> {
+    const zip = new JSZip();
+    zip.file("word/document.xml", "<w:document/>");
+    const bytes = await zip.generateAsync({ type: "uint8array" });
+    // Rewrite the uncompressed size in the central directory entry.
+    const view = new DataView(bytes.buffer);
+    for (let at = bytes.length - 4; at >= 0; at -= 1) {
+      if (view.getUint32(at, true) === 0x02014b50) {
+        view.setUint32(at + 24, size, true);
+        break;
+      }
+    }
+    return bytes;
+  }
+
+  test("a real Word file passes", async () => {
+    const file = await renderSeedDocumentFile(
+      policy,
+      "docx",
+      "clinical/hand-hygiene",
+      "01J8XZ4K7MQ9V3B0RN7YHS2E1D",
+    );
+    expect(() =>
+      checkZipSizes(new Uint8Array(Buffer.from(file.content, "base64"))),
+    ).not.toThrow();
+  });
+
+  test("one that says it unpacks to gigabytes is not opened", async () => {
+    expect(() => checkZipSizes(new Uint8Array(0))).toThrow();
+    const bomb = await zipClaiming(2_000_000_000);
+    expect(() => checkZipSizes(bomb)).toThrow(/too large/);
+    await expect(
+      extractPassages("a/bomb.docx", new Uint8Array(bomb)),
+    ).rejects.toThrow(/too large/);
   });
 });

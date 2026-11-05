@@ -236,7 +236,16 @@ function groupIntoBlocks(lines: readonly TextLine[]): DocumentBlock[] {
  * Scanned PDFs have no text layer at all and come back empty; the caller says
  * so rather than reporting that nothing changed.
  */
-export async function extractPdfBlocks(file: Blob): Promise<DocumentBlock[]> {
+export async function extractPdfBlocks(
+  file: Blob,
+  options: {
+    /**
+     * Read this many pages at most. The API sets it: one PDF of ten thousand
+     * pages must not hold the host's two cores for an hour.
+     */
+    maxPages?: number;
+  } = {},
+): Promise<DocumentBlock[]> {
   const lib = await loadPdfjs();
   const data = new Uint8Array(await file.arrayBuffer());
   const loading = lib.getDocument({
@@ -254,7 +263,11 @@ export async function extractPdfBlocks(file: Blob): Promise<DocumentBlock[]> {
   try {
     const lines: TextLine[] = [];
 
-    for (let number = 1; number <= document.numPages; number += 1) {
+    const pages = Math.min(
+      document.numPages,
+      options.maxPages ?? document.numPages,
+    );
+    for (let number = 1; number <= pages; number += 1) {
       const page = await document.getPage(number);
       const content = await page.getTextContent();
 

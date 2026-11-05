@@ -189,6 +189,20 @@ describe("sweepSearchIndex", () => {
     expect(store.counts()).toMatchObject({ binders: 0, documents: 0 });
   });
 
+  test("a file whose reading never finished is not opened again", async () => {
+    // What a crash mid-file leaves behind: the note that it began.
+    const store = freshStore();
+    store.beginExtraction("b1");
+    const { client, reads } = gitea({
+      main: "c1",
+      files: { [`bomb.${UID}.docx`]: { sha: "b1", text: "" } },
+    });
+    const pass = await sweepSearchIndex({ client, store, organizations });
+    expect(reads).toEqual([]);
+    expect(pass.errors[0]?.error).toMatch(/did not finish last time/);
+    expect(names(store, '"bomb"*')).toEqual(["bomb"]);
+  });
+
   test("a binder with no commits is indexed as empty", async () => {
     const store = freshStore();
     const { client } = gitea({ main: null, files: {} });

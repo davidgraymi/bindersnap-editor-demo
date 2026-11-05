@@ -148,22 +148,33 @@ export async function indexBinder(params: {
       continue;
     }
     if (readableFormat(entry.path) !== null && mainSha) {
-      try {
-        const bytes = await readFileAt(
-          client,
-          owner,
-          name,
-          entry.path,
-          mainSha,
-        );
-        input.passages = await extractPassages(entry.path, bytes);
-        files += 1;
-      } catch (err) {
+      if (!store.beginExtraction(entry.sha)) {
         errors.push({
           binder: `${owner}/${name}`,
           path: entry.path,
-          error: errorText(err),
+          error:
+            "Not opened: reading it did not finish last time, so it is found by its title only.",
         });
+      } else {
+        try {
+          const bytes = await readFileAt(
+            client,
+            owner,
+            name,
+            entry.path,
+            mainSha,
+          );
+          input.passages = await extractPassages(entry.path, bytes);
+          files += 1;
+        } catch (err) {
+          errors.push({
+            binder: `${owner}/${name}`,
+            path: entry.path,
+            error: errorText(err),
+          });
+        } finally {
+          store.endExtraction(entry.sha);
+        }
       }
     }
     documents.push(input);

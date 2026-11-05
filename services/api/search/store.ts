@@ -34,7 +34,7 @@ import { config } from "../config";
 import type { Passage } from "../../../packages/utils/documentPassages";
 
 /** Bump when a table changes; the file is emptied and rebuilt. */
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 const DOCUMENT_BITS = 20;
 const PASSAGE_BITS = 12;
@@ -210,6 +210,7 @@ export class SearchStore {
     // nothing that cannot be read again, so it is emptied, not migrated.
     this.db.transaction(() => {
       for (const table of [
+        "extractions",
         "passages",
         "titles",
         "documents",
@@ -246,6 +247,10 @@ export class SearchStore {
           UNIQUE (repo_id, path)
         );
         CREATE INDEX documents_by_repo ON documents (repo_id);
+        CREATE TABLE extractions (
+          blob_sha TEXT PRIMARY KEY,
+          started_at INTEGER NOT NULL
+        );
         CREATE VIRTUAL TABLE passages USING fts5(
           text,
           heading UNINDEXED,
@@ -516,6 +521,31 @@ export class SearchStore {
       this.db.query("DELETE FROM documents WHERE repo_id = ?").run(repoId);
       this.db.query("DELETE FROM binders WHERE repo_id = ?").run(repoId);
     })();
+  }
+
+  /**
+   * Note that a file is about to be opened, or say it must not be.
+   *
+   * A file that takes the process down with it — a Word file that unpacks to
+   * gigabytes, a PDF built to exhaust pdf.js — leaves its note behind, and
+   * the next pass finds it and does not open that file again: it is found by
+   * its title. Without this, one such file would take the API down on every
+   * sweep, forever. Emptying `search.db` (a rebuild) clears the notes.
+   */
+  beginExtraction(blobSha: string, now = Date.now()): boolean {
+    const found = this.db
+      .query("SELECT 1 FROM extractions WHERE blob_sha = ?")
+      .get(blobSha);
+    if (found) return false;
+    this.db
+      .query("INSERT INTO extractions (blob_sha, started_at) VALUES (?, ?)")
+      .run(blobSha, now);
+    return true;
+  }
+
+  /** The file was opened and closed, whether or not its words came out. */
+  endExtraction(blobSha: string): void {
+    this.db.query("DELETE FROM extractions WHERE blob_sha = ?").run(blobSha);
   }
 
   // ─── What a search reads ───────────────────────────────────────────────
