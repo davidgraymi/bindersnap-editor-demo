@@ -464,10 +464,26 @@ export function NavSearch({
 
   // The highlighted row has to be a row the reader can see, however they moved
   // to it — arrow keys can wrap from the last result back to the first.
+  //
+  // **Found by its id, not by its place in the list.** The list's children
+  // include a heading above each kind, so `children[highlight]` was a row
+  // behind for every heading above it: the panel scrolled to the row before
+  // the one highlighted, and the highlight walked off the bottom of it. A
+  // row that starts its kind brings its heading into view with it.
   useEffect(() => {
     if (highlight < 0) return;
-    const row = listRef.current?.children[highlight] as HTMLElement | undefined;
-    row?.scrollIntoView({ block: "nearest" });
+    const row = listRef.current?.querySelector<HTMLElement>(
+      `#quick-find-result-${highlight}`,
+    );
+    if (!row) return;
+    const heading = row.previousElementSibling;
+    if (
+      heading instanceof HTMLElement &&
+      heading.getAttribute("role") === "presentation"
+    ) {
+      heading.scrollIntoView({ block: "nearest" });
+    }
+    row.scrollIntoView({ block: "nearest" });
   }, [highlight]);
 
   const activeId =
@@ -571,6 +587,20 @@ export function NavSearch({
                             ? `${result.meta} · Enter copies the username`
                             : result.meta}
                       </span>
+                      {/* The passage that matched, as text: the marks are
+                          elements React builds, never markup from the
+                          server. */}
+                      {result.excerpt && (
+                        <span className="quick-find-result-excerpt">
+                          {result.excerpt.map((part, partIndex) =>
+                            part.match ? (
+                              <mark key={partIndex}>{part.text}</mark>
+                            ) : (
+                              <Fragment key={partIndex}>{part.text}</Fragment>
+                            ),
+                          )}
+                        </span>
+                      )}
                     </span>
                     {index === highlight && (
                       <CornerDownLeft

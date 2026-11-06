@@ -546,8 +546,14 @@ nothing but speed when dropped. Every row keys on an immutable git coordinate (a
 tag name, a commit SHA) so it is either correct or detectably stale, never subtly
 wrong. **The index serves browsing; Gitea serves proving** — no publish gate,
 approval check, or audit export may read it. Anything else that duplicates Gitea
-state is a cache, and caches are banned. One has been built: the activity
-dataset (`services/api/activity.ts`), behind the site admin's growth reports.
+state is a cache, and caches are banned. Two have been built: the activity
+dataset (`services/api/activity.ts`), behind the site admin's growth reports,
+and the document index (`services/api/search/`, ADR 0007): the words of every
+document on `main`, in its own `search.db` beside `sessions.db` and not backed
+up, which quick find searches. A job keeps it current — after each publish,
+and a sweep every ten minutes — and a search is limited to the binders Gitea
+says the reader can read. Never search drafts, changes or older versions with
+it.
 
 `.gitea/CODEOWNERS` is the one configuration that belongs in git: it is read at
 pull-request time and lives on the same timeline as the content it governs, so

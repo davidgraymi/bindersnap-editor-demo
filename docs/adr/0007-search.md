@@ -1,6 +1,8 @@
 # ADR 0007: One Search Box, and an Index of What Is on `main`
 
-Status: Proposed (design; nothing built yet)
+Status: Accepted. The document index and §6's first step (a result opens the
+document) are built; going to the passage, and the admin page's numbers, are
+next.
 Date: 2026-11-04
 Amends: nothing. The document index is the second derived index under
 [ADR 0004](0004-organization-workspace-folder-and-org-billing.md)'s rule, after

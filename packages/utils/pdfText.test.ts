@@ -97,3 +97,17 @@ test("a PDF with no text layer comes back with nothing rather than noise", async
   );
   expect(blocks).toEqual([]);
 });
+
+test("a page limit stops reading after that many pages", async () => {
+  const file = await renderSeedDocumentFile(
+    policy,
+    "pdf",
+    "nursing/handover",
+    "01J8XZ4K7MQ9V3B0RN7YHS2E1D",
+  );
+  const blob = new Blob([new Uint8Array(Buffer.from(file.content, "base64"))]);
+  expect(await extractPdfBlocks(blob, { maxPages: 0 })).toEqual([]);
+  expect(
+    (await extractPdfBlocks(blob, { maxPages: 1 })).length,
+  ).toBeGreaterThan(0);
+});
