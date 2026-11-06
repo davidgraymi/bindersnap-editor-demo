@@ -24,6 +24,20 @@ import { signUpAndConfirm } from "./mailpit";
 import { isCommitRef } from "../packages/utils/gitRef";
 import { LEGAL_VERSION } from "../packages/utils/legal";
 
+/**
+ * Most of these drive the classic ribbon's commands — Cut, Paste options,
+ * Format Painter, the Font group — so they run with it, as a person who chose
+ * it would. The one-row layout every new browser starts with has tests of
+ * its own, which choose it.
+ */
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    if (localStorage.getItem("bindersnap:ribbon-layout") === null) {
+      localStorage.setItem("bindersnap:ribbon-layout", "classic");
+    }
+  });
+});
+
 test.describe.configure({ mode: "parallel", timeout: 240_000 });
 
 // A desktop window, wide enough that the ribbon shows its Styles gallery:
@@ -219,7 +233,7 @@ async function policyText(
   return response.text();
 }
 
-test("a policy written here opens in the editor, and Save puts it in your draft", async ({
+test("a policy written here opens in the editor, and saves itself into your draft", async ({
   page,
 }) => {
   const { session, org, binder } = await provision();
@@ -234,7 +248,8 @@ test("a policy written here opens in the editor, and Save puts it in your draft"
 
   const text = page.getByRole("textbox", { name: "Hand Hygiene" });
   await expect(text).toContainText("Clean your hands");
-  await expect(page.getByText("No changes yet")).toBeVisible();
+  // Nothing typed, nothing to say: the title bar says only where it saves.
+  await expect(page.locator(".doc-editor-status")).toHaveText("");
   // The draft's files are beside the page, and this one is marked.
   await expect(
     page
@@ -251,9 +266,11 @@ test("a policy written here opens in the editor, and Save puts it in your draft"
   await page.keyboard.press("End");
   await page.keyboard.press("Enter");
   await page.keyboard.type("Alcohol rub is enough unless hands are soiled.");
-  await expect(page.getByText("Unsaved changes")).toBeVisible();
-
-  await page.keyboard.press("ControlOrMeta+s");
+  // Nothing to press: a draft nobody has been shown saves as the words
+  // rest, and there is no Save button to forget.
+  await expect(
+    page.getByRole("button", { name: "Save", exact: true }),
+  ).toHaveCount(0);
   await expect(page.getByText(/Saved just now/)).toBeVisible({
     timeout: 20_000,
   });
@@ -375,13 +392,10 @@ test("the draft is chosen, proposed and read from the editor, with no trip throu
   await page.keyboard.press("End");
   await page.keyboard.type(" Every time.");
 
-  // Propose from here: unsaved words are saved first, into this draft.
+  // Propose from here: the last words are saved on the way, into this
+  // draft, without a question.
   await expect(propose).toBeEnabled();
   await propose.click();
-  await page
-    .getByRole("alertdialog")
-    .getByRole("button", { name: "Save and propose" })
-    .click();
   await expect(page).toHaveURL(
     new RegExp(`edit=propose&draft=${encodeURIComponent(first)}`),
   );
@@ -512,13 +526,9 @@ test("Edit on a binder opens the editor, and its files are renamed and refiled t
     page.getByRole("textbox", { name: "Hand Washing" }),
   ).toContainText("Always.");
 
-  // Closing asks for the words, saves them at the new address, and lands on
-  // the policy there, in the draft.
+  // Closing saves the words at the new address, and lands on the policy
+  // there, in the draft.
   await page.getByRole("button", { name: "Close", exact: true }).click();
-  await page
-    .getByRole("alertdialog")
-    .getByRole("button", { name: "Save and close" })
-    .click();
   await expect(page).toHaveURL(/\/nursing\/hand-washing\?edit=1/i);
   await expect(page.locator(".doc-preview-prose")).toContainText("Always.");
 
@@ -565,13 +575,10 @@ test("the policy is renamed from its title, and its unsaved words stay with it",
   await expect(page.getByRole("textbox", { name: "Hand Care" })).toContainText(
     "Every time.",
   );
-  // The same open file under its new name: the words are still unsaved, and
-  // Save puts them in at the new address.
-  await expect(page.locator(".doc-editor-status")).toHaveText(
-    "Unsaved changes",
-  );
-  await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.locator(".doc-editor-status")).toHaveText(/^Saved/);
+  // The same open file under its new name, and its words saved there.
+  await expect(page.locator(".doc-editor-status")).toHaveText(/^Saved/, {
+    timeout: 20_000,
+  });
 
   // Escape leaves the name as it was.
   await page
@@ -713,7 +720,8 @@ test("the title bar says where the policy is filed, and moves it from there", as
   const filed = page.getByRole("button", {
     name: "Move Hand Hygiene, filed at the top level",
   });
-  await expect(filed).toHaveText("Top level");
+  // At the top level, the binder is the last place in the trail.
+  await expect(filed).toHaveText("Clinical Policies");
   await filed.click();
   await page.getByLabel("Where it goes").selectOption({ label: "Nursing" });
   await page.getByRole("button", { name: "Move", exact: true }).click();
@@ -724,6 +732,57 @@ test("the title bar says where the policy is filed, and moves it from there", as
   await expect(
     page.getByRole("button", { name: "Move Hand Hygiene, filed in Nursing" }),
   ).toHaveText("Nursing");
+});
+
+test("writing is one bar over one row of commands, and the full ribbon is a press away", async ({
+  page,
+}) => {
+  // A browser that has never chosen: the one-row layout.
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem("layout-reset") === null) {
+      sessionStorage.setItem("layout-reset", "1");
+      localStorage.removeItem("bindersnap:ribbon-layout");
+    }
+  });
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+
+  // The app's own bar goes while writing; the title bar carries the binder.
+  await expect(page.locator(".app-topnav")).toBeHidden();
+  await expect(page.locator(".doc-editor-trail")).toContainText(
+    "Clinical Policies",
+  );
+
+  // One row: the style first, and no clipboard buttons.
+  const style = page.getByRole("button", { name: "Style", exact: true });
+  await expect(style).toHaveText("Normal");
+  await expect(page.getByRole("button", { name: "Cut" })).toHaveCount(0);
+  await style.click();
+  await page.getByRole("menuitemradio", { name: "Heading 2" }).click();
+  await expect(style).toHaveText("Heading 2");
+  await expect(text.locator("h2, h3").first()).toContainText(
+    "Clean your hands",
+  );
+
+  // The font is in More, a press away.
+  await page.getByRole("button", { name: "More formatting" }).click();
+  await expect(
+    page.getByRole("button", { name: "Font", exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  // The full ribbon, chosen once, stays chosen.
+  await page.getByRole("button", { name: "Show the full ribbon" }).click();
+  await expect(page.getByRole("button", { name: "Cut" })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Cut" })).toBeVisible();
+  await page.getByRole("button", { name: "Show one row" }).click();
+  await expect(page.getByRole("button", { name: "Cut" })).toHaveCount(0);
 });
 
 test("Ctrl+/ lists the keyboard shortcuts, and Escape goes back to the words", async ({
@@ -955,7 +1014,7 @@ test("Make a copy starts a policy from another one, and opens the copy", async (
   );
 });
 
-test("closing with unsaved words asks first, and Cancel keeps them", async ({
+test("a save that does not land says so, and closing stops to ask; Cancel keeps the words", async ({
   page,
 }) => {
   const { session, org, binder } = await provision();
@@ -977,24 +1036,39 @@ test("closing with unsaved words asks first, and Cancel keeps them", async ({
     panel.getByRole("button", { name: /^Find/ }).first(),
   ).toBeInViewport();
 
+  // Saving does not work for now: the API refuses every save.
+  await page.route("**/document-revisions", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "Gitea is not answering." }),
+    }),
+  );
   await text.getByText("Clean your hands").click();
   await page.keyboard.press("End");
   await page.keyboard.type(" Every time.");
-  // Unsaved, and said so where somebody with several tabs open will look:
-  // the browser tab, and the policy's row in the file panel.
-  await expect(page).toHaveTitle(/^• Hand Hygiene/);
+
+  // Said where somebody will look: the title bar, and the policy's row.
+  const status = page.locator(".doc-editor-status");
+  await expect(status).toHaveText("Not saved — trying again", {
+    timeout: 20_000,
+  });
   await expect(
     page.getByRole("img", { name: "Unsaved changes" }),
   ).toBeVisible();
 
+  // Leaving tries once more, and only a save that fails stops to ask.
   await page.getByRole("button", { name: "Close", exact: true }).click();
   const ask = page.getByRole("alertdialog");
-  await expect(ask).toContainText("Save your changes to Hand Hygiene?");
+  await expect(ask).toContainText("Your latest changes are not saved");
   await ask.getByRole("button", { name: "Cancel" }).click();
-
   await expect(ask).toHaveCount(0);
   await expect(text).toContainText("Every time.");
   await expect(page).toHaveURL(/edit=write/);
+
+  // Saving works again: the words land on the next try, unasked.
+  await page.unroute("**/document-revisions");
+  await expect(status).toHaveText(/^Saved/, { timeout: 30_000 });
 });
 
 test("on a tablet the ribbon folds its groups and the files open over the page", async ({
@@ -1111,19 +1185,18 @@ test("the editor's file panel starts a policy, and moves between policies keepin
   const visitorRow = files.getByRole("button", { name: /^Visitor Policy/ });
   await expect(visitorRow).toBeVisible();
 
-  // **Back to the first policy with unsaved words: no question.** Several
-  // policies are open at once, as files are in any editor; each keeps what
-  // was typed in it, and its row says so.
+  // **Straight on to the first policy: no question.** Several policies are
+  // open at once, as files are in any editor; each keeps what was typed in
+  // it, and the one left behind is saved on its own.
   await page.keyboard.type("Visitors sign in at reception.");
   await files.getByRole("button", { name: /^Hand Hygiene/ }).click();
   await expect(page.getByRole("alertdialog")).toHaveCount(0);
   await expect(page).toHaveURL(/\/hand-hygiene\?edit=write&draft=/);
   const hand = page.getByRole("textbox", { name: "Hand Hygiene" });
   await expect(hand).toContainText("Clean your hands");
-  await expect(visitorRow.locator(".doc-files-unsaved")).toBeVisible();
-  await expect(page.locator(".doc-editor-status")).toHaveText(
-    "No changes yet · 1 other policy unsaved",
-  );
+  await expect(visitorRow.locator(".doc-files-unsaved")).toHaveCount(0, {
+    timeout: 20_000,
+  });
 
   // Words in this one too, then back: the first is as it was left, at once.
   await hand.getByText("Clean your hands").click();
@@ -1131,16 +1204,12 @@ test("the editor's file panel starts a policy, and moves between policies keepin
   await page.keyboard.type(" Every time.");
   await visitorRow.click();
   await expect(visitor).toContainText("Visitors sign in at reception.");
-  await expect(
-    files
-      .getByRole("button", { name: /^Hand Hygiene/ })
-      .locator(".doc-files-unsaved"),
-  ).toBeVisible();
 
-  // Save all commits both, each into the draft.
-  await page.getByRole("button", { name: "Save all (2)" }).click();
+  // Both saved, each into the draft, with nothing pressed.
   await expect(page.getByRole("button", { name: /^Save all/ })).toHaveCount(0);
-  await expect(page.locator(".doc-files-unsaved")).toHaveCount(0);
+  await expect(page.locator(".doc-files-unsaved")).toHaveCount(0, {
+    timeout: 20_000,
+  });
   const raw = async (slug: string) =>
     (
       await fetch(
@@ -1542,10 +1611,9 @@ test("sections are numbered from the Styles menu, in the editor and the reader",
     text.getByRole("heading", { name: "Hand Hygiene" }),
   ).not.toHaveClass(/bs-numbered/);
 
-  await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: "Save", exact: true }),
-  ).toBeDisabled();
+  await expect(page.locator(".doc-editor-status")).toHaveText(/^Saved/, {
+    timeout: 20_000,
+  });
   await page.getByRole("button", { name: "Close", exact: true }).click();
   const read = page.locator(".doc-preview-prose");
   await expect(read.getByRole("heading", { name: "Gloves" })).toHaveClass(
@@ -1768,10 +1836,9 @@ test("a table cell is shaded from the Table tab, and reads shaded once saved", a
   const blue = "rgb(219, 234, 254)";
   await expect(text.locator("th").first()).toHaveCSS("background-color", blue);
 
-  await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: "Save", exact: true }),
-  ).toBeDisabled();
+  await expect(page.locator(".doc-editor-status")).toHaveText(/^Saved/, {
+    timeout: 20_000,
+  });
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await expect(page.locator(".doc-preview-prose th").first()).toHaveCSS(
     "background-color",
@@ -1839,17 +1906,16 @@ test("closing the editor lands on the policy with the draft bar, and Propose is 
   );
   await page.keyboard.press("End");
   await page.keyboard.type(" Every time.");
-  await page.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: "Save", exact: true }),
-  ).toBeDisabled();
+  await expect(page.locator(".doc-editor-status")).toHaveText(/^Saved/, {
+    timeout: 20_000,
+  });
   // Not over the editor, which has a Propose of its own.
   await expect(page.locator(".bs-draftbar")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await expect(page).toHaveURL(/\/hand-hygiene\?edit=1&draft=/);
   const bar = page.locator(".bs-draftbar");
-  await expect(bar).toContainText("1 change", { timeout: 30_000 });
+  await expect(bar).toContainText("1 document changed", { timeout: 30_000 });
   await bar.getByRole("button", { name: "Propose" }).click();
   await expect(page).toHaveURL(/edit=propose&draft=/);
 });
@@ -1872,10 +1938,6 @@ test("the author edits an open change request in the editor, and saves into it",
   await page.keyboard.type(" Every time.");
   await page.getByRole("button", { name: "Propose", exact: true }).click();
   await page
-    .getByRole("alertdialog")
-    .getByRole("button", { name: "Save and propose" })
-    .click();
-  await page
     .getByRole("textbox", { name: "What you are asking for" })
     .fill("Say when to wash");
   await page.getByRole("button", { name: "Open the change request" }).click();
@@ -1888,7 +1950,7 @@ test("the author edits an open change request in the editor, and saves into it",
     new RegExp(`/hand-hygiene\\?edit=write&change=${change}`),
   );
   await expect(page.locator(".doc-editor-where")).toContainText(
-    new RegExp(`Saving to\\s*Change ${change}\\b`),
+    new RegExp(`Change ${change}\\b`),
   );
   await expect(
     page.getByRole("button", { name: "Propose", exact: true }),
@@ -1902,7 +1964,14 @@ test("the author edits an open change request in the editor, and saves into it",
   await expect(page.getByRole("button", { name: "Word count" })).toBeVisible();
   await page.keyboard.type(" With soap.");
   await expect(text).toContainText("Every time. With soap.");
+  // A change request is in front of its reviewers: Save is deliberate, and
+  // asked about first.
   await page.getByRole("button", { name: "Save", exact: true }).click();
+  const update = page.getByRole("alertdialog");
+  await expect(update).toContainText(`Update change ${change}?`);
+  await update
+    .getByRole("button", { name: `Update change ${change}`, exact: true })
+    .click();
   await expect(
     page.getByRole("button", { name: "Save", exact: true }),
   ).toBeDisabled();
@@ -1956,10 +2025,6 @@ test("a proposed draft keeps its name, and its change's chip goes back into it",
   await page.keyboard.type(" Every time.");
   await page.getByRole("button", { name: "Propose", exact: true }).click();
   await page
-    .getByRole("alertdialog")
-    .getByRole("button", { name: "Save and propose" })
-    .click();
-  await page
     .getByRole("textbox", { name: "What you are asking for" })
     .fill("Wash every time");
   await page.getByRole("button", { name: "Open the change request" }).click();
@@ -1981,9 +2046,10 @@ test("a proposed draft keeps its name, and its change's chip goes back into it",
   await page.goto(
     `${APP_BASE_URL}/${org}/${binder}/hand-hygiene?edit=write&draft=${encodeURIComponent(branch)}`,
   );
-  await expect(page.locator(".doc-editor-where")).toContainText(
-    `proposed as change ${change}`,
-  );
+  // The way to its change request is where Propose was.
+  await expect(
+    page.getByRole("button", { name: `Change ${change}`, exact: true }),
+  ).toBeVisible();
   await expect(text).toContainText("Every time.");
   await expect(
     page.getByRole("button", { name: "Propose", exact: true }),
@@ -2010,10 +2076,6 @@ test("a change that only makes a word bold still shows in its comparison", async
   await expect(text.locator("strong")).toHaveText("Clean");
 
   await page.getByRole("button", { name: "Propose", exact: true }).click();
-  await page
-    .getByRole("alertdialog")
-    .getByRole("button", { name: "Save and propose" })
-    .click();
   await page
     .getByRole("textbox", { name: "What you are asking for" })
     .fill("Make the first word stand out");
@@ -2046,12 +2108,21 @@ test("words never saved are kept on this device and offered back", async ({
   await expect(page).toHaveURL(/edit=write/);
   const address = page.url();
   const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  // Saving does not work for now, so the words reach only this device.
+  await page.route("**/document-revisions", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "Gitea is not answering." }),
+    }),
+  );
   await text.getByText("Clean your hands").click();
   await page.keyboard.press("End");
   await page.keyboard.type(" Nails kept short.");
-  await expect(page.getByText("Unsaved changes")).toBeVisible();
-  // Kept a moment after the last keystroke.
-  await page.waitForTimeout(1500);
+  await expect(page.locator(".doc-editor-status")).toHaveText(
+    "Not saved — trying again",
+    { timeout: 20_000 },
+  );
 
   // The tab goes away with the words unsaved — a crash, as far as the page
   // can tell.
@@ -2067,7 +2138,6 @@ test("words never saved are kept on this device and offered back", async ({
   await expect(reopened).not.toContainText("Nails kept short.");
   await offer.getByRole("button", { name: "Restore" }).click();
   await expect(reopened).toContainText("Nails kept short.");
-  await expect(again.getByText("Unsaved changes")).toBeVisible();
 
   // Saved, the copy is gone: the next visit offers nothing.
   await again.keyboard.press("ControlOrMeta+s");

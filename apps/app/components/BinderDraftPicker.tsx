@@ -58,6 +58,23 @@ interface BinderDraftPickerProps {
 }
 
 /** "3 changes · edited 4 minutes ago", and the singular when there is one. */
+/**
+ * What a draft holds, counted the way a person counts it: the documents it
+ * changes. A policy saved a hundred times is one document changed. A draft
+ * that has only reshaped folders has no documents to count, and says how
+ * many changes it holds instead.
+ */
+export function countInDraft(
+  draft: Pick<OwnDraft, "actCount" | "documentCount">,
+): string {
+  if (draft.documentCount > 0) {
+    return draft.documentCount === 1
+      ? "1 document changed"
+      : `${draft.documentCount} documents changed`;
+  }
+  return draft.actCount === 1 ? "1 change" : `${draft.actCount} changes`;
+}
+
 export function describeDraft(draft: OwnDraft): string {
   // **A draft with nothing in it has never been edited**, whatever its branch
   // says. A fresh branch's newest commit is `main`'s, so an empty draft made a
@@ -65,8 +82,7 @@ export function describeDraft(draft: OwnDraft): string {
   // work, on a row about yours.
   if (draft.actCount === 0) return "Nothing in it yet";
 
-  const changes =
-    draft.actCount === 1 ? "1 change" : `${draft.actCount} changes`;
+  const changes = countInDraft(draft);
   const when = draft.updatedAt
     ? `edited ${formatAge(draft.updatedAt)}`
     : "not edited yet";
@@ -116,6 +132,79 @@ export function BinderDraftPicker({
     setOpen(false);
   };
 
+  const working = drafts.filter((draft) => draft.changeNumber === null);
+  const inReview = drafts.filter((draft) => draft.changeNumber !== null);
+
+  const renderDraft = (draft: OwnDraft) => {
+    const on = draft.branch === current;
+    const renaming =
+      naming?.kind === "rename" && naming.branch === draft.branch;
+
+    return (
+      <div className={`bs-row${on ? " bs-row--on" : ""}`} key={draft.branch}>
+        <span className="bs-row-icon" aria-hidden="true">
+          {on ? <AppIcon icon={Check} size="sm" /> : null}
+        </span>
+
+        {renaming ? (
+          <input
+            className="bs-input bs-input--sm bs-draftname"
+            aria-label="What to call this draft"
+            autoFocus
+            value={naming.value}
+            disabled={busy}
+            onChange={(event) =>
+              setNaming({ ...naming, value: event.target.value })
+            }
+            onKeyDown={(event) => {
+              if (event.key === "Enter") void commitName();
+              if (event.key === "Escape") setNaming(null);
+            }}
+            onBlur={() => setNaming(null)}
+          />
+        ) : (
+          <>
+            {/* The row is the switch. A draft you are already in is
+                      still a button rather than a dead row, because a
+                      disabled control beside three live ones reads as
+                      broken rather than as "you are here" — the tick and
+                      the highlight are what say that. */}
+            <button
+              type="button"
+              className="bs-row-body bs-draftmenu-pick"
+              disabled={busy}
+              onClick={() => {
+                setOpen(false);
+                if (!on) onSwitch(draft.branch);
+              }}
+            >
+              <span className="bs-row-name">{draft.name}</span>
+              <span className="bs-row-meta">{describeDraft(draft)}</span>
+            </button>
+            <span className="bs-rowacts">
+              <button
+                type="button"
+                className="bs-actionbtn"
+                aria-label={`Rename ${draft.name}`}
+                title="Rename"
+                disabled={busy}
+                onClick={() =>
+                  setNaming({
+                    kind: "rename",
+                    branch: draft.branch,
+                    value: draft.name,
+                  })
+                }
+              >
+                <AppIcon icon={Pencil} size="sm" />
+              </button>
+            </span>
+          </>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="bs-draftpicker" ref={boxRef}>
       <button
@@ -134,11 +223,11 @@ export function BinderDraftPicker({
           icon={current === null ? BookCheck : GitPullRequestArrow}
           size="sm"
         />
-        {current === null ? "On the record" : (mine?.name ?? "Your draft")}
-        {mine ? (
-          <span className="bs-draftpick-count">
-            · {mine.actCount === 1 ? "1 change" : `${mine.actCount} changes`}
-          </span>
+        <span className="bs-draftpick-name">
+          {current === null ? "On the record" : (mine?.name ?? "Your draft")}
+        </span>
+        {mine && mine.actCount > 0 ? (
+          <span className="bs-draftpick-count">· {countInDraft(mine)}</span>
         ) : null}
         <AppIcon icon={ChevronDown} size="sm" />
       </button>
@@ -170,87 +259,33 @@ export function BinderDraftPicker({
           >
             <span className="bs-section-title">Your drafts</span>
           </div>
+          {/* What a draft is, said once, here — where a person is choosing
+              one — rather than on every visit to the editor's title bar. */}
+          <p className="bs-draftmenu-note">
+            Nothing on record changes until a draft is approved.
+          </p>
 
-          {drafts.length === 0 ? (
+          {working.length === 0 ? (
             <p className="bs-draftmenu-empty">
-              None yet. A draft is where changes wait until you propose them.
+              {inReview.length === 0
+                ? "None yet. A draft is where changes wait until you propose them."
+                : "None in progress."}
             </p>
           ) : null}
 
-          {drafts.map((draft) => {
-            const on = draft.branch === current;
-            const renaming =
-              naming?.kind === "rename" && naming.branch === draft.branch;
+          {working.map(renderDraft)}
 
-            return (
-              <div
-                className={`bs-row${on ? " bs-row--on" : ""}`}
-                key={draft.branch}
-              >
-                <span className="bs-row-icon" aria-hidden="true">
-                  {on ? <AppIcon icon={Check} size="sm" /> : null}
-                </span>
-
-                {renaming ? (
-                  <input
-                    className="bs-input bs-input--sm bs-draftname"
-                    aria-label="What to call this draft"
-                    autoFocus
-                    value={naming.value}
-                    disabled={busy}
-                    onChange={(event) =>
-                      setNaming({ ...naming, value: event.target.value })
-                    }
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") void commitName();
-                      if (event.key === "Escape") setNaming(null);
-                    }}
-                    onBlur={() => setNaming(null)}
-                  />
-                ) : (
-                  <>
-                    {/* The row is the switch. A draft you are already in is
-                        still a button rather than a dead row, because a
-                        disabled control beside three live ones reads as
-                        broken rather than as "you are here" — the tick and
-                        the highlight are what say that. */}
-                    <button
-                      type="button"
-                      className="bs-row-body bs-draftmenu-pick"
-                      disabled={busy}
-                      onClick={() => {
-                        setOpen(false);
-                        if (!on) onSwitch(draft.branch);
-                      }}
-                    >
-                      <span className="bs-row-name">{draft.name}</span>
-                      <span className="bs-row-meta">
-                        {describeDraft(draft)}
-                      </span>
-                    </button>
-                    <span className="bs-rowacts">
-                      <button
-                        type="button"
-                        className="bs-actionbtn"
-                        aria-label={`Rename ${draft.name}`}
-                        title="Rename"
-                        disabled={busy}
-                        onClick={() =>
-                          setNaming({
-                            kind: "rename",
-                            branch: draft.branch,
-                            value: draft.name,
-                          })
-                        }
-                      >
-                        <AppIcon icon={Pencil} size="sm" />
-                      </button>
-                    </span>
-                  </>
-                )}
+          {/* **Proposed, and still yours** — a branch with a change request
+              open on it. Apart from the drafts in progress, because saving
+              into one of these is saving in front of its reviewers. */}
+          {inReview.length > 0 ? (
+            <>
+              <div className="bs-panel-bar bs-draftmenu-split">
+                <span className="bs-section-title">In review</span>
               </div>
-            );
-          })}
+              {inReview.map(renderDraft)}
+            </>
+          ) : null}
 
           {/* Listed, and inert. Knowing somebody is editing is what stops two
               people making the same folder twice; reading their unproposed

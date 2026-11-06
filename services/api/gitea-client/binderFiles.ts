@@ -234,3 +234,222 @@ export async function proposeBinderFileChange(params: {
 
   return { changeNumber: change.number, branch };
 }
+
+/**
+ * How long one commit may keep taking saves, from the first of them. Past
+ * this, the next save starts a commit of its own, so a draft written over an
+ * afternoon keeps a checkpoint an hour.
+ */
+export const SAVE_FOLD_WINDOW_MS = 60 * 60 * 1000;
+
+/** What a save may fold into: the draft's newest commit, and its parent. */
+export interface FoldableSave {
+  sha: string;
+  parent: string;
+  /**
+   * When the first save it holds was made: its author date, which every fold
+   * carries forward. The committer date is the latest save's.
+   */
+  startedAt: string;
+}
+
+/**
+ * The draft's last commit, when the next save may take its place.
+ *
+ * **Only a save of the same document by the same person, made in the last
+ * hour, on a draft nobody has been shown.** The editor saves on its own as a
+ * person writes, and a commit per pause would bury the acts that mean
+ * something — "New folder Night shift", "Rename Hand Hygiene" — under three
+ * hundred "Edit Hand Hygiene". So consecutive saves of one document become
+ * one act, the way a word processor's file is one file however often it is
+ * saved.
+ *
+ * Every condition is read from the commit itself, never assumed:
+ *
+ * - **It is the draft's own**, not `main`'s. `not=main` answers only commits
+ *   the draft has and the record does not; a draft with none of its own has
+ *   nothing to fold into, and a commit on `main` is never rewritten.
+ * - **One parent.** A merge — bringing the draft up to date — is a point the
+ *   draft's history has to keep.
+ * - **The same act**: the subject this save would write, the same file and
+ *   nothing else, by the same person (the `Bindersnap-Uploaded-By` trailer,
+ *   which the server writes from the session, never the browser).
+ * - **Recent**: begun within {@link SAVE_FOLD_WINDOW_MS}.
+ */
+export async function findFoldableSave(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  branch: string;
+  /** The first line the new save's commit will carry: "Edit Hand Hygiene". */
+  subject: string;
+  /** The one file the save writes. */
+  path: string;
+  username: string;
+  now?: Date;
+}): Promise<FoldableSave | null> {
+  const { client, org, workspace, branch, subject, path, username } = params;
+  const now = params.now ?? new Date();
+
+  const rows = (await unwrap(
+    client.GET("/repos/{owner}/{repo}/commits", {
+      params: {
+        path: { owner: org, repo: workspace },
+        query: {
+          sha: branch,
+          not: "main",
+          stat: false,
+          verification: false,
+          files: true,
+          page: 1,
+          limit: 1,
+        },
+      },
+    }),
+  ).catch(() => [])) as FoldCandidate[];
+
+  const tip = rows[0];
+  if (!tip?.sha) return null;
+  const parents = tip.parents ?? [];
+  if (parents.length !== 1 || !parents[0]?.sha) return null;
+
+  const message = tip.commit?.message ?? "";
+  if ((message.split("\n")[0] ?? "").trim() !== subject) return null;
+  const trailers = message.split("\n").map((line) => line.trim());
+  if (!trailers.includes(`Bindersnap-Uploaded-By: ${username}`)) return null;
+  if (!trailers.includes(`Bindersnap-Canonical-File: ${path}`)) return null;
+
+  const files = (tip.files ?? []).map((file) => file.filename ?? "");
+  if (files.length !== 1 || files[0] !== path) return null;
+
+  // From the first save the commit holds, not the last: a person typing all
+  // afternoon would otherwise fold every save into one commit forever.
+  const startedAt = tip.commit?.author?.date ?? "";
+  const at = Date.parse(startedAt);
+  if (!Number.isFinite(at) || now.getTime() - at > SAVE_FOLD_WINDOW_MS) {
+    return null;
+  }
+
+  return { sha: tip.sha, parent: parents[0].sha, startedAt };
+}
+
+interface FoldCandidate {
+  sha?: string;
+  parents?: { sha?: string }[];
+  files?: { filename?: string }[];
+  commit?: {
+    message?: string;
+    author?: { date?: string };
+    committer?: { date?: string };
+  };
+}
+
+/**
+ * Save into a draft, folded into the last save when it may be.
+ *
+ * Gitea cannot amend a commit, so the fold is three moves it can make: a
+ * scratch branch at the last save's parent, this save committed there, and
+ * the draft moved onto that commit — **only if the draft is still where it
+ * was read** (`old_commit_id`). A save from another tab in between makes the
+ * move fail, and this save is then committed on top as an ordinary one, so
+ * nothing anybody wrote is lost to the fold. The scratch branch is deleted
+ * whatever happens; it is never under `draft/`, so no list of drafts sees it.
+ *
+ * Answers whether the save folded, for the log.
+ */
+export async function commitDraftSave(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  branch: string;
+  operations: readonly BinderFileOperation[];
+  message: string;
+  username: string;
+  now?: Date;
+}): Promise<{ folded: boolean }> {
+  const { client, org, workspace, branch, operations, message, username } =
+    params;
+  const write = operations.length === 1 ? operations[0] : undefined;
+  const previous =
+    write?.kind === "write"
+      ? await findFoldableSave({
+          client,
+          org,
+          workspace,
+          branch,
+          subject: (message.split("\n")[0] ?? "").trim(),
+          path: write.path,
+          username,
+          now: params.now,
+        })
+      : null;
+
+  if (!previous) {
+    await commitBinderFiles({
+      client,
+      org,
+      workspace,
+      branch,
+      operations,
+      message,
+    });
+    return { folded: false };
+  }
+
+  const scratch = `fold/${username}/${crypto.randomUUID()}`;
+  try {
+    await unwrap(
+      client.POST("/repos/{owner}/{repo}/branches", {
+        params: { path: { owner: org, repo: workspace } },
+        body: { new_branch_name: scratch, old_ref_name: previous.parent },
+      }),
+    );
+    const written = await unwrap(
+      client.POST("/repos/{owner}/{repo}/contents", {
+        params: { path: { owner: org, repo: workspace } },
+        body: {
+          branch: scratch,
+          message,
+          files: operations.map(toGiteaOperation),
+          // The folded commit is dated from the first save it holds, so the
+          // hour is counted from there.
+          dates: {
+            author: previous.startedAt,
+            committer: (params.now ?? new Date()).toISOString(),
+          },
+        },
+      }),
+    );
+    const sha = written.commit?.sha;
+    const moved = sha
+      ? await client.PUT("/repos/{owner}/{repo}/branches/{branch}", {
+          params: { path: { owner: org, repo: workspace, branch } },
+          body: {
+            new_commit_id: sha,
+            old_commit_id: previous.sha,
+            force: true,
+          },
+        })
+      : null;
+    if (moved?.response.ok) return { folded: true };
+  } catch {
+    // Folding is a tidiness, never a reason a save fails: the ordinary
+    // commit below still lands the words.
+  } finally {
+    await client
+      .DELETE("/repos/{owner}/{repo}/branches/{branch}", {
+        params: { path: { owner: org, repo: workspace, branch: scratch } },
+      })
+      .catch(() => undefined);
+  }
+
+  await commitBinderFiles({
+    client,
+    org,
+    workspace,
+    branch,
+    operations,
+    message,
+  });
+  return { folded: false };
+}
