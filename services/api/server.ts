@@ -189,6 +189,7 @@ import {
   listDocumentVersions,
   documentVersionsFrom,
   listRemovedDocuments,
+  listTouchedDocuments,
   readArchivedDocument,
   listVersionsByDocument,
   listWorkspaceDocuments,
@@ -8427,20 +8428,33 @@ async function handleWorkspaceOverview(
 /**
  * Which documents a change is about, without a call per change.
  *
- * Two sources, neither of which costs anything. An open change carries its
- * document in its branch name — `upload/<slugPath>/…`, the convention the
- * upload path writes. A published one is named exactly by the version tags on
- * its merge commit, which is one tags read for the whole binder.
+ * **An open change is read from the files it changes** — revised, added or
+ * archived, a rename counted once. Its branch name used to stand in — `upload/<slugPath>/…` names
+ * one document — but a draft's branch (`draft/…`) names none and a folder
+ * uploaded as one change names one of many, so a change proposed from the
+ * editor said "0 documents" while it changed three.
  *
- * A change made outside Bindersnap matches neither, and gets an empty list:
- * the row then simply does not describe itself, which beats guessing.
+ * A published one is named exactly by the version tags on its merge commit,
+ * which is one tags read for the whole binder. The branch name is the last
+ * resort, for a change whose files could not be read; a change matching
+ * nothing gets an empty list, which beats guessing.
  */
 function describeChangeDocuments(params: {
   branchName: string;
   mergeCommitSha: string | null;
   versionsByCommit: Map<string, Array<{ slugPath: string; version: number }>>;
+  /** What an open change's files say it changes; null when not read. */
+  changed: Array<{ slugPath: string; name: string }> | null;
 }): Array<{ slugPath: string; name: string; version: number | null }> {
-  const { branchName, mergeCommitSha, versionsByCommit } = params;
+  const { branchName, mergeCommitSha, versionsByCommit, changed } = params;
+
+  if (changed !== null) {
+    return changed.map((entry) => ({
+      slugPath: entry.slugPath,
+      name: entry.name,
+      version: null,
+    }));
+  }
 
   const published = mergeCommitSha
     ? (versionsByCommit.get(mergeCommitSha) ?? [])
@@ -8613,6 +8627,30 @@ async function listWorkspaceChangeSummaries(
     }
   }
 
+  // **What each open change touches, from its files.** One read per open
+  // change, in parallel — open changes are the few in flight, not the
+  // binder's history. A read that fails costs that row its count, not the
+  // list: it falls back to what the branch name says.
+  const changedByNumber = new Map<
+    number,
+    Array<{ slugPath: string; name: string }>
+  >();
+  if (state === "open") {
+    await Promise.all(
+      entries.map(async ({ pullRequest }) => {
+        const number = pullRequest.number;
+        if (typeof number !== "number") return;
+        const changed = await listTouchedDocuments({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          pullNumber: number,
+        }).catch(() => null);
+        if (changed) changedByNumber.set(number, changed);
+      }),
+    );
+  }
+
   const changes = entries
     .map(({ pullRequest, reviews }) => {
       const row = buildPendingChangeRow({ pullRequest, reviews }, mergeRules);
@@ -8657,6 +8695,9 @@ async function listWorkspaceChangeSummaries(
           branchName: row.branchName,
           mergeCommitSha,
           versionsByCommit,
+          changed: isOpen
+            ? (changedByNumber.get(pullRequest.number ?? -1) ?? null)
+            : null,
         }),
       };
     })
