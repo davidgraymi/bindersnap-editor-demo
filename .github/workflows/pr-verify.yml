@@ -44,7 +44,7 @@ jobs:
         run: bun run format:check
 
   generated:
-    name: Generated client
+    name: Generated code
     runs-on: ubuntu-24.04
     timeout-minutes: 10
 
@@ -55,23 +55,30 @@ jobs:
       - name: Set up Bun and install dependencies
         uses: ./.github/actions/setup-bun
 
-      # openapi.json and packages/api-client are committed generator output.
-      # An orval bump in #755 went without a regeneration, and for a month every
-      # schema change was written into the old output by hand. Regenerate and
-      # fail on any difference: a schema change, a generator bump or a hand edit.
+      # Generator output is committed: the BFF's openapi.json and
+      # packages/api-client (orval), the Gitea spec and types, and the SQLite
+      # migrations. An orval bump in #755 went without a regeneration, and for
+      # a month every schema change was written into the old output by hand.
+      # Run every generator and fail on any file it changes or adds.
       - name: Regenerate the BFF schema and client
         run: bun run generate:bff
 
-      - name: Check the committed output matches
+      - name: Regenerate the Gitea types from the committed spec
+        run: bun run generate:gitea-client --offline
+
+      - name: Generate a migration for any schema change without one
+        run: bunx drizzle-kit generate
+
+      - name: Check the migrations agree with each other
+        run: bun run db:check
+
+      - name: Check nothing changed
         run: |
-          if ! git diff --exit-code --stat -- openapi.json packages/api-client; then
-            echo "::error::openapi.json or packages/api-client is not what the generator writes. Run 'bun run generate:bff' and commit the result."
-            exit 1
-          fi
-          untracked=$(git ls-files --others --exclude-standard -- packages/api-client)
-          if [ -n "$untracked" ]; then
-            echo "$untracked"
-            echo "::error::The generator wrote files that are not committed. Run 'bun run generate:bff' and commit the result."
+          changed=$(git status --porcelain)
+          if [ -n "$changed" ]; then
+            echo "$changed"
+            git diff --stat
+            echo "::error::Generated code is not what its generator writes. Run 'bun run generate:bff', 'bun run generate:gitea-client --offline' and 'bun run db:generate' as needed, and commit the result. Never edit generated files by hand."
             exit 1
           fi
 
