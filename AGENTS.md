@@ -128,7 +128,10 @@ bun run format:check  # Check without writing
 
 Unit tests live next to their source as `*.test.ts`; Playwright tests are
 `tests/*.pw.ts`. CI (`pr-verify.yml`) runs `format:check`, the three unit
-suites, `bun run build` and the integration tests.
+suites, `bun run build` and the integration tests, and regenerates
+`openapi.json` and `packages/api-client`, failing if either differs from what
+is committed. Never edit the generated client by hand. `orval` is pinned to an
+exact version: bump it on purpose, with `bun run generate:bff` in the same PR.
 
 **CI does not typecheck.** `tsconfig.json` is strict, but `bunx tsc --noEmit -p .`
 reports existing errors, most of them in tests. Run it on what you change and

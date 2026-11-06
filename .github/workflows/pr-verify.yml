@@ -43,6 +43,38 @@ jobs:
       - name: Check formatting
         run: bun run format:check
 
+  generated:
+    name: Generated client
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Bun and install dependencies
+        uses: ./.github/actions/setup-bun
+
+      # openapi.json and packages/api-client are committed generator output.
+      # An orval bump in #755 went without a regeneration, and for a month every
+      # schema change was written into the old output by hand. Regenerate and
+      # fail on any difference: a schema change, a generator bump or a hand edit.
+      - name: Regenerate the BFF schema and client
+        run: bun run generate:bff
+
+      - name: Check the committed output matches
+        run: |
+          if ! git diff --exit-code --stat -- openapi.json packages/api-client; then
+            echo "::error::openapi.json or packages/api-client is not what the generator writes. Run 'bun run generate:bff' and commit the result."
+            exit 1
+          fi
+          untracked=$(git ls-files --others --exclude-standard -- packages/api-client)
+          if [ -n "$untracked" ]; then
+            echo "$untracked"
+            echo "::error::The generator wrote files that are not committed. Run 'bun run generate:bff' and commit the result."
+            exit 1
+          fi
+
   unit:
     name: Unit / ${{ matrix.target }}
     runs-on: ubuntu-24.04
