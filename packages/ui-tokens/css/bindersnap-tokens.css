@@ -274,12 +274,13 @@
 
   /* Dense-UI steps — the app's own scale. Tables, chips, metadata rows,
      and (ui-lg) the name a row is about. The people reading these are
-     compliance leads, not engineers: nothing a person reads goes below
-     12px, and the line a row is about sits at 15px. */
-  --brand-text-ui-xs: 0.75rem; /* 12px */
-  --brand-text-ui-sm: 0.8125rem; /* 13px */
-  --brand-text-ui-md: 0.875rem; /* 14px */
-  --brand-text-ui-lg: 0.9375rem; /* 15px */
+     compliance leads, not engineers, often on a laptop at arm's length:
+     nothing a person reads goes below 13px, most of it is 15px, and the
+     line a row is about sits at 16px (#888). */
+  --brand-text-ui-xs: 0.8125rem; /* 13px */
+  --brand-text-ui-sm: 0.875rem; /* 14px */
+  --brand-text-ui-md: 0.9375rem; /* 15px */
+  --brand-text-ui-lg: 1rem; /* 16px */
 
   /* ── Icon sizes / stroke widths ──
      Lucide icons via <AppIcon> (apps/app/components/AppIcon.tsx). Fixed —
