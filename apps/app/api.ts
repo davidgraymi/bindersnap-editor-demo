@@ -1646,6 +1646,11 @@ export async function reviseBinderDocument(
    * a Word file or PDF read into the editor's format, recorded as a conversion.
    */
   source?: "editor" | "converted",
+  /**
+   * The editor saved on its own: into a draft nobody has been shown, the
+   * server may fold this into the last save of the same document.
+   */
+  options: { fold?: boolean } = {},
 ): Promise<CreatedWorkspaceDocumentPayload> {
   try {
     const response = await BindersClient.reviseBinderDocument(org, binder, {
@@ -1653,6 +1658,7 @@ export async function reviseBinderDocument(
       documentPath,
       ...multipartTarget(target),
       ...(source ? { source } : {}),
+      ...(options.fold ? { fold: "true" as const } : {}),
     });
     return response.data;
   } catch (error) {

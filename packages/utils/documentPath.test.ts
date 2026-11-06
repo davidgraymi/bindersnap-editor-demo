@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import {
+  countDraftDocuments,
   buildDocumentDisplayPath,
   buildDocumentFilePath,
   buildDocumentSlugPath,
@@ -238,4 +239,21 @@ test("an archived tag nobody here wrote reads back as nothing", () => {
     expect(documentUidFromArchivedTag(notOurs)).toBeNull();
     expect(archivedSequenceFromTag(notOurs)).toBeNull();
   }
+});
+
+test("a draft's documents are counted by identity, once each", () => {
+  const uid = "01J8XZ4K7MQ9V3B0RN7YHS2E1D";
+  expect(
+    countDraftDocuments([
+      { paths: [`hand-hygiene.${uid}.json`] },
+      { paths: [`hand-hygiene.${uid}.json`] },
+      // Renamed and refiled: still the same document.
+      {
+        paths: [`hand-hygiene.${uid}.json`, `nursing/hand-washing.${uid}.json`],
+      },
+      { paths: ["nursing/.gitkeep"] },
+      { paths: ["visitors.01J8XZ4K7MQ9V3B0RN7YHS2E1E.md"] },
+    ]),
+  ).toBe(2);
+  expect(countDraftDocuments([{ paths: ["nursing/.gitkeep"] }])).toBe(0);
 });

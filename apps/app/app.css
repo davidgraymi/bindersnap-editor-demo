@@ -9619,6 +9619,15 @@ a.bs-row:focus-visible {
   opacity: 0.6;
 }
 
+/* A draft's name can be a sentence: it is cut short in the button, and read
+   in full in the menu the button opens. */
+.bs-draftpick-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .bs-draftpick-count {
   color: var(--bs-text-muted);
   font-weight: var(--brand-weight-regular);
@@ -11157,9 +11166,8 @@ html.bs-writing .app-main {
   font-size: var(--brand-text-ui-sm);
 }
 
-.doc-editor-where .bs-draftpick > span:first-of-type {
-  overflow: hidden;
-  text-overflow: ellipsis;
+.doc-editor-where .bs-draftpick > :is(svg, span:not(.bs-draftpick-name)) {
+  flex: none;
 }
 
 .doc-editor-where strong {
@@ -12348,4 +12356,15 @@ html.bs-writing .app-main {
   display: inline-flex;
   align-items: center;
   gap: var(--brand-space-1);
+}
+
+/* "Don't ask me again" under the question about saving into a proposal. */
+.doc-editor-ask-again {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  margin: var(--brand-space-3) 0 0;
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-sm);
+  cursor: pointer;
 }

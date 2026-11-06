@@ -2,7 +2,9 @@ import { useState } from "react";
 import { Loader2, Pencil } from "lucide-react";
 
 import type { DraftAct } from "../../../packages/api-schema/schemas/workspaces";
+import { countDraftDocuments } from "../../../packages/utils/documentPath";
 import { AppIcon } from "./AppIcon";
+import { countInDraft } from "./BinderDraftPicker";
 
 /**
  * What is in your draft, while you are editing a binder.
@@ -83,9 +85,10 @@ export function BinderDraftBar({
               ? `Saving to \u201c${name}\u201d\u2026`
               : acts.length === 0
                 ? `You are editing \u201c${name}\u201d. Nothing in it yet.`
-                : acts.length === 1
-                  ? `1 change in \u201c${name}\u201d`
-                  : `${acts.length} changes in \u201c${name}\u201d`}
+                : `${countInDraft({
+                    actCount: acts.length,
+                    documentCount: countDraftDocuments(acts),
+                  })} in \u201c${name}\u201d`}
           </p>
 
           {/* The acts themselves, not a count of them — the planners write

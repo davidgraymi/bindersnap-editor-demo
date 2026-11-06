@@ -58,6 +58,23 @@ interface BinderDraftPickerProps {
 }
 
 /** "3 changes · edited 4 minutes ago", and the singular when there is one. */
+/**
+ * What a draft holds, counted the way a person counts it: the documents it
+ * changes. A policy saved a hundred times is one document changed. A draft
+ * that has only reshaped folders has no documents to count, and says how
+ * many changes it holds instead.
+ */
+export function countInDraft(
+  draft: Pick<OwnDraft, "actCount" | "documentCount">,
+): string {
+  if (draft.documentCount > 0) {
+    return draft.documentCount === 1
+      ? "1 document changed"
+      : `${draft.documentCount} documents changed`;
+  }
+  return draft.actCount === 1 ? "1 change" : `${draft.actCount} changes`;
+}
+
 export function describeDraft(draft: OwnDraft): string {
   // **A draft with nothing in it has never been edited**, whatever its branch
   // says. A fresh branch's newest commit is `main`'s, so an empty draft made a
@@ -65,8 +82,7 @@ export function describeDraft(draft: OwnDraft): string {
   // work, on a row about yours.
   if (draft.actCount === 0) return "Nothing in it yet";
 
-  const changes =
-    draft.actCount === 1 ? "1 change" : `${draft.actCount} changes`;
+  const changes = countInDraft(draft);
   const when = draft.updatedAt
     ? `edited ${formatAge(draft.updatedAt)}`
     : "not edited yet";
@@ -207,11 +223,11 @@ export function BinderDraftPicker({
           icon={current === null ? BookCheck : GitPullRequestArrow}
           size="sm"
         />
-        {current === null ? "On the record" : (mine?.name ?? "Your draft")}
-        {mine ? (
-          <span className="bs-draftpick-count">
-            · {mine.actCount === 1 ? "1 change" : `${mine.actCount} changes`}
-          </span>
+        <span className="bs-draftpick-name">
+          {current === null ? "On the record" : (mine?.name ?? "Your draft")}
+        </span>
+        {mine && mine.actCount > 0 ? (
+          <span className="bs-draftpick-count">· {countInDraft(mine)}</span>
         ) : null}
         <AppIcon icon={ChevronDown} size="sm" />
       </button>

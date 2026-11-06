@@ -282,3 +282,26 @@ export function archivedSequenceFromTag(tag: string): number | null {
   if (!match || !isDocumentUid(match[1]!)) return null;
   return Number(match[2]);
 }
+
+/**
+ * How many documents a draft's acts change, each once.
+ *
+ * **Counted by identity, from the acts already read** — no read of its own,
+ * however many commits the draft holds. A policy edited, renamed and edited
+ * again is one document; a rename moves a file to a new address, and the
+ * identity segment in its filename (ADR 0005) is what says it is the same
+ * one. Files with no identity — the placeholder that holds an empty folder
+ * open, CODEOWNERS — are not documents and are not counted.
+ */
+export function countDraftDocuments(
+  acts: readonly { paths: readonly string[] }[],
+): number {
+  const documents = new Set<string>();
+  for (const act of acts) {
+    for (const path of act.paths) {
+      const uid = parseDocumentFilename(path.split("/").pop() ?? path).uid;
+      if (uid) documents.add(uid);
+    }
+  }
+  return documents.size;
+}

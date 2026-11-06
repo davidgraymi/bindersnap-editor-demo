@@ -4,6 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { ReviseBinderDocumentBodyFold } from './reviseBinderDocumentBodyFold.ts';
 import type { ReviseBinderDocumentBodySource } from './reviseBinderDocumentBodySource.ts';
 
 export type ReviseBinderDocumentBody = {
@@ -13,4 +14,5 @@ export type ReviseBinderDocumentBody = {
   changeNumber?: string;
   draft?: string;
   source?: ReviseBinderDocumentBodySource;
+  fold?: ReviseBinderDocumentBodyFold;
 };

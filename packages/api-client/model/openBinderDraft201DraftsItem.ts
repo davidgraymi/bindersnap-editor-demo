@@ -11,6 +11,7 @@ export type OpenBinderDraft201DraftsItem = {
   /** @nullable */
   updatedAt: string | null;
   actCount: number;
+  documentCount: number;
   /** @nullable */
   lastAct: string | null;
   /** @nullable */

@@ -1,4 +1,4 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { convertibleKind } from "../convertToEditor";
 import {
   lazy,
@@ -25,7 +25,11 @@ import {
   fetchBinderDocument,
   reviseBinderDocument,
 } from "../api";
-import { queryKeys } from "../data/queries";
+import {
+  binderChangeQuery,
+  changeUpdatesQuery,
+  queryKeys,
+} from "../data/queries";
 import { formatAge, formatDocumentName } from "../documentDisplay";
 import { parseEditorDocument } from "../editorDocumentHtml";
 import {
@@ -69,6 +73,30 @@ const DocumentEditor = lazy(() =>
     default: module.DocumentEditor,
   })),
 );
+
+/**
+ * How long the words rest before the editor saves them on its own: long
+ * enough that a sentence is not saved a word at a time, short enough that a
+ * closed laptop loses nothing worth retyping.
+ */
+const AUTOSAVE_IDLE_MS = 2_500;
+/** However steadily somebody types, nothing waits longer than this. */
+const AUTOSAVE_AT_MOST_MS = 30_000;
+/** A save that did not land is tried again after this. */
+const AUTOSAVE_RETRY_MS = 5_000;
+/**
+ * "Don't ask me again" for saving into a proposal: a habit of this person's
+ * on this browser, not a setting of the binder's.
+ */
+const PROPOSAL_SAVE_ASK_KEY = "bindersnap:ask-before-saving-a-proposal";
+
+function asksBeforeSavingAProposal(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(PROPOSAL_SAVE_ASK_KEY) !== "no";
+  } catch {
+    return true;
+  }
+}
 
 interface DocumentEditorPageProps {
   org: string;
@@ -262,14 +290,46 @@ export function DocumentEditorPage({
   const saveRevision = async (
     ...args: Parameters<typeof reviseBinderDocument>
   ): ReturnType<typeof reviseBinderDocument> => {
-    const saved = await reviseBinderDocument(...args);
+    const [org_, binder_, file, path, target, source] = args;
+    const saved = await reviseBinderDocument(
+      org_,
+      binder_,
+      file,
+      path,
+      target,
+      source,
+      // Saved on its own into an unproposed draft: the server may fold it
+      // into the last save of the same policy, so the draft lists "Edit
+      // Hand Hygiene" once rather than once per pause in the typing.
+      { fold: autosaveRef.current },
+    );
     void queryClient.invalidateQueries({
       queryKey: queryKeys.binder(org, binder),
     });
     return saved;
   };
+  /**
+   * **The editor saves on its own into a draft nobody has been shown.**
+   * Nothing on record moves until the draft is proposed and approved, so a
+   * save there costs nothing and forgetting one costs an afternoon. A draft
+   * already proposed — or a change request edited in place — is different:
+   * every save is in front of its reviewers, and may clear the approvals it
+   * has, so there it stays a deliberate Save (and Ctrl+S), asked about first.
+   * Until the drafts are read, nobody knows which this is, so nothing saves
+   * on its own.
+   */
+  const current = drafts?.draft ?? null;
+  const autosave =
+    change === null &&
+    current !== null &&
+    current.branch === draft &&
+    current.changeNumber === null;
+  const autosaveRef = useRef(autosave);
+  autosaveRef.current = autosave;
   const [load, setLoad] = useState<LoadState>({ kind: "loading" });
   const [save, setSave] = useState<SaveState>({ kind: "idle" });
+  const savingRef = useRef(false);
+  savingRef.current = save.kind === "saving";
   const [dirty, setDirty] = useState(false);
   const [leaving, setLeaving] = useState<Leaving | null>(null);
   const editorRef = useRef<Editor | null>(null);
@@ -603,6 +663,9 @@ export function DocumentEditorPage({
     }
     const base = savedJson.current;
     keepTimer.current = window.setTimeout(() => keepWords(key, doc, base), 800);
+    scheduleAutosave();
+    // `scheduleAutosave` reads only refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const saveNow = useCallback(async (): Promise<boolean> => {
@@ -762,6 +825,122 @@ export function DocumentEditorPage({
     }
   };
 
+  /**
+   * Saving on its own: after the words have rested, and never later than
+   * {@link AUTOSAVE_AT_MOST_MS} after the first unsaved one, every open policy
+   * with unsaved words is saved — the one on screen and any left open beside
+   * it. One save at a time; a pause that comes while one is in flight waits
+   * for it. A save that fails is tried again, and the words stay here and on
+   * this device meanwhile.
+   */
+  const saveAllRef = useRef(saveAll);
+  saveAllRef.current = saveAll;
+  const autosaveTimer = useRef<number | undefined>(undefined);
+  /** When the oldest unsaved words must be saved by, whatever the typing. */
+  const autosaveDue = useRef<number | null>(null);
+  const runAutosave = useCallback(() => {
+    window.clearTimeout(autosaveTimer.current);
+    if (!autosaveRef.current) return;
+    if (savingRef.current) {
+      autosaveTimer.current = window.setTimeout(runAutosave, 500);
+      return;
+    }
+    autosaveDue.current = null;
+    void saveAllRef.current().then((saved) => {
+      if (!saved && autosaveRef.current) {
+        autosaveTimer.current = window.setTimeout(
+          runAutosave,
+          AUTOSAVE_RETRY_MS,
+        );
+      }
+    });
+  }, []);
+  const scheduleAutosave = useCallback(() => {
+    if (!autosaveRef.current) return;
+    window.clearTimeout(autosaveTimer.current);
+    const now = Date.now();
+    autosaveDue.current ??= now + AUTOSAVE_AT_MOST_MS;
+    autosaveTimer.current = window.setTimeout(
+      runAutosave,
+      Math.max(0, Math.min(AUTOSAVE_IDLE_MS, autosaveDue.current - now)),
+    );
+  }, [runAutosave]);
+  useEffect(() => () => window.clearTimeout(autosaveTimer.current), []);
+  // Words left unsaved in a policy moved away from, or typed before the
+  // drafts were read: saved once the editor knows it may.
+  useEffect(() => {
+    if (autosave && anyUnsaved) scheduleAutosave();
+  }, [autosave, anyUnsaved, documentPath, scheduleAutosave]);
+
+  /**
+   * Every save, said and done: what is in flight first, then whatever is
+   * still unsaved. What leaving waits on while the editor saves on its own.
+   */
+  const flush = async (): Promise<boolean> => {
+    window.clearTimeout(autosaveTimer.current);
+    autosaveDue.current = null;
+    while (savingRef.current) {
+      await new Promise((resolve) => window.setTimeout(resolve, 150));
+    }
+    const saved = await saveAllRef.current();
+    // Still trying: a person who stays after a failed save on the way out
+    // gets their words saved as soon as saving works again.
+    if (!saved && autosaveRef.current) {
+      autosaveTimer.current = window.setTimeout(runAutosave, AUTOSAVE_RETRY_MS);
+    }
+    return saved;
+  };
+
+  /**
+   * Save into a proposal — a proposed draft, or a change request edited in
+   * place — asked about first: its reviewers see the save, and it may clear
+   * the approvals it has. "Don't ask me again" is remembered on this browser.
+   */
+  const [confirming, setConfirming] = useState<"this" | "all" | null>(null);
+  const [stopAsking, setStopAsking] = useState(false);
+  const requestSave = (scope: "this" | "all") => {
+    if (autosave) {
+      void flush();
+      return;
+    }
+    if (!asksBeforeSavingAProposal()) {
+      void (scope === "all" ? saveAll() : saveNow());
+      return;
+    }
+    setStopAsking(false);
+    setConfirming(scope);
+  };
+  const confirmSave = () => {
+    const scope = confirming;
+    setConfirming(null);
+    if (stopAsking) {
+      try {
+        globalThis.localStorage?.setItem(PROPOSAL_SAVE_ASK_KEY, "no");
+      } catch {
+        // Asked again next time, on a browser that keeps nothing.
+      }
+    }
+    void (scope === "all" ? saveAll() : saveNow());
+  };
+  /** The change a save would go into, when it is one. */
+  const proposalNumber = change?.number ?? current?.changeNumber ?? null;
+  const proposalRead = useQuery({
+    ...binderChangeQuery(org, binder, proposalNumber ?? 0),
+    enabled: confirming !== null && proposalNumber !== null,
+  });
+  const proposalUpdates = useQuery({
+    ...changeUpdatesQuery(org, binder, proposalNumber ?? 0),
+    enabled: confirming !== null && proposalNumber !== null,
+  });
+  /** Approvals that would be cleared: only when the binder says a new version clears them. */
+  const approvalsCleared = proposalUpdates.data?.resetsApprovals
+    ? new Set(
+        (proposalRead.data?.approvalRules ?? []).flatMap((rule) =>
+          rule.approvedBy.map((person) => person.login),
+        ),
+      ).size
+    : 0;
+
   const go = (to: Leaving) => {
     if (to.kind === "close") onClose();
     else if (to.kind === "open") onOpenDocument(to.slugPath);
@@ -833,6 +1012,10 @@ export function DocumentEditorPage({
    */
   const leave = (to: Leaving) => {
     if (to.kind === "open" || to.kind === "new" || !anyUnsaved) go(to);
+    // Saving on its own: the last words are saved on the way out, and only a
+    // save that fails stops to ask.
+    else if (autosave)
+      void flush().then((saved) => (saved ? go(to) : setLeaving(to)));
     else setLeaving(to);
   };
 
@@ -847,26 +1030,32 @@ export function DocumentEditorPage({
   // does — when it has changes not saved yet.
   useEffect(() => {
     const was = document.title;
-    document.title = `${dirty ? "• " : ""}${name} · Bindersnap`;
+    document.title = `${dirty && !autosave ? "• " : ""}${name} · Bindersnap`;
     return () => {
       document.title = was;
     };
-  }, [dirty, name]);
+  }, [autosave, dirty, name]);
 
+  // Saving on its own, words typed are words on their way: "Saving…" from
+  // the first key, as a word processor online says it.
   const status =
     save.kind === "saving"
       ? "Saving…"
       : save.kind === "failed"
-        ? "Not saved"
+        ? autosave
+          ? "Not saved — trying again"
+          : "Not saved"
         : dirty
-          ? "Unsaved changes"
+          ? autosave
+            ? "Saving…"
+            : "Unsaved changes"
           : save.kind === "saved"
             ? `Saved ${formatAge(save.at)}`
             : "";
   // The others are one glance away in the panel's marks; the count is here
   // too, beside this one's, so the title bar tells the whole story.
   const statusElsewhere =
-    unsavedElsewhere.size === 0
+    unsavedElsewhere.size === 0 || autosave
       ? ""
       : `${status === "" ? "" : " · "}${unsavedElsewhere.size} other ${
           unsavedElsewhere.size === 1 ? "policy" : "policies"
@@ -976,7 +1165,7 @@ export function DocumentEditorPage({
             // Anything longer opens at the top, where it starts.
             autoFocus={isBlankPolicy(frame.doc) ? "end" : "start"}
             onChange={handleChange}
-            onSave={() => void saveNow()}
+            onSave={() => requestSave("this")}
             onReady={(editor) => {
               // A new editor: states made by the one before carry its plugins,
               // not these, so each open policy starts again from its words.
@@ -1018,7 +1207,13 @@ export function DocumentEditorPage({
 
   /** Every open policy with words not saved, this one first. */
   const unsavedNames = [...(dirty ? [name] : []), ...unsavedElsewhere.values()];
-  const saveWord = unsavedNames.length > 1 ? "Save all" : "Save";
+  // Saving on its own, this asks only when a save has failed: the choice is
+  // to try it again, not to save at all.
+  const saveWord = autosave
+    ? "Try again"
+    : unsavedNames.length > 1
+      ? "Save all"
+      : "Save";
   const ask = leaving
     ? leaving.kind === "close"
       ? { save: `${saveWord} and close`, drop: "Close without saving" }
@@ -1044,7 +1239,6 @@ export function DocumentEditorPage({
 
   // Something to propose: words not saved yet, or anything already in the
   // draft. An empty draft proposed is a change request with nothing in it.
-  const current = drafts?.draft ?? null;
   const proposable = anyUnsaved || (current?.acts.length ?? 0) > 0;
 
   /** The folder the open policy is filed in, when it can be moved from here. */
@@ -1173,7 +1367,7 @@ export function DocumentEditorPage({
           )}
           <span
             className={`doc-editor-status${
-              dirty || save.kind === "failed"
+              (dirty && !autosave) || save.kind === "failed"
                 ? " doc-editor-status--unsaved"
                 : ""
             }`}
@@ -1191,22 +1385,28 @@ export function DocumentEditorPage({
           >
             Close
           </button>
-          <button
-            type="button"
-            className={`bs-btn ${change ? "bs-btn-primary" : "bs-btn-secondary"} bs-btn--sm`}
-            disabled={load.kind !== "ready" || !dirty || save.kind === "saving"}
-            title={
-              change
-                ? `Save into change ${change.number} (Ctrl+S)`
-                : "Save into your draft (Ctrl+S)"
-            }
-            onClick={() => void saveNow()}
-          >
-            {save.kind === "saving" ? "Saving…" : "Save"}
-          </button>
+          {/* Saving on its own, there is nothing to press. Into a proposal,
+              Save is deliberate — and asked about first. */}
+          {autosave ? null : (
+            <button
+              type="button"
+              className={`bs-btn ${change ? "bs-btn-primary" : "bs-btn-secondary"} bs-btn--sm`}
+              disabled={
+                load.kind !== "ready" || !dirty || save.kind === "saving"
+              }
+              title={
+                proposalNumber !== null
+                  ? `Save into change ${proposalNumber}, where its reviewers see it (Ctrl+S)`
+                  : "Save into your draft (Ctrl+S)"
+              }
+              onClick={() => requestSave("this")}
+            >
+              {save.kind === "saving" ? "Saving…" : "Save"}
+            </button>
+          )}
           {/* The others with unsaved words, saved in one press — shown only
               while there are any, as an editor's Save All is live only then. */}
-          {unsavedElsewhere.size > 0 ? (
+          {!autosave && unsavedElsewhere.size > 0 ? (
             <button
               type="button"
               className="bs-btn bs-btn-secondary bs-btn--sm"
@@ -1214,7 +1414,7 @@ export function DocumentEditorPage({
               title={`Save ${[...unsavedElsewhere.values()].join(", ")}${
                 dirty ? ` and ${name}` : ""
               }`}
-              onClick={() => void saveAll()}
+              onClick={() => requestSave("all")}
             >
               Save all ({unsavedElsewhere.size + (dirty ? 1 : 0)})
             </button>
@@ -1436,16 +1636,21 @@ export function DocumentEditorPage({
             aria-describedby="doc-editor-close-body"
           >
             <h2 id="doc-editor-close-title">
-              {unsavedNames.length > 1
-                ? `Save your changes to ${unsavedNames.length} policies?`
-                : `Save your changes to ${unsavedNames[0] ?? name}?`}
+              {autosave
+                ? "Your latest changes are not saved"
+                : unsavedNames.length > 1
+                  ? `Save your changes to ${unsavedNames.length} policies?`
+                  : `Save your changes to ${unsavedNames[0] ?? name}?`}
             </h2>
             <p id="doc-editor-close-body" className="add-policy-note">
               {unsavedNames.length > 1
                 ? `${unsavedNames.join(", ")} have words not saved yet. `
                 : ""}
-              They go into your draft. Leaving without saving loses everything
-              since the last save.
+              {autosave
+                ? "Saving them into your draft did not work just now. Try again, or leave without them."
+                : proposalNumber !== null
+                  ? `They go into change ${proposalNumber}, where its reviewers see them. Leaving without saving loses everything since the last save.`
+                  : "They go into your draft. Leaving without saving loses everything since the last save."}
             </p>
             <div className="upload-modal-actions">
               <button
@@ -1479,6 +1684,66 @@ export function DocumentEditorPage({
                 type="button"
                 className="bs-btn bs-btn-secondary"
                 onClick={() => setLeaving(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {confirming !== null && proposalNumber !== null ? (
+        <div
+          className="upload-modal-backdrop"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setConfirming(null);
+          }}
+        >
+          <div
+            className="upload-modal"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="doc-editor-proposal-title"
+            aria-describedby="doc-editor-proposal-body"
+            onKeyDown={(event) => {
+              if (event.key === "Escape") setConfirming(null);
+            }}
+          >
+            <h2 id="doc-editor-proposal-title">
+              Update change {proposalNumber}?
+            </h2>
+            <p id="doc-editor-proposal-body" className="add-policy-note">
+              {confirming === "all" && unsavedNames.length > 1
+                ? `${unsavedNames.join(", ")} go`
+                : `${name} goes`}{" "}
+              into the change its reviewers are reading, and they see this
+              version from now on.
+              {approvalsCleared > 0
+                ? ` ${approvalsCleared === 1 ? "The approval" : `The ${approvalsCleared} approvals`} it has will be cleared, and it will need approving again.`
+                : ""}
+            </p>
+            <label className="doc-editor-ask-again">
+              <input
+                className="bs-checkbox"
+                type="checkbox"
+                checked={stopAsking}
+                onChange={(event) => setStopAsking(event.target.checked)}
+              />
+              Don't ask me again
+            </label>
+            <div className="upload-modal-actions">
+              <button
+                type="button"
+                className="bs-btn bs-btn-primary"
+                autoFocus
+                onClick={confirmSave}
+              >
+                Update change {proposalNumber}
+              </button>
+              <button
+                type="button"
+                className="bs-btn bs-btn-secondary"
+                onClick={() => setConfirming(null)}
               >
                 Cancel
               </button>
