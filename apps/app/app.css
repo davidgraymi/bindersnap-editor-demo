@@ -9632,9 +9632,9 @@ a.bs-row:focus-visible {
 .bs-draftmenu {
   position: fixed;
   z-index: var(--brand-z-overlay);
-  width: 340px;
+  width: 360px;
   max-width: calc(100vw - 32px);
-  max-height: 360px;
+  max-height: min(480px, calc(100vh - 96px));
   border: 1px solid var(--bs-rule);
   border-radius: var(--brand-radius-lg);
   background: var(--bs-surface-1);
@@ -9662,13 +9662,22 @@ a.bs-row:focus-visible {
   cursor: pointer;
 }
 
-/* A change's title is a sentence; in a 340px menu it ends in an ellipsis
-   rather than off the edge. */
+/* A draft's name is often a sentence, and the words that tell two apart are
+   at its end: it wraps to a second line before it is cut short. */
 .bs-draftmenu-pick {
   min-width: 0;
 }
 
-.bs-draftmenu-pick .bs-row-name,
+.bs-draftmenu-pick .bs-row-name {
+  display: -webkit-box;
+  white-space: normal;
+  max-width: 100%;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
 .bs-draftmenu-pick .bs-row-meta {
   max-width: 100%;
   overflow: hidden;
@@ -10954,19 +10963,25 @@ a.binder-latest-title:focus-visible {
 /* ─── A document open in the editor ──────────────────────────────────────
    **Full page, the way Word opens a file.** The product's map and the binder's
    files go while a document is open — beside a ribbon and a navigation pane
-   they left Letter at half size on a laptop — and the sheet fills the window
-   under the top bar. The header is one line, a title bar rather than a page
-   title: the policy's name, where Save goes, Close and Save. Everything under
+   they left Letter at half size on a laptop — and so does the app's top bar:
+   the editor's own title bar says which binder, folder, document and draft,
+   and Close is the way out. The sheet fills the window edge to edge. The
+   header is one line, a title bar rather than a page title. Everything under
    it is the editor, sized to the window so the page scrolls inside it and the
    ribbon and status bar stay put. `bs-writing` is set on <html> by the editor
    page while it is mounted. */
 html.bs-writing .app-sidebar,
-html.bs-writing .app-explorer {
+html.bs-writing .app-explorer,
+html.bs-writing .app-topnav,
+html.bs-writing .app-bottom-nav {
   display: none;
 }
 
 html.bs-writing .app-canvas {
-  margin-left: var(--brand-space-2);
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 html.bs-writing .app-main-area {
@@ -11007,21 +11022,45 @@ html.bs-writing .app-main {
   gap: var(--brand-space-4);
   min-height: 52px;
   padding: var(--brand-space-2) var(--brand-space-3) var(--brand-space-2)
-    var(--brand-space-5);
+    var(--brand-space-4);
   border-bottom: 1px solid var(--bs-rule);
+  background: var(--bs-surface-2);
 }
 
+/* Binder / folder / document: the trail the top bar used to carry, ending in
+   the one thing this page is about. */
 .doc-editor-head-body {
   display: flex;
-  flex: 1 1 auto;
-  align-items: baseline;
-  gap: var(--brand-space-3);
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--brand-space-1);
   min-width: 0;
 }
 
-.doc-editor-title {
+.doc-editor-trail {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--brand-space-1);
+  min-width: 0;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+  white-space: nowrap;
+}
+
+.doc-editor-trail-binder {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.doc-editor-trail-sep {
   flex: none;
-  max-width: 50%;
+  color: var(--bs-text-faint);
+}
+
+.doc-editor-title {
+  flex: 0 1 auto;
+  min-width: 6rem;
   margin: 0;
   overflow: hidden;
   font-family: var(--brand-font-serif);
@@ -11096,37 +11135,31 @@ html.bs-writing .app-main {
   outline: none;
 }
 
+/* Where Save puts things, and whether it has. The draft and its state sit
+   together, so "Saved" is never read as being about anything else. */
 .doc-editor-where {
   display: flex;
+  flex: 1 1 auto;
   align-items: center;
-  gap: var(--brand-space-1-5);
+  gap: var(--brand-space-2);
   min-width: 0;
   margin: 0;
-  overflow: hidden;
   color: var(--bs-text-muted);
-  font-size: var(--brand-text-ui-md);
+  font-size: var(--brand-text-ui-sm);
   white-space: nowrap;
 }
 
-.doc-editor-where > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* The draft picker, where Save says where it puts things: the binder bar's
-   control, a size down to sit in a line of text. */
+/* The draft picker: the binder bar's control, a size down to sit in a line
+   of text. */
 .doc-editor-where .bs-draftpick {
-  min-height: 26px;
+  min-height: 28px;
+  max-width: 22rem;
   font-size: var(--brand-text-ui-sm);
 }
 
-.doc-editor-where-label,
-.doc-editor-where-more {
-  flex: none;
-}
-
-.doc-editor-where svg {
-  flex: none;
+.doc-editor-where .bs-draftpick > span:first-of-type {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .doc-editor-where strong {
@@ -11134,10 +11167,33 @@ html.bs-writing .app-main {
   font-weight: var(--brand-weight-medium);
 }
 
+/* Saving into a change request in place: the change, named, with what that
+   means in its tooltip. */
+.doc-editor-change {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--brand-space-1);
+  min-height: 28px;
+  padding: 0 var(--brand-space-2);
+  border: 1.5px solid var(--bs-coral-border);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-coral-glow);
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.doc-editor-status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .doc-editor-head-actions {
   display: flex;
   flex: none;
   gap: var(--brand-space-2);
+  margin-left: auto;
 }
 
 /* AutoRecover's offer: a strip under the title bar, where Word puts its
@@ -11374,14 +11430,17 @@ html.bs-writing .app-main {
 }
 
 @media (max-width: 900px) {
-  .doc-editor-where-more {
+  /* The binder's name is the first thing to go; the document and the draft
+     are what the bar is for. */
+  .doc-editor-trail {
     display: none;
   }
 }
 
 @media (max-width: 640px) {
   /* A phone's shell is in block flow, so the editor takes a height of its
-     own: the window, less the top bar, the title bar and the tab bar. */
+     own: the window, less the binder's tab strip and the title bar's two
+     lines. The app's top bar is gone while writing. */
   html.bs-writing .app-main-area,
   html.bs-writing .app-main,
   .docw-page--writing,
@@ -11397,14 +11456,21 @@ html.bs-writing .app-main {
     display: none;
   }
 
+  /* Title and actions on the first line, the draft and its state on the
+     second: a phone has no room for the three side by side. */
   .doc-editor-head {
+    flex-wrap: wrap;
+    gap: var(--brand-space-1) var(--brand-space-2);
     padding-left: var(--brand-space-4);
   }
 
   .doc-editor-head-body {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0;
+    flex: 1 1 0;
+  }
+
+  .doc-editor-where {
+    order: 3;
+    flex-basis: 100%;
   }
 
   .doc-editor-title {
@@ -11412,12 +11478,8 @@ html.bs-writing .app-main {
   }
 
   .doc-editor-frame {
-    height: calc(100dvh - var(--brand-nav-height) - 196px);
+    height: calc(100dvh - 136px);
   }
-}
-
-.doc-editor-status {
-  white-space: nowrap;
 }
 
 .doc-editor-status--unsaved {

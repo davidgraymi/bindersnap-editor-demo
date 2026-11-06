@@ -24,6 +24,20 @@ import { signUpAndConfirm } from "./mailpit";
 import { isCommitRef } from "../packages/utils/gitRef";
 import { LEGAL_VERSION } from "../packages/utils/legal";
 
+/**
+ * Most of these drive the classic ribbon's commands — Cut, Paste options,
+ * Format Painter, the Font group — so they run with it, as a person who chose
+ * it would. The one-row layout every new browser starts with has tests of
+ * its own, which choose it.
+ */
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    if (localStorage.getItem("bindersnap:ribbon-layout") === null) {
+      localStorage.setItem("bindersnap:ribbon-layout", "classic");
+    }
+  });
+});
+
 test.describe.configure({ mode: "parallel", timeout: 240_000 });
 
 // A desktop window, wide enough that the ribbon shows its Styles gallery:
@@ -234,7 +248,8 @@ test("a policy written here opens in the editor, and Save puts it in your draft"
 
   const text = page.getByRole("textbox", { name: "Hand Hygiene" });
   await expect(text).toContainText("Clean your hands");
-  await expect(page.getByText("No changes yet")).toBeVisible();
+  // Nothing typed, nothing to say: the title bar says only where it saves.
+  await expect(page.locator(".doc-editor-status")).toHaveText("");
   // The draft's files are beside the page, and this one is marked.
   await expect(
     page
@@ -713,7 +728,8 @@ test("the title bar says where the policy is filed, and moves it from there", as
   const filed = page.getByRole("button", {
     name: "Move Hand Hygiene, filed at the top level",
   });
-  await expect(filed).toHaveText("Top level");
+  // At the top level, the binder is the last place in the trail.
+  await expect(filed).toHaveText("Clinical Policies");
   await filed.click();
   await page.getByLabel("Where it goes").selectOption({ label: "Nursing" });
   await page.getByRole("button", { name: "Move", exact: true }).click();
@@ -724,6 +740,57 @@ test("the title bar says where the policy is filed, and moves it from there", as
   await expect(
     page.getByRole("button", { name: "Move Hand Hygiene, filed in Nursing" }),
   ).toHaveText("Nursing");
+});
+
+test("writing is one bar over one row of commands, and the full ribbon is a press away", async ({
+  page,
+}) => {
+  // A browser that has never chosen: the one-row layout.
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem("layout-reset") === null) {
+      sessionStorage.setItem("layout-reset", "1");
+      localStorage.removeItem("bindersnap:ribbon-layout");
+    }
+  });
+  const { session, org, binder } = await provision();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/hand-hygiene`);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const text = page.getByRole("textbox", { name: "Hand Hygiene" });
+  await text.getByText("Clean your hands").click();
+
+  // The app's own bar goes while writing; the title bar carries the binder.
+  await expect(page.locator(".app-topnav")).toBeHidden();
+  await expect(page.locator(".doc-editor-trail")).toContainText(
+    "Clinical Policies",
+  );
+
+  // One row: the style first, and no clipboard buttons.
+  const style = page.getByRole("button", { name: "Style", exact: true });
+  await expect(style).toHaveText("Normal");
+  await expect(page.getByRole("button", { name: "Cut" })).toHaveCount(0);
+  await style.click();
+  await page.getByRole("menuitemradio", { name: "Heading 2" }).click();
+  await expect(style).toHaveText("Heading 2");
+  await expect(text.locator("h2, h3").first()).toContainText(
+    "Clean your hands",
+  );
+
+  // The font is in More, a press away.
+  await page.getByRole("button", { name: "More formatting" }).click();
+  await expect(
+    page.getByRole("button", { name: "Font", exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  // The full ribbon, chosen once, stays chosen.
+  await page.getByRole("button", { name: "Show the full ribbon" }).click();
+  await expect(page.getByRole("button", { name: "Cut" })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Cut" })).toBeVisible();
+  await page.getByRole("button", { name: "Show one row" }).click();
+  await expect(page.getByRole("button", { name: "Cut" })).toHaveCount(0);
 });
 
 test("Ctrl+/ lists the keyboard shortcuts, and Escape goes back to the words", async ({
@@ -1122,7 +1189,7 @@ test("the editor's file panel starts a policy, and moves between policies keepin
   await expect(hand).toContainText("Clean your hands");
   await expect(visitorRow.locator(".doc-files-unsaved")).toBeVisible();
   await expect(page.locator(".doc-editor-status")).toHaveText(
-    "No changes yet · 1 other policy unsaved",
+    "1 other policy unsaved",
   );
 
   // Words in this one too, then back: the first is as it was left, at once.
@@ -1888,7 +1955,7 @@ test("the author edits an open change request in the editor, and saves into it",
     new RegExp(`/hand-hygiene\\?edit=write&change=${change}`),
   );
   await expect(page.locator(".doc-editor-where")).toContainText(
-    new RegExp(`Saving to\\s*Change ${change}\\b`),
+    new RegExp(`Change ${change}\\b`),
   );
   await expect(
     page.getByRole("button", { name: "Propose", exact: true }),
@@ -1981,9 +2048,10 @@ test("a proposed draft keeps its name, and its change's chip goes back into it",
   await page.goto(
     `${APP_BASE_URL}/${org}/${binder}/hand-hygiene?edit=write&draft=${encodeURIComponent(branch)}`,
   );
-  await expect(page.locator(".doc-editor-where")).toContainText(
-    `proposed as change ${change}`,
-  );
+  // The way to its change request is where Propose was.
+  await expect(
+    page.getByRole("button", { name: `Change ${change}`, exact: true }),
+  ).toBeVisible();
   await expect(text).toContainText("Every time.");
   await expect(
     page.getByRole("button", { name: "Propose", exact: true }),

@@ -12,13 +12,7 @@ import {
 } from "react";
 import type { Editor, JSONContent } from "@tiptap/core";
 import type { EditorState } from "@tiptap/pm/state";
-import {
-  Folder,
-  GitBranch,
-  GitPullRequest,
-  History,
-  Pencil,
-} from "lucide-react";
+import { Folder, GitPullRequest, History, Pencil } from "lucide-react";
 
 import type {
   BinderArchivePayload,
@@ -868,13 +862,13 @@ export function DocumentEditorPage({
           ? "Unsaved changes"
           : save.kind === "saved"
             ? `Saved ${formatAge(save.at)}`
-            : "No changes yet";
+            : "";
   // The others are one glance away in the panel's marks; the count is here
-  // too, beside this one's, so the status bar tells the whole story.
+  // too, beside this one's, so the title bar tells the whole story.
   const statusElsewhere =
     unsavedElsewhere.size === 0
       ? ""
-      : ` · ${unsavedElsewhere.size} other ${
+      : `${status === "" ? "" : " · "}${unsavedElsewhere.size} other ${
           unsavedElsewhere.size === 1 ? "policy" : "policies"
         } unsaved`;
 
@@ -1016,19 +1010,6 @@ export function DocumentEditorPage({
               setDirty(false);
               offerKept(now);
             }}
-            statusStart={
-              <span
-                className={`doc-editor-status${
-                  dirty || save.kind === "failed"
-                    ? " doc-editor-status--unsaved"
-                    : ""
-                }`}
-                role="status"
-              >
-                {status}
-                {statusElsewhere}
-              </span>
-            }
           />
         </Suspense>
       </div>
@@ -1066,10 +1047,61 @@ export function DocumentEditorPage({
   const current = drafts?.draft ?? null;
   const proposable = anyUnsaved || (current?.acts.length ?? 0) > 0;
 
+  /** The folder the open policy is filed in, when it can be moved from here. */
+  const filedAt =
+    renamable && !titling && (load.kind === "ready" || load.kind === "foreign")
+      ? load.detail.document.folder
+      : null;
+
   return (
     <div className="doc-editor-page">
       <header className="doc-editor-head">
+        {/* **The one bar while writing.** The app's own top bar goes while a
+            document is open (`bs-writing`), so this line says everything the
+            two used to: which binder, which folder, which document, which
+            draft, whether it is saved — and the way out. */}
         <div className="doc-editor-head-body">
+          <span className="doc-editor-trail">
+            {/* **Where it is filed, as the trail** — and the way to file it
+                somewhere else, as the folder beside a Google Doc's title is.
+                The last place in the trail is the Move button: the folder,
+                or the binder itself for a policy at the top level. */}
+            {filedAt === null ? (
+              <span className="doc-editor-trail-binder">{binderName}</span>
+            ) : filedAt === "" ? (
+              <button
+                type="button"
+                className="doc-editor-folder"
+                title="Move to a folder"
+                aria-label={`Move ${name}, filed at the top level`}
+                disabled={filesBusy}
+                onClick={() => setRefiling(true)}
+              >
+                <span>{binderName}</span>
+              </button>
+            ) : (
+              <>
+                <span className="doc-editor-trail-binder">{binderName}</span>
+                <span className="doc-editor-trail-sep" aria-hidden="true">
+                  /
+                </span>
+                <button
+                  type="button"
+                  className="doc-editor-folder"
+                  title="Move to another folder"
+                  aria-label={`Move ${name}, filed in ${folderLabel(filedAt)}`}
+                  disabled={filesBusy}
+                  onClick={() => setRefiling(true)}
+                >
+                  <Folder size={13} strokeWidth={1.75} aria-hidden="true" />
+                  <span>{folderLabel(filedAt)}</span>
+                </button>
+              </>
+            )}
+            <span className="doc-editor-trail-sep" aria-hidden="true">
+              /
+            </span>
+          </span>
           <h1 className="doc-editor-title">
             {titling ? (
               <InlineRename
@@ -1106,79 +1138,50 @@ export function DocumentEditorPage({
               name
             )}
           </h1>
-          {/* **Where it is filed, beside what it is called** — and the way
-              to file it somewhere else, as the folder beside a Google Doc's
-              title is. The folder was only in the panel's tree, which is
-              shut on a tablet. */}
-          {renamable &&
-          !titling &&
-          (load.kind === "ready" || load.kind === "foreign") ? (
-            <button
-              type="button"
-              className="doc-editor-folder"
-              title="Move to another folder"
-              aria-label={`Move ${name}, filed ${
-                load.detail.document.folder === ""
-                  ? "at the top level"
-                  : `in ${folderLabel(load.detail.document.folder)}`
-              }`}
-              disabled={filesBusy}
-              onClick={() => setRefiling(true)}
-            >
-              <Folder size={13} strokeWidth={1.75} aria-hidden="true" />
-              <span>
-                {load.detail.document.folder === ""
-                  ? "Top level"
-                  : folderLabel(load.detail.document.folder)}
-              </span>
-            </button>
-          ) : null}
-          {/* Where Save puts things, said before it is pressed. */}
+        </div>
+        {/* Where Save puts things, and whether it has: one place for both.
+            What a draft is — nothing on record moves until it is approved —
+            is the picker's to say, in its menu, not this bar's on every
+            visit. */}
+        <div className="doc-editor-where">
           {change ? (
-            <p
-              className="doc-editor-where"
-              title="The version on record does not change until the change is published."
+            <span
+              className="doc-editor-change"
+              title={`${change.title} — its reviewers see every save. The version on record does not change until the change is published.`}
             >
               <GitPullRequest size={14} strokeWidth={1.75} aria-hidden="true" />
-              <span className="doc-editor-where-label">Saving to</span>
-              <strong>Change {change.number}</strong>
-              <span className="doc-editor-where-more">
-                · {change.title} — its reviewers see every save
-              </span>
-            </p>
+              Change {change.number}
+            </span>
+          ) : drafts && current ? (
+            /* **Which draft, and the way to the others, here.** Changing
+               drafts meant closing the policy, finding the binder's own page
+               and its picker, and opening the policy again — and with two
+               drafts called "Draft of 27 September", saving into one and
+               proposing the other. */
+            <BinderDraftPicker
+              org={org}
+              drafts={drafts.drafts}
+              others={drafts.others}
+              current={current.branch}
+              busy={draftBusy}
+              onSwitch={(branch) => leave({ kind: "draft", branch })}
+              onStart={(name) => leave({ kind: "start", name })}
+              onRename={onRenameDraft}
+            />
           ) : (
-            <p
-              className="doc-editor-where"
-              title="The version on record does not change until the draft is proposed and approved."
-            >
-              <GitBranch size={14} strokeWidth={1.75} aria-hidden="true" />
-              <span className="doc-editor-where-label">Saving to</span>
-              {/* **Which draft, and the way to the others, here.** Changing
-                drafts meant closing the policy, finding the binder's own page
-                and its picker, and opening the policy again — and with two
-                drafts called "Draft of 27 September", saving into one and
-                proposing the other. */}
-              {drafts && current ? (
-                <BinderDraftPicker
-                  org={org}
-                  drafts={drafts.drafts}
-                  others={drafts.others}
-                  current={current.branch}
-                  busy={draftBusy}
-                  onSwitch={(branch) => leave({ kind: "draft", branch })}
-                  onStart={(name) => leave({ kind: "start", name })}
-                  onRename={onRenameDraft}
-                />
-              ) : (
-                <strong>{draftName ?? "your draft"}</strong>
-              )}
-              <span className="doc-editor-where-more">
-                {current?.changeNumber != null
-                  ? ` · proposed as change ${current.changeNumber} — its reviewers see every save`
-                  : " · nothing on record changes until it is approved"}
-              </span>
-            </p>
+            <strong>{draftName ?? "your draft"}</strong>
           )}
+          <span
+            className={`doc-editor-status${
+              dirty || save.kind === "failed"
+                ? " doc-editor-status--unsaved"
+                : ""
+            }`}
+            role="status"
+          >
+            {status}
+            {statusElsewhere}
+          </span>
         </div>
         <div className="doc-editor-head-actions">
           <button
