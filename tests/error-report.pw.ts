@@ -28,6 +28,9 @@ async function standInForTheWorker(page: Page) {
 test("an uncaught error is reported once, without who or where", async ({
   page,
 }) => {
+  // Sign-in and two page loads alone can take most of the default 10 s on a
+  // busy runner; the report itself arrives in about a second.
+  test.setTimeout(30_000);
   const reports = await standInForTheWorker(page);
   await signInAsAlice(page);
   await page.goto("/riverside-health/clinical");
