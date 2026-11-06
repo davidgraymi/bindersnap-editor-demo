@@ -11,6 +11,7 @@ export type RenameBinderDraft200DraftsItem = {
   /** @nullable */
   updatedAt: string | null;
   actCount: number;
+  documentCount: number;
   /** @nullable */
   lastAct: string | null;
   /** @nullable */

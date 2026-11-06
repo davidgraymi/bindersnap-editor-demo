@@ -7,6 +7,7 @@ const draft = (over: Partial<Parameters<typeof describeDraft>[0]> = {}) => ({
   name: "Reorganise nursing",
   updatedAt: "2026-09-19T10:00:00Z",
   actCount: 3,
+  documentCount: 0,
   lastAct: "Rename Nursing to Nursing and Midwifery",
   changeNumber: null,
   ...over,
@@ -36,6 +37,21 @@ test("one change is one change", () => {
  * ago reported "edited 2 days ago" — a date about somebody else's work, on a
  * row about yours.
  */
+test("a draft counts the documents it changes, not how often they were saved", () => {
+  expect(
+    describeDraft(
+      draft({
+        actCount: 40,
+        documentCount: 2,
+        updatedAt: new Date(Date.now() - 240_000).toISOString(),
+      }),
+    ),
+  ).toBe("2 documents changed · edited 4 minutes ago");
+  expect(describeDraft(draft({ documentCount: 1, changeNumber: 7 }))).toBe(
+    "Proposed as change 7 · 1 document changed",
+  );
+});
+
 test("a draft with nothing in it has never been edited", () => {
   expect(describeDraft(draft({ actCount: 0 }))).toBe("Nothing in it yet");
 });

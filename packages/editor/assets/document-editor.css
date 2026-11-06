@@ -156,6 +156,109 @@
   color: var(--bs-text-primary);
 }
 
+/* ─── One row: Word's simplified ribbon ─────────────────────────────────
+   Every tab's commands on a single line, small, with no group names under
+   them — the groups are told apart by the rule between them. A command the
+   classic ribbon draws large keeps its label, beside its icon rather than
+   under it, so nothing that had words loses them. */
+.bs-ribbon--simple .bs-ribbon-panel {
+  align-items: center;
+  min-height: 0;
+  padding: var(--brand-space-1) var(--brand-space-8) var(--brand-space-1)
+    var(--brand-space-1);
+}
+
+.bs-ribbon--simple .bs-ribbon-collapse {
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%);
+}
+
+.bs-ribbon--simple .bs-rgroup {
+  flex-direction: row;
+  align-items: center;
+  padding: 0 var(--brand-space-1-5);
+}
+
+.bs-ribbon--simple .bs-rgroup-label {
+  display: none;
+}
+
+.bs-ribbon--simple .bs-rgroup-body,
+.bs-ribbon--simple .bs-rgroup--font .bs-rgroup-body,
+.bs-ribbon--simple .bs-rgroup:has(.bs-rrow) .bs-rgroup-body,
+.bs-ribbon--simple .bs-rstack,
+.bs-ribbon--simple .bs-rsplit {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--brand-space-0-5);
+}
+
+.bs-ribbon--simple .bs-rb--large,
+.bs-ribbon--simple .bs-rdrop--large {
+  flex-direction: row;
+  gap: var(--brand-space-1-5);
+  min-width: 28px;
+  height: 28px;
+  padding: 0 var(--brand-space-1-5);
+}
+
+.bs-ribbon--simple .bs-rb--large svg,
+.bs-ribbon--simple .bs-rdrop--large svg {
+  width: 16px;
+  height: 16px;
+}
+
+.bs-ribbon--simple .bs-rb--large .bs-rb-label,
+.bs-ribbon--simple .bs-rdrop--large .bs-rb-label {
+  font-size: var(--brand-text-ui-sm);
+}
+
+.bs-ribbon--simple .bs-rb--labelled {
+  height: 28px;
+}
+
+/* Too narrow for every label in one row — the Insert tab beside the file
+   panel on a laptop — the labels go, to the eye only: each is still the
+   button's name to a screen reader, and its tooltip. */
+.bs-ribbon--simple .bs-ribbon-panel {
+  container-type: inline-size;
+}
+
+@container (max-width: 1120px) {
+  .bs-ribbon--simple .bs-rb--large .bs-rb-label,
+  .bs-ribbon--simple .bs-rdrop--large .bs-rb-label,
+  .bs-ribbon--simple .bs-rb--labelled .bs-rb-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+
+.bs-ribbon--simple .bs-rdrop--large .bs-rdrop-chevron {
+  margin-top: 0;
+}
+
+.bs-ribbon--simple .bs-rsplit > .bs-rb--large {
+  height: 28px;
+  padding-bottom: 0;
+  border-radius: var(--brand-radius-sm) 0 0 var(--brand-radius-sm);
+}
+
+.bs-ribbon--simple .bs-rdrop--split {
+  height: 28px;
+  border-radius: 0 var(--brand-radius-sm) var(--brand-radius-sm) 0;
+}
+
+/* The style the cursor is in, as a field: the first thing a policy is
+   written with. */
+.bs-rdrop--style {
+  width: 132px;
+}
+
 .bs-rgroup {
   display: flex;
   flex: none;

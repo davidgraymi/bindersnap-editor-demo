@@ -408,7 +408,9 @@ test("a rename in the tree lands in the draft, and the row keeps it", async ({
   await expect(
     page.locator(".binder-tree-label", { hasText: "Hand Hygiene and PPE" }),
   ).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator(".bs-draftbar")).toContainText("1 change");
+  await expect(page.locator(".bs-draftbar")).toContainText(
+    "1 document changed",
+  );
 
   // And the record is untouched, which is the half a screenshot cannot show.
   const onRecord = await listDocuments(session, org, binder);
@@ -456,9 +458,12 @@ test("Propose opens the change request, with the words the author wrote", async 
   const box = page.getByRole("textbox", { name: "New name" });
   await box.fill("Hand Hygiene and PPE");
   await box.press("Enter");
-  await expect(page.locator(".bs-draftbar")).toContainText("1 change", {
-    timeout: 30_000,
-  });
+  await expect(page.locator(".bs-draftbar")).toContainText(
+    "1 document changed",
+    {
+      timeout: 30_000,
+    },
+  );
 
   await page.getByRole("button", { name: "Propose" }).click();
   // Which draft is being proposed, because a person may have several.
@@ -506,9 +511,12 @@ test("Discard throws the draft away and leaves the binder as it was", async ({
   const box = page.getByRole("textbox", { name: "New name" });
   await box.fill("Hand Hygiene and PPE");
   await box.press("Enter");
-  await expect(page.locator(".bs-draftbar")).toContainText("1 change", {
-    timeout: 30_000,
-  });
+  await expect(page.locator(".bs-draftbar")).toContainText(
+    "1 document changed",
+    {
+      timeout: 30_000,
+    },
+  );
 
   await page.getByRole("button", { name: "Discard" }).click();
 
@@ -588,9 +596,12 @@ test("a policy dragged onto a folder is filed there", async ({ page }) => {
 
   await handbook.dragTo(nursing);
 
-  await expect(page.locator(".bs-draftbar")).toContainText("1 change", {
-    timeout: 30_000,
-  });
+  await expect(page.locator(".bs-draftbar")).toContainText(
+    "1 document changed",
+    {
+      timeout: 30_000,
+    },
+  );
   expect(await draftActs(session, org, binder)).toEqual([
     "Move Staff Handbook to Nursing",
   ]);
@@ -625,9 +636,12 @@ test("a folder dragged onto another takes everything in it", async ({
       page.locator(".binder-tree-row--folder").filter({ hasText: "Clinical" }),
     );
 
-  await expect(page.locator(".bs-draftbar")).toContainText("2 changes", {
-    timeout: 30_000,
-  });
+  await expect(page.locator(".bs-draftbar")).toContainText(
+    /\d+ documents? changed/,
+    {
+      timeout: 30_000,
+    },
+  );
   expect(await draftActs(session, org, binder)).toEqual([
     "Move the folder Nursing to Clinical / Nursing",
     "Add the folder Clinical",
@@ -688,9 +702,12 @@ test("the Move button files something without a pointer", async ({ page }) => {
     .selectOption("nursing");
   await page.getByRole("button", { name: "Move", exact: true }).click();
 
-  await expect(page.locator(".bs-draftbar")).toContainText("1 change", {
-    timeout: 30_000,
-  });
+  await expect(page.locator(".bs-draftbar")).toContainText(
+    "1 document changed",
+    {
+      timeout: 30_000,
+    },
+  );
   expect(await draftActs(session, org, binder)).toEqual([
     "Move Staff Handbook to Nursing",
   ]);
@@ -723,9 +740,12 @@ test("a policy dragged out of its folder lands at the top level", async ({
   await zone.hover();
   await page.mouse.up();
 
-  await expect(page.locator(".bs-draftbar")).toContainText("1 change", {
-    timeout: 30_000,
-  });
+  await expect(page.locator(".bs-draftbar")).toContainText(
+    "1 document changed",
+    {
+      timeout: 30_000,
+    },
+  );
   expect(await draftActs(session, org, binder)).toEqual([
     "Move Hand Hygiene to the binder’s top level",
   ]);

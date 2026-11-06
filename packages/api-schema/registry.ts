@@ -1741,6 +1741,14 @@ registry.registerPath({
              * "Upload: document.json" — a file name nobody chose.
              */
             source: z.enum(["editor", "converted"]).optional(),
+            /**
+             * `"true"` when the editor saved on its own: into a draft nobody
+             * has been shown, it may take the place of the last save of the
+             * same document, so a draft holds "Edit Hand Hygiene" once rather
+             * than once per pause in the typing. The server decides; a save
+             * it cannot fold is an ordinary commit.
+             */
+            fold: z.enum(["true"]).optional(),
           }),
         },
       },

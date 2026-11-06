@@ -1390,8 +1390,13 @@ export const OwnDraftSchema = z.object({
   /** What its author called it, or its date when it was made before names. */
   name: z.string(),
   updatedAt: z.string().nullable(),
-  /** How many acts are in it. What the picker's "3 changes" counts. */
+  /** How many acts are in it. */
   actCount: z.number(),
+  /**
+   * How many documents it changes, by identity: a policy edited, renamed and
+   * edited again is one. What the picker's "2 documents changed" counts.
+   */
+  documentCount: z.number(),
   lastAct: z.string().nullable(),
   /**
    * The change request open on it, once proposed. Still yours, still

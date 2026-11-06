@@ -17,8 +17,10 @@ import {
   Bold,
   CalendarDays,
   CaseSensitive,
+  ChevronDown,
   ChevronUp,
   ClipboardPaste,
+  Ellipsis,
   Code,
   Columns3,
   Copy,
@@ -149,6 +151,21 @@ const TAB_LABELS: Record<RibbonTab, string> = {
   picture: "Picture",
 };
 
+/** Where the ribbon's layout is kept, per browser: a habit, not a setting. */
+const LAYOUT_KEY = "bindersnap:ribbon-layout";
+
+export type RibbonLayout = "simple" | "classic";
+
+function readLayout(): RibbonLayout {
+  try {
+    return globalThis.localStorage?.getItem(LAYOUT_KEY) === "classic"
+      ? "classic"
+      : "simple";
+  } catch {
+    return "simple";
+  }
+}
+
 export function Ribbon({
   editor,
   view,
@@ -162,6 +179,24 @@ export function Ribbon({
   const format = useFormatState(editor);
   const [chosen, setChosen] = useState<RibbonTab>("home");
   const [collapsed, setCollapsed] = useState(false);
+  /**
+   * **One row unless asked for more**, as Word's simplified ribbon is. The
+   * classic ribbon is three rows of commands under its tabs, and on a laptop
+   * the page started a third of the way down the screen; the people writing
+   * here write all day, in that page. The classic ribbon is one press away,
+   * and stays chosen once chosen.
+   */
+  const [layout, setLayoutState] = useState<RibbonLayout>(readLayout);
+  const simple = layout === "simple";
+  const setLayout = (next: RibbonLayout) => {
+    setLayoutState(next);
+    setFold(0);
+    try {
+      globalThis.localStorage?.setItem(LAYOUT_KEY, next);
+    } catch {
+      // A browser that keeps nothing still switches, for this sitting.
+    }
+  };
 
   /**
    * How far the Home tab is folded to fit, as Word's ribbon folds: the style
@@ -226,11 +261,11 @@ export function Ribbon({
 
   useLayoutEffect(() => {
     const panel = panelRef.current;
-    if (!panel || tab !== "home") return;
+    if (!panel || tab !== "home" || simple) return;
     if (panel.scrollWidth > panel.clientWidth + 1 && fold < MAX_FOLD) {
       setFold(fold + 1);
     }
-  }, [fold, tab, panelWidth, fontsLoaded]);
+  }, [fold, tab, panelWidth, fontsLoaded, simple]);
 
   const pickTab = (next: RibbonTab) => {
     if (collapsed) setCollapsed(false);
@@ -238,7 +273,11 @@ export function Ribbon({
   };
 
   return (
-    <div className={`bs-ribbon${collapsed ? " bs-ribbon--collapsed" : ""}`}>
+    <div
+      className={`bs-ribbon${collapsed ? " bs-ribbon--collapsed" : ""}${
+        simple ? " bs-ribbon--simple" : ""
+      }`}
+    >
       <div className="bs-ribbon-bar">
         {/* Word's Quick Access Toolbar: Undo and Redo, above everything. */}
         <div className="bs-ribbon-quick">
@@ -292,7 +331,9 @@ export function Ribbon({
           role="tabpanel"
           aria-labelledby={`bs-ribbon-tab-${tab}`}
         >
-          {tab === "home" ? (
+          {tab === "home" && simple ? (
+            <SimpleHomeTab editor={editor} format={format} onFind={onFind} />
+          ) : tab === "home" ? (
             <HomeTab
               editor={editor}
               format={format}
@@ -320,15 +361,25 @@ export function Ribbon({
             <PictureTab editor={editor} format={format} />
           )}
 
+          {/* One row, or Word's full ribbon. Double-clicking a tab still
+              folds either away. */}
           <button
             type="button"
             className="bs-ribbon-collapse"
-            aria-label="Collapse the ribbon"
-            title="Collapse the ribbon (double-click a tab to bring it back)"
+            aria-label={simple ? "Show the full ribbon" : "Show one row"}
+            title={
+              simple
+                ? "Show the full ribbon"
+                : "Show one row (double-click a tab to hide the ribbon)"
+            }
             onMouseDown={keepSelection}
-            onClick={() => setCollapsed(true)}
+            onClick={() => setLayout(simple ? "classic" : "simple")}
           >
-            <ChevronUp size={14} strokeWidth={2} aria-hidden="true" />
+            {simple ? (
+              <ChevronDown size={14} strokeWidth={2} aria-hidden="true" />
+            ) : (
+              <ChevronUp size={14} strokeWidth={2} aria-hidden="true" />
+            )}
           </button>
         </div>
       )}
@@ -346,6 +397,28 @@ const GALLERY_SIZE = 4;
  * Paragraph and then Font fold into one button each, as Word's groups do.
  */
 const MAX_FOLD = GALLERY_SIZE + 4;
+
+/** Make the paragraph the cursor is in one of the styles, as Word's gallery does. */
+function applyParagraphStyle(editor: Editor, id: ParagraphStyleId): void {
+  const base = editor.chain().focus().clearNodes();
+  switch (id) {
+    case "normal":
+      base.setParagraph().run();
+      return;
+    case "quote":
+      base.setParagraph().toggleBlockquote().run();
+      return;
+    case "code":
+      base.setCodeBlock().run();
+      return;
+    default:
+      base
+        .setHeading({
+          level: Number(id.replace("heading", "")) as 1 | 2 | 3 | 4,
+        })
+        .run();
+  }
+}
 
 function HomeTab({
   editor,
@@ -369,26 +442,7 @@ function HomeTab({
 
   const setSize = (pt: number) => chain().setFontSize(`${pt}pt`).run();
 
-  const applyStyle = (id: ParagraphStyleId) => {
-    const base = chain().clearNodes();
-    switch (id) {
-      case "normal":
-        base.setParagraph().run();
-        return;
-      case "quote":
-        base.setParagraph().toggleBlockquote().run();
-        return;
-      case "code":
-        base.setCodeBlock().run();
-        return;
-      default:
-        base
-          .setHeading({
-            level: Number(id.replace("heading", "")) as 1 | 2 | 3 | 4,
-          })
-          .run();
-    }
-  };
+  const applyStyle = (id: ParagraphStyleId) => applyParagraphStyle(editor, id);
 
   return (
     <>
@@ -883,6 +937,422 @@ function HomeTab({
             />
           </div>
         )}
+      </RibbonGroup>
+    </>
+  );
+}
+
+/* ─── Home, in one row ──────────────────────────────────────────────────── */
+
+const ALIGNMENTS = [
+  {
+    align: "left",
+    label: "Align left",
+    shortcut: "Ctrl+Shift+L",
+    icon: AlignLeft,
+  },
+  {
+    align: "center",
+    label: "Center",
+    shortcut: "Ctrl+Shift+E",
+    icon: AlignCenter,
+  },
+  {
+    align: "right",
+    label: "Align right",
+    shortcut: "Ctrl+Shift+R",
+    icon: AlignRight,
+  },
+  {
+    align: "justify",
+    label: "Justify",
+    shortcut: "Ctrl+Shift+J",
+    icon: AlignJustify,
+  },
+] as const;
+
+/**
+ * The Home tab as one row: Word's simplified ribbon.
+ *
+ * **What a policy is written with, in reach; the rest a press away.** A
+ * policy's look is its styles — Normal, the headings, a list — so the style
+ * comes first and is a field that says which one the cursor is in. Then the
+ * marks and the lists. The font, its size and the rest of what makes one
+ * policy look unlike the next are in More, where they are still one press
+ * away and no longer the first thing offered. Cut, Copy and Paste are the
+ * keyboard's: a browser's own, greyed out until there is a selection, and
+ * nobody's way of copying.
+ */
+function SimpleHomeTab({
+  editor,
+  format,
+  onFind,
+}: {
+  editor: Editor;
+  format: FormatState;
+  onFind: (replace: boolean) => void;
+}) {
+  const chain = () => editor.chain().focus();
+  const size = format.fontSizePt;
+  const setSize = (pt: number) => chain().setFontSize(`${pt}pt`).run();
+  const style = PARAGRAPH_STYLES.find((entry) => entry.id === format.style);
+  const alignment =
+    ALIGNMENTS.find((entry) => entry.align === format.align) ?? ALIGNMENTS[0];
+
+  return (
+    <>
+      <RibbonGroup label="Styles" className="bs-rgroup--simple">
+        <DropButton
+          label="Style"
+          tip="The paragraph's style"
+          className="bs-rdrop--font bs-rdrop--style"
+          panelClassName="bs-rpanel--list"
+          panel={(close) => (
+            <>
+              {PARAGRAPH_STYLES.map((entry) => (
+                <MenuChoice
+                  key={entry.id}
+                  checked={format.style === entry.id}
+                  hint={
+                    entry.shortcut ? shortcutLabel(entry.shortcut) : undefined
+                  }
+                  onPick={() => {
+                    applyParagraphStyle(editor, entry.id);
+                    close();
+                  }}
+                >
+                  <span className={`bs-style-menu bs-style--${entry.id}`}>
+                    <span className="bs-style-sample">{entry.label}</span>
+                  </span>
+                </MenuChoice>
+              ))}
+              <div className="bs-rmenu-sep" role="separator" />
+              <MenuChoice
+                checked={format.numberedHeadings}
+                hint="1. 1.1"
+                onPick={() => {
+                  chain().toggleHeadingNumbers().run();
+                  close();
+                }}
+              >
+                Number the headings
+              </MenuChoice>
+            </>
+          )}
+        >
+          <span className="bs-rdrop-value">{style?.label ?? ""}</span>
+        </DropButton>
+      </RibbonGroup>
+
+      <RibbonGroup label="Font" className="bs-rgroup--simple">
+        <RibbonButton
+          icon={Bold}
+          label="Bold"
+          shortcut="Ctrl+B"
+          active={format.bold}
+          onClick={() => chain().toggleBold().run()}
+        />
+        <RibbonButton
+          icon={Italic}
+          label="Italic"
+          shortcut="Ctrl+I"
+          active={format.italic}
+          onClick={() => chain().toggleItalic().run()}
+        />
+        <RibbonButton
+          icon={UnderlineIcon}
+          label="Underline"
+          shortcut="Ctrl+U"
+          active={format.underline}
+          onClick={() => chain().toggleUnderline().run()}
+        />
+        <RibbonButton
+          icon={Strikethrough}
+          label="Strikethrough"
+          active={format.strike}
+          onClick={() => chain().toggleStrike().run()}
+        />
+        <ColorDrop
+          label="Font color"
+          icon={Baseline}
+          current={format.color}
+          colors={TEXT_COLORS}
+          noneLabel="Automatic"
+          onPick={(color) =>
+            color === null
+              ? chain().unsetColor().run()
+              : chain().setColor(color).run()
+          }
+        />
+        <ColorDrop
+          label="Text highlight color"
+          icon={Highlighter}
+          current={format.highlight}
+          colors={HIGHLIGHT_COLORS}
+          noneLabel="No color"
+          onPick={(color) =>
+            color === null
+              ? chain().unsetHighlight().run()
+              : chain().setHighlight({ color }).run()
+          }
+        />
+        <RibbonButton
+          icon={RemoveFormatting}
+          label="Clear formatting"
+          onClick={() => chain().unsetAllMarks().run()}
+        />
+      </RibbonGroup>
+
+      <RibbonGroup label="Paragraph" className="bs-rgroup--simple">
+        <RibbonButton
+          icon={List}
+          label="Bullets"
+          active={format.bulletList}
+          onClick={() => chain().toggleBulletList().run()}
+        />
+        <RibbonButton
+          icon={ListOrdered}
+          label="Numbering"
+          active={format.orderedList}
+          onClick={() => chain().toggleOrderedList().run()}
+        />
+        <RibbonButton
+          icon={ListChecks}
+          label="Checklist"
+          active={format.taskList}
+          onClick={() => chain().toggleTaskList().run()}
+        />
+        <RibbonButton
+          icon={IndentDecrease}
+          label="Decrease indent"
+          shortcut="Shift+Tab"
+          onClick={() => outdent(editor)}
+        />
+        <RibbonButton
+          icon={IndentIncrease}
+          label="Increase indent"
+          shortcut="Tab"
+          onClick={() => indent(editor)}
+        />
+        {/* One button for the four, showing the one in force — Word's
+            simplified ribbon does the same. */}
+        <DropButton
+          label="Alignment"
+          tip={`Alignment: ${alignment.label}`}
+          className="bs-rdrop--icon"
+          panelClassName="bs-rpanel--list"
+          panel={(close) =>
+            ALIGNMENTS.map((entry) => (
+              <MenuChoice
+                key={entry.align}
+                checked={(format.align ?? "left") === entry.align}
+                hint={shortcutLabel(entry.shortcut)}
+                onPick={() => {
+                  chain().setTextAlign(entry.align).run();
+                  close();
+                }}
+              >
+                {entry.label}
+              </MenuChoice>
+            ))
+          }
+        >
+          <alignment.icon size={16} strokeWidth={1.75} aria-hidden="true" />
+        </DropButton>
+        <DropButton
+          label="Line and paragraph spacing"
+          className="bs-rdrop--icon"
+          panelClassName="bs-rpanel--list bs-rpanel--narrow"
+          panel={(close) =>
+            LINE_SPACINGS.map((spacing) => (
+              <MenuChoice
+                key={spacing}
+                checked={(format.lineSpacing ?? "1.15") === spacing}
+                onPick={() => {
+                  if (spacing === "1.15") chain().unsetLineSpacing().run();
+                  else chain().setLineSpacing(spacing).run();
+                  close();
+                }}
+              >
+                {spacing === "1" ? "1.0" : spacing}
+              </MenuChoice>
+            ))
+          }
+        >
+          <WrapText size={16} strokeWidth={1.75} aria-hidden="true" />
+        </DropButton>
+      </RibbonGroup>
+
+      <RibbonGroup label="More" className="bs-rgroup--simple">
+        {/* Everything else the classic Home tab has, laid out as it is
+            there: the font and its size, the rarer marks, Format Painter and
+            pasting as plain text. */}
+        <DropButton
+          label="More formatting"
+          tip="Font, size and more"
+          className="bs-rdrop--icon"
+          role="dialog"
+          panelClassName="bs-rpanel--flyout"
+          panel={(close) => (
+            <div className="bs-rgroup-flyout">
+              <div className="bs-rgroup-body">
+                <RibbonRow>
+                  <DropButton
+                    label="Font"
+                    className="bs-rdrop--font"
+                    panelClassName="bs-rpanel--list"
+                    panel={(closeFont) =>
+                      FONT_CHOICES.map((font) => (
+                        <MenuChoice
+                          key={font.label}
+                          checked={format.fontFamily === font.value}
+                          style={
+                            font.value ? { fontFamily: font.value } : undefined
+                          }
+                          onPick={() => {
+                            if (font.value === "")
+                              chain().unsetFontFamily().run();
+                            else chain().setFontFamily(font.value).run();
+                            closeFont();
+                          }}
+                        >
+                          {font.label}
+                        </MenuChoice>
+                      ))
+                    }
+                  >
+                    <span className="bs-rdrop-value">
+                      {format.fontFamily === null
+                        ? ""
+                        : (FONT_CHOICES.find(
+                            (font) => font.value === format.fontFamily,
+                          )?.label.replace(" (Geist)", "") ?? "Custom")}
+                    </span>
+                  </DropButton>
+                  <DropButton
+                    label="Font size"
+                    className="bs-rdrop--size"
+                    panelClassName="bs-rpanel--list bs-rpanel--narrow"
+                    panel={(closeSize) =>
+                      FONT_SIZES_PT.map((pt) => (
+                        <MenuChoice
+                          key={pt}
+                          checked={size === pt}
+                          onPick={() => {
+                            setSize(pt);
+                            closeSize();
+                          }}
+                        >
+                          {pt}
+                        </MenuChoice>
+                      ))
+                    }
+                  >
+                    <span className="bs-rdrop-value">{size ?? ""}</span>
+                  </DropButton>
+                  <RibbonButton
+                    icon={AArrowUp}
+                    label="Grow font"
+                    shortcut="Ctrl+]"
+                    onClick={() => setSize(stepFontSize(size ?? 11, 1))}
+                  />
+                  <RibbonButton
+                    icon={AArrowDown}
+                    label="Shrink font"
+                    shortcut="Ctrl+["
+                    onClick={() => setSize(stepFontSize(size ?? 11, -1))}
+                  />
+                </RibbonRow>
+                <RibbonRow>
+                  <RibbonButton
+                    icon={SubscriptIcon}
+                    label="Subscript"
+                    shortcut="Ctrl+,"
+                    active={format.subscript}
+                    onClick={() =>
+                      chain().unsetSuperscript().toggleSubscript().run()
+                    }
+                  />
+                  <RibbonButton
+                    icon={SuperscriptIcon}
+                    label="Superscript"
+                    shortcut="Ctrl+."
+                    active={format.superscript}
+                    onClick={() =>
+                      chain().unsetSubscript().toggleSuperscript().run()
+                    }
+                  />
+                  <DropButton
+                    label="Change case"
+                    tip="Change case (Shift+F3)"
+                    className="bs-rdrop--icon"
+                    panelClassName="bs-rpanel--list bs-rpanel--narrow"
+                    panel={(closeCase) =>
+                      CASE_MODES.map(({ mode, label }) => (
+                        <MenuChoice
+                          key={mode}
+                          onPick={() => {
+                            chain().changeCase(mode).run();
+                            closeCase();
+                          }}
+                        >
+                          {label}
+                        </MenuChoice>
+                      ))
+                    }
+                  >
+                    <CaseSensitive
+                      size={16}
+                      strokeWidth={1.75}
+                      aria-hidden="true"
+                    />
+                  </DropButton>
+                  <RibbonButton
+                    icon={Paintbrush}
+                    label="Format Painter"
+                    shortcut="Ctrl+Shift+C"
+                    tip="Format Painter: click, then select the words to give this look to. Double-click to keep it on; Escape stops."
+                    active={format.painting}
+                    onClick={() => {
+                      close();
+                      if (format.painting) chain().putDownFormatPainter().run();
+                      else chain().pickUpFormatting("once").run();
+                    }}
+                    onDoubleClick={() =>
+                      chain().pickUpFormatting("sticky").run()
+                    }
+                  />
+                  <RibbonButton
+                    icon={ClipboardPaste}
+                    label="Paste as plain text"
+                    tip="Paste as plain text, keeping only the words"
+                    onClick={() => {
+                      close();
+                      void paste(editor, "text");
+                    }}
+                  />
+                </RibbonRow>
+              </div>
+            </div>
+          )}
+        >
+          <Ellipsis size={16} strokeWidth={1.75} aria-hidden="true" />
+        </DropButton>
+      </RibbonGroup>
+
+      <RibbonGroup label="Editing" className="bs-rgroup--simple">
+        <RibbonButton
+          icon={Search}
+          label="Find"
+          shortcut="Ctrl+F"
+          onClick={() => onFind(false)}
+        />
+        <RibbonButton
+          icon={Replace}
+          label="Replace"
+          shortcut="Ctrl+H"
+          onClick={() => onFind(true)}
+        />
       </RibbonGroup>
     </>
   );

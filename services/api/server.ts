@@ -149,6 +149,7 @@ import {
   validateFullName,
 } from "../../packages/utils/personName";
 import {
+  countDraftDocuments,
   buildDocumentFilePath,
   buildDocumentSlugPath,
   archivedSequenceFromTag,
@@ -193,6 +194,7 @@ import {
 import {
   addToBinderChange,
   commitBinderFiles,
+  commitDraftSave,
   proposeBinderFileChange,
   type BinderFileOperation,
 } from "./gitea-client/binderFiles";
@@ -13063,7 +13065,15 @@ async function resolveChangeToJoin(params: {
  */
 type WorkTarget =
   | { kind: "change"; changeNumber: number; branch: string }
-  | { kind: "draft"; branch: string };
+  | {
+      kind: "draft";
+      branch: string;
+      /**
+       * The change request open on it, when the draft has been proposed: a
+       * save into it is in front of reviewers, and is never folded.
+       */
+      changeNumber: number | null;
+    };
 
 /**
  * Read `draft` and `changeNumber` off a request and say where the work goes.
@@ -13102,7 +13112,7 @@ async function resolveWorkTarget(params: {
 
   if (draftRaw === true || draftRaw === "true") {
     const draft = await openDraft({ client, org, workspace, username });
-    return { kind: "draft", branch: draft.branch };
+    return { kind: "draft", branch: draft.branch, changeNumber: null };
   }
 
   const named = await resolveOwnDraftBranch({
@@ -13114,7 +13124,11 @@ async function resolveWorkTarget(params: {
   });
   if (named === null) return null;
   if ("error" in named) return named;
-  return { kind: "draft", branch: named.branch };
+  return {
+    kind: "draft",
+    branch: named.branch,
+    changeNumber: named.changeNumber,
+  };
 }
 
 /**
@@ -13931,6 +13945,7 @@ async function describeDraft(params: {
       name: nameOf(draft),
       updatedAt: draft.updatedAt,
       actCount: (actsByBranch.get(draft.branch) ?? []).length,
+      documentCount: countDraftDocuments(actsByBranch.get(draft.branch) ?? []),
       lastAct: draft.lastAct,
       changeNumber: draft.changeNumber,
     })),
@@ -14170,6 +14185,7 @@ async function handleReviseWorkspaceDocument(
   const source = parseOptionalString(form.get("source"));
   const fromEditor = source === "editor";
   const converted = source === "converted";
+  const fold = parseOptionalString(form.get("fold")) === "true";
 
   if (!file || !documentPath) {
     return json(
@@ -14300,35 +14316,61 @@ async function handleReviseWorkspaceDocument(
         : {}),
     });
 
-    const proposed = target
-      ? await applyToWorkTarget({
+    // **The editor saving on its own, into a draft nobody has been shown**,
+    // may take the place of its last save of this document (see
+    // `commitDraftSave`). Never into a proposed draft or a change request:
+    // there every save is one its reviewers see, and stays one.
+    const folding =
+      fold &&
+      fromEditor &&
+      target?.kind === "draft" &&
+      target.changeNumber === null;
+    const proposed = folding
+      ? await commitDraftSave({
           client,
           org: orgName,
           workspace: workspaceName,
-          target,
+          branch: target.branch,
           operations,
           message,
+          username: session.username,
+        }).then(({ folded }) => {
+          logger.info("Draft save", {
+            username: session.username,
+            workspace: workspaceName,
+            folded,
+          });
+          return { branch: target.branch, changeNumber: null };
         })
-      : await proposeBinderFileChange({
-          client,
-          org: orgName,
-          workspace: workspaceName,
-          branch,
-          operations,
-          message,
-          title: `New version of ${formatDocumentName(existing.slugPath.split("/").pop() ?? existing.slugPath)}`,
-          body: [
-            `New version of ${formatDocumentName(existing.slugPath.split("/").pop() ?? existing.slugPath)}`,
-            "",
-            "A new version proposed from Bindersnap.",
-            "",
-            `Source file: ${file.name}`,
-            `Document: ${existing.slugPath}`,
-            `Binder: ${orgName}/${workspaceName}`,
-            `Proposed by: ${session.username}`,
-            `File hash (SHA-256): ${fullHash}`,
-          ].join("\n"),
-        });
+      : target
+        ? await applyToWorkTarget({
+            client,
+            org: orgName,
+            workspace: workspaceName,
+            target,
+            operations,
+            message,
+          })
+        : await proposeBinderFileChange({
+            client,
+            org: orgName,
+            workspace: workspaceName,
+            branch,
+            operations,
+            message,
+            title: `New version of ${formatDocumentName(existing.slugPath.split("/").pop() ?? existing.slugPath)}`,
+            body: [
+              `New version of ${formatDocumentName(existing.slugPath.split("/").pop() ?? existing.slugPath)}`,
+              "",
+              "A new version proposed from Bindersnap.",
+              "",
+              `Source file: ${file.name}`,
+              `Document: ${existing.slugPath}`,
+              `Binder: ${orgName}/${workspaceName}`,
+              `Proposed by: ${session.username}`,
+              `File hash (SHA-256): ${fullHash}`,
+            ].join("\n"),
+          });
 
     // A new change: Gitea has asked the CODEOWNERS of what it touches to
     // review it. Tell them. (Into an existing change, nobody new is asked.)

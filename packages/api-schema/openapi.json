@@ -12361,6 +12361,12 @@
                       "editor",
                       "converted"
                     ]
+                  },
+                  "fold": {
+                    "type": "string",
+                    "enum": [
+                      "true"
+                    ]
                   }
                 },
                 "required": [
@@ -12823,6 +12829,9 @@
                           "actCount": {
                             "type": "number"
                           },
+                          "documentCount": {
+                            "type": "number"
+                          },
                           "lastAct": {
                             "type": "string",
                             "nullable": true
@@ -12837,6 +12846,7 @@
                           "name",
                           "updatedAt",
                           "actCount",
+                          "documentCount",
                           "lastAct",
                           "changeNumber"
                         ]
@@ -13019,6 +13029,9 @@
                           "actCount": {
                             "type": "number"
                           },
+                          "documentCount": {
+                            "type": "number"
+                          },
                           "lastAct": {
                             "type": "string",
                             "nullable": true
@@ -13033,6 +13046,7 @@
                           "name",
                           "updatedAt",
                           "actCount",
+                          "documentCount",
                           "lastAct",
                           "changeNumber"
                         ]
@@ -13222,6 +13236,9 @@
                           "actCount": {
                             "type": "number"
                           },
+                          "documentCount": {
+                            "type": "number"
+                          },
                           "lastAct": {
                             "type": "string",
                             "nullable": true
@@ -13236,6 +13253,7 @@
                           "name",
                           "updatedAt",
                           "actCount",
+                          "documentCount",
                           "lastAct",
                           "changeNumber"
                         ]
