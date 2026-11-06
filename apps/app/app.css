@@ -1812,18 +1812,15 @@ input {
   color: var(--bs-text-faint);
 }
 
-/* The icon is the first thing read, so it carries the verdict. Coral stays
-   rare on purpose: it marks the one outcome that went wrong. */
+/* The icon is the first thing read, so it carries the verdict: green for
+   the record, the default faint grey for a change closed without publishing.
+   Coral is not used here — a close is not a failure anyone can prove. */
 .change-row-icon--open {
   color: var(--bs-text-secondary);
 }
 
 .change-row-icon--published {
   color: var(--brand-green);
-}
-
-.change-row-icon--declined {
-  color: var(--bs-coral-text);
 }
 
 /* A change's title is a sentence, and it wraps rather than being cut. */

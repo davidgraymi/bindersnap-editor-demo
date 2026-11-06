@@ -8,7 +8,7 @@ import type { ChangeRecord } from "../documentDisplay";
 import { DocumentChanges } from "./DocumentChanges";
 import { SkeletonPanel } from "./Skeleton";
 
-type ChangeFilter = "open" | "closed";
+type ChangeFilter = "open" | "published" | "closed";
 
 /** A row of the organization's list knows which binder it is in. */
 type OrganizationChangeRecord = ChangeRecord & { binder: string };
@@ -18,7 +18,7 @@ type OrganizationChangeRecord = ChangeRecord & { binder: string };
  *
  * **A binder's own Change requests list, one level up**, the way a GitLab
  * group lists the merge requests of every project in it: the same panel, the
- * same Open and Closed, the same row — each row leading with its binder,
+ * same Open, Published and Closed, the same row — each row leading with its binder,
  * because this list spans them. The organization's sidebar is scoped to it, so
  * the work in flight across its binders is one click from anywhere in it.
  */
@@ -31,7 +31,7 @@ export function OrganizationChanges({
 }) {
   const [filter, setFilter] = useState<ChangeFilter>("open");
   const openQuery = useQuery(organizationChangesQuery(org, "open"));
-  // Not asked for until Closed is: every binder's closed changes are the
+  // Not asked for until Published or Closed is: every binder's closed changes are the
   // organization's whole history.
   const [wantClosed, setWantClosed] = useState(false);
   const closedQuery = useQuery({
@@ -92,7 +92,7 @@ export function OrganizationChanges({
       }
       onFilterChange={(next) => {
         setFilter(next);
-        if (next === "closed" && closed === null && !closedLoading) {
+        if (next !== "open" && closed === null && !closedLoading) {
           loadClosed();
         }
       }}

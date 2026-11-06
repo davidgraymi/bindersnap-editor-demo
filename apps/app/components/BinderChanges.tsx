@@ -35,7 +35,7 @@ export function BinderChanges({
 }: BinderChangesProps) {
   const [filter, setFilter] = useState<ChangeFilter>("open");
   const openQuery = useQuery(binderChangesQuery(org, binder, "open"));
-  // Not asked for until the Closed filter is: most visits never open it, and
+  // Not asked for until Published or Closed is: most visits never open it, and
   // a binder's closed changes are its whole history.
   const [wantClosed, setWantClosed] = useState(false);
   const closedQuery = useQuery({
@@ -85,7 +85,7 @@ export function BinderChanges({
         }
         onFilterChange={(next) => {
           setFilter(next);
-          if (next === "closed" && closed === null && !closedLoading) {
+          if (next !== "open" && closed === null && !closedLoading) {
             loadClosed();
           }
         }}

@@ -1,4 +1,4 @@
-import { CircleCheck, CircleSlash, FilePen, Undo2 } from "lucide-react";
+import { CircleCheck, CircleSlash, FilePen } from "lucide-react";
 
 import { followInApp } from "../appLink";
 import type { ChangeOutcome } from "../documentDisplay";
@@ -19,9 +19,9 @@ import type { DocumentChangeView } from "../routes";
 /**
  * Where a change stands on its own page: open, or how it ended.
  *
- * `closed` is a change that ended without being published when the page does
- * not know which way — declined and withdrawn look the same from the change
- * alone, and a badge that guessed would be a claim about who decided what.
+ * Every change that ended without being published reads `Closed`, whichever
+ * outcome the server guessed: a badge that said "Declined" would be a claim
+ * about who decided what.
  */
 export type ChangeState = "open" | "closed" | ChangeOutcome;
 
@@ -38,23 +38,7 @@ export function ChangeStateBadge({ state }: { state: ChangeState }) {
       </span>
     );
   }
-  if (state === "declined") {
-    return (
-      <span className="bs-status bs-status--declined change-state">
-        <CircleSlash {...props} />
-        Declined
-      </span>
-    );
-  }
-  if (state === "withdrawn") {
-    return (
-      <span className="bs-status bs-status--withdrawn change-state">
-        <Undo2 {...props} />
-        Withdrawn
-      </span>
-    );
-  }
-  if (state === "closed") {
+  if (state === "closed" || state === "declined" || state === "withdrawn") {
     return (
       <span className="bs-status bs-status--withdrawn change-state">
         <CircleSlash {...props} />
