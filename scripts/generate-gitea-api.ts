@@ -2,8 +2,13 @@
 // Generates TypeScript types from the local Gitea instance's OpenAPI spec.
 //
 // Usage:
-//   bun run generate:api            (requires Gitea running at localhost:3000)
-//   GITEA_URL=http://host:3000 bun run generate:api
+//   bun run generate:gitea-client            (requires Gitea running at localhost:3000)
+//   GITEA_URL=http://host:3000 bun run generate:gitea-client
+//   bun run generate:gitea-client --offline  (from the committed swagger2.json)
+//
+// The output depends only on swagger2.json, extensions.json and the pinned
+// swagger2openapi and openapi-typescript, so CI regenerates it offline and
+// fails on any difference. Keep it that way: no timestamps, no npx.
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
@@ -91,7 +96,7 @@ async function main() {
   // 2. Convert Swagger 2.0 → OpenAPI 3.0
   console.log(`→ Converting to OpenAPI 3.0 ...`);
   try {
-    execSync(`npx swagger2openapi "${SWAGGER2_FILE}" -o "${OPENAPI3_FILE}"`, {
+    execSync(`bunx swagger2openapi "${SWAGGER2_FILE}" -o "${OPENAPI3_FILE}"`, {
       stdio: "ignore",
     });
   } catch (error) {
@@ -129,7 +134,7 @@ async function main() {
   // 4. Generate TypeScript types
   console.log(`→ Generating TypeScript types ...`);
   try {
-    execSync(`npx openapi-typescript "${OPENAPI3_FILE}" -o "${TYPES_FILE}"`, {
+    execSync(`bunx openapi-typescript "${OPENAPI3_FILE}" -o "${TYPES_FILE}"`, {
       stdio: "pipe",
     });
   } catch (error) {
@@ -138,11 +143,10 @@ async function main() {
   }
 
   // 5. Prepend version header
-  const generatedAt = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
-  const header = `// Generated from Gitea ${GITEA_VERSION} at ${generatedAt}
-// Source: ${offline ? SWAGGER2_FILE : `${GITEA_URL}/swagger.v1.json`}
+  const header = `// Generated from Gitea ${GITEA_VERSION}
+// Source: ${SWAGGER2_FILE}
 // Note: Types have been extended via extensions.json
-// Do not edit manually — re-run: bun run generate:api\n\n`;
+// Do not edit manually — re-run: bun run generate:gitea-client\n\n`;
 
   const typesContent = await fs.readFile(TYPES_FILE, "utf8");
   const finalFileContent = header + typesContent;

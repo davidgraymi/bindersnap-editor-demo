@@ -43,6 +43,45 @@ jobs:
       - name: Check formatting
         run: bun run format:check
 
+  generated:
+    name: Generated code
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Bun and install dependencies
+        uses: ./.github/actions/setup-bun
+
+      # Generator output is committed: the BFF's openapi.json and
+      # packages/api-client (orval), the Gitea spec and types, and the SQLite
+      # migrations. An orval bump in #755 went without a regeneration, and for
+      # a month every schema change was written into the old output by hand.
+      # Run every generator and fail on any file it changes or adds.
+      - name: Regenerate the BFF schema and client
+        run: bun run generate:bff
+
+      - name: Regenerate the Gitea types from the committed spec
+        run: bun run generate:gitea-client --offline
+
+      - name: Generate a migration for any schema change without one
+        run: bunx drizzle-kit generate
+
+      - name: Check the migrations agree with each other
+        run: bun run db:check
+
+      - name: Check nothing changed
+        run: |
+          changed=$(git status --porcelain)
+          if [ -n "$changed" ]; then
+            echo "$changed"
+            git diff --stat
+            echo "::error::Generated code is not what its generator writes. Run 'bun run generate:bff', 'bun run generate:gitea-client --offline' and 'bun run db:generate' as needed, and commit the result. Never edit generated files by hand."
+            exit 1
+          fi
+
   unit:
     name: Unit / ${{ matrix.target }}
     runs-on: ubuntu-24.04

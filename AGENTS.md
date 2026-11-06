@@ -128,7 +128,12 @@ bun run format:check  # Check without writing
 
 Unit tests live next to their source as `*.test.ts`; Playwright tests are
 `tests/*.pw.ts`. CI (`pr-verify.yml`) runs `format:check`, the three unit
-suites, `bun run build` and the integration tests.
+suites, `bun run build` and the integration tests, and reruns every
+generator — `generate:bff`, `generate:gitea-client --offline` and drizzle-kit —
+failing if any of them changes or adds a file. Never edit generated code by
+hand. The generators (`orval`, `openapi-typescript`, `swagger2openapi`) are
+pinned to exact versions: bump one on purpose, and commit what it regenerates in
+the same PR.
 
 **CI does not typecheck.** `tsconfig.json` is strict, but `bunx tsc --noEmit -p .`
 reports existing errors, most of them in tests. Run it on what you change and
