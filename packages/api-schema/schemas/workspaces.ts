@@ -582,6 +582,12 @@ export const WorkspaceChangeDetailPayloadSchema = z.object({
   viewer: z.object({
     canApprove: z.boolean(),
     canPublish: z.boolean(),
+    /**
+     * Whether they may close this change without publishing it, or reopen it
+     * once closed: its author or a binder admin. Always false on a published
+     * change, which is the record and stays as it was decided.
+     */
+    canCloseOrReopen: z.boolean(),
   }),
   /**
    * What has to be true before the change can be published, rule by rule:
