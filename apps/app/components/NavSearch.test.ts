@@ -44,7 +44,11 @@ for (const key of [
 }
 
 // JSDOM has no layout, so a highlighted row cannot scroll itself into view.
-dom.window.Element.prototype.scrollIntoView = () => {};
+// What was asked to scroll is kept, so a test can say which row it was.
+let scrolledTo: Element[] = [];
+dom.window.Element.prototype.scrollIntoView = function (this: Element) {
+  scrolledTo.push(this);
+};
 
 /**
  * React may still have decided, in a sibling test file that imported it before
@@ -348,6 +352,27 @@ test("a query too short to be a question is not asked", async () => {
 
   expect(searchCalls).toEqual([]);
   expect(rows()).toHaveLength(0);
+
+  await view.unmount();
+});
+
+test("the row the arrow keys highlight is the row scrolled into view", async () => {
+  // The bug: the list's children include each kind's heading, so the row
+  // scrolled to was one behind the highlight for every heading above it, and
+  // the highlight walked off the bottom of the panel.
+  response = found(["Vendor Agreement", "Vendor Review", "Vendor Audit"]);
+  const view = await render(createElement(NavSearch, props()));
+  await openOverlay(view.container);
+
+  const input = await type(view.container, "ven");
+  scrolledTo = [];
+  await press(input, "ArrowDown");
+  await press(input, "ArrowDown");
+  await press(input, "ArrowDown");
+
+  const active = document.querySelector(".quick-find-result--active");
+  expect(active?.textContent).toContain("Vendor Audit");
+  expect(scrolledTo.at(-1)).toBe(active!);
 
   await view.unmount();
 });
