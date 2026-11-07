@@ -21,16 +21,20 @@ afterEach(() => {
 });
 
 /**
- * Ctrl+Shift+<key>, or ⌘ on a Mac. Both are tried: ProseMirror decides which
+ * Ctrl+<modifier>+<key>, or ⌘ on a Mac. Both are tried: ProseMirror decides which
  * is "Mod" when it loads, and other tests stub the platform after that.
  */
-function pressShortcut(editor: Editor, key: string): boolean {
+function pressShortcut(
+  editor: Editor,
+  key: string,
+  modifier: "Shift" | "Alt" = "Alt",
+): boolean {
   return [false, true].some((mac) => {
     const event = {
-      key: key.toUpperCase(),
+      key: modifier === "Shift" ? key.toUpperCase() : key,
       keyCode: key.toUpperCase().charCodeAt(0),
-      shiftKey: true,
-      altKey: false,
+      shiftKey: modifier === "Shift",
+      altKey: modifier === "Alt",
       ctrlKey: !mac,
       metaKey: mac,
       preventDefault() {},
@@ -93,7 +97,7 @@ describe("the Format Painter", () => {
     expect(html).toContain('href="https://example.com"');
   });
 
-  test("Ctrl+Shift+C and Ctrl+Shift+V copy and paste a look, as in Word", () => {
+  test("Ctrl+Alt+C and Ctrl+Alt+V copy and paste a look, as in Google Docs", () => {
     const editor = editorWith("<p><em>Note</em> wash hands</p>");
     editor.commands.setTextSelection(at(editor, "Note") + 1);
     expect(pressShortcut(editor, "c")).toBe(true);
@@ -104,10 +108,18 @@ describe("the Format Painter", () => {
     expect(editor.getHTML()).toContain("wash <em>hands</em>");
   });
 
-  test("nothing copied, and Ctrl+Shift+V is left to the browser", () => {
+  test("nothing copied, and Ctrl+Alt+V does nothing", () => {
     const editor = editorWith("<p>words</p>");
     editor.commands.setTextSelection(2);
     expect(editor.commands.pasteFormatting()).toBe(false);
+  });
+
+  test("Ctrl+Shift+V is left to the browser's paste as plain text", () => {
+    const editor = editorWith("<p><em>Note</em> wash hands</p>");
+    editor.commands.setTextSelection(at(editor, "Note") + 1);
+    expect(pressShortcut(editor, "c")).toBe(true);
+    // A look copied, and the key still is not ours.
+    expect(pressShortcut(editor, "v", "Shift")).toBe(false);
   });
 
   test("the brush is picked up once or kept, and Escape puts it down", () => {
@@ -118,7 +130,7 @@ describe("the Format Painter", () => {
     expect(formatPainterState(editor.state).brush).toBe("off");
     // Down already: Escape is somebody else's.
     expect(editor.commands.putDownFormatPainter()).toBe(false);
-    // The look stays, for Ctrl+Shift+V.
+    // The look stays, for Ctrl+Alt+V.
     expect(formatPainterState(editor.state).marks).not.toBeNull();
   });
 

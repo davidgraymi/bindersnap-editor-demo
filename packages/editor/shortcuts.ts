@@ -29,6 +29,7 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
       { keys: "Ctrl+F", does: "Find" },
       { keys: "Ctrl+H", does: "Replace" },
       { keys: "Ctrl+A", does: "Select all" },
+      { keys: "Ctrl+Shift+V", does: "Paste as plain text" },
       { keys: "Ctrl+P", does: "Print" },
       { keys: "Ctrl+/", does: "Show keyboard shortcuts" },
     ],
@@ -46,8 +47,8 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
       { keys: "Ctrl+]", does: "Bigger font" },
       { keys: "Ctrl+[", does: "Smaller font" },
       { keys: "Shift+F3", does: "Change case" },
-      { keys: "Ctrl+Shift+C", does: "Copy formatting" },
-      { keys: "Ctrl+Shift+V", does: "Paste formatting" },
+      { keys: "Ctrl+Alt+C", does: "Copy formatting" },
+      { keys: "Ctrl+Alt+V", does: "Paste formatting" },
     ],
   },
   {

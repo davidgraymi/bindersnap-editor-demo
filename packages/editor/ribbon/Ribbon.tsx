@@ -472,6 +472,7 @@ function HomeTab({
                   Keep Source Formatting
                 </MenuChoice>
                 <MenuChoice
+                  hint="Ctrl+Shift+V"
                   onPick={() => {
                     close();
                     void paste(editor, "text");
@@ -511,7 +512,7 @@ function HomeTab({
           <RibbonButton
             icon={Paintbrush}
             label="Format Painter"
-            shortcut="Ctrl+Shift+C"
+            shortcut="Ctrl+Alt+C"
             tip="Format Painter: click, then select the words to give this look to. Double-click to keep it on; Escape stops."
             showLabel={!compactClipboard}
             active={format.painting}
@@ -831,9 +832,7 @@ function HomeTab({
                 <MenuChoice
                   key={style.id}
                   checked={format.style === style.id}
-                  hint={
-                    style.shortcut ? shortcutLabel(style.shortcut) : undefined
-                  }
+                  hint={style.shortcut}
                   onPick={() => {
                     applyStyle(style.id);
                     close();
@@ -1310,7 +1309,7 @@ function SimpleHomeTab({
                   <RibbonButton
                     icon={Paintbrush}
                     label="Format Painter"
-                    shortcut="Ctrl+Shift+C"
+                    shortcut="Ctrl+Alt+C"
                     tip="Format Painter: click, then select the words to give this look to. Double-click to keep it on; Escape stops."
                     active={format.painting}
                     onClick={() => {
@@ -1325,6 +1324,7 @@ function SimpleHomeTab({
                   <RibbonButton
                     icon={ClipboardPaste}
                     label="Paste as plain text"
+                    shortcut="Ctrl+Shift+V"
                     tip="Paste as plain text, keeping only the words"
                     onClick={() => {
                       close();
