@@ -30,7 +30,15 @@ import { NavigationPane } from "./NavigationPane";
 import { ShortcutsDialog } from "./ShortcutsDialog";
 import { DropButton, shortcutLabel } from "./ribbon/controls";
 import { LinkForm, Ribbon, type ViewSettings } from "./ribbon/Ribbon";
-import { ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, clampZoom } from "./ribbon/options";
+import {
+  ZOOM_MAX,
+  ZOOM_MIN,
+  ZOOM_STEP,
+  clampZoom,
+  pinchZoom,
+  stepZoom,
+  zoomKey,
+} from "./ribbon/options";
 
 /**
  * The document editor: a word processor for policies.
@@ -250,6 +258,14 @@ export function DocumentEditor({
     const root = rootRef.current;
     if (!root) return;
     const onKey = (event: KeyboardEvent) => {
+      // The page's zoom, not the browser's, while you are in the editor — as
+      // in Google Docs and Word for the web. Outside it, and from the
+      // browser's own menu, the browser still zooms everything.
+      const zooming = zoomKey(event);
+      if (zooming && zoomByKeyRef.current(zooming)) {
+        event.preventDefault();
+        return;
+      }
       const mod = event.metaKey || event.ctrlKey;
       if (!mod || event.altKey) return;
       const key = event.key.toLowerCase();
@@ -305,6 +321,43 @@ export function DocumentEditor({
         ? pageWidthZoom(deskWidth)
         : view.zoom;
   const pages = usePagination(editor, view, zoom);
+
+  // Read by listeners attached once, so they always see the zoom as it is.
+  // Web layout has no zoom of its own, so there the browser's is left alone.
+  const zoomByKeyRef = useRef<(how: "in" | "out" | "reset") => boolean>(
+    () => false,
+  );
+  zoomByKeyRef.current = (how) => {
+    if (view.layout === "web") return false;
+    setView({ ...view, zoom: how === "reset" ? 100 : stepZoom(zoom, how) });
+    return true;
+  };
+  const pinchRef = useRef({ zoom, exact: zoom });
+  if (Math.round(pinchRef.current.exact) !== zoom) {
+    pinchRef.current = { zoom, exact: zoom };
+  }
+  const pinchToRef = useRef<(exact: number) => void>(() => {});
+  pinchToRef.current = (exact) => {
+    pinchRef.current = { zoom: clampZoom(exact), exact };
+    if (clampZoom(exact) !== zoom) {
+      setView({ ...view, zoom: clampZoom(exact) });
+    }
+  };
+
+  // A pinch on a trackpad, or Ctrl and the wheel, over the page zooms the
+  // page: a browser reports a pinch as a wheel with Ctrl held. Not in Web
+  // layout, which has no zoom.
+  useEffect(() => {
+    const desk = deskRef.current;
+    if (!desk || view.layout === "web") return;
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      pinchToRef.current(pinchZoom(pinchRef.current.exact, event.deltaY));
+    };
+    desk.addEventListener("wheel", onWheel, { passive: false });
+    return () => desk.removeEventListener("wheel", onWheel);
+  }, [editor, view.layout]);
 
   if (!editor) return null;
 
@@ -660,7 +713,7 @@ function StatusBar({
             type="button"
             className="bs-doc-status-icon"
             aria-label="Zoom out"
-            title={`Zoom out (${shortcutLabel("Ctrl+-")} zooms the browser)`}
+            title={`Zoom out (${shortcutLabel("Ctrl+-")})`}
             disabled={zoom <= ZOOM_MIN}
             onClick={() => zoomTo(zoom - ZOOM_STEP)}
           >
@@ -681,7 +734,7 @@ function StatusBar({
             type="button"
             className="bs-doc-status-icon"
             aria-label="Zoom in"
-            title="Zoom in"
+            title={`Zoom in (${shortcutLabel("Ctrl+=")})`}
             disabled={zoom >= ZOOM_MAX}
             onClick={() => zoomTo(zoom + ZOOM_STEP)}
           >
