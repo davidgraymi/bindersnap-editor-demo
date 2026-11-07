@@ -11,7 +11,10 @@ import {
   ShieldCheck,
   Users,
 } from "lucide-react";
+import { describeFolder, describeOwners, describeTarget } from "../signOff";
 import { useIsReadOnly } from "../readOnlyContext";
+
+export { describeFolder, describeOwners, describeTarget };
 import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
 
 import {
@@ -1006,82 +1009,6 @@ function ruleSignature(rules: SignOffRuleView[]): string {
       [...users].sort(),
     ]),
   );
-}
-
-/** "A", "A and B", "A, B and C" — the way a person would say a list. */
-function listSentence(items: string[]): string {
-  if (items.length <= 1) return items[0] ?? "";
-  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
-}
-
-/** `clinical/nursing` → "Clinical / Nursing". A folder is a slug too. */
-export function describeFolder(folder: string): string {
-  return folder.split("/").map(formatDocumentName).join(" / ");
-}
-
-/**
- * What a rule covers, as a customer reads it.
- *
- * A document rule carries an identity, which is not a thing to put in front of
- * anybody, so it is looked up in the binder's own list. One that is not there
- * is **said**, not hidden: a rule about a document this binder no longer holds
- * enforces nothing.
- */
-export function describeTarget(
-  rule: Pick<SignOffRuleView, "scope" | "target">,
-  documents: readonly SignOffDocumentView[],
-): string {
-  switch (rule.scope) {
-    case "binder":
-      return "Everything in this binder";
-    case "folder":
-      return `Anything filed in ${describeFolder(rule.target)}`;
-    case "document": {
-      const match = documents.find((entry) => entry.uid === rule.target);
-      return match
-        ? formatDocumentName(match.name)
-        : "A document that is no longer in this binder";
-    }
-    case "rules":
-      // Said as what it governs rather than as the file it is. Nobody here is
-      // thinking about `.gitea/CODEOWNERS`.
-      return "Who signs things off in this binder";
-  }
-}
-
-/**
- * Who signs a rule off, on the rule's own row.
- *
- * **A group with nobody in it is said here, and only here.** Verified against a
- * running Gitea: a rule whose owners are an empty team waits for nobody and
- * lets the publish through. This is the one screen in the product that could
- * ever say so, and it says it on the row that is holding nothing rather than in
- * a paragraph above the list.
- */
-export function describeOwners(
-  rule: Pick<SignOffRuleView, "teams" | "users">,
-  emptyGroups: readonly string[],
-): { text: string; holdingNothing: boolean } {
-  const empty = new Set(emptyGroups);
-  const owners = [
-    ...rule.teams.map((team) =>
-      empty.has(team)
-        ? `the ${describeGroupName(team)} group, which has nobody in it`
-        : describeGroupName(team),
-    ),
-    ...rule.users,
-  ];
-
-  if (owners.length === 0) {
-    return { text: "Nobody signs this off yet", holdingNothing: true };
-  }
-
-  const text = listSentence(owners);
-  return {
-    text: `${text.charAt(0).toUpperCase()}${text.slice(1)}`,
-    holdingNothing:
-      rule.users.length === 0 && rule.teams.every((team) => empty.has(team)),
-  };
 }
 
 function scopeIcon(scope: SignOffRuleView["scope"]) {

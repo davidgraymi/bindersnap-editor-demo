@@ -483,6 +483,83 @@ export type WorkspaceRemovedDocument = z.infer<
   typeof WorkspaceRemovedDocumentSchema
 >;
 
+/** Something in a binder, and who has to sign off on a change to it. */
+export const SignOffRuleSchema = z.object({
+  /**
+   * How much a rule covers.
+   *
+   * Three are the answers a customer gives to "what has to be signed off?":
+   * everything here, this drawer, this policy. `rules` is the fourth and is
+   * about the rules themselves — without it, anybody who can open a change
+   * request can propose rewriting who signs things off, and a gate with a door
+   * beside it is not a gate.
+   */
+  scope: z.enum(["binder", "folder", "document", "rules"]),
+  /**
+   * What the scope names: "" for the binder and "" for the rules, a folder path
+   * for a folder, and for a document its **identity** rather than its path
+   * (ADR 0005) — so the rule follows the policy through a retitle or a move
+   * instead of silently ceasing to apply.
+   */
+  target: z.string(),
+  /** Group handles. The preferred form: a group's membership can change
+   * without touching the binder, which is the whole reason Gitea 28.0.0 is
+   * worth the upgrade. */
+  teams: z.array(z.string()),
+  /** Named individuals. Supported by Gitea, rarely the right answer. */
+  users: z.array(z.string()),
+});
+export type SignOffRuleView = z.infer<typeof SignOffRuleSchema>;
+
+/** A document a rule may name, as the picker and the rule list need it. */
+export const SignOffDocumentSchema = z.object({
+  /** The identity a rule is written against. */
+  uid: z.string(),
+  /** `nursing/hand-hygiene` — its address, for a link and for sorting. */
+  slugPath: z.string(),
+  /** `hand-hygiene` — what it is called, before the screen title-cases it. */
+  name: z.string(),
+  /** `nursing`, or "" at the binder's root. Said beside the name in a picker,
+   * because two binders' worth of policies are not all uniquely named. */
+  folder: z.string(),
+});
+export type SignOffDocumentView = z.infer<typeof SignOffDocumentSchema>;
+
+/**
+ * A binder's sign-off rules on both sides of one change.
+ *
+ * Both lists in full rather than a diff, because what has to be drawn is
+ * "nursing was signed off by Compliance and would be signed off by the night
+ * shift" — a sentence that needs both halves. `diffSignOffRules` in
+ * `packages/utils/codeowners.ts` pairs them, so the API and the screen cannot
+ * disagree about which rule is which.
+ */
+export const WorkspaceChangeSignOffSchema = z.object({
+  /** In force on the branch this change would land on. */
+  base: z.array(SignOffRuleSchema),
+  /** In force once it is published. */
+  proposed: z.array(SignOffRuleSchema),
+  /**
+   * Proposed lines Gitea would drop with nothing but a log warning.
+   *
+   * A rule that does not compile is not refused by Gitea — it is left out, and
+   * the gate it was meant to be then finds nothing to wait for. A reviewer
+   * approving a file with one in it is approving a rule that will not run.
+   */
+  unreadable: z.array(z.object({ line: z.number(), text: z.string() })),
+  /**
+   * The documents this binder holds, for naming a rule that is about one.
+   *
+   * A document rule carries an identity (ADR 0005), which is not a thing to
+   * put in front of a reviewer. Same list the Settings tab is given, for the
+   * same reason.
+   */
+  documents: z.array(SignOffDocumentSchema),
+});
+export type WorkspaceChangeSignOff = z.infer<
+  typeof WorkspaceChangeSignOffSchema
+>;
+
 /**
  * One change in a binder, as its page reads it.
  *
@@ -607,6 +684,18 @@ export const WorkspaceChangeDetailPayloadSchema = z.object({
       approvedBy: z.array(ChangeUserSchema),
     }),
   ),
+  /**
+   * What this change would do to who signs things off, or null when it leaves
+   * the rules alone.
+   *
+   * **Read from `.gitea/CODEOWNERS` at both refs, never from the change's own
+   * description.** A sign-off change says what it does in its body, and its
+   * author can rewrite that body after it has been approved — which left the
+   * one change in the product that alters a control explained only by the
+   * person proposing it (issue 921). These are the two files Gitea itself reads, so
+   * the screen can state the change rather than relay a claim about it.
+   */
+  signOffRules: WorkspaceChangeSignOffSchema.nullable(),
   /** How a decided change ended; null while it is open. */
   outcome: z.enum(["published", "declined", "withdrawn"]).nullable(),
   /**
@@ -888,48 +977,6 @@ export const WorkspaceRulesSchema = z.object({
   approvers: BinderApproversSchema.nullable(),
 });
 export type WorkspaceRules = z.infer<typeof WorkspaceRulesSchema>;
-
-/** Something in a binder, and who has to sign off on a change to it. */
-export const SignOffRuleSchema = z.object({
-  /**
-   * How much a rule covers.
-   *
-   * Three are the answers a customer gives to "what has to be signed off?":
-   * everything here, this drawer, this policy. `rules` is the fourth and is
-   * about the rules themselves — without it, anybody who can open a change
-   * request can propose rewriting who signs things off, and a gate with a door
-   * beside it is not a gate.
-   */
-  scope: z.enum(["binder", "folder", "document", "rules"]),
-  /**
-   * What the scope names: "" for the binder and "" for the rules, a folder path
-   * for a folder, and for a document its **identity** rather than its path
-   * (ADR 0005) — so the rule follows the policy through a retitle or a move
-   * instead of silently ceasing to apply.
-   */
-  target: z.string(),
-  /** Group handles. The preferred form: a group's membership can change
-   * without touching the binder, which is the whole reason Gitea 28.0.0 is
-   * worth the upgrade. */
-  teams: z.array(z.string()),
-  /** Named individuals. Supported by Gitea, rarely the right answer. */
-  users: z.array(z.string()),
-});
-export type SignOffRuleView = z.infer<typeof SignOffRuleSchema>;
-
-/** A document a rule may name, as the picker and the rule list need it. */
-export const SignOffDocumentSchema = z.object({
-  /** The identity a rule is written against. */
-  uid: z.string(),
-  /** `nursing/hand-hygiene` — its address, for a link and for sorting. */
-  slugPath: z.string(),
-  /** `hand-hygiene` — what it is called, before the screen title-cases it. */
-  name: z.string(),
-  /** `nursing`, or "" at the binder's root. Said beside the name in a picker,
-   * because two binders' worth of policies are not all uniquely named. */
-  folder: z.string(),
-});
-export type SignOffDocumentView = z.infer<typeof SignOffDocumentSchema>;
 
 /**
  * A binder's sign-off rules, as the Settings tab needs it.

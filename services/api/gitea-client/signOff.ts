@@ -260,3 +260,57 @@ function describeTarget(
       return "Who signs things off in this binder";
   }
 }
+
+/** The rules as they stand, and as a change proposes them. */
+export interface SignOffRulesAcrossChange {
+  /** In force on the branch this change would land on. */
+  base: SignOffRule[];
+  /** What would be in force once it is published. */
+  proposed: SignOffRule[];
+  /** Proposed lines Gitea would drop with nothing but a log warning. */
+  unreadable: Array<{ line: number; text: string }>;
+}
+
+/**
+ * The sign-off rules on both sides of a change, or null when it leaves them
+ * alone.
+ *
+ * **The only honest source for "this change alters who signs things off".** A
+ * sign-off change explains itself in its description, and its author can
+ * rewrite that description at any time, including after somebody has approved
+ * it (issue 921) — so the change's own words cannot be what a reviewer is shown.
+ * These two files can't be: they are what Gitea reads at merge time.
+ *
+ * Read at the refs rather than off the pull request's file list, because the
+ * file list says only that `.gitea/CODEOWNERS` was touched. What it was
+ * changed *to* is the part a reviewer is being asked to agree to.
+ */
+export async function readSignOffRulesAcrossChange(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  baseRef: string;
+  /** The change's branch, or null when it has none left on record. */
+  headRef: string | null;
+}): Promise<SignOffRulesAcrossChange | null> {
+  const { client, org, workspace, baseRef, headRef } = params;
+  if (!headRef) return null;
+
+  const [base, head] = await Promise.all([
+    readSignOffFile({ client, org, workspace, ref: baseRef }),
+    readSignOffFile({ client, org, workspace, ref: headRef }),
+  ]);
+
+  // The same bytes on both sides is a change that is about something else,
+  // which is nearly every change — so it says nothing rather than drawing an
+  // empty panel about the rules on every diff screen in the product.
+  if ((base?.content ?? null) === (head?.content ?? null)) return null;
+
+  const proposed = head ? parseCodeowners(org, head.content) : null;
+
+  return {
+    base: base ? parseCodeowners(org, base.content).rules : [],
+    proposed: proposed?.rules ?? [],
+    unreadable: proposed?.unreadable ?? [],
+  };
+}

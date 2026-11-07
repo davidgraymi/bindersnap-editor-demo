@@ -62,6 +62,14 @@ interface ChangeTabsProps {
   changesHref: string;
   /** How many documents it touches; none for a change to the rules. */
   documentCount: number;
+  /**
+   * Whether it also changes who signs things off.
+   *
+   * A rules change versions no document, so the count alone left the tab
+   * reading as though the change contained nothing — on the one kind of
+   * change that alters a control (issue 921).
+   */
+  rulesChanged?: boolean;
   onSelect: (view: DocumentChangeView) => void;
 }
 
@@ -76,6 +84,7 @@ export function ChangeTabs({
   overviewHref,
   changesHref,
   documentCount,
+  rulesChanged = false,
   onSelect,
 }: ChangeTabsProps) {
   const onChanges = view === "compare";
@@ -101,6 +110,9 @@ export function ChangeTabs({
           {documentCount > 0 ? (
             <span className="doc-tab-count">{documentCount}</span>
           ) : null}
+          {/* Said in a word rather than counted: "1" beside Changes would
+              read as one document, and this change has none. */}
+          {rulesChanged ? <span className="doc-tab-count">Rules</span> : null}
         </a>
       </div>
     </nav>

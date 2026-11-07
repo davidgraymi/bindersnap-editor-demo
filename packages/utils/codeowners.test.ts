@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   CODEOWNERS_PATH,
   codeownersToken,
+  diffSignOffRules,
   escapeForTokenizer,
   escapeRegex,
   MAX_CODEOWNERS_BYTES,
@@ -692,5 +693,86 @@ test("owners are named once, however many rules name them", () => {
   expect(signOffOwnersForPaths(rules, ["nursing/a.01J8.md"])).toEqual({
     teams: ["compliance"],
     users: [],
+  });
+});
+
+describe("what a change does to the rules", () => {
+  const compliance: SignOffRule = {
+    scope: "folder",
+    target: "nursing",
+    teams: ["compliance"],
+    users: [],
+  };
+
+  test("an untouched file is no change at all", () => {
+    expect(diffSignOffRules([compliance], [{ ...compliance }])).toEqual([]);
+  });
+
+  test("owners in another order are the same owners", () => {
+    expect(
+      diffSignOffRules(
+        [{ ...compliance, teams: ["compliance", "nursing-leads"] }],
+        [{ ...compliance, teams: ["nursing-leads", "Compliance"] }],
+      ),
+    ).toEqual([]);
+  });
+
+  test("a rule arriving and a rule leaving are told apart", () => {
+    const binder: SignOffRule = {
+      scope: "binder",
+      target: "",
+      teams: ["owners"],
+      users: [],
+    };
+
+    expect(diffSignOffRules([binder], [compliance])).toEqual([
+      {
+        kind: "added",
+        scope: "folder",
+        target: "nursing",
+        before: null,
+        after: compliance,
+      },
+      {
+        kind: "removed",
+        scope: "binder",
+        target: "",
+        before: binder,
+        after: null,
+      },
+    ]);
+  });
+
+  test("a rule changing hands is one fact, not two", () => {
+    const after: SignOffRule = { ...compliance, teams: ["night-shift"] };
+
+    expect(diffSignOffRules([compliance], [after])).toEqual([
+      {
+        kind: "reassigned",
+        scope: "folder",
+        target: "nursing",
+        before: compliance,
+        after,
+      },
+    ]);
+  });
+
+  test("the rule over the rules themselves is one of the things reported", () => {
+    const rules: SignOffRule = {
+      scope: "rules",
+      target: "",
+      teams: ["compliance"],
+      users: [],
+    };
+
+    expect(diffSignOffRules([rules], [])).toEqual([
+      {
+        kind: "removed",
+        scope: "rules",
+        target: "",
+        before: rules,
+        after: null,
+      },
+    ]);
   });
 });

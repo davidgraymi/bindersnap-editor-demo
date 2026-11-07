@@ -29,6 +29,8 @@ import { classifyDocumentFile } from "../documentFile";
 import { DocumentComparison, type ImageMode } from "./DocumentComparison";
 import { DocumentPreview } from "./DocumentPreview";
 import { ChangeByline } from "./ChangeByline";
+import { SignOffChangePanel } from "./SignOffChangePanel";
+import type { SignOffChangeRow } from "../signOff";
 
 /**
  * Everything one change does to a binder, on one screen.
@@ -71,6 +73,18 @@ interface ChangeComparisonPageProps {
   /** Names the login inside a draft's branch. */
   nameOf?: (login: string) => string;
   rows: readonly ChangedDocumentRow[];
+  /**
+   * What the change would do to who signs things off, or null when it leaves
+   * the binder's rules alone — which is nearly every change.
+   *
+   * Read by the API from `.gitea/CODEOWNERS` at both refs. It is on this
+   * screen and not only on the change's description because a description is
+   * written by the change's author and can be rewritten after an approval
+   * (issue 921): a control changing hands must be something a reviewer is shown.
+   */
+  signOffRows?: readonly SignOffChangeRow[] | null;
+  /** Proposed rule lines Gitea would drop with nothing but a log warning. */
+  signOffUnreadable?: readonly { line: number; text: string }[];
   /**
    * The branch holding the proposed files, or null when the change has none
    * on record — a change whose branch has been deleted can still be read, but
@@ -251,6 +265,8 @@ export function ChangeComparisonPage({
   openedAt = "",
   nameOf,
   rows: listed,
+  signOffRows = null,
+  signOffUnreadable = [],
   headRef,
   focusDocument = null,
   branchHref,
@@ -584,16 +600,36 @@ export function ChangeComparisonPage({
     </>
   );
 
+  /**
+   * The rules panel, when this change touches them.
+   *
+   * Above the documents rather than among them: a sign-off rule is about the
+   * binder, not about a policy, and a change that moves a gate and revises
+   * three documents should lead with the gate.
+   */
+  const rulesPanel = signOffRows ? (
+    <SignOffChangePanel
+      rows={signOffRows}
+      unreadable={signOffUnreadable}
+      open={open}
+    />
+  ) : null;
+
   if (rows.length === 0) {
     return (
       <article className="change-compare">
         <div className="change-main">
           {header}
-          <p className="bs-note">
-            This change versions no document — it changes the binder's sign-off
-            rules, which publishes nothing. The change itself says what it would
-            do to them.
-          </p>
+          {/* **The change that used to explain itself.** A rules change
+              versions no document, so this screen had nothing to draw and
+              pointed at the change's description instead — the one thing on
+              the page its author can rewrite after it has been approved. */}
+          {rulesPanel ?? (
+            <p className="bs-note">
+              This change versions no document and leaves the binder's sign-off
+              rules alone, so there is nothing to compare.
+            </p>
+          )}
         </div>
       </article>
     );
@@ -616,6 +652,7 @@ export function ChangeComparisonPage({
   return (
     <article className="change-compare">
       {header}
+      {rulesPanel}
 
       <div
         className={`cmp-layout${rows.length > 1 ? " cmp-layout--tree" : ""}`}

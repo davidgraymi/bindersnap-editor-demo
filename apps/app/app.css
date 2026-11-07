@@ -7286,6 +7286,60 @@ a.cmp-branch:focus-visible {
   color: var(--bs-status-info-fg);
 }
 
+/* ── What a change does to who signs things off ────────────────────────
+   A rules change versions no document, so this panel is the only thing on
+   the screen that says what it would do. It sits above the documents: a
+   sign-off rule is about the binder, not about a policy. */
+
+.cmp-rules {
+  margin-bottom: var(--brand-space-4);
+}
+
+.cmp-rules-note {
+  margin: 0;
+  padding: var(--brand-space-2) var(--brand-space-3);
+  max-width: var(--brand-measure);
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-sm);
+}
+
+/* The three verbs, and only one of them is a loss: a rule going away leaves
+   something on the record that nobody has to sign off any more. */
+.cmp-rules-icon--removed {
+  color: var(--bs-status-danger-fg);
+}
+
+.cmp-rules-icon--reassigned {
+  color: var(--bs-status-info-fg);
+}
+
+.cmp-rules-icon--added {
+  color: var(--bs-status-ok-fg);
+}
+
+.cmp-rules-who {
+  overflow-wrap: anywhere;
+}
+
+/* Who signs it off now and who would, drawn the way a diff draws a line that
+   moved — struck through on the way out, in the added colour on the way in. */
+.cmp-rules-from {
+  color: var(--bs-coral-text);
+  text-decoration: line-through;
+}
+
+.cmp-rules-to {
+  color: var(--bs-status-ok-fg);
+  font-weight: var(--brand-weight-medium);
+}
+
+.cmp-rules-dropped {
+  display: flex;
+  gap: var(--brand-space-2);
+  align-items: flex-start;
+  margin: var(--brand-space-2) var(--brand-space-3) var(--brand-space-3);
+}
+
 /* ── One document's panel ──────────────────────────────────────────────── */
 
 .cmp-file {
