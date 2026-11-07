@@ -269,9 +269,11 @@ test("the top bar names the binder; the page names where in it", async ({
   await page.goto(`${APP_BASE_URL}/riverside-health/clinical?tab=changes`);
   await page.locator(".change-row-open").first().click();
   await expect(page).toHaveURL(/\/-\/changes\/\d+$/, { timeout: 30_000 });
-  await expect(path.locator("[aria-current='page']")).toHaveText(
-    /^Change \d+$/,
-  );
+  // It names no number: the title is what the change is about.
+  await expect(
+    path.getByRole("link", { name: "Change requests" }),
+  ).toBeVisible();
+  await expect(path).not.toContainText(/Change \d+/);
   await expect(page.locator(".app-main .bs-crumbs")).toHaveCount(0);
 
   await path.getByRole("link", { name: "Change requests" }).click();

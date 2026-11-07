@@ -6,7 +6,7 @@
  * so the top bar says the same thing on every screen of a binder and never
  * grows with the page.
  *
- * **The path, in the page:** `Change requests / Change 4 / Compare`, or
+ * **The path, in the page:** `Change requests / Change 4 / Changes`, or
  * `Nursing / Wards / Handover Standard`, just above the page's title. It is
  * about the content, so it sits inside the content's own boundary, beside the
  * thing it names.
@@ -118,15 +118,21 @@ function binderPath(
     const subpage =
       view === "compare" ? "Changes" : view === "preview" ? "Preview" : null;
 
+    // **The change's own page names no number.** Its title is what it is
+    // about, and the number is a code host's way of finding it, not a reader's.
+    // The trail is only the way back to the list. A subpage keeps the number,
+    // because it is the way back up to the change.
+    if (subpage === null) {
+      return [changesStep];
+    }
+
     return [
       changesStep,
-      subpage === null
-        ? here(changeLabel)
-        : {
-            label: changeLabel,
-            href: buildBinderUrl({ org, binder, tab: "changes", change }),
-          },
-      ...(subpage === null ? [] : [here(subpage)]),
+      {
+        label: changeLabel,
+        href: buildBinderUrl({ org, binder, tab: "changes", change }),
+      },
+      here(subpage),
     ];
   }
 

@@ -473,7 +473,7 @@ export function DocumentChangeDetail({
           A wide one lays the rail beside both; see `.change-detail`. */}
       <div className="change-head">
         {/* The way back to the list is the trail in the top bar — `Clinical
-            / Change requests / Change 4` — the same line every page has, so
+            / Change requests` — the same line every page has, so
             it is not drawn a second time here. */}
         {editing ? (
           /* A change request is open for days, and the first thing a

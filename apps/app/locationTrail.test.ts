@@ -66,7 +66,7 @@ test("a policy's name loses its extension and its identity segment", () => {
   ).toEqual(["Code of Conduct"]);
 });
 
-test("a change request is under its binder's change requests, and links back up", () => {
+test("a change request's own page is the way back to the list, with no number", () => {
   const trail = trailFor("/riverside-health/clinical?tab=changes&change=4");
 
   expect(trail.binder?.href).toBe("/riverside-health/clinical");
@@ -75,7 +75,6 @@ test("a change request is under its binder's change requests, and links back up"
       label: "Change requests",
       href: "/riverside-health/clinical/-/changes",
     },
-    { label: "Change 4", href: null },
   ]);
 });
 
