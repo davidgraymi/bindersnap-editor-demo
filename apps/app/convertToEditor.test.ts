@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { Document, ImageRun, Packer, Paragraph, TextRun } from "docx";
+import {
+  Document,
+  HeadingLevel,
+  ImageRun,
+  Packer,
+  Paragraph,
+  TextRun,
+} from "docx";
 import JSZip from "jszip";
 import { JSDOM } from "jsdom";
 
@@ -95,6 +102,29 @@ test("a Word file converts with its heading and a note about layout", async () =
   expect(document.content?.[0]?.type).toBe("heading");
   expect(JSON.stringify(document)).toContain("Wash your hands.");
   expect(notes.join(" ")).toContain("Page layout");
+});
+
+test("Word's Title and Subtitle convert to the editor's", async () => {
+  const docx = new Document({
+    // Word defines Subtitle in every file; this library only when asked.
+    styles: { paragraphStyles: [{ id: "Subtitle", name: "Subtitle" }] },
+    sections: [
+      {
+        children: [
+          new Paragraph({ text: "Hand Hygiene", heading: HeadingLevel.TITLE }),
+          new Paragraph({ text: "Nursing", style: "Subtitle" }),
+          new Paragraph({ text: "Wash your hands." }),
+        ],
+      },
+    ],
+  });
+  const { document } = await convertToEditorDocument(
+    await Packer.toBlob(docx),
+    "Hand hygiene.docx",
+  );
+  expect(
+    (document.content ?? []).map((node) => node.attrs?.variant ?? null),
+  ).toEqual(["title", "subtitle", null]);
 });
 
 test("a file that is not Word or PDF is refused", async () => {

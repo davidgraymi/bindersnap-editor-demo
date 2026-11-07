@@ -104,6 +104,7 @@ import {
   clampZoom,
   dateChoices,
   stepFontSize,
+  styleDefaults,
   type ParagraphStyleId,
 } from "./options";
 
@@ -390,23 +391,47 @@ export function Ribbon({
 /* ─── Home ──────────────────────────────────────────────────────────────── */
 
 /** How many styles the gallery shows before folding the rest into a menu. */
-const GALLERY_SIZE = 4;
+const GALLERY_SIZE = 5;
 
 /**
- * Gallery 4 → 0 is four folds; then Editing and Clipboard grow compact; then
+ * Gallery 5 → 0 is five folds; then Editing and Clipboard grow compact; then
  * Paragraph and then Font fold into one button each, as Word's groups do.
  */
 const MAX_FOLD = GALLERY_SIZE + 4;
+
+/**
+ * The Font box: the font the words are set in, named — the style's own when
+ * they carry none, as Word names "Aptos" rather than "Default".
+ */
+function fontLabel(format: FormatState): string {
+  if (format.fontFamily === null) return "";
+  if (format.fontFamily === "") return styleDefaults(format.style).font;
+  return (
+    FONT_CHOICES.find((font) => font.value === format.fontFamily)?.label ??
+    "Custom"
+  );
+}
 
 /** Make the paragraph the cursor is in one of the styles, as Word's gallery does. */
 function applyParagraphStyle(editor: Editor, id: ParagraphStyleId): void {
   const base = editor.chain().focus().clearNodes();
   switch (id) {
     case "normal":
-      base.setParagraph().run();
+      base
+        .setParagraph()
+        .updateAttributes("paragraph", { variant: null })
+        .run();
+      return;
+    case "title":
+    case "subtitle":
+      base.setParagraph().updateAttributes("paragraph", { variant: id }).run();
       return;
     case "quote":
-      base.setParagraph().toggleBlockquote().run();
+      base
+        .setParagraph()
+        .updateAttributes("paragraph", { variant: null })
+        .toggleBlockquote()
+        .run();
       return;
     case "code":
       base.setCodeBlock().run();
@@ -554,13 +579,7 @@ function HomeTab({
               ))
             }
           >
-            <span className="bs-rdrop-value">
-              {format.fontFamily === null
-                ? ""
-                : (FONT_CHOICES.find(
-                    (font) => font.value === format.fontFamily,
-                  )?.label.replace(" (Geist)", "") ?? "Custom")}
-            </span>
+            <span className="bs-rdrop-value">{fontLabel(format)}</span>
           </DropButton>
           <DropButton
             label="Font size"
@@ -1220,13 +1239,7 @@ function SimpleHomeTab({
                       ))
                     }
                   >
-                    <span className="bs-rdrop-value">
-                      {format.fontFamily === null
-                        ? ""
-                        : (FONT_CHOICES.find(
-                            (font) => font.value === format.fontFamily,
-                          )?.label.replace(" (Geist)", "") ?? "Custom")}
-                    </span>
+                    <span className="bs-rdrop-value">{fontLabel(format)}</span>
                   </DropButton>
                   <DropButton
                     label="Font size"

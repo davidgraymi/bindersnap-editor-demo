@@ -7,7 +7,12 @@ import { numbersHeadings } from "../extensions/NumberedHeadings";
 import { pictureWidth } from "../imageFiles";
 
 import type { ParagraphStyleId } from "./options";
-import { HIGHLIGHT_COLORS, parseFontSizePt, shadingColor } from "./options";
+import {
+  HIGHLIGHT_COLORS,
+  parseFontSizePt,
+  shadingColor,
+  styleDefaults,
+} from "./options";
 
 /**
  * What the selection looks like, for the ribbon to reflect.
@@ -94,6 +99,8 @@ function currentStyle(editor: Editor): ParagraphStyleId | null {
   }
   if (editor.isActive("heading")) return null;
   if (editor.isActive("blockquote")) return "quote";
+  if (editor.isActive("paragraph", { variant: "title" })) return "title";
+  if (editor.isActive("paragraph", { variant: "subtitle" })) return "subtitle";
   return "normal";
 }
 
@@ -107,6 +114,7 @@ function selectedPicture(editor: Editor) {
 
 export function readFormatState(editor: Editor): FormatState {
   const picture = selectedPicture(editor);
+  const style = currentStyle(editor);
   const family = uniformTextStyle(editor, (attrs) => attrs.fontFamily);
   const size = uniformTextStyle(editor, (attrs) => attrs.fontSize);
   const color = uniformTextStyle(editor, (attrs) => attrs.color);
@@ -124,8 +132,13 @@ export function readFormatState(editor: Editor): FormatState {
     code: editor.isActive("code"),
     link: editor.isActive("link"),
     fontFamily: family,
-    // No size set is the document's default size, not "mixed".
-    fontSizePt: size === null ? null : size === "" ? 11 : parseFontSizePt(size),
+    // No size set is the style's own size, not "mixed".
+    fontSizePt:
+      size === null
+        ? null
+        : size === ""
+          ? styleDefaults(style).sizePt
+          : parseFontSizePt(size),
     color: color === "" ? null : color,
     highlight:
       typeof highlight === "string" && highlight !== ""
@@ -133,7 +146,7 @@ export function readFormatState(editor: Editor): FormatState {
         : editor.isActive("highlight")
           ? (HIGHLIGHT_COLORS[0]?.value ?? null)
           : null,
-    style: currentStyle(editor),
+    style,
     align:
       (["center", "right", "justify"] as const).find((align) =>
         editor.isActive({ textAlign: align }),

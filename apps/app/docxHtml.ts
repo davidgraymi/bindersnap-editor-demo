@@ -61,16 +61,25 @@ export async function docxToHtml(
       arrayBuffer: bytes,
       buffer: new Uint8Array(bytes),
     } as Parameters<typeof lib.convertToHtml>[0],
-    picture
-      ? {
-          convertImage: lib.images.imgElement(async (image) => {
-            const blob = new Blob([await image.readAsArrayBuffer()], {
-              type: image.contentType,
-            });
-            return { src: (await picture(blob).catch(() => null)) ?? "" };
-          }),
-        }
-      : undefined,
+    {
+      // Word's Title and Subtitle, as the editor writes them — so a
+      // converted policy keeps its title, and a comparison reads both sides
+      // alike. Mammoth's own map has no entry for either.
+      styleMap: [
+        "p[style-name='Title'] => p.bs-title:fresh",
+        "p[style-name='Subtitle'] => p.bs-subtitle:fresh",
+      ],
+      ...(picture
+        ? {
+            convertImage: lib.images.imgElement(async (image) => {
+              const blob = new Blob([await image.readAsArrayBuffer()], {
+                type: image.contentType,
+              });
+              return { src: (await picture(blob).catch(() => null)) ?? "" };
+            }),
+          }
+        : {}),
+    },
   );
 
   // Every picture when none were asked for; otherwise the ones left out.

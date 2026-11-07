@@ -1607,6 +1607,21 @@ input {
   margin-top: 0;
 }
 
+/* A document's Title and Subtitle — paragraphs the editor styles. */
+.doc-preview-prose .bs-title {
+  margin: 0 0 var(--brand-space-1);
+  color: var(--bs-text-primary);
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-h2);
+  font-weight: var(--brand-weight-semibold);
+  line-height: var(--brand-leading-tight);
+}
+
+.doc-preview-prose .bs-subtitle {
+  margin: 0 0 var(--brand-space-4);
+  font-size: var(--brand-text-body-lg);
+}
+
 .doc-preview-prose h1,
 .doc-preview-prose h2,
 .doc-preview-prose h3,
