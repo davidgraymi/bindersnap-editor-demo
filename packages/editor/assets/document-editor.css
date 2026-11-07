@@ -740,14 +740,24 @@
 }
 
 .bs-style-sample {
+  flex-shrink: 0;
   max-width: 100%;
   overflow: hidden;
+  line-height: 1.2;
   font-family: var(--brand-font-sans);
   font-size: 13px;
   white-space: nowrap;
 }
 
+/* One line, always: a name that wrapped pushed the sample out of the tile,
+   and "Heading 2" read as two grey words with no preview. */
 .bs-style-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.2;
   color: var(--brand-mockup-muted);
   font-family: var(--brand-font-sans);
   font-size: var(--brand-text-ui-xs);
@@ -769,6 +779,17 @@
   font-family: var(--brand-font-serif);
   font-size: 13px;
   font-weight: var(--brand-weight-semibold);
+}
+
+.bs-style--title .bs-style-sample {
+  font-family: var(--brand-font-serif);
+  font-size: 18px;
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-style--subtitle .bs-style-sample {
+  color: var(--brand-mockup-ink-soft);
+  font-size: 15px;
 }
 
 .bs-style--heading4 .bs-style-sample {
@@ -1208,6 +1229,25 @@
 
 .bs-doc-content p {
   margin: 0 0 8pt;
+}
+
+/* Title and Subtitle: paragraphs, not headings — see `ParagraphFormat`. The
+   exports set them from `VARIANT_LOOK`, which keeps these numbers. */
+.bs-doc-content p.bs-title {
+  margin: 0 0 4pt;
+  color: var(--brand-mockup-ink);
+  font-family: var(--brand-font-serif);
+  font-size: 26pt;
+  font-weight: var(--brand-weight-semibold);
+  line-height: 1.15;
+}
+
+.bs-doc-content p.bs-subtitle {
+  margin: 0 0 12pt;
+  color: var(--brand-mockup-ink-soft);
+  font-family: var(--brand-font-sans);
+  font-size: 15pt;
+  line-height: 1.2;
 }
 
 .bs-doc-content h1,

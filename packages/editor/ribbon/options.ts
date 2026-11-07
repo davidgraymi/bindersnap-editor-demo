@@ -16,7 +16,7 @@ export interface FontChoice {
 }
 
 export const FONT_CHOICES: FontChoice[] = [
-  { label: "Default (Geist)", value: "" },
+  { label: "Default", value: "" },
   { label: "Lora", value: "var(--brand-font-serif)" },
   { label: "Arial", value: 'Arial, "Helvetica Neue", Helvetica, sans-serif' },
   { label: "Calibri", value: "Calibri, Carlito, Arial, sans-serif" },
@@ -39,6 +39,33 @@ export const FONT_SIZES_PT = [
 
 /** The size a paragraph has when nobody has set one. */
 export const DEFAULT_FONT_SIZE_PT = 11;
+
+/**
+ * The font and size a style sets when the words carry none of their own —
+ * what the Font boxes show, as Word's do, rather than "Default" and 11 in a
+ * 20pt Lora heading. Kept with the editor's stylesheet (`.bs-doc-content`).
+ */
+export function styleDefaults(style: ParagraphStyleId | null): {
+  font: string;
+  sizePt: number;
+} {
+  switch (style) {
+    case "title":
+      return { font: "Lora", sizePt: 26 };
+    case "subtitle":
+      return { font: "Geist", sizePt: 15 };
+    case "heading1":
+      return { font: "Lora", sizePt: 20 };
+    case "heading2":
+      return { font: "Lora", sizePt: 16 };
+    case "heading3":
+      return { font: "Lora", sizePt: 13 };
+    case "code":
+      return { font: "Geist Mono", sizePt: 10 };
+    default:
+      return { font: "Geist", sizePt: DEFAULT_FONT_SIZE_PT };
+  }
+}
 
 /** The next size up or down Word's Grow and Shrink Font would pick. */
 export function stepFontSize(current: number, direction: 1 | -1): number {
@@ -131,6 +158,8 @@ export function shadingColor(value: unknown): string | null {
 
 export type ParagraphStyleId =
   | "normal"
+  | "title"
+  | "subtitle"
   | "heading1"
   | "heading2"
   | "heading3"
@@ -145,13 +174,18 @@ export interface ParagraphStyle {
   shortcut?: string;
 }
 
-/** Word's Styles gallery, as far as a policy needs one. */
+/**
+ * Word's Styles gallery, as far as a policy needs one. Title comes second, as
+ * in Word's gallery, so the row shows it without opening the rest.
+ */
 export const PARAGRAPH_STYLES: ParagraphStyle[] = [
   { id: "normal", label: "Normal", shortcut: "Ctrl+Alt+0" },
+  { id: "title", label: "Title" },
   { id: "heading1", label: "Heading 1", shortcut: "Ctrl+Alt+1" },
   { id: "heading2", label: "Heading 2", shortcut: "Ctrl+Alt+2" },
   { id: "heading3", label: "Heading 3", shortcut: "Ctrl+Alt+3" },
   { id: "heading4", label: "Heading 4" },
+  { id: "subtitle", label: "Subtitle" },
   { id: "quote", label: "Quote" },
   { id: "code", label: "Code" },
 ];

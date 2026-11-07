@@ -21,7 +21,13 @@ import {
   type ParagraphChild,
 } from "docx";
 
-import type { Align, Block, Run } from "./documentBlocks";
+import {
+  VARIANT_LOOK,
+  type Align,
+  type Block,
+  type ParagraphVariant,
+  type Run,
+} from "./documentBlocks";
 import { pictureSize, readPicture } from "./images";
 import { embedFonts } from "./docxFonts";
 import { faceForFamily, wordFontForFamily, type FaceKey } from "./fonts";
@@ -262,7 +268,9 @@ class Writer {
           this.paragraph(
             this.paragraphOptions(block, context),
             0,
-            context.paragraphAfter,
+            block.variant
+              ? VARIANT_LOOK[block.variant].after
+              : context.paragraphAfter,
           );
           break;
         case "list":
@@ -387,20 +395,25 @@ class Writer {
     block: Extract<Block, { kind: "paragraph" }>,
     context: Context,
   ): IParagraphOptions {
+    const look = block.variant ? VARIANT_LOOK[block.variant] : null;
     const base: RunBase = {
-      font: "Geist",
-      size: BODY_SIZE,
-      color: context.color,
+      font: look?.font ?? "Geist",
+      size: look?.size ?? BODY_SIZE,
+      color: look?.soft ? INK_SOFT : context.color,
       italic: context.italic,
     };
+    if (look) this.fonts.add(look.font);
     return {
+      // Word's own Title and Subtitle, so its Styles pane names them.
+      ...(block.variant === "title" ? { heading: HeadingLevel.TITLE } : {}),
+      ...(block.variant === "subtitle" ? { style: "Subtitle" } : {}),
       alignment: ALIGN[block.align],
       indent: { left: twips(context.indent + block.indent * 36) },
       border: this.border(context),
       spacing: {
         line: wordLine(
-          block.lineSpacing ?? BODY_LINE,
-          this.faceOf(block.runs, "geist"),
+          block.lineSpacing ?? look?.lineHeight ?? BODY_LINE,
+          this.faceOf(block.runs, look?.face ?? "geist"),
         ),
         lineRule: LineRuleType.AUTO,
       },
@@ -786,6 +799,30 @@ export async function documentToDocx(
     };
   };
 
+  const variantStyle = (variant: ParagraphVariant) => {
+    const look = VARIANT_LOOK[variant];
+    return {
+      run: {
+        font: {
+          ascii: look.font,
+          hAnsi: look.font,
+          cs: look.font,
+          eastAsia: look.font,
+        },
+        size: look.size * 2,
+        bold: false,
+        color: look.soft ? INK_SOFT : INK,
+      },
+      paragraph: {
+        spacing: {
+          before: 0,
+          after: look.after * TWIPS,
+          line: wordLine(look.lineHeight, look.face),
+        },
+      },
+    };
+  };
+
   const document = new Document({
     creator: "Bindersnap",
     title: meta.title,
@@ -815,7 +852,18 @@ export async function documentToDocx(
         heading4: headingStyle(4),
         heading5: headingStyle(5),
         heading6: headingStyle(6),
+        title: variantStyle("title"),
       },
+      paragraphStyles: [
+        {
+          id: "Subtitle",
+          name: "Subtitle",
+          basedOn: "Normal",
+          next: "Normal",
+          quickFormat: true,
+          ...variantStyle("subtitle"),
+        },
+      ],
     },
     numbering: {
       config: [

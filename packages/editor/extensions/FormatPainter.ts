@@ -19,7 +19,7 @@ import {
  *
  * **The look of the words and of their paragraph.** Bold, italic,
  * underline, strikethrough, code, sub- and superscript, highlight, the font,
- * size and colour — and the paragraph's style (Normal or a heading), its
+ * size and colour — and the paragraph's style (Normal, Title or a heading), its
  * alignment and its line spacing, as Google Docs' paint format carries them.
  * Copying only the words' look made the brush seem broken on the one look
  * people reach for most: a heading's is its paragraph's, with no marks on
@@ -45,7 +45,12 @@ export const FORMATTING_MARKS = [
 const STYLED_BLOCKS = ["paragraph", "heading"];
 
 /** The paragraph attributes that are its look. */
-const BLOCK_LOOK_ATTRS = ["level", "textAlign", "lineSpacing"] as const;
+const BLOCK_LOOK_ATTRS = [
+  "level",
+  "variant",
+  "textAlign",
+  "lineSpacing",
+] as const;
 
 export type Brush = "off" | "once" | "sticky";
 
