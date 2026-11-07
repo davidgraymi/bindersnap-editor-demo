@@ -22,6 +22,7 @@ import type { DocumentChangeView } from "./routes";
 export const BINDER_TABS = [
   "documents",
   "changes",
+  "drafts",
   "people",
   "sign-off",
   "change-requests",
@@ -119,6 +120,8 @@ export function parseBinderAddress(
     }
     case "history":
       return { ...HOME, tab: "history" };
+    case "drafts":
+      return { ...HOME, tab: "drafts" };
     case "settings":
       return {
         ...HOME,
@@ -270,6 +273,8 @@ export function buildBinderUrl(params: {
           }`;
   } else if (tab === "history") {
     path = "/-/history";
+  } else if (tab === "drafts") {
+    path = "/-/drafts";
   } else if (tab === "settings") {
     path = "/-/settings";
   } else if (

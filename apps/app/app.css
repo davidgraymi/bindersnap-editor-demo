@@ -8354,6 +8354,19 @@ a.cmp-file-act {
   font-weight: var(--brand-weight-semibold);
 }
 
+/* The Drafts page's one line under "Not proposed yet" (`MyDrafts`). */
+.drafts-lede {
+  margin: 0;
+  padding: var(--brand-space-2) var(--brand-space-2) 0;
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-sm);
+}
+
+.drafts-page {
+  display: grid;
+  gap: var(--brand-space-4);
+}
+
 .bs-panel-bar-spacer {
   flex: 1;
 }

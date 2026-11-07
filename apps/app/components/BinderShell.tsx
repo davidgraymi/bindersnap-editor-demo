@@ -71,6 +71,7 @@ import { ProposeChangePage } from "./ProposeChangePage";
 import { BinderChangePage } from "./BinderChangePage";
 import { BinderChanges } from "./BinderChanges";
 import { BinderHistory } from "./BinderHistory";
+import { MyDrafts } from "./MyDrafts";
 import { BinderSettings } from "./BinderSettings";
 import {
   BINDER_SETTINGS_PAGES,
@@ -1268,34 +1269,41 @@ export function BinderShell({
                 subtitle:
                   "Nothing joins this binder except a change that has been published.",
               }
-            : activeTab === "history"
+            : activeTab === "drafts"
               ? {
-                  title: "History",
+                  title: "Drafts",
                   subtitle:
-                    "Every change this binder has published, and what each one did.",
+                    "Your saved work in this binder, and whether it has been proposed.",
                 }
-              : activeTab === "settings"
-                ? // The page is named for the settings page it is, as the
-                  // sidebar entry that opened it is, with the one sentence
-                  // that says what that page decides.
-                  (() => {
-                    const page =
-                      BINDER_SETTINGS_PAGES.find(
-                        (entry) => entry.section === binderSettingsSection(tab),
-                      ) ?? BINDER_SETTINGS_PAGES[0]!;
-                    return { title: page.label, subtitle: page.description };
-                  })()
-                : {
-                    title: binderName,
-                    ...(editMode === "editing"
-                      ? {
-                          subtitle:
-                            "Rename in place, drag to refile, make a folder. Everything you do is saved to your draft, and nobody is asked to look until you propose it.",
-                        }
-                      : overview?.workspace.description
-                        ? { subtitle: overview.workspace.description }
-                        : {}),
-                  };
+              : activeTab === "history"
+                ? {
+                    title: "History",
+                    subtitle:
+                      "Every change this binder has published, and what each one did.",
+                  }
+                : activeTab === "settings"
+                  ? // The page is named for the settings page it is, as the
+                    // sidebar entry that opened it is, with the one sentence
+                    // that says what that page decides.
+                    (() => {
+                      const page =
+                        BINDER_SETTINGS_PAGES.find(
+                          (entry) =>
+                            entry.section === binderSettingsSection(tab),
+                        ) ?? BINDER_SETTINGS_PAGES[0]!;
+                      return { title: page.label, subtitle: page.description };
+                    })()
+                  : {
+                      title: binderName,
+                      ...(editMode === "editing"
+                        ? {
+                            subtitle:
+                              "Rename in place, drag to refile, make a folder. Everything you do is saved to your draft, and nobody is asked to look until you propose it.",
+                          }
+                        : overview?.workspace.description
+                          ? { subtitle: overview.workspace.description }
+                          : {}),
+                    };
 
   // **A page, not a broken binder.** An address with no binder behind it drew
   // the whole binder — its name made up from the address, Add a document and
@@ -1669,6 +1677,8 @@ export function BinderShell({
           binder={binder}
           onOpenChange={openChangeNumber}
         />
+      ) : activeTab === "drafts" ? (
+        <MyDrafts org={org} binder={binder} />
       ) : activeTab === "history" ? (
         <BinderHistory
           org={org}

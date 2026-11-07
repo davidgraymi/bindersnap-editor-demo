@@ -102,6 +102,7 @@ import {
   BinderShapeChangePayloadSchema,
   BinderArchivePayloadSchema,
   BinderDraftPayloadSchema,
+  MyDraftsPayloadSchema,
   ProposedDraftPayloadSchema,
   WorkspaceHistoryPayloadSchema,
   WorkspaceSettingsPayloadSchema,
@@ -462,6 +463,30 @@ registry.registerPath({
       content: {
         "application/json": { schema: NotificationCountPayloadSchema },
       },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/drafts",
+  operationId: "listMyDrafts",
+  tags: ["workspaces"],
+  request: {
+    /**
+     * Narrowed to one organization, or one binder in it. Neither: every
+     * binder you can write in, in every organization you are in.
+     */
+    query: z.object({
+      org: z.string().optional(),
+      binder: z.string().optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description:
+        "Your drafts, newest first: unproposed and proposed, with the binder each is in",
+      content: { "application/json": { schema: MyDraftsPayloadSchema } },
     },
   },
 });

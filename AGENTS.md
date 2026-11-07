@@ -240,7 +240,10 @@ Routes:
   called `-`, so none of them can shadow one, and an organization may be named
   almost anything. Add new app-wide pages here, never as a bare first segment.
   - `/-/login`, `/-/signup` — credential forms
-  - `/-/documents` — the library; `/-/changes` — every change in flight
+  - `/-/documents` — the library; `/-/changes` — every change in flight;
+    `/-/drafts` — your own drafts in every binder, unproposed first (also
+    `/{org}/-/drafts` and `/{org}/{binder}/-/drafts`, from
+    `GET /api/app/drafts`)
   - `/-/organizations/new` — create (or ask to join) an organization
   - `/-/user_settings/profile` — the signed-in person's own account
   - `/-/billing` — the session's organization's billing, rewritten to
