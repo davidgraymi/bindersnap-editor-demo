@@ -112,8 +112,11 @@ export function describeChangeStandingWord(change: ChangeRowInput): {
   if (outcome === "published") {
     return { tone: "published", standing: "Published" };
   }
-  if (outcome === "declined") return { tone: "closed", standing: "Declined" };
-  if (outcome === "withdrawn") return { tone: "closed", standing: "Withdrawn" };
+  // One word for both: why a change closed is a guess, and the row's meta
+  // line carries the reason it can prove.
+  if (outcome === "declined" || outcome === "withdrawn") {
+    return { tone: "closed", standing: "Closed" };
+  }
 
   if (change.isRejected) {
     return { tone: "changes", standing: "Changes requested" };
@@ -143,5 +146,20 @@ export function describeChangeRow(
   return {
     meta: describeChangeMeta(change, now),
     ...describeChangeStandingWord(change),
+  };
+}
+
+/**
+ * The decided changes, split the way the list's filters read them: what went
+ * on the record, and what was closed without reaching it. Null stays null — a
+ * list not fetched yet is not an empty one.
+ */
+export function splitDecidedChanges<
+  T extends { outcome?: ChangeOutcome | null },
+>(decided: readonly T[] | null): { published: T[] | null; closed: T[] | null } {
+  if (decided === null) return { published: null, closed: null };
+  return {
+    published: decided.filter((change) => change.outcome === "published"),
+    closed: decided.filter((change) => change.outcome !== "published"),
   };
 }

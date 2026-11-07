@@ -14217,11 +14217,15 @@
                         },
                         "canPublish": {
                           "type": "boolean"
+                        },
+                        "canCloseOrReopen": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
                         "canApprove",
-                        "canPublish"
+                        "canPublish",
+                        "canCloseOrReopen"
                       ]
                     },
                     "approvalRules": {
@@ -14652,6 +14656,122 @@
                       "nullable": true
                     }
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/changes/{changeNumber}/close": {
+      "post": {
+        "operationId": "closeBinderChange",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "changeNumber",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The change, closed without publishing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "open",
+                        "closed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "state"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/changes/{changeNumber}/reopen": {
+      "post": {
+        "operationId": "reopenBinderChange",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "changeNumber",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The change, open again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "open",
+                        "closed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "state"
+                  ]
                 }
               }
             }

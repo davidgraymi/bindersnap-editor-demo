@@ -37,6 +37,11 @@ let reactionsByComment = new Map<number, GiteaReaction[]>();
 let reactionCalls: { method: string; commentId: number; content: string }[] =
   [];
 let postedComments: string[] = [];
+/** Where change 3 stands. Every act on a change asks first. */
+let pullState: { state: string; merged: boolean } = {
+  state: "open",
+  merged: false,
+};
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -87,6 +92,7 @@ beforeEach(() => {
   reactionsByComment = new Map();
   reactionCalls = [];
   postedComments = [];
+  pullState = { state: "open", merged: false };
 
   globalThis.fetch = (async (input, init) => {
     const requestUrl =
@@ -151,6 +157,18 @@ beforeEach(() => {
         held.filter((entry) => entry.content !== content),
       );
       return new Response(null, { status: 204 });
+    }
+
+    if (
+      path.match(/^\/api\/v1\/repos\/[^/]+\/[^/]+\/pulls\/\d+$/) &&
+      method === "GET"
+    ) {
+      return json({
+        number: 3,
+        ...pullState,
+        user: { login: "bob" },
+        head: { ref: "draft/bob/1" },
+      });
     }
 
     const commentsMatch = path.match(
@@ -277,6 +295,19 @@ describe("comment reaction route", () => {
       { method: "DELETE", commentId: 1, content: "+1" },
     ]);
     expect(reactionsByComment.get(1)).toEqual([]);
+  });
+
+  test("a published change takes no more reactions", async () => {
+    const server = createApiServer();
+    const session = await seedSession("alice");
+    pullState = { state: "closed", merged: true };
+
+    const response = await server.fetch(
+      request("t1", 1, { content: "+1", on: true }, session),
+    );
+
+    expect(response.status).toBe(409);
+    expect(reactionCalls).toEqual([]);
   });
 
   test("a comment on another thread cannot be reached through this one", async () => {

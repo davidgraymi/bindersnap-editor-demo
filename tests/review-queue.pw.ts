@@ -156,8 +156,7 @@ test("a row's standing is one word, and the row says nothing else", async ({
       "Changes requested",
       "Approved",
       "Published",
-      "Declined",
-      "Withdrawn",
+      "Closed",
     ]).toContain(text.trim());
   }
 

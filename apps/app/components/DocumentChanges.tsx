@@ -1,9 +1,14 @@
 import { formatDocumentName, type ChangeRecord } from "../documentDisplay";
 import { nameFor, usePeopleNames } from "../usePeopleNames";
+import { splitDecidedChanges } from "../changeRow";
 import { ChangeRow } from "./ChangeRow";
 import { SkeletonGroup, SkeletonLine, SkeletonShape } from "./Skeleton";
 
-export type ChangeFilter = "open" | "closed";
+/**
+ * Which changes the list shows. `published` and `closed` are both read from
+ * the decided changes: published went on the record, closed did not.
+ */
+export type ChangeFilter = "open" | "published" | "closed";
 
 interface DocumentChangesProps {
   isAnonymous: boolean;
@@ -91,9 +96,10 @@ function BinderChangeRow({
 /**
  * The index of every change this document has ever seen.
  *
- * Open changes are the work; closed ones are the record, and the record has to
- * say what happened — a change that was declined and a change its author gave
- * up on are not the same event, and "closed" tells a reader neither.
+ * Open changes are the work; decided ones are the record, split the way a
+ * surveyor asks about them: what was published, and what was closed without
+ * being published. Why a change was closed is said on its row, not guessed
+ * into a status word.
  */
 export function DocumentChanges({
   isAnonymous,
@@ -111,7 +117,14 @@ export function DocumentChanges({
   org,
   binderOf,
 }: DocumentChangesProps) {
-  const rows = filter === "open" ? openChanges : (closedChanges ?? []);
+  const { published, closed } = splitDecidedChanges(closedChanges);
+  const rows =
+    filter === "open"
+      ? openChanges
+      : filter === "published"
+        ? (published ?? [])
+        : (closed ?? []);
+  const decidedFilter = filter !== "open";
   const names = usePeopleNames(org);
 
   return (
@@ -132,22 +145,31 @@ export function DocumentChanges({
           <button
             className="bs-seg queue-counter"
             type="button"
+            aria-pressed={filter === "published"}
+            onClick={() => onFilterChange("published")}
+          >
+            Published
+            {published === null ? null : (
+              <span className="queue-counter-value">{published.length}</span>
+            )}
+          </button>
+          <button
+            className="bs-seg queue-counter"
+            type="button"
             aria-pressed={filter === "closed"}
             onClick={() => onFilterChange("closed")}
           >
             Closed
-            {closedChanges === null ? null : (
-              <span className="queue-counter-value">
-                {closedChanges.length}
-              </span>
+            {closed === null ? null : (
+              <span className="queue-counter-value">{closed.length}</span>
             )}
           </button>
         </div>
       </div>
 
-      {filter === "closed" && closedError ? (
+      {decidedFilter && closedError ? (
         <div className="bs-empty">
-          <p className="bs-empty-lead">Unable to load closed changes</p>
+          <p className="bs-empty-lead">Unable to load decided changes</p>
           <p>{closedError}</p>
           <button
             className="bs-btn bs-btn--sm bs-btn-secondary"
@@ -157,8 +179,8 @@ export function DocumentChanges({
             Retry
           </button>
         </div>
-      ) : filter === "closed" && closedLoading ? (
-        <SkeletonGroup label="Loading closed changes">
+      ) : decidedFilter && closedLoading ? (
+        <SkeletonGroup label="Loading decided changes">
           {Array.from({ length: 3 }, (_, index) => (
             <div className="bs-row bs-row--tall" key={index}>
               <SkeletonShape variant="icon" />
@@ -179,13 +201,21 @@ export function DocumentChanges({
               <h2 className="bs-empty-lead">No pending approvals</h2>
               <p>
                 Nothing is waiting on a decision. Every version has been
-                published or withdrawn.
+                published or closed.
               </p>
+            </>
+          ) : filter === "published" ? (
+            <>
+              <h2 className="bs-empty-lead">Nothing published yet</h2>
+              <p>A change appears here once it is approved and published.</p>
             </>
           ) : (
             <>
               <h2 className="bs-empty-lead">No closed changes</h2>
-              <p>Nothing has been published, declined, or withdrawn yet.</p>
+              <p>
+                A change closed without being published appears here. It can be
+                reopened.
+              </p>
             </>
           )}
         </div>

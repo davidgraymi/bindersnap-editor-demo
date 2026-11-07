@@ -134,9 +134,9 @@ test("the badge says open, published, or closed, and never guesses why", () => {
   const cases = [
     ["open", "Open"],
     ["published", "Published"],
-    ["declined", "Declined"],
-    ["withdrawn", "Withdrawn"],
-    // Ended without publishing, and the page cannot tell who ended it.
+    // Ended without publishing: one word, whichever way the server guessed.
+    ["declined", "Closed"],
+    ["withdrawn", "Closed"],
     ["closed", "Closed"],
   ] as const;
 

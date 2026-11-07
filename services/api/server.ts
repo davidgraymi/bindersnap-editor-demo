@@ -189,6 +189,7 @@ import {
   listDocumentVersions,
   documentVersionsFrom,
   listRemovedDocuments,
+  listTouchedDocuments,
   readArchivedDocument,
   listVersionsByDocument,
   listWorkspaceDocuments,
@@ -376,6 +377,10 @@ import {
   requestPullReviewers,
   setPullRequestSubject,
   setPullRequestAssignees,
+  setPullRequestOpen,
+  getPullRequestForBranch,
+  readPullRequestStanding,
+  branchExists,
   submitReview,
   type PullRequestWithApprovalState,
   type PullRequestWithReviews,
@@ -5263,6 +5268,44 @@ async function handleOneClickUnsubscribe(
   return json(200, { ok: true }, baseHeaders);
 }
 
+/**
+ * Refuse to add to a change that is no longer open, or null when it is.
+ *
+ * **A decided change is the record, for everyone.** A comment, a resolved
+ * thread or a reaction added after a publish reads as part of the review the
+ * approvers saw, when it never was. A published change stays exactly as it was
+ * decided; a change closed without publishing is read-only until its author
+ * or a binder admin reopens it.
+ *
+ * Every act on a change asks this first. Gitea's own conversation lock is not
+ * enough on its own: it still lets anyone with write access comment.
+ */
+async function refuseDecidedChange(
+  client: GiteaClient,
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  baseHeaders: Headers,
+): Promise<Response | null> {
+  const { standing } = await readPullRequestStanding({
+    client,
+    owner,
+    repo,
+    pullNumber,
+  });
+  if (standing === "open") return null;
+  return json(
+    409,
+    {
+      error:
+        standing === "published"
+          ? "This change is published, and its record is closed. To change the document, start a new draft."
+          : "This change is closed. Reopen it to comment or review.",
+    },
+    baseHeaders,
+  );
+}
+
 /** Distinct, trimmed usernames, in the order they were given. */
 function readUsernameList(value: unknown): string[] | null {
   if (!Array.isArray(value)) return null;
@@ -5339,6 +5382,15 @@ async function handleUpdateChangeAssignments(
   }
 
   try {
+    const decided = await refuseDecidedChange(
+      client,
+      owner,
+      repo,
+      prNumber,
+      baseHeaders,
+    );
+    if (decided) return decided;
+
     const before = await getPullRequestWithReviews({
       client,
       owner,
@@ -5553,6 +5605,15 @@ async function handleCreateDiscussionThread(
   }
 
   try {
+    const decided = await refuseDecidedChange(
+      auth.client,
+      owner,
+      repo,
+      prNumber,
+      baseHeaders,
+    );
+    if (decided) return decided;
+
     const discussions = await createDiscussionThread({
       client: auth.client,
       owner,
@@ -5590,6 +5651,15 @@ async function handleReplyToDiscussion(
   }
 
   try {
+    const decided = await refuseDecidedChange(
+      auth.client,
+      owner,
+      repo,
+      prNumber,
+      baseHeaders,
+    );
+    if (decided) return decided;
+
     const discussions = await replyToDiscussion({
       client: auth.client,
       owner,
@@ -5641,6 +5711,15 @@ async function handleResolveDiscussion(
   }
 
   try {
+    const decided = await refuseDecidedChange(
+      auth.client,
+      owner,
+      repo,
+      prNumber,
+      baseHeaders,
+    );
+    if (decided) return decided;
+
     const discussions = await setDiscussionResolution({
       client: auth.client,
       owner,
@@ -5715,6 +5794,15 @@ async function handleSetCommentReaction(
   }
 
   try {
+    const decided = await refuseDecidedChange(
+      auth.client,
+      owner,
+      repo,
+      prNumber,
+      baseHeaders,
+    );
+    if (decided) return decided;
+
     const discussions = await setCommentReactionInThread({
       client: auth.client,
       owner,
@@ -7477,12 +7565,21 @@ async function handleWorkspaceChangeDetail(
         // moves on — the binder's "A new version clears the approvals" rule.
         clearsApprovalsOnEdit: mergeRules?.ignoresStale ?? true,
         canManage: access.push,
-        viewer: await readDecisionRights({
-          org: orgName,
-          binder: workspaceName,
-          username: auth.session.username,
-          canWrite: access.push,
-        }),
+        viewer: {
+          ...(await readDecisionRights({
+            org: orgName,
+            binder: workspaceName,
+            username: auth.session.username,
+            canWrite: access.push,
+          })),
+          // Its author or a binder admin, as `handleSetWorkspaceChangeOpen`
+          // decides it. Never on a published change: that is the record.
+          canCloseOrReopen:
+            decided?.outcome !== "published" &&
+            (access.admin ||
+              (entry.pullRequest.user?.login ?? "").toLowerCase() ===
+                auth.session.username.toLowerCase()),
+        },
         // Who this change is actually held for, out of the people its rules
         // named. Read rather than guessed: see `requiredReviewers.ts`.
         requiredReviewers: requiredReviewersFor({
@@ -7620,6 +7717,157 @@ async function handleWorkspaceChangeEdit(
 }
 
 /**
+ * Close a change without publishing it, or reopen one that was closed.
+ *
+ * **Its author's, or a binder admin's** — the same people who may rewrite its
+ * title, for the same reason: a change whose author has left still has to be
+ * cleared off the list by somebody.
+ *
+ * **A published change cannot be reopened.** It is the record, and a version
+ * on it can only be followed by a new change. A closed one can, so long as
+ * the draft it was proposed from is still there and has not been proposed
+ * again as another change.
+ *
+ * Gitea's own pull request state, so its timeline records who closed or
+ * reopened the change and when.
+ */
+async function handleSetWorkspaceChangeOpen(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+  pullNumber: number,
+  open: boolean,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client, session } = auth;
+
+  try {
+    const [change, access] = await Promise.all([
+      readPullRequestStanding({
+        client,
+        owner: orgName,
+        repo: workspaceName,
+        pullNumber,
+      }),
+      readWorkspaceAccess({ client, org: orgName, name: workspaceName }),
+    ]);
+
+    const isAuthor =
+      change.author.toLowerCase() === session.username.toLowerCase();
+    if (!isAuthor && !access.admin) {
+      return json(
+        403,
+        {
+          error: open
+            ? "Only the author or a binder admin can reopen this change."
+            : "Only the author or a binder admin can close this change.",
+        },
+        baseHeaders,
+      );
+    }
+
+    if (change.standing === "published") {
+      return json(
+        409,
+        {
+          error:
+            "This change is published, and its record is closed. To change the document, start a new draft.",
+        },
+        baseHeaders,
+      );
+    }
+    if (change.standing === (open ? "open" : "closed")) {
+      return json(
+        409,
+        {
+          error: open
+            ? "This change is already open."
+            : "This change is already closed.",
+        },
+        baseHeaders,
+      );
+    }
+
+    if (open) {
+      // A closed change's draft may have been thrown away, or proposed again
+      // as a new change. Either way there is nothing for this one to reopen
+      // onto, and Gitea's own refusal would not say which.
+      const stillThere =
+        change.branch !== "" &&
+        (await branchExists({
+          client,
+          owner: orgName,
+          repo: workspaceName,
+          branch: change.branch,
+        }));
+      if (!stillThere) {
+        return json(
+          409,
+          {
+            error:
+              "The draft this change was proposed from has been thrown away, so it cannot be reopened.",
+          },
+          baseHeaders,
+        );
+      }
+      const current = await getPullRequestForBranch({
+        client,
+        owner: orgName,
+        repo: workspaceName,
+        branch: change.branch,
+      });
+      if (
+        current &&
+        current.state === "open" &&
+        current.number !== pullNumber
+      ) {
+        return json(
+          409,
+          {
+            error: `This change's draft is proposed again as change ${current.number}. Open that one instead.`,
+          },
+          baseHeaders,
+        );
+      }
+    }
+
+    await setPullRequestOpen({
+      client,
+      owner: orgName,
+      repo: workspaceName,
+      pullNumber,
+      open,
+    });
+
+    logger.info(open ? "Change request reopened" : "Change request closed", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      pullNumber,
+    });
+
+    return json(200, { state: open ? "open" : "closed" }, baseHeaders);
+  } catch (err) {
+    logger.error("Failed to close or reopen a change request", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      pullNumber,
+      open,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      open ? "Unable to reopen this change." : "Unable to close this change.",
+    );
+  }
+}
+
+/**
  * Bring a change's branch up to date with the binder's `main`.
  *
  * A mutation, and a deliberate one: it moves the branch, so the approvals
@@ -7647,6 +7895,15 @@ async function handleWorkspaceChangeUpdate(
     if (!workspace) {
       return json(404, { error: "No such binder." }, baseHeaders);
     }
+
+    const decided = await refuseDecidedChange(
+      client,
+      orgName,
+      workspaceName,
+      pullNumber,
+      baseHeaders,
+    );
+    if (decided) return decided;
 
     const caughtUp = await updateChangeBranch({
       client,
@@ -8079,6 +8336,15 @@ async function handleWorkspaceChangeReview(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
+    const decided = await refuseDecidedChange(
+      client,
+      orgName,
+      workspaceName,
+      pullNumber,
+      baseHeaders,
+    );
+    if (decided) return decided;
+
     // **Only an approver approves.** Gitea records an approval from anybody
     // who can read the change and counts it only from an approver, so an
     // approval from anyone else would sit in the record as a sign-off that
@@ -8198,20 +8464,33 @@ async function handleWorkspaceOverview(
 /**
  * Which documents a change is about, without a call per change.
  *
- * Two sources, neither of which costs anything. An open change carries its
- * document in its branch name — `upload/<slugPath>/…`, the convention the
- * upload path writes. A published one is named exactly by the version tags on
- * its merge commit, which is one tags read for the whole binder.
+ * **An open change is read from the files it changes** — revised, added or
+ * archived, a rename counted once. Its branch name used to stand in — `upload/<slugPath>/…` names
+ * one document — but a draft's branch (`draft/…`) names none and a folder
+ * uploaded as one change names one of many, so a change proposed from the
+ * editor said "0 documents" while it changed three.
  *
- * A change made outside Bindersnap matches neither, and gets an empty list:
- * the row then simply does not describe itself, which beats guessing.
+ * A published one is named exactly by the version tags on its merge commit,
+ * which is one tags read for the whole binder. The branch name is the last
+ * resort, for a change whose files could not be read; a change matching
+ * nothing gets an empty list, which beats guessing.
  */
 function describeChangeDocuments(params: {
   branchName: string;
   mergeCommitSha: string | null;
   versionsByCommit: Map<string, Array<{ slugPath: string; version: number }>>;
+  /** What an open change's files say it changes; null when not read. */
+  changed: Array<{ slugPath: string; name: string }> | null;
 }): Array<{ slugPath: string; name: string; version: number | null }> {
-  const { branchName, mergeCommitSha, versionsByCommit } = params;
+  const { branchName, mergeCommitSha, versionsByCommit, changed } = params;
+
+  if (changed !== null) {
+    return changed.map((entry) => ({
+      slugPath: entry.slugPath,
+      name: entry.name,
+      version: null,
+    }));
+  }
 
   const published = mergeCommitSha
     ? (versionsByCommit.get(mergeCommitSha) ?? [])
@@ -8384,6 +8663,30 @@ async function listWorkspaceChangeSummaries(
     }
   }
 
+  // **What each open change touches, from its files.** One read per open
+  // change, in parallel — open changes are the few in flight, not the
+  // binder's history. A read that fails costs that row its count, not the
+  // list: it falls back to what the branch name says.
+  const changedByNumber = new Map<
+    number,
+    Array<{ slugPath: string; name: string }>
+  >();
+  if (state === "open") {
+    await Promise.all(
+      entries.map(async ({ pullRequest }) => {
+        const number = pullRequest.number;
+        if (typeof number !== "number") return;
+        const changed = await listTouchedDocuments({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          pullNumber: number,
+        }).catch(() => null);
+        if (changed) changedByNumber.set(number, changed);
+      }),
+    );
+  }
+
   const changes = entries
     .map(({ pullRequest, reviews }) => {
       const row = buildPendingChangeRow({ pullRequest, reviews }, mergeRules);
@@ -8428,6 +8731,9 @@ async function listWorkspaceChangeSummaries(
           branchName: row.branchName,
           mergeCommitSha,
           versionsByCommit,
+          changed: isOpen
+            ? (changedByNumber.get(pullRequest.number ?? -1) ?? null)
+            : null,
         }),
       };
     })
@@ -17661,6 +17967,11 @@ async function handleRequest(req: Request): Promise<Response> {
     const workspaceChangeUpdateMatch = pathname.match(
       /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/update$/,
     );
+    // Close and reopen are two verbs rather than one `state` field, so the
+    // log, the schema and the button all say which act it was.
+    const workspaceChangeStateMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/(close|reopen)$/,
+    );
     // A binder is a Gitea repository and a change on it is a Gitea pull
     // request, so everything below is the document model's own handler
     // reached at the binder's address. Same behaviour, one namespace per
@@ -18170,6 +18481,15 @@ async function handleRequest(req: Request): Promise<Response> {
         workspaceChangeUpdateMatch[1]!,
         workspaceChangeUpdateMatch[2]!,
         Number.parseInt(workspaceChangeUpdateMatch[3] ?? "", 10),
+      );
+    } else if (workspaceChangeStateMatch && method === "POST") {
+      response = await handleSetWorkspaceChangeOpen(
+        req,
+        baseHeaders,
+        workspaceChangeStateMatch[1]!,
+        workspaceChangeStateMatch[2]!,
+        Number.parseInt(workspaceChangeStateMatch[3] ?? "", 10),
+        workspaceChangeStateMatch[4] === "reopen",
       );
     } else if (workspaceChangeMatch && method === "PATCH") {
       response = await handleWorkspaceChangeEdit(

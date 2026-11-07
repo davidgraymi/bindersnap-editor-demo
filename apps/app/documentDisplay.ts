@@ -683,15 +683,22 @@ export function describeChangeStanding(
   };
 }
 
+/**
+ * **One word for every change that ended without publishing.** The server
+ * still tells declined from withdrawn by whether anybody asked for changes,
+ * but that is a guess about why a change closed — an admin clearing out an
+ * old change is not a reviewer declining it — so the status says only what
+ * is certain, and the line under the title gives the reason it can prove.
+ */
 const CHANGE_OUTCOME_LABELS: Record<ChangeOutcome, string> = {
   published: "Published",
-  declined: "Declined",
-  withdrawn: "Withdrawn",
+  declined: "Closed",
+  withdrawn: "Closed",
 };
 
 const CHANGE_OUTCOME_BADGE_TONES: Record<ChangeOutcome, string> = {
   published: "bs-status--published",
-  declined: "bs-status--declined",
+  declined: "bs-status--withdrawn",
   withdrawn: "bs-status--withdrawn",
 };
 
@@ -763,14 +770,14 @@ export function describeChangeOutcome(
     }
     case "declined":
       return [
-        "Declined",
-        who ? `after ${who} requested changes` : "after changes were requested",
-        when ? `· closed ${when}` : null,
+        "Closed without publishing",
+        who ? `after ${who} asked for changes` : "after changes were asked for",
+        when ? `on ${when}` : null,
       ]
         .filter(Boolean)
         .join(" ");
     default:
-      return ["Withdrawn without a decision", when ? `· closed ${when}` : null]
+      return ["Closed without publishing", when ? `on ${when}` : null]
         .filter(Boolean)
         .join(" ");
   }

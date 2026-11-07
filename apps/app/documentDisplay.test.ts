@@ -212,7 +212,7 @@ test("a published change says which version it became", () => {
   );
 });
 
-test("a declined change names who asked for the changes it never made", () => {
+test("a change closed after a request for changes names who asked", () => {
   const change = closedChangeToRecord({
     number: 5,
     body: "",
@@ -225,18 +225,18 @@ test("a declined change names who asked for the changes it never made", () => {
     publishedVersion: null,
   });
 
-  expect(getChangeStateLabel(change)).toBe("Declined");
-  // Declined is closed; changes-requested is still open. Same hue, own tone.
+  // Closed, never "Declined": who closed it is not known, only who asked.
+  expect(getChangeStateLabel(change)).toBe("Closed");
   expect(getChangeStateBadgeClass(change)).toBe(
-    "bs-status bs-status--declined",
+    "bs-status bs-status--withdrawn",
   );
   expect(change.branchName).toBeNull();
   expect(describeChangeOutcome(change)).toBe(
-    "Declined after Dana requested changes · closed Feb 4, 2026",
+    "Closed without publishing after Dana asked for changes on Feb 4, 2026",
   );
 });
 
-test("a withdrawn change says so rather than saying nothing", () => {
+test("a change closed with no decision says so rather than saying nothing", () => {
   const change = closedChangeToRecord({
     number: 6,
     body: "",
@@ -249,12 +249,12 @@ test("a withdrawn change says so rather than saying nothing", () => {
     publishedVersion: null,
   });
 
-  expect(getChangeStateLabel(change)).toBe("Withdrawn");
+  expect(getChangeStateLabel(change)).toBe("Closed");
   expect(getChangeStateBadgeClass(change)).toBe(
     "bs-status bs-status--withdrawn",
   );
   expect(describeChangeOutcome(change)).toBe(
-    "Withdrawn without a decision · closed Feb 5, 2026",
+    "Closed without publishing on Feb 5, 2026",
   );
 });
 
