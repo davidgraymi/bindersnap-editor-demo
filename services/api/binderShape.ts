@@ -320,8 +320,14 @@ function describeFolder(folder: string): string {
  */
 export function planDocumentArchive(params: {
   document: WorkspaceDocumentEntry;
+  /**
+   * Whether it was ever published. One never published is only in this
+   * draft, so taking it out is a deletion and is called one: there is no
+   * record for it to be archived from.
+   */
+  published?: boolean;
 }): ShapeChangeResult {
-  const { document } = params;
+  const { document, published = true } = params;
 
   if (document.uid === null) {
     return {
@@ -329,13 +335,69 @@ export function planDocumentArchive(params: {
     };
   }
 
-  const said = `Archive ${formatDocumentName(document.name)}`;
+  const said = `${published ? "Archive" : "Delete"} ${formatDocumentName(document.name)}`;
 
   return {
     operations: [{ kind: "remove", path: document.path }],
     title: said,
     message: said,
   };
+}
+
+/**
+ * Take a folder off the record: every document in it, and in the folders
+ * under it, archived as {@link planDocumentArchive} archives one — in one
+ * commit, so the draft counts it as one act and Undo has one thing to undo.
+ * The placeholders holding its folders open go too, so the folder itself is
+ * gone from the tree rather than left standing empty.
+ *
+ * Each document keeps its version tags, and the publish that merges this
+ * writes an `archived-<n>` tag for each, exactly as for one archived alone.
+ *
+ * **Refused whole when any document in it has no identity**, for the reason
+ * one such document is refused: removing it would be a deletion. Archiving the
+ * rest and leaving that one would leave the folder standing for a reason
+ * nobody could see, so the refusal names it instead.
+ */
+export function planFolderArchive(params: {
+  folder: string;
+  /** Every path in the binder, documents and furniture alike. */
+  paths: readonly string[];
+  documents: readonly WorkspaceDocumentEntry[];
+  existingFolders: readonly string[];
+}): ShapeChangeResult {
+  const folder = normalizeFolder(params.folder);
+  if (folder === "") return { error: "Name the folder to archive." };
+  if (!params.existingFolders.includes(folder)) {
+    return { error: `This binder has no folder called “${folder}”.` };
+  }
+
+  const prefix = `${folder}/`;
+  const inside = params.documents.filter((entry) =>
+    entry.path.startsWith(prefix),
+  );
+  const unmanaged = inside.find((entry) => entry.uid === null);
+  if (unmanaged) {
+    return {
+      error: `“${unmanaged.path}” was not added through Bindersnap, so it has no published versions to fall back on. Move it out of ${describeFolder(folder)} before archiving the folder.`,
+    };
+  }
+
+  const keeps = params.paths.filter(
+    (path) =>
+      path.startsWith(prefix) &&
+      path.slice(path.lastIndexOf("/") + 1) === FOLDER_KEEP_FILE,
+  );
+  const operations: BinderFileOperation[] = [
+    ...inside.map((entry) => ({ kind: "remove" as const, path: entry.path })),
+    ...keeps.map((path) => ({ kind: "remove" as const, path })),
+  ];
+  if (operations.length === 0) {
+    return { error: `${describeFolder(folder)} has nothing in it to archive.` };
+  }
+
+  const said = `Archive the folder ${describeFolder(folder)}`;
+  return { operations, title: said, message: said };
 }
 
 /**
