@@ -233,6 +233,62 @@ export function clampZoom(value: number): number {
 }
 
 /**
+ * Ctrl+= / Ctrl+- / Ctrl+0 as the page's zoom, as Google Docs and Word for
+ * the web take them while you are in the document. Read by the key and, for
+ * a layout that moves the characters, by where the key is. Null for anything
+ * else, and for Alt, which is somebody else's (Ctrl+Alt+0 is Normal text).
+ */
+export function zoomKey(event: {
+  key: string;
+  code?: string;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  altKey: boolean;
+}): "in" | "out" | "reset" | null {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey) return null;
+  if (event.key === "=" || event.key === "+") return "in";
+  if (event.key === "-" || event.key === "_") return "out";
+  if (event.key === "0") return "reset";
+  switch (event.code) {
+    case "Equal":
+    case "NumpadAdd":
+      return "in";
+    case "Minus":
+    case "NumpadSubtract":
+      return "out";
+    case "Digit0":
+    case "Numpad0":
+      return "reset";
+    default:
+      return null;
+  }
+}
+
+/** The next step of Zoom in or out, from wherever the zoom is now. */
+export function stepZoom(current: number, direction: "in" | "out"): number {
+  const steps = current / ZOOM_STEP;
+  const next =
+    direction === "in"
+      ? Math.floor(steps + 1e-9) + 1
+      : Math.ceil(steps - 1e-9) - 1;
+  return clampZoom(next * ZOOM_STEP);
+}
+
+/**
+ * A pinch, or Ctrl and the wheel: the zoom scaled by how far the fingers or
+ * the wheel moved. A trackpad sends many small moves and a wheel a few large
+ * ones, so one move is capped, and a notch of a wheel is a step of about a
+ * tenth, as in Word. Unrounded, so a slow pinch adds up instead of rounding away.
+ */
+export function pinchZoom(current: number, deltaY: number): number {
+  const move = Math.max(-10, Math.min(10, deltaY));
+  return Math.max(
+    ZOOM_MIN,
+    Math.min(ZOOM_MAX, current * Math.exp(-move / 100)),
+  );
+}
+
+/**
  * Today, in the ways a policy writes a date — Word's Insert > Date & Time.
  *
  * In the reader's own language, except the last: ISO is the one form that
