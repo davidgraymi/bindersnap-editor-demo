@@ -348,7 +348,7 @@ describe("buildDecidedChangeRows", () => {
     expect(rows[0]?.documentName).toBe("Hand Hygiene");
   });
 
-  test("a withdrawn change says who withdrew it", () => {
+  test("a withdrawn change is closed, naming nobody", () => {
     const rows = buildDecidedChangeRows(
       [
         {
@@ -369,7 +369,8 @@ describe("buildDecidedChangeRows", () => {
     );
 
     expect(rows[0]?.outcome).toBe("closed");
-    expect(rows[0]?.meta).toBe("withdrawn by Tom");
+    // Not "by Tom": who closed it is not on the record.
+    expect(rows[0]?.meta).toBe("closed without publishing");
     expect(rows[0]?.standing).toBe("Closed");
   });
 
@@ -404,8 +405,8 @@ describe("buildDecidedChangeRows", () => {
         "david",
       )[0]?.meta;
 
-    expect(declined("tom")).toBe("declined by Tom Okafor");
-    expect(declined("david")).toBe("declined by you");
+    expect(declined("tom")).toBe("closed after Tom Okafor asked for changes");
+    expect(declined("david")).toBe("closed after you asked for changes");
   });
 
   test("a decision the reader had no part in is left off", () => {

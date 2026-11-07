@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 
-import { describeChangeMeta, describeChangeStandingWord } from "./changeRow";
+import {
+  describeChangeMeta,
+  describeChangeStandingWord,
+  splitDecidedChanges,
+} from "./changeRow";
 
 const NOW = Date.parse("2026-09-20T12:00:00Z");
 const hoursAgo = (n: number) => new Date(NOW - n * 3_600_000).toISOString();
@@ -94,11 +98,11 @@ test("a decided change says how it ended", () => {
     tone: "published",
   });
   expect(describeChangeStandingWord(change({ outcome: "declined" }))).toEqual({
-    standing: "Declined",
+    standing: "Closed",
     tone: "closed",
   });
   expect(describeChangeStandingWord(change({ outcome: "withdrawn" }))).toEqual({
-    standing: "Withdrawn",
+    standing: "Closed",
     tone: "closed",
   });
 });
@@ -140,4 +144,22 @@ test("the row names its author when the list knows the name", () => {
   expect(describeChangeMeta(change({ submittedByName: "  " }), NOW)).toBe(
     "#4 · Alice opened 2 hours ago",
   );
+});
+
+test("decided changes split into the published and the closed", () => {
+  const decided = [
+    { number: 1, outcome: "published" as const },
+    { number: 2, outcome: "declined" as const },
+    { number: 3, outcome: "withdrawn" as const },
+    { number: 4, outcome: "published" as const },
+  ];
+
+  const { published, closed } = splitDecidedChanges(decided);
+
+  expect(published?.map((change) => change.number)).toEqual([1, 4]);
+  expect(closed?.map((change) => change.number)).toEqual([2, 3]);
+});
+
+test("decided changes not fetched yet are not an empty list", () => {
+  expect(splitDecidedChanges(null)).toEqual({ published: null, closed: null });
 });

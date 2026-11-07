@@ -2027,6 +2027,31 @@ export async function editBinderChange(
 }
 
 /**
+ * Close a change without publishing it, or reopen one that was closed.
+ *
+ * Its author's or a binder admin's. A published change is never reopened.
+ */
+export async function setBinderChangeOpen(
+  org: string,
+  binder: string,
+  changeNumber: number,
+  open: boolean,
+): Promise<void> {
+  try {
+    if (open) {
+      await BindersClient.reopenBinderChange(org, binder, String(changeNumber));
+    } else {
+      await BindersClient.closeBinderChange(org, binder, String(changeNumber));
+    }
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/changes/${changeNumber}/${open ? "reopen" : "close"}`,
+      error,
+    );
+  }
+}
+
+/**
  * Say what a binder is for.
  *
  * Unlike a rename this moves nothing — it is the repository's own description,

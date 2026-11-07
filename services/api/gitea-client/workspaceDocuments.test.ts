@@ -6,6 +6,7 @@ import {
   findWorkspaceDocument,
   latestChangeByDocument,
   listChangedDocuments,
+  listTouchedDocuments,
   listDocumentVersions,
   listVersionsByDocument,
   listWorkspaceDocuments,
@@ -553,6 +554,52 @@ test("a document a change only deletes publishes nothing", async () => {
   });
 
   expect(documents.map((d) => d.slugPath)).toEqual(["admissions"]);
+});
+
+test("a change is about every document it touches, archived ones too", async () => {
+  // The count a list of changes shows. A change that archives one document
+  // and revises another is about two, even though only one gets a version.
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/pulls/{index}/files": () => [
+        { filename: `nursing/old.${OTHER_ABSENT}.md`, status: "deleted" },
+        { filename: `admissions.${ADMISSIONS}.json`, status: "modified" },
+      ],
+    },
+  });
+
+  const documents = await listTouchedDocuments({
+    client,
+    org: "mercy-health",
+    workspace: "clinical",
+    pullNumber: 7,
+  });
+
+  expect(documents.map((d) => d.uid)).toEqual([ADMISSIONS, OTHER_ABSENT]);
+});
+
+test("a rename touches one document, at the address it is going to", async () => {
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/pulls/{index}/files": () => [
+        { filename: `nursing/hand-hygiene.${HANDOVER}.md`, status: "deleted" },
+        {
+          filename: `nursing/hand-hygiene-and-ppe.${HANDOVER}.md`,
+          status: "added",
+        },
+      ],
+    },
+  });
+
+  const documents = await listTouchedDocuments({
+    client,
+    org: "mercy-health",
+    workspace: "clinical",
+    pullNumber: 7,
+  });
+
+  expect(documents).toHaveLength(1);
+  expect(documents[0]?.slugPath).toBe("nursing/hand-hygiene-and-ppe");
 });
 
 test("createDocumentVersionTag names the document in the tag", async () => {

@@ -499,6 +499,53 @@ export async function listChangedDocuments(params: {
 }
 
 /**
+ * Every document a change touches — revised, added or taken off the record —
+ * once each, from one read of its files.
+ *
+ * What a list of changes says a change is about. Not a publish input: that
+ * is {@link listChangedDocuments} and {@link listRemovedDocuments}, kept
+ * apart because only one half gets a version tag. Keyed by identity, so a
+ * rename — which Gitea reports as a removal and an addition — is one document.
+ */
+export async function listTouchedDocuments(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  pullNumber: number;
+}): Promise<WorkspaceDocumentEntry[]> {
+  const { client, org, workspace, pullNumber } = params;
+
+  const files = (await unwrap(
+    client.GET("/repos/{owner}/{repo}/pulls/{index}/files", {
+      params: { path: { owner: org, repo: workspace, index: pullNumber } },
+    }),
+  )) as ChangedFile[];
+
+  // The added half first, so a renamed document is listed where it is going.
+  const ordered = [...(files ?? [])].sort(
+    (left, right) =>
+      Number(ABSENT_STATUSES.has((left.status ?? "").toLowerCase())) -
+      Number(ABSENT_STATUSES.has((right.status ?? "").toLowerCase())),
+  );
+
+  const seen = new Set<string>();
+  const documents: WorkspaceDocumentEntry[] = [];
+
+  for (const file of ordered) {
+    const entry = toDocumentEntry({ path: file.filename ?? "", type: "blob" });
+    if (!entry) continue;
+
+    const key = entry.uid ?? entry.slugPath;
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    documents.push(entry);
+  }
+
+  return documents.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+/**
  * The documents a change **takes off** the record, which is the other half.
  *
  * {@link listChangedDocuments} skips exactly these statuses, because a file

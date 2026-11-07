@@ -2361,6 +2361,65 @@ registry.registerPath({
   },
 });
 
+/**
+ * Close a change without publishing it. Its author's, or a binder admin's.
+ *
+ * A closed change is read-only until it is reopened.
+ */
+registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/changes/{changeNumber}/close",
+  operationId: "closeBinderChange",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({
+      org: z.string(),
+      binder: z.string(),
+      changeNumber: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "The change, closed without publishing",
+      content: {
+        "application/json": {
+          schema: z.object({ state: z.enum(["open", "closed"]) }),
+        },
+      },
+    },
+  },
+});
+
+/**
+ * Reopen a change that was closed without publishing.
+ *
+ * Refused for a published change, and for one whose draft has been thrown
+ * away or proposed again as another change.
+ */
+registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/changes/{changeNumber}/reopen",
+  operationId: "reopenBinderChange",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({
+      org: z.string(),
+      binder: z.string(),
+      changeNumber: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "The change, open again",
+      content: {
+        "application/json": {
+          schema: z.object({ state: z.enum(["open", "closed"]) }),
+        },
+      },
+    },
+  },
+});
+
 registry.registerPath({
   method: "post",
   path: "/api/app/binders/{org}/{binder}/changes/{changeNumber}/update",

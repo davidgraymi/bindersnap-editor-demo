@@ -508,7 +508,8 @@ binders:
                     body: Agency contracts already require it before first shift. This brings our policy in line with the contract rather than the other way round.
                 resolved: false
           # Closed without publishing, with a request for work standing against
-          # it — which the product reads as **Declined**. The outcome is not
+          # it — which the app shows as **Closed** after a request for changes
+          # (the server's `declined`). The outcome is not
           # declared anywhere: it falls out of the review, the same way it does
           # for a real change.
           - branch: upload/nursing/infection-control-policy/20251209/160000Z-grace-1b4f07ce

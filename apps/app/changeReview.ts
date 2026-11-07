@@ -242,12 +242,12 @@ function closingEvent(
     };
   }
 
+  // **Nobody is named for a close.** `decidedBy` on a closed change is the
+  // last reviewer who asked for changes, not whoever pressed Close — naming
+  // them here would say they closed it.
   return {
-    actor: decidedBy ? nameOf(decidedBy) : null,
-    verb:
-      outcome === "declined"
-        ? "closed this without publishing"
-        : "withdrew this change",
+    actor: null,
+    verb: "Closed without publishing",
     emphasiseVerb: false,
     tag: null,
     when,

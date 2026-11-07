@@ -351,9 +351,10 @@ function describeDecision(change: ClosedChange, username: string): string {
       : change.reviews
           .find((review) => review.author.login === login)
           ?.author.fullName.trim() || capitalizeFirst(login);
+  // Never "closed by": who asked for changes is known, who closed it is not.
   return change.outcome === "declined"
-    ? `declined by ${decidedBy}`
-    : `withdrawn by ${decidedBy}`;
+    ? `closed after ${decidedBy} asked for changes`
+    : "closed without publishing";
 }
 
 function wasPartOf(change: ClosedChange, username: string): boolean {

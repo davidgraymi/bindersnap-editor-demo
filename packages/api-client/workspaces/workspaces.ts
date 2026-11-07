@@ -9,6 +9,7 @@ import type {
   AddBinderPersonBody,
   ArchiveBinderDocument201,
   ArchiveBinderDocumentBody,
+  CloseBinderChange200,
   CreateBinder201,
   CreateBinderBody,
   CreateBinderChangeDiscussion201,
@@ -68,6 +69,7 @@ import type {
   RenameBinderDraftBody,
   RenameBinderFolder201,
   RenameBinderFolderBody,
+  ReopenBinderChange200,
   ReplyToBinderChangeDiscussion201,
   ReplyToBinderChangeDiscussionBody,
   ResolveBinderChangeConflicts200,
@@ -1915,6 +1917,78 @@ return customFetch<reviewBinderChangeResponse>(getReviewBinderChangeUrl(org,bind
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(reviewBinderChangeBody)
+  }
+);}
+
+
+export type closeBinderChangeResponse200 = {
+  data: CloseBinderChange200
+  status: 200
+}
+
+export type closeBinderChangeResponseSuccess = (closeBinderChangeResponse200) & {
+  headers: Headers;
+};
+;
+
+export type closeBinderChangeResponse = (closeBinderChangeResponseSuccess)
+
+export const getCloseBinderChangeUrl = (org: string,
+    binder: string,
+    changeNumber: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/changes/${changeNumber}/close`
+}
+
+export const closeBinderChange = async (org: string,
+    binder: string,
+    changeNumber: string, options?: Parameters<typeof customFetch>[1]): Promise<closeBinderChangeResponse> => {
+
+  return customFetch<closeBinderChangeResponse>(getCloseBinderChangeUrl(org,binder,changeNumber),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+export type reopenBinderChangeResponse200 = {
+  data: ReopenBinderChange200
+  status: 200
+}
+
+export type reopenBinderChangeResponseSuccess = (reopenBinderChangeResponse200) & {
+  headers: Headers;
+};
+;
+
+export type reopenBinderChangeResponse = (reopenBinderChangeResponseSuccess)
+
+export const getReopenBinderChangeUrl = (org: string,
+    binder: string,
+    changeNumber: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/changes/${changeNumber}/reopen`
+}
+
+export const reopenBinderChange = async (org: string,
+    binder: string,
+    changeNumber: string, options?: Parameters<typeof customFetch>[1]): Promise<reopenBinderChangeResponse> => {
+
+  return customFetch<reopenBinderChangeResponse>(getReopenBinderChangeUrl(org,binder,changeNumber),
+  {
+    ...options,
+    method: 'POST'
+
+
   }
 );}
 

@@ -7,6 +7,7 @@ import { binderChangeQuery, queryKeys } from "../data/queries";
 import {
   downloadBinderDocument,
   editBinderChange,
+  setBinderChangeOpen,
   updateBinderChange,
 } from "../api";
 import { followInApp } from "../appLink";
@@ -609,6 +610,17 @@ export function BinderChangePage({
           await editBinderChange(org, binder, changeNumber, subject);
           await load();
         }}
+        onSetOpen={
+          detail.viewer.canCloseOrReopen
+            ? async (open) => {
+                await setBinderChangeOpen(org, binder, changeNumber, open);
+                // The binder's change list counts open changes, and the
+                // author's draft is proposed or not by this.
+                onChanged();
+                await load();
+              }
+            : null
+        }
         scope={scope}
         currentUser={currentUser}
         isAnonymous={false}

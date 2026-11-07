@@ -130,9 +130,9 @@ test("a change with no reviewers publishes in a binder that needs no approvals",
     ),
   ).toHaveCount(0);
   await page.getByRole("button", { name: "Publish", exact: true }).click();
-  // Published, it leaves the open list for the closed one.
+  // Published, it leaves the open list for the published one.
   await expect(page).toHaveURL(new RegExp(`/${binder}/-/changes(?:[?#]|$)`));
-  await page.getByRole("button", { name: "Closed", exact: true }).click();
+  await page.getByRole("button", { name: /^Published/ }).click();
   await expect(page.getByText("Add Hand Hygiene")).toBeVisible();
 
   // Its own page says how it ended, not that it is still waiting.
