@@ -519,12 +519,18 @@ export function BinderShell({
    * with the draft's files beside it. Renaming, refiling and folders are
    * Organize. A binder of nothing but Word files and PDFs has nothing to
    * write, so there Edit opens the tree as before.
+   *
+   * **In the draft on screen, when there is one.** Reached from the Drafts
+   * page, the binder is open in a particular draft — not always your newest —
+   * and Edit there carries on in that one rather than switching to another.
    */
-  const startWriting = async () => {
+  const startWriting = async (inDraft?: string | null) => {
     setStartingEdit(true);
     setDraftError(null);
     try {
-      const payload = await openBinderDraft(org, binder);
+      const payload = inDraft
+        ? await fetchBinderDraft(org, binder, inDraft)
+        : await openBinderDraft(org, binder);
       const branch = payload.draft?.branch ?? null;
       setDraft(payload);
       const listing = branch
@@ -1335,6 +1341,10 @@ export function BinderShell({
     return () => window.removeEventListener("popstate", take);
   }, [org, binder, addDocument]);
   const editBinder = useWriteAction(() => void startWriting());
+  /** Edit while organizing: the editor, in the draft being organized. */
+  const editThisDraft = useWriteAction(
+    () => void startWriting(draft?.draft?.branch ?? draftBranch),
+  );
   const organizeBinder = useWriteAction(() => void startEditing());
   const editDocument = useWriteAction(
     (slugPath: string) => void writeDocument(slugPath),
@@ -1475,13 +1485,26 @@ export function BinderShell({
                   </button>
                 </>
               ) : editMode === "editing" ? (
-                <button
-                  className="bs-btn bs-btn-secondary"
-                  type="button"
-                  onClick={leaveEditMode}
-                >
-                  Done
-                </button>
+                <>
+                  <button
+                    className="bs-btn bs-btn-secondary"
+                    type="button"
+                    onClick={leaveEditMode}
+                  >
+                    Done
+                  </button>
+                  {/* The words, in this draft: organizing is the tree, and
+                      a draft opened from the Drafts page had no way into the
+                      editor from here. */}
+                  <button
+                    className="bs-btn bs-btn-primary"
+                    type="button"
+                    onClick={editThisDraft}
+                    disabled={startingEdit}
+                  >
+                    {startingEdit ? "Opening the editor…" : "Edit"}
+                  </button>
+                </>
               ) : null}
             </div>
           )}
