@@ -83,7 +83,10 @@ export interface DocumentEditorProps {
   aside?: ReactNode | ((outline: OutlineSlot) => ReactNode);
   /** A name for the page, for screen readers and the print title. */
   label: string;
-  /** Read-only: the page and the panes, no ribbon. */
+  /**
+   * Not a place to type, for now: the ribbon stays, its writing commands off
+   * (`Ribbon`'s `locked`), and the selection toolbar goes.
+   */
   editable?: boolean;
   /** Put the cursor in the page on open: at its start, or at its end. */
   autoFocus?: "start" | "end" | false;
@@ -490,23 +493,22 @@ export function DocumentEditor({
         editable ? "" : " bs-doc-editor--readonly"
       }`}
     >
-      {editable ? (
-        <Ribbon
-          editor={editor}
-          view={view}
-          zoom={zoom}
-          onViewChange={setView}
-          onFind={openFind}
-          onPrint={print}
-          onShortcuts={() => setShortcuts(true)}
-          end={ribbonEnd}
-          onUndo={() => undoOutsideRef.current()}
-          outsideUndo={outsideUndo !== null}
-          {...(typeof aside === "function"
-            ? { outline: { shown: outlineShown, onToggle: toggleOutline } }
-            : {})}
-        />
-      ) : null}
+      <Ribbon
+        editor={editor}
+        locked={!editable}
+        view={view}
+        zoom={zoom}
+        onViewChange={setView}
+        onFind={openFind}
+        onPrint={print}
+        onShortcuts={() => setShortcuts(true)}
+        end={ribbonEnd}
+        onUndo={() => undoOutsideRef.current()}
+        outsideUndo={outsideUndo !== null}
+        {...(typeof aside === "function"
+          ? { outline: { shown: outlineShown, onToggle: toggleOutline } }
+          : {})}
+      />
 
       {shortcuts ? <ShortcutsDialog onClose={closeShortcuts} /> : null}
       {editable ? (
