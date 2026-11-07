@@ -7,6 +7,7 @@
 
 export type RestoreBinderDocumentBody = {
   uid: string;
+  path?: string;
   changeNumber?: number;
   draft?: boolean | string;
 };

@@ -2102,6 +2102,46 @@ registry.registerPath({
 });
 
 /**
+ * Take a folder off the record: every document in it and in the folders
+ * under it, as one change. Refused whole when a file in it was not added
+ * through Bindersnap, because removing that one would be a deletion.
+ */
+registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/folder-archives",
+  operationId: "archiveBinderFolder",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({
+            /** The folder, by its path inside the binder. */
+            folder: z.string(),
+            changeNumber: z.number().optional(),
+            /**
+             * Put this in a draft instead: `true` for the one you are working
+             * in, or a draft's branch name.
+             */
+            draft: z.union([z.boolean(), z.string()]).optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "The change request that would archive it",
+      content: {
+        "application/json": { schema: BinderShapeChangePayloadSchema },
+      },
+    },
+  },
+});
+
+/**
  * Bring an archived policy back.
  *
  * **An ordinary change, and deliberately not an undo.** The file is written
@@ -2133,6 +2173,12 @@ registry.registerPath({
              * one it had may since have been taken by something else.
              */
             uid: z.string(),
+            /**
+             * Where it was when it was removed, for a document never
+             * published: one a draft made and then deleted, read back out of
+             * that draft's own history since it has no version tag.
+             */
+            path: z.string().optional(),
             changeNumber: z.number().optional(),
             draft: z.union([z.boolean(), z.string()]).optional(),
           }),

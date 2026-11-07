@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Editor, JSONContent } from "@tiptap/core";
+import { TextSelection } from "@tiptap/pm/state";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import Placeholder from "@tiptap/extension-placeholder";
 import { FileText, Columns3, Minus, Plus } from "lucide-react";
@@ -19,6 +20,7 @@ import { EMPTY_DOCUMENT, documentContentExtensions } from "./documentSchema";
 import { countDocument, countSelectedWords, paginate } from "./documentStats";
 import { EnterOverSelection } from "./extensions/EnterOverSelection";
 import { PictureFiles } from "./extensions/PictureFiles";
+import { PICTURE_TYPES } from "./imageFiles";
 import { PictureSize } from "./extensions/PictureSize";
 import { FormatPainter } from "./extensions/FormatPainter";
 import { preparePrintCopy, removePrintCopy } from "./printCopy";
@@ -28,9 +30,18 @@ import { ChangeCase } from "./extensions/ChangeCase";
 import { AutoFormat } from "./extensions/AutoFormat";
 import { NavigationPane } from "./NavigationPane";
 import { ShortcutsDialog } from "./ShortcutsDialog";
+import { PageContextMenu, SelectionToolbar } from "./SelectionMenus";
 import { DropButton, shortcutLabel } from "./ribbon/controls";
 import { LinkForm, Ribbon, type ViewSettings } from "./ribbon/Ribbon";
-import { ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, clampZoom } from "./ribbon/options";
+import {
+  ZOOM_MAX,
+  ZOOM_MIN,
+  ZOOM_STEP,
+  clampZoom,
+  pinchZoom,
+  stepZoom,
+  zoomKey,
+} from "./ribbon/options";
 
 /**
  * The document editor: a word processor for policies.
@@ -62,12 +73,46 @@ export interface DocumentEditorProps {
   ribbonEnd?: ReactNode;
   /** The start of the status bar, before the page and word counts. */
   statusStart?: ReactNode;
+  /**
+   * What floats over the desk, under the ribbon: the page's file panel. It is
+   * placed after the navigation pane, so it never covers the headings.
+   */
+  aside?: ReactNode;
   /** A name for the page, for screen readers and the print title. */
   label: string;
   /** Read-only: the page and the panes, no ribbon. */
   editable?: boolean;
   /** Put the cursor in the page on open: at its start, or at its end. */
   autoFocus?: "start" | "end" | false;
+  /**
+   * Something done outside the page that Undo takes back — a file archived
+   * from the file panel. Ctrl+Z and the ribbon's Undo take it back when it is
+   * newer than the last edit to a page, or when the page has nothing to undo;
+   * otherwise they undo the page, as always.
+   */
+  outsideUndo?: { at: number; run: () => void } | null;
+  /**
+   * Files from the computer dropped on the page or the desk around it, other
+   * than pictures, which go into the page where they land. Answers whether it
+   * took them; absent, a dropped file is refused with a note.
+   */
+  onDropFiles?: (data: DataTransfer) => boolean;
+}
+
+/**
+ * Whether a drop holds anything other than pictures: a Word file, a PDF, a
+ * folder. Pictures alone are for the page.
+ */
+function droppedSomethingButPictures(data: DataTransfer): boolean {
+  const items = Array.from(data.items ?? []).filter(
+    (item) => item.kind === "file",
+  );
+  if (items.length === 0) return false;
+  return items.some(
+    (item) =>
+      item.webkitGetAsEntry?.()?.isDirectory === true ||
+      !(PICTURE_TYPES as readonly string[]).includes(item.type),
+  );
 }
 
 /** US Letter at 96 CSS pixels to the inch, less Word's one-inch margins. */
@@ -123,9 +168,12 @@ export function DocumentEditor({
   placeholder = "Start writing your policy…",
   ribbonEnd,
   statusStart,
+  aside,
   label,
   editable = true,
   autoFocus = false,
+  outsideUndo = null,
+  onDropFiles,
 }: DocumentEditorProps) {
   const content = useMemo(
     () =>
@@ -139,6 +187,18 @@ export function DocumentEditor({
   onChangeRef.current = onChange;
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
+  const onDropFilesRef = useRef(onDropFiles);
+  onDropFilesRef.current = onDropFiles;
+  const outsideUndoRef = useRef(outsideUndo);
+  outsideUndoRef.current = outsideUndo;
+  /** When a page last changed by an edit: Undo's way to tell what came last. */
+  const lastEditAt = useRef(0);
+  /** Undo what was done outside the page, if that is what came last. */
+  const undoOutsideRef = useRef<() => boolean>(() => false);
+  /** The page's right-click menu, where it was opened. */
+  const [pageMenuAt, setPageMenuAt] = useState<{ x: number; y: number } | null>(
+    null,
+  );
 
   // Why a picture did not go in, said over the page for a few seconds.
   const [notice, setNotice] = useState<string | null>(null);
@@ -171,6 +231,46 @@ export function DocumentEditor({
     immediatelyRender: true,
     shouldRerenderOnTransaction: false,
     editorProps: {
+      handleDOMEvents: {
+        // The page's own menu, not the browser's. Right-clicked outside the
+        // selection, the cursor goes where the click was first, as in Word.
+        // Shift keeps the browser's, with its spelling suggestions.
+        contextmenu: (view, event) => {
+          if (event.shiftKey || !view.editable) return false;
+          event.preventDefault();
+          const { from, to } = view.state.selection;
+          const hit = view.posAtCoords({
+            left: event.clientX,
+            top: event.clientY,
+          });
+          if (hit && (hit.pos < from || hit.pos > to)) {
+            view.dispatch(
+              view.state.tr.setSelection(
+                TextSelection.create(view.state.doc, hit.pos),
+              ),
+            );
+          }
+          setPageMenuAt({ x: event.clientX, y: event.clientY });
+          return true;
+        },
+      },
+      // Before the picture handling: a document dropped on the page is one to
+      // add to the binder. Pictures alone fall through, into the page.
+      handleDrop: (_view, event, _slice, moved) => {
+        const data = event.dataTransfer;
+        if (moved || !data || !onDropFilesRef.current) return false;
+        if (!droppedSomethingButPictures(data)) return false;
+        if (!onDropFilesRef.current(data)) return false;
+        event.preventDefault();
+        return true;
+      },
+      // Before the keymap, so Ctrl+Z reaches an act outside the page first.
+      handleKeyDown: (_view, event) => {
+        const mod = event.metaKey || event.ctrlKey;
+        if (!mod || event.shiftKey || event.altKey) return false;
+        if (event.key.toLowerCase() !== "z") return false;
+        return undoOutsideRef.current();
+      },
       attributes: {
         class: "bs-doc-content",
         role: "textbox",
@@ -183,6 +283,28 @@ export function DocumentEditor({
       onChangeRef.current?.(current.getJSON());
     },
   });
+
+  undoOutsideRef.current = () => {
+    const outside = outsideUndoRef.current;
+    if (!outside || !editor) return false;
+    if (outside.at <= lastEditAt.current && editor.can().undo()) return false;
+    outside.run();
+    return true;
+  };
+  useEffect(() => {
+    if (!editor) return;
+    const onTransaction = ({
+      transaction,
+    }: {
+      transaction: { docChanged: boolean };
+    }) => {
+      if (transaction.docChanged) lastEditAt.current = Date.now();
+    };
+    editor.on("transaction", onTransaction);
+    return () => {
+      editor.off("transaction", onTransaction);
+    };
+  }, [editor]);
 
   useEffect(() => {
     if (editor) onReady?.(editor);
@@ -233,6 +355,7 @@ export function DocumentEditor({
     setLinkAt(null);
     editor?.commands.focus();
   }, [editor]);
+  const closePageMenu = useCallback(() => setPageMenuAt(null), []);
   const closeShortcuts = useCallback(() => {
     setShortcuts(false);
     editor?.commands.focus();
@@ -244,6 +367,14 @@ export function DocumentEditor({
     const root = rootRef.current;
     if (!root) return;
     const onKey = (event: KeyboardEvent) => {
+      // The page's zoom, not the browser's, while you are in the editor — as
+      // in Google Docs and Word for the web. Outside it, and from the
+      // browser's own menu, the browser still zooms everything.
+      const zooming = zoomKey(event);
+      if (zooming && zoomByKeyRef.current(zooming)) {
+        event.preventDefault();
+        return;
+      }
       const mod = event.metaKey || event.ctrlKey;
       if (!mod || event.altKey) return;
       const key = event.key.toLowerCase();
@@ -300,6 +431,43 @@ export function DocumentEditor({
         : view.zoom;
   const pages = usePagination(editor, view, zoom);
 
+  // Read by listeners attached once, so they always see the zoom as it is.
+  // Web layout has no zoom of its own, so there the browser's is left alone.
+  const zoomByKeyRef = useRef<(how: "in" | "out" | "reset") => boolean>(
+    () => false,
+  );
+  zoomByKeyRef.current = (how) => {
+    if (view.layout === "web") return false;
+    setView({ ...view, zoom: how === "reset" ? 100 : stepZoom(zoom, how) });
+    return true;
+  };
+  const pinchRef = useRef({ zoom, exact: zoom });
+  if (Math.round(pinchRef.current.exact) !== zoom) {
+    pinchRef.current = { zoom, exact: zoom };
+  }
+  const pinchToRef = useRef<(exact: number) => void>(() => {});
+  pinchToRef.current = (exact) => {
+    pinchRef.current = { zoom: clampZoom(exact), exact };
+    if (clampZoom(exact) !== zoom) {
+      setView({ ...view, zoom: clampZoom(exact) });
+    }
+  };
+
+  // A pinch on a trackpad, or Ctrl and the wheel, over the page zooms the
+  // page: a browser reports a pinch as a wheel with Ctrl held. Not in Web
+  // layout, which has no zoom.
+  useEffect(() => {
+    const desk = deskRef.current;
+    if (!desk || view.layout === "web") return;
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      pinchToRef.current(pinchZoom(pinchRef.current.exact, event.deltaY));
+    };
+    desk.addEventListener("wheel", onWheel, { passive: false });
+    return () => desk.removeEventListener("wheel", onWheel);
+  }, [editor, view.layout]);
+
   if (!editor) return null;
 
   return (
@@ -319,10 +487,27 @@ export function DocumentEditor({
           onPrint={print}
           onShortcuts={() => setShortcuts(true)}
           end={ribbonEnd}
+          onUndo={() => undoOutsideRef.current()}
+          outsideUndo={outsideUndo !== null}
         />
       ) : null}
 
       {shortcuts ? <ShortcutsDialog onClose={closeShortcuts} /> : null}
+      {editable ? (
+        <SelectionToolbar
+          editor={editor}
+          onLink={openLink}
+          hidden={pageMenuAt !== null || linkAt !== null}
+        />
+      ) : null}
+      {pageMenuAt ? (
+        <PageContextMenu
+          editor={editor}
+          at={pageMenuAt}
+          onLink={openLink}
+          onClose={closePageMenu}
+        />
+      ) : null}
       {linkAt && editor ? (
         <LinkPopover at={linkAt} onClose={closeLink}>
           <LinkForm editor={editor} onDone={closeLink} />
@@ -351,8 +536,28 @@ export function DocumentEditor({
             onClose={() => setView({ ...view, navigationPane: false })}
           />
         ) : null}
+        {/* After the navigation pane, so what floats here floats over the
+            desk and never over the headings. */}
+        {aside}
 
-        <div className="bs-doc-desk" ref={deskRef}>
+        <div
+          className="bs-doc-desk"
+          ref={deskRef}
+          // The desk around the page takes a dropped file too, so a file
+          // dropped just off the page is not opened by the browser instead.
+          onDragOver={(event) => {
+            if (!onDropFiles || event.defaultPrevented) return;
+            if (!Array.from(event.dataTransfer.types).includes("Files")) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "copy";
+          }}
+          onDrop={(event) => {
+            if (!onDropFiles || event.defaultPrevented) return;
+            if (!Array.from(event.dataTransfer.types).includes("Files")) return;
+            event.preventDefault();
+            onDropFiles(event.dataTransfer);
+          }}
+        >
           <div className="bs-doc-sheetwrap" ref={pages.wrapRef}>
             <div
               className="bs-doc-page"
@@ -653,7 +858,7 @@ function StatusBar({
             type="button"
             className="bs-doc-status-icon"
             aria-label="Zoom out"
-            title={`Zoom out (${shortcutLabel("Ctrl+-")} zooms the browser)`}
+            title={`Zoom out (${shortcutLabel("Ctrl+-")})`}
             disabled={zoom <= ZOOM_MIN}
             onClick={() => zoomTo(zoom - ZOOM_STEP)}
           >
@@ -674,7 +879,7 @@ function StatusBar({
             type="button"
             className="bs-doc-status-icon"
             aria-label="Zoom in"
-            title="Zoom in"
+            title={`Zoom in (${shortcutLabel("Ctrl+=")})`}
             disabled={zoom >= ZOOM_MAX}
             onClick={() => zoomTo(zoom + ZOOM_STEP)}
           >

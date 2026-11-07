@@ -9,22 +9,41 @@
  * so it takes the fixed mockup tokens, which exist for exactly this.
  */
 
+/* **One ground, edge to edge**, as Word's and Google Docs' are: the title
+   bar, the ribbon's tabs and the desk the page sits on are one surface, with
+   no rule between them. The page, the ribbon's card and the file panel
+   stand off it; the status bar is a band of its own below. */
 .bs-doc-editor {
   display: flex;
   flex-direction: column;
   min-height: 0;
   height: 100%;
-  background: var(--bs-page-bg);
+  background: var(--bs-surface-2);
   color: var(--bs-text-secondary);
   font-family: var(--brand-font-sans);
 }
 
 /* ─── Ribbon ─────────────────────────────────────────────────────────────── */
 
+/* The tabs sit on the window's own ground and the commands in a card inset
+   from its edges, as Word's and Google Docs' toolbars now do — so the
+   controls read as one thing, apart from the page below them, rather than
+   as a strip ruled across the window. */
+/* **The page goes under the toolbar, not into a gap.** Nothing of the ground
+   shows below the card, so a page scrolled up meets the card's own edge and
+   slides beneath it; raised over the desk, the card's shadow falls on the
+   page as it goes, as Google Docs' toolbar does. The room between card and
+   page is the desk's own padding. */
 .bs-ribbon {
+  position: relative;
+  z-index: var(--brand-z-raised);
   flex: none;
-  background: var(--bs-surface-1);
-  border-bottom: 1px solid var(--bs-rule);
+  background: var(--bs-surface-2);
+}
+
+/* On the ground rather than in the card, so a hover a step darker. */
+.bs-ribbon-bar .bs-rb:hover:not(:disabled) {
+  background: var(--bs-surface-3);
 }
 
 .bs-ribbon-bar {
@@ -33,7 +52,6 @@
   gap: var(--brand-space-2);
   min-height: 40px;
   padding: 0 var(--brand-space-2);
-  border-bottom: 1px solid var(--bs-rule-warm);
 }
 
 .bs-ribbon-quick {
@@ -128,6 +146,11 @@
   position: relative;
   display: flex;
   align-items: stretch;
+  margin: 0 var(--brand-space-2);
+  border: 1px solid var(--bs-rule-warm);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  box-shadow: var(--bs-shadow-sm);
   min-height: 92px;
   padding: var(--brand-space-1-5) var(--brand-space-8) var(--brand-space-0-5)
     var(--brand-space-1);
@@ -740,14 +763,24 @@
 }
 
 .bs-style-sample {
+  flex-shrink: 0;
   max-width: 100%;
   overflow: hidden;
+  line-height: 1.2;
   font-family: var(--brand-font-sans);
   font-size: 13px;
   white-space: nowrap;
 }
 
+/* One line, always: a name that wrapped pushed the sample out of the tile,
+   and "Heading 2" read as two grey words with no preview. */
 .bs-style-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.2;
   color: var(--brand-mockup-muted);
   font-family: var(--brand-font-sans);
   font-size: var(--brand-text-ui-xs);
@@ -769,6 +802,17 @@
   font-family: var(--brand-font-serif);
   font-size: 13px;
   font-weight: var(--brand-weight-semibold);
+}
+
+.bs-style--title .bs-style-sample {
+  font-family: var(--brand-font-serif);
+  font-size: 18px;
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-style--subtitle .bs-style-sample {
+  color: var(--brand-mockup-ink-soft);
+  font-size: 15px;
 }
 
 .bs-style--heading4 .bs-style-sample {
@@ -884,6 +928,8 @@
 }
 
 .bs-doc-body {
+  /* The page's file panel opens over the page here on a narrow window. */
+  position: relative;
   display: flex;
   flex: 1;
   min-height: 0;
@@ -1118,8 +1164,8 @@
   overflow: auto;
   /* Room below the last page to scroll its last line up off the bottom
      edge, as Word leaves. */
-  padding: var(--brand-space-6) var(--brand-space-6) var(--brand-space-24);
-  background: var(--bs-surface-3);
+  padding: var(--brand-space-8) var(--brand-space-6) var(--brand-space-24);
+  background: var(--bs-surface-2);
 }
 
 .bs-doc-sheetwrap {
@@ -1208,6 +1254,25 @@
 
 .bs-doc-content p {
   margin: 0 0 8pt;
+}
+
+/* Title and Subtitle: paragraphs, not headings — see `ParagraphFormat`. The
+   exports set them from `VARIANT_LOOK`, which keeps these numbers. */
+.bs-doc-content p.bs-title {
+  margin: 0 0 4pt;
+  color: var(--brand-mockup-ink);
+  font-family: var(--brand-font-serif);
+  font-size: 26pt;
+  font-weight: var(--brand-weight-semibold);
+  line-height: 1.15;
+}
+
+.bs-doc-content p.bs-subtitle {
+  margin: 0 0 12pt;
+  color: var(--brand-mockup-ink-soft);
+  font-family: var(--brand-font-sans);
+  font-size: 15pt;
+  line-height: 1.2;
 }
 
 .bs-doc-content h1,
@@ -1488,8 +1553,10 @@
   gap: var(--brand-space-4);
   min-height: 30px;
   padding: 0 var(--brand-space-3);
+  /* **Apart from the ground**, as Word's status bar is: a band of its own
+     under a rule, so the counts read as the window's, not the page's. */
   border-top: 1px solid var(--bs-rule);
-  background: var(--bs-surface-1);
+  background: var(--bs-surface-3);
   color: var(--bs-text-muted);
   font-size: var(--brand-text-ui-sm);
 }
@@ -1538,7 +1605,7 @@
 }
 
 .bs-doc-status-icon:hover:not(:disabled) {
-  background: var(--bs-surface-2);
+  background: var(--bs-surface-1);
   color: var(--bs-text-primary);
 }
 
@@ -1587,6 +1654,55 @@
   color: var(--bs-text-primary);
   font-variant-numeric: tabular-nums;
   text-align: right;
+}
+
+/* ─── The page's own menus ──────────────────────────────────────────────── */
+
+/* Over selected words: the ribbon's buttons, in a card of the ribbon's
+   depth, as Google Docs' and Word's float over a selection. */
+.bs-bubble {
+  z-index: var(--brand-z-overlay);
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-0-5);
+  padding: var(--brand-space-1);
+  border: 1px solid var(--bs-rule-warm);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-1);
+  box-shadow: var(--bs-elevation-menu);
+}
+
+.bs-bubble-sep {
+  align-self: stretch;
+  width: 1px;
+  margin: var(--brand-space-0-5) var(--brand-space-1);
+  background: var(--bs-rule);
+}
+
+/* Where the page is right-clicked: the ribbon's dropped panel, its list. */
+.bs-pagemenu {
+  min-width: 220px;
+  max-height: none;
+}
+
+/* Focused so the arrow keys reach it; the items show where they are. */
+.bs-pagemenu:focus {
+  outline: none;
+}
+
+.bs-pagemenu-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+}
+
+.bs-pagemenu .bs-rmenu-item:disabled {
+  color: var(--bs-text-faint);
+  cursor: default;
+}
+
+.bs-pagemenu .bs-rmenu-item:disabled:hover {
+  background: none;
 }
 
 /* ─── Narrow screens ─────────────────────────────────────────────────────── */

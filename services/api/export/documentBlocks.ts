@@ -48,6 +48,38 @@ export interface ParagraphFormat {
 
 export type Align = "left" | "center" | "right" | "justify";
 
+export type ParagraphVariant = "title" | "subtitle";
+
+/**
+ * How Title and Subtitle are set, as the editor's stylesheet sets them
+ * (`.bs-doc-content .bs-title`), for the two writers to share.
+ */
+export const VARIANT_LOOK = {
+  title: {
+    face: "lora",
+    font: "Lora SemiBold",
+    size: 26,
+    weight: 600,
+    lineHeight: 1.15,
+    after: 4,
+    soft: false,
+  },
+  subtitle: {
+    face: "geist",
+    font: "Geist",
+    size: 15,
+    weight: 400,
+    lineHeight: 1.2,
+    after: 12,
+    soft: true,
+  },
+} as const;
+
+function variantOf(node: PmNode): ParagraphVariant | null {
+  const variant = node.attrs?.variant;
+  return variant === "title" || variant === "subtitle" ? variant : null;
+}
+
 export type Block =
   | ({
       kind: "heading";
@@ -56,7 +88,12 @@ export type Block =
       /** "2.1" when the document numbers its sections. */
       number: string | null;
     } & ParagraphFormat)
-  | ({ kind: "paragraph"; runs: Run[] } & ParagraphFormat)
+  | ({
+      kind: "paragraph";
+      runs: Run[];
+      /** Title or Subtitle, or null for Normal text. */
+      variant: ParagraphVariant | null;
+    } & ParagraphFormat)
   | {
       kind: "list";
       style: "bullet" | "ordered" | "task";
@@ -288,6 +325,7 @@ function blocksOf(
           blocks.push({
             kind: "paragraph",
             runs: runsOf({ ...node, content: rest }),
+            variant: variantOf(node),
             ...formatOf(node),
           });
         }
@@ -359,6 +397,7 @@ function blocksOf(
           blocks.push({
             kind: "paragraph",
             runs: [{ text }],
+            variant: null,
             align: "left",
             indent: 0,
             lineSpacing: null,

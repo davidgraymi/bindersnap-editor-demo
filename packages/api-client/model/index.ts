@@ -85,6 +85,8 @@ export * from './adminUserListPayloadUsersItemOrganizationsItem.ts';
 export * from './adminUserListPayloadUsersItemOrganizationsItemBilling.ts';
 export * from './archiveBinderDocument201.ts';
 export * from './archiveBinderDocumentBody.ts';
+export * from './archiveBinderFolder201.ts';
+export * from './archiveBinderFolderBody.ts';
 export * from './authCheckResetLink200.ts';
 export * from './authCheckResetLinkParams.ts';
 export * from './authForgotPassword202.ts';

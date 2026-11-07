@@ -21,16 +21,20 @@ afterEach(() => {
 });
 
 /**
- * Ctrl+Shift+<key>, or ⌘ on a Mac. Both are tried: ProseMirror decides which
+ * Ctrl+<modifier>+<key>, or ⌘ on a Mac. Both are tried: ProseMirror decides which
  * is "Mod" when it loads, and other tests stub the platform after that.
  */
-function pressShortcut(editor: Editor, key: string): boolean {
+function pressShortcut(
+  editor: Editor,
+  key: string,
+  modifier: "Shift" | "Alt" = "Alt",
+): boolean {
   return [false, true].some((mac) => {
     const event = {
-      key: key.toUpperCase(),
+      key: modifier === "Shift" ? key.toUpperCase() : key,
       keyCode: key.toUpperCase().charCodeAt(0),
-      shiftKey: true,
-      altKey: false,
+      shiftKey: modifier === "Shift",
+      altKey: modifier === "Alt",
       ctrlKey: !mac,
       metaKey: mac,
       preventDefault() {},
@@ -41,6 +45,19 @@ function pressShortcut(editor: Editor, key: string): boolean {
       ) ?? false
     );
   });
+}
+
+/** Where a word starts, in whichever paragraph it is. */
+function posOf(editor: Editor, word: string): number {
+  let found = -1;
+  editor.state.doc.descendants((node, pos) => {
+    if (found >= 0 || !node.isText) return found < 0;
+    const offset = node.text!.indexOf(word);
+    if (offset >= 0) found = pos + offset;
+    return false;
+  });
+  if (found < 0) throw new Error(`"${word}" is not in the document`);
+  return found;
 }
 
 /** Where a word starts in the first paragraph. */
@@ -70,6 +87,48 @@ describe("the Format Painter", () => {
     expect(html).not.toContain("<em>");
   });
 
+  test("a heading's look is its paragraph's, and the brush carries it", () => {
+    const editor = editorWith(
+      "<h1>Purpose</h1><p>Scope <strong>of</strong> this policy</p>",
+    );
+    editor.commands.setTextSelection(posOf(editor, "Purpose") + 2);
+    editor.commands.pickUpFormatting("off");
+    const from = posOf(editor, "Scope");
+    editor.commands.setTextSelection({ from, to: from + 5 });
+    editor.commands.pasteFormatting();
+    // The whole paragraph becomes the heading, and its words lose their marks
+    // where the brush went. (The empty paragraph is the one a document ends on.)
+    expect(editor.getHTML()).toBe(
+      "<h1>Purpose</h1><h1>Scope <strong>of</strong> this policy</h1><p></p>",
+    );
+  });
+
+  test("a body paragraph's look turns a heading back into Normal text", () => {
+    const editor = editorWith(
+      '<h2>Wrong</h2><p style="text-align: center">Body</p>',
+    );
+    editor.commands.setTextSelection(posOf(editor, "Body") + 1);
+    editor.commands.pickUpFormatting("off");
+    editor.commands.setTextSelection(posOf(editor, "Wrong") + 1);
+    editor.commands.pasteFormatting();
+    expect(editor.getHTML()).toBe(
+      '<p style="text-align: center;">Wrong</p><p style="text-align: center;">Body</p>',
+    );
+  });
+
+  test("a list item keeps its paragraph and takes the rest of the look", () => {
+    const editor = editorWith(
+      '<h1 style="text-align: right">Title</h1><ul><li><p>item</p></li></ul>',
+    );
+    editor.commands.setTextSelection(posOf(editor, "Title") + 1);
+    editor.commands.pickUpFormatting("off");
+    editor.commands.setTextSelection(posOf(editor, "item") + 1);
+    editor.commands.pasteFormatting();
+    expect(editor.getHTML()).toContain(
+      '<li><p style="text-align: right;">item</p></li>',
+    );
+  });
+
   test("a click without a drag paints the whole word", () => {
     const editor = editorWith("<p><u>Note</u> wash hands</p>");
     editor.commands.setTextSelection(at(editor, "Note"));
@@ -93,7 +152,7 @@ describe("the Format Painter", () => {
     expect(html).toContain('href="https://example.com"');
   });
 
-  test("Ctrl+Shift+C and Ctrl+Shift+V copy and paste a look, as in Word", () => {
+  test("Ctrl+Alt+C and Ctrl+Alt+V copy and paste a look, as in Google Docs", () => {
     const editor = editorWith("<p><em>Note</em> wash hands</p>");
     editor.commands.setTextSelection(at(editor, "Note") + 1);
     expect(pressShortcut(editor, "c")).toBe(true);
@@ -104,10 +163,18 @@ describe("the Format Painter", () => {
     expect(editor.getHTML()).toContain("wash <em>hands</em>");
   });
 
-  test("nothing copied, and Ctrl+Shift+V is left to the browser", () => {
+  test("nothing copied, and Ctrl+Alt+V does nothing", () => {
     const editor = editorWith("<p>words</p>");
     editor.commands.setTextSelection(2);
     expect(editor.commands.pasteFormatting()).toBe(false);
+  });
+
+  test("Ctrl+Shift+V is left to the browser's paste as plain text", () => {
+    const editor = editorWith("<p><em>Note</em> wash hands</p>");
+    editor.commands.setTextSelection(at(editor, "Note") + 1);
+    expect(pressShortcut(editor, "c")).toBe(true);
+    // A look copied, and the key still is not ours.
+    expect(pressShortcut(editor, "v", "Shift")).toBe(false);
   });
 
   test("the brush is picked up once or kept, and Escape puts it down", () => {
@@ -118,7 +185,7 @@ describe("the Format Painter", () => {
     expect(formatPainterState(editor.state).brush).toBe("off");
     // Down already: Escape is somebody else's.
     expect(editor.commands.putDownFormatPainter()).toBe(false);
-    // The look stays, for Ctrl+Shift+V.
+    // The look stays, for Ctrl+Alt+V.
     expect(formatPainterState(editor.state).marks).not.toBeNull();
   });
 

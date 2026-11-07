@@ -86,6 +86,23 @@ describe("the document schema", () => {
     expect(html).not.toContain("height=");
   });
 
+  test("a Title is a paragraph with a class, and Enter after it is Normal", () => {
+    const editor = editorWith('<p class="bs-title">Hand Hygiene</p>');
+    expect(editor.getJSON().content?.[0]?.attrs?.variant).toBe("title");
+    expect(editor.getHTML()).toContain('<p class="bs-title">Hand Hygiene</p>');
+
+    editor.commands.setTextSelection(13);
+    editor.commands.splitBlock();
+    const [title, next] = editor.getJSON().content ?? [];
+    expect(title?.attrs?.variant).toBe("title");
+    expect(next?.attrs?.variant).toBeNull();
+  });
+
+  test("a class that is not a style is not one", () => {
+    const editor = editorWith('<p class="bs-heading">Words</p>');
+    expect(editor.getJSON().content?.[0]?.attrs?.variant).toBeNull();
+  });
+
   test("a page break is a node of its own, and prints as one", () => {
     const editor = editorWith("<p>Before</p>");
     editor.commands.setTextSelection(7);

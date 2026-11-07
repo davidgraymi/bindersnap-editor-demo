@@ -42,7 +42,7 @@ bytes (`sniffDocumentKind`), because only the new `.json` name is known.
 The editor opens **full page**:
 while it is mounted it sets `bs-writing` on `<html>`, and the shell drops the
 sidebar and the binder's file panel so Letter fits at 100% on a laptop. The
-editor has **its own file panel** (`components/DraftFiles.tsx`), read at the
+editor has **its own file panel** (`components/DraftFiles.tsx`), floating over the desk under the ribbon (`DocumentEditor`'s `aside`), shut to a small button, its width dragged from its right edge, read at the
 draft: a policy opens beside the last one, and New starts one, without leaving
 the editor. **Several policies are open at once**: moving to another keeps
 the words typed in each (`OpenPolicy` buffers in `DocumentEditorPage.tsx`,

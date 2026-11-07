@@ -249,6 +249,42 @@ describe("a document's Word document", () => {
     );
   });
 
+  test("a Title and a Subtitle are Word's own styles, set as the page sets them", async () => {
+    const doc = {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          attrs: { variant: "title" },
+          content: [{ type: "text", text: "Hand Hygiene" }],
+        },
+        {
+          type: "paragraph",
+          attrs: { variant: "subtitle" },
+          content: [{ type: "text", text: "Nursing" }],
+        },
+        { type: "paragraph", content: [{ type: "text", text: "Body" }] },
+      ],
+    };
+    expect(
+      documentBlocks(doc).map((block) =>
+        block.kind === "paragraph" ? block.variant : block.kind,
+      ),
+    ).toEqual(["title", "subtitle", null]);
+
+    const zip = await JSZip.loadAsync(await convert("docx", doc));
+    const document = await zip.file("word/document.xml")!.async("string");
+    expect(document).toContain('<w:pStyle w:val="Title"/>');
+    expect(document).toContain('<w:pStyle w:val="Subtitle"/>');
+    // 26pt is 52 half-points.
+    expect(document).toContain('<w:sz w:val="52"/>');
+    const styles = await zip.file("word/styles.xml")!.async("string");
+    expect(styles).toContain('w:styleId="Subtitle"');
+
+    const pdf = await convert("pdf", doc);
+    expect(new TextDecoder().decode(pdf.slice(0, 5))).toBe("%PDF-");
+  });
+
   test("an embedded font is Word's obfuscation of the file, and undoes to it", () => {
     const bytes = fontBytes("Geist-Regular.ttf");
     const key = fontKey(bytes);

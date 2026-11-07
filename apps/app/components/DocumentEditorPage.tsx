@@ -5,14 +5,13 @@ import {
   Suspense,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
 import type { Editor, JSONContent } from "@tiptap/core";
 import type { EditorState } from "@tiptap/pm/state";
-import { Folder, GitPullRequest, History, Pencil } from "lucide-react";
+import { GitPullRequest, History, Pencil } from "lucide-react";
 
 import type {
   BinderArchivePayload,
@@ -45,11 +44,14 @@ import {
   type RecoveredWords,
 } from "../editorRecovery";
 import type { DragSubject } from "../binderMove";
-import { buildBinderTree, folderPaths } from "../binderTree";
-import { MoveToFolderModal } from "./MoveToFolderModal";
 import { BinderDraftPicker } from "./BinderDraftPicker";
 import { InlineRename } from "./BinderPage";
-import { DraftFiles, type DraftFileTarget } from "./DraftFiles";
+import { readDroppedFiles, type DroppedFiles } from "../bulkUpload";
+import {
+  DraftFiles,
+  type ArchiveUndo,
+  type DraftFileTarget,
+} from "./DraftFiles";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 /**
@@ -126,8 +128,17 @@ interface DocumentEditorPageProps {
   } | null;
   /** Open another policy in the editor, in the same draft. */
   onOpenDocument: (slugPath: string) => void;
-  /** Start a new policy in the draft: in `folder`, or beside this one. */
-  onNewDocument: (folder?: string) => void;
+  /**
+   * Make a new, untitled policy in the draft — in `folder`, or beside this
+   * one — and open it.
+   */
+  onNewDocument: (folder?: string) => Promise<void>;
+  /**
+   * Files dragged in from the computer: the add dialog, with them in it, to
+   * go into `folder` — where they were dropped in the file panel — or beside
+   * this policy when dropped on the page.
+   */
+  onUploadFiles?: (files: DroppedFiles, folder?: string) => void;
   /** Your drafts in this binder, for the picker in the title bar. */
   drafts: BinderDraftPayload | null;
   /** A draft is being started or renamed. */
@@ -150,6 +161,8 @@ interface DocumentEditorPageProps {
   onRenameFile: (target: DraftFileTarget, name: string) => Promise<void>;
   onMoveFile: (subject: DragSubject, folder: string) => Promise<void>;
   onArchiveFile: (slugPath: string) => Promise<void>;
+  /** A folder off the record, every policy in it, in the draft. */
+  onArchiveFolder: (folder: string) => Promise<void>;
   /** A copy of a policy, in the draft, opened in the editor. */
   onCopyFile: (slugPath: string) => Promise<void>;
   /** Read a Word file or PDF into the editor's format, in the draft. */
@@ -158,8 +171,16 @@ interface DocumentEditorPageProps {
     path: string;
     name: string;
   }) => void;
-  /** Bring an archived policy back, into the draft. */
-  onRestoreFile: (uid: string) => Promise<void>;
+  /**
+   * Bring an archived policy back, into the draft. `path` is where it was,
+   * for one never published, which is read back from the draft's history.
+   */
+  onRestoreFile: (uid: string, path?: string) => Promise<void>;
+  /** An archived folder back: its folders, then its policies. */
+  onRestoreFolder: (
+    folders: readonly string[],
+    documents: readonly { uid: string; path: string }[],
+  ) => Promise<void>;
   /** What is archived, as the draft stands. */
   onReadArchive: () => Promise<BinderArchivePayload["documents"]>;
   /** Make a folder in the draft. */
@@ -242,11 +263,6 @@ function isBlankPolicy(doc: JSONContent): boolean {
   );
 }
 
-/** `nursing/night` as the tree names it: Nursing / Night. */
-function folderLabel(folder: string): string {
-  return folder.split("/").map(formatDocumentName).join(" / ");
-}
-
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error && err.message.trim() !== ""
     ? err.message
@@ -265,6 +281,7 @@ export function DocumentEditorPage({
   files,
   onOpenDocument,
   onNewDocument,
+  onUploadFiles,
   drafts,
   draftBusy = false,
   onSwitchDraft,
@@ -276,7 +293,9 @@ export function DocumentEditorPage({
   onRenameFile,
   onMoveFile,
   onArchiveFile,
+  onArchiveFolder,
   onRestoreFile,
+  onRestoreFolder,
   onReadArchive,
   onCopyFile,
   onConvertFile,
@@ -948,7 +967,12 @@ export function DocumentEditorPage({
     else if (to.kind === "start") void onStartDraft(to.name);
     else if (to.kind === "propose") onPropose();
     else if (to.kind === "change") onOpenChange(to.number);
-    else onNewDocument(to.folder);
+    else
+      void actOnFiles(
+        null,
+        () => onNewDocument(to.folder),
+        "Unable to start a new document.",
+      );
   };
 
   /**
@@ -963,6 +987,23 @@ export function DocumentEditorPage({
    */
   const [filesBusy, setFilesBusy] = useState(false);
   const [filesError, setFilesError] = useState<string | null>(null);
+  /**
+   * The file just archived or deleted from the panel, and when. Ctrl+Z, the
+   * ribbon's Undo and the panel's own Undo all take it back; the panel says
+   * so for a few seconds, and Ctrl+Z still reaches it after that, until the
+   * page is edited or something else is archived.
+   */
+  const [lastArchive, setLastArchive] = useState<{
+    record: ArchiveUndo;
+    at: number;
+  } | null>(null);
+  const [archiveNotice, setArchiveNotice] = useState(false);
+  useEffect(() => {
+    if (!archiveNotice) return;
+    const timer = window.setTimeout(() => setArchiveNotice(false), 12_000);
+    return () => window.clearTimeout(timer);
+  }, [archiveNotice, lastArchive]);
+
   const actOnFiles = async (
     /** The policy whose saved words the act reads or removes, if any. */
     savesFirst: string | null,
@@ -991,15 +1032,6 @@ export function DocumentEditorPage({
    * identity for its history to follow (ADR 0005).
    */
   const [titling, setTitling] = useState(false);
-  /** The Move picker, opened from where the title says it is filed. */
-  const [refiling, setRefiling] = useState(false);
-  const everyFolder = useMemo(
-    () =>
-      files
-        ? folderPaths(buildBinderTree(files.documents, [...files.folders]))
-        : [],
-    [files],
-  );
   const renamable =
     !change &&
     files !== null &&
@@ -1075,7 +1107,154 @@ export function DocumentEditorPage({
         ? lastReady.current
         : null;
 
+  const undoArchive = () => {
+    if (!lastArchive || filesBusy) return;
+    const { record } = lastArchive;
+    setLastArchive(null);
+    setArchiveNotice(false);
+    void actOnFiles(
+      null,
+      () =>
+        record.kind === "document"
+          ? onRestoreFile(record.uid, record.path)
+          : onRestoreFolder(record.folders, record.documents),
+      record.kind === "document" && record.deleted
+        ? "Unable to bring that document back."
+        : "Unable to restore that.",
+    );
+  };
+  const undoArchiveRef = useRef(undoArchive);
+  undoArchiveRef.current = undoArchive;
+  const hasArchiveUndo = lastArchive !== null;
+  // Ctrl+Z with the focus anywhere but a text box — on the file panel, say,
+  // where the act was done — takes the act back. In the page, the editor
+  // decides between the act and the page's own last edit.
+  useEffect(() => {
+    if (!hasArchiveUndo) return;
+    const onKey = (event: KeyboardEvent) => {
+      const mod = event.metaKey || event.ctrlKey;
+      if (!mod || event.shiftKey || event.altKey) return;
+      if (event.key.toLowerCase() !== "z" || event.defaultPrevented) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.closest("input, textarea, select, [contenteditable]"))
+      ) {
+        return;
+      }
+      event.preventDefault();
+      undoArchiveRef.current();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [hasArchiveUndo]);
+
+  // The draft's files: under the ribbon, beside the page, once there is an
+  // editor to put them in; beside whatever stands in for it until then.
+  const filesPanel = files ? (
+    <DraftFiles
+      org={org}
+      binder={binder}
+      binderName={binderName}
+      documents={files.documents}
+      touched={files.touched}
+      folders={files.folders}
+      active={documentPath}
+      unsaved={dirty}
+      unsavedElsewhere={unsavedElsewhere}
+      onReadAhead={readAheadOf}
+      onOpen={(slugPath) => leave({ kind: "open", slugPath })}
+      // A change request is revised, not added to or reshaped, here.
+      onNew={change ? undefined : (folder) => leave({ kind: "new", folder })}
+      onNewFolder={change ? undefined : onNewFolder}
+      onUploadDrop={
+        change || !onUploadFiles
+          ? undefined
+          : (data, folder) => {
+              const files = readDroppedFiles(data);
+              if (files) onUploadFiles(files, folder);
+            }
+      }
+      busy={filesBusy || save.kind === "saving"}
+      onRename={
+        change
+          ? undefined
+          : (target, name) =>
+              void actOnFiles(
+                null,
+                () => onRenameFile(target, name),
+                "Unable to rename that.",
+              )
+      }
+      onMove={
+        change
+          ? undefined
+          : (subject, folder) =>
+              void actOnFiles(
+                null,
+                () => onMoveFile(subject, folder),
+                "Unable to move that.",
+              )
+      }
+      onArchive={
+        change
+          ? undefined
+          : (slugPath) =>
+              actOnFiles(
+                slugPath,
+                () => onArchiveFile(slugPath),
+                "Unable to archive that.",
+              )
+      }
+      onArchiveFolder={
+        change
+          ? undefined
+          : (folder) =>
+              actOnFiles(
+                // The open policy's words go first when it is in the folder.
+                documentPath.startsWith(`${folder}/`) ? documentPath : null,
+                () => onArchiveFolder(folder),
+                "Unable to archive that folder.",
+              )
+      }
+      onConvert={change ? undefined : onConvertFile}
+      onCopy={
+        change
+          ? undefined
+          : (slugPath) =>
+              void actOnFiles(
+                // The copy is made from what is saved, so the words of
+                // the one being copied go first.
+                slugPath,
+                () => onCopyFile(slugPath),
+                "Unable to copy that.",
+              )
+      }
+      archivedCount={files.archivedCount ?? 0}
+      onReadArchive={change ? undefined : onReadArchive}
+      onRestore={
+        change
+          ? undefined
+          : (uid) =>
+              actOnFiles(
+                null,
+                () => onRestoreFile(uid),
+                "Unable to restore that document.",
+              )
+      }
+      onArchived={(record) => {
+        setLastArchive({ record, at: Date.now() });
+        setArchiveNotice(true);
+      }}
+      undo={archiveNotice ? (lastArchive?.record ?? null) : null}
+      onUndo={undoArchive}
+    />
+  ) : null;
+
   let body: ReactNode;
+  /** Whether `body` is the editor, which then holds the file panel. */
+  let inEditor = false;
   if (!draft || (load.kind === "loading" && !frame)) {
     body = (
       <div className="doc-editor-state">
@@ -1140,6 +1319,7 @@ export function DocumentEditorPage({
       </div>
     );
   } else if (frame) {
+    inEditor = true;
     body = (
       <div
         className={`doc-editor-frame${
@@ -1156,6 +1336,23 @@ export function DocumentEditorPage({
         >
           <DocumentEditor
             label={name}
+            aside={filesPanel}
+            // A file from the computer dropped on the page is a document to
+            // add, not something to open in the browser. Pictures still go
+            // into the page, where they were dropped.
+            onDropFiles={
+              change || !onUploadFiles
+                ? undefined
+                : (data) => {
+                    const files = readDroppedFiles(data);
+                    if (!files) return false;
+                    onUploadFiles(files);
+                    return true;
+                  }
+            }
+            outsideUndo={
+              lastArchive ? { at: lastArchive.at, run: undoArchive } : null
+            }
             // Read when the editor is made; every policy after the first is
             // swapped in as a state of its own, undo and all.
             initialContent={frame.doc}
@@ -1241,12 +1438,6 @@ export function DocumentEditorPage({
   // draft. An empty draft proposed is a change request with nothing in it.
   const proposable = anyUnsaved || (current?.acts.length ?? 0) > 0;
 
-  /** The folder the open policy is filed in, when it can be moved from here. */
-  const filedAt =
-    renamable && !titling && (load.kind === "ready" || load.kind === "foreign")
-      ? load.detail.document.folder
-      : null;
-
   return (
     <div className="doc-editor-page">
       <header className="doc-editor-head">
@@ -1255,43 +1446,12 @@ export function DocumentEditorPage({
             two used to: which binder, which folder, which document, which
             draft, whether it is saved — and the way out. */}
         <div className="doc-editor-head-body">
+          {/* **Binder / document, and nothing between.** Where the policy
+              is filed is the file panel's to show, open beside it; a folder
+              here changed the bar's length with every policy opened, and
+              moved everything after it. */}
           <span className="doc-editor-trail">
-            {/* **Where it is filed, as the trail** — and the way to file it
-                somewhere else, as the folder beside a Google Doc's title is.
-                The last place in the trail is the Move button: the folder,
-                or the binder itself for a policy at the top level. */}
-            {filedAt === null ? (
-              <span className="doc-editor-trail-binder">{binderName}</span>
-            ) : filedAt === "" ? (
-              <button
-                type="button"
-                className="doc-editor-folder"
-                title="Move to a folder"
-                aria-label={`Move ${name}, filed at the top level`}
-                disabled={filesBusy}
-                onClick={() => setRefiling(true)}
-              >
-                <span>{binderName}</span>
-              </button>
-            ) : (
-              <>
-                <span className="doc-editor-trail-binder">{binderName}</span>
-                <span className="doc-editor-trail-sep" aria-hidden="true">
-                  /
-                </span>
-                <button
-                  type="button"
-                  className="doc-editor-folder"
-                  title="Move to another folder"
-                  aria-label={`Move ${name}, filed in ${folderLabel(filedAt)}`}
-                  disabled={filesBusy}
-                  onClick={() => setRefiling(true)}
-                >
-                  <Folder size={13} strokeWidth={1.75} aria-hidden="true" />
-                  <span>{folderLabel(filedAt)}</span>
-                </button>
-              </>
-            )}
+            <span className="doc-editor-trail-binder">{binderName}</span>
             <span className="doc-editor-trail-sep" aria-hidden="true">
               /
             </span>
@@ -1503,82 +1663,7 @@ export function DocumentEditorPage({
       ) : null}
 
       <div className="doc-editor-workspace">
-        {files ? (
-          <DraftFiles
-            org={org}
-            binder={binder}
-            binderName={binderName}
-            documents={files.documents}
-            touched={files.touched}
-            folders={files.folders}
-            active={documentPath}
-            unsaved={dirty}
-            unsavedElsewhere={unsavedElsewhere}
-            onReadAhead={readAheadOf}
-            onOpen={(slugPath) => leave({ kind: "open", slugPath })}
-            // A change request is revised, not added to or reshaped, here.
-            onNew={
-              change ? undefined : (folder) => leave({ kind: "new", folder })
-            }
-            onNewFolder={change ? undefined : onNewFolder}
-            busy={filesBusy || save.kind === "saving"}
-            onRename={
-              change
-                ? undefined
-                : (target, name) =>
-                    void actOnFiles(
-                      null,
-                      () => onRenameFile(target, name),
-                      "Unable to rename that.",
-                    )
-            }
-            onMove={
-              change
-                ? undefined
-                : (subject, folder) =>
-                    void actOnFiles(
-                      null,
-                      () => onMoveFile(subject, folder),
-                      "Unable to move that.",
-                    )
-            }
-            onArchive={
-              change
-                ? undefined
-                : (slugPath) =>
-                    actOnFiles(
-                      slugPath,
-                      () => onArchiveFile(slugPath),
-                      "Unable to archive that.",
-                    )
-            }
-            onConvert={change ? undefined : onConvertFile}
-            onCopy={
-              change
-                ? undefined
-                : (slugPath) =>
-                    void actOnFiles(
-                      // The copy is made from what is saved, so the words of
-                      // the one being copied go first.
-                      slugPath,
-                      () => onCopyFile(slugPath),
-                      "Unable to copy that.",
-                    )
-            }
-            archivedCount={files.archivedCount ?? 0}
-            onReadArchive={change ? undefined : onReadArchive}
-            onRestore={
-              change
-                ? undefined
-                : (uid) =>
-                    actOnFiles(
-                      null,
-                      () => onRestoreFile(uid),
-                      "Unable to restore that document.",
-                    )
-            }
-          />
-        ) : null}
+        {inEditor ? null : filesPanel}
         <div className="doc-editor-main">
           {filesError ? (
             <p
@@ -1591,35 +1676,6 @@ export function DocumentEditorPage({
           {body}
         </div>
       </div>
-
-      {refiling && (load.kind === "ready" || load.kind === "foreign") ? (
-        <MoveToFolderModal
-          subject={{
-            kind: "document",
-            slugPath: documentPath,
-            folder: load.detail.document.folder,
-          }}
-          label={name}
-          folders={everyFolder}
-          onClose={() => setRefiling(false)}
-          onMove={(folder) => {
-            setRefiling(false);
-            void actOnFiles(
-              null,
-              () =>
-                onMoveFile(
-                  {
-                    kind: "document",
-                    slugPath: documentPath,
-                    folder: load.detail.document.folder,
-                  },
-                  folder,
-                ),
-              "Unable to move this document.",
-            );
-          }}
-        />
-      ) : null}
 
       {leaving && ask ? (
         <div

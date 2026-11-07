@@ -9,6 +9,8 @@ import type {
   AddBinderPersonBody,
   ArchiveBinderDocument201,
   ArchiveBinderDocumentBody,
+  ArchiveBinderFolder201,
+  ArchiveBinderFolderBody,
   CloseBinderChange200,
   CreateBinder201,
   CreateBinderBody,
@@ -1589,6 +1591,55 @@ return customFetch<archiveBinderDocumentResponse>(getArchiveBinderDocumentUrl(or
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(archiveBinderDocumentBody)
+  }
+);}
+
+
+export type archiveBinderFolderResponse201 = {
+  data: ArchiveBinderFolder201
+  status: 201
+}
+
+export type archiveBinderFolderResponseSuccess = (archiveBinderFolderResponse201) & {
+  headers: Headers;
+};
+;
+
+export type archiveBinderFolderResponse = (archiveBinderFolderResponseSuccess)
+
+export const getArchiveBinderFolderUrl = (org: string,
+    binder: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/folder-archives`
+}
+
+export const archiveBinderFolder = async (org: string,
+    binder: string,
+    archiveBinderFolderBody: ArchiveBinderFolderBody, options?: Parameters<typeof customFetch>[1]): Promise<archiveBinderFolderResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<archiveBinderFolderResponse>(getArchiveBinderFolderUrl(org,binder),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(archiveBinderFolderBody)
   }
 );}
 

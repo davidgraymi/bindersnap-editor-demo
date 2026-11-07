@@ -49,6 +49,12 @@ describe("keyboard shortcuts", () => {
       "Mod-k",
       "Mod-a",
       "Mod-y",
+      // Paste as plain text: the browser's, and ProseMirror reads the Shift.
+      "Mod-Shift-v",
+      // The page's zoom, taken by the editor around the page.
+      "Mod-=",
+      "Mod--",
+      "Mod-0",
     ]);
     const missing = SHORTCUT_GROUPS.flatMap((group) => group.items)
       .map((item) => toKeymapName(item.keys))
