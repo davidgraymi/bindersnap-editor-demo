@@ -264,11 +264,14 @@ test("the top bar names the binder; the page names where in it", async ({
   await expect(trail.locator("[aria-current='page']")).toHaveText("Clinical");
   await expect(path).toHaveCount(0);
 
-  // A change request is under its binder's list, and the way back up is the
-  // path above its title.
+  // A change request has no path above its title: the sidebar and the
+  // change's own tabs are the way back.
   await page.goto(`${APP_BASE_URL}/riverside-health/clinical?tab=changes`);
   await page.locator(".change-row-open").first().click();
   await expect(page).toHaveURL(/\/-\/changes\/\d+$/, { timeout: 30_000 });
+  await expect(path).toHaveCount(0);
+  await expect(page.locator(".app-main .bs-crumbs")).toHaveCount(0);
+});
   // It names no number: the title is what the change is about.
   await expect(
     path.getByRole("link", { name: "Change requests" }),

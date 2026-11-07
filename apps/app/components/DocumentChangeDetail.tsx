@@ -472,9 +472,8 @@ export function DocumentChangeDetail({
           the title rather than under every comment ever made on the change.
           A wide one lays the rail beside both; see `.change-detail`. */}
       <div className="change-head">
-        {/* The way back to the list is the trail in the top bar — `Clinical
-            / Change requests` — the same line every page has, so
-            it is not drawn a second time here. */}
+        {/* A change draws no path of its own: the sidebar's Change requests
+            and the change's tabs are the way back. */}
         {editing ? (
           /* A change request is open for days, and the first thing a
              reviewer's question produces is a better title. Once it is
