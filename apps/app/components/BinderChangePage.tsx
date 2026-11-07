@@ -20,6 +20,7 @@ import { buildChangedDocumentRows } from "../changedDocuments";
 import type { ChangeScope } from "../changeScope";
 import { formatDocumentName } from "../documentDisplay";
 import type { DocumentChangeView } from "../routes";
+import { buildSignOffChangeRows, summarizeSignOffChange } from "../signOff";
 import { nameFor, usePeopleNames } from "../usePeopleNames";
 import { ChangeByline } from "./ChangeByline";
 import { ChangeComparisonPage } from "./ChangeComparisonPage";
@@ -204,6 +205,26 @@ export function BinderChangePage({
     [detail],
   );
 
+  /**
+   * What this change would do to who signs things off, or null when it leaves
+   * the rules alone.
+   *
+   * Built from the two committed files the API read, never from the change's
+   * description: the description belongs to the change's author, who can
+   * rewrite it after somebody has approved it (issue 921).
+   */
+  const signOffRows = useMemo(
+    () =>
+      detail?.signOffRules
+        ? buildSignOffChangeRows({
+            base: detail.signOffRules.base,
+            proposed: detail.signOffRules.proposed,
+            documents: detail.signOffRules.documents,
+          })
+        : null,
+    [detail],
+  );
+
   const runCatchUp = async () => {
     setCatchingUp(true);
     setCatchUpError(null);
@@ -321,6 +342,7 @@ export function BinderChangePage({
       })}
       changesHref={changesHref}
       documentCount={comparisonRows.length}
+      rulesChanged={signOffRows !== null}
       onSelect={onViewChange}
     />
   );
@@ -390,6 +412,8 @@ export function BinderChangePage({
           openedAt={record.submittedAt}
           nameOf={nameOf}
           rows={comparisonRows}
+          signOffRows={signOffRows}
+          signOffUnreadable={detail.signOffRules?.unreadable ?? []}
           headRef={detail.change.branchName || null}
           /* Arriving from a particular document's Compare button opens on that
              document rather than at the top of a page of six. */
@@ -509,91 +533,145 @@ export function BinderChangePage({
         }
         banner={behind}
         documentPicker={
-          documents.length > 0 ? (
-            /* **What this change does, document by document.** A change is the
+          documents.length > 0 || signOffRows ? (
+            <>
+              {documents.length > 0 ? (
+                /* **What this change does, document by document.** A change is the
                unit of approval and routinely touches several, and this panel
                was a picker rather than an answer: it showed the raw filename,
                identity segment and all, and left the one thing a reviewer
                wants — what happens to each — to a version string in the
                header that changed as you clicked. */
-            <div className="bs-panel change-does">
-              <div className="bs-panel-bar">
-                <h2 className="bs-panel-bar-title">What this change does</h2>
-                <span className="bs-panel-bar-spacer" />
-                <span className="binder-count">
-                  {documents.length === 1
-                    ? "1 document"
-                    : `${documents.length} documents`}
-                </span>
-              </div>
-              <ul className="bs-row-list">
-                {documents.map((document) => {
-                  const facts = describeChangedDocument(document, !isOpen);
-                  const anchor = comparisonRows.find(
-                    (row) => row.slugPath === document.slugPath,
-                  )?.anchor;
+                <div className="bs-panel change-does">
+                  <div className="bs-panel-bar">
+                    <h2 className="bs-panel-bar-title">
+                      What this change does
+                    </h2>
+                    <span className="bs-panel-bar-spacer" />
+                    <span className="binder-count">
+                      {documents.length === 1
+                        ? "1 document"
+                        : `${documents.length} documents`}
+                    </span>
+                  </div>
+                  <ul className="bs-row-list">
+                    {documents.map((document) => {
+                      const facts = describeChangedDocument(document, !isOpen);
+                      const anchor = comparisonRows.find(
+                        (row) => row.slugPath === document.slugPath,
+                      )?.anchor;
 
-                  /* **Back into the words, in this change.** A reviewer's
+                      /* **Back into the words, in this change.** A reviewer's
                      "please reword step 3" meant a new draft, the edit, and a
                      second change for the same policy. Only its author, only
                      while it is open, and only a policy the editor writes — a
                      Word file is revised in Word and uploaded. */
-                  const editable =
-                    onEditInEditor &&
-                    record.open &&
-                    detail.change.branchName !== "" &&
-                    record.submittedBy === currentUser &&
-                    isEditorDocumentFile(document.path);
+                      const editable =
+                        onEditInEditor &&
+                        record.open &&
+                        detail.change.branchName !== "" &&
+                        record.submittedBy === currentUser &&
+                        isEditorDocumentFile(document.path);
 
-                  return (
-                    <li key={document.slugPath} className="change-does-item">
-                      {/* **A way into its diff, not a selector.** Picking a
+                      return (
+                        <li
+                          key={document.slugPath}
+                          className="change-does-item"
+                        >
+                          {/* **A way into its diff, not a selector.** Picking a
                           row used to repoint the rail at that document, so
                           seeing what changed was pick, then Compare — when
                           what a reviewer does is open Changes and scroll.
                           Each row now goes straight to its own place on
                           that screen. */}
+                          <a
+                            className="bs-row"
+                            href={`${changesHref}${anchor ? `#${anchor}` : ""}`}
+                            onClick={(event) =>
+                              followInApp(event, () => {
+                                setViewing(document.slugPath);
+                                onViewChange("compare");
+                              })
+                            }
+                          >
+                            <span className="bs-row-body">
+                              <span className="bs-row-name">{facts.title}</span>
+                              {/* The address, not the file path: the identity
+                              segment is a thing the server mints and nobody
+                              reads. */}
+                              <span className="bs-row-meta">
+                                {facts.address}
+                              </span>
+                            </span>
+                            <span className="bs-row-right">
+                              {facts.move ? (
+                                <span className="bs-status bs-status--working">
+                                  {facts.move}
+                                </span>
+                              ) : null}
+                              <span className="bs-ver">{facts.effect}</span>
+                            </span>
+                          </a>
+                          {editable ? (
+                            <button
+                              className="bs-btn bs-btn--sm bs-btn-secondary"
+                              type="button"
+                              aria-label={`Edit ${facts.title}`}
+                              onClick={() =>
+                                onEditInEditor?.(document.slugPath)
+                              }
+                            >
+                              Edit
+                            </button>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ) : null}
+              {/* **A control changing hands, said on the page it is approved
+                from.** The rules themselves are drawn on the Changes tab,
+                where every other "what would this do" lives; this is the row
+                that makes a reviewer go and look, because the alternative was
+                a sentence in a description its author can rewrite (issue 921). */}
+              {signOffRows ? (
+                <div className="bs-panel change-does">
+                  <div className="bs-panel-bar">
+                    <h2 className="bs-panel-bar-title">Who signs things off</h2>
+                    <span className="bs-panel-bar-spacer" />
+                    <span className="binder-count">
+                      {summarizeSignOffChange(signOffRows)}
+                    </span>
+                  </div>
+                  <ul className="bs-row-list">
+                    <li className="change-does-item">
                       <a
                         className="bs-row"
-                        href={`${changesHref}${anchor ? `#${anchor}` : ""}`}
+                        href={changesHref}
                         onClick={(event) =>
-                          followInApp(event, () => {
-                            setViewing(document.slugPath);
-                            onViewChange("compare");
-                          })
+                          followInApp(event, () => onViewChange("compare"))
                         }
                       >
                         <span className="bs-row-body">
-                          <span className="bs-row-name">{facts.title}</span>
-                          {/* The address, not the file path: the identity
-                              segment is a thing the server mints and nobody
-                              reads. */}
-                          <span className="bs-row-meta">{facts.address}</span>
+                          <span className="bs-row-name">
+                            This change alters this binder's sign-off rules
+                          </span>
+                          <span className="bs-row-meta">
+                            {signOffRows.length > 0
+                              ? signOffRows.map((row) => row.target).join(" · ")
+                              : "No rule would change"}
+                          </span>
                         </span>
                         <span className="bs-row-right">
-                          {facts.move ? (
-                            <span className="bs-status bs-status--working">
-                              {facts.move}
-                            </span>
-                          ) : null}
-                          <span className="bs-ver">{facts.effect}</span>
+                          <span className="bs-row-meta">See what changes</span>
                         </span>
                       </a>
-                      {editable ? (
-                        <button
-                          className="bs-btn bs-btn--sm bs-btn-secondary"
-                          type="button"
-                          aria-label={`Edit ${facts.title}`}
-                          onClick={() => onEditInEditor?.(document.slugPath)}
-                        >
-                          Edit
-                        </button>
-                      ) : null}
                     </li>
-                  );
-                })}
-              </ul>
-            </div>
+                  </ul>
+                </div>
+              ) : null}
+            </>
           ) : null
         }
         approvers={[

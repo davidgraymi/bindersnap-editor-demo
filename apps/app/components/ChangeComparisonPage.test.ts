@@ -11,6 +11,7 @@ import type {
   WorkspaceChangedDocument,
   WorkspaceRemovedDocument,
 } from "../../../packages/api-schema/schemas/workspaces";
+import type { SignOffChangeRow } from "../signOff";
 
 /**
  * Everything one change does, on one screen.
@@ -30,6 +31,7 @@ mock.module("../api", () => ({
 }));
 
 const { buildChangedDocumentRows } = await import("../changedDocuments");
+const { buildSignOffChangeRows } = await import("../signOff");
 const { ChangeComparisonPage } = await import("./ChangeComparisonPage");
 
 const DOM_KEYS = [
@@ -309,16 +311,16 @@ test("a document can be folded away, and marking it viewed folds it", async () =
   unmount();
 });
 
-test("a change that versions no document says what it does instead", async () => {
-  const element = createElement(ChangeComparisonPage, {
+/** A sign-off change: the same review as a policy, and no version at all. */
+function rulesChange(signOffRows: SignOffChangeRow[] | null) {
+  return createElement(ChangeComparisonPage, {
     org: "riverside",
     binder: "clinical",
     changeNumber: 7,
     title: "Who signs off on nursing",
     open: true,
-    // A sign-off rules change: it goes through the same review as a policy and
-    // publishes no version at all.
     rows: [],
+    signOffRows,
     headRef: "sign-off/nursing",
     author: "alice",
     branchHref: "/riverside/clinical?ref=change-4&change=4",
@@ -328,12 +330,67 @@ test("a change that versions no document says what it does instead", async () =>
     onReadFile: () => {},
     onDownload: () => {},
   });
+}
 
-  const { container, unmount } = await render(element);
+/**
+ * **The change that used to explain itself** (issue 921).
+ *
+ * A rules change versions no document, so this screen drew nothing and sent
+ * the reviewer to the change's description — which its author can rewrite
+ * after it has been approved. What has to survive: the rules are on the screen,
+ * read from the two committed files, and a gate coming down is drawn as the
+ * loosening it is.
+ */
+test("a change to who signs things off draws the rules it would change", async () => {
+  const { container, unmount } = await render(
+    rulesChange(
+      buildSignOffChangeRows({
+        base: [
+          {
+            scope: "folder",
+            target: "nursing",
+            teams: ["infection-control"],
+            users: [],
+          },
+        ],
+        proposed: [
+          { scope: "binder", target: "", teams: ["compliance"], users: [] },
+        ],
+        documents: [],
+      }),
+    ),
+  );
+
+  const rules = container.querySelector(".cmp-rules");
+  expect(rules).not.toBeNull();
+  const said = rules?.textContent ?? "";
+
+  // What the change does, said as counts rather than as the author's sentence.
+  expect(said).toContain("1 rule taken away");
+  expect(said).toContain("1 rule added");
+
+  // The gate coming down, and who used to hold it.
+  expect(said).toContain("Anything filed in Nursing");
+  expect(said).toContain("Infection Control");
+  expect(said).toContain("signs this off today → nobody would");
+  expect(
+    container.querySelector(".cmp-rules .cmp-rules-icon--removed"),
+  ).not.toBeNull();
+
+  // And the gate going up.
+  expect(said).toContain("Everything in this binder");
+  expect(said).toContain("Compliance");
+
+  unmount();
+});
+
+test("a change that versions no document and touches no rule says so", async () => {
+  const { container, unmount } = await render(rulesChange(null));
 
   expect(container.querySelector(".bs-note")?.textContent).toContain(
-    "versions no document",
+    "nothing to compare",
   );
+  expect(container.querySelector(".cmp-rules")).toBeNull();
   expect(container.querySelector(".bs-rail")).toBeNull();
 
   unmount();

@@ -128,6 +128,16 @@ no file on the branch at all — it offers the last version on record instead.
 What is in the list and what each row says lives in
 `apps/app/changedDocuments.ts`, testable without a browser.
 
+**A change to who signs things off is drawn here too**, above the documents:
+`SignOffChangePanel` lists every rule the change would add, take away or hand
+to somebody else, with who signs it off today beside who would. The API reads
+both sides out of `.gitea/CODEOWNERS` at the change's base and head
+(`signOffRules` on the change detail) and `apps/app/signOff.ts` pairs and words
+them, because the change's description — the only place this used to be said —
+belongs to its author and can be rewritten after an approval (issue 921). A
+rules change versions no document, so this panel is the whole screen for one;
+the Changes tab marks it "Rules" and the overview links to it.
+
 **It is laid out the way a code review is.** Under the title, one line says
 who wants to publish how many documents from which branch, and the branch is
 a link to the binder's root read at that branch (`/{org}/{binder}/-/tree/{ref}?change=N`

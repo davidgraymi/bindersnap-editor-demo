@@ -337,7 +337,11 @@ import {
   type RepoUserSummary,
   type WorkspaceRepo,
 } from "./gitea-client/repos";
-import { proposeSignOffRules, readSignOffRules } from "./gitea-client/signOff";
+import {
+  proposeSignOffRules,
+  readSignOffRules,
+  readSignOffRulesAcrossChange,
+} from "./gitea-client/signOff";
 import { requiredReviewersFor } from "./requiredReviewers";
 import {
   validateSignOffRules,
@@ -7333,15 +7337,30 @@ async function handleWorkspaceChangeDetail(
     // branch this change would land on. A read that fails costs the sentence
     // and not the page: nothing below it is a gate.
     const baseRef = entry.pullRequest.base?.ref || "main";
-    const onBase =
+    const headRef = entry.pullRequest.head?.ref || null;
+    const [onBase, signOffAcrossChange] = await Promise.all([
       baseRef === "main"
-        ? mainTree
-        : await readWorkspaceTree({
+        ? Promise.resolve(mainTree)
+        : readWorkspaceTree({
             client,
             org: orgName,
             workspace: workspaceName,
             ref: baseRef,
-          }).catch(() => null);
+          }).catch(() => null),
+      // **What this change would do to who signs things off.** Both committed
+      // files, because the change's own description is written by its author
+      // and can be rewritten after an approval (issue 921) — a control changing
+      // hands cannot be something a reviewer has to take the proposer's word
+      // for. Null for every change that leaves the file alone, which is nearly
+      // all of them. A read that fails costs the panel and not the page.
+      readSignOffRulesAcrossChange({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+        baseRef,
+        headRef,
+      }).catch(() => null),
+    ]);
     const baseAddresses = new Map<string, string>(
       (onBase?.documents ?? []).flatMap((document) =>
         document.uid ? [[document.uid, document.slugPath] as const] : [],
@@ -7437,6 +7456,23 @@ async function handleWorkspaceChangeDetail(
           (entry.pullRequest as { mergeable?: boolean }).mergeable === false,
         blockOnUnresolvedThreads: reviewSettings.blockOnUnresolvedThreads,
         unresolvedThreadCount: discussions.unresolvedCount,
+        // What it would do to the binder's sign-off rules, read off the two
+        // committed files rather than off what the change says about itself.
+        // The documents name a rule that is about one: a rule carries an
+        // identity (ADR 0005), and a reviewer should not be shown a ULID.
+        signOffRules: signOffAcrossChange
+          ? {
+              ...signOffAcrossChange,
+              documents: (onBase?.documents ?? [])
+                .filter((document) => document.uid !== null)
+                .map((document) => ({
+                  uid: document.uid!,
+                  slugPath: document.slugPath,
+                  name: document.name,
+                  folder: document.folder,
+                })),
+            }
+          : null,
         // Whether an approval stops counting once what the change proposes
         // moves on — the binder's "A new version clears the approvals" rule.
         clearsApprovalsOnEdit: mergeRules?.ignoresStale ?? true,
