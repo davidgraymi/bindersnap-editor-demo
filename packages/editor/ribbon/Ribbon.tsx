@@ -41,7 +41,6 @@ import {
   PaintBucket,
   Paintbrush,
   MoveHorizontal,
-  PanelLeft,
   Printer,
   Quote,
   Redo2,
@@ -127,7 +126,6 @@ export interface ViewSettings {
    * without scrolling sideways, and never past 100%.
    */
   zoom: number | "page-width";
-  navigationPane: boolean;
 }
 
 interface RibbonProps {
@@ -136,8 +134,13 @@ interface RibbonProps {
   /** The zoom the page is drawn at, Page Width resolved. */
   zoom: number;
   onViewChange: (next: ViewSettings) => void;
-  /** Open the navigation pane on Find, or on Replace. */
+  /** Open the find bar, on Find or on Replace. */
   onFind: (replace: boolean) => void;
+  /**
+   * The document's headings, where the page around the editor shows them —
+   * the file panel's Outline tab, in the app. Absent, View has no Outline.
+   */
+  outline?: { shown: boolean; onToggle: () => void };
   onPrint: () => void;
   /** Every keyboard shortcut, on one sheet (Ctrl+/). */
   onShortcuts?: () => void;
@@ -187,6 +190,7 @@ export function Ribbon({
   end,
   onUndo,
   outsideUndo = false,
+  outline,
 }: RibbonProps) {
   const format = useFormatState(editor);
   const [chosen, setChosen] = useState<RibbonTab>("home");
@@ -380,6 +384,7 @@ export function Ribbon({
               onViewChange={onViewChange}
               onPrint={onPrint}
               onShortcuts={onShortcuts}
+              outline={outline}
             />
           ) : tab === "table" ? (
             <TableTab editor={editor} format={format} />
@@ -1896,12 +1901,14 @@ function ViewTab({
   onViewChange,
   onPrint,
   onShortcuts,
+  outline,
 }: {
   view: ViewSettings;
   zoom: number;
   onViewChange: (next: ViewSettings) => void;
   onPrint: () => void;
   onShortcuts?: () => void;
+  outline?: { shown: boolean; onToggle: () => void };
 }) {
   const zoomTo = (next: number) =>
     onViewChange({ ...view, zoom: clampZoom(next) });
@@ -1925,17 +1932,17 @@ function ViewTab({
         />
       </RibbonGroup>
 
-      <RibbonGroup label="Show">
-        <RibbonButton
-          icon={PanelLeft}
-          label="Navigation pane"
-          large
-          active={view.navigationPane}
-          onClick={() =>
-            onViewChange({ ...view, navigationPane: !view.navigationPane })
-          }
-        />
-      </RibbonGroup>
+      {outline ? (
+        <RibbonGroup label="Show">
+          <RibbonButton
+            icon={ListTree}
+            label="Outline"
+            large
+            active={outline.shown}
+            onClick={outline.onToggle}
+          />
+        </RibbonGroup>
+      ) : null}
 
       <RibbonGroup label="Zoom">
         <RibbonButton

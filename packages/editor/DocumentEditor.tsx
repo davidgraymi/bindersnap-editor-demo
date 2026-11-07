@@ -28,7 +28,8 @@ import { SearchAndReplace } from "./extensions/SearchAndReplace";
 import { WordKeymap } from "./extensions/WordKeymap";
 import { ChangeCase } from "./extensions/ChangeCase";
 import { AutoFormat } from "./extensions/AutoFormat";
-import { NavigationPane } from "./NavigationPane";
+import { DocumentOutline } from "./DocumentOutline";
+import { FindBar } from "./FindBar";
 import { ShortcutsDialog } from "./ShortcutsDialog";
 import { PageContextMenu, SelectionToolbar } from "./SelectionMenus";
 import { DropButton, shortcutLabel } from "./ribbon/controls";
@@ -74,10 +75,12 @@ export interface DocumentEditorProps {
   /** The start of the status bar, before the page and word counts. */
   statusStart?: ReactNode;
   /**
-   * What floats over the desk, under the ribbon: the page's file panel. It is
-   * placed after the navigation pane, so it never covers the headings.
+   * What floats over the desk, under the ribbon: the page's file panel. As a
+   * function it is handed the document's outline to show as well, and the
+   * View tab's Outline asks it to — so the binder's files and this
+   * document's headings share one panel. As a node, View offers no Outline.
    */
-  aside?: ReactNode;
+  aside?: ReactNode | ((outline: OutlineSlot) => ReactNode);
   /** A name for the page, for screen readers and the print title. */
   label: string;
   /** Read-only: the page and the panes, no ribbon. */
@@ -97,6 +100,20 @@ export interface DocumentEditorProps {
    * took them; absent, a dropped file is refused with a note.
    */
   onDropFiles?: (data: DataTransfer) => boolean;
+}
+
+/**
+ * The document's headings, for the page around the editor to place. View's
+ * Outline asks for them to be shown or put away, and the page says whether
+ * they are on screen, so the button can show it.
+ */
+export interface OutlineSlot {
+  /** The headings, ready to place. */
+  content: ReactNode;
+  /** Every press of View's Outline: show them, or put them away. */
+  request: { show: boolean; nonce: number };
+  /** Whether they are on screen now. */
+  onShown: (shown: boolean) => void;
 }
 
 /**
@@ -124,11 +141,6 @@ function readSavedView(): ViewSettings {
   const fallback: ViewSettings = {
     layout: "print",
     zoom: "page-width",
-    // Open where it leaves the page at full size beside the app's file panel,
-    // and shut on a laptop or a tablet, where it would cost the page a
-    // quarter of its width. Once somebody opens or shuts it, their choice is
-    // what is remembered.
-    navigationPane: window.innerWidth >= 1500,
   };
   try {
     const raw = window.localStorage.getItem(VIEW_KEY);
@@ -140,7 +152,6 @@ function readSavedView(): ViewSettings {
         parsed.zoom === undefined || parsed.zoom === "page-width"
           ? "page-width"
           : clampZoom(Number(parsed.zoom)),
-      navigationPane: parsed.navigationPane !== false,
     };
   } catch {
     return fallback;
@@ -148,8 +159,8 @@ function readSavedView(): ViewSettings {
 }
 
 /**
- * The view is the reader's, not the document's: zoom and the navigation pane
- * are remembered on this browser for next time, and never written to the
+ * The view is the reader's, not the document's: the zoom and the layout are
+ * remembered on this browser for next time, and never written to the
  * policy, which every reviewer opens at their own zoom.
  */
 function saveView(view: ViewSettings): void {
@@ -322,23 +333,25 @@ export function DocumentEditor({
     saveView(next);
   }, []);
 
-  const [paneMode, setPaneMode] = useState<{
-    view: "headings" | "search";
+  /** The find bar, while it is open: Ctrl+F, or Ctrl+H for Replace. */
+  const [find, setFind] = useState<{
     replace: boolean;
     nonce: number;
-  }>({ view: "headings", replace: false, nonce: 0 });
+  } | null>(null);
+  const openFind = useCallback((replace: boolean) => {
+    setFind((was) => ({ replace, nonce: (was?.nonce ?? 0) + 1 }));
+  }, []);
+  const closeFind = useCallback(() => setFind(null), []);
 
-  const openFind = useCallback(
-    (replace: boolean) => {
-      setPaneMode((was) => ({
-        view: "search",
-        replace,
-        nonce: was.nonce + 1,
-      }));
-      setView({ ...view, navigationPane: true });
-    },
-    [setView, view],
-  );
+  /** View's Outline: asks the page's panel to show the headings, or not. */
+  const [outlineShown, setOutlineShown] = useState(false);
+  const [outlineRequest, setOutlineRequest] = useState({
+    show: false,
+    nonce: 0,
+  });
+  const toggleOutline = useCallback(() => {
+    setOutlineRequest((was) => ({ show: !outlineShown, nonce: was.nonce + 1 }));
+  }, [outlineShown]);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const [shortcuts, setShortcuts] = useState(false);
@@ -489,6 +502,9 @@ export function DocumentEditor({
           end={ribbonEnd}
           onUndo={() => undoOutsideRef.current()}
           outsideUndo={outsideUndo !== null}
+          {...(typeof aside === "function"
+            ? { outline: { shown: outlineShown, onToggle: toggleOutline } }
+            : {})}
         />
       ) : null}
 
@@ -497,7 +513,7 @@ export function DocumentEditor({
         <SelectionToolbar
           editor={editor}
           onLink={openLink}
-          hidden={pageMenuAt !== null || linkAt !== null}
+          hidden={pageMenuAt !== null || linkAt !== null || find !== null}
         />
       ) : null}
       {pageMenuAt ? (
@@ -529,16 +545,16 @@ export function DocumentEditor({
       ) : null}
 
       <div className="bs-doc-body">
-        {view.navigationPane ? (
-          <NavigationPane
-            editor={editor}
-            mode={paneMode}
-            onClose={() => setView({ ...view, navigationPane: false })}
-          />
+        {typeof aside === "function"
+          ? aside({
+              content: <DocumentOutline editor={editor} />,
+              request: outlineRequest,
+              onShown: setOutlineShown,
+            })
+          : aside}
+        {find ? (
+          <FindBar editor={editor} request={find} onClose={closeFind} />
         ) : null}
-        {/* After the navigation pane, so what floats here floats over the
-            desk and never over the headings. */}
-        {aside}
 
         <div
           className="bs-doc-desk"
@@ -728,7 +744,7 @@ function usePagination(
     };
   }, [editor, measure]);
 
-  useLayoutEffect(measure, [measure, zoom, view.layout, view.navigationPane]);
+  useLayoutEffect(measure, [measure, zoom, view.layout]);
 
   const current = useEditorState({
     editor,

@@ -31,6 +31,7 @@ import type {
   BinderArchivePayload,
   WorkspaceDocumentListEntry,
 } from "../../../packages/api-schema/schemas/workspaces";
+import type { OutlineSlot } from "../../../packages/editor/DocumentEditor";
 import { isEditorDocumentFile } from "../binderDocument";
 import { convertibleKind } from "../convertToEditor";
 import {
@@ -169,9 +170,40 @@ interface DraftFilesProps {
    * rather than read in the draft bar, as an IDE marks a changed file.
    */
   touched?: readonly string[];
+  /**
+   * The open document's headings, from the editor. With them the panel has
+   * two sides, Files and Outline, and View's Outline opens it on the second.
+   */
+  outline?: OutlineSlot;
 }
 
 const STORAGE_KEY = "bindersnap.editor.files.collapsed";
+
+type PanelTab = "files" | "outline";
+const PANEL_TABS: readonly { id: PanelTab; label: string }[] = [
+  { id: "files", label: "Files" },
+  { id: "outline", label: "Outline" },
+];
+/** Which side of the panel was up last, per browser: a habit. */
+const TAB_KEY = "bindersnap.editor.files.tab";
+
+function readPanelTab(): PanelTab {
+  try {
+    return window.localStorage.getItem(TAB_KEY) === "outline"
+      ? "outline"
+      : "files";
+  } catch {
+    return "files";
+  }
+}
+
+function writePanelTab(tab: PanelTab): void {
+  try {
+    window.localStorage.setItem(TAB_KEY, tab);
+  } catch {
+    // Private mode or storage off: the tab just is not remembered.
+  }
+}
 
 /**
  * Narrower than this, a tree beside the page leaves the page too small to
@@ -296,6 +328,7 @@ export function DraftFiles({
   onUndo,
   busy = false,
   touched = NOTHING,
+  outline,
 }: DraftFilesProps) {
   const remembered = useRememberedToggle(STORAGE_KEY);
   const narrow = useSyncExternalStore(subscribeNarrow, isNarrow, () => false);
@@ -381,6 +414,40 @@ export function DraftFiles({
   }, [floating, renaming, moving, menu]);
   const shut = narrow ? !floating : remembered.on;
   const toggle = narrow ? () => setFloating((was) => !was) : remembered.toggle;
+
+  /** Which side of the panel is up: the binder's files, or the outline. */
+  const [tab, setTab] = useState<PanelTab>(readPanelTab);
+  const chooseTab = (next: PanelTab) => {
+    setTab(next);
+    writePanelTab(next);
+  };
+  const onOutline = outline !== undefined && tab === "outline";
+  const setOpen = (open: boolean) => {
+    if (narrow) setFloating(open);
+    else if (remembered.on === open) remembered.toggle();
+  };
+  // View's Outline: open the panel on the headings, or put it away. Each
+  // press is new; the one the panel was drawn with is not a press.
+  const outlineRequest = outline?.request;
+  const answered = useRef(outlineRequest?.nonce ?? 0);
+  useEffect(() => {
+    if (!outlineRequest || outlineRequest.nonce === answered.current) return;
+    answered.current = outlineRequest.nonce;
+    if (outlineRequest.show) {
+      chooseTab("outline");
+      setOpen(true);
+    } else {
+      setOpen(false);
+    }
+    // Only a new press acts; the rest is read as it stands at that press.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outlineRequest]);
+  // Tell View whether the headings are on screen, so Outline shows it.
+  const onOutlineShown = outline?.onShown;
+  const outlineOnScreen = !shut && onOutline;
+  useEffect(() => {
+    onOutlineShown?.(outlineOnScreen);
+  }, [onOutlineShown, outlineOnScreen]);
   const openPolicy = (slugPath: string) => {
     setFloating(false);
     onOpen(slugPath);
@@ -1104,8 +1171,44 @@ export function DraftFiles({
       aria-busy={busy || undefined}
     >
       <div className="app-explorer-head">
-        <span className="app-explorer-heading">Files</span>
-        {startNew ? (
+        {outline ? (
+          <div
+            className="doc-files-tabs"
+            role="tablist"
+            aria-label="Show in the panel"
+            onKeyDown={(event) => {
+              // The arrows move between the two, as between any tabs.
+              if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+                return;
+              }
+              event.preventDefault();
+              const next = onOutline ? "files" : "outline";
+              chooseTab(next);
+              document.getElementById(`doc-files-tab-${next}`)?.focus();
+            }}
+          >
+            {PANEL_TABS.map((each) => (
+              <button
+                key={each.id}
+                type="button"
+                role="tab"
+                id={`doc-files-tab-${each.id}`}
+                aria-selected={(each.id === "outline") === onOutline}
+                aria-controls={`doc-files-panel-${each.id}`}
+                tabIndex={(each.id === "outline") === onOutline ? 0 : -1}
+                className={`doc-files-tab${
+                  (each.id === "outline") === onOutline ? " is-on" : ""
+                }`}
+                onClick={() => chooseTab(each.id)}
+              >
+                {each.label}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <span className="app-explorer-heading">Files</span>
+        )}
+        {startNew && !onOutline ? (
           <button
             type="button"
             className="app-explorer-toggle"
@@ -1116,7 +1219,7 @@ export function DraftFiles({
             <FilePlus size={15} strokeWidth={1.75} aria-hidden="true" />
           </button>
         ) : null}
-        {onNewFolder ? (
+        {onNewFolder && !onOutline ? (
           <button
             type="button"
             className="app-explorer-toggle"
@@ -1143,187 +1246,216 @@ export function DraftFiles({
         </button>
       </div>
 
-      <div className="app-explorer-filter">
-        <input
-          className="bs-input bs-input--sm"
-          ref={filterRef}
-          type="search"
-          value={filter}
-          placeholder="Go to file"
-          aria-label={`Find a document in ${binderName}`}
-          onChange={(event) => {
-            setFilter(event.target.value);
-            if (event.target.value.trim() !== "") openFolders(everyFolder);
-          }}
-          onKeyDown={(event) => {
-            // VS Code's Go to File: Enter opens the first match, Down steps
-            // into the matches, Escape clears what was typed.
-            if (event.key === "Enter" && needle !== "") {
-              const first = firstDocument(shown);
-              if (!first) return;
-              event.preventDefault();
-              setFilter("");
-              if (first.slugPath !== active) openPolicy(first.slugPath);
-            } else if (event.key === "ArrowDown") {
-              const row = treeRef.current?.querySelector<HTMLElement>(
-                "button.app-explorer-item, button.app-explorer-folder",
-              );
-              if (!row) return;
-              event.preventDefault();
-              row.focus();
-            } else if (event.key === "Escape" && filter !== "") {
-              event.preventDefault();
-              event.stopPropagation();
-              setFilter("");
-            }
-          }}
-        />
-      </div>
+      {onOutline && outline ? (
+        <div
+          className="doc-files-outline"
+          role="tabpanel"
+          id="doc-files-panel-outline"
+          aria-labelledby="doc-files-tab-outline"
+        >
+          {outline.content}
+        </div>
+      ) : (
+        <>
+          <div className="app-explorer-filter">
+            <input
+              className="bs-input bs-input--sm"
+              ref={filterRef}
+              type="search"
+              value={filter}
+              placeholder="Go to file"
+              aria-label={`Find a document in ${binderName}`}
+              onChange={(event) => {
+                setFilter(event.target.value);
+                if (event.target.value.trim() !== "") openFolders(everyFolder);
+              }}
+              onKeyDown={(event) => {
+                // VS Code's Go to File: Enter opens the first match, Down steps
+                // into the matches, Escape clears what was typed.
+                if (event.key === "Enter" && needle !== "") {
+                  const first = firstDocument(shown);
+                  if (!first) return;
+                  event.preventDefault();
+                  setFilter("");
+                  if (first.slugPath !== active) openPolicy(first.slugPath);
+                } else if (event.key === "ArrowDown") {
+                  const row = treeRef.current?.querySelector<HTMLElement>(
+                    "button.app-explorer-item, button.app-explorer-folder",
+                  );
+                  if (!row) return;
+                  event.preventDefault();
+                  row.focus();
+                } else if (event.key === "Escape" && filter !== "") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setFilter("");
+                }
+              }}
+            />
+          </div>
 
-      <div
-        className={`app-explorer-tree${
-          dragging === null && over === "" ? " doc-files-tree--drop" : ""
-        }`}
-        ref={treeRef}
-        onKeyDown={onTreeKey}
-        // Files from the computer dropped below the rows: the top level.
-        onDragOver={(event) => {
-          if (!onUploadDrop || dragging !== null) return;
-          if (!carriesFiles(event.dataTransfer)) return;
-          event.preventDefault();
-          event.dataTransfer.dropEffect = "copy";
-          setOver("");
-        }}
-        onDragLeave={(event) => {
-          const next = event.relatedTarget;
-          if (next instanceof Node && event.currentTarget.contains(next)) {
-            return;
-          }
-          if (dragging === null) setOver(null);
-        }}
-        onDrop={(event) => {
-          if (!onUploadDrop || dragging !== null) return;
-          if (!carriesFiles(event.dataTransfer)) return;
-          event.preventDefault();
-          setOver(null);
-          onUploadDrop(event.dataTransfer, "");
-        }}
-        // Below the rows: the top level's menu. A row's own menu stops here.
-        onContextMenu={(event) => {
-          event.preventDefault();
-          openMenu(TOP_LEVEL, event.clientX, event.clientY, null);
-        }}
-      >
-        {shown.length === 0 ? (
-          <p className="app-explorer-empty">
-            {needle === "" ? "Nothing filed yet." : "No document matches that."}
-          </p>
-        ) : (
-          shown.map((node) => renderNode(node, 0))
-        )}
-
-        {/* Out of a folder: the top level is otherwise no target at all. Only
-            while something is in the air. */}
-        {dragging !== null && acceptsDrop(dragging, "") ? (
           <div
-            className={`doc-files-root-drop${
-              over === "" ? " doc-files-root-drop--over" : ""
+            className={`app-explorer-tree${
+              dragging === null && over === "" ? " doc-files-tree--drop" : ""
             }`}
+            ref={treeRef}
+            onKeyDown={onTreeKey}
+            // Files from the computer dropped below the rows: the top level.
             onDragOver={(event) => {
+              if (!onUploadDrop || dragging !== null) return;
+              if (!carriesFiles(event.dataTransfer)) return;
               event.preventDefault();
-              event.dataTransfer.dropEffect = "move";
+              event.dataTransfer.dropEffect = "copy";
               setOver("");
             }}
-            onDragLeave={() => {
-              if (over === "") setOver(null);
+            onDragLeave={(event) => {
+              const next = event.relatedTarget;
+              if (next instanceof Node && event.currentTarget.contains(next)) {
+                return;
+              }
+              if (dragging === null) setOver(null);
             }}
             onDrop={(event) => {
+              if (!onUploadDrop || dragging !== null) return;
+              if (!carriesFiles(event.dataTransfer)) return;
               event.preventDefault();
-              if (dragging) drop(dragging, "");
+              setOver(null);
+              onUploadDrop(event.dataTransfer, "");
+            }}
+            // Below the rows: the top level's menu. A row's own menu stops here.
+            onContextMenu={(event) => {
+              event.preventDefault();
+              openMenu(TOP_LEVEL, event.clientX, event.clientY, null);
             }}
           >
-            Drop here for the top level
+            {shown.length === 0 ? (
+              <p className="app-explorer-empty">
+                {needle === ""
+                  ? "Nothing filed yet."
+                  : "No document matches that."}
+              </p>
+            ) : (
+              shown.map((node) => renderNode(node, 0))
+            )}
+
+            {/* Out of a folder: the top level is otherwise no target at all. Only
+            while something is in the air. */}
+            {dragging !== null && acceptsDrop(dragging, "") ? (
+              <div
+                className={`doc-files-root-drop${
+                  over === "" ? " doc-files-root-drop--over" : ""
+                }`}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                  setOver("");
+                }}
+                onDragLeave={() => {
+                  if (over === "") setOver(null);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  if (dragging) drop(dragging, "");
+                }}
+              >
+                Drop here for the top level
+              </div>
+            ) : null}
           </div>
-        ) : null}
-      </div>
 
-      {undo ? (
-        <div className="doc-files-undo" role="status">
-          <span>
-            <strong>{undo.label}</strong>{" "}
-            {undo.kind === "document" && undo.deleted
-              ? "deleted from this draft."
-              : "archived in this draft."}
-          </span>
-          <button
-            type="button"
-            className="bs-btn bs-btn--sm bs-btn--quiet"
-            disabled={busy}
-            onClick={() => onUndo?.()}
-          >
-            Undo
-          </button>
-        </div>
-      ) : null}
+          {undo ? (
+            <div className="doc-files-undo" role="status">
+              <span>
+                <strong>{undo.label}</strong>{" "}
+                {undo.kind === "document" && undo.deleted
+                  ? "deleted from this draft."
+                  : "archived in this draft."}
+              </span>
+              <button
+                type="button"
+                className="bs-btn bs-btn--sm bs-btn--quiet"
+                disabled={busy}
+                onClick={() => onUndo?.()}
+              >
+                Undo
+              </button>
+            </div>
+          ) : null}
 
-      {/* **The archive, at the foot of the files**, as on the binder's tree:
+          {/* **The archive, at the foot of the files**, as on the binder's tree:
           what the draft or the record has taken off, and Restore — into this
           draft, as the binder's next version of it rather than a new v1. */}
-      {archivedCount > 0 && onReadArchive ? (
-        <div className="doc-files-archive">
-          <button
-            type="button"
-            className="app-explorer-folder"
-            aria-expanded={archiveOpen}
-            onClick={() => setArchiveOpen((was) => !was)}
-          >
-            {archiveOpen ? (
-              <ChevronDown size={13} strokeWidth={1.75} aria-hidden="true" />
-            ) : (
-              <ChevronRight size={13} strokeWidth={1.75} aria-hidden="true" />
-            )}
-            <Archive size={14} strokeWidth={1.6} aria-hidden="true" />
-            <span className="app-explorer-name">Archived</span>
-            <span className="doc-files-archive-count">{archivedCount}</span>
-          </button>
-          {archiveOpen ? (
-            archiveError ? (
-              <p className="app-explorer-empty">Unable to read the archive.</p>
-            ) : archived === null ? (
-              <p className="app-explorer-empty">Reading the archive…</p>
-            ) : (
-              archived.map((entry) => (
-                <div className="doc-files-row" key={entry.uid}>
-                  <span
-                    className="app-explorer-item doc-files-item doc-files-item--archived"
-                    style={{ paddingLeft: "22px" }}
-                    title={
-                      entry.slugPath
-                        ? `Was filed at ${entry.slugPath}`
-                        : "Its folder is gone"
-                    }
-                  >
-                    <FileText size={14} strokeWidth={1.6} aria-hidden="true" />
-                    <span className="app-explorer-name">{entry.title}</span>
-                  </span>
-                  {onRestore ? (
-                    <button
-                      type="button"
-                      className="bs-btn bs-btn--sm bs-btn--quiet doc-files-restore"
-                      aria-label={`Restore ${entry.title}`}
-                      title={`Restore as v${entry.lastVersion + 1}, in this draft`}
-                      disabled={busy}
-                      onClick={() => void restore(entry.uid)}
-                    >
-                      Restore
-                    </button>
-                  ) : null}
-                </div>
-              ))
-            )
+          {archivedCount > 0 && onReadArchive ? (
+            <div className="doc-files-archive">
+              <button
+                type="button"
+                className="app-explorer-folder"
+                aria-expanded={archiveOpen}
+                onClick={() => setArchiveOpen((was) => !was)}
+              >
+                {archiveOpen ? (
+                  <ChevronDown
+                    size={13}
+                    strokeWidth={1.75}
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <ChevronRight
+                    size={13}
+                    strokeWidth={1.75}
+                    aria-hidden="true"
+                  />
+                )}
+                <Archive size={14} strokeWidth={1.6} aria-hidden="true" />
+                <span className="app-explorer-name">Archived</span>
+                <span className="doc-files-archive-count">{archivedCount}</span>
+              </button>
+              {archiveOpen ? (
+                archiveError ? (
+                  <p className="app-explorer-empty">
+                    Unable to read the archive.
+                  </p>
+                ) : archived === null ? (
+                  <p className="app-explorer-empty">Reading the archive…</p>
+                ) : (
+                  archived.map((entry) => (
+                    <div className="doc-files-row" key={entry.uid}>
+                      <span
+                        className="app-explorer-item doc-files-item doc-files-item--archived"
+                        style={{ paddingLeft: "22px" }}
+                        title={
+                          entry.slugPath
+                            ? `Was filed at ${entry.slugPath}`
+                            : "Its folder is gone"
+                        }
+                      >
+                        <FileText
+                          size={14}
+                          strokeWidth={1.6}
+                          aria-hidden="true"
+                        />
+                        <span className="app-explorer-name">{entry.title}</span>
+                      </span>
+                      {onRestore ? (
+                        <button
+                          type="button"
+                          className="bs-btn bs-btn--sm bs-btn--quiet doc-files-restore"
+                          aria-label={`Restore ${entry.title}`}
+                          title={`Restore as v${entry.lastVersion + 1}, in this draft`}
+                          disabled={busy}
+                          onClick={() => void restore(entry.uid)}
+                        >
+                          Restore
+                        </button>
+                      ) : null}
+                    </div>
+                  ))
+                )
+              ) : null}
+            </div>
           ) : null}
-        </div>
-      ) : null}
+        </>
+      )}
 
       {menu ? (
         <RowMenu

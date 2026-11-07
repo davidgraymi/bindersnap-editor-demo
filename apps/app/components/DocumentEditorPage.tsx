@@ -35,6 +35,7 @@ import {
   createDocumentState,
   showDocumentState,
 } from "../../../packages/editor/documentState";
+import type { OutlineSlot } from "../../../packages/editor/DocumentEditor";
 import {
   dropWords,
   keepWords,
@@ -1152,105 +1153,112 @@ export function DocumentEditorPage({
 
   // The draft's files: under the ribbon, beside the page, once there is an
   // editor to put them in; beside whatever stands in for it until then.
-  const filesPanel = files ? (
-    <DraftFiles
-      org={org}
-      binder={binder}
-      binderName={binderName}
-      documents={files.documents}
-      touched={files.touched}
-      folders={files.folders}
-      active={documentPath}
-      unsaved={dirty}
-      unsavedElsewhere={unsavedElsewhere}
-      onReadAhead={readAheadOf}
-      onOpen={(slugPath) => leave({ kind: "open", slugPath })}
-      // A change request is revised, not added to or reshaped, here.
-      onNew={change ? undefined : (folder) => leave({ kind: "new", folder })}
-      onNewFolder={change ? undefined : onNewFolder}
-      onUploadDrop={
-        change || !onUploadFiles
-          ? undefined
-          : (data, folder) => {
-              const files = readDroppedFiles(data);
-              if (files) onUploadFiles(files, folder);
-            }
-      }
-      busy={filesBusy || save.kind === "saving"}
-      onRename={
-        change
-          ? undefined
-          : (target, name) =>
-              void actOnFiles(
-                null,
-                () => onRenameFile(target, name),
-                "Unable to rename that.",
-              )
-      }
-      onMove={
-        change
-          ? undefined
-          : (subject, folder) =>
-              void actOnFiles(
-                null,
-                () => onMoveFile(subject, folder),
-                "Unable to move that.",
-              )
-      }
-      onArchive={
-        change
-          ? undefined
-          : (slugPath) =>
-              actOnFiles(
-                slugPath,
-                () => onArchiveFile(slugPath),
-                "Unable to archive that.",
-              )
-      }
-      onArchiveFolder={
-        change
-          ? undefined
-          : (folder) =>
-              actOnFiles(
-                // The open policy's words go first when it is in the folder.
-                documentPath.startsWith(`${folder}/`) ? documentPath : null,
-                () => onArchiveFolder(folder),
-                "Unable to archive that folder.",
-              )
-      }
-      onConvert={change ? undefined : onConvertFile}
-      onCopy={
-        change
-          ? undefined
-          : (slugPath) =>
-              void actOnFiles(
-                // The copy is made from what is saved, so the words of
-                // the one being copied go first.
-                slugPath,
-                () => onCopyFile(slugPath),
-                "Unable to copy that.",
-              )
-      }
-      archivedCount={files.archivedCount ?? 0}
-      onReadArchive={change ? undefined : onReadArchive}
-      onRestore={
-        change
-          ? undefined
-          : (uid) =>
-              actOnFiles(
-                null,
-                () => onRestoreFile(uid),
-                "Unable to restore that document.",
-              )
-      }
-      onArchived={(record) => {
-        setLastArchive({ record, at: Date.now() });
-        setArchiveNotice(true);
-      }}
-      undo={archiveNotice ? (lastArchive?.record ?? null) : null}
-      onUndo={undoArchive}
-    />
-  ) : null;
+  // A function, so the editor hands the panel the document's outline too: the
+  // binder's files and this document's headings share one panel.
+  const filesPanel = files
+    ? (outline?: OutlineSlot) => (
+        <DraftFiles
+          org={org}
+          binder={binder}
+          binderName={binderName}
+          documents={files.documents}
+          touched={files.touched}
+          folders={files.folders}
+          active={documentPath}
+          unsaved={dirty}
+          unsavedElsewhere={unsavedElsewhere}
+          onReadAhead={readAheadOf}
+          onOpen={(slugPath) => leave({ kind: "open", slugPath })}
+          // A change request is revised, not added to or reshaped, here.
+          onNew={
+            change ? undefined : (folder) => leave({ kind: "new", folder })
+          }
+          onNewFolder={change ? undefined : onNewFolder}
+          onUploadDrop={
+            change || !onUploadFiles
+              ? undefined
+              : (data, folder) => {
+                  const files = readDroppedFiles(data);
+                  if (files) onUploadFiles(files, folder);
+                }
+          }
+          busy={filesBusy || save.kind === "saving"}
+          onRename={
+            change
+              ? undefined
+              : (target, name) =>
+                  void actOnFiles(
+                    null,
+                    () => onRenameFile(target, name),
+                    "Unable to rename that.",
+                  )
+          }
+          onMove={
+            change
+              ? undefined
+              : (subject, folder) =>
+                  void actOnFiles(
+                    null,
+                    () => onMoveFile(subject, folder),
+                    "Unable to move that.",
+                  )
+          }
+          onArchive={
+            change
+              ? undefined
+              : (slugPath) =>
+                  actOnFiles(
+                    slugPath,
+                    () => onArchiveFile(slugPath),
+                    "Unable to archive that.",
+                  )
+          }
+          onArchiveFolder={
+            change
+              ? undefined
+              : (folder) =>
+                  actOnFiles(
+                    // The open policy's words go first when it is in the folder.
+                    documentPath.startsWith(`${folder}/`) ? documentPath : null,
+                    () => onArchiveFolder(folder),
+                    "Unable to archive that folder.",
+                  )
+          }
+          onConvert={change ? undefined : onConvertFile}
+          onCopy={
+            change
+              ? undefined
+              : (slugPath) =>
+                  void actOnFiles(
+                    // The copy is made from what is saved, so the words of
+                    // the one being copied go first.
+                    slugPath,
+                    () => onCopyFile(slugPath),
+                    "Unable to copy that.",
+                  )
+          }
+          archivedCount={files.archivedCount ?? 0}
+          onReadArchive={change ? undefined : onReadArchive}
+          onRestore={
+            change
+              ? undefined
+              : (uid) =>
+                  actOnFiles(
+                    null,
+                    () => onRestoreFile(uid),
+                    "Unable to restore that document.",
+                  )
+          }
+          onArchived={(record) => {
+            setLastArchive({ record, at: Date.now() });
+            setArchiveNotice(true);
+          }}
+          undo={archiveNotice ? (lastArchive?.record ?? null) : null}
+          onUndo={undoArchive}
+          outline={outline}
+        />
+      )
+    : undefined;
 
   let body: ReactNode;
   /** Whether `body` is the editor, which then holds the file panel. */
@@ -1663,7 +1671,9 @@ export function DocumentEditorPage({
       ) : null}
 
       <div className="doc-editor-workspace">
-        {inEditor ? null : filesPanel}
+        {/* Not the editor — a file it does not write: the panel without an
+            outline, since there are no headings to show. */}
+        {inEditor ? null : filesPanel?.()}
         <div className="doc-editor-main">
           {filesError ? (
             <p

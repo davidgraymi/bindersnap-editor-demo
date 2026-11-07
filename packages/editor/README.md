@@ -1,8 +1,9 @@
 # `packages/editor/` — the document editor
 
 A word processor for policies, built on Tiptap. Word's layout — a ribbon of
-commands over a sheet of paper, the document's headings in a navigation pane,
-page and word counts in a status bar — in Bindersnap's type and colour.
+commands over a sheet of paper, find in a bar floating over the page, the
+document's headings for the page around it to show, page and word counts in a
+status bar — in Bindersnap's type and colour.
 
 ## Boundary rules
 
@@ -22,7 +23,8 @@ documentSchema.ts        — what a document may contain: the one extension list
                            breaks
 documentStats.ts         — word counts, the heading outline, pagination
 DocumentEditor.tsx       — the editor: ribbon, page, panes, status bar
-NavigationPane.tsx       — headings, and find and replace
+FindBar.tsx              — find and replace, floating over the page
+DocumentOutline.tsx      — the headings; the app shows them in its file panel
 ribbon/                  — Home, Insert, View and the contextual Table tab
 extensions/
   SearchAndReplace.ts    — find and replace, with every match marked
