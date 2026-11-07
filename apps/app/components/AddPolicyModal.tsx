@@ -20,6 +20,7 @@ import {
   nameFromFile,
   planBulkUpload,
   type BulkSource,
+  type DroppedFiles,
 } from "../bulkUpload";
 import {
   ConversionError,
@@ -87,6 +88,11 @@ interface AddPolicyModalProps {
    */
   initialMode?: "upload" | "write";
   initialFolder?: string;
+  /**
+   * Files dragged onto the editor from the computer: the dialog opens with
+   * them in it, as if dropped on its own zone, and asks what it always asks.
+   */
+  dropped?: DroppedFiles | null;
 }
 
 /**
@@ -142,6 +148,7 @@ export function AddPolicyModal({
   onWrite,
   initialMode = "upload",
   initialFolder = "",
+  dropped = null,
 }: AddPolicyModalProps) {
   /**
    * Upload a file written elsewhere, or write a new one here.
@@ -247,6 +254,24 @@ export function AddPolicyModal({
     setFile(null);
     setSources(found);
   };
+
+  // Dropped on the editor: taken as if dropped here, once they are read.
+  useEffect(() => {
+    if (!dropped) return;
+    let cancelled = false;
+    dropped.sources
+      .then((found) => {
+        if (!cancelled) takeSources(found, dropped.fromFolder);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Those files could not be read.");
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Once, for the drop the dialog was opened with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dropped]);
 
   // Where it will land, worked out by the same functions the server commits
   // with — so the address promised here is the address written.

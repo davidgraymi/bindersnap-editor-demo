@@ -91,6 +91,7 @@ import {
   keepSelection,
   shortcutLabel,
 } from "./controls";
+import { paste } from "../clipboard";
 import { useFormatState, type FormatState } from "./formatState";
 import {
   FONT_CHOICES,
@@ -142,6 +143,14 @@ interface RibbonProps {
   onShortcuts?: () => void;
   /** Anything the page puts at the end of the tab row — Save, in practice. */
   end?: ReactNode;
+  /**
+   * Undo, when the page has something of its own to take back — archiving a
+   * file, say. Answers whether it took that back; when it did not, Undo
+   * undoes the page's last edit as usual.
+   */
+  onUndo?: () => boolean;
+  /** Whether the page has such a thing to take back, which enables Undo. */
+  outsideUndo?: boolean;
 }
 
 const TAB_LABELS: Record<RibbonTab, string> = {
@@ -176,6 +185,8 @@ export function Ribbon({
   onPrint,
   onShortcuts,
   end,
+  onUndo,
+  outsideUndo = false,
 }: RibbonProps) {
   const format = useFormatState(editor);
   const [chosen, setChosen] = useState<RibbonTab>("home");
@@ -273,6 +284,29 @@ export function Ribbon({
     setChosen(next);
   };
 
+  /** Undo and Redo: the toolbar's first group, before every tab's own. */
+  const undoRedo = (
+    <>
+      <RibbonButton
+        icon={Undo2}
+        label="Undo"
+        shortcut="Ctrl+Z"
+        disabled={!format.canUndo && !outsideUndo}
+        onClick={() => {
+          if (onUndo?.()) return;
+          editor.chain().focus().undo().run();
+        }}
+      />
+      <RibbonButton
+        icon={Redo2}
+        label="Redo"
+        shortcut="Ctrl+Y"
+        disabled={!format.canRedo}
+        onClick={() => editor.chain().focus().redo().run()}
+      />
+    </>
+  );
+
   return (
     <div
       className={`bs-ribbon${collapsed ? " bs-ribbon--collapsed" : ""}${
@@ -280,23 +314,9 @@ export function Ribbon({
       }`}
     >
       <div className="bs-ribbon-bar">
-        {/* Word's Quick Access Toolbar: Undo and Redo, above everything. */}
-        <div className="bs-ribbon-quick">
-          <RibbonButton
-            icon={Undo2}
-            label="Undo"
-            shortcut="Ctrl+Z"
-            disabled={!format.canUndo}
-            onClick={() => editor.chain().focus().undo().run()}
-          />
-          <RibbonButton
-            icon={Redo2}
-            label="Redo"
-            shortcut="Ctrl+Y"
-            disabled={!format.canRedo}
-            onClick={() => editor.chain().focus().redo().run()}
-          />
-        </div>
+        {/* Folded away with the rest, Undo and Redo stay to hand, as on
+            Word's Quick Access Toolbar. */}
+        {collapsed ? <div className="bs-ribbon-quick">{undoRedo}</div> : null}
 
         <div className="bs-ribbon-tabs" role="tablist" aria-label="Ribbon">
           {tabs.map((id) => (
@@ -332,6 +352,11 @@ export function Ribbon({
           role="tabpanel"
           aria-labelledby={`bs-ribbon-tab-${tab}`}
         >
+          {/* **In the toolbar, not beside the tabs**: the first thing in
+              it on every tab, as the commands it takes back are. */}
+          <RibbonGroup label="Undo" className="bs-rgroup--undo">
+            {undoRedo}
+          </RibbonGroup>
           {tab === "home" && simple ? (
             <SimpleHomeTab editor={editor} format={format} onFind={onFind} />
           ) : tab === "home" ? (
@@ -410,6 +435,21 @@ function fontLabel(format: FormatState): string {
     FONT_CHOICES.find((font) => font.value === format.fontFamily)?.label ??
     "Custom"
   );
+}
+
+/**
+ * Whether a font in the list is the one the words are in: set on them, or
+ * their style's own when they carry none — so Geist is ticked in a paragraph
+ * nobody has set a font on, and Lora in a heading.
+ */
+function isFontInUse(
+  format: FormatState,
+  font: { label: string; value: string },
+): boolean {
+  if (format.fontFamily === "") {
+    return styleDefaults(format.style).font === font.label;
+  }
+  return format.fontFamily === font.value;
 }
 
 /** Make the paragraph the cursor is in one of the styles, as Word's gallery does. */
@@ -566,11 +606,10 @@ function HomeTab({
               FONT_CHOICES.map((font) => (
                 <MenuChoice
                   key={font.label}
-                  checked={format.fontFamily === font.value}
-                  style={font.value ? { fontFamily: font.value } : undefined}
+                  checked={isFontInUse(format, font)}
+                  style={{ fontFamily: font.value }}
                   onPick={() => {
-                    if (font.value === "") chain().unsetFontFamily().run();
-                    else chain().setFontFamily(font.value).run();
+                    chain().setFontFamily(font.value).run();
                     close();
                   }}
                 >
@@ -1223,14 +1262,10 @@ function SimpleHomeTab({
                       FONT_CHOICES.map((font) => (
                         <MenuChoice
                           key={font.label}
-                          checked={format.fontFamily === font.value}
-                          style={
-                            font.value ? { fontFamily: font.value } : undefined
-                          }
+                          checked={isFontInUse(format, font)}
+                          style={{ fontFamily: font.value }}
                           onPick={() => {
-                            if (font.value === "")
-                              chain().unsetFontFamily().run();
-                            else chain().setFontFamily(font.value).run();
+                            chain().setFontFamily(font.value).run();
                             closeFont();
                           }}
                         >
@@ -1384,60 +1419,6 @@ export function outdent(editor: Editor): boolean {
   if (editor.isActive("taskItem")) return chain.liftListItem("taskItem").run();
   if (editor.isActive("listItem")) return chain.liftListItem("listItem").run();
   return chain.outdentParagraph().run();
-}
-
-/**
- * Paste from the ribbon.
- *
- * A browser only hands a page the clipboard's plain text when asked from a
- * button, so this pastes text — Ctrl+V still pastes with formatting, which is
- * what the tooltip says.
- */
-/**
- * The Paste button, as Word's: what was copied, as it was copied — or, from
- * its menu, the words alone.
- *
- * Both go through the editor's own paste, the one Ctrl+V takes, so what is
- * pasted is held to the document's schema and a line break is a new
- * paragraph. A picture on the clipboard is handed to the page as a paste,
- * where the picture handling that Ctrl+V reaches says why one did not go in.
- */
-async function paste(editor: Editor, how: "source" | "text"): Promise<void> {
-  editor.commands.focus();
-  const { view } = editor;
-  try {
-    if (how === "source" && typeof navigator.clipboard.read === "function") {
-      for (const item of await navigator.clipboard.read()) {
-        if (item.types.includes("text/html")) {
-          const html = await (await item.getType("text/html")).text();
-          if (view.pasteHTML(html)) return;
-        }
-        const picture = item.types.find((type) => type.startsWith("image/"));
-        if (picture) {
-          const blob = await item.getType(picture);
-          const data = new DataTransfer();
-          data.items.add(
-            new File([blob], `Pasted picture.${picture.slice(6)}`, {
-              type: picture,
-            }),
-          );
-          view.dom.dispatchEvent(
-            new ClipboardEvent("paste", {
-              clipboardData: data,
-              bubbles: true,
-              cancelable: true,
-            }),
-          );
-          return;
-        }
-      }
-    }
-    const text = await navigator.clipboard.readText();
-    if (text) view.pasteText(text);
-  } catch {
-    // The browser said no to reading the clipboard. Ctrl+V still works, and
-    // the cursor is back in the page for it.
-  }
 }
 
 function ColorDrop({

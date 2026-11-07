@@ -510,9 +510,14 @@ test("Edit on a binder opens the editor, and its files are renamed and refiled t
   await expect(renamed).toContainText("Clean your hands");
   await expect(renamed).toContainText("Always.");
 
-  // Refiled from its row's Move, into the folder just made.
-  await files.getByRole("button", { name: /^Hand Washing/ }).hover();
-  await files.getByRole("button", { name: "Move Hand Washing" }).click();
+  // Refiled from its row's menu, into the folder just made.
+  await files
+    .getByRole("button", { name: /^Hand Washing/ })
+    .click({ button: "right" });
+  await page
+    .getByRole("menu", { name: "Hand Washing: actions" })
+    .getByRole("menuitem", { name: "Move to…" })
+    .click();
   await page.getByLabel("Where it goes").selectOption({ label: "Nursing" });
   await page.getByRole("button", { name: "Move", exact: true }).click();
   await expect(page).toHaveURL(
@@ -621,12 +626,10 @@ test("a row's menu in the file panel acts on it: a folder takes a new document a
   await expect(page.getByLabel("What to call it")).toHaveValue(/^nursing\//i);
   await page.getByRole("button", { name: "Cancel" }).click();
 
-  // And a new document from the same menu is filed in it.
+  // And a new document from the same menu is made in it at once, untitled.
   await nursing.click({ button: "right" });
   await menu.getByRole("menuitem", { name: "New document here" }).click();
-  await page.getByLabel("What it is called").fill("Night Rounds");
-  await page.getByRole("button", { name: "Start writing" }).click();
-  await expect(page).toHaveURL(/\/nursing\/night-rounds\?edit=write/i, {
+  await expect(page).toHaveURL(/\/nursing\/untitled\?edit=write/i, {
     timeout: 20_000,
   });
 
@@ -668,9 +671,7 @@ test("a policy archived from the editor's panel comes back by Undo, or from the 
 
   // A second policy to be in while the first is archived.
   await files.getByRole("button", { name: "New document" }).click();
-  await page.getByLabel("What it is called").fill("Visitor Policy");
-  await page.getByRole("button", { name: "Start writing" }).click();
-  await expect(page).toHaveURL(/\/visitor-policy\?edit=write/);
+  await expect(page).toHaveURL(/\/untitled\?edit=write/, { timeout: 20_000 });
 
   const hand = files.getByRole("button", { name: /^Hand Hygiene/ });
   await hand.hover();
@@ -683,7 +684,7 @@ test("a policy archived from the editor's panel comes back by Undo, or from the 
   await notice.getByRole("button", { name: "Undo" }).click();
   await expect(hand).toBeVisible({ timeout: 20_000 });
   await expect(notice).toHaveCount(0);
-  await expect(page).toHaveURL(/\/visitor-policy\?edit=write/);
+  await expect(page).toHaveURL(/\/untitled\?edit=write/);
 
   // Archived again, it is in the archive at the panel's foot, and Restore
   // there brings it back too.
@@ -696,42 +697,6 @@ test("a policy archived from the editor's panel comes back by Undo, or from the 
   await files.getByRole("button", { name: "Restore Hand Hygiene" }).click();
   await expect(hand).toBeVisible({ timeout: 20_000 });
   await expect(archive).toHaveCount(0);
-});
-
-test("the title bar says where the policy is filed, and moves it from there", async ({
-  page,
-}) => {
-  const { session, org, binder } = await provision();
-  await signInBrowser(page, session);
-
-  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await expect(page).toHaveURL(/\/hand-hygiene\?edit=write&draft=/);
-  const files = page.getByRole("complementary", {
-    name: "Files in Clinical Policies",
-  });
-  await files.getByRole("button", { name: "New folder" }).click();
-  await page.getByLabel("What to call it").fill("Nursing");
-  await page.getByRole("button", { name: "Add folder" }).click();
-  await expect(
-    files.getByRole("button", { name: "Nursing", exact: true }),
-  ).toBeVisible({ timeout: 20_000 });
-
-  const filed = page.getByRole("button", {
-    name: "Move Hand Hygiene, filed at the top level",
-  });
-  // At the top level, the binder is the last place in the trail.
-  await expect(filed).toHaveText("Clinical Policies");
-  await filed.click();
-  await page.getByLabel("Where it goes").selectOption({ label: "Nursing" });
-  await page.getByRole("button", { name: "Move", exact: true }).click();
-
-  await expect(page).toHaveURL(/\/nursing\/hand-hygiene\?edit=write/i, {
-    timeout: 20_000,
-  });
-  await expect(
-    page.getByRole("button", { name: "Move Hand Hygiene, filed in Nursing" }),
-  ).toHaveText("Nursing");
 });
 
 test("writing is one bar over one row of commands, and the full ribbon is a press away", async ({
@@ -877,19 +842,15 @@ test("the arrow keys walk the file panel's tree, as in a file explorer", async (
     .getByRole("menu", { name: "Nursing: actions" })
     .getByRole("menuitem", { name: "New document here" })
     .click();
-  await page.getByLabel("What it is called").fill("Night Rounds");
-  await page.getByRole("button", { name: "Start writing" }).click();
-  await expect(page).toHaveURL(/\/nursing\/night-rounds\?edit=write/i, {
+  await expect(page).toHaveURL(/\/nursing\/untitled\?edit=write/i, {
     timeout: 20_000,
   });
 
-  const night = files.getByRole("button", { name: /^Night Rounds/ });
+  const night = files.getByRole("button", { name: /^Untitled/ });
   const hand = files.getByRole("button", { name: /^Hand Hygiene/ });
   await expect(nursing).toHaveAttribute("aria-expanded", "true");
   // A new policy opens with the cursor in it; the walk starts after that.
-  await expect(
-    page.getByRole("textbox", { name: "Night Rounds" }),
-  ).toBeFocused();
+  await expect(page.getByRole("textbox", { name: "Untitled" })).toBeFocused();
 
   // Left from a row in a folder goes to the folder; Left again shuts it.
   await night.focus();
@@ -932,17 +893,13 @@ test("Go to file opens the first match on Enter, and Down steps into the matches
     name: "Files in Clinical Policies",
   });
   await files.getByRole("button", { name: "New document" }).click();
-  await page.getByLabel("What it is called").fill("Visitor Policy");
-  await page.getByRole("button", { name: "Start writing" }).click();
-  await expect(page).toHaveURL(/\/visitor-policy\?edit=write/);
+  await expect(page).toHaveURL(/\/untitled\?edit=write/, { timeout: 20_000 });
 
   const find = files.getByRole("searchbox", {
     name: "Find a document in Clinical Policies",
   });
   await find.fill("hygi");
-  await expect(
-    files.getByRole("button", { name: /^Visitor Policy/ }),
-  ).toHaveCount(0);
+  await expect(files.getByRole("button", { name: /^Untitled/ })).toHaveCount(0);
   await find.press("Enter");
   await expect(page).toHaveURL(/\/hand-hygiene\?edit=write/);
   await expect(find).toHaveValue("");
@@ -1088,7 +1045,7 @@ test("on a tablet the ribbon folds its groups and the files open over the page",
     name: "Files in Clinical Policies",
   });
   await expect(files).toHaveCount(0);
-  const show = page.getByRole("button", { name: "Show the draft's files" });
+  const show = page.getByRole("button", { name: "Show file explorer" });
   await show.click();
   await expect(files).toBeVisible();
   await page.keyboard.press("Escape");
@@ -1171,18 +1128,16 @@ test("the editor's file panel starts a policy, and moves between policies keepin
     name: "Files in Clinical Policies",
   });
 
-  // New, from inside the editor: the dialog opens on Write.
+  // New, from inside the editor: no dialog, an untitled document at once.
   await files.getByRole("button", { name: "New document" }).click();
-  await expect(
-    page.getByRole("radio", { name: /Write it here/ }),
-  ).toBeChecked();
-  await page.getByLabel("What it is called").fill("Visitor Policy");
-  await page.getByRole("button", { name: "Start writing" }).click();
-  await expect(page).toHaveURL(/\/visitor-policy\?edit=write&draft=draft%2F/);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page).toHaveURL(/\/untitled\?edit=write&draft=draft%2F/, {
+    timeout: 20_000,
+  });
   const draft = new URL(page.url()).searchParams.get("draft")!;
-  const visitor = page.getByRole("textbox", { name: "Visitor Policy" });
+  const visitor = page.getByRole("textbox", { name: "Untitled" });
   await expect(visitor).toBeFocused();
-  const visitorRow = files.getByRole("button", { name: /^Visitor Policy/ });
+  const visitorRow = files.getByRole("button", { name: /^Untitled/ });
   await expect(visitorRow).toBeVisible();
 
   // **Straight on to the first policy: no question.** Several policies are
@@ -1217,9 +1172,7 @@ test("the editor's file panel starts a policy, and moves between policies keepin
         { headers: authHeaders(session) },
       )
     ).text();
-  expect(await raw("visitor-policy")).toContain(
-    "Visitors sign in at reception.",
-  );
+  expect(await raw("untitled")).toContain("Visitors sign in at reception.");
   expect(await raw("hand-hygiene")).toContain("Every time.");
 });
 
@@ -1235,9 +1188,7 @@ test("each open policy keeps its own undo, across a move to another and back", a
     name: "Files in Clinical Policies",
   });
   await files.getByRole("button", { name: "New document" }).click();
-  await page.getByLabel("What it is called").fill("Visitor Policy");
-  await page.getByRole("button", { name: "Start writing" }).click();
-  const visitor = page.getByRole("textbox", { name: "Visitor Policy" });
+  const visitor = page.getByRole("textbox", { name: "Untitled" });
   await expect(visitor).toBeFocused();
 
   // Words in the new one, then over to Hand Hygiene and words there.
@@ -1250,9 +1201,9 @@ test("each open policy keeps its own undo, across a move to another and back", a
   await page.keyboard.type(" Always.");
   await expect(hand).toContainText("Always.");
 
-  // Back to Visitor Policy: its words, and Ctrl+Z still takes them back —
+  // Back to Untitled: its words, and Ctrl+Z still takes them back —
   // not Hand Hygiene's, and not nothing.
-  await files.getByRole("button", { name: /^Visitor Policy/ }).click();
+  await files.getByRole("button", { name: /^Untitled/ }).click();
   await expect(visitor).toContainText("Visitors sign in.");
   await expect(visitor).toBeFocused();
   await page.keyboard.press("ControlOrMeta+z");

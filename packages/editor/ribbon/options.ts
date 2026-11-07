@@ -16,7 +16,9 @@ export interface FontChoice {
 }
 
 export const FONT_CHOICES: FontChoice[] = [
-  { label: "Default", value: "" },
+  // By name, as Word lists Aptos: a policy's body is set in Geist, and
+  // "Default" said nothing about what it looks like.
+  { label: "Geist", value: "var(--brand-font-sans)" },
   { label: "Lora", value: "var(--brand-font-serif)" },
   { label: "Arial", value: 'Arial, "Helvetica Neue", Helvetica, sans-serif' },
   { label: "Calibri", value: "Calibri, Carlito, Arial, sans-serif" },

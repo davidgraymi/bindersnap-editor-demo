@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
-import { describeBulkChange, nameFromFile, planBulkUpload } from "./bulkUpload";
+import {
+  carriesFiles,
+  describeBulkChange,
+  nameFromFile,
+  planBulkUpload,
+  readDroppedFiles,
+} from "./bulkUpload";
 
 const file = (name: string, size = 100) => ({ name, size });
 const source = (relativePath: string, size = 100) => ({
@@ -77,5 +83,66 @@ describe("describeBulkChange", () => {
     expect(
       describeBulkChange([{ name: "Fire safety", folder: "" }]).title,
     ).toBe("Add Fire safety");
+  });
+});
+
+/** A drop as a browser hands it over: its types, and its items. */
+function dropOf(
+  items: {
+    kind: string;
+    file?: { name: string; size: number };
+    folder?: boolean;
+  }[],
+  types: string[] = ["Files"],
+): DataTransfer {
+  return {
+    types,
+    items: items.map((item) => ({
+      kind: item.kind,
+      type: "",
+      getAsFile: () => item.file ?? null,
+      webkitGetAsEntry: () =>
+        item.folder
+          ? {
+              isDirectory: true,
+              isFile: false,
+              name: "Policies",
+              // An empty folder: one page of nothing.
+              createReader: () => ({
+                readEntries: (done: (entries: unknown[]) => void) => done([]),
+              }),
+            }
+          : null,
+    })),
+  } as unknown as DataTransfer;
+}
+
+describe("carriesFiles", () => {
+  test("a drag from the computer carries files; a row moved does not", () => {
+    expect(carriesFiles(dropOf([], ["Files"]))).toBe(true);
+    expect(carriesFiles(dropOf([], ["text/plain"]))).toBe(false);
+    expect(carriesFiles(null)).toBe(false);
+  });
+});
+
+describe("readDroppedFiles", () => {
+  test("reads loose files while the drop is under way", async () => {
+    const dropped = readDroppedFiles(
+      dropOf([{ kind: "file", file: file("Hand hygiene.docx") }]),
+    );
+    expect(dropped?.fromFolder).toBe(false);
+    expect(await dropped?.sources).toEqual([
+      { file: file("Hand hygiene.docx"), relativePath: "Hand hygiene.docx" },
+    ]);
+  });
+
+  test("says when a folder was among them", async () => {
+    const dropped = readDroppedFiles(dropOf([{ kind: "file", folder: true }]));
+    expect(dropped?.fromFolder).toBe(true);
+    expect(await dropped?.sources).toEqual([]);
+  });
+
+  test("nothing when no file was dropped", () => {
+    expect(readDroppedFiles(dropOf([{ kind: "string" }]))).toBeNull();
   });
 });
