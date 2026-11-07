@@ -37,6 +37,7 @@ test("describeFileKind names the common office formats", () => {
   expect(describeFileKind("budget.xlsx")).toBe("Excel spreadsheet");
   expect(describeFileKind("deck.pptx")).toBe("PowerPoint deck");
   expect(describeFileKind("terms.pdf")).toBe("PDF");
+  expect(describeFileKind("grievance.md")).toBe("Markdown file");
   expect(describeFileKind("data.parquet")).toBe("PARQUET file");
   expect(describeFileKind("LICENSE")).toBe("File");
 });

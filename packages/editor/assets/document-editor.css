@@ -1142,6 +1142,11 @@
   margin: 0 auto;
 }
 
+/* Put away, not unmade, while a file is shown in its place (`cover`). */
+.bs-doc-sheetwrap[hidden] {
+  display: none;
+}
+
 /* The sheet: US Letter with Word's one-inch margins. */
 .bs-doc-page {
   position: relative;

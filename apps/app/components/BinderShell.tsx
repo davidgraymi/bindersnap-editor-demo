@@ -938,6 +938,9 @@ export function BinderShell({
         documentPath: revised.slugPath,
         draft: branch,
       }),
+      // From the file's note in the editor, the same policy, now writable:
+      // not a step for Back to take.
+      { replace: editMode === "writing" },
     );
     setEditMode("writing");
   };

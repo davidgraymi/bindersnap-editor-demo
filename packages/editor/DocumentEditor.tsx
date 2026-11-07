@@ -103,6 +103,14 @@ export interface DocumentEditorProps {
    * took them; absent, a dropped file is refused with a note.
    */
   onDropFiles?: (data: DataTransfer) => boolean;
+  /**
+   * Shown on the desk in place of the page: a file the editor does not open —
+   * a Word file or a PDF, as it is. The ribbon, the panel and the status bar
+   * stay, so moving to one is not leaving the editor; nothing on the page can
+   * be written (pass `editable={false}` with it), and Find, the word count
+   * and the outline, which are about the page, step aside.
+   */
+  cover?: ReactNode;
 }
 
 /**
@@ -185,6 +193,7 @@ export function DocumentEditor({
   aside,
   label,
   editable = true,
+  cover,
   autoFocus = false,
   outsideUndo = null,
   onDropFiles,
@@ -341,6 +350,8 @@ export function DocumentEditor({
     replace: boolean;
     nonce: number;
   } | null>(null);
+  const coveredRef = useRef(false);
+  coveredRef.current = cover !== undefined && cover !== null;
   const openFind = useCallback((replace: boolean) => {
     setFind((was) => ({ replace, nonce: (was?.nonce ?? 0) + 1 }));
   }, []);
@@ -394,6 +405,11 @@ export function DocumentEditor({
       const mod = event.metaKey || event.ctrlKey;
       if (!mod || event.altKey) return;
       const key = event.key.toLowerCase();
+      // Find and Link are about the page, and a covered page is not there.
+      if (coveredRef.current && (key === "f" || key === "h" || key === "k")) {
+        if (!event.shiftKey) event.preventDefault();
+        return;
+      }
       if (key === "s") {
         event.preventDefault();
         onSaveRef.current?.();
@@ -549,12 +565,19 @@ export function DocumentEditor({
       <div className="bs-doc-body">
         {typeof aside === "function"
           ? aside({
-              content: <DocumentOutline editor={editor} />,
+              content: coveredRef.current ? (
+                <p className="bs-outline-empty">
+                  This file is shown as it was uploaded, so it has no outline
+                  here.
+                </p>
+              ) : (
+                <DocumentOutline editor={editor} />
+              ),
               request: outlineRequest,
               onShown: setOutlineShown,
             })
           : aside}
-        {find ? (
+        {find && !coveredRef.current ? (
           <FindBar editor={editor} request={find} onClose={closeFind} />
         ) : null}
 
@@ -576,7 +599,14 @@ export function DocumentEditor({
             onDropFiles(event.dataTransfer);
           }}
         >
-          <div className="bs-doc-sheetwrap" ref={pages.wrapRef}>
+          {cover}
+          <div
+            className="bs-doc-sheetwrap"
+            ref={pages.wrapRef}
+            // Kept, not unmade: the editor in it is the one the next page is
+            // shown in, undo and all.
+            hidden={coveredRef.current}
+          >
             <div
               className="bs-doc-page"
               ref={pages.pageRef}
@@ -622,6 +652,7 @@ export function DocumentEditor({
         view={view}
         onViewChange={setView}
         start={statusStart}
+        counts={!coveredRef.current}
       />
     </div>
   );
@@ -778,6 +809,7 @@ function StatusBar({
   view,
   onViewChange,
   start,
+  counts: showCounts = true,
 }: {
   editor: Editor;
   zoom: number;
@@ -786,6 +818,8 @@ function StatusBar({
   view: ViewSettings;
   onViewChange: (next: ViewSettings) => void;
   start?: ReactNode;
+  /** The page and word counts: off for a file shown in place of the page. */
+  counts?: boolean;
 }) {
   const counts = useEditorState({
     editor,
@@ -816,35 +850,37 @@ function StatusBar({
   return (
     <footer className="bs-doc-status" aria-label="Document status">
       <div className="bs-doc-status-start">
-        {view.layout === "print" ? (
+        {showCounts && view.layout === "print" ? (
           <span className="bs-doc-status-item">
             Page {currentPage} of {pages}
           </span>
         ) : null}
-        <DropButton
-          label="Word count"
-          className="bs-doc-status-item bs-doc-status-button"
-          role="dialog"
-          panelClassName="bs-rpanel--form"
-          panel={() => (
-            <dl className="bs-wordcount">
-              <dt>Pages</dt>
-              <dd>{pages.toLocaleString()}</dd>
-              <dt>Words</dt>
-              <dd>{words.toLocaleString()}</dd>
-              <dt>Characters (with spaces)</dt>
-              <dd>{(counts?.characters ?? 0).toLocaleString()}</dd>
-              <dt>Paragraphs</dt>
-              <dd>{(counts?.paragraphs ?? 0).toLocaleString()}</dd>
-            </dl>
-          )}
-        >
-          {selected === null || selected === undefined
-            ? `${words.toLocaleString()} ${words === 1 ? "word" : "words"}`
-            : `${selected.toLocaleString()} of ${words.toLocaleString()} ${
-                words === 1 ? "word" : "words"
-              }`}
-        </DropButton>
+        {showCounts ? (
+          <DropButton
+            label="Word count"
+            className="bs-doc-status-item bs-doc-status-button"
+            role="dialog"
+            panelClassName="bs-rpanel--form"
+            panel={() => (
+              <dl className="bs-wordcount">
+                <dt>Pages</dt>
+                <dd>{pages.toLocaleString()}</dd>
+                <dt>Words</dt>
+                <dd>{words.toLocaleString()}</dd>
+                <dt>Characters (with spaces)</dt>
+                <dd>{(counts?.characters ?? 0).toLocaleString()}</dd>
+                <dt>Paragraphs</dt>
+                <dd>{(counts?.paragraphs ?? 0).toLocaleString()}</dd>
+              </dl>
+            )}
+          >
+            {selected === null || selected === undefined
+              ? `${words.toLocaleString()} ${words === 1 ? "word" : "words"}`
+              : `${selected.toLocaleString()} of ${words.toLocaleString()} ${
+                  words === 1 ? "word" : "words"
+                }`}
+          </DropButton>
+        ) : null}
         {start}
       </div>
 
