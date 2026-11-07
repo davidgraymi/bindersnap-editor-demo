@@ -11422,6 +11422,53 @@ html:has(.doc-files-resize--active) {
   flex: 1 0 auto;
 }
 
+/* Files | Outline: the binder's files, or the open document's headings. Two
+   sides of one panel, switched in its head where its title was. */
+.doc-files-tabs {
+  display: inline-flex;
+  flex: 1;
+  align-self: stretch;
+  gap: var(--brand-space-1);
+  /* The ribbon's tabs: an underline on the head's own rule. */
+  margin-bottom: -1px;
+}
+
+.doc-files-tab {
+  padding: 0 var(--brand-space-1);
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--bs-text-muted);
+  cursor: pointer;
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-medium);
+  transition:
+    color var(--brand-transition-fast),
+    border-color var(--brand-transition-fast);
+}
+
+.doc-files-tab:hover {
+  color: var(--bs-text-primary);
+}
+
+.doc-files-tab.is-on {
+  border-bottom-color: var(--brand-coral);
+  color: var(--bs-text-primary);
+}
+
+.doc-files-tab:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: -2px;
+}
+
+.doc-files-outline {
+  flex: 1;
+  min-height: 0;
+  padding: var(--brand-space-2);
+  overflow-y: auto;
+}
+
 /* The open policy has words not saved yet — the dot an IDE puts on a tab. */
 .doc-files-unsaved {
   flex: none;

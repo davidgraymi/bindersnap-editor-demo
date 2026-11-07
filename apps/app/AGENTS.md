@@ -8,9 +8,11 @@ which the root guide only summarizes.
 
 `packages/editor/` is a word processor for policies, imported by the SPA and
 laid out the way Word is: a ribbon (Home, Insert, View, and a Table tab while
-the cursor is in one) over a sheet of Letter on a desk, the headings and find
-and replace in a navigation pane, page and word counts and zoom in a status
-bar. `apps/app/components/DocumentEditorPage.tsx` is the page around it, at
+the cursor is in one) over a sheet of Letter on a desk, find and replace in a
+bar floating over the page (Ctrl+F, Ctrl+H), page and word counts and zoom in a
+status bar. The headings are the file panel's Outline tab: `DocumentEditor`
+hands its `aside` the outline (`OutlineSlot`), and View → Outline opens the
+panel on it. `apps/app/components/DocumentEditorPage.tsx` is the page around it, at
 `/{org}/{binder}/-/blob/main/{path}?edit=write&draft=…`: **Save commits the document to
 the author's draft** through the ordinary revise endpoint, so the version on
 record does not move until the draft is proposed and published. Edit on a

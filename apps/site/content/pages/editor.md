@@ -22,7 +22,7 @@ The person who keeps your policy manual has spent years in Word. The editor does
 - **Lists and checklists**, with indenting, line spacing and paragraph spacing.
 - **Tables** you can resize, with header rows, merged and split cells, and rows and columns inserted where you need them.
 - **Pictures** with alt text, links, symbols, the date and time, horizontal lines and page breaks.
-- **Find and replace**, a navigation pane of every heading, word and page counts in the status bar, and a print layout.
+- **Find and replace**, an outline of every heading, word and page counts in the status bar, and a print layout.
 - **The shortcuts you already know**: Ctrl+B, Ctrl+S, Tab to indent, Format Painter, change case, curly quotes and dashes as you type.
 
 ## Nothing to install, nothing to license
@@ -59,7 +59,7 @@ No. You can write, review, approve and read every policy in your browser. Word i
 
 ### Does the editor work like Word?
 
-Yes, on purpose. It has a ribbon, a white page, headings and numbered sections, tables, pictures, find and replace, a navigation pane and the keyboard shortcuts people already know.
+Yes, on purpose. It has a ribbon, a white page, headings and numbered sections, tables, pictures, find and replace, an outline of the headings and the keyboard shortcuts people already know.
 
 ### Can I turn a Word file into a policy I edit in Bindersnap?
 

@@ -45,12 +45,18 @@ export function SelectionToolbar({
 }: {
   editor: Editor;
   onLink: () => void;
-  /** The right-click menu is open: one menu at a time. */
+  /** Another menu, or the find bar, is open: one at a time. */
   hidden: boolean;
 }) {
   const format = useFormatState(editor);
   const hiddenRef = useRef(hidden);
   hiddenRef.current = hidden;
+  // Put away at once when another menu or the find bar opens: the menu only
+  // asks `shouldShow` again when the page's selection moves.
+  useEffect(() => {
+    if (!hidden || editor.isDestroyed) return;
+    editor.view.dispatch(editor.state.tr.setMeta("bubbleMenu", "hide"));
+  }, [editor, hidden]);
 
   return (
     <BubbleMenu
