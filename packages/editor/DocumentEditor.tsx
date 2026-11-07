@@ -62,6 +62,11 @@ export interface DocumentEditorProps {
   ribbonEnd?: ReactNode;
   /** The start of the status bar, before the page and word counts. */
   statusStart?: ReactNode;
+  /**
+   * A pane beside the page, under the ribbon: the page's file panel. The
+   * ribbon spans the window over it, as Word's does over its panes.
+   */
+  aside?: ReactNode;
   /** A name for the page, for screen readers and the print title. */
   label: string;
   /** Read-only: the page and the panes, no ribbon. */
@@ -123,6 +128,7 @@ export function DocumentEditor({
   placeholder = "Start writing your policy…",
   ribbonEnd,
   statusStart,
+  aside,
   label,
   editable = true,
   autoFocus = false,
@@ -344,6 +350,7 @@ export function DocumentEditor({
       ) : null}
 
       <div className="bs-doc-body">
+        {aside}
         {view.navigationPane ? (
           <NavigationPane
             editor={editor}

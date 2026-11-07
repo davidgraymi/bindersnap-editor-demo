@@ -1075,7 +1075,86 @@ export function DocumentEditorPage({
         ? lastReady.current
         : null;
 
+  // The draft's files: under the ribbon, beside the page, once there is an
+  // editor to put them in; beside whatever stands in for it until then.
+  const filesPanel = files ? (
+    <DraftFiles
+      org={org}
+      binder={binder}
+      binderName={binderName}
+      documents={files.documents}
+      touched={files.touched}
+      folders={files.folders}
+      active={documentPath}
+      unsaved={dirty}
+      unsavedElsewhere={unsavedElsewhere}
+      onReadAhead={readAheadOf}
+      onOpen={(slugPath) => leave({ kind: "open", slugPath })}
+      // A change request is revised, not added to or reshaped, here.
+      onNew={change ? undefined : (folder) => leave({ kind: "new", folder })}
+      onNewFolder={change ? undefined : onNewFolder}
+      busy={filesBusy || save.kind === "saving"}
+      onRename={
+        change
+          ? undefined
+          : (target, name) =>
+              void actOnFiles(
+                null,
+                () => onRenameFile(target, name),
+                "Unable to rename that.",
+              )
+      }
+      onMove={
+        change
+          ? undefined
+          : (subject, folder) =>
+              void actOnFiles(
+                null,
+                () => onMoveFile(subject, folder),
+                "Unable to move that.",
+              )
+      }
+      onArchive={
+        change
+          ? undefined
+          : (slugPath) =>
+              actOnFiles(
+                slugPath,
+                () => onArchiveFile(slugPath),
+                "Unable to archive that.",
+              )
+      }
+      onConvert={change ? undefined : onConvertFile}
+      onCopy={
+        change
+          ? undefined
+          : (slugPath) =>
+              void actOnFiles(
+                // The copy is made from what is saved, so the words of
+                // the one being copied go first.
+                slugPath,
+                () => onCopyFile(slugPath),
+                "Unable to copy that.",
+              )
+      }
+      archivedCount={files.archivedCount ?? 0}
+      onReadArchive={change ? undefined : onReadArchive}
+      onRestore={
+        change
+          ? undefined
+          : (uid) =>
+              actOnFiles(
+                null,
+                () => onRestoreFile(uid),
+                "Unable to restore that document.",
+              )
+      }
+    />
+  ) : null;
+
   let body: ReactNode;
+  /** Whether `body` is the editor, which then holds the file panel. */
+  let inEditor = false;
   if (!draft || (load.kind === "loading" && !frame)) {
     body = (
       <div className="doc-editor-state">
@@ -1140,6 +1219,7 @@ export function DocumentEditorPage({
       </div>
     );
   } else if (frame) {
+    inEditor = true;
     body = (
       <div
         className={`doc-editor-frame${
@@ -1156,6 +1236,7 @@ export function DocumentEditorPage({
         >
           <DocumentEditor
             label={name}
+            aside={filesPanel}
             // Read when the editor is made; every policy after the first is
             // swapped in as a state of its own, undo and all.
             initialContent={frame.doc}
@@ -1503,82 +1584,7 @@ export function DocumentEditorPage({
       ) : null}
 
       <div className="doc-editor-workspace">
-        {files ? (
-          <DraftFiles
-            org={org}
-            binder={binder}
-            binderName={binderName}
-            documents={files.documents}
-            touched={files.touched}
-            folders={files.folders}
-            active={documentPath}
-            unsaved={dirty}
-            unsavedElsewhere={unsavedElsewhere}
-            onReadAhead={readAheadOf}
-            onOpen={(slugPath) => leave({ kind: "open", slugPath })}
-            // A change request is revised, not added to or reshaped, here.
-            onNew={
-              change ? undefined : (folder) => leave({ kind: "new", folder })
-            }
-            onNewFolder={change ? undefined : onNewFolder}
-            busy={filesBusy || save.kind === "saving"}
-            onRename={
-              change
-                ? undefined
-                : (target, name) =>
-                    void actOnFiles(
-                      null,
-                      () => onRenameFile(target, name),
-                      "Unable to rename that.",
-                    )
-            }
-            onMove={
-              change
-                ? undefined
-                : (subject, folder) =>
-                    void actOnFiles(
-                      null,
-                      () => onMoveFile(subject, folder),
-                      "Unable to move that.",
-                    )
-            }
-            onArchive={
-              change
-                ? undefined
-                : (slugPath) =>
-                    actOnFiles(
-                      slugPath,
-                      () => onArchiveFile(slugPath),
-                      "Unable to archive that.",
-                    )
-            }
-            onConvert={change ? undefined : onConvertFile}
-            onCopy={
-              change
-                ? undefined
-                : (slugPath) =>
-                    void actOnFiles(
-                      // The copy is made from what is saved, so the words of
-                      // the one being copied go first.
-                      slugPath,
-                      () => onCopyFile(slugPath),
-                      "Unable to copy that.",
-                    )
-            }
-            archivedCount={files.archivedCount ?? 0}
-            onReadArchive={change ? undefined : onReadArchive}
-            onRestore={
-              change
-                ? undefined
-                : (uid) =>
-                    actOnFiles(
-                      null,
-                      () => onRestoreFile(uid),
-                      "Unable to restore that document.",
-                    )
-            }
-          />
-        ) : null}
+        {inEditor ? null : filesPanel}
         <div className="doc-editor-main">
           {filesError ? (
             <p

@@ -11315,6 +11315,14 @@ html.bs-writing .app-main {
   padding-top: var(--brand-space-2);
 }
 
+/* Beside the page, the panel's names are read as often as the page is: the
+   size of the ribbon's tabs, not of a sidebar's fine print. */
+.doc-files .app-explorer-item,
+.doc-files .app-explorer-folder {
+  min-height: 32px;
+  font-size: var(--brand-text-ui-md);
+}
+
 /* The open policy has words not saved yet — the dot an IDE puts on a tab. */
 .doc-files-unsaved {
   flex: none;
