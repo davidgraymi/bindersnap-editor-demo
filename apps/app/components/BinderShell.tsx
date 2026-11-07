@@ -124,8 +124,14 @@ function readRef(): string | null {
   return ref === DEFAULT_REF ? null : ref;
 }
 
-function moveTo(url: string): void {
-  window.history.pushState({}, "", url);
+/**
+ * To another address in the app. `replace` takes the place of the one open
+ * rather than adding to Back: moving between policies in the editor is one
+ * sitting, and Back leaves it rather than stepping through every file opened.
+ */
+function moveTo(url: string, { replace = false } = {}): void {
+  if (replace) window.history.replaceState({}, "", url);
+  else window.history.pushState({}, "", url);
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
@@ -596,6 +602,8 @@ export function BinderShell({
           documentPath: slugPath,
           draft: open,
         }),
+        // From one policy to the next in the editor: the same sitting.
+        { replace: editMode === "writing" },
       );
       setEditMode("writing");
       return;
@@ -849,6 +857,7 @@ export function BinderShell({
         documentPath: created.slugPath,
         draft: branch,
       }),
+      { replace: true },
     );
     setEditMode("writing");
   };

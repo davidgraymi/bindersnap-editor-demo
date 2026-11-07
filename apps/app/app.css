@@ -11614,17 +11614,28 @@ html:has(.doc-files-resize--active) {
   overflow: hidden;
 }
 
-/* The last policy, still on the page while the next is read: dimmed, and not
-   a place to type, for the moment it takes. */
+/* The last policy, still on the page while the next is read, and not a
+   place to type for the moment it takes. **Dimmed only when the moment is
+   long**: most policies arrive at once — read ahead as the row is pointed
+   at — and a page that flickered grey on every click felt like a reload. */
 .doc-editor-frame--opening {
-  opacity: 0.55;
-  transition: opacity 120ms ease-out;
   pointer-events: none;
+  cursor: progress;
+}
+
+.doc-editor-frame--opening .bs-doc-desk {
+  animation: doc-editor-opening var(--brand-transition-base) 0.4s both;
+}
+
+@keyframes doc-editor-opening {
+  to {
+    opacity: 0.55;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .doc-editor-frame--opening {
-    transition: none;
+  .doc-editor-frame--opening .bs-doc-desk {
+    animation-duration: 0s;
   }
 }
 
