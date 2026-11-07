@@ -914,6 +914,8 @@
 }
 
 .bs-doc-body {
+  /* The page's file panel opens over the page here on a narrow window. */
+  position: relative;
   display: flex;
   flex: 1;
   min-height: 0;
