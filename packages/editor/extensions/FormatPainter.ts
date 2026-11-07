@@ -13,8 +13,9 @@ import {
  * Click the brush and the next words selected with the mouse take the look of
  * the words the cursor was in; double-click it and it stays on for as many as
  * you like, until Escape or another click on the brush. A click without a
- * drag paints the word under it, as Word's does. Ctrl+Shift+C and
- * Ctrl+Shift+V copy and paste a look from the keyboard, also as in Word.
+ * drag paints the word under it, as Word's does. Ctrl+Alt+C and Ctrl+Alt+V
+ * copy and paste a look from the keyboard, as in Google Docs — not Word's
+ * Ctrl+Shift+V, which in a browser is paste as plain text and stays that.
  *
  * **The look of the words, not of the paragraph.** Bold, italic, underline,
  * strikethrough, code, sub- and superscript, highlight, and the font, size
@@ -52,7 +53,7 @@ declare module "@tiptap/core" {
     formatPainter: {
       /** Copy the look at the cursor, and pick up the brush with it. */
       pickUpFormatting: (brush?: Brush) => ReturnType;
-      /** Put the brush down, keeping the look for Ctrl+Shift+V. */
+      /** Put the brush down, keeping the look for Ctrl+Alt+V. */
       putDownFormatPainter: () => ReturnType;
       /** Give the selection — or the word at the cursor — the copied look. */
       pasteFormatting: () => ReturnType;
@@ -121,7 +122,7 @@ export function wordAround(
   return { from: base + start, to: base + end };
 }
 
-/** The range the brush or Ctrl+Shift+V paints: the selection, or the word. */
+/** The range the brush or Ctrl+Alt+V paints: the selection, or the word. */
 function paintRange(state: EditorState): { from: number; to: number } | null {
   const { from, to, empty, $from } = state.selection;
   return empty ? wordAround($from) : { from, to };
@@ -164,9 +165,8 @@ export const FormatPainter = Extension.create({
 
   addKeyboardShortcuts() {
     return {
-      "Mod-Shift-c": () => this.editor.commands.pickUpFormatting("off"),
-      // Nothing copied, and the browser's own paste-as-plain-text still runs.
-      "Mod-Shift-v": () => this.editor.commands.pasteFormatting(),
+      "Mod-Alt-c": () => this.editor.commands.pickUpFormatting("off"),
+      "Mod-Alt-v": () => this.editor.commands.pasteFormatting(),
       Escape: () => this.editor.commands.putDownFormatPainter(),
     };
   },

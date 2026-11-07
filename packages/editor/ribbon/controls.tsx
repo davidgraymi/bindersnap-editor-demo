@@ -447,7 +447,9 @@ export function MenuChoice({
       <span className="bs-rmenu-text" style={style}>
         {children}
       </span>
-      {hint ? <span className="bs-rmenu-hint">{hint}</span> : null}
+      {hint ? (
+        <span className="bs-rmenu-hint">{shortcutLabel(hint)}</span>
+      ) : null}
     </button>
   );
 }
