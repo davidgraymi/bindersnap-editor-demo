@@ -47,6 +47,19 @@ function pressShortcut(
   });
 }
 
+/** Where a word starts, in whichever paragraph it is. */
+function posOf(editor: Editor, word: string): number {
+  let found = -1;
+  editor.state.doc.descendants((node, pos) => {
+    if (found >= 0 || !node.isText) return found < 0;
+    const offset = node.text!.indexOf(word);
+    if (offset >= 0) found = pos + offset;
+    return false;
+  });
+  if (found < 0) throw new Error(`"${word}" is not in the document`);
+  return found;
+}
+
 /** Where a word starts in the first paragraph. */
 function at(editor: Editor, word: string): number {
   return editor.state.doc.textContent.indexOf(word) + 1;
@@ -72,6 +85,48 @@ describe("the Format Painter", () => {
       '<span style="color: red;"><strong>hands</strong></span>',
     );
     expect(html).not.toContain("<em>");
+  });
+
+  test("a heading's look is its paragraph's, and the brush carries it", () => {
+    const editor = editorWith(
+      "<h1>Purpose</h1><p>Scope <strong>of</strong> this policy</p>",
+    );
+    editor.commands.setTextSelection(posOf(editor, "Purpose") + 2);
+    editor.commands.pickUpFormatting("off");
+    const from = posOf(editor, "Scope");
+    editor.commands.setTextSelection({ from, to: from + 5 });
+    editor.commands.pasteFormatting();
+    // The whole paragraph becomes the heading, and its words lose their marks
+    // where the brush went. (The empty paragraph is the one a document ends on.)
+    expect(editor.getHTML()).toBe(
+      "<h1>Purpose</h1><h1>Scope <strong>of</strong> this policy</h1><p></p>",
+    );
+  });
+
+  test("a body paragraph's look turns a heading back into Normal text", () => {
+    const editor = editorWith(
+      '<h2>Wrong</h2><p style="text-align: center">Body</p>',
+    );
+    editor.commands.setTextSelection(posOf(editor, "Body") + 1);
+    editor.commands.pickUpFormatting("off");
+    editor.commands.setTextSelection(posOf(editor, "Wrong") + 1);
+    editor.commands.pasteFormatting();
+    expect(editor.getHTML()).toBe(
+      '<p style="text-align: center;">Wrong</p><p style="text-align: center;">Body</p>',
+    );
+  });
+
+  test("a list item keeps its paragraph and takes the rest of the look", () => {
+    const editor = editorWith(
+      '<h1 style="text-align: right">Title</h1><ul><li><p>item</p></li></ul>',
+    );
+    editor.commands.setTextSelection(posOf(editor, "Title") + 1);
+    editor.commands.pickUpFormatting("off");
+    editor.commands.setTextSelection(posOf(editor, "item") + 1);
+    editor.commands.pasteFormatting();
+    expect(editor.getHTML()).toContain(
+      '<li><p style="text-align: right;">item</p></li>',
+    );
   });
 
   test("a click without a drag paints the whole word", () => {

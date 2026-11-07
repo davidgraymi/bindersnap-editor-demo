@@ -17,10 +17,15 @@ import {
  * copy and paste a look from the keyboard, as in Google Docs — not Word's
  * Ctrl+Shift+V, which in a browser is paste as plain text and stays that.
  *
- * **The look of the words, not of the paragraph.** Bold, italic, underline,
- * strikethrough, code, sub- and superscript, highlight, and the font, size
- * and colour. A link is not a look, and a heading is a style the Styles
- * gallery already sets in one click.
+ * **The look of the words and of their paragraph.** Bold, italic,
+ * underline, strikethrough, code, sub- and superscript, highlight, the font,
+ * size and colour — and the paragraph's style (Normal or a heading), its
+ * alignment and its line spacing, as Google Docs' paint format carries them.
+ * Copying only the words' look made the brush seem broken on the one look
+ * people reach for most: a heading's is its paragraph's, with no marks on
+ * the words at all, so painting it from a heading took everything away and
+ * gave nothing. A link is not a look, and nor is an indent: that is where a
+ * paragraph sits, not how it looks.
  */
 
 /** The marks that are formatting, and so are what the brush carries. */
@@ -36,15 +41,31 @@ export const FORMATTING_MARKS = [
   "textStyle",
 ] as const;
 
+/** The paragraphs whose style the brush carries, and gives. */
+const STYLED_BLOCKS = ["paragraph", "heading"];
+
+/** The paragraph attributes that are its look. */
+const BLOCK_LOOK_ATTRS = ["level", "textAlign", "lineSpacing"] as const;
+
 export type Brush = "off" | "once" | "sticky";
+
+/** A paragraph's look: Normal or a heading, its alignment, its spacing. */
+export interface BlockLook {
+  type: string;
+  attrs: Record<string, unknown>;
+}
 
 interface PainterState {
   /** The look last copied, or null before anything has been. */
   marks: readonly Mark[] | null;
+  /** Its paragraph's look, or null when it was in a list, table cell and so on. */
+  block: BlockLook | null;
   brush: Brush;
 }
 
-type PainterMeta = { pick: readonly Mark[]; brush: Brush } | { brush: Brush };
+type PainterMeta =
+  | { pick: readonly Mark[]; block: BlockLook | null; brush: Brush }
+  | { brush: Brush };
 
 export const formatPainterKey = new PluginKey<PainterState>("formatPainter");
 
@@ -62,7 +83,24 @@ declare module "@tiptap/core" {
 }
 
 export function formatPainterState(state: EditorState): PainterState {
-  return formatPainterKey.getState(state) ?? { marks: null, brush: "off" };
+  return (
+    formatPainterKey.getState(state) ?? {
+      marks: null,
+      block: null,
+      brush: "off",
+    }
+  );
+}
+
+/** The look of the paragraph the selection starts in, if it has one to give. */
+export function blockLookAt(state: EditorState): BlockLook | null {
+  const parent = state.selection.$from.parent;
+  if (!STYLED_BLOCKS.includes(parent.type.name)) return null;
+  const attrs: Record<string, unknown> = {};
+  for (const name of BLOCK_LOOK_ATTRS) {
+    if (name in parent.attrs) attrs[name] = parent.attrs[name];
+  }
+  return { type: parent.type.name, attrs };
 }
 
 /** The look of the selection's first words, or of the cursor. */
@@ -87,20 +125,65 @@ export function formattingAt(state: EditorState): Mark[] {
   return marks.filter((mark) => names.includes(mark.type.name));
 }
 
-/** Replace the formatting of a range with a look, leaving links alone. */
+/**
+ * Replace the formatting of a range with a look, leaving links alone — and,
+ * given a paragraph's look, give it to every paragraph the range touches.
+ */
 export function applyFormatting(
   tr: Transaction,
   from: number,
   to: number,
   marks: readonly Mark[],
   schema: Schema,
+  block: BlockLook | null = null,
 ): Transaction {
   for (const name of FORMATTING_MARKS) {
     const type = schema.marks[name];
     if (type) tr.removeMark(from, to, type);
   }
   for (const mark of marks) tr.addMark(from, to, mark);
+  if (block) applyBlockLook(tr, from, to, block, schema);
   return tr;
+}
+
+function applyBlockLook(
+  tr: Transaction,
+  from: number,
+  to: number,
+  block: BlockLook,
+  schema: Schema,
+): void {
+  const wanted = schema.nodes[block.type];
+  if (!wanted) return;
+  tr.doc.nodesBetween(from, to, (node, pos, parent, index) => {
+    if (!node.isTextblock) return true;
+    if (!STYLED_BLOCKS.includes(node.type.name)) return false;
+    // A list item or a table cell takes a paragraph and nothing else: there
+    // it keeps its type and takes the rest of the look.
+    const type =
+      parent && parent.canReplaceWith(index, index + 1, wanted)
+        ? wanted
+        : node.type;
+    const attrs: Record<string, unknown> = { ...node.attrs };
+    for (const name of BLOCK_LOOK_ATTRS) {
+      if (!(name in (type.spec.attrs ?? {}))) {
+        delete attrs[name];
+      } else if (name in block.attrs) {
+        attrs[name] = block.attrs[name];
+      }
+    }
+    if (type === node.type && sameAttrs(attrs, node.attrs)) return false;
+    tr.setNodeMarkup(pos, type, attrs);
+    return false;
+  });
+}
+
+function sameAttrs(
+  a: Record<string, unknown>,
+  b: Record<string, unknown>,
+): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  return [...keys].every((key) => a[key] === b[key]);
 }
 
 const WORD = /[\p{L}\p{N}_'’-]/u;
@@ -136,7 +219,11 @@ export const FormatPainter = Extension.create({
       pickUpFormatting:
         (brush = "once") =>
         ({ state, tr, dispatch }) => {
-          const meta: PainterMeta = { pick: formattingAt(state), brush };
+          const meta: PainterMeta = {
+            pick: formattingAt(state),
+            block: blockLookAt(state),
+            brush,
+          };
           dispatch?.(tr.setMeta(formatPainterKey, meta));
           return true;
         },
@@ -151,11 +238,18 @@ export const FormatPainter = Extension.create({
       pasteFormatting:
         () =>
         ({ state, tr, dispatch }) => {
-          const { marks } = formatPainterState(state);
+          const { marks, block } = formatPainterState(state);
           const range = paintRange(state);
           if (marks === null || range === null) return false;
           if (dispatch) {
-            applyFormatting(tr, range.from, range.to, marks, state.schema);
+            applyFormatting(
+              tr,
+              range.from,
+              range.to,
+              marks,
+              state.schema,
+              block,
+            );
             dispatch(tr);
           }
           return true;
@@ -176,13 +270,13 @@ export const FormatPainter = Extension.create({
       new Plugin<PainterState>({
         key: formatPainterKey,
         state: {
-          init: () => ({ marks: null, brush: "off" }),
+          init: () => ({ marks: null, block: null, brush: "off" }),
           apply(tr, value) {
             const meta = tr.getMeta(formatPainterKey) as
               PainterMeta | undefined;
             if (!meta) return value;
             return "pick" in meta
-              ? { marks: meta.pick, brush: meta.brush }
+              ? { marks: meta.pick, block: meta.block, brush: meta.brush }
               : { ...value, brush: meta.brush };
           },
         },
@@ -227,7 +321,7 @@ export const FormatPainter = Extension.create({
             const timer = window.setTimeout(() => {
               timers.delete(timer);
               const { state } = view;
-              const { marks, brush } = formatPainterState(state);
+              const { marks, block, brush } = formatPainterState(state);
               if (brush === "off" || marks === null || range === null) return;
               if (range.to > state.doc.content.size) return;
               const tr = applyFormatting(
@@ -236,6 +330,7 @@ export const FormatPainter = Extension.create({
                 range.to,
                 marks,
                 state.schema,
+                block,
               );
               if (brush === "once") {
                 const meta: PainterMeta = { brush: "off" };
