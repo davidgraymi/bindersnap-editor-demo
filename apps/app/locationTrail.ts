@@ -213,10 +213,11 @@ export function buildLocationTrail(
           );
     const label = formatDocumentName(route.binder);
     // At its root on a branch is not at its root on the record: the binder's
-    // name is the way back to the record.
+    // name is the way back to the record. Nor is a change, which has no path
+    // but is not the binder's contents either.
     return {
       binder:
-        path.length === 0 && !onBranch(address)
+        path.length === 0 && !onBranch(address) && address.change === null
           ? here(label)
           : {
               label,

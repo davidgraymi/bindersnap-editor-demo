@@ -272,16 +272,6 @@ test("the top bar names the binder; the page names where in it", async ({
   await expect(path).toHaveCount(0);
   await expect(page.locator(".app-main .bs-crumbs")).toHaveCount(0);
 });
-  // It names no number: the title is what the change is about.
-  await expect(
-    path.getByRole("link", { name: "Change requests" }),
-  ).toBeVisible();
-  await expect(path).not.toContainText(/Change \d+/);
-  await expect(page.locator(".app-main .bs-crumbs")).toHaveCount(0);
-
-  await path.getByRole("link", { name: "Change requests" }).click();
-  await expect(page).toHaveURL(/\/-\/changes$/, { timeout: 30_000 });
-});
 
 test("sidebar entries are links, so they open in a new tab", async ({
   page,
