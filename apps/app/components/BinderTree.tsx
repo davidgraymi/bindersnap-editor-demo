@@ -286,11 +286,13 @@ function DocumentRow({
   );
   /* **A file says what it is.** One written here opens in the editor; a Word
      file or a PDF opens in the program that made it, and "PDF" tells this
-     reader that faster than any picture can. */
+     reader that faster than any picture can. It is kept out of the row's
+     accessible name, which stays the document's name alone. */
   const format = written ? null : (
     <span
       className="binder-tree-format"
       title={describeFileKind(document.path)}
+      aria-hidden="true"
     >
       {fileExtension(document.path).toUpperCase() || "FILE"}
     </span>
