@@ -582,6 +582,12 @@ export const WorkspaceChangeDetailPayloadSchema = z.object({
   viewer: z.object({
     canApprove: z.boolean(),
     canPublish: z.boolean(),
+    /**
+     * Whether they may close this change without publishing it, or reopen it
+     * once closed: its author or a binder admin. Always false on a published
+     * change, which is the record and stays as it was decided.
+     */
+    canCloseOrReopen: z.boolean(),
   }),
   /**
    * What has to be true before the change can be published, rule by rule:
@@ -1475,6 +1481,29 @@ export const BinderDraftPayloadSchema = z.object({
   others: z.array(OtherDraftSchema),
 });
 export type BinderDraftPayload = z.infer<typeof BinderDraftPayloadSchema>;
+
+/**
+ * One of your drafts, anywhere you can write: the binder it is in, and the
+ * same name and counts the binder's picker shows.
+ */
+export const MyDraftSchema = OwnDraftSchema.extend({
+  organization: z.string(),
+  /** The binder: its repository name, the URL segment. */
+  workspace: z.string(),
+});
+export type MyDraft = z.infer<typeof MyDraftSchema>;
+
+/**
+ * **Your drafts, across binders** — the Drafts page under Your work, an
+ * organization and a binder. Only your own: a draft is private work, and
+ * other people's are not listed with or without their contents. Newest
+ * first. Proposed ones are here too, with their change request's number,
+ * because saving into one still changes what its reviewers see.
+ */
+export const MyDraftsPayloadSchema = z.object({
+  drafts: z.array(MyDraftSchema),
+});
+export type MyDraftsPayload = z.infer<typeof MyDraftsPayloadSchema>;
 
 /** Where a proposed draft went: the change request it is now waiting in. */
 export const ProposedDraftPayloadSchema = z.object({

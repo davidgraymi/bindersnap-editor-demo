@@ -499,6 +499,53 @@ export async function listChangedDocuments(params: {
 }
 
 /**
+ * Every document a change touches — revised, added or taken off the record —
+ * once each, from one read of its files.
+ *
+ * What a list of changes says a change is about. Not a publish input: that
+ * is {@link listChangedDocuments} and {@link listRemovedDocuments}, kept
+ * apart because only one half gets a version tag. Keyed by identity, so a
+ * rename — which Gitea reports as a removal and an addition — is one document.
+ */
+export async function listTouchedDocuments(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  pullNumber: number;
+}): Promise<WorkspaceDocumentEntry[]> {
+  const { client, org, workspace, pullNumber } = params;
+
+  const files = (await unwrap(
+    client.GET("/repos/{owner}/{repo}/pulls/{index}/files", {
+      params: { path: { owner: org, repo: workspace, index: pullNumber } },
+    }),
+  )) as ChangedFile[];
+
+  // The added half first, so a renamed document is listed where it is going.
+  const ordered = [...(files ?? [])].sort(
+    (left, right) =>
+      Number(ABSENT_STATUSES.has((left.status ?? "").toLowerCase())) -
+      Number(ABSENT_STATUSES.has((right.status ?? "").toLowerCase())),
+  );
+
+  const seen = new Set<string>();
+  const documents: WorkspaceDocumentEntry[] = [];
+
+  for (const file of ordered) {
+    const entry = toDocumentEntry({ path: file.filename ?? "", type: "blob" });
+    if (!entry) continue;
+
+    const key = entry.uid ?? entry.slugPath;
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    documents.push(entry);
+  }
+
+  return documents.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+/**
  * The documents a change **takes off** the record, which is the other half.
  *
  * {@link listChangedDocuments} skips exactly these statuses, because a file
@@ -612,6 +659,72 @@ export async function readArchivedDocument(params: {
     version: latest.version,
     tag: latest.tag,
   };
+}
+
+/**
+ * A document a draft made and then removed, read back out of that draft's
+ * own history — what Undo restores when the document was never published,
+ * so there is no version tag to read it from.
+ *
+ * The newest commit on `ref` touching `path` is the one that removed it, and
+ * its parent still holds it. Read by identity there: the file at `path` in
+ * that parent must be the document with `uid`, or nothing is restored.
+ */
+export async function readRemovedDraftDocument(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  /** The draft or change branch it was removed from. Never `main`. */
+  ref: string;
+  /** Where it was, as the removal left it. */
+  path: string;
+  uid: string;
+}): Promise<{
+  document: WorkspaceDocumentEntry;
+  base64Content: string;
+} | null> {
+  const { client, org, workspace, ref, path, uid } = params;
+
+  const commits = await unwrap(
+    client.GET("/repos/{owner}/{repo}/commits", {
+      params: {
+        path: { owner: org, repo: workspace },
+        query: {
+          sha: ref,
+          path,
+          limit: 1,
+          stat: false,
+          verification: false,
+          files: false,
+        },
+      },
+    }),
+  );
+  const parent = commits[0]?.parents?.[0]?.sha;
+  if (!parent) return null;
+
+  const tree = await readWorkspaceTree({
+    client,
+    org,
+    workspace,
+    ref: parent,
+  });
+  const document = tree.documents.find(
+    (entry) => entry.uid === uid && entry.path === path,
+  );
+  if (!document) return null;
+
+  const file = (await unwrap(
+    client.GET("/repos/{owner}/{repo}/contents/{filepath}", {
+      params: {
+        path: { owner: org, repo: workspace, filepath: path },
+        query: { ref: parent },
+      },
+    }),
+  )) as { content?: string };
+  if (typeof file.content !== "string") return null;
+
+  return { document, base64Content: file.content };
 }
 
 /**

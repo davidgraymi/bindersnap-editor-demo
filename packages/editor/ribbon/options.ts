@@ -16,7 +16,9 @@ export interface FontChoice {
 }
 
 export const FONT_CHOICES: FontChoice[] = [
-  { label: "Default (Geist)", value: "" },
+  // By name, as Word lists Aptos: a policy's body is set in Geist, and
+  // "Default" said nothing about what it looks like.
+  { label: "Geist", value: "var(--brand-font-sans)" },
   { label: "Lora", value: "var(--brand-font-serif)" },
   { label: "Arial", value: 'Arial, "Helvetica Neue", Helvetica, sans-serif' },
   { label: "Calibri", value: "Calibri, Carlito, Arial, sans-serif" },
@@ -39,6 +41,33 @@ export const FONT_SIZES_PT = [
 
 /** The size a paragraph has when nobody has set one. */
 export const DEFAULT_FONT_SIZE_PT = 11;
+
+/**
+ * The font and size a style sets when the words carry none of their own —
+ * what the Font boxes show, as Word's do, rather than "Default" and 11 in a
+ * 20pt Lora heading. Kept with the editor's stylesheet (`.bs-doc-content`).
+ */
+export function styleDefaults(style: ParagraphStyleId | null): {
+  font: string;
+  sizePt: number;
+} {
+  switch (style) {
+    case "title":
+      return { font: "Lora", sizePt: 26 };
+    case "subtitle":
+      return { font: "Geist", sizePt: 15 };
+    case "heading1":
+      return { font: "Lora", sizePt: 20 };
+    case "heading2":
+      return { font: "Lora", sizePt: 16 };
+    case "heading3":
+      return { font: "Lora", sizePt: 13 };
+    case "code":
+      return { font: "Geist Mono", sizePt: 10 };
+    default:
+      return { font: "Geist", sizePt: DEFAULT_FONT_SIZE_PT };
+  }
+}
 
 /** The next size up or down Word's Grow and Shrink Font would pick. */
 export function stepFontSize(current: number, direction: 1 | -1): number {
@@ -131,6 +160,8 @@ export function shadingColor(value: unknown): string | null {
 
 export type ParagraphStyleId =
   | "normal"
+  | "title"
+  | "subtitle"
   | "heading1"
   | "heading2"
   | "heading3"
@@ -145,13 +176,18 @@ export interface ParagraphStyle {
   shortcut?: string;
 }
 
-/** Word's Styles gallery, as far as a policy needs one. */
+/**
+ * Word's Styles gallery, as far as a policy needs one. Title comes second, as
+ * in Word's gallery, so the row shows it without opening the rest.
+ */
 export const PARAGRAPH_STYLES: ParagraphStyle[] = [
   { id: "normal", label: "Normal", shortcut: "Ctrl+Alt+0" },
+  { id: "title", label: "Title" },
   { id: "heading1", label: "Heading 1", shortcut: "Ctrl+Alt+1" },
   { id: "heading2", label: "Heading 2", shortcut: "Ctrl+Alt+2" },
   { id: "heading3", label: "Heading 3", shortcut: "Ctrl+Alt+3" },
   { id: "heading4", label: "Heading 4" },
+  { id: "subtitle", label: "Subtitle" },
   { id: "quote", label: "Quote" },
   { id: "code", label: "Code" },
 ];
@@ -196,6 +232,62 @@ export const ZOOM_STEP = 10;
 export function clampZoom(value: number): number {
   if (!Number.isFinite(value)) return 100;
   return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(value)));
+}
+
+/**
+ * Ctrl+= / Ctrl+- / Ctrl+0 as the page's zoom, as Google Docs and Word for
+ * the web take them while you are in the document. Read by the key and, for
+ * a layout that moves the characters, by where the key is. Null for anything
+ * else, and for Alt, which is somebody else's (Ctrl+Alt+0 is Normal text).
+ */
+export function zoomKey(event: {
+  key: string;
+  code?: string;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  altKey: boolean;
+}): "in" | "out" | "reset" | null {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey) return null;
+  if (event.key === "=" || event.key === "+") return "in";
+  if (event.key === "-" || event.key === "_") return "out";
+  if (event.key === "0") return "reset";
+  switch (event.code) {
+    case "Equal":
+    case "NumpadAdd":
+      return "in";
+    case "Minus":
+    case "NumpadSubtract":
+      return "out";
+    case "Digit0":
+    case "Numpad0":
+      return "reset";
+    default:
+      return null;
+  }
+}
+
+/** The next step of Zoom in or out, from wherever the zoom is now. */
+export function stepZoom(current: number, direction: "in" | "out"): number {
+  const steps = current / ZOOM_STEP;
+  const next =
+    direction === "in"
+      ? Math.floor(steps + 1e-9) + 1
+      : Math.ceil(steps - 1e-9) - 1;
+  return clampZoom(next * ZOOM_STEP);
+}
+
+/**
+ * A pinch, or Ctrl and the wheel: the zoom scaled by how far the fingers or
+ * the wheel moved. A trackpad sends many small moves and a wheel a few large
+ * ones, so one move is capped, and a notch of a wheel is a step of about a
+ * tenth, as in Word. Unrounded, so a slow pinch adds up instead of rounding away.
+ */
+export function pinchZoom(current: number, deltaY: number): number {
+  const move = Math.max(-10, Math.min(10, deltaY));
+  return Math.max(
+    ZOOM_MIN,
+    Math.min(ZOOM_MAX, current * Math.exp(-move / 100)),
+  );
 }
 
 /**

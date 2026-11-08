@@ -66,6 +66,14 @@ const CELL_SHADING = {
 /** Line spacing a paragraph may take — Word's own menu, as multiples. */
 export const LINE_SPACINGS = ["1", "1.15", "1.5", "2", "2.5", "3"] as const;
 
+/** The paragraph styles that are not headings: a document's title. */
+export const PARAGRAPH_VARIANTS = ["title", "subtitle"] as const;
+export type ParagraphVariant = (typeof PARAGRAPH_VARIANTS)[number];
+
+export function isParagraphVariant(value: unknown): value is ParagraphVariant {
+  return (PARAGRAPH_VARIANTS as readonly unknown[]).includes(value);
+}
+
 /** How far one step of Indent moves a paragraph, in inches, as Word does. */
 export const INDENT_STEP_IN = 0.5;
 /** Past this a paragraph is off the page on a portrait Letter sheet. */
@@ -132,6 +140,30 @@ export const ParagraphFormat = Extension.create({
                 "data-indent": String(indent),
                 style: `margin-left: ${indent * INDENT_STEP_IN}in`,
               };
+            },
+          },
+        },
+      },
+      {
+        // Title and Subtitle, Word's and Google Docs' first two styles. A
+        // paragraph, not a heading: a document's title is not a section, so
+        // numbered headings, the table of contents and the navigation pane
+        // pass over it. A class rather than a data attribute, because the
+        // reader's sanitizer keeps classes and drops `data-*`.
+        types: ["paragraph"],
+        attributes: {
+          variant: {
+            default: null,
+            // Enter at the end of a title starts Normal text, as in Word.
+            keepOnSplit: false,
+            parseHTML: (element) =>
+              PARAGRAPH_VARIANTS.find((variant) =>
+                element.classList.contains(`bs-${variant}`),
+              ) ?? null,
+            renderHTML: (attributes) => {
+              const variant = attributes.variant as string | null;
+              if (!variant || !isParagraphVariant(variant)) return {};
+              return { class: `bs-${variant}` };
             },
           },
         },

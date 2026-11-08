@@ -345,7 +345,7 @@ test("a published change ends with how it ended", () => {
   expect(last?.event?.verb).toBe("published this as v4");
 });
 
-test("a withdrawn change says so rather than just closing", () => {
+test("a closed change says it closed without publishing, naming nobody", () => {
   const entries = buildReviewTimeline({
     change: change({
       open: false,
@@ -357,7 +357,9 @@ test("a withdrawn change says so rather than just closing", () => {
     resetsApprovals: false,
   });
 
-  expect(entries[entries.length - 1]?.event?.verb).toBe("withdrew this change");
+  const last = entries[entries.length - 1]?.event;
+  expect(last?.verb).toBe("Closed without publishing");
+  expect(last?.actor).toBeNull();
 });
 
 // --- the decision ----------------------------------------------------------

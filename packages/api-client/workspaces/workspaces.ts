@@ -9,6 +9,9 @@ import type {
   AddBinderPersonBody,
   ArchiveBinderDocument201,
   ArchiveBinderDocumentBody,
+  ArchiveBinderFolder201,
+  ArchiveBinderFolderBody,
+  CloseBinderChange200,
   CreateBinder201,
   CreateBinderBody,
   CreateBinderChangeDiscussion201,
@@ -49,6 +52,8 @@ import type {
   ListBinderDocuments200,
   ListBinderDocumentsParams,
   ListBinders200,
+  ListMyDrafts200,
+  ListMyDraftsParams,
   ListOrganizationBinders200,
   ListOrganizationChanges200,
   ListOrganizationChangesParams,
@@ -68,6 +73,7 @@ import type {
   RenameBinderDraftBody,
   RenameBinderFolder201,
   RenameBinderFolderBody,
+  ReopenBinderChange200,
   ReplyToBinderChangeDiscussion201,
   ReplyToBinderChangeDiscussionBody,
   ResolveBinderChangeConflicts200,
@@ -95,6 +101,45 @@ import type {
 } from '../model';
 
 import { customFetch } from '.././mutator.ts';
+
+export type listMyDraftsResponse200 = {
+  data: ListMyDrafts200
+  status: 200
+}
+
+export type listMyDraftsResponseSuccess = (listMyDraftsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listMyDraftsResponse = (listMyDraftsResponseSuccess)
+
+export const getListMyDraftsUrl = (params?: ListMyDraftsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/app/drafts?${stringifiedParams}` : `/api/app/drafts`
+}
+
+export const listMyDrafts = async (params?: ListMyDraftsParams, options?: Parameters<typeof customFetch>[1]): Promise<listMyDraftsResponse> => {
+
+  return customFetch<listMyDraftsResponse>(getListMyDraftsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
 
 export type listBindersResponse200 = {
   data: ListBinders200
@@ -1591,6 +1636,55 @@ return customFetch<archiveBinderDocumentResponse>(getArchiveBinderDocumentUrl(or
 );}
 
 
+export type archiveBinderFolderResponse201 = {
+  data: ArchiveBinderFolder201
+  status: 201
+}
+
+export type archiveBinderFolderResponseSuccess = (archiveBinderFolderResponse201) & {
+  headers: Headers;
+};
+;
+
+export type archiveBinderFolderResponse = (archiveBinderFolderResponseSuccess)
+
+export const getArchiveBinderFolderUrl = (org: string,
+    binder: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/folder-archives`
+}
+
+export const archiveBinderFolder = async (org: string,
+    binder: string,
+    archiveBinderFolderBody: ArchiveBinderFolderBody, options?: Parameters<typeof customFetch>[1]): Promise<archiveBinderFolderResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<archiveBinderFolderResponse>(getArchiveBinderFolderUrl(org,binder),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(archiveBinderFolderBody)
+  }
+);}
+
+
 export type restoreBinderDocumentResponse201 = {
   data: RestoreBinderDocument201
   status: 201
@@ -1915,6 +2009,78 @@ return customFetch<reviewBinderChangeResponse>(getReviewBinderChangeUrl(org,bind
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(reviewBinderChangeBody)
+  }
+);}
+
+
+export type closeBinderChangeResponse200 = {
+  data: CloseBinderChange200
+  status: 200
+}
+
+export type closeBinderChangeResponseSuccess = (closeBinderChangeResponse200) & {
+  headers: Headers;
+};
+;
+
+export type closeBinderChangeResponse = (closeBinderChangeResponseSuccess)
+
+export const getCloseBinderChangeUrl = (org: string,
+    binder: string,
+    changeNumber: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/changes/${changeNumber}/close`
+}
+
+export const closeBinderChange = async (org: string,
+    binder: string,
+    changeNumber: string, options?: Parameters<typeof customFetch>[1]): Promise<closeBinderChangeResponse> => {
+
+  return customFetch<closeBinderChangeResponse>(getCloseBinderChangeUrl(org,binder,changeNumber),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+export type reopenBinderChangeResponse200 = {
+  data: ReopenBinderChange200
+  status: 200
+}
+
+export type reopenBinderChangeResponseSuccess = (reopenBinderChangeResponse200) & {
+  headers: Headers;
+};
+;
+
+export type reopenBinderChangeResponse = (reopenBinderChangeResponseSuccess)
+
+export const getReopenBinderChangeUrl = (org: string,
+    binder: string,
+    changeNumber: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/changes/${changeNumber}/reopen`
+}
+
+export const reopenBinderChange = async (org: string,
+    binder: string,
+    changeNumber: string, options?: Parameters<typeof customFetch>[1]): Promise<reopenBinderChangeResponse> => {
+
+  return customFetch<reopenBinderChangeResponse>(getReopenBinderChangeUrl(org,binder,changeNumber),
+  {
+    ...options,
+    method: 'POST'
+
+
   }
 );}
 

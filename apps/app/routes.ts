@@ -28,6 +28,8 @@ export type AppRoute =
   /** Every binder you can open, across your organizations: `/-/binders`. */
   | { kind: "binders" }
   | { kind: "changes" }
+  /** Your drafts, in every binder you can write in. */
+  | { kind: "drafts" }
   /**
    * The site admin's console, `/-/admin` and its sections: everyone, every
    * organization, every binder, and whether the deployment is well.
@@ -109,7 +111,8 @@ export type DocumentChangeView =
   /** The documents that conflict with the binder, and resolving them. */
   | "conflicts";
 /** The organization's own tabs. Binders is the one it opens on. */
-export type OrganizationTab = "binders" | "changes" | "people" | "settings";
+export type OrganizationTab =
+  "binders" | "changes" | "drafts" | "people" | "settings";
 
 /** The admin console's sections, in the order its tabs show them. */
 export const ADMIN_SECTIONS = [
@@ -180,6 +183,7 @@ const APP_PAGES: Readonly<Record<string, AppRoute>> = {
   // Every change in flight, across every binder. The counterpart to a
   // binder's own Change requests tab, which can only answer for one binder.
   "/-/changes": { kind: "changes" },
+  "/-/drafts": { kind: "drafts" },
   "/-/user_settings/profile": { kind: "accountSettings" },
   "/-/admin": { kind: "admin", section: "overview" },
   "/-/admin/users": { kind: "admin", section: "users" },
@@ -240,7 +244,9 @@ export function getRoute(pathname: string): AppRoute {
           ? { tab: "settings" as const }
           : screen === "changes"
             ? { tab: "changes" as const }
-            : {}),
+            : screen === "drafts"
+              ? { tab: "drafts" as const }
+              : {}),
     };
   }
 
@@ -309,6 +315,8 @@ export function routeToPath(route: AppRoute): string {
       return "/-/binders";
     case "changes":
       return "/-/changes";
+    case "drafts":
+      return "/-/drafts";
     case "accountSettings":
       return "/-/user_settings/profile";
     case "admin":

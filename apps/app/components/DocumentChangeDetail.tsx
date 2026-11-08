@@ -92,6 +92,11 @@ interface DocumentChangeDetailProps {
   /** Rewrite the title and description. The author's, while it is open. */
   onEditSubject?:
     ((subject: { title: string; body: string }) => Promise<void>) | null;
+  /**
+   * Close the change without publishing it, or reopen it once closed. Its
+   * author's or a binder admin's; never offered on a published change.
+   */
+  onSetOpen?: ((open: boolean) => Promise<void>) | null;
   /** Where the required reviewers come from, for the reader who asks. */
   onOpenSignOffRules?: (() => void) | null;
   /**
@@ -260,6 +265,7 @@ export function DocumentChangeDetail({
   approvers = [],
   approvalPanel = null,
   onEditSubject = null,
+  onSetOpen = null,
   onOpenSignOffRules = null,
   banner = null,
   documentPicker = null,
@@ -286,6 +292,7 @@ export function DocumentChangeDetail({
     body: string;
   } | null>(null);
   const [savingSubject, setSavingSubject] = useState(false);
+  const [settingOpen, setSettingOpen] = useState(false);
 
   const prNum = change.number;
   const isSubmitting = actionState.status === "submitting";
@@ -427,6 +434,33 @@ export function DocumentChangeDetail({
   // and a button that fails is worse than one that is not there.
   const canEditSubject =
     onEditSubject !== null && change.open && ownSubmission && !isReadOnly;
+
+  /* **Close and reopen, never on a published change.** A published change is
+     the record; one closed without publishing waits, read-only, for its
+     author or a binder admin to bring it back. */
+  const published = change.outcome === "published";
+  const canSetOpen = onSetOpen !== null && !published && !isReadOnly;
+
+  const setOpen = async (open: boolean) => {
+    if (!onSetOpen) return;
+    setSettingOpen(true);
+    updateActionState({ error: null });
+    try {
+      await onSetOpen(open);
+    } catch (err) {
+      updateActionState({
+        status: "error",
+        error: readActionError(
+          err,
+          open
+            ? "Unable to reopen this change."
+            : "Unable to close this change.",
+        ),
+      });
+    } finally {
+      setSettingOpen(false);
+    }
+  };
 
   const saveSubject = async () => {
     if (!editing || !onEditSubject || editing.title.trim() === "") return;
@@ -813,6 +847,23 @@ export function DocumentChangeDetail({
             )}
           </div>
         )}
+
+        {canSetOpen ? (
+          <button
+            className="bs-btn bs-btn--sm bs-btn--quiet bs-btn--block"
+            type="button"
+            disabled={settingOpen || isSubmitting}
+            onClick={() => void setOpen(!change.open)}
+          >
+            {change.open
+              ? settingOpen
+                ? "Closing…"
+                : "Close without publishing"
+              : settingOpen
+                ? "Reopening…"
+                : "Reopen change"}
+          </button>
+        ) : null}
       </aside>
 
       <div className="change-main">
@@ -832,7 +883,10 @@ export function DocumentChangeDetail({
           change={change}
           updates={updates}
           resetsApprovals={resetsApprovals}
-          canParticipate={!isAnonymous}
+          /* **A decided change is the record, for everyone**: no new
+             comments, replies, resolutions or reactions once it is published
+             or closed. The server refuses them too. */
+          canParticipate={!isAnonymous && change.open}
           currentUsername={currentUser}
           blockOnUnresolvedThreads={blockOnUnresolvedThreads}
           /* What an update did is what the Changes tab shows. */
@@ -861,6 +915,14 @@ export function DocumentChangeDetail({
             });
           }}
         />
+
+        {change.open ? null : (
+          <p className="bs-note" role="note">
+            {published
+              ? "This change is published, so its discussion is closed. To change the document, start a new draft."
+              : "This change is closed, so its discussion is too. Reopen it to comment or review."}
+          </p>
+        )}
       </div>
     </article>
   );

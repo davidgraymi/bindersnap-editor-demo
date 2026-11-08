@@ -1,10 +1,4 @@
-import {
-  CircleCheck,
-  CircleSlash,
-  FilePen,
-  MessageSquare,
-  Undo2,
-} from "lucide-react";
+import { CircleCheck, CircleSlash, FilePen, MessageSquare } from "lucide-react";
 
 import { followInApp } from "../appLink";
 import type { ChangeRowInput, ChangeStandingTone } from "../changeRow";
@@ -58,18 +52,11 @@ function ChangeIcon({ outcome }: { outcome: ChangeRowInput["outcome"] }) {
       />
     );
   }
-  if (outcome === "declined") {
+  // One mark for every change closed without publishing, as the word is one.
+  if (outcome === "declined" || outcome === "withdrawn") {
     return (
       <CircleSlash
-        className="change-row-icon change-row-icon--declined"
-        {...props}
-      />
-    );
-  }
-  if (outcome === "withdrawn") {
-    return (
-      <Undo2
-        className="change-row-icon change-row-icon--withdrawn"
+        className="change-row-icon change-row-icon--closed"
         {...props}
       />
     );

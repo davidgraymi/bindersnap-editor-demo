@@ -6,6 +6,7 @@ import {
   useSyncExternalStore,
   type DragEvent,
   type MouseEvent,
+  type PointerEvent as ReactPointerEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import {
@@ -22,6 +23,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Pencil,
+  Trash2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -29,6 +31,7 @@ import type {
   BinderArchivePayload,
   WorkspaceDocumentListEntry,
 } from "../../../packages/api-schema/schemas/workspaces";
+import type { OutlineSlot } from "../../../packages/editor/DocumentEditor";
 import { isEditorDocumentFile } from "../binderDocument";
 import { convertibleKind } from "../convertToEditor";
 import {
@@ -43,6 +46,16 @@ import {
   type DragSubject,
 } from "../binderMove";
 import { formatDocumentName } from "../documentDisplay";
+import { carriesFiles } from "../bulkUpload";
+import {
+  FILES_WIDTH_DEFAULT,
+  FILES_WIDTH_MAX,
+  FILES_WIDTH_MIN,
+  clampFilesWidth,
+  keyedFilesWidth,
+  readFilesWidth,
+  writeFilesWidth,
+} from "../filesPanelWidth";
 import { useOpenFolders } from "../useOpenFolders";
 import { useRememberedToggle } from "../useRememberedToggle";
 import { InlineRename } from "./BinderPage";
@@ -112,8 +125,15 @@ interface DraftFilesProps {
   onRename?: (target: DraftFileTarget, name: string) => void;
   /** File a row somewhere else, `""` being the binder's top level. */
   onMove?: (subject: DragSubject, folder: string) => void;
+  /**
+   * Files dragged in from the computer, dropped into `folder`: a folder's
+   * row or anything in it, or `""` below the rows for the top level.
+   */
+  onUploadDrop?: (data: DataTransfer, folder: string) => void;
   /** Take a policy off the record, in this draft. */
   onArchive?: (slugPath: string) => Promise<boolean>;
+  /** Take a folder off the record — every policy in it — in this draft. */
+  onArchiveFolder?: (folder: string) => Promise<boolean>;
   /**
    * What this binder has taken off the record, as the draft stands — the
    * count, the list when it is opened, and the way back. Restore goes into
@@ -133,6 +153,15 @@ interface DraftFilesProps {
   }) => void;
   onReadArchive?: () => Promise<BinderArchivePayload["documents"]>;
   onRestore?: (uid: string) => Promise<boolean>;
+  /**
+   * Told what was just archived or deleted here, for the page to offer back:
+   * the panel's Undo, Ctrl+Z and the ribbon's Undo all take it back.
+   */
+  onArchived?: (record: ArchiveUndo) => void;
+  /** The act to offer back under the tree, while it is "just now". */
+  undo?: ArchiveUndo | null;
+  /** Take back {@link undo}. */
+  onUndo?: () => void;
   /** An act is being saved: nothing else starts until it lands. */
   busy?: boolean;
   /**
@@ -141,9 +170,40 @@ interface DraftFilesProps {
    * rather than read in the draft bar, as an IDE marks a changed file.
    */
   touched?: readonly string[];
+  /**
+   * The open document's headings, from the editor. With them the panel has
+   * two sides, Files and Outline, and View's Outline opens it on the second.
+   */
+  outline?: OutlineSlot;
 }
 
 const STORAGE_KEY = "bindersnap.editor.files.collapsed";
+
+type PanelTab = "files" | "outline";
+const PANEL_TABS: readonly { id: PanelTab; label: string }[] = [
+  { id: "files", label: "Files" },
+  { id: "outline", label: "Outline" },
+];
+/** Which side of the panel was up last, per browser: a habit. */
+const TAB_KEY = "bindersnap.editor.files.tab";
+
+function readPanelTab(): PanelTab {
+  try {
+    return window.localStorage.getItem(TAB_KEY) === "outline"
+      ? "outline"
+      : "files";
+  } catch {
+    return "files";
+  }
+}
+
+function writePanelTab(tab: PanelTab): void {
+  try {
+    window.localStorage.setItem(TAB_KEY, tab);
+  } catch {
+    // Private mode or storage off: the tab just is not remembered.
+  }
+}
 
 /**
  * Narrower than this, a tree beside the page leaves the page too small to
@@ -165,6 +225,45 @@ function isNarrow(): boolean {
     ? window.matchMedia(NARROW).matches
     : false;
 }
+
+/**
+ * An act on the draft's files the page can take back: the policy or folder
+ * just archived, or the policy just deleted.
+ */
+export type ArchiveUndo =
+  | {
+      kind: "document";
+      uid: string;
+      /** Where it was: how one never published is found again. */
+      path: string;
+      label: string;
+      /** Never published, so deleted from the draft rather than archived. */
+      deleted: boolean;
+    }
+  | {
+      kind: "folder";
+      /** Its folders, made again before anything is restored into them. */
+      folders: string[];
+      documents: { uid: string; path: string }[];
+      label: string;
+    };
+
+/** Whether a policy has ever been published: it is on the record if so. */
+function isPublished(document: WorkspaceDocumentListEntry): boolean {
+  return document.latestVersion !== null;
+}
+
+/**
+ * The binder's top level, as a folder: what a right-click on the empty part
+ * of the panel opens a menu for, as on the empty part of a file explorer.
+ */
+const TOP_LEVEL: BinderTreeNode = {
+  kind: "folder",
+  path: "",
+  name: "",
+  children: [],
+  documentCount: 0,
+};
 
 /** The first document in the tree's order, folders first as drawn. */
 function firstDocument(
@@ -216,20 +315,34 @@ export function DraftFiles({
   onNewFolder,
   onRename,
   onMove,
+  onUploadDrop,
   onArchive,
+  onArchiveFolder,
   archivedCount = 0,
   onCopy,
   onConvert,
   onReadArchive,
   onRestore,
+  onArchived,
+  undo = null,
+  onUndo,
   busy = false,
   touched = NOTHING,
+  outline,
 }: DraftFilesProps) {
   const remembered = useRememberedToggle(STORAGE_KEY);
   const narrow = useSyncExternalStore(subscribeNarrow, isNarrow, () => false);
   const [floating, setFloating] = useState(false);
-  const floatRef = useRef<HTMLElement>(null);
-  const railRef = useRef<HTMLDivElement>(null);
+  /** Beside the page, as wide as its edge was last dragged. */
+  const [width, setWidth] = useState(readFilesWidth);
+  const [resizing, setResizing] = useState(false);
+  const resizeFrom = useRef<{ x: number; width: number } | null>(null);
+  const resizeTo = (next: number) => {
+    setWidth(next);
+    writeFilesWidth(next);
+  };
+  const floatRef = useRef<HTMLDivElement>(null);
+  const railRef = useRef<HTMLButtonElement>(null);
   const treeRef = useRef<HTMLDivElement>(null);
   const filterRef = useRef<HTMLInputElement>(null);
   /** The row whose name is a text box, by {@link keyOf}. One at a time. */
@@ -241,8 +354,6 @@ export function DraftFiles({
   } | null>(null);
   const [dragging, setDragging] = useState<DragSubject | null>(null);
   /** A row's menu, from a right-click or the keyboard's menu key. */
-  /** The policy just archived here, and the way to take it back. */
-  const [undo, setUndo] = useState<{ uid: string; label: string } | null>(null);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [archived, setArchived] = useState<
     BinderArchivePayload["documents"] | null
@@ -267,12 +378,6 @@ export function DraftFiles({
     // `onReadArchive` is made afresh each render; the count is what changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [archiveOpen, archivedCount]);
-  // The Undo is for the act just done; a later act is a new "just now".
-  useEffect(() => {
-    if (!undo) return;
-    const timer = window.setTimeout(() => setUndo(null), 12_000);
-    return () => window.clearTimeout(timer);
-  }, [undo]);
   const [menu, setMenu] = useState<{
     node: BinderTreeNode;
     x: number;
@@ -309,6 +414,40 @@ export function DraftFiles({
   }, [floating, renaming, moving, menu]);
   const shut = narrow ? !floating : remembered.on;
   const toggle = narrow ? () => setFloating((was) => !was) : remembered.toggle;
+
+  /** Which side of the panel is up: the binder's files, or the outline. */
+  const [tab, setTab] = useState<PanelTab>(readPanelTab);
+  const chooseTab = (next: PanelTab) => {
+    setTab(next);
+    writePanelTab(next);
+  };
+  const onOutline = outline !== undefined && tab === "outline";
+  const setOpen = (open: boolean) => {
+    if (narrow) setFloating(open);
+    else if (remembered.on === open) remembered.toggle();
+  };
+  // View's Outline: open the panel on the headings, or put it away. Each
+  // press is new; the one the panel was drawn with is not a press.
+  const outlineRequest = outline?.request;
+  const answered = useRef(outlineRequest?.nonce ?? 0);
+  useEffect(() => {
+    if (!outlineRequest || outlineRequest.nonce === answered.current) return;
+    answered.current = outlineRequest.nonce;
+    if (outlineRequest.show) {
+      chooseTab("outline");
+      setOpen(true);
+    } else {
+      setOpen(false);
+    }
+    // Only a new press acts; the rest is read as it stands at that press.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outlineRequest]);
+  // Tell View whether the headings are on screen, so Outline shows it.
+  const onOutlineShown = outline?.onShown;
+  const outlineOnScreen = !shut && onOutline;
+  useEffect(() => {
+    onOutlineShown?.(outlineOnScreen);
+  }, [onOutlineShown, outlineOnScreen]);
   const openPolicy = (slugPath: string) => {
     setFloating(false);
     onOpen(slugPath);
@@ -345,7 +484,7 @@ export function DraftFiles({
   // the move picker offers where a policy can go, not where it can be seen.
   const allFolders = useMemo(() => folderPaths(tree), [tree]);
 
-  const organizing = !!(onRename || onMove || onArchive);
+  const organizing = !!(onRename || onMove || onArchive || onArchiveFolder);
 
   /**
    * Archive a row, and offer it back. **No "are you sure"**, as on the
@@ -354,16 +493,47 @@ export function DraftFiles({
    */
   const archiveRow = async (node: BinderTreeNode) => {
     if (!onArchive || node.kind !== "document") return;
-    setUndo(null);
     const done = await onArchive(node.document.slugPath);
-    if (done && node.document.uid && onRestore) {
-      setUndo({ uid: node.document.uid, label: labelOf(node) });
+    if (done && node.document.uid) {
+      onArchived?.({
+        kind: "document",
+        uid: node.document.uid,
+        path: node.document.path,
+        label: labelOf(node),
+        deleted: !isPublished(node.document),
+      });
+    }
+  };
+
+  /**
+   * Archive a folder and everything in it, as one act, and offer it back:
+   * Undo makes its folders again and restores every policy into them.
+   */
+  const archiveFolder = async (node: BinderTreeNode) => {
+    if (!onArchiveFolder || node.kind !== "folder") return;
+    const prefix = `${node.path}/`;
+    const inside = documents.filter((entry) =>
+      `${entry.folder}/`.startsWith(prefix),
+    );
+    const folders = [
+      node.path,
+      ...allFolders.filter((path) => path.startsWith(prefix)),
+    ];
+    const done = await onArchiveFolder(node.path);
+    if (done) {
+      onArchived?.({
+        kind: "folder",
+        folders,
+        documents: inside.flatMap((entry) =>
+          entry.uid ? [{ uid: entry.uid, path: entry.path }] : [],
+        ),
+        label: labelOf(node),
+      });
     }
   };
 
   const restore = async (uid: string) => {
     if (!onRestore) return;
-    setUndo(null);
     await onRestore(uid);
   };
 
@@ -384,29 +554,20 @@ export function DraftFiles({
     return false;
   };
 
+  // Shut, the panel is one small button floating at the desk's corner.
   const rail = (
-    <div className="doc-files doc-files--shut" ref={railRef}>
+    <div className="doc-files-anchor">
       <button
         type="button"
-        className="app-explorer-toggle"
+        ref={railRef}
+        className="doc-files-launcher"
         aria-expanded={false}
-        aria-label="Show the draft's files"
-        title="Show the draft's files"
+        aria-label="Show file explorer"
+        title="Show file explorer"
         onClick={toggle}
       >
-        <PanelLeftOpen size={15} strokeWidth={1.75} aria-hidden="true" />
+        <PanelLeftOpen size={16} strokeWidth={1.75} aria-hidden="true" />
       </button>
-      {startNew ? (
-        <button
-          type="button"
-          className="app-explorer-toggle"
-          aria-label="New document"
-          title="New document"
-          onClick={startNew}
-        >
-          <FilePlus size={15} strokeWidth={1.75} aria-hidden="true" />
-        </button>
-      ) : null}
     </div>
   );
   if (shut) return rail;
@@ -566,6 +727,8 @@ export function DraftFiles({
         });
       }
     }
+    // The top level makes things in it; it is not itself renamed or moved.
+    if (node.kind === "folder" && node.path === "") return items;
     if (onRename && isManaged(node)) {
       items.push({
         label: "Rename",
@@ -619,13 +782,26 @@ export function DraftFiles({
       });
     }
     if (onArchive && node.kind === "document" && isManaged(node)) {
+      const published = isPublished(node.document);
       items.push({
-        label: "Archive",
-        icon: Archive,
+        // Never published, it is only in this draft: there is no record to
+        // archive it from, so it is deleted.
+        label: published ? "Archive" : "Delete",
+        icon: published ? Archive : Trash2,
         danger: true,
         disabled: !acts,
         separated: true,
         run: () => void archiveRow(node),
+      });
+    }
+    if (onArchiveFolder && node.kind === "folder") {
+      items.push({
+        label: "Archive folder",
+        icon: Archive,
+        danger: true,
+        disabled: !acts,
+        separated: true,
+        run: () => void archiveFolder(node),
       });
     }
     return items;
@@ -635,7 +811,40 @@ export function DraftFiles({
    * The drag attributes for a row. Only a folder takes a drop — there is no
    * "inside" a policy — and the top level has its own zone below the tree.
    */
+  /**
+   * The drag attributes for a row: a row moved within the panel, and files
+   * from the computer dropped on it — into the folder it is, or is in.
+   */
   const dragProps = (node: BinderTreeNode) => {
+    const moving = moveProps(node);
+    if (!onUploadDrop) return moving;
+    const into = node.kind === "folder" ? node.path : node.document.folder;
+    return {
+      ...moving,
+      onDragOver: (event: DragEvent<HTMLDivElement>) => {
+        if (dragging === null && carriesFiles(event.dataTransfer)) {
+          event.preventDefault();
+          event.stopPropagation();
+          event.dataTransfer.dropEffect = "copy";
+          setOver(into);
+          return;
+        }
+        moving.onDragOver?.(event);
+      },
+      onDrop: (event: DragEvent<HTMLDivElement>) => {
+        if (dragging === null && carriesFiles(event.dataTransfer)) {
+          event.preventDefault();
+          event.stopPropagation();
+          setOver(null);
+          onUploadDrop(event.dataTransfer, into);
+          return;
+        }
+        moving.onDrop?.(event);
+      },
+    };
+  };
+
+  const moveProps = (node: BinderTreeNode) => {
     if (!onMove || !canAct(node) || renaming === keyOf(node)) return {};
     const folder = node.kind === "folder" ? node.path : null;
     const willTake =
@@ -686,7 +895,10 @@ export function DraftFiles({
     onMove(subject, folder);
   };
 
-  /** Rename, Move and Archive, on the row they act on. */
+  /**
+   * Rename and Archive, on the row they act on. Moving is a drag onto a
+   * folder; the row's menu keeps "Move to…" for the keyboard.
+   */
   const rowActions = (node: BinderTreeNode) => {
     if (!organizing || !isManaged(node) || renaming === keyOf(node)) {
       return null;
@@ -706,30 +918,31 @@ export function DraftFiles({
             <Pencil size={13} strokeWidth={1.6} aria-hidden="true" />
           </button>
         ) : null}
-        {onMove ? (
-          <button
-            type="button"
-            className="bs-rowact"
-            aria-label={`Move ${label}`}
-            title="Move to a folder"
-            disabled={busy}
-            onClick={() => setMoving({ subject: subjectOf(node), label })}
-          >
-            <FolderInput size={13} strokeWidth={1.6} aria-hidden="true" />
-          </button>
-        ) : null}
-        {/* A folder is emptied by moving what is in it, not archived whole. */}
+        {/* A folder's Archive is in its menu: it takes everything in it. */}
         {onArchive && node.kind === "document" ? (
-          <button
-            type="button"
-            className="bs-rowact bs-rowact--danger"
-            aria-label={`Archive ${label}`}
-            title="Archive — it leaves the binder when this draft is published"
-            disabled={busy}
-            onClick={() => void archiveRow(node)}
-          >
-            <Archive size={13} strokeWidth={1.6} aria-hidden="true" />
-          </button>
+          isPublished(node.document) ? (
+            <button
+              type="button"
+              className="bs-rowact bs-rowact--danger"
+              aria-label={`Archive ${label}`}
+              title="Archive — it leaves the binder when this draft is published"
+              disabled={busy}
+              onClick={() => void archiveRow(node)}
+            >
+              <Archive size={13} strokeWidth={1.6} aria-hidden="true" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="bs-rowact bs-rowact--danger"
+              aria-label={`Delete ${label}`}
+              title="Delete — it was never published, so it is only in this draft"
+              disabled={busy}
+              onClick={() => void archiveRow(node)}
+            >
+              <Trash2 size={13} strokeWidth={1.6} aria-hidden="true" />
+            </button>
+          )
         ) : null}
       </span>
     );
@@ -791,7 +1004,11 @@ export function DraftFiles({
                   ? label
                   : `${label} — uploaded as a file, so it is edited in the program that made it`
               }${changed ? " · changed in this draft" : ""}`}
-              onClick={() => {
+              onClick={(event) => {
+                // Only a plain click opens a policy. A Mac's Control-click is
+                // a right-click, and some browsers send it as a click too:
+                // it opens the row's menu, never the policy under it.
+                if (event.button !== 0 || event.ctrlKey) return;
                 if (!on) openPolicy(slugPath);
                 else setFloating(false);
               }}
@@ -871,7 +1088,10 @@ export function DraftFiles({
               title={
                 isTouched(node) ? `${label} · changed in this draft` : undefined
               }
-              onClick={() => toggleFolder(node.path)}
+              onClick={(event) => {
+                if (event.button !== 0 || event.ctrlKey) return;
+                toggleFolder(node.path);
+              }}
               onKeyDown={(event) => onRowKey(event, node)}
             >
               {open ? (
@@ -895,18 +1115,100 @@ export function DraftFiles({
     );
   };
 
+  // The panel's right edge is a handle, as an IDE's sidebar is: drag it,
+  // step it with the arrows, or double-click it back to where it began.
+  const resizeHandle = (
+    <div
+      className={`doc-files-resize${resizing ? " doc-files-resize--active" : ""}`}
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize the files panel"
+      aria-valuenow={width}
+      aria-valuemin={FILES_WIDTH_MIN}
+      aria-valuemax={FILES_WIDTH_MAX}
+      tabIndex={0}
+      title="Drag to resize. Double-click to reset."
+      onPointerDown={(event: ReactPointerEvent<HTMLDivElement>) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        resizeFrom.current = { x: event.clientX, width };
+        setResizing(true);
+      }}
+      onPointerMove={(event) => {
+        const from = resizeFrom.current;
+        if (!from) return;
+        setWidth(clampFilesWidth(from.width + event.clientX - from.x));
+      }}
+      onPointerUp={(event) => {
+        if (!resizeFrom.current) return;
+        resizeFrom.current = null;
+        setResizing(false);
+        event.currentTarget.releasePointerCapture(event.pointerId);
+        writeFilesWidth(width);
+      }}
+      onPointerCancel={() => {
+        resizeFrom.current = null;
+        setResizing(false);
+        writeFilesWidth(width);
+      }}
+      onDoubleClick={() => resizeTo(FILES_WIDTH_DEFAULT)}
+      onKeyDown={(event) => {
+        const next = keyedFilesWidth(event.key, width);
+        if (next === null) return;
+        event.preventDefault();
+        resizeTo(next);
+      }}
+    />
+  );
+
+  // Open, it floats over the desk as a card, clear of the ribbon above and
+  // the status bar below, so the page keeps the whole width behind it.
   const panel = (
     <aside
-      ref={floatRef}
-      className={`doc-files${narrow ? " doc-files--floating" : ""}`}
+      className="doc-files"
       aria-label={`Files in ${binderName}`}
       aria-busy={busy || undefined}
     >
       <div className="app-explorer-head">
-        <span className="app-explorer-heading">
-          {busy ? "Saving…" : "Files"}
-        </span>
-        {startNew ? (
+        {outline ? (
+          <div
+            className="doc-files-tabs"
+            role="tablist"
+            aria-label="Show in the panel"
+            onKeyDown={(event) => {
+              // The arrows move between the two, as between any tabs.
+              if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+                return;
+              }
+              event.preventDefault();
+              const next = onOutline ? "files" : "outline";
+              chooseTab(next);
+              document.getElementById(`doc-files-tab-${next}`)?.focus();
+            }}
+          >
+            {PANEL_TABS.map((each) => (
+              <button
+                key={each.id}
+                type="button"
+                role="tab"
+                id={`doc-files-tab-${each.id}`}
+                aria-selected={(each.id === "outline") === onOutline}
+                aria-controls={`doc-files-panel-${each.id}`}
+                tabIndex={(each.id === "outline") === onOutline ? 0 : -1}
+                className={`doc-files-tab${
+                  (each.id === "outline") === onOutline ? " is-on" : ""
+                }`}
+                onClick={() => chooseTab(each.id)}
+              >
+                {each.label}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <span className="app-explorer-heading">Files</span>
+        )}
+        {startNew && !onOutline ? (
           <button
             type="button"
             className="app-explorer-toggle"
@@ -917,7 +1219,7 @@ export function DraftFiles({
             <FilePlus size={15} strokeWidth={1.75} aria-hidden="true" />
           </button>
         ) : null}
-        {onNewFolder ? (
+        {onNewFolder && !onOutline ? (
           <button
             type="button"
             className="app-explorer-toggle"
@@ -936,165 +1238,234 @@ export function DraftFiles({
           type="button"
           className="app-explorer-toggle"
           aria-expanded
-          aria-label="Hide the draft's files"
-          title="Hide the draft's files"
+          aria-label="Hide file explorer"
+          title="Hide file explorer"
           onClick={toggle}
         >
           <PanelLeftClose size={15} strokeWidth={1.75} aria-hidden="true" />
         </button>
       </div>
 
-      <div className="app-explorer-filter">
-        <input
-          className="bs-input bs-input--sm"
-          ref={filterRef}
-          type="search"
-          value={filter}
-          placeholder="Go to file"
-          aria-label={`Find a document in ${binderName}`}
-          onChange={(event) => {
-            setFilter(event.target.value);
-            if (event.target.value.trim() !== "") openFolders(everyFolder);
-          }}
-          onKeyDown={(event) => {
-            // VS Code's Go to File: Enter opens the first match, Down steps
-            // into the matches, Escape clears what was typed.
-            if (event.key === "Enter" && needle !== "") {
-              const first = firstDocument(shown);
-              if (!first) return;
-              event.preventDefault();
-              setFilter("");
-              if (first.slugPath !== active) openPolicy(first.slugPath);
-            } else if (event.key === "ArrowDown") {
-              const row = treeRef.current?.querySelector<HTMLElement>(
-                "button.app-explorer-item, button.app-explorer-folder",
-              );
-              if (!row) return;
-              event.preventDefault();
-              row.focus();
-            } else if (event.key === "Escape" && filter !== "") {
-              event.preventDefault();
-              event.stopPropagation();
-              setFilter("");
-            }
-          }}
-        />
-      </div>
+      {onOutline && outline ? (
+        <div
+          className="doc-files-outline"
+          role="tabpanel"
+          id="doc-files-panel-outline"
+          aria-labelledby="doc-files-tab-outline"
+        >
+          {outline.content}
+        </div>
+      ) : (
+        <>
+          <div className="app-explorer-filter">
+            <input
+              className="bs-input bs-input--sm"
+              ref={filterRef}
+              type="search"
+              value={filter}
+              placeholder="Go to file"
+              aria-label={`Find a document in ${binderName}`}
+              onChange={(event) => {
+                setFilter(event.target.value);
+                if (event.target.value.trim() !== "") openFolders(everyFolder);
+              }}
+              onKeyDown={(event) => {
+                // VS Code's Go to File: Enter opens the first match, Down steps
+                // into the matches, Escape clears what was typed.
+                if (event.key === "Enter" && needle !== "") {
+                  const first = firstDocument(shown);
+                  if (!first) return;
+                  event.preventDefault();
+                  setFilter("");
+                  if (first.slugPath !== active) openPolicy(first.slugPath);
+                } else if (event.key === "ArrowDown") {
+                  const row = treeRef.current?.querySelector<HTMLElement>(
+                    "button.app-explorer-item, button.app-explorer-folder",
+                  );
+                  if (!row) return;
+                  event.preventDefault();
+                  row.focus();
+                } else if (event.key === "Escape" && filter !== "") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setFilter("");
+                }
+              }}
+            />
+          </div>
 
-      <div className="app-explorer-tree" ref={treeRef} onKeyDown={onTreeKey}>
-        {shown.length === 0 ? (
-          <p className="app-explorer-empty">
-            {needle === "" ? "Nothing filed yet." : "No document matches that."}
-          </p>
-        ) : (
-          shown.map((node) => renderNode(node, 0))
-        )}
-
-        {/* Out of a folder: the top level is otherwise no target at all. Only
-            while something is in the air. */}
-        {dragging !== null && acceptsDrop(dragging, "") ? (
           <div
-            className={`doc-files-root-drop${
-              over === "" ? " doc-files-root-drop--over" : ""
+            className={`app-explorer-tree${
+              dragging === null && over === "" ? " doc-files-tree--drop" : ""
             }`}
+            ref={treeRef}
+            onKeyDown={onTreeKey}
+            // Files from the computer dropped below the rows: the top level.
             onDragOver={(event) => {
+              if (!onUploadDrop || dragging !== null) return;
+              if (!carriesFiles(event.dataTransfer)) return;
               event.preventDefault();
-              event.dataTransfer.dropEffect = "move";
+              event.dataTransfer.dropEffect = "copy";
               setOver("");
             }}
-            onDragLeave={() => {
-              if (over === "") setOver(null);
+            onDragLeave={(event) => {
+              const next = event.relatedTarget;
+              if (next instanceof Node && event.currentTarget.contains(next)) {
+                return;
+              }
+              if (dragging === null) setOver(null);
             }}
             onDrop={(event) => {
+              if (!onUploadDrop || dragging !== null) return;
+              if (!carriesFiles(event.dataTransfer)) return;
               event.preventDefault();
-              if (dragging) drop(dragging, "");
+              setOver(null);
+              onUploadDrop(event.dataTransfer, "");
+            }}
+            // Below the rows: the top level's menu. A row's own menu stops here.
+            onContextMenu={(event) => {
+              event.preventDefault();
+              openMenu(TOP_LEVEL, event.clientX, event.clientY, null);
             }}
           >
-            Drop here for the top level
+            {shown.length === 0 ? (
+              <p className="app-explorer-empty">
+                {needle === ""
+                  ? "Nothing filed yet."
+                  : "No document matches that."}
+              </p>
+            ) : (
+              shown.map((node) => renderNode(node, 0))
+            )}
+
+            {/* Out of a folder: the top level is otherwise no target at all. Only
+            while something is in the air. */}
+            {dragging !== null && acceptsDrop(dragging, "") ? (
+              <div
+                className={`doc-files-root-drop${
+                  over === "" ? " doc-files-root-drop--over" : ""
+                }`}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                  setOver("");
+                }}
+                onDragLeave={() => {
+                  if (over === "") setOver(null);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  if (dragging) drop(dragging, "");
+                }}
+              >
+                Drop here for the top level
+              </div>
+            ) : null}
           </div>
-        ) : null}
-      </div>
 
-      {undo ? (
-        <div className="doc-files-undo" role="status">
-          <span>
-            <strong>{undo.label}</strong> archived in this draft.
-          </span>
-          <button
-            type="button"
-            className="bs-btn bs-btn--sm bs-btn--quiet"
-            disabled={busy}
-            onClick={() => void restore(undo.uid)}
-          >
-            Undo
-          </button>
-        </div>
-      ) : null}
+          {undo ? (
+            <div className="doc-files-undo" role="status">
+              <span>
+                <strong>{undo.label}</strong>{" "}
+                {undo.kind === "document" && undo.deleted
+                  ? "deleted from this draft."
+                  : "archived in this draft."}
+              </span>
+              <button
+                type="button"
+                className="bs-btn bs-btn--sm bs-btn--quiet"
+                disabled={busy}
+                onClick={() => onUndo?.()}
+              >
+                Undo
+              </button>
+            </div>
+          ) : null}
 
-      {/* **The archive, at the foot of the files**, as on the binder's tree:
+          {/* **The archive, at the foot of the files**, as on the binder's tree:
           what the draft or the record has taken off, and Restore — into this
           draft, as the binder's next version of it rather than a new v1. */}
-      {archivedCount > 0 && onReadArchive ? (
-        <div className="doc-files-archive">
-          <button
-            type="button"
-            className="app-explorer-folder"
-            aria-expanded={archiveOpen}
-            onClick={() => setArchiveOpen((was) => !was)}
-          >
-            {archiveOpen ? (
-              <ChevronDown size={13} strokeWidth={1.75} aria-hidden="true" />
-            ) : (
-              <ChevronRight size={13} strokeWidth={1.75} aria-hidden="true" />
-            )}
-            <Archive size={14} strokeWidth={1.6} aria-hidden="true" />
-            <span className="app-explorer-name">Archived</span>
-            <span className="doc-files-archive-count">{archivedCount}</span>
-          </button>
-          {archiveOpen ? (
-            archiveError ? (
-              <p className="app-explorer-empty">Unable to read the archive.</p>
-            ) : archived === null ? (
-              <p className="app-explorer-empty">Reading the archive…</p>
-            ) : (
-              archived.map((entry) => (
-                <div className="doc-files-row" key={entry.uid}>
-                  <span
-                    className="app-explorer-item doc-files-item doc-files-item--archived"
-                    style={{ paddingLeft: "22px" }}
-                    title={
-                      entry.slugPath
-                        ? `Was filed at ${entry.slugPath}`
-                        : "Its folder is gone"
-                    }
-                  >
-                    <FileText size={14} strokeWidth={1.6} aria-hidden="true" />
-                    <span className="app-explorer-name">{entry.title}</span>
-                  </span>
-                  {onRestore ? (
-                    <button
-                      type="button"
-                      className="bs-btn bs-btn--sm bs-btn--quiet doc-files-restore"
-                      aria-label={`Restore ${entry.title}`}
-                      title={`Restore as v${entry.lastVersion + 1}, in this draft`}
-                      disabled={busy}
-                      onClick={() => void restore(entry.uid)}
-                    >
-                      Restore
-                    </button>
-                  ) : null}
-                </div>
-              ))
-            )
+          {archivedCount > 0 && onReadArchive ? (
+            <div className="doc-files-archive">
+              <button
+                type="button"
+                className="app-explorer-folder"
+                aria-expanded={archiveOpen}
+                onClick={() => setArchiveOpen((was) => !was)}
+              >
+                {archiveOpen ? (
+                  <ChevronDown
+                    size={13}
+                    strokeWidth={1.75}
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <ChevronRight
+                    size={13}
+                    strokeWidth={1.75}
+                    aria-hidden="true"
+                  />
+                )}
+                <Archive size={14} strokeWidth={1.6} aria-hidden="true" />
+                <span className="app-explorer-name">Archived</span>
+                <span className="doc-files-archive-count">{archivedCount}</span>
+              </button>
+              {archiveOpen ? (
+                archiveError ? (
+                  <p className="app-explorer-empty">
+                    Unable to read the archive.
+                  </p>
+                ) : archived === null ? (
+                  <p className="app-explorer-empty">Reading the archive…</p>
+                ) : (
+                  archived.map((entry) => (
+                    <div className="doc-files-row" key={entry.uid}>
+                      <span
+                        className="app-explorer-item doc-files-item doc-files-item--archived"
+                        style={{ paddingLeft: "22px" }}
+                        title={
+                          entry.slugPath
+                            ? `Was filed at ${entry.slugPath}`
+                            : "Its folder is gone"
+                        }
+                      >
+                        <FileText
+                          size={14}
+                          strokeWidth={1.6}
+                          aria-hidden="true"
+                        />
+                        <span className="app-explorer-name">{entry.title}</span>
+                      </span>
+                      {onRestore ? (
+                        <button
+                          type="button"
+                          className="bs-btn bs-btn--sm bs-btn--quiet doc-files-restore"
+                          aria-label={`Restore ${entry.title}`}
+                          title={`Restore as v${entry.lastVersion + 1}, in this draft`}
+                          disabled={busy}
+                          onClick={() => void restore(entry.uid)}
+                        >
+                          Restore
+                        </button>
+                      ) : null}
+                    </div>
+                  ))
+                )
+              ) : null}
+            </div>
           ) : null}
-        </div>
-      ) : null}
+        </>
+      )}
 
       {menu ? (
         <RowMenu
           x={menu.x}
           y={menu.y}
-          label={`${labelOf(menu.node)}: actions`}
+          label={`${
+            menu.node.kind === "folder" && menu.node.path === ""
+              ? binderName
+              : labelOf(menu.node)
+          }: actions`}
           items={menuItems(menu.node)}
           onClose={(acted) => {
             const from = menu.from;
@@ -1116,16 +1487,14 @@ export function DraftFiles({
     </aside>
   );
 
-  // Over the page, the rail stays where it was so the page does not move.
-  if (narrow) {
-    return (
-      <>
-        {rail}
+  return (
+    <div className="doc-files-anchor">
+      <div className="doc-files-float" ref={floatRef} style={{ width }}>
         {panel}
-      </>
-    );
-  }
-  return panel;
+        {resizeHandle}
+      </div>
+    </div>
+  );
 }
 
 interface RowMenuItem {
@@ -1163,6 +1532,14 @@ function RowMenu({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState({ left: x, top: y });
+  /**
+   * Whether a press began on this menu since it opened. The menu opens under
+   * the pointer, so the release of the button that opened it lands on an
+   * item; some browsers send that release as a click, which would pick the
+   * item — Open, switching policies — without anyone choosing it. An item
+   * runs from a press of its own, or from the keyboard.
+   */
+  const pressed = useRef(false);
 
   useEffect(() => {
     const box = ref.current;
@@ -1241,6 +1618,9 @@ function RowMenu({
       role="menu"
       aria-label={label}
       style={{ left: at.left, top: at.top }}
+      onPointerDown={(event) => {
+        if (event.button === 0 && !event.ctrlKey) pressed.current = true;
+      }}
       onKeyDown={onKey}
       onContextMenu={(event) => event.preventDefault()}
     >
@@ -1256,7 +1636,9 @@ function RowMenu({
               item.danger ? " doc-files-menu-item--danger" : ""
             }`}
             disabled={item.disabled}
-            onClick={() => {
+            onClick={(event) => {
+              // `detail` is 0 for Enter or Space: the keyboard's choice.
+              if (event.detail !== 0 && !pressed.current) return;
               onClose(true);
               item.run();
             }}

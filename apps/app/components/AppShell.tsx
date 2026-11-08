@@ -24,6 +24,7 @@ import { GettingStarted, GuideBar } from "./GettingStarted";
 import { useOnboarding } from "../useOnboarding";
 import { routeToPath, type AppRoute } from "../routes";
 import { BinderShell } from "./BinderShell";
+import { MyDrafts } from "./MyDrafts";
 import { OrganizationPage } from "./OrganizationPage";
 import { LocationTrail } from "./LocationTrail";
 import { useWriteAction } from "../paywallContext";
@@ -643,6 +644,19 @@ export function AppShell({
                   }
                   onBrowseDocuments={() => onNavigate({ kind: "documents" })}
                 />
+              ) : route.kind === "drafts" ? (
+                <div className="docw-page">
+                  <div className="bs-pagehead">
+                    <div className="bs-pagehead-body">
+                      <h1 className="bs-title">Drafts</h1>
+                      <p className="bs-subtitle">
+                        Your saved work in every binder, and whether it has been
+                        proposed.
+                      </p>
+                    </div>
+                  </div>
+                  <MyDrafts />
+                </div>
               ) : route.kind === "binders" ? (
                 <BindersPage
                   onOpenBinder={(org, binder) =>

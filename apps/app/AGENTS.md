@@ -8,17 +8,25 @@ which the root guide only summarizes.
 
 `packages/editor/` is a word processor for policies, imported by the SPA and
 laid out the way Word is: a ribbon (Home, Insert, View, and a Table tab while
-the cursor is in one) over a sheet of Letter on a desk, the headings and find
-and replace in a navigation pane, page and word counts and zoom in a status
-bar. `apps/app/components/DocumentEditorPage.tsx` is the page around it, at
+the cursor is in one) over a sheet of Letter on a desk, find and replace in a
+bar floating over the page (Ctrl+F, Ctrl+H), page and word counts and zoom in a
+status bar. The headings are the file panel's Outline tab: `DocumentEditor`
+hands its `aside` the outline (`OutlineSlot`), and View → Outline opens the
+panel on it. `apps/app/components/DocumentEditorPage.tsx` is the page around it, at
 `/{org}/{binder}/-/blob/main/{path}?edit=write&draft=…`: **Save commits the document to
 the author's draft** through the ordinary revise endpoint, so the version on
 record does not move until the draft is proposed and published. Edit on a
 document's page opens (or resumes) that draft first. Only a file the editor
-writes — `*.json` — is opened in it. A Word file or a PDF is edited in the
+writes — `*.json` — is opened in it. **A Word file or a PDF chosen in the
+editor is shown there, read only** (`EditorFileCover`, the editor's `cover`):
+the document page's own preview on the desk where the page goes, the ribbon
+locked, the file panel and status bar where they were, and a note at the top
+right — "Word document · View only", Edit in Bindersnap, Download — so moving
+to one never leaves the editor. Moving between documents replaces the address
+rather than adding to Back. A Word file or a PDF is edited in the
 program that made it and uploaded as a new version, **or converted on request**:
 "Edit in Bindersnap" (the document's page, the editor's file panel, and the
-editor's own "not a Bindersnap document" screen) opens
+note on a file shown in the editor) opens
 `ConvertDocumentModal`, which reads the file in the browser
 (`convertToEditor.ts`: mammoth for `.docx`, pdf.js for a PDF, then the
 editor's own schema) and says what the conversion loses _before_ anything is
@@ -42,7 +50,7 @@ bytes (`sniffDocumentKind`), because only the new `.json` name is known.
 The editor opens **full page**:
 while it is mounted it sets `bs-writing` on `<html>`, and the shell drops the
 sidebar and the binder's file panel so Letter fits at 100% on a laptop. The
-editor has **its own file panel** (`components/DraftFiles.tsx`), read at the
+editor has **its own file panel** (`components/DraftFiles.tsx`), floating over the desk under the ribbon (`DocumentEditor`'s `aside`), shut to a small button, its width dragged from its right edge, read at the
 draft: a policy opens beside the last one, and New starts one, without leaving
 the editor. **Several policies are open at once**: moving to another keeps
 the words typed in each (`OpenPolicy` buffers in `DocumentEditorPage.tsx`,

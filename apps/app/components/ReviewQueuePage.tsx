@@ -172,7 +172,7 @@ export function ReviewQueuePage({
                     tone={row.tone}
                     standing={row.standing}
                     outcome={
-                      row.outcome === "published" ? "published" : "declined"
+                      row.outcome === "published" ? "published" : "withdrawn"
                     }
                     href={changeHref(row)}
                     onOpen={() => onOpenChange(row.owner, row.repo, row.number)}

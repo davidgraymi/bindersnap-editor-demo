@@ -30,7 +30,12 @@ export const WordKeymap = Extension.create({
         this.editor.commands.setFontSize(`${stepFontSize(size(), 1)}pt`),
       "Mod-[": () =>
         this.editor.commands.setFontSize(`${stepFontSize(size(), -1)}pt`),
-      "Mod-Alt-0": () => this.editor.commands.setParagraph(),
+      "Mod-Alt-0": () =>
+        this.editor
+          .chain()
+          .setParagraph()
+          .updateAttributes("paragraph", { variant: null })
+          .run(),
       "Mod-Alt-1": () => this.editor.commands.setHeading({ level: 1 }),
       "Mod-Alt-2": () => this.editor.commands.setHeading({ level: 2 }),
       "Mod-Alt-3": () => this.editor.commands.setHeading({ level: 3 }),

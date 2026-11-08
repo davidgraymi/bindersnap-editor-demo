@@ -1097,6 +1097,75 @@ export async function setPullRequestSubject(params: {
   );
 }
 
+/**
+ * Where a change stands, without the reviews the fuller read brings.
+ *
+ * `published` and `closed` are told apart because only one of them can be
+ * undone: a change closed without publishing can be reopened, and a published
+ * one is the record.
+ */
+export async function readPullRequestStanding(params: PullRequestRef): Promise<{
+  standing: "open" | "published" | "closed";
+  author: string;
+  branch: string;
+}> {
+  const { client, owner, repo, pullNumber } = params;
+
+  const pullRequest = (await unwrap(
+    client.GET("/repos/{owner}/{repo}/pulls/{index}", {
+      params: { path: { owner, repo, index: pullNumber } },
+    }),
+  )) as PullRequest & { merged?: boolean };
+
+  return {
+    standing:
+      pullRequest.state === "open"
+        ? "open"
+        : pullRequest.merged
+          ? "published"
+          : "closed",
+    author: pullRequest.user?.login ?? "",
+    branch: pullRequest.head?.ref ?? "",
+  };
+}
+
+/**
+ * Close a change without publishing it, or reopen one that was.
+ *
+ * Gitea's own state on the pull request, so its timeline records who closed
+ * or reopened the change and when — nothing about it is stored here.
+ */
+export async function setPullRequestOpen(
+  params: PullRequestRef & { open: boolean },
+): Promise<void> {
+  const { client, owner, repo, pullNumber, open } = params;
+
+  await unwrap(
+    client.PATCH("/repos/{owner}/{repo}/pulls/{index}", {
+      params: { path: { owner, repo, index: pullNumber } },
+      body: { state: open ? "open" : "closed" },
+    }),
+  );
+}
+
+/** Whether a branch is still there. A branch Gitea cannot find is not. */
+export async function branchExists(params: {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  branch: string;
+}): Promise<boolean> {
+  const { client, owner, repo, branch } = params;
+
+  const { error, response } = await client.GET(
+    "/repos/{owner}/{repo}/branches/{branch}",
+    { params: { path: { owner, repo, branch } } },
+  );
+  if (response.status === 404) return false;
+  if (!response.ok) throw toGiteaApiError(response.status, error);
+  return true;
+}
+
 /** Ask these people to review. Already-requested reviewers are left alone. */
 export async function requestPullReviewers(
   params: PullReviewRequestParams,

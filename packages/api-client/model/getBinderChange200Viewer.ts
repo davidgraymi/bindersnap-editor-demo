@@ -8,4 +8,5 @@
 export type GetBinderChange200Viewer = {
   canApprove: boolean;
   canPublish: boolean;
+  canCloseOrReopen: boolean;
 };

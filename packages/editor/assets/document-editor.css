@@ -9,22 +9,41 @@
  * so it takes the fixed mockup tokens, which exist for exactly this.
  */
 
+/* **One ground, edge to edge**, as Word's and Google Docs' are: the title
+   bar, the ribbon's tabs and the desk the page sits on are one surface, with
+   no rule between them. The page, the ribbon's card and the file panel
+   stand off it; the status bar is a band of its own below. */
 .bs-doc-editor {
   display: flex;
   flex-direction: column;
   min-height: 0;
   height: 100%;
-  background: var(--bs-page-bg);
+  background: var(--bs-surface-2);
   color: var(--bs-text-secondary);
   font-family: var(--brand-font-sans);
 }
 
 /* ─── Ribbon ─────────────────────────────────────────────────────────────── */
 
+/* The tabs sit on the window's own ground and the commands in a card inset
+   from its edges, as Word's and Google Docs' toolbars now do — so the
+   controls read as one thing, apart from the page below them, rather than
+   as a strip ruled across the window. */
+/* **The page goes under the toolbar, not into a gap.** Nothing of the ground
+   shows below the card, so a page scrolled up meets the card's own edge and
+   slides beneath it; raised over the desk, the card's shadow falls on the
+   page as it goes, as Google Docs' toolbar does. The room between card and
+   page is the desk's own padding. */
 .bs-ribbon {
+  position: relative;
+  z-index: var(--brand-z-raised);
   flex: none;
-  background: var(--bs-surface-1);
-  border-bottom: 1px solid var(--bs-rule);
+  background: var(--bs-surface-2);
+}
+
+/* On the ground rather than in the card, so a hover a step darker. */
+.bs-ribbon-bar .bs-rb:hover:not(:disabled) {
+  background: var(--bs-surface-3);
 }
 
 .bs-ribbon-bar {
@@ -33,7 +52,6 @@
   gap: var(--brand-space-2);
   min-height: 40px;
   padding: 0 var(--brand-space-2);
-  border-bottom: 1px solid var(--bs-rule-warm);
 }
 
 .bs-ribbon-quick {
@@ -105,12 +123,9 @@
 .bs-tablegrid-cell:focus-visible,
 .bs-symbol:focus-visible,
 .bs-outline-item:focus-visible,
-.bs-result:focus-visible,
+.bs-findbar-btn:focus-visible,
 .bs-doc-status-icon:focus-visible,
-.bs-doc-zoom-value:focus-visible,
-.bs-navpane-close:focus-visible,
-.bs-navpane-tab:focus-visible,
-.bs-navpane-link:focus-visible {
+.bs-doc-zoom-value:focus-visible {
   outline: 2px solid var(--brand-coral);
   outline-offset: -2px;
   border-radius: var(--brand-radius-sm);
@@ -124,10 +139,46 @@
   padding: var(--brand-space-1) 0;
 }
 
+/* The ribbon's lock (`Ribbon`'s `locked`): a fieldset that draws nothing, so
+   disabling it turns off every control inside at once, and leaves the
+   layout — and the ribbon's folding, measured from it — exactly as it was. */
+.bs-ribbon-lock {
+  display: contents;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+/* Off at once, and greyed only once it has been off a moment: between two
+   documents the lock lasts as long as a read, and a ribbon that flickered
+   grey on every click was the reload it is here to stop looking like. */
+.bs-ribbon-lock:disabled > * {
+  pointer-events: none;
+  animation: bs-ribbon-locking var(--brand-transition-base) 0.4s both;
+}
+
+@keyframes bs-ribbon-locking {
+  to {
+    opacity: 0.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bs-ribbon-lock:disabled > * {
+    animation-duration: 0s;
+  }
+}
+
 .bs-ribbon-panel {
   position: relative;
   display: flex;
   align-items: stretch;
+  margin: 0 var(--brand-space-2);
+  border: 1px solid var(--bs-rule-warm);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  box-shadow: var(--bs-shadow-sm);
   min-height: 92px;
   padding: var(--brand-space-1-5) var(--brand-space-8) var(--brand-space-0-5)
     var(--brand-space-1);
@@ -740,14 +791,24 @@
 }
 
 .bs-style-sample {
+  flex-shrink: 0;
   max-width: 100%;
   overflow: hidden;
+  line-height: 1.2;
   font-family: var(--brand-font-sans);
   font-size: 13px;
   white-space: nowrap;
 }
 
+/* One line, always: a name that wrapped pushed the sample out of the tile,
+   and "Heading 2" read as two grey words with no preview. */
 .bs-style-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.2;
   color: var(--brand-mockup-muted);
   font-family: var(--brand-font-sans);
   font-size: var(--brand-text-ui-xs);
@@ -771,6 +832,17 @@
   font-weight: var(--brand-weight-semibold);
 }
 
+.bs-style--title .bs-style-sample {
+  font-family: var(--brand-font-serif);
+  font-size: 18px;
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-style--subtitle .bs-style-sample {
+  color: var(--brand-mockup-ink-soft);
+  font-size: 15px;
+}
+
 .bs-style--heading4 .bs-style-sample {
   font-weight: var(--brand-weight-semibold);
 }
@@ -785,7 +857,7 @@
   font-size: 12px;
 }
 
-/* ─── Body: navigation pane, and the desk the page sits on ───────────────── */
+/* ─── Body: the desk the page sits on, and what floats over it ──────────── */
 
 /* Why a pasted or dropped picture did not go in: a strip under the ribbon,
    gone on its own after a few seconds. */
@@ -884,63 +956,51 @@
 }
 
 .bs-doc-body {
+  /* The page's file panel opens over the page here on a narrow window. */
+  position: relative;
   display: flex;
   flex: 1;
   min-height: 0;
 }
 
-.bs-navpane {
-  display: flex;
-  flex: none;
-  flex-direction: column;
-  width: 260px;
-  min-height: 0;
-  overflow-y: auto;
-  border-right: 1px solid var(--bs-rule);
+/* ─── Find ─────────────────────────────────────────────────────────────────
+   A small card floating at the top right of the page, as in Google Docs and
+   VS Code: the page does not move while somebody searches. Its depth is the
+   ribbon's and the file panel's — the three float off the same ground. */
+
+.bs-findbar {
+  position: absolute;
+  top: var(--brand-space-3);
+  right: var(--brand-space-6);
+  z-index: var(--brand-z-raised);
+  display: grid;
+  /* A column no wider than the card: the field gives way on a phone. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--brand-space-1-5);
+  width: min(28rem, calc(100% - var(--brand-space-8)));
+  padding: var(--brand-space-1-5);
+  border: 1px solid var(--bs-rule-warm);
+  border-radius: var(--brand-radius-lg);
   background: var(--bs-surface-1);
+  box-shadow: var(--bs-shadow-sm);
+  font-family: var(--brand-font-sans);
 }
 
-.bs-navpane-head {
+.bs-findbar-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: var(--brand-space-3) var(--brand-space-3) var(--brand-space-2);
+  gap: var(--brand-space-1);
 }
 
-.bs-navpane-title {
-  margin: 0;
-  color: var(--bs-text-primary);
-  font-family: var(--brand-font-sans);
-  font-size: var(--brand-text-ui-md);
-  font-weight: var(--brand-weight-semibold);
+.bs-findbar-row--replace {
+  /* Under the field it replaces in, past the chevron that opened it. */
+  padding-left: calc(28px + var(--brand-space-1));
 }
 
-.bs-navpane-close {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: none;
-  border-radius: var(--brand-radius-sm);
-  background: none;
-  color: var(--bs-text-muted);
-  cursor: pointer;
-}
-
-.bs-navpane-close:hover {
-  background: var(--bs-surface-2);
-}
-
-.bs-navpane-search {
-  display: grid;
-  gap: var(--brand-space-2);
-  padding: 0 var(--brand-space-3) var(--brand-space-3);
-}
-
-.bs-navpane-input {
-  width: 100%;
-  height: 32px;
+.bs-findbar-input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
   padding: 0 var(--brand-space-2);
   border: 1px solid var(--bs-rule);
   border-radius: var(--brand-radius-sm);
@@ -950,136 +1010,91 @@
   font-size: var(--brand-text-ui-md);
 }
 
-.bs-navpane-input:focus {
+.bs-findbar-input:focus {
   outline: 2px solid var(--brand-coral);
   outline-offset: -1px;
 }
 
-.bs-navpane-found {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.bs-findbar-count {
+  flex: none;
+  min-width: 4.5rem;
   color: var(--bs-text-muted);
   font-size: var(--brand-text-ui-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
 }
 
-.bs-navpane-steps {
-  display: flex;
-  gap: var(--brand-space-0-5);
-}
-
-.bs-navpane-steps button {
+.bs-findbar-btn {
   display: grid;
+  flex: none;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   padding: 0;
-  border: 1px solid var(--bs-rule);
+  border: none;
   border-radius: var(--brand-radius-sm);
-  background: var(--bs-surface-1);
+  background: none;
   color: var(--bs-text-secondary);
   cursor: pointer;
 }
 
-.bs-navpane-steps button:disabled {
+.bs-findbar-btn:hover:not(:disabled) {
+  background: var(--bs-surface-2);
+  color: var(--bs-text-primary);
+}
+
+.bs-findbar-btn.is-on {
+  background: var(--bs-coral-glow);
+  color: var(--bs-coral-text);
+}
+
+.bs-findbar-btn:disabled {
   opacity: 0.4;
   cursor: default;
 }
 
-.bs-navpane-check {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-1-5);
-  color: var(--bs-text-muted);
-  font-size: var(--brand-text-ui-sm);
-}
+/* ─── Outline ──────────────────────────────────────────────────────────────
+   The document's headings, drawn as the file panel draws its rows, since
+   the panel is where they are shown. */
 
-.bs-navpane-replace {
-  display: grid;
-  gap: var(--brand-space-2);
-}
-
-.bs-navpane-replace-actions {
-  display: flex;
-  gap: var(--brand-space-2);
-}
-
-.bs-navpane-link {
-  justify-self: start;
+.bs-outline {
+  margin: 0;
   padding: 0;
-  border: none;
-  background: none;
-  color: var(--bs-coral-text);
-  cursor: pointer;
-  font: inherit;
-  font-size: var(--brand-text-ui-sm);
-}
-
-.bs-navpane-tabs {
-  display: flex;
-  gap: var(--brand-space-4);
-  padding: 0 var(--brand-space-3);
-  border-bottom: 1px solid var(--bs-rule-warm);
-}
-
-.bs-navpane-tab {
-  padding: var(--brand-space-2) 0;
-  border: none;
-  border-bottom: 2px solid transparent;
-  background: none;
-  color: var(--bs-text-muted);
-  cursor: pointer;
-  font: inherit;
-  font-size: var(--brand-text-ui-sm);
-  font-weight: var(--brand-weight-medium);
-}
-
-.bs-navpane-tab.is-on {
-  color: var(--bs-text-primary);
-  border-bottom-color: var(--brand-coral);
-}
-
-.bs-navpane-empty {
-  margin: 0;
-  padding: var(--brand-space-4) var(--brand-space-3);
-  color: var(--bs-text-muted);
-  font-size: var(--brand-text-ui-sm);
-  line-height: var(--brand-leading-normal);
-}
-
-.bs-outline,
-.bs-results {
-  margin: 0;
-  padding: var(--brand-space-2) 0;
   list-style: none;
 }
 
-.bs-outline-item,
-.bs-result {
+.bs-outline-item {
   display: block;
   width: 100%;
-  padding: var(--brand-space-1-5) var(--brand-space-3);
+  min-height: 32px;
+  padding: var(--brand-space-1-5) var(--brand-space-2);
+  overflow: hidden;
   border: none;
-  border-left: 3px solid transparent;
+  border-radius: var(--brand-radius-md);
   background: none;
   color: var(--bs-text-secondary);
   cursor: pointer;
-  font: inherit;
+  font-family: var(--brand-font-sans);
   font-size: var(--brand-text-ui-md);
   line-height: var(--brand-leading-snug);
   text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition:
+    color var(--brand-transition-base),
+    background var(--brand-transition-base);
 }
 
-.bs-outline-item:hover,
-.bs-result:hover {
+.bs-outline-item:hover {
   background: var(--bs-surface-2);
+  color: var(--bs-text-primary);
 }
 
-.bs-outline-item.is-on,
-.bs-result.is-on {
-  border-left-color: var(--brand-coral);
-  background: var(--bs-coral-glow);
+.bs-outline-item.is-on {
+  background: var(--bs-surface-2);
   color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-medium);
 }
 
 .bs-outline-item--h1 {
@@ -1087,28 +1102,27 @@
 }
 
 .bs-outline-item--h2 {
-  padding-left: calc(var(--brand-space-3) + var(--brand-space-3));
+  padding-left: calc(var(--brand-space-2) + var(--brand-space-4));
 }
 
 .bs-outline-item--h3 {
-  padding-left: calc(var(--brand-space-3) + var(--brand-space-6));
+  padding-left: calc(var(--brand-space-2) + var(--brand-space-8));
   font-size: var(--brand-text-ui-sm);
 }
 
 .bs-outline-item--h4 {
-  padding-left: calc(var(--brand-space-3) + var(--brand-space-8));
-  font-size: var(--brand-text-ui-sm);
+  padding-left: calc(var(--brand-space-2) + var(--brand-space-12));
   color: var(--bs-text-muted);
-}
-
-.bs-result {
   font-size: var(--brand-text-ui-sm);
 }
 
-.bs-result mark {
-  background: var(--bs-status-warn-bg);
-  color: inherit;
-  font-weight: var(--brand-weight-semibold);
+.bs-outline-empty {
+  margin: 0;
+  padding: var(--brand-space-2);
+  color: var(--bs-text-muted);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-sm);
+  line-height: var(--brand-leading-normal);
 }
 
 .bs-doc-desk {
@@ -1118,14 +1132,19 @@
   overflow: auto;
   /* Room below the last page to scroll its last line up off the bottom
      edge, as Word leaves. */
-  padding: var(--brand-space-6) var(--brand-space-6) var(--brand-space-24);
-  background: var(--bs-surface-3);
+  padding: var(--brand-space-8) var(--brand-space-6) var(--brand-space-24);
+  background: var(--bs-surface-2);
 }
 
 .bs-doc-sheetwrap {
   position: relative;
   width: max-content;
   margin: 0 auto;
+}
+
+/* Put away, not unmade, while a file is shown in its place (`cover`). */
+.bs-doc-sheetwrap[hidden] {
+  display: none;
 }
 
 /* The sheet: US Letter with Word's one-inch margins. */
@@ -1208,6 +1227,25 @@
 
 .bs-doc-content p {
   margin: 0 0 8pt;
+}
+
+/* Title and Subtitle: paragraphs, not headings — see `ParagraphFormat`. The
+   exports set them from `VARIANT_LOOK`, which keeps these numbers. */
+.bs-doc-content p.bs-title {
+  margin: 0 0 4pt;
+  color: var(--brand-mockup-ink);
+  font-family: var(--brand-font-serif);
+  font-size: 26pt;
+  font-weight: var(--brand-weight-semibold);
+  line-height: 1.15;
+}
+
+.bs-doc-content p.bs-subtitle {
+  margin: 0 0 12pt;
+  color: var(--brand-mockup-ink-soft);
+  font-family: var(--brand-font-sans);
+  font-size: 15pt;
+  line-height: 1.2;
 }
 
 .bs-doc-content h1,
@@ -1488,8 +1526,10 @@
   gap: var(--brand-space-4);
   min-height: 30px;
   padding: 0 var(--brand-space-3);
+  /* **Apart from the ground**, as Word's status bar is: a band of its own
+     under a rule, so the counts read as the window's, not the page's. */
   border-top: 1px solid var(--bs-rule);
-  background: var(--bs-surface-1);
+  background: var(--bs-surface-3);
   color: var(--bs-text-muted);
   font-size: var(--brand-text-ui-sm);
 }
@@ -1538,7 +1578,7 @@
 }
 
 .bs-doc-status-icon:hover:not(:disabled) {
-  background: var(--bs-surface-2);
+  background: var(--bs-surface-1);
   color: var(--bs-text-primary);
 }
 
@@ -1589,11 +1629,67 @@
   text-align: right;
 }
 
+/* ─── The page's own menus ──────────────────────────────────────────────── */
+
+/* Over selected words: the ribbon's buttons, in a card of the ribbon's
+   depth, as Google Docs' and Word's float over a selection. */
+.bs-bubble {
+  z-index: var(--brand-z-overlay);
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-0-5);
+  padding: var(--brand-space-1);
+  border: 1px solid var(--bs-rule-warm);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-1);
+  box-shadow: var(--bs-elevation-menu);
+}
+
+.bs-bubble-sep {
+  align-self: stretch;
+  width: 1px;
+  margin: var(--brand-space-0-5) var(--brand-space-1);
+  background: var(--bs-rule);
+}
+
+/* Where the page is right-clicked: the ribbon's dropped panel, its list. */
+.bs-pagemenu {
+  min-width: 220px;
+  max-height: none;
+}
+
+/* Focused so the arrow keys reach it; the items show where they are. */
+.bs-pagemenu:focus {
+  outline: none;
+}
+
+.bs-pagemenu-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+}
+
+.bs-pagemenu .bs-rmenu-item:disabled {
+  color: var(--bs-text-faint);
+  cursor: default;
+}
+
+.bs-pagemenu .bs-rmenu-item:disabled:hover {
+  background: none;
+}
+
 /* ─── Narrow screens ─────────────────────────────────────────────────────── */
 
-@media (max-width: 900px) {
-  .bs-navpane {
-    display: none;
+@media (max-width: 720px) {
+  /* A phone: the find bar spans the page. */
+  .bs-findbar {
+    right: var(--brand-space-2);
+    left: var(--brand-space-2);
+    width: auto;
+  }
+
+  .bs-findbar-count {
+    min-width: 0;
   }
 }
 

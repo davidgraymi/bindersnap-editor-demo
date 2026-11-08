@@ -122,9 +122,13 @@ export function BinderBranchSummary({
       </div>
       {change ? (
         <div className="binder-latest-right">
-          <span className="binder-latest-count">
-            {count === 1 ? "1 document" : `${count} documents`}
-          </span>
+          {/* A change to the sign-off rules touches no document, and "0
+              documents" on it reads as a fault. Nothing is said instead. */}
+          {count > 0 ? (
+            <span className="binder-latest-count">
+              {count === 1 ? "1 document" : `${count} documents`}
+            </span>
+          ) : null}
           <a
             className="bs-btn bs-btn--sm bs-btn-secondary binder-latest-history"
             href={changeHref(change.number, true)}

@@ -173,6 +173,36 @@ export function describeBulkChange(
 }
 
 /**
+ * Files dragged in from the computer, read while the drop is still under way.
+ *
+ * **Read now or never.** What a drop carries can only be read during the drop
+ * event itself — a folder's entries included — so this starts the walk at
+ * once and hands back its promise, for a dialog opening a moment later to
+ * wait on. Null when nothing dropped was a file.
+ */
+export interface DroppedFiles {
+  sources: Promise<BulkSource[]>;
+  /** A folder was among them, which makes the upload a batch. */
+  fromFolder: boolean;
+}
+
+export function readDroppedFiles(data: DataTransfer): DroppedFiles | null {
+  const items = Array.from(data.items ?? []).filter(
+    (item) => item.kind === "file",
+  );
+  if (items.length === 0) return null;
+  const fromFolder = items.some(
+    (item) => item.webkitGetAsEntry?.()?.isDirectory === true,
+  );
+  return { sources: filesFromDrop(data.items), fromFolder };
+}
+
+/** Whether a drag carries files from the computer, which a page can tell early. */
+export function carriesFiles(data: DataTransfer | null): boolean {
+  return data !== null && Array.from(data.types).includes("Files");
+}
+
+/**
  * Every file under something dropped on the page, with where it sat.
  *
  * A dropped folder arrives as a `FileSystemEntry`, not a `File`, and has to be

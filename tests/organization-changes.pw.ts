@@ -62,13 +62,25 @@ test("a row opens the change on its own binder, and Closed is the record", async
     { timeout: 30_000 },
   );
 
-  await page.getByRole("button", { name: /^Closed/ }).click();
+  // Published and closed are separate lists: the record, and what never
+  // reached it.
+  await page.getByRole("button", { name: /^Published/ }).click();
   await expect(page.locator(".change-row").first()).toBeVisible({
     timeout: 60_000,
   });
-  await expect(page.locator(".change-row .change-standing").first()).toHaveText(
-    /Published|Declined|Withdrawn/,
-  );
+  for (const text of await page
+    .locator(".change-row .change-standing")
+    .allInnerTexts()) {
+    expect(text.trim()).toBe("Published");
+  }
+
+  await page.getByRole("button", { name: /^Closed/ }).click();
+  await expect(page.locator(".change-row").first()).toBeVisible();
+  for (const text of await page
+    .locator(".change-row .change-standing")
+    .allInnerTexts()) {
+    expect(text.trim()).toBe("Closed");
+  }
 
   await page.getByRole("button", { name: /^Open/ }).click();
   await row.click();
