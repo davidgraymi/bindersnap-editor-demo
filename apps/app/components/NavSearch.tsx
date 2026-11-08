@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { CornerDownLeft, Search } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import {
   bindersQuery,
@@ -512,11 +512,10 @@ export function NavSearch({
           role="search"
           onSubmit={handleSubmit}
         >
-          <Search
+          <AppIcon
+            icon={ICON.search}
+            size="lg"
             className="quick-find-field-icon"
-            aria-hidden="true"
-            size={18}
-            strokeWidth={1.5}
           />
           <input
             ref={inputRef}
@@ -603,11 +602,10 @@ export function NavSearch({
                       )}
                     </span>
                     {index === highlight && (
-                      <CornerDownLeft
+                      <AppIcon
+                        icon={ICON.enterKey}
+                        size="sm"
                         className="quick-find-result-enter"
-                        aria-hidden="true"
-                        size={14}
-                        strokeWidth={1.5}
                       />
                     )}
                   </li>
@@ -689,12 +687,7 @@ export function NavSearch({
         aria-haspopup="dialog"
         aria-expanded={open}
       >
-        <Search
-          className="app-nav-search-icon"
-          aria-hidden="true"
-          size={14}
-          strokeWidth={1.5}
-        />
+        <AppIcon icon={ICON.search} size="sm" className="app-nav-search-icon" />
         <span className="app-nav-search-trigger-label">
           {query.trim() || SEARCH_LABEL}
         </span>

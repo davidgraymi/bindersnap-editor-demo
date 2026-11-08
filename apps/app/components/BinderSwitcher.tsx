@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Check, ChevronDown } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { organizationBindersQuery } from "../data/queries";
@@ -158,7 +158,7 @@ export function BinderSwitcher({
           setOpen((was) => !was);
         }}
       >
-        <ChevronDown size={14} strokeWidth={1.5} aria-hidden="true" />
+        <AppIcon icon={ICON.chevronDown} size="sm" />
       </button>
       {open && anchor ? (
         <div
@@ -184,7 +184,7 @@ export function BinderSwitcher({
               >
                 <span className="app-menu-item-check" aria-hidden="true">
                   {row.name === binder ? (
-                    <Check size={14} strokeWidth={2} />
+                    <AppIcon icon={ICON.selected} size="sm" heavy />
                   ) : null}
                 </span>
                 {formatDocumentName(row.name)}

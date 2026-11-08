@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, SmilePlus } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import type {
   CommentReaction,
@@ -110,7 +110,7 @@ export function ReviewThread({
           </span>
         ) : facts.resolved ? (
           <span className="rev-mark rev-mark--resolved">
-            <Check size={11} strokeWidth={2.2} aria-hidden="true" />
+            <AppIcon icon={ICON.resolvedConcern} size="xs" heavy />
             Resolved
           </span>
         ) : (
@@ -173,7 +173,7 @@ export function ReviewThread({
               floating above it — and it says out loud that it can be undone. */}
           {facts.resolutionNote ? (
             <p className="rev-thread-event">
-              <Check size={11} strokeWidth={2.2} aria-hidden="true" />
+              <AppIcon icon={ICON.resolvedConcern} size="xs" heavy />
               {facts.resolutionNote}
             </p>
           ) : null}
@@ -316,7 +316,7 @@ function ReactionRow({
             aria-haspopup="menu"
             onClick={() => setPickerOpen((open) => !open)}
           >
-            <SmilePlus size={14} strokeWidth={1.5} aria-hidden="true" />
+            <AppIcon icon={ICON.addReaction} size="sm" />
           </button>
 
           {pickerOpen ? (

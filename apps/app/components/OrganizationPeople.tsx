@@ -32,9 +32,8 @@ import {
 } from "../../../packages/utils/groupName";
 import { PersonAvatar } from "./PersonAvatar";
 import { describePlanPrice } from "./PlanOffer";
-import { ChevronRight, X } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
-import { AppIcon } from "./AppIcon";
 import { OrganizationInvitations } from "./OrganizationInvitations";
 import { SettingsGroup } from "./SettingsGroup";
 import { SkeletonPanel } from "./Skeleton";
@@ -371,7 +370,7 @@ function OrgPersonRow({
                 title={`Remove ${name} from ${orgName}`}
                 onClick={() => setConfirming("remove")}
               >
-                <AppIcon icon={X} size="sm" />
+                <AppIcon icon={ICON.close} size="sm" />
               </button>
             ) : (
               <span className="bs-rowact-slot" aria-hidden="true" />
@@ -570,11 +569,7 @@ function OrganizationGroups({
                     onClick={() => setOpen(expanded ? null : group.name)}
                   >
                     <span className="bs-row-icon org-group-chevron">
-                      <ChevronRight
-                        size={16}
-                        strokeWidth={1.75}
-                        aria-hidden="true"
-                      />
+                      <AppIcon icon={ICON.chevronRight} size="md" />
                     </span>
                     <span className="bs-row-body">
                       <span className="bs-row-name">
@@ -737,7 +732,7 @@ function GroupDetail({
                     aria-label={`Remove ${member.fullName || member.login} from ${describeGroupName(group.name)}`}
                     onClick={() => onRemove(member.login)}
                   >
-                    <X size={12} strokeWidth={2} aria-hidden="true" />
+                    <AppIcon icon={ICON.close} size="xs" heavy />
                   </button>
                 ) : null}
               </span>
@@ -809,7 +804,7 @@ function GroupDetail({
                     aria-label={`Take ${describeGroupName(group.name)} off ${binder}`}
                     onClick={() => onRemoveBinder(binder)}
                   >
-                    <X size={12} strokeWidth={2} aria-hidden="true" />
+                    <AppIcon icon={ICON.close} size="xs" heavy />
                   </button>
                 ) : null}
               </span>

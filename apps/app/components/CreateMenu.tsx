@@ -1,4 +1,4 @@
-import { BookOpen, Building2, Plus } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
@@ -93,7 +93,7 @@ export function CreateMenu({
           setOpen((was) => !was);
         }}
       >
-        <Plus size={16} strokeWidth={1.5} aria-hidden="true" />
+        <AppIcon icon={ICON.add} size="md" />
       </button>
       {open && anchor ? (
         <div
@@ -110,7 +110,7 @@ export function CreateMenu({
               className="app-menu-item create-menu-item"
               onClick={() => choose(() => onNewBinder(org))}
             >
-              <BookOpen size={16} strokeWidth={1.5} aria-hidden="true" />
+              <AppIcon icon={ICON.binder} size="md" />
               <span>
                 <span className="create-menu-name">New binder</span>
                 <span className="create-menu-note">In {orgName}</span>
@@ -123,7 +123,7 @@ export function CreateMenu({
             className="app-menu-item create-menu-item"
             onClick={() => choose(onNewOrganization)}
           >
-            <Building2 size={16} strokeWidth={1.5} aria-hidden="true" />
+            <AppIcon icon={ICON.organization} size="md" />
             <span>
               <span className="create-menu-name">New organization</span>
               <span className="create-menu-note">

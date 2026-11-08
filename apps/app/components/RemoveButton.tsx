@@ -1,6 +1,4 @@
-import { X } from "lucide-react";
-
-import { AppIcon } from "./AppIcon";
+import { AppIcon, ICON } from "./AppIcon";
 
 /** A row's quiet "remove" cross, labelled for a screen reader. */
 export function RemoveButton({
@@ -21,7 +19,7 @@ export function RemoveButton({
       title={label}
       onClick={onClick}
     >
-      <AppIcon icon={X} size="sm" />
+      <AppIcon icon={ICON.close} size="sm" />
     </button>
   );
 }

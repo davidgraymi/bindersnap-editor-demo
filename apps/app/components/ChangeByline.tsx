@@ -1,4 +1,4 @@
-import { GitBranch } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 import type { ReactNode } from "react";
 
 import { followInApp } from "../appLink";
@@ -76,7 +76,7 @@ export function ChangeByline({
               title={branch}
               onClick={(event) => followInApp(event, onOpenBranch)}
             >
-              <GitBranch size={12} strokeWidth={1.75} aria-hidden="true" />
+              <AppIcon icon={ICON.draft} size="xs" />
               <span className="cmp-branch-label">
                 {branchLabel ?? describeBranch(branch, nameOf)}
               </span>

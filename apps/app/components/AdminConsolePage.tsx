@@ -6,7 +6,7 @@ import {
   useEffect,
   useState,
 } from "react";
-import { RefreshCw, Search } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import {
   clearAdminOrganizationAccess,
@@ -231,7 +231,7 @@ function AdminOverview({
             disabled={loading}
             onClick={() => setRefreshes((count) => count + 1)}
           >
-            <RefreshCw size={14} strokeWidth={1.6} aria-hidden="true" />
+            <AppIcon icon={ICON.refresh} size="sm" />
             {loading ? "Checking…" : "Check again"}
           </button>
         </div>
@@ -380,11 +380,10 @@ function ListPanel({
             onSubmit={submit}
             role="search"
           >
-            <Search
+            <AppIcon
+              icon={ICON.search}
+              size="sm"
               className="admin-console-search-icon"
-              size={14}
-              strokeWidth={1.5}
-              aria-hidden="true"
             />
             <input
               className="bs-input bs-input--sm"

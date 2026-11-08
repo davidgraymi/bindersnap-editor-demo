@@ -1,14 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import {
-  Archive,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  FileText,
-  FolderInput,
-  Pencil,
-} from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 import { useIsReadOnly } from "../readOnlyContext";
 
 import {
@@ -635,7 +627,7 @@ export function BinderDocuments({
               <span className="bs-panel-bar-spacer" />
               {/* Continuous save, said where the eye already is. */}
               <span className="bs-saved">
-                <Check size={13} strokeWidth={2} aria-hidden="true" />
+                <AppIcon icon={ICON.saved} size="sm" />
                 {committing ? "Saving…" : "Saved"}
               </span>
             </>
@@ -759,11 +751,7 @@ export function BinderDocuments({
                             )
                           }
                         >
-                          <Pencil
-                            size={14}
-                            strokeWidth={1.6}
-                            aria-hidden="true"
-                          />
+                          <AppIcon icon={ICON.edit} size="sm" />
                         </button>
                         {/* **Dragging is the fast path, not the only one.** It
                             needs a pointer, both ends of the move on screen at
@@ -780,11 +768,7 @@ export function BinderDocuments({
                             setMoving({ subject: subjectOf(node), label })
                           }
                         >
-                          <FolderInput
-                            size={14}
-                            strokeWidth={1.6}
-                            aria-hidden="true"
-                          />
+                          <AppIcon icon={ICON.moveToFolder} size="sm" />
                         </button>
                         {/* **Documents only.** Archiving a folder would mean
                             archiving everything in it, which is a different and
@@ -801,11 +785,7 @@ export function BinderDocuments({
                             disabled={committing}
                             onClick={() => void archiveDocument(node)}
                           >
-                            <Archive
-                              size={14}
-                              strokeWidth={1.6}
-                              aria-hidden="true"
-                            />
+                            <AppIcon icon={ICON.archive} size="sm" />
                           </button>
                         ) : null}
                       </>
@@ -856,11 +836,11 @@ export function BinderDocuments({
               onClick={() => setArchiveOpen((open) => !open)}
             >
               {archiveOpen ? (
-                <ChevronDown size={14} strokeWidth={1.6} aria-hidden="true" />
+                <AppIcon icon={ICON.chevronDown} size="sm" />
               ) : (
-                <ChevronRight size={14} strokeWidth={1.6} aria-hidden="true" />
+                <AppIcon icon={ICON.chevronRight} size="sm" />
               )}
-              <Archive size={14} strokeWidth={1.5} aria-hidden="true" />
+              <AppIcon icon={ICON.archive} size="sm" />
               {archivedCount === 1
                 ? "Archived · 1 document"
                 : `Archived · ${archivedCount} documents`}
@@ -876,7 +856,7 @@ export function BinderDocuments({
                     <span className="binder-tree-main binder-tree-main--inert">
                       <span className="binder-tree-twisty" aria-hidden="true" />
                       <span className="binder-tree-icon" aria-hidden="true">
-                        <FileText size={16} strokeWidth={1.4} />
+                        <AppIcon icon={ICON.document} size="md" />
                       </span>
                       <span className="binder-tree-label">{entry.title}</span>
                     </span>
@@ -918,7 +898,7 @@ export function BinderDocuments({
               className="bs-btn bs-btn--sm bs-btn--quiet binder-archive-link"
               onClick={onOpenArchive}
             >
-              <Archive size={14} strokeWidth={1.5} aria-hidden="true" />
+              <AppIcon icon={ICON.archive} size="sm" />
               {archivedCount === 1
                 ? "1 archived document"
                 : `${archivedCount} archived documents`}

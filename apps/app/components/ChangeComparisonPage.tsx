@@ -1,18 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import {
-  Archive,
-  ArchiveRestore,
-  Check,
-  ChevronDown,
-  Columns2,
-  Download,
-  Eye,
-  FilePlus2,
-  FileText,
-  Folder,
-  Layers,
-} from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import { downloadDocument } from "../api";
 import { followInApp } from "../appLink";
@@ -146,23 +134,10 @@ function isText(value: unknown): value is string {
 }
 
 function KindIcon({ kind }: { kind: ChangedDocumentRow["kind"] }) {
-  const size = 14;
-  const strokeWidth = 1.6;
-  if (kind === "added")
-    return (
-      <FilePlus2 size={size} strokeWidth={strokeWidth} aria-hidden="true" />
-    );
-  if (kind === "removed")
-    return <Archive size={size} strokeWidth={strokeWidth} aria-hidden="true" />;
-  if (kind === "restored")
-    return (
-      <ArchiveRestore
-        size={size}
-        strokeWidth={strokeWidth}
-        aria-hidden="true"
-      />
-    );
-  return <FileText size={size} strokeWidth={strokeWidth} aria-hidden="true" />;
+  if (kind === "added") return <AppIcon icon={ICON.newDocument} size="sm" />;
+  if (kind === "removed") return <AppIcon icon={ICON.archive} size="sm" />;
+  if (kind === "restored") return <AppIcon icon={ICON.restore} size="sm" />;
+  return <AppIcon icon={ICON.document} size="sm" />;
 }
 
 /**
@@ -653,11 +628,7 @@ export function ChangeComparisonPage({
                   <li key={group.folder || "(top)"}>
                     {group.folder ? (
                       <span className="cmp-tree-folder">
-                        <Folder
-                          size={13}
-                          strokeWidth={1.6}
-                          aria-hidden="true"
-                        />
+                        <AppIcon icon={ICON.folder} size="sm" />
                         {group.folder}
                       </span>
                     ) : null}
@@ -680,10 +651,10 @@ export function ChangeComparisonPage({
                                 className={`bs-row-icon cmp-rail-icon--${row.kind}`}
                               >
                                 {isRead ? (
-                                  <Check
-                                    size={14}
-                                    strokeWidth={2}
-                                    aria-hidden="true"
+                                  <AppIcon
+                                    icon={ICON.selected}
+                                    size="sm"
+                                    heavy
                                   />
                                 ) : (
                                   <KindIcon kind={row.kind} />
@@ -883,11 +854,10 @@ function ChangedDocumentSection({
             aria-controls={`${row.anchor}-body`}
             onClick={onToggle}
           >
-            <ChevronDown
+            <AppIcon
+              icon={ICON.chevronDown}
+              size="md"
               className={collapsed ? "cmp-file-chevron--shut" : undefined}
-              size={16}
-              strokeWidth={1.75}
-              aria-hidden="true"
             />
             <span className="sr-only">
               {collapsed ? `Show ${row.name}` : `Hide ${row.name}`}
@@ -924,7 +894,7 @@ function ChangedDocumentSection({
               aria-pressed={imageMode === "side-by-side"}
               onClick={() => onImageMode("side-by-side")}
             >
-              <Columns2 size={13} strokeWidth={1.75} aria-hidden="true" />
+              <AppIcon icon={ICON.compareSideBySide} size="sm" />
               Side by side
             </button>
             <button
@@ -933,7 +903,7 @@ function ChangedDocumentSection({
               aria-pressed={imageMode === "difference"}
               onClick={() => onImageMode("difference")}
             >
-              <Layers size={13} strokeWidth={1.75} aria-hidden="true" />
+              <AppIcon icon={ICON.compareInline} size="sm" />
               Difference
             </button>
           </span>
@@ -948,7 +918,7 @@ function ChangedDocumentSection({
           aria-pressed={read}
           onClick={onToggleRead}
         >
-          <Check size={13} strokeWidth={2} aria-hidden="true" />
+          <AppIcon icon={ICON.selected} size="sm" heavy />
           Viewed
         </button>
 
@@ -960,7 +930,7 @@ function ChangedDocumentSection({
             href={fileHref}
             onClick={(event) => followInApp(event, onReadFile)}
           >
-            <Eye size={14} strokeWidth={1.6} aria-hidden="true" />
+            <AppIcon icon={ICON.preview} size="sm" />
             View
           </a>
         )}
@@ -971,7 +941,7 @@ function ChangedDocumentSection({
             type="button"
             onClick={() => onDownload(downloadRef)}
           >
-            <Download size={14} strokeWidth={1.6} aria-hidden="true" />
+            <AppIcon icon={ICON.download} size="sm" />
             Download
           </button>
         )}

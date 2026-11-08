@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { History, Settings, type LucideIcon } from "lucide-react";
+import { AppIcon, ICON, type IconGlyph } from "./AppIcon";
 import { useIsReadOnly } from "../readOnlyContext";
 import { ApiRequestError } from "../../../packages/api-client/mutator";
 import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
@@ -1245,12 +1245,12 @@ export function BinderShell({
      * end of a 320px strip. The binder and its changes keep their words: they
      * carry counts, and they are where people are going.
      */
-    icon?: LucideIcon;
+    icon?: IconGlyph;
   }> = [
     { id: "documents", label: binderName, count: overview?.documentCount },
     { id: "changes", label: "Changes", count: overview?.openChangeCount },
-    { id: "history", label: "History", icon: History },
-    { id: "settings", label: "Settings", icon: Settings },
+    { id: "history", label: "History", icon: ICON.history },
+    { id: "settings", label: "Settings", icon: ICON.settings },
   ];
 
   /**
@@ -1410,7 +1410,7 @@ export function BinderShell({
           >
             {entry.icon ? (
               <>
-                <entry.icon size={15} strokeWidth={1.75} aria-hidden="true" />
+                <AppIcon icon={entry.icon} size="md" />
                 <span className="sr-only">{entry.label}</span>
               </>
             ) : (

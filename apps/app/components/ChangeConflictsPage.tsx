@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Download, FileText, GitMerge } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import type {
   ChangeConflictsPayload,
@@ -265,7 +265,7 @@ export function ChangeConflictsPage({
               disabled={open > 0 || submitting}
               onClick={() => void submit()}
             >
-              <GitMerge size={15} strokeWidth={1.75} aria-hidden="true" />
+              <AppIcon icon={ICON.resolveConflicts} size="md" />
               {submitting ? "Resolving…" : "Resolve and bring up to date"}
             </button>
           </div>
@@ -381,7 +381,7 @@ function ConflictFile({
       aria-label={displayConflictPath(file.path)}
     >
       <div className="bs-panel-bar conflict-file-bar">
-        <FileText size={15} strokeWidth={1.75} aria-hidden="true" />
+        <AppIcon icon={ICON.document} size="md" />
         <span
           className="conflict-file-name"
           title={displayConflictPath(file.path)}
@@ -535,7 +535,7 @@ function WholeChoice({
                   download(option.content!, name, option.take);
                 }}
               >
-                <Download size={13} strokeWidth={1.75} aria-hidden="true" />
+                <AppIcon icon={ICON.download} size="sm" />
                 Download
               </button>
             ) : null}

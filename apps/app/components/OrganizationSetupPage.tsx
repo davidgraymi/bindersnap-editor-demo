@@ -1,4 +1,4 @@
-import { Building2, UserPlus } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -121,11 +121,10 @@ export function OrganizationSetupPage({
                 checked={path === "create"}
                 onChange={() => setPath("create")}
               />
-              <Building2
+              <AppIcon
+                icon={ICON.organization}
+                size="md"
                 className="bs-choice-icon"
-                size={16}
-                strokeWidth={1.75}
-                aria-hidden="true"
               />
               <span>
                 <span className="bs-choice-name">Start a new organization</span>
@@ -142,11 +141,10 @@ export function OrganizationSetupPage({
                 checked={path === "join"}
                 onChange={() => setPath("join")}
               />
-              <UserPlus
+              <AppIcon
+                icon={ICON.addPerson}
+                size="md"
                 className="bs-choice-icon"
-                size={16}
-                strokeWidth={1.75}
-                aria-hidden="true"
               />
               <span>
                 <span className="bs-choice-name">
