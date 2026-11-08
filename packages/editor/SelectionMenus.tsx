@@ -1,19 +1,7 @@
 import type { Editor } from "@tiptap/core";
 import { NodeSelection } from "@tiptap/pm/state";
 import { BubbleMenu } from "@tiptap/react/menus";
-import {
-  Bold,
-  ClipboardPaste,
-  Copy,
-  Italic,
-  Link as LinkIcon,
-  RemoveFormatting,
-  Scissors,
-  Strikethrough,
-  Type,
-  Underline,
-  type LucideIcon,
-} from "lucide-react";
+import { AppIcon, ICON, type IconGlyph } from "../ui-tokens/icons";
 import {
   useEffect,
   useLayoutEffect,
@@ -74,42 +62,42 @@ export function SelectionToolbar({
       }}
     >
       <RibbonButton
-        icon={Bold}
+        icon={ICON.bold}
         label="Bold"
         shortcut="Ctrl+B"
         active={format.bold}
         onClick={() => editor.chain().focus().toggleBold().run()}
       />
       <RibbonButton
-        icon={Italic}
+        icon={ICON.italic}
         label="Italic"
         shortcut="Ctrl+I"
         active={format.italic}
         onClick={() => editor.chain().focus().toggleItalic().run()}
       />
       <RibbonButton
-        icon={Underline}
+        icon={ICON.underline}
         label="Underline"
         shortcut="Ctrl+U"
         active={format.underline}
         onClick={() => editor.chain().focus().toggleUnderline().run()}
       />
       <RibbonButton
-        icon={Strikethrough}
+        icon={ICON.strikethrough}
         label="Strikethrough"
         active={format.strike}
         onClick={() => editor.chain().focus().toggleStrike().run()}
       />
       <span className="bs-bubble-sep" aria-hidden="true" />
       <RibbonButton
-        icon={LinkIcon}
+        icon={ICON.link}
         label="Link"
         shortcut="Ctrl+K"
         active={format.link}
         onClick={onLink}
       />
       <RibbonButton
-        icon={RemoveFormatting}
+        icon={ICON.clearFormatting}
         label="Clear formatting"
         onClick={() => editor.chain().focus().unsetAllMarks().run()}
       />
@@ -119,7 +107,7 @@ export function SelectionToolbar({
 
 interface PageMenuItem {
   label: string;
-  icon: LucideIcon;
+  icon: IconGlyph;
   shortcut?: string;
   disabled?: boolean;
   /** A rule above it: the next set of commands. */
@@ -151,59 +139,59 @@ export function PageContextMenu({
   const items: PageMenuItem[] = [
     {
       label: "Cut",
-      icon: Scissors,
+      icon: ICON.cut,
       shortcut: "Ctrl+X",
       disabled: !selected,
       run: () => cutOrCopy(editor, "cut"),
     },
     {
       label: "Copy",
-      icon: Copy,
+      icon: ICON.copy,
       shortcut: "Ctrl+C",
       disabled: !selected,
       run: () => cutOrCopy(editor, "copy"),
     },
     {
       label: "Paste",
-      icon: ClipboardPaste,
+      icon: ICON.paste,
       shortcut: "Ctrl+V",
       run: () => void paste(editor, "source"),
     },
     {
       label: "Paste as plain text",
-      icon: Type,
+      icon: ICON.pastePlainText,
       shortcut: "Ctrl+Shift+V",
       run: () => void paste(editor, "text"),
     },
     {
       label: format.bold ? "Remove bold" : "Bold",
-      icon: Bold,
+      icon: ICON.bold,
       shortcut: "Ctrl+B",
       separated: true,
       run: () => editor.chain().focus().toggleBold().run(),
     },
     {
       label: format.italic ? "Remove italic" : "Italic",
-      icon: Italic,
+      icon: ICON.italic,
       shortcut: "Ctrl+I",
       run: () => editor.chain().focus().toggleItalic().run(),
     },
     {
       label: format.underline ? "Remove underline" : "Underline",
-      icon: Underline,
+      icon: ICON.underline,
       shortcut: "Ctrl+U",
       run: () => editor.chain().focus().toggleUnderline().run(),
     },
     {
       label: format.link ? "Edit link…" : "Link…",
-      icon: LinkIcon,
+      icon: ICON.link,
       shortcut: "Ctrl+K",
       separated: true,
       run: onLink,
     },
     {
       label: "Clear formatting",
-      icon: RemoveFormatting,
+      icon: ICON.clearFormatting,
       disabled: !selected,
       run: () => editor.chain().focus().unsetAllMarks().run(),
     },
@@ -298,7 +286,7 @@ export function PageContextMenu({
             }}
           >
             <span className="bs-pagemenu-label">
-              <item.icon size={15} strokeWidth={1.75} aria-hidden="true" />
+              <AppIcon icon={item.icon} size="md" />
               {item.label}
             </span>
             {item.shortcut ? (

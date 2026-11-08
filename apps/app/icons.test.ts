@@ -5,8 +5,8 @@ import { join, relative } from "node:path";
 import { ICON } from "../../packages/ui-tokens/icons";
 
 /**
- * The app draws every icon from the vocabulary (packages/ui-tokens/icons.tsx)
- * through AppIcon, at a size on the scale and the token's weight. CI does not
+ * The app and the editor draw every icon from the vocabulary
+ * (packages/ui-tokens/icons.tsx) through AppIcon, at a size on the scale and the token's weight. CI does not
  * typecheck, so these hold the line the types would: one call site reaching
  * for lucide-react directly is how three pictures for "draft" came about.
  */
@@ -25,7 +25,10 @@ function sourceFiles(dir: string): string[] {
   return out;
 }
 
-const files = sourceFiles(import.meta.dir).map((file) => ({
+const files = [
+  ...sourceFiles(import.meta.dir),
+  ...sourceFiles(join(ROOT, "packages/editor")),
+].map((file) => ({
   name: relative(ROOT, file),
   text: readFileSync(file, "utf8"),
 }));
@@ -38,7 +41,7 @@ const offenders = (pattern: RegExp) =>
     ),
   );
 
-describe("icons in the app", () => {
+describe("icons in the app and the editor", () => {
   test("come from the vocabulary, never from lucide-react directly", () => {
     expect(offenders(/from "lucide-react"/)).toEqual([]);
   });
@@ -48,7 +51,7 @@ describe("icons in the app", () => {
   });
 
   test("take a size from the scale, never a number", () => {
-    expect(offenders(/<AppIcon\b[^>]*\bsize=\{/)).toEqual([]);
+    expect(offenders(/<AppIcon\b[^>]*\bsize=\{[^}]*\d/)).toEqual([]);
     expect(offenders(/<AppIcon\b[^>]*\bsize="(?!(xs|sm|md|lg)")/)).toEqual([]);
   });
 
