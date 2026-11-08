@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { History } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import { fetchBinderHistory } from "../api";
 import { followInApp } from "../appLink";
@@ -137,7 +137,7 @@ export function BinderLatestChange({
           href={historyHref}
           onClick={(event) => followInApp(event, onOpenHistory)}
         >
-          <History size={14} strokeWidth={1.75} aria-hidden="true" />
+          <AppIcon icon={ICON.history} size="sm" />
           History
         </a>
       </div>

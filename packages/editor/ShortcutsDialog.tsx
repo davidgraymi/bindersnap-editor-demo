@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { X } from "lucide-react";
+import { AppIcon, ICON } from "../ui-tokens/icons";
 
 import { shortcutLabel } from "./ribbon/controls";
 import { SHORTCUT_GROUPS } from "./shortcuts";
@@ -47,7 +47,7 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
             aria-label="Close"
             onClick={onClose}
           >
-            <X size={16} strokeWidth={1.75} aria-hidden="true" />
+            <AppIcon icon={ICON.close} size="md" />
           </button>
         </div>
         <div className="bs-shortcuts-body">

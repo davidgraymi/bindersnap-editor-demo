@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Archive } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import { restoreBinderDocument } from "../api";
 import { binderArchiveQuery } from "../data/queries";
@@ -146,7 +146,7 @@ export function BinderArchive({
               className="docs-list-item docs-list-item--static"
               key={entry.uid}
             >
-              <Archive size={16} strokeWidth={1.5} aria-hidden="true" />
+              <AppIcon icon={ICON.archive} size="md" />
               <span className="docs-list-item-body">
                 <span className="docs-list-item-name">{entry.title}</span>
                 <span className="docs-list-item-meta">

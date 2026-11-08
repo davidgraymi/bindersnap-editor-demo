@@ -1,13 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import {
-  Bell,
-  CheckCheck,
-  CircleCheck,
-  GitPullRequest,
-  UserCheck,
-  X,
-} from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import { type AppNotification } from "../api";
 import { useMarkNotificationsRead } from "../data/notifications";
@@ -32,11 +25,11 @@ import { describeNotification } from "../notificationText";
 const POLL_MS = 60_000;
 
 const ICONS = {
-  review_requested: UserCheck,
-  your_change: GitPullRequest,
-  published: CircleCheck,
-  closed: X,
-  activity: GitPullRequest,
+  review_requested: ICON.approver,
+  your_change: ICON.changeRequest,
+  published: ICON.published,
+  closed: ICON.closed,
+  activity: ICON.changeRequest,
 } as const;
 
 interface NotificationBellProps {
@@ -132,7 +125,7 @@ export function NotificationBell({ onOpen }: NotificationBellProps) {
           setOpen((was) => !was);
         }}
       >
-        <Bell size={16} strokeWidth={1.5} aria-hidden="true" />
+        <AppIcon icon={ICON.notifications} size="md" />
         {unread > 0 ? (
           <span className="notif-badge" aria-hidden="true">
             {unread > 99 ? "99+" : unread}
@@ -175,7 +168,7 @@ export function NotificationBell({ onOpen }: NotificationBellProps) {
               onClick={markAll}
               title="Mark all as read"
             >
-              <CheckCheck size={14} strokeWidth={1.5} aria-hidden="true" />
+              <AppIcon icon={ICON.markAllRead} size="sm" />
               Mark all read
             </button>
           </div>
@@ -217,12 +210,7 @@ export function NotificationBell({ onOpen }: NotificationBellProps) {
                         openNote(note);
                       }}
                     >
-                      <Icon
-                        className="notif-icon"
-                        size={16}
-                        strokeWidth={1.5}
-                        aria-hidden="true"
-                      />
+                      <AppIcon icon={Icon} size="md" className="notif-icon" />
                       <span className="notif-body">
                         <span className="notif-name">{note.title}</span>
                         <span className="notif-meta">

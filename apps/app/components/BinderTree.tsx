@@ -1,8 +1,10 @@
-import { ChevronDown, ChevronRight, FileText, Folder } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import { followInApp } from "../appLink";
 import type { BinderTreeFolder, BinderTreeNode } from "../binderTree";
+import { isEditorDocumentFile } from "../binderDocument";
 import { formatDocumentName } from "../documentDisplay";
+import { describeFileKind, fileExtension } from "../documentFile";
 
 /**
  * The binder's contents, drawn the way a file explorer draws a folder.
@@ -168,7 +170,7 @@ function FolderRow({
 
   const icon = (
     <span className="binder-tree-icon" aria-hidden="true">
-      <Folder size={16} strokeWidth={1.4} />
+      <AppIcon icon={ICON.folder} size="md" />
     </span>
   );
 
@@ -199,9 +201,9 @@ function FolderRow({
           >
             <span className="binder-tree-twisty" aria-hidden="true">
               {isOpen ? (
-                <ChevronDown size={14} strokeWidth={1.6} />
+                <AppIcon icon={ICON.chevronDown} size="sm" />
               ) : (
-                <ChevronRight size={14} strokeWidth={1.6} />
+                <AppIcon icon={ICON.chevronRight} size="sm" />
               )}
             </span>
             {icon}
@@ -269,6 +271,7 @@ function DocumentRow({
   const isActive = activeDocument === document.slugPath;
   const instead = renderRowLabel?.(node) ?? null;
   const { className: extra, ...dragProps } = rowProps?.(node) ?? {};
+  const written = isEditorDocumentFile(document.path);
 
   /* A document has nothing to twist open, but it lines up with the folders
      above it — a ragged left edge is what makes a tree read as a list of
@@ -277,9 +280,22 @@ function DocumentRow({
     <>
       <span className="binder-tree-twisty" aria-hidden="true" />
       <span className="binder-tree-icon" aria-hidden="true">
-        <FileText size={16} strokeWidth={1.4} />
+        <AppIcon icon={written ? ICON.document : ICON.uploadedFile} size="md" />
       </span>
     </>
+  );
+  /* **A file says what it is.** One written here opens in the editor; a Word
+     file or a PDF opens in the program that made it, and "PDF" tells this
+     reader that faster than any picture can. It is kept out of the row's
+     accessible name, which stays the document's name alone. */
+  const format = written ? null : (
+    <span
+      className="binder-tree-format"
+      title={describeFileKind(document.path)}
+      aria-hidden="true"
+    >
+      {fileExtension(document.path).toUpperCase() || "FILE"}
+    </span>
   );
 
   return (
@@ -312,6 +328,7 @@ function DocumentRow({
           <span className="binder-tree-label">
             {formatDocumentName(document.name)}
           </span>
+          {format}
         </a>
       ) : (
         <button
@@ -324,6 +341,7 @@ function DocumentRow({
           <span className="binder-tree-label">
             {formatDocumentName(document.name)}
           </span>
+          {format}
         </button>
       )}
 

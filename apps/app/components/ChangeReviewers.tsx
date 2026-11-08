@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
-import { Check, Clock, MessageSquare, Plus, X } from "lucide-react";
+import { AppIcon, ICON, type IconGlyph } from "./AppIcon";
 
 import { updateChangeAssignments } from "../api";
 import { binderCollaboratorsQuery, searchUsersQuery } from "../data/queries";
@@ -75,12 +75,12 @@ interface UserOption {
  * this row that is finished. Everything else is quiet and grey — a reviewer
  * who has not answered yet is not a problem, they are just not done.
  */
-const STATUS_ICONS: Record<ReviewerDisplayStatus, typeof Check> = {
-  approved: Check,
-  changes_requested: X,
-  thread_open: MessageSquare,
-  commented: MessageSquare,
-  awaiting: Clock,
+const STATUS_ICONS: Record<ReviewerDisplayStatus, IconGlyph> = {
+  approved: ICON.approved,
+  changes_requested: ICON.changesRequested,
+  thread_open: ICON.openConcern,
+  commented: ICON.comment,
+  awaiting: ICON.waiting,
 };
 
 function readError(err: unknown, fallback: string): string {
@@ -335,7 +335,7 @@ export function ChangeReviewers({
                   className={`rev-reviewer-mark rev-reviewer-mark--${status}`}
                   title={getReviewerStatusLabel(status)}
                 >
-                  <Icon size={13} strokeWidth={2} aria-hidden="true" />
+                  <AppIcon icon={Icon} size="sm" heavy />
                   <span className="sr-only">
                     {getReviewerStatusLabel(status)}
                   </span>
@@ -356,7 +356,7 @@ export function ChangeReviewers({
                       )
                     }
                   >
-                    <X size={12} strokeWidth={2} aria-hidden="true" />
+                    <AppIcon icon={ICON.close} size="xs" heavy />
                     <span className="sr-only">
                       Remove {getReviewerDisplayName(reviewer)} as a reviewer
                     </span>
@@ -383,7 +383,7 @@ export function ChangeReviewers({
               aria-haspopup="true"
               onClick={() => (picking ? closePicker() : setPicking(true))}
             >
-              <Plus size={13} strokeWidth={2} aria-hidden="true" />
+              <AppIcon icon={ICON.add} size="sm" heavy />
               Reviewer
             </button>
           ) : null}

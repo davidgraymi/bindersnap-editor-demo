@@ -1,16 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import {
-  AlertTriangle,
-  Building2,
-  FileText,
-  Folder,
-  Library,
-  Pencil,
-  Plus,
-  ShieldCheck,
-  Users,
-} from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 import { useIsReadOnly } from "../readOnlyContext";
 import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
 
@@ -68,7 +58,7 @@ import { FloatingResults } from "./FloatingResults";
 import { RemoveButton } from "./RemoveButton";
 import { formatDocumentName } from "../documentDisplay";
 import { describeGroupName } from "../../../packages/utils/groupName";
-import { AppIcon } from "./AppIcon";
+
 import { PersonAvatar } from "./PersonAvatar";
 import { SettingsGroup } from "./SettingsGroup";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
@@ -613,7 +603,7 @@ function AccessTab({
         <ul className="bs-row-list">
           <li className="bs-row">
             <span className="bs-row-icon">
-              <AppIcon icon={Building2} size="md" />
+              <AppIcon icon={ICON.organization} size="md" />
             </span>
             <span className="bs-row-body">
               <label className="bs-row-name" htmlFor="binder-open">
@@ -663,7 +653,7 @@ function AccessTab({
               return (
                 <li className="bs-row" key={`group:${group.id}`}>
                   <span className="bs-row-icon">
-                    <AppIcon icon={Users} size="md" />
+                    <AppIcon icon={ICON.people} size="md" />
                   </span>
                   <span className="bs-row-body">
                     <span className="bs-row-name">{name}</span>
@@ -827,7 +817,7 @@ function AddMember({
     return (
       <div className="bs-panel-foot">
         {chosen.kind === "group" ? (
-          <AppIcon icon={Users} size="sm" />
+          <AppIcon icon={ICON.people} size="sm" />
         ) : (
           <PersonAvatar
             person={{ login: chosen.login, fullName: chosen.label }}
@@ -926,7 +916,7 @@ function AddMember({
                     }}
                   >
                     {match.kind === "group" ? (
-                      <AppIcon icon={Users} size="sm" />
+                      <AppIcon icon={ICON.people} size="sm" />
                     ) : (
                       <PersonAvatar
                         person={{ login: match.login, fullName: match.label }}
@@ -1087,13 +1077,13 @@ export function describeOwners(
 function scopeIcon(scope: SignOffRuleView["scope"]) {
   switch (scope) {
     case "binder":
-      return Library;
+      return ICON.binder;
     case "folder":
-      return Folder;
+      return ICON.folder;
     case "document":
-      return FileText;
+      return ICON.document;
     case "rules":
-      return ShieldCheck;
+      return ICON.rules;
   }
 }
 
@@ -1466,7 +1456,7 @@ function ApprovalsTab({
                           title="Change"
                           onClick={() => setEditingRule(rule.key)}
                         >
-                          <AppIcon icon={Pencil} size="sm" />
+                          <AppIcon icon={ICON.edit} size="sm" />
                         </button>
                         <RemoveButton
                           label={`Remove the rule for ${describeTarget(rule, signOff.documents)}`}
@@ -1490,7 +1480,7 @@ function ApprovalsTab({
               <tr key={`unreadable-${line.line}`}>
                 <td colSpan={3}>
                   <span className="bs-settings-rules-target bs-row-meta--warn">
-                    <AppIcon icon={AlertTriangle} size="sm" />
+                    <AppIcon icon={ICON.warning} size="sm" />
                     <span>
                       A rule that cannot be read, and enforces nothing:{" "}
                       <code className="bs-filename">{line.text}</code>
@@ -1555,7 +1545,7 @@ function ApprovalsTab({
                 className="bs-btn bs-btn--sm bs-btn--quiet"
                 onClick={() => setAdding(true)}
               >
-                <AppIcon icon={Plus} size="sm" />
+                <AppIcon icon={ICON.add} size="sm" />
                 Add a rule for a folder or document
               </button>
             </div>
@@ -1773,7 +1763,7 @@ function EveryChangeRow({
     <tr>
       <td>
         <span className="bs-settings-rules-target">
-          <AppIcon icon={Library} size="sm" />
+          <AppIcon icon={ICON.binder} size="sm" />
           <span>
             <span className="rev-rules-name">Every change</span>
             <span className="rev-rules-owners">

@@ -165,6 +165,35 @@ Each radius has a use. Do not apply them arbitrarily:
 | `--brand-radius-2xl`  | 24px   | CTA boxes, hero containers, modal dialogs     |
 | `--brand-radius-full` | 9999px | Pills, avatars, count badges                  |
 
+## Icons
+
+Icons are Lucide, drawn only through `AppIcon` with a glyph from `ICON`
+(`packages/ui-tokens/icons.tsx`). `ICON` names each glyph by what it means
+— `ICON.draft`, `ICON.changeRequest`, `ICON.onRecord` — and is the whole set:
+
+- **One glyph per idea, one idea per glyph.** A person who opens the app a
+  few times a month learns a picture only if it never changes and never means
+  something else. A new icon is a new entry in `ICON`; if its glyph is
+  already taken, it is either the same idea (reuse the entry) or it needs
+  another picture. `icons.test.ts` refuses a second meaning unless it is
+  added to `SHARED_GLYPHS` on purpose.
+- **The record's lifecycle is three shapes**: a pencil for a draft, a
+  clipboard for a change request, and the seal (`BadgeCheck`) for a version
+  on the record. The seal is for approved, published versions and nothing
+  else.
+- **Verdicts are circles**: approved, changes requested, open, closed. The
+  bare tick (`ICON.selected`) means chosen or ticked, and the bare X
+  (`ICON.close`) means close or remove. Neither is ever a verdict.
+- **No Git symbols.** The words say "draft" and "change request", and so do
+  the pictures.
+- **Four sizes, one weight**: `size="xs" | "sm" | "md" | "lg"` (12, 14, 16,
+  20px) at `--brand-icon-stroke` (1.75). `heavy` is for emphasis only. Never
+  pass a number as `size` or a `strokeWidth`.
+- **An icon never carries meaning alone.** A status says its word beside the
+  icon, and an icon-only button has an `aria-label`.
+- The public site copies Lucide's paths into its HTML, so it follows the same
+  meanings, and its icons take their weight from `--brand-icon-stroke` in CSS.
+
 ## Components
 
 - **Section eyebrow:** every section opens with a mono coral label with

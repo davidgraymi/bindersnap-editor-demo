@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { PencilLine } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import type { MyDraft } from "../../../packages/api-schema/schemas/workspaces";
 import { followInApp, navigateToHref } from "../appLink";
@@ -94,11 +94,10 @@ export function MyDrafts({
         key={`${draft.organization}/${draft.workspace}/${draft.branch}`}
       >
         <span className="bs-row-icon">
-          <PencilLine
+          <AppIcon
+            icon={ICON.draft}
+            size="md"
             className="change-row-icon change-row-icon--open"
-            size={16}
-            strokeWidth={1.75}
-            aria-hidden="true"
           />
         </span>
         <a

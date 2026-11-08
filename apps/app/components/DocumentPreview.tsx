@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Download, FileText } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import { sanitizeHtml } from "../../../packages/utils/sanitizer";
 import {
@@ -238,7 +238,7 @@ export function DocumentPreview({
         className={`doc-preview-fallback${failed ? " doc-preview-fallback--error" : ""}`}
         role={failed ? "status" : undefined}
       >
-        <FileText size={16} strokeWidth={1.5} aria-hidden="true" />
+        <AppIcon icon={ICON.document} size="md" />
         <span className="doc-preview-fallback-main">
           <span className="doc-preview-fallback-name">
             {fileName ?? "This version"}
@@ -264,7 +264,7 @@ export function DocumentPreview({
       {bare ? null : (
         <header className="doc-preview-toolbar">
           <span className="doc-preview-filename">
-            <FileText size={14} strokeWidth={1.5} aria-hidden="true" />
+            <AppIcon icon={ICON.document} size="sm" />
             <span
               className={`doc-preview-filename-text${
                 isWrittenHere(fileName)
@@ -384,7 +384,7 @@ function DownloadButtons({
           disabled={downloading}
           onClick={() => onExport("pdf")}
         >
-          <Download size={14} strokeWidth={1.5} aria-hidden="true" />
+          <AppIcon icon={ICON.download} size="sm" />
           <span className="doc-preview-download-label">
             {downloading ? "Preparing…" : "PDF"}
           </span>
@@ -396,7 +396,7 @@ function DownloadButtons({
           disabled={downloading}
           onClick={() => onExport("docx")}
         >
-          <Download size={14} strokeWidth={1.5} aria-hidden="true" />
+          <AppIcon icon={ICON.download} size="sm" />
           <span className="doc-preview-download-label">Word</span>
         </button>
       </span>
@@ -410,7 +410,7 @@ function DownloadButtons({
       disabled={downloading || !fileName}
       onClick={onDownload}
     >
-      <Download size={14} strokeWidth={1.5} aria-hidden="true" />
+      <AppIcon icon={ICON.download} size="sm" />
       <span className="doc-preview-download-label">
         {downloading ? "Downloading…" : "Download"}
       </span>

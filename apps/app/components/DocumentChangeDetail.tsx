@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
-import { Columns2, FileText, Pencil } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import type { ChangeUpdate, RepoBranchProtection } from "../api";
 import { publishDocument, submitDocumentReview } from "../api";
@@ -609,7 +609,7 @@ export function DocumentChangeDetail({
                     })
                   }
                 >
-                  <Pencil size={15} strokeWidth={1.6} aria-hidden="true" />
+                  <AppIcon icon={ICON.edit} size="md" />
                 </button>
               </div>
             ) : null}

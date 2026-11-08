@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, type LucideIcon } from "lucide-react";
+import { AppIcon, ICON, type IconGlyph } from "../../ui-tokens/icons";
 
 /**
  * The ribbon's building blocks: a button, a labelled group, a menu that drops
@@ -49,7 +49,7 @@ export const keepSelection = (event: React.MouseEvent) =>
   event.preventDefault();
 
 interface RibbonButtonProps {
-  icon: LucideIcon;
+  icon: IconGlyph;
   /** Said aloud, and shown as the tooltip with the shortcut beside it. */
   label: string;
   shortcut?: string;
@@ -97,7 +97,7 @@ export function RibbonButton({
       onDoubleClick={onDoubleClick}
     >
       <span className="bs-rb-icon" aria-hidden="true">
-        <Icon size={large ? 22 : 16} strokeWidth={1.75} />
+        <AppIcon icon={Icon} size={large ? "lg" : "md"} />
         {swatch !== undefined ? (
           <span
             className="bs-rb-swatch"
@@ -128,7 +128,7 @@ export function RibbonGroup({
   children: ReactNode;
   className?: string;
   /** Drawn on the button the group folds into. */
-  icon?: LucideIcon;
+  icon?: IconGlyph;
   folded?: boolean;
 }) {
   if (folded && Icon) {
@@ -150,7 +150,7 @@ export function RibbonGroup({
               </div>
             )}
           >
-            <Icon size={22} strokeWidth={1.75} aria-hidden="true" />
+            <AppIcon icon={Icon} size="lg" />
             <span className="bs-rb-label">{label}</span>
           </DropButton>
         </div>
@@ -350,11 +350,11 @@ export function DropButton({
         onClick={() => setOpen((was) => !was)}
       >
         {children}
-        <ChevronDown
+        <AppIcon
+          icon={ICON.chevronDown}
+          size="xs"
+          heavy
           className="bs-rdrop-chevron"
-          size={12}
-          strokeWidth={2}
-          aria-hidden="true"
         />
       </button>
       {open

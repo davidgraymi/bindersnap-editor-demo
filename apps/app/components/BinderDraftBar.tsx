@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Loader2, Pencil } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import type { DraftAct } from "../../../packages/api-schema/schemas/workspaces";
 import { countDraftDocuments } from "../../../packages/utils/documentPath";
-import { AppIcon } from "./AppIcon";
+
 import { countInDraft } from "./BinderDraftPicker";
 
 /**
@@ -70,9 +70,9 @@ export function BinderDraftBar({
       <div className="bs-draftbar-row">
         <span className="bs-draftbar-mark" aria-hidden="true">
           {busy ? (
-            <Loader2 size={15} strokeWidth={1.6} className="draft-bar-spin" />
+            <AppIcon icon={ICON.loading} size="md" className="draft-bar-spin" />
           ) : (
-            <AppIcon icon={Pencil} size="sm" />
+            <AppIcon icon={ICON.draft} size="sm" />
           )}
         </span>
 

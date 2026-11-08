@@ -75,6 +75,15 @@ body::after {
   line-height: 0;
 }
 
+/* The app's weight, from the token, whatever a copied path says. */
+.landing-lucide-icon svg {
+  stroke-width: var(--brand-icon-stroke);
+}
+
+.landing-lucide-icon--heavy svg {
+  stroke-width: var(--brand-icon-stroke-heavy);
+}
+
 /* Icon show/hide, driven by the [data-theme] attribute */
 .icon-sun {
   display: none;

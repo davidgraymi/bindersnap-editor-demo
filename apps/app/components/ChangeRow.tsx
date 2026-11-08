@@ -1,4 +1,4 @@
-import { CircleCheck, CircleSlash, FilePen, MessageSquare } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import { followInApp } from "../appLink";
 import type { ChangeRowInput, ChangeStandingTone } from "../changeRow";
@@ -37,32 +37,36 @@ interface ChangeRowProps {
  *
  * **Not git glyphs.** A branch-fork and a merge-arrow are precise to anyone
  * who has used GitHub and unreadable to everyone else, and the reader here is
- * a compliance manager. A document-with-a-pen for a change somebody is still
- * proposing, and a tick for one that is published, say the same thing without
- * the vocabulary lesson.
+ * a compliance manager. An open circle for a change still in review, the seal
+ * for one that put a version on the record, and a struck circle for one closed
+ * without it say the same thing without the vocabulary lesson.
  */
 function ChangeIcon({ outcome }: { outcome: ChangeRowInput["outcome"] }) {
-  const props = { size: 16, strokeWidth: 1.5, "aria-hidden": true } as const;
-
   if (outcome === "published") {
     return (
-      <CircleCheck
+      <AppIcon
+        icon={ICON.published}
+        size="md"
         className="change-row-icon change-row-icon--published"
-        {...props}
       />
     );
   }
   // One mark for every change closed without publishing, as the word is one.
   if (outcome === "declined" || outcome === "withdrawn") {
     return (
-      <CircleSlash
+      <AppIcon
+        icon={ICON.closed}
+        size="md"
         className="change-row-icon change-row-icon--closed"
-        {...props}
       />
     );
   }
   return (
-    <FilePen className="change-row-icon change-row-icon--open" {...props} />
+    <AppIcon
+      icon={ICON.open}
+      size="md"
+      className="change-row-icon change-row-icon--open"
+    />
   );
 }
 
@@ -170,7 +174,7 @@ export function ChangeRowView({
         >
           {commentCount > 0 ? (
             <>
-              <MessageSquare size={13} strokeWidth={1.75} aria-hidden="true" />
+              <AppIcon icon={ICON.comment} size="sm" />
               {commentCount}
             </>
           ) : null}
