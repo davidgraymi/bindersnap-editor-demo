@@ -1,8 +1,16 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { Editor, generateHTML, type JSONContent } from "@tiptap/core";
 
 import { documentContentExtensions } from "../documentSchema";
-import { dateChoices, shadingColor } from "./options";
+import {
+  ZOOM_MAX,
+  ZOOM_MIN,
+  dateChoices,
+  pinchZoom,
+  shadingColor,
+  stepZoom,
+  zoomKey,
+} from "./options";
 
 const editors: Editor[] = [];
 
@@ -74,4 +82,49 @@ test("a shaded cell survives the round trip, header or not", () => {
   // The DOM writes a style back in rgb(); either is a colour and no more.
   expect(html).toMatch(/background-color: (#dbeafe|rgb\(219, 234, 254\))/);
   expect(html).toMatch(/background-color: (#fef9c3|rgb\(254, 249, 195\))/);
+});
+
+describe("zoom", () => {
+  const press = (key: string, extra: Partial<KeyboardEvent> = {}) =>
+    zoomKey({
+      key,
+      ctrlKey: true,
+      metaKey: false,
+      altKey: false,
+      ...extra,
+    });
+
+  test("Ctrl+=, Ctrl+- and Ctrl+0 are the page's zoom", () => {
+    expect(press("=")).toBe("in");
+    expect(press("+", { shiftKey: true } as Partial<KeyboardEvent>)).toBe("in");
+    expect(press("-")).toBe("out");
+    expect(press("0")).toBe("reset");
+    expect(press("=", { ctrlKey: false, metaKey: true })).toBe("in");
+  });
+
+  test("by where the key is, when the layout moves the character", () => {
+    expect(press("ß", { code: "Minus" })).toBe("out");
+    expect(press("à", { code: "Digit0" })).toBe("reset");
+  });
+
+  test("not without Ctrl, and not with Alt: Ctrl+Alt+0 is Normal text", () => {
+    expect(press("=", { ctrlKey: false })).toBeNull();
+    expect(press("0", { altKey: true })).toBeNull();
+    expect(press("b")).toBeNull();
+  });
+
+  test("a step lands on the next tenth, within the bounds", () => {
+    expect(stepZoom(100, "in")).toBe(110);
+    expect(stepZoom(94, "in")).toBe(100);
+    expect(stepZoom(94, "out")).toBe(90);
+    expect(stepZoom(ZOOM_MAX, "in")).toBe(ZOOM_MAX);
+    expect(stepZoom(ZOOM_MIN, "out")).toBe(ZOOM_MIN);
+  });
+
+  test("a pinch scales the zoom, a wheel's notch by about a tenth", () => {
+    expect(pinchZoom(100, -100)).toBeCloseTo(110.5, 1);
+    expect(pinchZoom(100, 2)).toBeCloseTo(98.02, 2);
+    expect(pinchZoom(ZOOM_MAX, -100)).toBe(ZOOM_MAX);
+    expect(pinchZoom(ZOOM_MIN, 100)).toBe(ZOOM_MIN);
+  });
 });

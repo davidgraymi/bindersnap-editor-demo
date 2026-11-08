@@ -1607,6 +1607,21 @@ input {
   margin-top: 0;
 }
 
+/* A document's Title and Subtitle — paragraphs the editor styles. */
+.doc-preview-prose .bs-title {
+  margin: 0 0 var(--brand-space-1);
+  color: var(--bs-text-primary);
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-h2);
+  font-weight: var(--brand-weight-semibold);
+  line-height: var(--brand-leading-tight);
+}
+
+.doc-preview-prose .bs-subtitle {
+  margin: 0 0 var(--brand-space-4);
+  font-size: var(--brand-text-body-lg);
+}
+
 .doc-preview-prose h1,
 .doc-preview-prose h2,
 .doc-preview-prose h3,
@@ -8393,6 +8408,19 @@ a.cmp-file-act {
   font-weight: var(--brand-weight-semibold);
 }
 
+/* The Drafts page's one line under "Not proposed yet" (`MyDrafts`). */
+.drafts-lede {
+  margin: 0;
+  padding: var(--brand-space-2) var(--brand-space-2) 0;
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-sm);
+}
+
+.drafts-page {
+  display: grid;
+  gap: var(--brand-space-4);
+}
+
 .bs-panel-bar-spacer {
   flex: 1;
 }
@@ -11101,15 +11129,19 @@ html.bs-writing .app-main {
   min-height: 52px;
   padding: var(--brand-space-2) var(--brand-space-3) var(--brand-space-2)
     var(--brand-space-4);
-  border-bottom: 1px solid var(--bs-rule);
+  /* The editor's ground, with no rule under it: the bar and the ribbon's
+     tabs read as one surface, as in Word. */
   background: var(--bs-surface-2);
 }
 
-/* Binder / folder / document: the trail the top bar used to carry, ending in
-   the one thing this page is about. */
+/* Binder / document: the trail the top bar used to carry, ending in the one
+   thing this page is about. */
 .doc-editor-head-body {
   display: flex;
-  flex: 0 1 auto;
+  /* **A fixed width, whatever the title.** Sized to the title it held, the
+     slot moved the draft picker and everything after it with every policy
+     opened. A long title ellipses inside it; a short one leaves it room. */
+  flex: 0 1 clamp(14rem, 30vw, 28rem);
   align-items: center;
   gap: var(--brand-space-1);
   min-width: 0;
@@ -11313,45 +11345,195 @@ html.bs-writing .app-main {
   margin: var(--brand-space-2) var(--brand-space-5);
 }
 
-/* The draft's files beside the page, the way GitLab's Web IDE keeps its
-   tree beside the file: the same rows as the binder's file panel, in a panel
-   of the editor's own so the shell's rule hiding that one does not hide it. */
+/* The draft's files over the page, the same rows as the binder's file panel,
+   in a panel of the editor's own so the shell's rule hiding that one does
+   not hide it. */
 .doc-editor-workspace {
+  position: relative;
   display: flex;
   flex: 1 1 0;
   min-height: 0;
 }
 
+/* The draft's files float over the desk rather than standing beside it: the
+   anchor takes no room in the row, so the page keeps its width, and what it
+   holds — a small button, or the open panel — sits at the desk's corner. */
+.doc-files-anchor {
+  position: relative;
+  /* Over the page, under every menu: the drafts menu, the ribbon's
+     dropdowns and the rest float at the overlay layer above it. */
+  z-index: var(--brand-z-raised);
+  flex: none;
+  width: 0;
+}
+
+.doc-files-launcher {
+  position: absolute;
+  top: var(--brand-space-3);
+  left: var(--brand-space-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--brand-space-8);
+  height: var(--brand-space-8);
+  padding: 0;
+  border: 1px solid var(--bs-rule-warm);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-1);
+  box-shadow: var(--bs-shadow-sm);
+  color: var(--bs-text-muted);
+  cursor: pointer;
+  transition:
+    color var(--brand-transition-base),
+    background var(--brand-transition-base);
+}
+
+.doc-files-launcher:hover {
+  background: var(--bs-surface-2);
+  color: var(--bs-text-primary);
+}
+
+.doc-files-launcher:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 2px;
+}
+
+/* Open: a card about as tall as the desk, inset from the ribbon above and
+   the status bar below, as wide as its edge was last dragged. */
+.doc-files-float {
+  position: absolute;
+  top: var(--brand-space-3);
+  bottom: var(--brand-space-3);
+  left: var(--brand-space-3);
+  display: flex;
+  max-width: calc(100vw - var(--brand-space-12));
+  border: 1px solid var(--bs-rule-warm);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  /* The ribbon's card's depth: the two float off the same ground, so they
+     float the same height above it. */
+  box-shadow: var(--bs-shadow-sm);
+}
+
 .doc-files {
   display: flex;
-  flex: none;
+  flex: 1;
   flex-direction: column;
-  width: 248px;
+  min-width: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  border-right: 1px solid var(--bs-rule);
-  background: var(--bs-surface-1);
+  border-radius: inherit;
 }
 
-/* On a narrow window the panel opens over the page, not beside it. */
-.doc-editor-workspace {
-  position: relative;
+/* The card's right edge, dragged to widen it: the hit area straddles the
+   border, which lights up coral while it is held or has the keyboard. */
+.doc-files-resize {
+  position: absolute;
+  top: var(--brand-space-3);
+  right: 0;
+  bottom: var(--brand-space-3);
+  width: 0;
+  touch-action: none;
 }
 
-.doc-files--floating {
+.doc-files-resize::before {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 40px;
-  z-index: var(--brand-z-overlay);
-  box-shadow: var(--bs-elevation-menu);
+  left: calc(var(--brand-space-1) * -1);
+  width: var(--brand-space-2);
+  cursor: col-resize;
+  content: "";
 }
 
-.doc-files--shut {
-  align-items: center;
+.doc-files-resize::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -2px;
+  width: 3px;
+  border-radius: var(--brand-radius-full);
+  background: transparent;
+  content: "";
+  transition: background var(--brand-transition-fast);
+}
+
+.doc-files-resize:hover::after,
+.doc-files-resize:focus-visible::after,
+.doc-files-resize--active::after {
+  background: var(--brand-coral);
+}
+
+.doc-files-resize:focus-visible {
+  outline: none;
+}
+
+/* While it is dragged, the whole window shows the resize cursor and no text
+   is selected under the pointer. */
+html:has(.doc-files-resize--active) {
+  cursor: col-resize;
+  user-select: none;
+}
+
+/* Beside the page, the panel's names are read as often as the page is: the
+   size of the ribbon's tabs, not of a sidebar's fine print. */
+.doc-files .app-explorer-item,
+.doc-files .app-explorer-folder {
+  min-height: 32px;
+  font-size: var(--brand-text-ui-md);
+}
+
+/* The tree takes the panel's spare height, so a right-click below the last
+   row lands on it and opens the top level's menu. */
+.doc-files .app-explorer-tree {
+  flex: 1 0 auto;
+}
+
+/* Files | Outline: the binder's files, or the open document's headings. Two
+   sides of one panel, switched in its head where its title was. */
+.doc-files-tabs {
+  display: inline-flex;
+  flex: 1;
+  align-self: stretch;
   gap: var(--brand-space-1);
-  width: 40px;
-  padding-top: var(--brand-space-2);
+  /* The ribbon's tabs: an underline on the head's own rule. */
+  margin-bottom: -1px;
+}
+
+.doc-files-tab {
+  padding: 0 var(--brand-space-1);
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--bs-text-muted);
+  cursor: pointer;
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-medium);
+  transition:
+    color var(--brand-transition-fast),
+    border-color var(--brand-transition-fast);
+}
+
+.doc-files-tab:hover {
+  color: var(--bs-text-primary);
+}
+
+.doc-files-tab.is-on {
+  border-bottom-color: var(--brand-coral);
+  color: var(--bs-text-primary);
+}
+
+.doc-files-tab:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: -2px;
+}
+
+.doc-files-outline {
+  flex: 1;
+  min-height: 0;
+  padding: var(--brand-space-2);
+  overflow-y: auto;
 }
 
 /* The open policy has words not saved yet — the dot an IDE puts on a tab. */
@@ -11450,6 +11632,13 @@ html.bs-writing .app-main {
   opacity: 0.4;
 }
 
+/* Files from the computer, over the top level: the whole tree takes them. */
+.doc-files-tree--drop {
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-coral-dim);
+  box-shadow: inset 0 0 0 2px var(--brand-coral);
+}
+
 /* A folder a drop would land in: inset, so aiming at it moves nothing. */
 .doc-files-group--drop {
   border-radius: var(--brand-radius-md);
@@ -11486,23 +11675,106 @@ html.bs-writing .app-main {
   padding: var(--brand-space-8);
 }
 
+/* ─── A Word file or a PDF in the editor (`EditorFileCover`) ──────────────
+   Shown on the desk where the page goes, a sheet's width, with a note at its
+   top right that says what it is and offers the one way to write in it. The
+   note stays in view as the file scrolls. */
+
+.doc-editor-cover {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--brand-space-3);
+  width: min(100%, 8.5in);
+  margin: 0 auto;
+}
+
+.doc-editor-cover-note {
+  position: sticky;
+  top: 0;
+  z-index: var(--brand-z-raised);
+  justify-self: end;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--brand-space-2) var(--brand-space-3);
+  max-width: 100%;
+  padding: var(--brand-space-2) var(--brand-space-2) var(--brand-space-2)
+    var(--brand-space-3);
+  border: 1px solid var(--bs-rule-warm);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  box-shadow: var(--bs-shadow-sm);
+}
+
+.doc-editor-cover-icon {
+  display: inline-flex;
+  color: var(--bs-text-muted);
+}
+
+.doc-editor-cover-text {
+  display: grid;
+  gap: var(--brand-space-0-5);
+  min-width: 0;
+  flex: 1 1 14rem;
+  font-size: var(--brand-text-sm);
+  color: var(--bs-text-secondary);
+}
+
+.doc-editor-cover-text strong {
+  font-weight: 600;
+  color: var(--bs-text-primary);
+}
+
+.doc-editor-cover-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--brand-space-2);
+}
+
+.doc-editor-cover-actions .bs-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+}
+
+/* A PDF as tall as the desk shows, rather than a box in the middle of it,
+   and close to the card's edge: the PDF brings its own margins. */
+.doc-editor-cover .doc-preview-frame {
+  min-height: calc(100dvh - 15rem);
+}
+
+.doc-editor-cover .doc-preview-body:has(> .doc-preview-frame) {
+  padding: var(--brand-space-2);
+}
+
 .doc-editor-frame {
   flex: 1 1 0;
   min-height: 420px;
   overflow: hidden;
 }
 
-/* The last policy, still on the page while the next is read: dimmed, and not
-   a place to type, for the moment it takes. */
+/* The last policy, still on the page while the next is read, and not a
+   place to type for the moment it takes. **Dimmed only when the moment is
+   long**: most policies arrive at once — read ahead as the row is pointed
+   at — and a page that flickered grey on every click felt like a reload. */
 .doc-editor-frame--opening {
-  opacity: 0.55;
-  transition: opacity 120ms ease-out;
   pointer-events: none;
+  cursor: progress;
+}
+
+.doc-editor-frame--opening .bs-doc-desk {
+  animation: doc-editor-opening var(--brand-transition-base) 0.4s both;
+}
+
+@keyframes doc-editor-opening {
+  to {
+    opacity: 0.55;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .doc-editor-frame--opening {
-    transition: none;
+  .doc-editor-frame--opening .bs-doc-desk {
+    animation-duration: 0s;
   }
 }
 
@@ -11529,7 +11801,7 @@ html.bs-writing .app-main {
 
   /* No room for a tree beside a page on a phone; the binder's own list is
      one Close away. */
-  .doc-files {
+  .doc-files-anchor {
     display: none;
   }
 
@@ -11737,44 +12009,6 @@ html.bs-writing .app-main {
 .doc-files-restore {
   flex: none;
   margin-right: var(--brand-space-1);
-}
-
-/* Where the open policy is filed, beside its title, and the way to move it. */
-.doc-editor-folder {
-  display: inline-flex;
-  flex: 0 1 auto;
-  align-items: center;
-  gap: var(--brand-space-1);
-  min-width: 0;
-  max-width: 14rem;
-  padding: var(--brand-space-0-5) var(--brand-space-1-5);
-  border: 1px solid transparent;
-  border-radius: var(--brand-radius-sm);
-  background: none;
-  color: var(--bs-text-muted);
-  font-family: var(--brand-font-sans);
-  font-size: var(--brand-text-ui-sm);
-  cursor: pointer;
-}
-
-.doc-editor-folder > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.doc-editor-folder svg {
-  flex: none;
-}
-
-.doc-editor-folder:hover:not(:disabled) {
-  border-color: var(--bs-rule);
-  color: var(--bs-text-primary);
-}
-
-.doc-editor-folder:focus-visible {
-  outline: 2px solid var(--brand-coral);
-  outline-offset: 1px;
 }
 
 /* ── Adding many documents at once ───────────────────────────────────────

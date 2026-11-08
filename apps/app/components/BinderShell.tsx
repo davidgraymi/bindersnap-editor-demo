@@ -8,6 +8,8 @@ import { routeToPath } from "../routes";
 
 import {
   archiveBinderDocument,
+  archiveBinderFolder,
+  createBinderFolder,
   createBinderDocument,
   discardBinderDraft,
   downloadBinderDocument,
@@ -52,6 +54,8 @@ import {
 } from "../binderDocument";
 import { formatDocumentName } from "../documentDisplay";
 import { copyName } from "../copyName";
+import { blankDocument, untitledName } from "../newDocument";
+import type { DroppedFiles } from "../bulkUpload";
 import {
   convertibleKind,
   convertToEditorFile,
@@ -67,6 +71,7 @@ import { ProposeChangePage } from "./ProposeChangePage";
 import { BinderChangePage } from "./BinderChangePage";
 import { BinderChanges } from "./BinderChanges";
 import { BinderHistory } from "./BinderHistory";
+import { MyDrafts } from "./MyDrafts";
 import { BinderSettings } from "./BinderSettings";
 import {
   BINDER_SETTINGS_PAGES,
@@ -120,8 +125,14 @@ function readRef(): string | null {
   return ref === DEFAULT_REF ? null : ref;
 }
 
-function moveTo(url: string): void {
-  window.history.pushState({}, "", url);
+/**
+ * To another address in the app. `replace` takes the place of the one open
+ * rather than adding to Back: moving between policies in the editor is one
+ * sitting, and Back leaves it rather than stepping through every file opened.
+ */
+function moveTo(url: string, { replace = false } = {}): void {
+  if (replace) window.history.replaceState({}, "", url);
+  else window.history.pushState({}, "", url);
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
@@ -196,7 +207,6 @@ export function BinderShell({
   const [reading, setReading] = useState<DocumentRefView | null>(null);
   const [adding, setAdding] = useState(false);
   /** Opened from the editor's New: start on Write, in the open policy's folder. */
-  const [addingFromEditor, setAddingFromEditor] = useState(false);
   const [addingFolder, setAddingFolder] = useState(false);
   /** A Word file or PDF being read into the editor's format (issue 883). */
   const [converting, setConverting] = useState<{
@@ -206,6 +216,8 @@ export function BinderShell({
   } | null>(null);
   /** The folder a new document or folder goes in, from a folder's menu. */
   const [addingIn, setAddingIn] = useState<string | null>(null);
+  /** Files dragged onto the editor, for the add dialog to open with. */
+  const [dropped, setDropped] = useState<DroppedFiles | null>(null);
 
   // Back and forward are how somebody leaves a tab or a change, so the shell
   // follows the address bar rather than its own memory of what was clicked.
@@ -507,12 +519,18 @@ export function BinderShell({
    * with the draft's files beside it. Renaming, refiling and folders are
    * Organize. A binder of nothing but Word files and PDFs has nothing to
    * write, so there Edit opens the tree as before.
+   *
+   * **In the draft on screen, when there is one.** Reached from the Drafts
+   * page, the binder is open in a particular draft — not always your newest —
+   * and Edit there carries on in that one rather than switching to another.
    */
-  const startWriting = async () => {
+  const startWriting = async (inDraft?: string | null) => {
     setStartingEdit(true);
     setDraftError(null);
     try {
-      const payload = await openBinderDraft(org, binder);
+      const payload = inDraft
+        ? await fetchBinderDraft(org, binder, inDraft)
+        : await openBinderDraft(org, binder);
       const branch = payload.draft?.branch ?? null;
       setDraft(payload);
       const listing = branch
@@ -591,6 +609,8 @@ export function BinderShell({
           documentPath: slugPath,
           draft: open,
         }),
+        // From one policy to the next in the editor: the same sitting.
+        { replace: editMode === "writing" },
       );
       setEditMode("writing");
       return;
@@ -809,6 +829,47 @@ export function BinderShell({
   };
 
   /**
+   * A new document from the editor's panel: made at once in the draft, blank
+   * and called "Untitled", and opened — no dialog first, as a new file is in
+   * any other editor. In `folder`, or beside the policy that is open.
+   */
+  const newInEditor = async (folder?: string) => {
+    const branch = draft?.draft?.branch ?? draftBranch;
+    if (!branch) return;
+    const into =
+      folder ??
+      (documentPath?.includes("/")
+        ? documentPath.slice(0, documentPath.lastIndexOf("/"))
+        : "");
+    const name = untitledName(
+      (contents?.documents ?? [])
+        .filter((document) => document.folder === into)
+        .map((document) => formatDocumentName(document.name)),
+    );
+    const created = await createBinderDocument(
+      org,
+      binder,
+      new File([blankDocument()], "document.json", {
+        type: "application/json",
+      }),
+      name,
+      into || undefined,
+      { draft: branch },
+    );
+    refreshDraft();
+    moveTo(
+      buildDocumentEditUrl({
+        org,
+        binder,
+        documentPath: created.slugPath,
+        draft: branch,
+      }),
+      { replace: true },
+    );
+    setEditMode("writing");
+  };
+
+  /**
    * Read a Word file or PDF as an editor document. Nothing is written: the
    * dialog shows what the conversion loses first.
    *
@@ -884,12 +945,15 @@ export function BinderShell({
         documentPath: revised.slugPath,
         draft: branch,
       }),
+      // From the file's note in the editor, the same policy, now writable:
+      // not a step for Back to take.
+      { replace: editMode === "writing" },
     );
     setEditMode("writing");
   };
 
-  const restoreInEditor = (uid: string) =>
-    actInEditor((into) => restoreBinderDocument(org, binder, uid, into));
+  const restoreInEditor = (uid: string, path?: string) =>
+    actInEditor((into) => restoreBinderDocument(org, binder, uid, into, path));
 
   const readArchiveInEditor = async () => {
     const branch = draft?.draft?.branch ?? draftBranch;
@@ -899,6 +963,38 @@ export function BinderShell({
 
   const archiveInEditor = (slugPath: string) =>
     actInEditor((into) => archiveBinderDocument(org, binder, slugPath, into));
+
+  const archiveFolderInEditor = (folder: string) =>
+    actInEditor((into) => archiveBinderFolder(org, binder, folder, into));
+
+  /**
+   * An archived folder back: its folders first, then every document in it.
+   * A restored document goes back to its folder only while that folder
+   * exists, and archiving the folder took it away, so the folders are made
+   * again before anything is restored into them.
+   */
+  const restoreFolderInEditor = (
+    folders: readonly string[],
+    documents: readonly { uid: string; path: string }[],
+  ) =>
+    actInEditor(async (into) => {
+      for (const folder of folders) {
+        // One that is there already — a parent made with its child — is
+        // refused, and that refusal is what was wanted.
+        await createBinderFolder(org, binder, folder, into).catch(
+          () => undefined,
+        );
+      }
+      for (const document of documents) {
+        await restoreBinderDocument(
+          org,
+          binder,
+          document.uid,
+          into,
+          document.path,
+        );
+      }
+    });
 
   /** Every file the draft has written, for the editor's panel to mark. */
   const draftTouched = useMemo(
@@ -1179,34 +1275,41 @@ export function BinderShell({
                 subtitle:
                   "Nothing joins this binder except a change that has been published.",
               }
-            : activeTab === "history"
+            : activeTab === "drafts"
               ? {
-                  title: "History",
+                  title: "Drafts",
                   subtitle:
-                    "Every change this binder has published, and what each one did.",
+                    "Your saved work in this binder, and whether it has been proposed.",
                 }
-              : activeTab === "settings"
-                ? // The page is named for the settings page it is, as the
-                  // sidebar entry that opened it is, with the one sentence
-                  // that says what that page decides.
-                  (() => {
-                    const page =
-                      BINDER_SETTINGS_PAGES.find(
-                        (entry) => entry.section === binderSettingsSection(tab),
-                      ) ?? BINDER_SETTINGS_PAGES[0]!;
-                    return { title: page.label, subtitle: page.description };
-                  })()
-                : {
-                    title: binderName,
-                    ...(editMode === "editing"
-                      ? {
-                          subtitle:
-                            "Rename in place, drag to refile, make a folder. Everything you do is saved to your draft, and nobody is asked to look until you propose it.",
-                        }
-                      : overview?.workspace.description
-                        ? { subtitle: overview.workspace.description }
-                        : {}),
-                  };
+              : activeTab === "history"
+                ? {
+                    title: "History",
+                    subtitle:
+                      "Every change this binder has published, and what each one did.",
+                  }
+                : activeTab === "settings"
+                  ? // The page is named for the settings page it is, as the
+                    // sidebar entry that opened it is, with the one sentence
+                    // that says what that page decides.
+                    (() => {
+                      const page =
+                        BINDER_SETTINGS_PAGES.find(
+                          (entry) =>
+                            entry.section === binderSettingsSection(tab),
+                        ) ?? BINDER_SETTINGS_PAGES[0]!;
+                      return { title: page.label, subtitle: page.description };
+                    })()
+                  : {
+                      title: binderName,
+                      ...(editMode === "editing"
+                        ? {
+                            subtitle:
+                              "Rename in place, drag to refile, make a folder. Everything you do is saved to your draft, and nobody is asked to look until you propose it.",
+                          }
+                        : overview?.workspace.description
+                          ? { subtitle: overview.workspace.description }
+                          : {}),
+                    };
 
   // **A page, not a broken binder.** An address with no binder behind it drew
   // the whole binder — its name made up from the address, Add a document and
@@ -1238,6 +1341,10 @@ export function BinderShell({
     return () => window.removeEventListener("popstate", take);
   }, [org, binder, addDocument]);
   const editBinder = useWriteAction(() => void startWriting());
+  /** Edit while organizing: the editor, in the draft being organized. */
+  const editThisDraft = useWriteAction(
+    () => void startWriting(draft?.draft?.branch ?? draftBranch),
+  );
   const organizeBinder = useWriteAction(() => void startEditing());
   const editDocument = useWriteAction(
     (slugPath: string) => void writeDocument(slugPath),
@@ -1378,13 +1485,26 @@ export function BinderShell({
                   </button>
                 </>
               ) : editMode === "editing" ? (
-                <button
-                  className="bs-btn bs-btn-secondary"
-                  type="button"
-                  onClick={leaveEditMode}
-                >
-                  Done
-                </button>
+                <>
+                  <button
+                    className="bs-btn bs-btn-secondary"
+                    type="button"
+                    onClick={leaveEditMode}
+                  >
+                    Done
+                  </button>
+                  {/* The words, in this draft: organizing is the tree, and
+                      a draft opened from the Drafts page had no way into the
+                      editor from here. */}
+                  <button
+                    className="bs-btn bs-btn-primary"
+                    type="button"
+                    onClick={editThisDraft}
+                    disabled={startingEdit}
+                  >
+                    {startingEdit ? "Opening the editor…" : "Edit"}
+                  </button>
+                </>
               ) : null}
             </div>
           )}
@@ -1459,9 +1579,17 @@ export function BinderShell({
               : null
           }
           onOpenDocument={(slugPath) => void writeDocument(slugPath)}
-          onNewDocument={(folder) => {
-            setAddingIn(folder ?? null);
-            setAddingFromEditor(true);
+          onNewDocument={newInEditor}
+          onUploadFiles={(files, folder) => {
+            // Where it was dropped in the file panel; on the page, beside
+            // the policy that is open, where a sibling most likely goes.
+            setAddingIn(
+              folder ??
+                (documentPath?.includes("/")
+                  ? documentPath.slice(0, documentPath.lastIndexOf("/"))
+                  : ""),
+            );
+            setDropped(files);
             setAdding(true);
           }}
           drafts={draft}
@@ -1474,7 +1602,9 @@ export function BinderShell({
           onRenameFile={renameInEditor}
           onMoveFile={moveInEditor}
           onArchiveFile={archiveInEditor}
+          onArchiveFolder={archiveFolderInEditor}
           onRestoreFile={restoreInEditor}
+          onRestoreFolder={restoreFolderInEditor}
           onCopyFile={copyInEditor}
           onConvertFile={convertDocument}
           onReadArchive={readArchiveInEditor}
@@ -1570,6 +1700,8 @@ export function BinderShell({
           binder={binder}
           onOpenChange={openChangeNumber}
         />
+      ) : activeTab === "drafts" ? (
+        <MyDrafts org={org} binder={binder} />
       ) : activeTab === "history" ? (
         <BinderHistory
           org={org}
@@ -1814,25 +1946,16 @@ export function BinderShell({
           binder={binder}
           currentUser={currentUser}
           draft={draft?.draft?.branch}
-          {...(addingFromEditor
-            ? {
-                initialMode: "write" as const,
-                initialFolder:
-                  addingIn ??
-                  (documentPath?.includes("/")
-                    ? documentPath.slice(0, documentPath.lastIndexOf("/"))
-                    : ""),
-              }
-            : {})}
+          {...(dropped ? { dropped, initialFolder: addingIn ?? "" } : {})}
           onClose={() => {
+            setDropped(null);
             setAdding(false);
-            setAddingFromEditor(false);
             setAddingIn(null);
           }}
           onWrite={(slugPath, branch) => {
             // Straight into the editor, in the draft it was started in.
+            setDropped(null);
             setAdding(false);
-            setAddingFromEditor(false);
             setAddingIn(null);
             loadOverview();
             setDraftBranch(branch);
@@ -1847,8 +1970,8 @@ export function BinderShell({
             setEditMode("writing");
           }}
           onAdded={(changeNumber) => {
+            setDropped(null);
             setAdding(false);
-            setAddingFromEditor(false);
             setAddingIn(null);
             loadOverview();
             // Into the draft: the policy is in the tree, nothing has been

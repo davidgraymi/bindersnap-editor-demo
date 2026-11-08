@@ -1,6 +1,6 @@
 import { rgb } from "pdf-lib";
 
-import type { Block, Run } from "./documentBlocks";
+import { VARIANT_LOOK, type Block, type Run } from "./documentBlocks";
 import { faceForFamily, type FaceKey } from "./fonts";
 import {
   MARGIN,
@@ -231,15 +231,25 @@ async function render(
         });
         break;
       }
-      case "paragraph":
+      case "paragraph": {
+        const look = block.variant ? VARIANT_LOOK[block.variant] : null;
         writer.text(block.runs, {
           ...body(context),
+          ...(look
+            ? {
+                face: look.face,
+                size: look.size,
+                weight: look.weight,
+                color: look.soft ? INK_SOFT : context.color,
+              }
+            : {}),
           align: block.align,
-          lineHeight: block.lineSpacing ?? BODY_LINE,
+          lineHeight: block.lineSpacing ?? look?.lineHeight ?? BODY_LINE,
           indent: context.indent + block.indent * INDENT_STEP,
-          spaceAfter: context.paragraphAfter,
+          spaceAfter: look?.after ?? context.paragraphAfter,
         });
         break;
+      }
       case "list": {
         writer.gap(0);
         const task = block.style === "task";

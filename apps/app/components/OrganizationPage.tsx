@@ -13,17 +13,25 @@ import { formatAge, formatDocumentName } from "../documentDisplay";
 import { OrganizationSettings } from "./OrganizationSettings";
 import { NewBinderPage } from "./NewBinderPage";
 import { OrganizationChanges } from "./OrganizationChanges";
+import { MyDrafts } from "./MyDrafts";
 import { OrganizationPeople } from "./OrganizationPeople";
 import { SkeletonPanel } from "./Skeleton";
 
 /** The organization's tabs. Binders is the one it opens on. */
-const ORG_TABS = ["binders", "changes", "people", "settings"] as const;
+const ORG_TABS = [
+  "binders",
+  "changes",
+  "drafts",
+  "people",
+  "settings",
+] as const;
 type OrgTab = (typeof ORG_TABS)[number];
 
 /** `/{org}/-/people` is People; anything else of the organization's is Binders. */
 function orgTabFromPath(pathname: string): OrgTab {
   if (/^\/[^/]+\/-\/people\/?$/.test(pathname)) return "people";
   if (/^\/[^/]+\/-\/changes\/?$/.test(pathname)) return "changes";
+  if (/^\/[^/]+\/-\/drafts\/?$/.test(pathname)) return "drafts";
   if (/^\/[^/]+\/-\/settings\/?$/.test(pathname)) return "settings";
   return "binders";
 }
@@ -65,6 +73,11 @@ function orgPageHead(
       return {
         title: "Change requests",
         subtitle: `Every change request in ${displayName}'s binders.`,
+      };
+    case "drafts":
+      return {
+        title: "Drafts",
+        subtitle: `Your saved work in ${displayName}'s binders, and whether it has been proposed.`,
       };
     case "settings":
       return {
@@ -184,9 +197,11 @@ export function OrganizationPage({
               ? "Binders"
               : entry === "changes"
                 ? "Change requests"
-                : entry === "people"
-                  ? "People & access"
-                  : "Settings"}
+                : entry === "drafts"
+                  ? "Drafts"
+                  : entry === "people"
+                    ? "People & access"
+                    : "Settings"}
             {entry === "binders" && binders !== null && binders.length > 0 ? (
               <span className="doc-tab-count">{binders.length}</span>
             ) : null}
@@ -234,6 +249,15 @@ export function OrganizationPage({
       <section className="docw-page">
         {header}
         <OrganizationChanges org={org} onOpenChange={onOpenChange} />
+      </section>
+    );
+  }
+
+  if (tab === "drafts") {
+    return (
+      <section className="docw-page">
+        {header}
+        <MyDrafts org={org} />
       </section>
     );
   }

@@ -5,6 +5,7 @@ import {
   planDocumentArchive,
   planDocumentRename,
   planDocumentRestore,
+  planFolderArchive,
   planFolderRename,
   planNewFolder,
 } from "./binderShape";
@@ -447,6 +448,13 @@ describe("archiving a document", () => {
     ]);
   });
 
+  test("one never published is deleted, and says so", () => {
+    const plan = ok(
+      planDocumentArchive({ document: document(), published: false }),
+    );
+    expect(plan.message).toBe("Delete Hand Hygiene");
+  });
+
   test("says what it did in the customer's word", () => {
     // "Delete has connotations." It is also the wrong word: nothing is
     // destroyed, which is exactly what delete would have promised.
@@ -579,5 +587,59 @@ describe("restoring an archived document", () => {
       }),
     );
     expect(plan.message).toBe("Restore Hand Hygiene and PPE");
+  });
+});
+
+describe("planFolderArchive", () => {
+  const hand = document();
+  const rounds = document({
+    path: `nursing/wards/night-rounds.${OTHER}.json`,
+    slugPath: "nursing/wards/night-rounds",
+    name: "night-rounds",
+    uid: OTHER,
+    folder: "nursing/wards",
+  });
+  const paths = [
+    hand.path,
+    rounds.path,
+    "nursing/wards/.gitkeep",
+    "clinical/.gitkeep",
+  ];
+  const plan = (folder: string, documents = [hand, rounds]) =>
+    planFolderArchive({
+      folder,
+      paths,
+      documents,
+      existingFolders: ["nursing", "nursing/wards", "clinical"],
+    });
+
+  test("archives every document under it, and its placeholders, in one change", () => {
+    const done = ok(plan("nursing"));
+    expect(done.operations).toEqual([
+      { kind: "remove", path: hand.path },
+      { kind: "remove", path: rounds.path },
+      { kind: "remove", path: "nursing/wards/.gitkeep" },
+    ]);
+    expect(done.message).toBe("Archive the folder Nursing");
+  });
+
+  test("an empty folder goes with its placeholder", () => {
+    expect(ok(plan("clinical")).operations).toEqual([
+      { kind: "remove", path: "clinical/.gitkeep" },
+    ]);
+  });
+
+  test("refuses the whole folder when a file in it has no identity", () => {
+    const loose = document({
+      path: "nursing/scan.pdf",
+      slugPath: "nursing/scan",
+      uid: null,
+    });
+    const refused = plan("nursing", [hand, loose]);
+    expect("error" in refused && refused.error).toContain("nursing/scan.pdf");
+  });
+
+  test("refuses a folder the binder does not have", () => {
+    expect("error" in plan("pharmacy")).toBe(true);
   });
 });

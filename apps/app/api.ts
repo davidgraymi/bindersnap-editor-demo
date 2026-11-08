@@ -25,6 +25,7 @@ import type {
 import type {
   BinderArchivePayload,
   BinderDraftPayload,
+  MyDraftsPayload,
   BinderGroupsPayload,
   BinderPeoplePayload,
   BinderRulesPayload,
@@ -1783,6 +1784,24 @@ function multipartTarget(target?: ActTarget): {
 }
 
 /**
+ * Your drafts, newest first, with the binder each is in: every binder you can
+ * write in, or one organization's, or one binder's. Only your own.
+ */
+export async function fetchMyDrafts(
+  scope: { org?: string; binder?: string } = {},
+  request?: ReadRequest,
+): Promise<MyDraftsPayload> {
+  const response = await BindersClient.listMyDrafts(
+    {
+      ...(scope.org ? { org: scope.org } : {}),
+      ...(scope.org && scope.binder ? { binder: scope.binder } : {}),
+    },
+    request,
+  );
+  return response.data;
+}
+
+/**
  * Your drafts in this binder, what is in the one you are in, and who else is
  * editing.
  *
@@ -1937,6 +1956,30 @@ export async function archiveBinderDocument(
 }
 
 /**
+ * Take a folder off the record: every document in it, as one act. Refused
+ * whole when a file in it was not added through Bindersnap.
+ */
+export async function archiveBinderFolder(
+  org: string,
+  binder: string,
+  folder: string,
+  target?: ActTarget,
+): Promise<BinderShapeChangePayload> {
+  try {
+    const response = await BindersClient.archiveBinderFolder(org, binder, {
+      folder,
+      ...jsonTarget(target),
+    });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/folder-archives`,
+      error,
+    );
+  }
+}
+
+/**
  * Bring an archived policy back.
  *
  * **Not an undo.** It is a change like any other, and it waits on the same
@@ -1954,10 +1997,16 @@ export async function restoreBinderDocument(
   binder: string,
   uid: string,
   target?: ActTarget,
+  /**
+   * Where it was, for one never published: a document the draft made and
+   * then deleted, read back from the draft's own history.
+   */
+  path?: string,
 ): Promise<BinderShapeChangePayload> {
   try {
     const response = await BindersClient.restoreBinderDocument(org, binder, {
       uid,
+      ...(path ? { path } : {}),
       ...jsonTarget(target),
     });
     return response.data;

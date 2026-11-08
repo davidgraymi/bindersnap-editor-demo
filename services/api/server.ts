@@ -191,6 +191,7 @@ import {
   listRemovedDocuments,
   listTouchedDocuments,
   readArchivedDocument,
+  readRemovedDraftDocument,
   listVersionsByDocument,
   listWorkspaceDocuments,
   readWorkspaceTree,
@@ -218,6 +219,7 @@ import {
 } from "./gitea-client/drafts";
 import {
   planDocumentArchive,
+  planFolderArchive,
   planDocumentRename,
   planDocumentRestore,
   planFolderRename,
@@ -411,6 +413,7 @@ import {
   stripeWebhookLimiter,
 } from "./edge";
 import type { DraftNameRecord } from "./draft-names";
+import { defaultMyDraftsDeps, readMyDrafts } from "./my-drafts";
 import {
   findSoleOwnerships,
   listOwnedDrafts,
@@ -4908,6 +4911,32 @@ async function handleHomeChanges(
       baseHeaders,
       "Unable to load your change requests.",
     );
+  }
+}
+
+/**
+ * Your drafts, across binders: `GET /api/app/drafts`, narrowed by `org` and
+ * `binder`. A read, never gated; only ever the reader's own (`my-drafts.ts`).
+ */
+async function handleMyDrafts(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const query = new URL(req.url).searchParams;
+  try {
+    const drafts = await readMyDrafts({
+      client: auth.client,
+      username: auth.session.username,
+      org: query.get("org"),
+      binder: query.get("binder"),
+      deps: defaultMyDraftsDeps(draftNameStore),
+    });
+    return json(200, { drafts }, baseHeaders);
+  } catch (err) {
+    return responseFromError(err, baseHeaders, "Unable to load your drafts.");
   }
 }
 
@@ -14453,6 +14482,8 @@ async function handleBinderShapeChange(
     tree: WorkspaceTree;
     /** The caller's own client, for a plan that has to read something. */
     client: GiteaClient;
+    /** The draft or change branch this goes into, or null for a new change. */
+    ref: string | null;
   }) => ShapeChangeResult | Promise<ShapeChangeResult>,
 ): Promise<Response> {
   const auth = await requireSubscription(req, baseHeaders);
@@ -14503,7 +14534,12 @@ async function handleBinderShapeChange(
       ...(target ? { ref: target.branch } : {}),
     });
 
-    const planned = await plan({ body, tree, client });
+    const planned = await plan({
+      body,
+      tree,
+      client,
+      ref: target ? target.branch : null,
+    });
     if ("error" in planned) {
       return json(409, { error: planned.error }, baseHeaders);
     }
@@ -17852,6 +17888,8 @@ async function handleRequest(req: Request): Promise<Response> {
     method === "POST"
   ) {
     response = await handleAdminRunActivityBuild(req, baseHeaders);
+  } else if (pathname === "/api/app/drafts" && method === "GET") {
+    response = await handleMyDrafts(req, baseHeaders);
   } else if (pathname === "/api/app/home/changes" && method === "GET") {
     response = await handleHomeChanges(req, baseHeaders);
   } else if (pathname === "/api/app/changes/search" && method === "GET") {
@@ -17935,6 +17973,10 @@ async function handleRequest(req: Request): Promise<Response> {
     // tags still point at every commit that held it.
     const workspaceDocumentArchivesMatch = pathname.match(
       /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/document-archives$/,
+    );
+    // A whole folder off the record, every document in it in one act.
+    const workspaceFolderArchivesMatch = pathname.match(
+      /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/folder-archives$/,
     );
     // Bringing one back. Its own act rather than an inverse of the one
     // above: it writes a file, and what it writes comes out of a tag.
@@ -18613,7 +18655,7 @@ async function handleRequest(req: Request): Promise<Response> {
         baseHeaders,
         workspaceDocumentArchivesMatch[1]!,
         workspaceDocumentArchivesMatch[2]!,
-        ({ body, tree }) => {
+        async ({ body, tree, client }) => {
           const documentPath =
             typeof body.documentPath === "string" ? body.documentPath : "";
           const document =
@@ -18624,8 +18666,34 @@ async function handleRequest(req: Request): Promise<Response> {
             return { error: `"${documentPath}" is not in this binder.` };
           }
 
-          return planDocumentArchive({ document });
+          // Never published, it is only in this draft: deleted, not archived.
+          const published =
+            document.uid === null
+              ? true
+              : (
+                  await listDocumentVersions({
+                    client,
+                    org: workspaceDocumentArchivesMatch[1]!,
+                    workspace: workspaceDocumentArchivesMatch[2]!,
+                    uid: document.uid,
+                  })
+                ).length > 0;
+          return planDocumentArchive({ document, published });
         },
+      );
+    } else if (workspaceFolderArchivesMatch && method === "POST") {
+      return await handleBinderShapeChange(
+        req,
+        baseHeaders,
+        workspaceFolderArchivesMatch[1]!,
+        workspaceFolderArchivesMatch[2]!,
+        ({ body, tree }) =>
+          planFolderArchive({
+            folder: typeof body.folder === "string" ? body.folder : "",
+            paths: tree.paths,
+            documents: tree.documents,
+            existingFolders: tree.folders,
+          }),
       );
     } else if (workspaceDocumentRestoresMatch && method === "POST") {
       return await handleBinderShapeChange(
@@ -18633,11 +18701,13 @@ async function handleRequest(req: Request): Promise<Response> {
         baseHeaders,
         workspaceDocumentRestoresMatch[1]!,
         workspaceDocumentRestoresMatch[2]!,
-        async ({ body, tree, client }) => {
+        async ({ body, tree, client, ref }) => {
           const uid = typeof body.uid === "string" ? body.uid : "";
           if (uid === "") {
             return { error: "Name the document to restore." };
           }
+          const org = workspaceDocumentRestoresMatch[1]!;
+          const workspace = workspaceDocumentRestoresMatch[2]!;
 
           // Straight off the version tag the policy last published at. The
           // bytes are still there because a tag is a ref and git never
@@ -18650,9 +18720,30 @@ async function handleRequest(req: Request): Promise<Response> {
             uid,
           });
           if (!archived) {
-            return {
-              error: "That document has no published version to restore from.",
-            };
+            // Never published: a document this draft made and then deleted.
+            // Its bytes are in the draft's own history, one commit back.
+            const removed =
+              ref !== null && typeof body.path === "string"
+                ? await readRemovedDraftDocument({
+                    client,
+                    org,
+                    workspace,
+                    ref,
+                    path: body.path,
+                    uid,
+                  })
+                : null;
+            if (!removed) {
+              return {
+                error:
+                  "That document has no published version to restore from.",
+              };
+            }
+            return planDocumentRestore({
+              document: removed.document,
+              base64Content: removed.base64Content,
+              tree,
+            });
           }
 
           return planDocumentRestore({

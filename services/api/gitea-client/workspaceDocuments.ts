@@ -662,6 +662,72 @@ export async function readArchivedDocument(params: {
 }
 
 /**
+ * A document a draft made and then removed, read back out of that draft's
+ * own history — what Undo restores when the document was never published,
+ * so there is no version tag to read it from.
+ *
+ * The newest commit on `ref` touching `path` is the one that removed it, and
+ * its parent still holds it. Read by identity there: the file at `path` in
+ * that parent must be the document with `uid`, or nothing is restored.
+ */
+export async function readRemovedDraftDocument(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  /** The draft or change branch it was removed from. Never `main`. */
+  ref: string;
+  /** Where it was, as the removal left it. */
+  path: string;
+  uid: string;
+}): Promise<{
+  document: WorkspaceDocumentEntry;
+  base64Content: string;
+} | null> {
+  const { client, org, workspace, ref, path, uid } = params;
+
+  const commits = await unwrap(
+    client.GET("/repos/{owner}/{repo}/commits", {
+      params: {
+        path: { owner: org, repo: workspace },
+        query: {
+          sha: ref,
+          path,
+          limit: 1,
+          stat: false,
+          verification: false,
+          files: false,
+        },
+      },
+    }),
+  );
+  const parent = commits[0]?.parents?.[0]?.sha;
+  if (!parent) return null;
+
+  const tree = await readWorkspaceTree({
+    client,
+    org,
+    workspace,
+    ref: parent,
+  });
+  const document = tree.documents.find(
+    (entry) => entry.uid === uid && entry.path === path,
+  );
+  if (!document) return null;
+
+  const file = (await unwrap(
+    client.GET("/repos/{owner}/{repo}/contents/{filepath}", {
+      params: {
+        path: { owner: org, repo: workspace, filepath: path },
+        query: { ref: parent },
+      },
+    }),
+  )) as { content?: string };
+  if (typeof file.content !== "string") return null;
+
+  return { document, base64Content: file.content };
+}
+
+/**
  * Record a document being archived: a tag naming the act, on the merge commit.
  *
  * Deliberately the same primitive and the same publish as a version tag, so

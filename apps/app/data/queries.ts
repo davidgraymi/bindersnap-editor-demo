@@ -17,6 +17,7 @@ import {
   fetchBinderDocument,
   fetchBinderDocuments,
   fetchBinderDraft,
+  fetchMyDrafts,
   fetchBinderHistory,
   fetchBinderPeople,
   fetchBinderSettings,
@@ -119,6 +120,9 @@ export const queryKeys = {
 
   /** The changes this person is part of, everywhere — home and the queue. */
   homeChanges: () => ["home-changes"] as const,
+  /** Your drafts: everywhere, in one organization, or in one binder. */
+  myDrafts: (org?: string, binder?: string) =>
+    ["my-drafts", org ?? null, binder ?? null] as const,
   /** Every binder this person can open, across their organizations. */
   myBinders: () => ["my-binders"] as const,
   /** Home's feed — what has been happening in your binders. */
@@ -190,6 +194,14 @@ export function homeChangesQuery() {
   return queryOptions({
     queryKey: queryKeys.homeChanges(),
     queryFn: ({ signal }) => getHomeChanges({ signal }),
+  });
+}
+
+/** Your drafts, newest first: everywhere, in an organization, or a binder. */
+export function myDraftsQuery(scope: { org?: string; binder?: string } = {}) {
+  return queryOptions({
+    queryKey: queryKeys.myDrafts(scope.org, scope.binder),
+    queryFn: ({ signal }) => fetchMyDrafts(scope, { signal }),
   });
 }
 
