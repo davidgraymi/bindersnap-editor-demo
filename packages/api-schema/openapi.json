@@ -14511,6 +14511,138 @@
                         ]
                       }
                     },
+                    "signOffRules": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "base": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "scope": {
+                                "type": "string",
+                                "enum": [
+                                  "binder",
+                                  "folder",
+                                  "document",
+                                  "rules"
+                                ]
+                              },
+                              "target": {
+                                "type": "string"
+                              },
+                              "teams": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "users": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "scope",
+                              "target",
+                              "teams",
+                              "users"
+                            ]
+                          }
+                        },
+                        "proposed": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "scope": {
+                                "type": "string",
+                                "enum": [
+                                  "binder",
+                                  "folder",
+                                  "document",
+                                  "rules"
+                                ]
+                              },
+                              "target": {
+                                "type": "string"
+                              },
+                              "teams": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "users": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "scope",
+                              "target",
+                              "teams",
+                              "users"
+                            ]
+                          }
+                        },
+                        "unreadable": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "line": {
+                                "type": "number"
+                              },
+                              "text": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "line",
+                              "text"
+                            ]
+                          }
+                        },
+                        "documents": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "uid": {
+                                "type": "string"
+                              },
+                              "slugPath": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "folder": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "uid",
+                              "slugPath",
+                              "name",
+                              "folder"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "base",
+                        "proposed",
+                        "unreadable",
+                        "documents"
+                      ]
+                    },
                     "outcome": {
                       "type": "string",
                       "nullable": true,
@@ -14548,6 +14680,7 @@
                     "requiredReviewers",
                     "viewer",
                     "approvalRules",
+                    "signOffRules",
                     "outcome",
                     "closedAt",
                     "decidedBy",

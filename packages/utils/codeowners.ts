@@ -699,3 +699,96 @@ export function validateSignOffRules(params: {
 
   return { ok: problems.length === 0, problems };
 }
+
+/** What one change does to the rule over one thing in a binder. */
+export interface SignOffRuleDelta {
+  /**
+   * `added` — nothing had to be signed off here before. `removed` — it did and
+   * now nothing does. `reassigned` — it still does, by different people.
+   *
+   * Three verbs rather than a diff of lines, because the question a reviewer
+   * is being asked is which of the three happened: a gate going up, a gate
+   * coming down, or a gate changing hands. Only one of those loosens the
+   * binder, and the screen has to be able to draw it differently.
+   */
+  kind: "added" | "removed" | "reassigned";
+  scope: SignOffScope;
+  target: string;
+  /** The rule in force on the base branch, or null when there was none. */
+  before: SignOffRule | null;
+  /** The rule this change proposes, or null when it takes the rule away. */
+  after: SignOffRule | null;
+}
+
+/** `folder:nursing` — one thing in the binder a rule can be about. */
+function ruleKey(rule: { scope: SignOffScope; target: string }): string {
+  return `${rule.scope}:${trimFolder(rule.target).toLowerCase()}`;
+}
+
+/** Whether two rules name the same owners, however they are ordered. */
+function sameOwners(left: SignOffRule, right: SignOffRule): boolean {
+  const owners = (rule: SignOffRule) =>
+    JSON.stringify([
+      [...rule.teams].map((team) => team.toLowerCase()).sort(),
+      [...rule.users].map((user) => user.toLowerCase()).sort(),
+    ]);
+  return owners(left) === owners(right);
+}
+
+/**
+ * What a change would do to a binder's sign-off rules, rule by rule.
+ *
+ * **Read from the two committed files, never from what the change says about
+ * itself.** A sign-off change's description explains itself in words, and the
+ * author can rewrite that description after an approval — so a reviewer who
+ * trusted it was trusting the one thing on the page the proposer controls
+ * (issue 921). These two lists come from `.gitea/CODEOWNERS` at the base ref and at
+ * the change's head, which is exactly what Gitea will enforce after the merge.
+ *
+ * Paired by what the rule is *about*, not by line: a rule whose owners change
+ * is one fact — "nursing is signed off by somebody else now" — and reporting
+ * it as a removal and an addition would make the loosest change in the product
+ * read as two unrelated ones.
+ */
+export function diffSignOffRules(
+  base: readonly SignOffRule[],
+  proposed: readonly SignOffRule[],
+): SignOffRuleDelta[] {
+  const was = new Map(base.map((rule) => [ruleKey(rule), rule]));
+  const willBe = new Map(proposed.map((rule) => [ruleKey(rule), rule]));
+  const deltas: SignOffRuleDelta[] = [];
+
+  for (const [key, after] of willBe) {
+    const before = was.get(key);
+    if (!before) {
+      deltas.push({
+        kind: "added",
+        scope: after.scope,
+        target: after.target,
+        before: null,
+        after,
+      });
+    } else if (!sameOwners(before, after)) {
+      deltas.push({
+        kind: "reassigned",
+        scope: after.scope,
+        target: after.target,
+        before,
+        after,
+      });
+    }
+  }
+
+  for (const [key, before] of was) {
+    if (willBe.has(key)) continue;
+    deltas.push({
+      kind: "removed",
+      scope: before.scope,
+      target: before.target,
+      before,
+      after: null,
+    });
+  }
+
+  return deltas;
+}
