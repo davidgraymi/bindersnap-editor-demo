@@ -71,6 +71,7 @@ import { ProposeChangePage } from "./ProposeChangePage";
 import { BinderChangePage } from "./BinderChangePage";
 import { BinderChanges } from "./BinderChanges";
 import { BinderHistory } from "./BinderHistory";
+import { MyDrafts } from "./MyDrafts";
 import { BinderSettings } from "./BinderSettings";
 import {
   BINDER_SETTINGS_PAGES,
@@ -124,8 +125,14 @@ function readRef(): string | null {
   return ref === DEFAULT_REF ? null : ref;
 }
 
-function moveTo(url: string): void {
-  window.history.pushState({}, "", url);
+/**
+ * To another address in the app. `replace` takes the place of the one open
+ * rather than adding to Back: moving between policies in the editor is one
+ * sitting, and Back leaves it rather than stepping through every file opened.
+ */
+function moveTo(url: string, { replace = false } = {}): void {
+  if (replace) window.history.replaceState({}, "", url);
+  else window.history.pushState({}, "", url);
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
@@ -512,12 +519,18 @@ export function BinderShell({
    * with the draft's files beside it. Renaming, refiling and folders are
    * Organize. A binder of nothing but Word files and PDFs has nothing to
    * write, so there Edit opens the tree as before.
+   *
+   * **In the draft on screen, when there is one.** Reached from the Drafts
+   * page, the binder is open in a particular draft — not always your newest —
+   * and Edit there carries on in that one rather than switching to another.
    */
-  const startWriting = async () => {
+  const startWriting = async (inDraft?: string | null) => {
     setStartingEdit(true);
     setDraftError(null);
     try {
-      const payload = await openBinderDraft(org, binder);
+      const payload = inDraft
+        ? await fetchBinderDraft(org, binder, inDraft)
+        : await openBinderDraft(org, binder);
       const branch = payload.draft?.branch ?? null;
       setDraft(payload);
       const listing = branch
@@ -596,6 +609,8 @@ export function BinderShell({
           documentPath: slugPath,
           draft: open,
         }),
+        // From one policy to the next in the editor: the same sitting.
+        { replace: editMode === "writing" },
       );
       setEditMode("writing");
       return;
@@ -849,6 +864,7 @@ export function BinderShell({
         documentPath: created.slugPath,
         draft: branch,
       }),
+      { replace: true },
     );
     setEditMode("writing");
   };
@@ -929,6 +945,9 @@ export function BinderShell({
         documentPath: revised.slugPath,
         draft: branch,
       }),
+      // From the file's note in the editor, the same policy, now writable:
+      // not a step for Back to take.
+      { replace: editMode === "writing" },
     );
     setEditMode("writing");
   };
@@ -1256,34 +1275,41 @@ export function BinderShell({
                 subtitle:
                   "Nothing joins this binder except a change that has been published.",
               }
-            : activeTab === "history"
+            : activeTab === "drafts"
               ? {
-                  title: "History",
+                  title: "Drafts",
                   subtitle:
-                    "Every change this binder has published, and what each one did.",
+                    "Your saved work in this binder, and whether it has been proposed.",
                 }
-              : activeTab === "settings"
-                ? // The page is named for the settings page it is, as the
-                  // sidebar entry that opened it is, with the one sentence
-                  // that says what that page decides.
-                  (() => {
-                    const page =
-                      BINDER_SETTINGS_PAGES.find(
-                        (entry) => entry.section === binderSettingsSection(tab),
-                      ) ?? BINDER_SETTINGS_PAGES[0]!;
-                    return { title: page.label, subtitle: page.description };
-                  })()
-                : {
-                    title: binderName,
-                    ...(editMode === "editing"
-                      ? {
-                          subtitle:
-                            "Rename in place, drag to refile, make a folder. Everything you do is saved to your draft, and nobody is asked to look until you propose it.",
-                        }
-                      : overview?.workspace.description
-                        ? { subtitle: overview.workspace.description }
-                        : {}),
-                  };
+              : activeTab === "history"
+                ? {
+                    title: "History",
+                    subtitle:
+                      "Every change this binder has published, and what each one did.",
+                  }
+                : activeTab === "settings"
+                  ? // The page is named for the settings page it is, as the
+                    // sidebar entry that opened it is, with the one sentence
+                    // that says what that page decides.
+                    (() => {
+                      const page =
+                        BINDER_SETTINGS_PAGES.find(
+                          (entry) =>
+                            entry.section === binderSettingsSection(tab),
+                        ) ?? BINDER_SETTINGS_PAGES[0]!;
+                      return { title: page.label, subtitle: page.description };
+                    })()
+                  : {
+                      title: binderName,
+                      ...(editMode === "editing"
+                        ? {
+                            subtitle:
+                              "Rename in place, drag to refile, make a folder. Everything you do is saved to your draft, and nobody is asked to look until you propose it.",
+                          }
+                        : overview?.workspace.description
+                          ? { subtitle: overview.workspace.description }
+                          : {}),
+                    };
 
   // **A page, not a broken binder.** An address with no binder behind it drew
   // the whole binder — its name made up from the address, Add a document and
@@ -1315,6 +1341,10 @@ export function BinderShell({
     return () => window.removeEventListener("popstate", take);
   }, [org, binder, addDocument]);
   const editBinder = useWriteAction(() => void startWriting());
+  /** Edit while organizing: the editor, in the draft being organized. */
+  const editThisDraft = useWriteAction(
+    () => void startWriting(draft?.draft?.branch ?? draftBranch),
+  );
   const organizeBinder = useWriteAction(() => void startEditing());
   const editDocument = useWriteAction(
     (slugPath: string) => void writeDocument(slugPath),
@@ -1455,13 +1485,26 @@ export function BinderShell({
                   </button>
                 </>
               ) : editMode === "editing" ? (
-                <button
-                  className="bs-btn bs-btn-secondary"
-                  type="button"
-                  onClick={leaveEditMode}
-                >
-                  Done
-                </button>
+                <>
+                  <button
+                    className="bs-btn bs-btn-secondary"
+                    type="button"
+                    onClick={leaveEditMode}
+                  >
+                    Done
+                  </button>
+                  {/* The words, in this draft: organizing is the tree, and
+                      a draft opened from the Drafts page had no way into the
+                      editor from here. */}
+                  <button
+                    className="bs-btn bs-btn-primary"
+                    type="button"
+                    onClick={editThisDraft}
+                    disabled={startingEdit}
+                  >
+                    {startingEdit ? "Opening the editor…" : "Edit"}
+                  </button>
+                </>
               ) : null}
             </div>
           )}
@@ -1657,6 +1700,8 @@ export function BinderShell({
           binder={binder}
           onOpenChange={openChangeNumber}
         />
+      ) : activeTab === "drafts" ? (
+        <MyDrafts org={org} binder={binder} />
       ) : activeTab === "history" ? (
         <BinderHistory
           org={org}

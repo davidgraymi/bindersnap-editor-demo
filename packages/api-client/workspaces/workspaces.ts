@@ -52,6 +52,8 @@ import type {
   ListBinderDocuments200,
   ListBinderDocumentsParams,
   ListBinders200,
+  ListMyDrafts200,
+  ListMyDraftsParams,
   ListOrganizationBinders200,
   ListOrganizationChanges200,
   ListOrganizationChangesParams,
@@ -99,6 +101,45 @@ import type {
 } from '../model';
 
 import { customFetch } from '.././mutator.ts';
+
+export type listMyDraftsResponse200 = {
+  data: ListMyDrafts200
+  status: 200
+}
+
+export type listMyDraftsResponseSuccess = (listMyDraftsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listMyDraftsResponse = (listMyDraftsResponseSuccess)
+
+export const getListMyDraftsUrl = (params?: ListMyDraftsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/app/drafts?${stringifiedParams}` : `/api/app/drafts`
+}
+
+export const listMyDrafts = async (params?: ListMyDraftsParams, options?: Parameters<typeof customFetch>[1]): Promise<listMyDraftsResponse> => {
+
+  return customFetch<listMyDraftsResponse>(getListMyDraftsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
 
 export type listBindersResponse200 = {
   data: ListBinders200

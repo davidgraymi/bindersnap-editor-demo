@@ -4982,6 +4982,98 @@
         }
       }
     },
+    "/api/app/drafts": {
+      "get": {
+        "operationId": "listMyDrafts",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "org",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "binder",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Your drafts, newest first: unproposed and proposed, with the binder each is in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "drafts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "branch": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "actCount": {
+                            "type": "number"
+                          },
+                          "documentCount": {
+                            "type": "number"
+                          },
+                          "lastAct": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "changeNumber": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "organization": {
+                            "type": "string"
+                          },
+                          "workspace": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "branch",
+                          "name",
+                          "updatedAt",
+                          "actCount",
+                          "documentCount",
+                          "lastAct",
+                          "changeNumber",
+                          "organization",
+                          "workspace"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "drafts"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/app/home/changes": {
       "get": {
         "operationId": "getHomeChanges",

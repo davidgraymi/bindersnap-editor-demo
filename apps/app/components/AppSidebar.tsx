@@ -8,6 +8,7 @@ import {
   CreditCard,
   FileText,
   FilePen,
+  PencilLine,
   History,
   Home,
   Library,
@@ -90,7 +91,10 @@ function organizationTab(route: AppRoute): OrganizationTab | null {
   if (route.kind !== "organization") return null;
   const tab =
     route.tab ?? new URLSearchParams(window.location.search).get("tab");
-  return tab === "people" || tab === "settings" || tab === "changes"
+  return tab === "people" ||
+    tab === "settings" ||
+    tab === "changes" ||
+    tab === "drafts"
     ? tab
     : "binders";
 }
@@ -245,6 +249,15 @@ export function AppSidebar({
       count: changeCount,
     },
     {
+      // Saved work nobody has been asked to review yet — easy to leave behind
+      // in a binder you moved on from, so it has a place to be found.
+      key: "drafts",
+      label: "Drafts",
+      icon: PencilLine,
+      route: { kind: "drafts" },
+      isActive: (r) => r.kind === "drafts",
+    },
+    {
       // Binders, not documents: a binder is one scope, with its own rules and
       // people, and a list mixing every binder's files answered nothing.
       key: "binders",
@@ -300,6 +313,18 @@ export function AppSidebar({
           },
           isActive: (r) => r.kind === "binder" && scope.section === "changes",
           count: scope.openChangeCount ?? null,
+        },
+        {
+          key: "binder-drafts",
+          label: "Drafts",
+          icon: PencilLine,
+          route: {
+            kind: "binder",
+            org: scope.org,
+            binder: scope.binder,
+            tab: "drafts",
+          },
+          isActive: (r) => r.kind === "binder" && scope.section === "drafts",
         },
         {
           key: "binder-history",
@@ -377,6 +402,13 @@ export function AppSidebar({
       route: orgRoute("changes"),
       isActive: (r) => organizationTab(r) === "changes",
       count: orgOpenChanges,
+    },
+    {
+      key: "org-drafts",
+      label: "Drafts",
+      icon: PencilLine,
+      route: orgRoute("drafts"),
+      isActive: (r) => organizationTab(r) === "drafts",
     },
     {
       key: "people",

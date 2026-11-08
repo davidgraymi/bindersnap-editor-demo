@@ -22,7 +22,11 @@ documentSchema.ts        — what a document may contain: the one extension list
                            both load, plus paragraph spacing, indent and page
                            breaks
 documentStats.ts         — word counts, the heading outline, pagination
-DocumentEditor.tsx       — the editor: ribbon, page, panes, status bar
+DocumentEditor.tsx       — the editor: ribbon, page, panes, status bar;
+                           `editable={false}` locks the ribbon rather than
+                           hiding it, and `cover` shows something else on the
+                           desk in place of the page (the app's Word and PDF
+                           files)
 FindBar.tsx              — find and replace, floating over the page
 DocumentOutline.tsx      — the headings; the app shows them in its file panel
 ribbon/                  — Home, Insert, View and the contextual Table tab

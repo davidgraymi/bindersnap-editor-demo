@@ -139,6 +139,37 @@
   padding: var(--brand-space-1) 0;
 }
 
+/* The ribbon's lock (`Ribbon`'s `locked`): a fieldset that draws nothing, so
+   disabling it turns off every control inside at once, and leaves the
+   layout — and the ribbon's folding, measured from it — exactly as it was. */
+.bs-ribbon-lock {
+  display: contents;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+/* Off at once, and greyed only once it has been off a moment: between two
+   documents the lock lasts as long as a read, and a ribbon that flickered
+   grey on every click was the reload it is here to stop looking like. */
+.bs-ribbon-lock:disabled > * {
+  pointer-events: none;
+  animation: bs-ribbon-locking var(--brand-transition-base) 0.4s both;
+}
+
+@keyframes bs-ribbon-locking {
+  to {
+    opacity: 0.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bs-ribbon-lock:disabled > * {
+    animation-duration: 0s;
+  }
+}
+
 .bs-ribbon-panel {
   position: relative;
   display: flex;
@@ -1109,6 +1140,11 @@
   position: relative;
   width: max-content;
   margin: 0 auto;
+}
+
+/* Put away, not unmade, while a file is shown in its place (`cover`). */
+.bs-doc-sheetwrap[hidden] {
+  display: none;
 }
 
 /* The sheet: US Letter with Word's one-inch margins. */

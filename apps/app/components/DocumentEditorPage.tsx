@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { convertibleKind } from "../convertToEditor";
+import { downloadFileName, isEditorDocumentFile } from "../binderDocument";
 import {
   lazy,
   Suspense,
@@ -54,6 +55,7 @@ import {
   type DraftFileTarget,
 } from "./DraftFiles";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
+import { EditorFileCover } from "./EditorFileCover";
 
 /**
  * A document open in the editor, saving into your draft.
@@ -207,8 +209,11 @@ type Leaving =
 type LoadState =
   | { kind: "loading" }
   | { kind: "error"; message: string }
-  /** The file is not one the editor writes — a Word file, a PDF. */
-  | { kind: "foreign"; detail: WorkspaceDocumentDetailPayload }
+  /**
+   * The file is not one the editor writes — a Word file, a PDF — and its
+   * bytes, already read, for the desk to show it as it is.
+   */
+  | { kind: "foreign"; detail: WorkspaceDocumentDetailPayload; file: Blob }
   | { kind: "ready"; detail: WorkspaceDocumentDetailPayload; doc: JSONContent };
 
 type SaveState =
@@ -385,7 +390,12 @@ export function DocumentEditorPage({
   const readAhead = useRef(
     new Map<
       string,
-      Promise<{ detail: WorkspaceDocumentDetailPayload; text: string }>
+      Promise<{
+        detail: WorkspaceDocumentDetailPayload;
+        file: Blob;
+        /** The words, for a file the editor writes; null for any other. */
+        text: string | null;
+      }>
     >(),
   );
   const readPolicy = useCallback(
@@ -412,7 +422,14 @@ export function DocumentEditorPage({
           detail.document.path,
           draft ?? undefined,
         );
-        return { detail, text: await blob.text() };
+        return {
+          detail,
+          file: blob,
+          // A Word file read as text is a megabyte of nothing.
+          text: isEditorDocumentFile(detail.document.path)
+            ? await blob.text()
+            : null,
+        };
       })();
       readAhead.current.set(path, reading);
       // A failed read is not kept: the open that follows asks again, and
@@ -486,6 +503,21 @@ export function DocumentEditorPage({
     html.classList.add("bs-writing");
     return () => html.classList.remove("bs-writing");
   }, []);
+
+  /**
+   * **A file shown as it is that has since become a Bindersnap document** —
+   * converted from the note on it, into the draft. Its address does not
+   * change (the name stays; only the file under it does), so the open would
+   * never be read again and the note would stay up. The file panel's listing
+   * knows the file under the address moved; that reads it again.
+   */
+  const listedPath =
+    files?.documents.find((entry) => entry.slugPath === documentPath)?.path ??
+    null;
+  const coverStale =
+    load.kind === "foreign" &&
+    listedPath !== null &&
+    listedPath !== load.detail.document.path;
 
   useEffect(() => {
     if (!draft) return;
@@ -573,12 +605,12 @@ export function DocumentEditorPage({
     (async () => {
       // Taken from a read ahead when the row was pointed at; once taken it is
       // this policy's, and the next read of it is a fresh one.
-      const { detail, text } = await readPolicy(documentPath);
+      const { detail, file, text } = await readPolicy(documentPath);
       readAhead.current.delete(documentPath);
-      const doc = parseEditorDocument(text);
+      const doc = text === null ? null : parseEditorDocument(text);
       if (cancelled) return;
       if (doc === null) {
-        setLoad({ kind: "foreign", detail });
+        setLoad({ kind: "foreign", detail, file });
         return;
       }
       savedJson.current = JSON.stringify(doc);
@@ -623,7 +655,7 @@ export function DocumentEditorPage({
     // `recountElsewhere` is stable; `isUnsaved` reads only its argument;
     // `readPolicy` changes only with the draft, which is in the list.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [org, binder, documentPath, draft, changeNumber]);
+  }, [org, binder, documentPath, draft, changeNumber, coverStale]);
 
   // "Saved 3 minutes ago" has to keep counting while nobody types.
   useEffect(() => {
@@ -1097,16 +1129,22 @@ export function DocumentEditorPage({
   // **One editor for the whole sitting.** While the next policy is read, the
   // last one stays on the page — still, and not editable — rather than the
   // page blanking to a skeleton between two policies; then the editor takes
-  // the next one in (`documentState.ts`).
-  const lastReady = useRef<Extract<LoadState, { kind: "ready" }> | null>(null);
-  if (load.kind === "ready") lastReady.current = load;
-  else if (load.kind !== "loading") lastReady.current = null;
-  const frame =
-    load.kind === "ready"
+  // the next one in (`documentState.ts`). A Word file or a PDF is shown in
+  // the same editor, on the desk in place of the page, so moving to one and
+  // back never leaves it either.
+  type Shown = Extract<LoadState, { kind: "ready" } | { kind: "foreign" }>;
+  const lastShown = useRef<Shown | null>(null);
+  if (load.kind === "ready" || load.kind === "foreign") {
+    lastShown.current = load;
+  } else if (load.kind !== "loading") lastShown.current = null;
+  const frame: Shown | null =
+    load.kind === "ready" || load.kind === "foreign"
       ? load
       : load.kind === "loading"
-        ? lastReady.current
+        ? lastShown.current
         : null;
+  /** What the editor is made with, when it is made on a file it cannot open. */
+  const frameDoc = frame?.kind === "ready" ? frame.doc : null;
 
   const undoArchive = () => {
     if (!lastArchive || filesBusy) return;
@@ -1280,52 +1318,6 @@ export function DocumentEditorPage({
         </p>
       </div>
     );
-  } else if (load.kind === "foreign") {
-    body = (
-      <div className="doc-editor-state">
-        <div className="bs-empty">
-          <h2 className="bs-title">{name} is not a Bindersnap document</h2>
-          {/* Not on a change request: the conversion goes into a draft, and
-              this is somebody's change, saved into in place. */}
-          {!change && convertibleKind(load.detail.document.path) !== null ? (
-            <>
-              <p>
-                It was uploaded as a file. You can turn it into a Bindersnap
-                document and edit it here, in your draft, or edit it in the
-                program that made it and use Upload new version on the
-                document's page.
-              </p>
-              <button
-                type="button"
-                className="bs-btn bs-btn-primary bs-btn--sm"
-                onClick={() =>
-                  onConvertFile({
-                    slugPath: load.detail.document.slugPath,
-                    path: load.detail.document.path,
-                    name,
-                  })
-                }
-              >
-                Edit in Bindersnap
-              </button>
-            </>
-          ) : (
-            <p>
-              It was uploaded as a file, so it is edited in the program that
-              made it. Make your changes there, then use Upload new version on
-              the document's page.
-            </p>
-          )}
-          <button
-            type="button"
-            className="bs-btn bs-btn-secondary bs-btn--sm"
-            onClick={onClose}
-          >
-            Go to the document's page
-          </button>
-        </div>
-      </div>
-    );
   } else if (frame) {
     inEditor = true;
     body = (
@@ -1363,12 +1355,41 @@ export function DocumentEditorPage({
             }
             // Read when the editor is made; every policy after the first is
             // swapped in as a state of its own, undo and all.
-            initialContent={frame.doc}
+            initialContent={frameDoc}
             editable={load.kind === "ready"}
+            cover={
+              frame.kind === "foreign" ? (
+                <EditorFileCover
+                  // A new file is a new preview, not the last one reread.
+                  key={frame.detail.document.path}
+                  fileName={downloadFileName(frame.detail.document)}
+                  file={frame.file}
+                  // Not on a change request: the conversion goes into a
+                  // draft, and this is somebody's change, saved into in place.
+                  onConvert={
+                    !change &&
+                    convertibleKind(frame.detail.document.path) !== null
+                      ? () =>
+                          onConvertFile({
+                            slugPath: frame.detail.document.slugPath,
+                            path: frame.detail.document.path,
+                            name,
+                          })
+                      : undefined
+                  }
+                />
+              ) : undefined
+            }
             // A policy just started is its title and an empty line: the
             // cursor goes on the empty line, ready to type, as Word's does.
             // Anything longer opens at the top, where it starts.
-            autoFocus={isBlankPolicy(frame.doc) ? "end" : "start"}
+            autoFocus={
+              frameDoc === null
+                ? false
+                : isBlankPolicy(frameDoc)
+                  ? "end"
+                  : "start"
+            }
             onChange={handleChange}
             onSave={() => requestSave("this")}
             onReady={(editor) => {

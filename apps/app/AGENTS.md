@@ -17,10 +17,16 @@ panel on it. `apps/app/components/DocumentEditorPage.tsx` is the page around it,
 the author's draft** through the ordinary revise endpoint, so the version on
 record does not move until the draft is proposed and published. Edit on a
 document's page opens (or resumes) that draft first. Only a file the editor
-writes — `*.json` — is opened in it. A Word file or a PDF is edited in the
+writes — `*.json` — is opened in it. **A Word file or a PDF chosen in the
+editor is shown there, read only** (`EditorFileCover`, the editor's `cover`):
+the document page's own preview on the desk where the page goes, the ribbon
+locked, the file panel and status bar where they were, and a note at the top
+right — "Word document · View only", Edit in Bindersnap, Download — so moving
+to one never leaves the editor. Moving between documents replaces the address
+rather than adding to Back. A Word file or a PDF is edited in the
 program that made it and uploaded as a new version, **or converted on request**:
 "Edit in Bindersnap" (the document's page, the editor's file panel, and the
-editor's own "not a Bindersnap document" screen) opens
+note on a file shown in the editor) opens
 `ConvertDocumentModal`, which reads the file in the browser
 (`convertToEditor.ts`: mammoth for `.docx`, pdf.js for a PDF, then the
 editor's own schema) and says what the conversion loses _before_ anything is

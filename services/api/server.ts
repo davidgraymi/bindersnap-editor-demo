@@ -409,6 +409,7 @@ import {
   stripeWebhookLimiter,
 } from "./edge";
 import type { DraftNameRecord } from "./draft-names";
+import { defaultMyDraftsDeps, readMyDrafts } from "./my-drafts";
 import {
   findSoleOwnerships,
   listOwnedDrafts,
@@ -4906,6 +4907,32 @@ async function handleHomeChanges(
       baseHeaders,
       "Unable to load your change requests.",
     );
+  }
+}
+
+/**
+ * Your drafts, across binders: `GET /api/app/drafts`, narrowed by `org` and
+ * `binder`. A read, never gated; only ever the reader's own (`my-drafts.ts`).
+ */
+async function handleMyDrafts(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const query = new URL(req.url).searchParams;
+  try {
+    const drafts = await readMyDrafts({
+      client: auth.client,
+      username: auth.session.username,
+      org: query.get("org"),
+      binder: query.get("binder"),
+      deps: defaultMyDraftsDeps(draftNameStore),
+    });
+    return json(200, { drafts }, baseHeaders);
+  } catch (err) {
+    return responseFromError(err, baseHeaders, "Unable to load your drafts.");
   }
 }
 
@@ -17825,6 +17852,8 @@ async function handleRequest(req: Request): Promise<Response> {
     method === "POST"
   ) {
     response = await handleAdminRunActivityBuild(req, baseHeaders);
+  } else if (pathname === "/api/app/drafts" && method === "GET") {
+    response = await handleMyDrafts(req, baseHeaders);
   } else if (pathname === "/api/app/home/changes" && method === "GET") {
     response = await handleHomeChanges(req, baseHeaders);
   } else if (pathname === "/api/app/changes/search" && method === "GET") {

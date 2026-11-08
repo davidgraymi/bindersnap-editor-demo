@@ -101,6 +101,9 @@ export function describeFileKind(fileName: string | null | undefined): string {
       return "PowerPoint deck";
     case "pdf":
       return "PDF";
+    case "md":
+    case "markdown":
+      return "Markdown file";
     case "zip":
       return "Archive";
     case "":

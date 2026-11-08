@@ -154,6 +154,14 @@ interface RibbonProps {
   onUndo?: () => boolean;
   /** Whether the page has such a thing to take back, which enables Undo. */
   outsideUndo?: boolean;
+  /**
+   * Nothing to write in, for now: the next document is being read, or what is
+   * shown is a file the editor does not open. **The ribbon stays where it
+   * is** — the tabs, View and the end of the row still work — and every
+   * command that writes is off. It used to leave the screen instead, and the
+   * whole window jumped on every document opened.
+   */
+  locked?: boolean;
 }
 
 const TAB_LABELS: Record<RibbonTab, string> = {
@@ -191,6 +199,7 @@ export function Ribbon({
   onUndo,
   outsideUndo = false,
   outline,
+  locked = false,
 }: RibbonProps) {
   const format = useFormatState(editor);
   const [chosen, setChosen] = useState<RibbonTab>("home");
@@ -320,7 +329,14 @@ export function Ribbon({
       <div className="bs-ribbon-bar">
         {/* Folded away with the rest, Undo and Redo stay to hand, as on
             Word's Quick Access Toolbar. */}
-        {collapsed ? <div className="bs-ribbon-quick">{undoRedo}</div> : null}
+        {collapsed ? (
+          <fieldset
+            className="bs-ribbon-quick bs-ribbon-lock"
+            disabled={locked}
+          >
+            {undoRedo}
+          </fieldset>
+        ) : null}
 
         <div className="bs-ribbon-tabs" role="tablist" aria-label="Ribbon">
           {tabs.map((id) => (
@@ -358,39 +374,49 @@ export function Ribbon({
         >
           {/* **In the toolbar, not beside the tabs**: the first thing in
               it on every tab, as the commands it takes back are. */}
-          <RibbonGroup label="Undo" className="bs-rgroup--undo">
-            {undoRedo}
-          </RibbonGroup>
-          {tab === "home" && simple ? (
-            <SimpleHomeTab editor={editor} format={format} onFind={onFind} />
-          ) : tab === "home" ? (
-            <HomeTab
-              editor={editor}
-              format={format}
-              onFind={onFind}
-              fold={fold}
-            />
-          ) : tab === "insert" ? (
-            <InsertTab
-              editor={editor}
-              // Word goes to Table Design the moment a table goes in: the
-              // next thing anybody does to a new table is shape it.
-              onTableInserted={() => setChosen("table")}
-            />
-          ) : tab === "view" ? (
-            <ViewTab
-              view={view}
-              zoom={zoom}
-              onViewChange={onViewChange}
-              onPrint={onPrint}
-              onShortcuts={onShortcuts}
-              outline={outline}
-            />
-          ) : tab === "table" ? (
-            <TableTab editor={editor} format={format} />
-          ) : (
-            <PictureTab editor={editor} format={format} />
-          )}
+          {/* A fieldset that draws nothing, so a lock is one attribute:
+              Undo always (it would take back a page not on screen), and
+              every tab's commands but View's. */}
+          <fieldset className="bs-ribbon-lock" disabled={locked}>
+            <RibbonGroup label="Undo" className="bs-rgroup--undo">
+              {undoRedo}
+            </RibbonGroup>
+          </fieldset>
+          <fieldset
+            className="bs-ribbon-lock"
+            disabled={locked && tab !== "view"}
+          >
+            {tab === "home" && simple ? (
+              <SimpleHomeTab editor={editor} format={format} onFind={onFind} />
+            ) : tab === "home" ? (
+              <HomeTab
+                editor={editor}
+                format={format}
+                onFind={onFind}
+                fold={fold}
+              />
+            ) : tab === "insert" ? (
+              <InsertTab
+                editor={editor}
+                // Word goes to Table Design the moment a table goes in: the
+                // next thing anybody does to a new table is shape it.
+                onTableInserted={() => setChosen("table")}
+              />
+            ) : tab === "view" ? (
+              <ViewTab
+                view={view}
+                zoom={zoom}
+                onViewChange={onViewChange}
+                onPrint={onPrint}
+                onShortcuts={onShortcuts}
+                outline={outline}
+              />
+            ) : tab === "table" ? (
+              <TableTab editor={editor} format={format} />
+            ) : (
+              <PictureTab editor={editor} format={format} />
+            )}
+          </fieldset>
 
           {/* One row, or Word's full ribbon. Double-clicking a tab still
               folds either away. */}

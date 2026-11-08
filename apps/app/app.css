@@ -8354,6 +8354,19 @@ a.cmp-file-act {
   font-weight: var(--brand-weight-semibold);
 }
 
+/* The Drafts page's one line under "Not proposed yet" (`MyDrafts`). */
+.drafts-lede {
+  margin: 0;
+  padding: var(--brand-space-2) var(--brand-space-2) 0;
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-sm);
+}
+
+.drafts-page {
+  display: grid;
+  gap: var(--brand-space-4);
+}
+
 .bs-panel-bar-spacer {
   flex: 1;
 }
@@ -11608,23 +11621,106 @@ html:has(.doc-files-resize--active) {
   padding: var(--brand-space-8);
 }
 
+/* ─── A Word file or a PDF in the editor (`EditorFileCover`) ──────────────
+   Shown on the desk where the page goes, a sheet's width, with a note at its
+   top right that says what it is and offers the one way to write in it. The
+   note stays in view as the file scrolls. */
+
+.doc-editor-cover {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--brand-space-3);
+  width: min(100%, 8.5in);
+  margin: 0 auto;
+}
+
+.doc-editor-cover-note {
+  position: sticky;
+  top: 0;
+  z-index: var(--brand-z-raised);
+  justify-self: end;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--brand-space-2) var(--brand-space-3);
+  max-width: 100%;
+  padding: var(--brand-space-2) var(--brand-space-2) var(--brand-space-2)
+    var(--brand-space-3);
+  border: 1px solid var(--bs-rule-warm);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  box-shadow: var(--bs-shadow-sm);
+}
+
+.doc-editor-cover-icon {
+  display: inline-flex;
+  color: var(--bs-text-muted);
+}
+
+.doc-editor-cover-text {
+  display: grid;
+  gap: var(--brand-space-0-5);
+  min-width: 0;
+  flex: 1 1 14rem;
+  font-size: var(--brand-text-sm);
+  color: var(--bs-text-secondary);
+}
+
+.doc-editor-cover-text strong {
+  font-weight: 600;
+  color: var(--bs-text-primary);
+}
+
+.doc-editor-cover-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--brand-space-2);
+}
+
+.doc-editor-cover-actions .bs-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+}
+
+/* A PDF as tall as the desk shows, rather than a box in the middle of it,
+   and close to the card's edge: the PDF brings its own margins. */
+.doc-editor-cover .doc-preview-frame {
+  min-height: calc(100dvh - 15rem);
+}
+
+.doc-editor-cover .doc-preview-body:has(> .doc-preview-frame) {
+  padding: var(--brand-space-2);
+}
+
 .doc-editor-frame {
   flex: 1 1 0;
   min-height: 420px;
   overflow: hidden;
 }
 
-/* The last policy, still on the page while the next is read: dimmed, and not
-   a place to type, for the moment it takes. */
+/* The last policy, still on the page while the next is read, and not a
+   place to type for the moment it takes. **Dimmed only when the moment is
+   long**: most policies arrive at once — read ahead as the row is pointed
+   at — and a page that flickered grey on every click felt like a reload. */
 .doc-editor-frame--opening {
-  opacity: 0.55;
-  transition: opacity 120ms ease-out;
   pointer-events: none;
+  cursor: progress;
+}
+
+.doc-editor-frame--opening .bs-doc-desk {
+  animation: doc-editor-opening var(--brand-transition-base) 0.4s both;
+}
+
+@keyframes doc-editor-opening {
+  to {
+    opacity: 0.55;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .doc-editor-frame--opening {
-    transition: none;
+  .doc-editor-frame--opening .bs-doc-desk {
+    animation-duration: 0s;
   }
 }
 

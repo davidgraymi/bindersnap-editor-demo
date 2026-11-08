@@ -25,6 +25,7 @@ import type {
 import type {
   BinderArchivePayload,
   BinderDraftPayload,
+  MyDraftsPayload,
   BinderGroupsPayload,
   BinderPeoplePayload,
   BinderRulesPayload,
@@ -1780,6 +1781,24 @@ function multipartTarget(target?: ActTarget): {
       : {}),
     ...(target.draft ? { draft: String(target.draft) } : {}),
   };
+}
+
+/**
+ * Your drafts, newest first, with the binder each is in: every binder you can
+ * write in, or one organization's, or one binder's. Only your own.
+ */
+export async function fetchMyDrafts(
+  scope: { org?: string; binder?: string } = {},
+  request?: ReadRequest,
+): Promise<MyDraftsPayload> {
+  const response = await BindersClient.listMyDrafts(
+    {
+      ...(scope.org ? { org: scope.org } : {}),
+      ...(scope.org && scope.binder ? { binder: scope.binder } : {}),
+    },
+    request,
+  );
+  return response.data;
 }
 
 /**
