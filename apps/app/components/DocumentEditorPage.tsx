@@ -12,7 +12,7 @@ import {
 } from "react";
 import type { Editor, JSONContent } from "@tiptap/core";
 import type { EditorState } from "@tiptap/pm/state";
-import { GitPullRequest, History, Pencil } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import type {
   BinderArchivePayload,
@@ -1515,7 +1515,7 @@ export function DocumentEditorPage({
                 onClick={() => setTitling(true)}
               >
                 <span className="doc-editor-title-text">{name}</span>
-                <Pencil size={13} strokeWidth={1.75} aria-hidden="true" />
+                <AppIcon icon={ICON.edit} size="sm" />
               </button>
             ) : (
               name
@@ -1532,7 +1532,7 @@ export function DocumentEditorPage({
               className="doc-editor-change"
               title={`${change.title} — its reviewers see every save. The version on record does not change until the change is published.`}
             >
-              <GitPullRequest size={14} strokeWidth={1.75} aria-hidden="true" />
+              <AppIcon icon={ICON.changeRequest} size="sm" />
               Change {change.number}
             </span>
           ) : drafts && current ? (
@@ -1625,7 +1625,7 @@ export function DocumentEditorPage({
                 leave({ kind: "change", number: current.changeNumber! })
               }
             >
-              <GitPullRequest size={14} strokeWidth={1.75} aria-hidden="true" />
+              <AppIcon icon={ICON.changeRequest} size="sm" />
               Change {current.changeNumber}
             </button>
           ) : (
@@ -1648,7 +1648,7 @@ export function DocumentEditorPage({
 
       {recovered && load.kind === "ready" ? (
         <div className="doc-editor-recover" role="status">
-          <History size={15} strokeWidth={1.75} aria-hidden="true" />
+          <AppIcon icon={ICON.history} size="md" />
           <p>
             <strong>Unsaved changes from {formatAge(recovered.at)}</strong> were
             kept on this device.

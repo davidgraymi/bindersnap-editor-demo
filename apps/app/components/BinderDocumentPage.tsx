@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FileArchive } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import type { WorkspaceDocumentDetailPayload } from "../../../packages/api-schema/schemas/workspaces";
 import {
@@ -10,7 +10,7 @@ import {
 } from "../api";
 import { binderDocumentQuery } from "../data/queries";
 import { followInApp } from "../appLink";
-import { AppIcon } from "./AppIcon";
+
 import {
   buildDocumentCrumbs,
   buildDocumentUrl,
@@ -697,7 +697,11 @@ export function BinderDocumentPage({
                   disabled={exportingAudit}
                   onClick={() => void handleAuditPacket()}
                 >
-                  <AppIcon icon={FileArchive} size="sm" aria-hidden="true" />
+                  <AppIcon
+                    icon={ICON.auditPacket}
+                    size="sm"
+                    aria-hidden="true"
+                  />
                   {exportingAudit
                     ? "Preparing the audit packet…"
                     : "Audit packet"}

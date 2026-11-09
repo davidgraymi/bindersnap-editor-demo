@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Building2, Lock } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import { createBinder } from "../api";
 import {
@@ -273,11 +273,10 @@ export function NewBinderPage({
               disabled={submitting}
               onChange={() => setOpenToOrganization(true)}
             />
-            <Building2
+            <AppIcon
+              icon={ICON.organization}
+              size="md"
               className="bs-choice-icon"
-              size={16}
-              strokeWidth={1.75}
-              aria-hidden="true"
             />
             <span>
               <span className="bs-choice-name">
@@ -296,12 +295,7 @@ export function NewBinderPage({
               disabled={submitting}
               onChange={() => setOpenToOrganization(false)}
             />
-            <Lock
-              className="bs-choice-icon"
-              size={16}
-              strokeWidth={1.75}
-              aria-hidden="true"
-            />
+            <AppIcon icon={ICON.private} size="md" className="bs-choice-icon" />
             <span>
               <span className="bs-choice-name">Only people you add</span>
               <span className="bs-choice-note">

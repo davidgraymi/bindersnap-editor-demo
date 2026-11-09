@@ -9,23 +9,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
-import {
-  Archive,
-  ChevronDown,
-  ChevronRight,
-  Copy,
-  File,
-  FilePlus,
-  FileText,
-  Folder,
-  FolderInput,
-  FolderPlus,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Pencil,
-  Trash2,
-  type LucideIcon,
-} from "lucide-react";
+import { AppIcon, ICON, type IconGlyph } from "./AppIcon";
 
 import type {
   BinderArchivePayload,
@@ -566,7 +550,7 @@ export function DraftFiles({
         title="Show file explorer"
         onClick={toggle}
       >
-        <PanelLeftOpen size={16} strokeWidth={1.75} aria-hidden="true" />
+        <AppIcon icon={ICON.showPanel} size="md" />
       </button>
     </div>
   );
@@ -700,7 +684,7 @@ export function DraftFiles({
       if (node.document.slugPath !== active) {
         items.push({
           label: "Open",
-          icon: FileText,
+          icon: ICON.document,
           run: () => openPolicy(node.document.slugPath),
         });
       }
@@ -708,7 +692,7 @@ export function DraftFiles({
       if (onNew) {
         items.push({
           label: "New document here",
-          icon: FilePlus,
+          icon: ICON.newDocument,
           run: () => {
             setFloating(false);
             onNew(node.path);
@@ -718,7 +702,7 @@ export function DraftFiles({
       if (onNewFolder) {
         items.push({
           label: "New folder here",
-          icon: FolderPlus,
+          icon: ICON.newFolder,
           disabled: busy,
           run: () => {
             setFloating(false);
@@ -733,7 +717,7 @@ export function DraftFiles({
       items.push({
         label: "Rename",
         hint: "F2",
-        icon: Pencil,
+        icon: ICON.edit,
         disabled: !acts,
         separated: items.length > 0,
         run: () => setRenaming(keyOf(node)),
@@ -746,7 +730,7 @@ export function DraftFiles({
     ) {
       items.push({
         label: "Make a copy",
-        icon: Copy,
+        icon: ICON.copy,
         disabled: busy,
         run: () => {
           setFloating(false);
@@ -761,7 +745,7 @@ export function DraftFiles({
     ) {
       items.push({
         label: "Edit in Bindersnap",
-        icon: FileText,
+        icon: ICON.document,
         disabled: busy,
         run: () => {
           setFloating(false);
@@ -776,7 +760,7 @@ export function DraftFiles({
     if (onMove && isManaged(node)) {
       items.push({
         label: "Move to…",
-        icon: FolderInput,
+        icon: ICON.moveToFolder,
         disabled: !acts,
         run: () => setMoving({ subject: subjectOf(node), label }),
       });
@@ -787,7 +771,7 @@ export function DraftFiles({
         // Never published, it is only in this draft: there is no record to
         // archive it from, so it is deleted.
         label: published ? "Archive" : "Delete",
-        icon: published ? Archive : Trash2,
+        icon: published ? ICON.archive : ICON.delete,
         danger: true,
         disabled: !acts,
         separated: true,
@@ -797,7 +781,7 @@ export function DraftFiles({
     if (onArchiveFolder && node.kind === "folder") {
       items.push({
         label: "Archive folder",
-        icon: Archive,
+        icon: ICON.archive,
         danger: true,
         disabled: !acts,
         separated: true,
@@ -915,7 +899,7 @@ export function DraftFiles({
             disabled={busy}
             onClick={() => setRenaming(keyOf(node))}
           >
-            <Pencil size={13} strokeWidth={1.6} aria-hidden="true" />
+            <AppIcon icon={ICON.edit} size="sm" />
           </button>
         ) : null}
         {/* A folder's Archive is in its menu: it takes everything in it. */}
@@ -929,7 +913,7 @@ export function DraftFiles({
               disabled={busy}
               onClick={() => void archiveRow(node)}
             >
-              <Archive size={13} strokeWidth={1.6} aria-hidden="true" />
+              <AppIcon icon={ICON.archive} size="sm" />
             </button>
           ) : (
             <button
@@ -940,7 +924,7 @@ export function DraftFiles({
               disabled={busy}
               onClick={() => void archiveRow(node)}
             >
-              <Trash2 size={13} strokeWidth={1.6} aria-hidden="true" />
+              <AppIcon icon={ICON.delete} size="sm" />
             </button>
           )
         ) : null}
@@ -960,9 +944,9 @@ export function DraftFiles({
       const writable = isEditorDocumentFile(path);
       const changed = isTouched(node);
       const icon = writable ? (
-        <FileText size={14} strokeWidth={1.6} aria-hidden="true" />
+        <AppIcon icon={ICON.document} size="sm" />
       ) : (
-        <File size={14} strokeWidth={1.6} aria-hidden="true" />
+        <AppIcon icon={ICON.uploadedFile} size="sm" />
       );
       return (
         <div
@@ -1065,7 +1049,7 @@ export function DraftFiles({
               className="app-explorer-folder doc-files-item--renaming"
               style={indent}
             >
-              <Folder size={14} strokeWidth={1.6} aria-hidden="true" />
+              <AppIcon icon={ICON.folder} size="sm" />
               <InlineRename
                 className="doc-files-rename"
                 initial={label}
@@ -1095,11 +1079,11 @@ export function DraftFiles({
               onKeyDown={(event) => onRowKey(event, node)}
             >
               {open ? (
-                <ChevronDown size={13} strokeWidth={1.75} aria-hidden="true" />
+                <AppIcon icon={ICON.chevronDown} size="sm" />
               ) : (
-                <ChevronRight size={13} strokeWidth={1.75} aria-hidden="true" />
+                <AppIcon icon={ICON.chevronRight} size="sm" />
               )}
-              <Folder size={14} strokeWidth={1.6} aria-hidden="true" />
+              <AppIcon icon={ICON.folder} size="sm" />
               <span className="app-explorer-name">{label}</span>
               {isTouched(node) ? (
                 <span className="doc-files-changed" aria-hidden="true" />
@@ -1216,7 +1200,7 @@ export function DraftFiles({
             title="New document"
             onClick={startNew}
           >
-            <FilePlus size={15} strokeWidth={1.75} aria-hidden="true" />
+            <AppIcon icon={ICON.newDocument} size="md" />
           </button>
         ) : null}
         {onNewFolder && !onOutline ? (
@@ -1231,7 +1215,7 @@ export function DraftFiles({
               onNewFolder();
             }}
           >
-            <FolderPlus size={15} strokeWidth={1.75} aria-hidden="true" />
+            <AppIcon icon={ICON.newFolder} size="md" />
           </button>
         ) : null}
         <button
@@ -1242,7 +1226,7 @@ export function DraftFiles({
           title="Hide file explorer"
           onClick={toggle}
         >
-          <PanelLeftClose size={15} strokeWidth={1.75} aria-hidden="true" />
+          <AppIcon icon={ICON.hidePanel} size="md" />
         </button>
       </div>
 
@@ -1394,19 +1378,11 @@ export function DraftFiles({
                 onClick={() => setArchiveOpen((was) => !was)}
               >
                 {archiveOpen ? (
-                  <ChevronDown
-                    size={13}
-                    strokeWidth={1.75}
-                    aria-hidden="true"
-                  />
+                  <AppIcon icon={ICON.chevronDown} size="sm" />
                 ) : (
-                  <ChevronRight
-                    size={13}
-                    strokeWidth={1.75}
-                    aria-hidden="true"
-                  />
+                  <AppIcon icon={ICON.chevronRight} size="sm" />
                 )}
-                <Archive size={14} strokeWidth={1.6} aria-hidden="true" />
+                <AppIcon icon={ICON.archive} size="sm" />
                 <span className="app-explorer-name">Archived</span>
                 <span className="doc-files-archive-count">{archivedCount}</span>
               </button>
@@ -1429,11 +1405,7 @@ export function DraftFiles({
                             : "Its folder is gone"
                         }
                       >
-                        <FileText
-                          size={14}
-                          strokeWidth={1.6}
-                          aria-hidden="true"
-                        />
+                        <AppIcon icon={ICON.document} size="sm" />
                         <span className="app-explorer-name">{entry.title}</span>
                       </span>
                       {onRestore ? (
@@ -1499,7 +1471,7 @@ export function DraftFiles({
 
 interface RowMenuItem {
   label: string;
-  icon: LucideIcon;
+  icon: IconGlyph;
   run: () => void;
   /** The key that does it without the menu, said at the end of the line. */
   hint?: string;
@@ -1643,7 +1615,7 @@ function RowMenu({
               item.run();
             }}
           >
-            <item.icon size={14} strokeWidth={1.6} aria-hidden="true" />
+            <AppIcon icon={item.icon} size="sm" />
             <span>{item.label}</span>
             {item.hint ? (
               <kbd className="doc-files-menu-hint">{item.hint}</kbd>

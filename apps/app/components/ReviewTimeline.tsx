@@ -1,15 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
-import {
-  ArrowRightToLine,
-  Check,
-  MessageSquare,
-  Pencil,
-  RefreshCw,
-  Undo2,
-  X,
-} from "lucide-react";
+import { AppIcon, ICON, type IconGlyph } from "./AppIcon";
 
 import type { ChangeUpdate, DiscussionSummary, ReactionKind } from "../api";
 import type { ChangeScope } from "../changeScope";
@@ -46,14 +38,14 @@ interface ReviewTimelineProps {
   onOpenUpdate: ((sha: string) => void) | null;
 }
 
-const ENTRY_ICONS: Record<TimelineEntryKind, typeof Check> = {
-  opened: ArrowRightToLine,
-  thread: MessageSquare,
-  update: RefreshCw,
-  approved: Check,
-  changes: X,
-  commented: MessageSquare,
-  closed: Undo2,
+const ENTRY_ICONS: Record<TimelineEntryKind, IconGlyph> = {
+  opened: ICON.propose,
+  thread: ICON.comment,
+  update: ICON.bringUpToDate,
+  approved: ICON.approved,
+  changes: ICON.changesRequested,
+  commented: ICON.comment,
+  closed: ICON.closed,
 };
 
 /** One row of plain text on the paper: something happened, and this is it. */
@@ -271,7 +263,7 @@ export function ReviewTimeline({
                 className={`rev-dot${green ? " rev-dot--green" : ""}`}
                 aria-hidden="true"
               >
-                <Icon size={13} strokeWidth={1.75} />
+                <AppIcon icon={Icon} size="sm" />
               </span>
               {entry.thread ? (
                 <ReviewThread
@@ -325,7 +317,7 @@ export function ReviewTimeline({
         {canParticipate ? (
           <div className="rev-entry">
             <span className="rev-dot" aria-hidden="true">
-              <Pencil size={12} strokeWidth={1.75} />
+              <AppIcon icon={ICON.edit} size="xs" />
             </span>
             {composing ? (
               <div className="rev-composer">

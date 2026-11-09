@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Columns2, GitBranch } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import { binderChangesQuery } from "../data/queries";
 import type { WorkspaceChangeSummary } from "../../../packages/api-schema/schemas/workspaces";
@@ -85,7 +85,7 @@ export function BinderBranchSummary({
       aria-label="This branch"
     >
       <span className="binder-latest-icon" aria-hidden="true">
-        <GitBranch size={16} strokeWidth={1.75} />
+        <AppIcon icon={ICON.draft} size="md" />
       </span>
       <div className="binder-latest-body">
         {change ? (
@@ -136,7 +136,7 @@ export function BinderBranchSummary({
               followInApp(event, () => onOpenChange(change.number, true))
             }
           >
-            <Columns2 size={14} strokeWidth={1.75} aria-hidden="true" />
+            <AppIcon icon={ICON.compareSideBySide} size="sm" />
             Changes
           </a>
         </div>

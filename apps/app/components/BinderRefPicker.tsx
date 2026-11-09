@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { BookCheck, Check, ChevronDown, GitBranch } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import {
   binderChangeQuery,
@@ -13,7 +13,7 @@ import type {
 } from "../../../packages/api-schema/schemas/workspaces";
 import { describeBranch } from "../branchLabel";
 import { nameFor, usePeopleNames } from "../usePeopleNames";
-import { AppIcon } from "./AppIcon";
+
 import { describeDraft } from "./BinderDraftPicker";
 import { useFloatingMenu } from "./useFloatingMenu";
 
@@ -118,9 +118,12 @@ export function BinderRefPicker({
         title={current ?? "The published binder"}
         onClick={() => setOpen((was) => !was)}
       >
-        <AppIcon icon={current === null ? BookCheck : GitBranch} size="sm" />
+        <AppIcon
+          icon={current === null ? ICON.onRecord : ICON.draft}
+          size="sm"
+        />
         <span className="bs-refpick-label">{label}</span>
-        <AppIcon icon={ChevronDown} size="sm" />
+        <AppIcon icon={ICON.chevronDown} size="sm" />
       </button>
 
       {open ? (
@@ -199,7 +202,7 @@ function RefRow({
   return (
     <div className={`bs-row${on ? " bs-row--on" : ""}`}>
       <span className="bs-row-icon" aria-hidden="true">
-        {on ? <AppIcon icon={Check} size="sm" /> : null}
+        {on ? <AppIcon icon={ICON.selected} size="sm" /> : null}
       </span>
       <button
         type="button"

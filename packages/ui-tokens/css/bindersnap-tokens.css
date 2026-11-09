@@ -283,13 +283,13 @@
   --brand-text-ui-lg: 1rem; /* 16px */
 
   /* ── Icon sizes / stroke widths ──
-     Lucide icons via <AppIcon> (apps/app/components/AppIcon.tsx). Fixed —
+     Lucide icons via <AppIcon> (packages/ui-tokens/icons.tsx). Fixed —
      an icon's weight is a drawing property, not a themeable one. */
   --brand-icon-xs: 12px;
   --brand-icon-sm: 14px;
   --brand-icon-md: 16px;
   --brand-icon-lg: 20px;
-  --brand-icon-stroke: 1.5; /* default — already the plurality */
+  --brand-icon-stroke: 1.75; /* default — 1.5 reads faint at 14px on paper */
   --brand-icon-stroke-heavy: 2; /* emphasis only */
 
   /* ── Line heights ── */

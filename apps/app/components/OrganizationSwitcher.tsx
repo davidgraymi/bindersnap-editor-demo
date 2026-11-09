@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Building2, Check, ChevronDown } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import { organizationsQuery } from "../data/queries";
 import { followInApp } from "../appLink";
@@ -91,7 +91,7 @@ export function OrganizationSwitcher({
         aria-current={isCurrentPage ? "page" : undefined}
         onClick={(event) => followInApp(event, () => onSelect(currentOrg))}
       >
-        <Building2 size={14} strokeWidth={1.5} aria-hidden="true" />
+        <AppIcon icon={ICON.organization} size="sm" />
         <span className="app-topnav-link-label">
           {formatDocumentName(currentOrg)}
         </span>
@@ -119,7 +119,7 @@ export function OrganizationSwitcher({
         aria-current={isCurrentPage ? "page" : undefined}
         onClick={(event) => followInApp(event, () => onSelect(only))}
       >
-        <Building2 size={14} strokeWidth={1.5} aria-hidden="true" />
+        <AppIcon icon={ICON.organization} size="sm" />
         <span className="app-topnav-link-label">{label}</span>
       </a>
     );
@@ -142,9 +142,9 @@ export function OrganizationSwitcher({
           setIsOpen((open) => !open);
         }}
       >
-        <Building2 size={14} strokeWidth={1.5} aria-hidden="true" />
+        <AppIcon icon={ICON.organization} size="sm" />
         <span className="app-topnav-link-label">{label}</span>
-        <ChevronDown size={14} strokeWidth={1.5} aria-hidden="true" />
+        <AppIcon icon={ICON.chevronDown} size="sm" />
       </button>
 
       {isOpen && anchor ? (
@@ -169,7 +169,7 @@ export function OrganizationSwitcher({
             >
               <span className="app-menu-item-check" aria-hidden="true">
                 {organization.name === currentOrg ? (
-                  <Check size={14} strokeWidth={2} />
+                  <AppIcon icon={ICON.selected} size="sm" heavy />
                 ) : null}
               </span>
               {organization.displayName}

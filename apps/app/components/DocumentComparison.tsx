@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Download, FileText } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import { sanitizeHtml } from "../../../packages/utils/sanitizer";
 import { downloadDocument } from "../api";
@@ -349,7 +349,7 @@ export function DocumentComparison({
   if (kind === "unsupported" || state.status === "unsupported") {
     return (
       <div className="doc-compare-fallback">
-        <FileText size={16} strokeWidth={1.5} aria-hidden="true" />
+        <AppIcon icon={ICON.document} size="md" />
         <span className="doc-compare-fallback-main">
           <span className="doc-compare-fallback-name">
             {fileName ?? "This file"}
@@ -366,7 +366,7 @@ export function DocumentComparison({
             type="button"
             onClick={() => onDownload(base.ref)}
           >
-            <Download size={14} strokeWidth={1.5} aria-hidden="true" />
+            <AppIcon icon={ICON.download} size="sm" />
             {base.label}
           </button>
           <button
@@ -374,7 +374,7 @@ export function DocumentComparison({
             type="button"
             onClick={() => onDownload(headRef)}
           >
-            <Download size={14} strokeWidth={1.5} aria-hidden="true" />
+            <AppIcon icon={ICON.download} size="sm" />
             This change
           </button>
         </span>
@@ -388,7 +388,7 @@ export function DocumentComparison({
         className="doc-compare-fallback doc-compare-fallback--error"
         role="status"
       >
-        <FileText size={16} strokeWidth={1.5} aria-hidden="true" />
+        <AppIcon icon={ICON.document} size="md" />
         <span className="doc-compare-fallback-main">
           <span className="doc-compare-fallback-name">
             {fileName ?? "This file"}

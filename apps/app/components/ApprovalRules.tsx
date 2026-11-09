@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Check, ChevronDown, ChevronUp, Clock } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import { describeGroupName } from "../../../packages/utils/groupName";
 import { formatDocumentName } from "../documentDisplay";
-import { AppIcon } from "./AppIcon";
+
 import { PersonAvatar } from "./PersonAvatar";
 
 /** One person, as the change payload carries them. */
@@ -156,7 +156,7 @@ export function ApprovalRules({ rules }: { rules: readonly ApprovalRule[] }) {
         disabled={rules.length === 0}
         onClick={() => setOpen(!open)}
       >
-        <AppIcon icon={met ? Check : Clock} size="sm" />
+        <AppIcon icon={met ? ICON.met : ICON.waiting} size="sm" />
         <span className="rev-rules-line">
           <strong>{summarizeRules(rules)}</strong>
           {approvedBy.length > 0 ? (
@@ -168,7 +168,7 @@ export function ApprovalRules({ rules }: { rules: readonly ApprovalRule[] }) {
         </span>
         <Faces users={approvedBy} />
         {rules.length > 0 ? (
-          <AppIcon icon={open ? ChevronUp : ChevronDown} size="sm" />
+          <AppIcon icon={open ? ICON.chevronUp : ICON.chevronDown} size="sm" />
         ) : null}
       </button>
 

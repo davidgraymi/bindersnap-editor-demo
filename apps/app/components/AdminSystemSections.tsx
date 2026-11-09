@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useState } from "react";
-import { CheckCircle2, RefreshCw, UserPlus } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import {
   createAdminUser,
@@ -104,7 +104,7 @@ export function AdminSystem() {
             className="bs-btn bs-btn-secondary bs-btn--sm"
             onClick={() => setRefreshes((count) => count + 1)}
           >
-            <RefreshCw size={14} strokeWidth={1.6} aria-hidden="true" />
+            <AppIcon icon={ICON.refresh} size="sm" />
             Read again
           </button>
         </div>
@@ -313,7 +313,7 @@ function MaintenanceRow({
         <span className="bs-row-meta">{meta}</span>
         {result ? (
           <span className="admin-console-done" role="status">
-            <CheckCircle2 size={14} strokeWidth={1.8} aria-hidden="true" />
+            <AppIcon icon={ICON.met} size="sm" />
             {result}
           </span>
         ) : null}
@@ -463,7 +463,7 @@ export function NewAccountPanel({
       <div className="admin-console-actions">
         {created ? (
           <span className="admin-console-done" role="status">
-            <CheckCircle2 size={14} strokeWidth={1.8} aria-hidden="true" />
+            <AppIcon icon={ICON.met} size="sm" />
             {created.username} was created.{" "}
             {created.emailed === "welcome"
               ? `A link to choose a password went to ${created.email}.`
@@ -479,7 +479,7 @@ export function NewAccountPanel({
             setOpen(true);
           }}
         >
-          <UserPlus size={14} strokeWidth={1.6} aria-hidden="true" />
+          <AppIcon icon={ICON.addPerson} size="sm" />
           New account
         </button>
       </div>
