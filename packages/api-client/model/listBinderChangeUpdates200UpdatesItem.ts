@@ -10,4 +10,5 @@ export type ListBinderChangeUpdates200UpdatesItem = {
   sha: string;
   author: string;
   at: string;
+  catchUp: boolean;
 };

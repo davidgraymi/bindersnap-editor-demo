@@ -15,5 +15,6 @@ export type GetBinderChangeConflicts200 = {
   headSha: string;
   baseSha: string;
   canResolve: boolean;
+  clearsApprovalsOnEdit: boolean;
   files: GetBinderChangeConflicts200FilesItem[];
 };

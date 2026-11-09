@@ -10,4 +10,5 @@ export type ChangeUpdatesPayloadUpdatesItem = {
   sha: string;
   author: string;
   at: string;
+  catchUp: boolean;
 };

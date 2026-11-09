@@ -621,7 +621,8 @@ export const WorkspaceChangeDetailPayloadSchema = z.object({
   decidedBy: z.string().nullable(),
   /**
    * Whether an approval stops counting once what the change proposes moves
-   * on: the binder's "A new version clears the approvals already collected".
+   * on: the binder's "Ask approvers again after the change is edited". Bringing
+   * the change up to date does not move it; resolving a conflict does.
    */
   clearsApprovalsOnEdit: z.boolean(),
 });
@@ -1555,6 +1556,12 @@ export const ChangeConflictsPayloadSchema = z.object({
   baseSha: z.string(),
   /** Whether this caller may write to the change's branch. */
   canResolve: z.boolean(),
+  /**
+   * Whether resolving clears the approvals already given. It changes what the
+   * change proposes, so it does wherever the binder asks approvers again after
+   * an edit.
+   */
+  clearsApprovalsOnEdit: z.boolean(),
   files: z.array(ConflictingFileSchema),
 });
 export type ChangeConflictsPayload = z.infer<

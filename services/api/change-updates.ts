@@ -18,6 +18,12 @@
  * submission, however many commits it took to write — and only what lands
  * afterwards counts up. Which is what "update 2 of 3" is asking, and what
  * every other review tool means by it.
+ *
+ * **Bringing a change up to date is not an update either.** It merges the
+ * binder into the change's branch, so it is a commit there, but what the
+ * change proposes is the same before and after — which is exactly why Gitea's
+ * `dismiss_stale_approvals` leaves the approvals standing. It is listed, so
+ * the history says it happened, and it takes no number.
  */
 
 import type { ChangeUpdate } from "../../packages/api-schema/schemas/documents";
@@ -27,6 +33,8 @@ export interface UpdateCommit {
   sha: string;
   author: string;
   timestamp: string;
+  /** More than one parent: the binder merged in, bringing the change up to date. */
+  merge?: boolean;
 }
 
 function timeOf(value: string): number {
@@ -61,12 +69,7 @@ export function buildChangeUpdates(
 
   const opened = openedAt ? timeOf(openedAt) : 0;
   if (opened === 0) {
-    return ordered.map((commit, index) => ({
-      index: index + 1,
-      sha: commit.sha,
-      author: commit.author,
-      at: commit.timestamp,
-    }));
+    return numbered(ordered, []);
   }
 
   // A commit whose timestamp we could not read is treated as part of the
@@ -85,18 +88,33 @@ export function buildChangeUpdates(
           sha: first.sha,
           author: first.author,
           at: first.timestamp,
+          catchUp: false,
         },
       ]
     : [];
 
-  for (const commit of after) {
+  return numbered(after, updates);
+}
+
+/**
+ * Append commits to `updates`, numbering each revision one past the last and
+ * a catch-up as the revision it sits on.
+ */
+function numbered(
+  commits: UpdateCommit[],
+  updates: ChangeUpdate[],
+): ChangeUpdate[] {
+  let revisions = updates.filter((update) => !update.catchUp).length;
+  for (const commit of commits) {
+    const catchUp = commit.merge === true;
+    if (!catchUp) revisions += 1;
     updates.push({
-      index: updates.length + 1,
+      index: Math.max(revisions, 1),
       sha: commit.sha,
       author: commit.author,
       at: commit.timestamp,
+      catchUp,
     });
   }
-
   return updates;
 }

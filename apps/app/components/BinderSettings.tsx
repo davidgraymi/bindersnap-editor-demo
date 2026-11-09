@@ -1640,7 +1640,7 @@ function ApprovalsTab({
                     the record reads differently under each. */}
                 <span className="bs-row-meta">
                   {rules.dismissStaleApprovals
-                    ? "An edit clears the approvals already given, so every approval is for exactly what was published."
+                    ? "An edit clears the approvals already given, so every approval is for exactly what the change proposes. Bringing a change up to date with the binder is not an edit: its approvals stand."
                     : "Approvals stand when a change is edited afterwards. Approvers are not asked to look again."}
                 </span>
               </span>
