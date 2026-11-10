@@ -4,7 +4,7 @@ description: The J-tags a rural health clinic surveyor cites on a CMS-2567, with
 updated: 2026-11-10
 crumb: RHC J-tags
 facilities: rural-health-clinics
-related: /manuals/rural-health-clinic-policy-and-procedure-manual, /glossary/statement-of-deficiencies, /glossary/plan-of-correction
+related: /manuals/rural-health-clinic-policy-and-procedure-manual, /glossary/statement-of-deficiencies, /requirements/what-a-plan-of-correction-must-include
 ---
 
 ## What a J-tag is
@@ -28,7 +28,7 @@ A clinic can have a full manual and still be cited under J-0123 if it can't show
 1. **Read the rule the tag stands for.** Follow the link in the table. A [plan of correction](/glossary/plan-of-correction) has to answer those words.
 2. **Find the policy, and its review record.** For J-0123 the record is the finding: the names, the date, and the version reviewed.
 3. **Decide which problem you have.** No policy, a policy with no review on record, or a policy staff were not following.
-4. **Write the plan of correction** for each deficiency, on the same form, and return it by the date in your cover letter.
+4. **Write the plan of correction** for each deficiency, on the same form, and return it by the date in your cover letter. See [what a plan of correction must include](/requirements/what-a-plan-of-correction-must-include).
 
 A clinic with deficiencies may continue in Medicare if it submits an acceptable plan of correction for achieving compliance within a reasonable period ([42 CFR 488.28](https://www.ecfr.gov/current/title-42/section-488.28)).
 

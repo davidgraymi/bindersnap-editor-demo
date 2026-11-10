@@ -4,7 +4,7 @@ description: The L-tags a hospice surveyor cites on a CMS-2567, with the Conditi
 updated: 2026-11-10
 crumb: Hospice L-tags
 facilities: hospices
-related: /manuals/hospice-policy-and-procedure-manual, /glossary/statement-of-deficiencies, /glossary/plan-of-correction
+related: /manuals/hospice-policy-and-procedure-manual, /glossary/statement-of-deficiencies, /requirements/what-a-plan-of-correction-must-include
 ---
 
 ## What an L-tag is
@@ -18,7 +18,7 @@ The first table above lists the L-tags that turn on a written policy, procedure 
 1. **Read the rule the tag stands for.** Follow the link in the table. A [plan of correction](/glossary/plan-of-correction) has to answer those words.
 2. **Find your policy as it stood on the date in the finding.** Hospice findings come from clinical records, home visits and interviews, each tied to a date. What your policy said on that date is part of the answer.
 3. **Decide which problem you have.** No policy, a policy nobody approved, or a policy the team was not following.
-4. **Write the plan of correction** for each deficiency, on the same form, and return it by the date in your cover letter.
+4. **Write the plan of correction** for each deficiency, on the same form, and return it by the date in your cover letter. See [what a plan of correction must include](/requirements/what-a-plan-of-correction-must-include).
 
 ## Why so many hospice tags lead to a policy
 

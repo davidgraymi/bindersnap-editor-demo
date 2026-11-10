@@ -4,7 +4,7 @@ description: The G-tags a home health surveyor cites on a CMS-2567, with the Con
 updated: 2026-11-10
 crumb: Home health G-tags
 facilities: home-health-agencies
-related: /manuals/home-health-policy-and-procedure-manual, /glossary/statement-of-deficiencies, /glossary/plan-of-correction
+related: /manuals/home-health-policy-and-procedure-manual, /glossary/statement-of-deficiencies, /requirements/what-a-plan-of-correction-must-include
 ---
 
 ## What a G-tag is
@@ -18,7 +18,7 @@ The first table above lists the G-tags that turn on a written policy or program,
 1. **Read the rule the tag stands for.** Follow the link in the table. A [plan of correction](/glossary/plan-of-correction) has to answer those words, not the surveyor's summary of them.
 2. **Find your policy as it stood on the date in the finding.** Home health findings usually come from a record review or a home visit on a particular day. The question is what your policy said on that day, and whether the clinician followed it.
 3. **Decide which problem you have.** No policy, a policy that was never approved, or a policy the field staff were not working from. In home health the third is the common one, because staff carry copies.
-4. **Write the plan of correction** for each deficiency, on the same form, and return it by the date in your cover letter.
+4. **Write the plan of correction** for each deficiency, on the same form, and return it by the date in your cover letter. See [what a plan of correction must include](/requirements/what-a-plan-of-correction-must-include).
 
 ## The tags most tied to a document
 

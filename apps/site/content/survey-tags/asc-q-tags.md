@@ -4,7 +4,7 @@ description: The Q-tags a surgery center surveyor cites on a CMS-2567, with the 
 updated: 2026-11-10
 crumb: ASC Q-tags
 facilities: ambulatory-surgery-centers
-related: /manuals/asc-policy-and-procedure-manual, /glossary/statement-of-deficiencies, /glossary/plan-of-correction
+related: /manuals/asc-policy-and-procedure-manual, /glossary/statement-of-deficiencies, /requirements/what-a-plan-of-correction-must-include
 ---
 
 ## What a Q-tag is
@@ -18,7 +18,7 @@ The first table above lists the Q-tags that turn on a written policy, procedure 
 1. **Read the rule the tag stands for.** Follow the link in the table. The finding has to describe a failure to meet those words, and a [plan of correction](/glossary/plan-of-correction) has to answer them.
 2. **Find your policy for it, as it stood on the survey date.** A finding often turns on what the policy said that day. If the file has been saved over since, you are working from memory.
 3. **Decide which problem you have.** There was no policy, or the policy was not approved by the people the rule names, or staff were not following it. Each needs a different correction.
-4. **Write the plan of correction** for each deficiency, on the same form, and return it by the date in your cover letter.
+4. **Write the plan of correction** for each deficiency, on the same form, and return it by the date in your cover letter. See [what a plan of correction must include](/requirements/what-a-plan-of-correction-must-include).
 
 ## Condition-level and standard-level
 
