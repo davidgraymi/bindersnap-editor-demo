@@ -290,6 +290,22 @@
   color: var(--bs-coral-text);
 }
 
+/* ── A policy manual index ───────────── */
+
+.site-manual h3 {
+  margin: var(--brand-space-8) 0 var(--brand-space-2);
+}
+
+.site-manual-kind,
+.site-manual-tag {
+  font-size: var(--brand-text-sm);
+  color: var(--bs-text-muted);
+}
+
+.site-manual-tag {
+  font-family: var(--brand-font-mono);
+}
+
 /* ── Closing card: the landing page's ── */
 
 .site-closing {

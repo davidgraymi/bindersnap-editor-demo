@@ -18,6 +18,13 @@ are: plain HTML with nothing to run, a Markdown copy at `{path}.md`, JSON-LD,
 and listed in `/sitemap.xml`, `/llms.txt` and `/llms-full.txt`
 (`scripts/build-site.ts`, served live by `server.ts`).
 
+The policy manual indexes at `/manuals` are built from data, not prose:
+`policyManuals.ts` holds each provider's rows (the policy, the rule, the survey
+tag), and the page's table, its Markdown copy and its Word download all come
+from them. A row is checked against the eCFR text and the State Operations
+Manual appendix that prints its tag. `named` is true only where the rule's own
+words ask for a policy, procedure, plan or program.
+
 `renderSite.test.ts` is the quality gate: length of titles and descriptions,
 minimum words, no broken internal links, no claims we cannot make (never
 "HIPAA compliant": Bindersnap holds no patient data). Marketing copy may say

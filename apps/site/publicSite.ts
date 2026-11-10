@@ -4,27 +4,34 @@ import { readLegalDocuments } from "../legal/legalDocuments";
 import { legalHref } from "../legal/renderLegal";
 import { siteFiles, type ListedPage } from "./renderSite";
 import { FLYER_PATH, flyerHtml, onePagerFiles } from "./sharePage";
+import { manualFiles, MANUAL_PARTS } from "./policyManuals";
 import { TOOLS } from "./requiredPolicies";
 import { templateFiles } from "./templateDocument";
 import { readSitePages, type SitePage } from "./siteContent";
 
-/** Every page, read fresh, with each free tool's data-built part attached. */
+/**
+ * Every page, read fresh, with its data-built part attached where it has one:
+ * a free tool's, or a policy manual index's table.
+ */
 export function publicSitePages(): SitePage[] {
   return readSitePages().map((page) => {
-    const tool = page.collection.key === "tools" ? TOOLS[page.slug] : undefined;
+    const tool =
+      (page.collection.key === "tools" ? TOOLS[page.slug] : undefined) ??
+      MANUAL_PARTS[page.path];
     return tool ? { ...page, tool: tool() } : page;
   });
 }
 
 /**
- * The files that are not text: each template as a Word document, and the
- * one-pager the share page offers.
+ * The files that are not text: each template and each policy manual index as
+ * a Word document, and the one-pager the share page offers.
  */
 export async function publicSiteBinaryFiles(): Promise<
   Map<string, Uint8Array>
 > {
   return new Map([
     ...(await templateFiles(publicSitePages())),
+    ...(await manualFiles()),
     ...(await onePagerFiles()),
   ]);
 }
