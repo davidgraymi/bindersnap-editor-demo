@@ -4,7 +4,7 @@ description: The policies the Medicare hospice Conditions of Participation name,
 updated: 2026-11-10
 crumb: Hospice manual
 facilities: hospices
-related: /for/hospices, /templates/controlled-drug-disposal-policy, /tools/required-policies-checklist
+related: /survey-tags/hospice-l-tags, /for/hospices, /templates/controlled-drug-disposal-policy
 ---
 
 ## How to use this index

@@ -79,6 +79,15 @@ export const SITE_COLLECTIONS: readonly SiteCollection[] = [
     notice: GUIDANCE_NOTICE,
   },
   {
+    key: "survey-tags",
+    prefix: "survey-tags",
+    label: "Survey tags",
+    intro:
+      "The tag numbers on a CMS-2567, by kind of provider: what each one stands for, the rule behind it, and the policy a surveyor reads under it.",
+    minWords: 350,
+    notice: GUIDANCE_NOTICE,
+  },
+  {
     key: "requirements",
     prefix: "requirements",
     label: "Requirements, answered",

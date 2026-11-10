@@ -4,7 +4,7 @@ description: Every policy a surgery center's Medicare Conditions for Coverage as
 updated: 2026-11-10
 crumb: Surgery center manual
 facilities: ambulatory-surgery-centers
-related: /for/ambulatory-surgery-centers, /tools/required-policies-checklist, /templates/policy-review-and-approval
+related: /survey-tags/asc-q-tags, /for/ambulatory-surgery-centers, /tools/required-policies-checklist
 ---
 
 ## How to use this index

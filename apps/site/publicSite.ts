@@ -6,18 +6,20 @@ import { siteFiles, type ListedPage } from "./renderSite";
 import { FLYER_PATH, flyerHtml, onePagerFiles } from "./sharePage";
 import { manualFiles, MANUAL_PARTS } from "./policyManuals";
 import { TOOLS } from "./requiredPolicies";
+import { TAG_PARTS } from "./surveyTags";
 import { templateFiles } from "./templateDocument";
 import { readSitePages, type SitePage } from "./siteContent";
 
 /**
  * Every page, read fresh, with its data-built part attached where it has one:
- * a free tool's, or a policy manual index's table.
+ * a free tool's, a policy manual index's table, or a survey tag page's.
  */
 export function publicSitePages(): SitePage[] {
   return readSitePages().map((page) => {
     const tool =
       (page.collection.key === "tools" ? TOOLS[page.slug] : undefined) ??
-      MANUAL_PARTS[page.path];
+      MANUAL_PARTS[page.path] ??
+      TAG_PARTS[page.path];
     return tool ? { ...page, tool: tool() } : page;
   });
 }

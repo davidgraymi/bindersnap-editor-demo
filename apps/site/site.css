@@ -304,6 +304,7 @@
 
 .site-manual-tag {
   font-family: var(--brand-font-mono);
+  white-space: nowrap;
 }
 
 /* ── Closing card: the landing page's ── */

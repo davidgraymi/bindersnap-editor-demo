@@ -4,7 +4,7 @@ description: The written policies 42 CFR Part 491 requires of a rural health cli
 updated: 2026-11-10
 crumb: Rural health clinic manual
 facilities: rural-health-clinics
-related: /for/rural-health-clinics, /requirements/who-approves-policies, /tools/required-policies-checklist
+related: /survey-tags/rural-health-clinic-j-tags, /for/rural-health-clinics, /requirements/who-approves-policies
 ---
 
 ## How to use this index

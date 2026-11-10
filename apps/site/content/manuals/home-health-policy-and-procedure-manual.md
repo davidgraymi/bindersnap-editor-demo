@@ -4,7 +4,7 @@ description: The policies the Medicare home health Conditions of Participation a
 updated: 2026-11-10
 crumb: Home health manual
 facilities: home-health-agencies
-related: /for/home-health-agencies, /tools/required-policies-checklist, /templates/policy-review-and-approval
+related: /survey-tags/home-health-g-tags, /for/home-health-agencies, /tools/required-policies-checklist
 ---
 
 ## How to use this index

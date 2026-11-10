@@ -66,6 +66,7 @@ export const FOOTER_COLUMNS: readonly {
     links: [
       { href: "/templates", label: "Policy templates" },
       { href: "/manuals", label: "Policy manual indexes" },
+      { href: "/survey-tags", label: "Survey tags" },
       { href: "/requirements", label: "Requirements, answered" },
       {
         href: "/tools/required-policies-checklist",
