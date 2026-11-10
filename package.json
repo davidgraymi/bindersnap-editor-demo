@@ -1,6 +1,6 @@
 {
   "name": "bindersnap-editor-demo",
-  "version": "0.4.123",
+  "version": "0.4.124",
   "private": true,
   "type": "module",
   "packageManager": "bun@1.4.4",
