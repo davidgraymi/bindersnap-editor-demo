@@ -245,6 +245,33 @@ export const AdminSignupRowSchema = z.object({
 });
 export type AdminSignupRow = z.infer<typeof AdminSignupRowSchema>;
 
+/**
+ * People who asked the public site to email them a page ("Email it to me"),
+ * who may never sign up. The site admin writes to them by hand.
+ */
+export const AdminResourceRequestsSchema = z.object({
+  /** Addresses on the list, counted once each. */
+  people: z.number(),
+  byResource: z.array(
+    z.object({
+      /** The site page: `/templates/hand-hygiene-policy`. */
+      resource: z.string(),
+      requests: z.number(),
+    }),
+  ),
+  /** The newest requests, newest first. */
+  recent: z.array(
+    z.object({
+      email: z.string(),
+      resource: z.string(),
+      requestedAt: z.number(),
+      /** They asked us to stop writing. Do not email them. */
+      unsubscribed: z.boolean(),
+    }),
+  ),
+});
+export type AdminResourceRequests = z.infer<typeof AdminResourceRequestsSchema>;
+
 export const AdminSignupsPayloadSchema = z.object({
   /** Signups with a row; accounts made before rows were kept have none. */
   recorded: z.number(),
@@ -255,6 +282,7 @@ export const AdminSignupsPayloadSchema = z.object({
   byCampaign: z.array(AdminSignupTallySchema),
   /** The newest signups, newest first. */
   recent: z.array(AdminSignupRowSchema),
+  resourceRequests: AdminResourceRequestsSchema,
 });
 export type AdminSignupsPayload = z.infer<typeof AdminSignupsPayloadSchema>;
 

@@ -25,6 +25,16 @@ from them. A row is checked against the eCFR text and the State Operations
 Manual appendix that prints its tag. `named` is true only where the rule's own
 words ask for a policy, procedure, plan or program.
 
+`/survey-tags` is the same rows looked up by tag number (`surveyTags.ts`), so
+a tag page and its manual index cannot disagree.
+
+Templates, manual indexes and tools each offer "Email it to me"
+(`sendForm.ts`): a plain form posted to the API, which sends the page and
+keeps the address for the founder to write to. The hint under the form and
+section 7 of the Privacy Policy say the same thing about what we do with the
+address; change them together. The page still runs no script: the API sends
+the reader back to `#sent`, and `:target` shows the line.
+
 `renderSite.test.ts` is the quality gate: length of titles and descriptions,
 minimum words, no broken internal links, no claims we cannot make (never
 "HIPAA compliant": Bindersnap holds no patient data). Marketing copy may say

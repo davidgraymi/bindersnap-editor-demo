@@ -61,15 +61,18 @@ export function AdminSignups({ link }: { link: LinkProps }) {
 
   if (data.recorded === 0) {
     return (
-      <section className="bs-panel" aria-label="Signups">
-        <div className="bs-empty">
-          <p className="bs-empty-lead">No signups recorded yet.</p>
-          <p>
-            Each new account keeps the page of bindersnap.com its visit began
-            on. Accounts made before that started have none.
-          </p>
-        </div>
-      </section>
+      <div className="admin-console-stack">
+        <section className="bs-panel" aria-label="Signups">
+          <div className="bs-empty">
+            <p className="bs-empty-lead">No signups recorded yet.</p>
+            <p>
+              Each new account keeps the page of bindersnap.com its visit began
+              on. Accounts made before that started have none.
+            </p>
+          </div>
+        </section>
+        <ResourceRequestsPanel requests={data.resourceRequests} />
+      </div>
     );
   }
 
@@ -162,7 +165,75 @@ export function AdminSignups({ link }: { link: LinkProps }) {
           </table>
         </div>
       </section>
+      <ResourceRequestsPanel requests={data.resourceRequests} />
     </div>
+  );
+}
+
+/**
+ * People who asked the site to email them a template, a manual index or the
+ * checklist. They have no account: this list is the only place they appear,
+ * and it is for writing to them by hand.
+ */
+function ResourceRequestsPanel({
+  requests,
+}: {
+  requests: AdminSignupsPayload["resourceRequests"];
+}) {
+  return (
+    <section className="bs-panel" aria-label="Asked for a page by email">
+      <div className="bs-panel-bar">
+        <h2 className="bs-panel-bar-title">Asked for a page by email</h2>
+      </div>
+      {requests.recent.length === 0 ? (
+        <div className="bs-empty">
+          <p className="bs-empty-lead">Nobody has asked yet.</p>
+          <p>
+            Templates, policy manual indexes and the checklist on bindersnap.com
+            each offer to email the page. Whoever asks is listed here.
+          </p>
+        </div>
+      ) : (
+        <>
+          <p className="admin-console-note">
+            {formatCount(requests.people)}{" "}
+            {requests.people === 1 ? "person" : "people"}. Most asked for:{" "}
+            {requests.byResource
+              .slice(0, 3)
+              .map((row) => `${row.resource} (${formatCount(row.requests)})`)
+              .join(", ")}
+            .
+          </p>
+          <div className="admin-console-table-wrap">
+            <table className="admin-console-table">
+              <thead>
+                <tr>
+                  <th scope="col">Email</th>
+                  <th scope="col">Page</th>
+                  <th scope="col">Asked</th>
+                </tr>
+              </thead>
+              <tbody>
+                {requests.recent.map((row) => (
+                  <tr key={`${row.email} ${row.resource}`}>
+                    <td>
+                      <span className="admin-console-primary">{row.email}</span>
+                      {row.unsubscribed ? (
+                        <span className="admin-console-secondary">
+                          Unsubscribed. Do not write.
+                        </span>
+                      ) : null}
+                    </td>
+                    <td>{row.resource}</td>
+                    <td>{formatAdminDate(row.requestedAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 

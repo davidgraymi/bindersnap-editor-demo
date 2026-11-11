@@ -322,6 +322,11 @@ The families:
   `/api/app/billing/*`, `/api/app/notifications*`, `/api/app/legal*`,
   `/api/app/users/search`, `/api/app/onboarding`, `/api/app/admin/*`
 - `/stripe/webhook`, `/email/unsubscribe`, `/healthz`
+- `/site/resource-requests` — "Email it to me" on the public site: a plain
+  form posted from `bindersnap.com` by a reader with no account, and its
+  unsubscribe page. Routed before the origin check, so it trusts nothing it is
+  sent (`services/api/resource-requests.ts`). The list is on
+  `/-/admin/signups`
 
 A binder change's detail carries `documents` (what publishing would version)
 **and** `removedDocuments` (what it takes off the record) — separate lists,

@@ -9,6 +9,8 @@
  * appears only once the script has run.
  */
 
+import { sendForm } from "./sendForm";
+
 export interface Situation {
   key: string;
   label: string;
@@ -356,6 +358,7 @@ export function requiredPoliciesHtml(): string {
 <form id="rp-filter" class="site-tool-filter" hidden><fieldset><legend>Which describe your organization?</legend>${boxes}</fieldset><p id="rp-count" role="status"></p></form>
 <table id="rp-table"><thead><tr><th>Policy, plan or program</th><th>What the rule requires</th><th>Review or retention</th><th>Rule</th></tr></thead><tbody>${rows}</tbody></table>
 <script>${SCRIPT}</script>
+${sendForm("/tools/required-policies-checklist", "this checklist")}
 </section>`;
 }
 

@@ -1,6 +1,7 @@
 import { documentToDocx } from "../../services/api/export/documentDocx";
 import { documentBlocks } from "../../services/api/export/documentBlocks";
 import { trackAttributes } from "./analytics";
+import { sendForm } from "./sendForm";
 import { GUIDANCE_NOTICE } from "./siteContent";
 import { markdownToDocument } from "./templateDocument";
 
@@ -972,6 +973,7 @@ export function manualHtml(manual: PolicyManual): string {
   )}" download="${manual.slug}.docx"${trackAttributes("manual_download", {
     manual: manual.slug,
   })}>Download as Word (.docx)</a><span>All ${count} rows, with columns for your own document, who approved it and when it is next due.</span></p>
+${sendForm(`/manuals/${manual.slug}`, "the Word file")}
 ${sections}
 </section>`;
 }

@@ -406,8 +406,15 @@ import { buildChangeUpdates } from "./change-updates";
 import {
   applySecurityHeaders,
   clientIpFrom,
+  resourceRequestLimiter,
   stripeWebhookLimiter,
 } from "./edge";
+import {
+  handleResourceRequest,
+  handleResourceUnsubscribe,
+  reportResourceRequests,
+  resourceRequestStore,
+} from "./resource-requests";
 import type { DraftNameRecord } from "./draft-names";
 import { defaultMyDraftsDeps, readMyDrafts } from "./my-drafts";
 import {
@@ -17268,11 +17275,14 @@ async function handleAdminSignups(
   try {
     return json(
       200,
-      await reportSignups({
-        signups: signupSourceStore().list(),
-        organizations: await organizationStore.list(),
-        access: (id) => subscriptionStore.resolveAccess(id),
-      }),
+      {
+        ...(await reportSignups({
+          signups: signupSourceStore().list(),
+          organizations: await organizationStore.list(),
+          access: (id) => subscriptionStore.resolveAccess(id),
+        })),
+        resourceRequests: reportResourceRequests(resourceRequestStore().list()),
+      },
       baseHeaders,
     );
   } catch (err) {
@@ -17692,6 +17702,47 @@ async function handleRequest(req: Request): Promise<Response> {
   // see `handleOneClickUnsubscribe`. The token is the only credential.
   if (pathname === "/email/unsubscribe" && method === "POST") {
     const response = await handleOneClickUnsubscribe(req, baseHeaders);
+    logger.info("Response sent", {
+      method,
+      path: pathname,
+      status: response.status,
+      durationMs: Date.now() - startMs,
+    });
+    return response;
+  }
+
+  // "Email it to me" on the public site: a plain form posted from
+  // bindersnap.com, which is not an allowed origin, by a reader with no
+  // account. Routed before the origin check for that reason, and it trusts
+  // nothing it is sent — see `resource-requests.ts`.
+  if (pathname === "/site/resource-requests" && method === "POST") {
+    const response = await handleResourceRequest(req, clientIp, {
+      store: resourceRequestStore(),
+      limited: (ip) => resourceRequestLimiter.limited(ip),
+      send: (params) => {
+        queueEmail({ kind: "resource-request", ...params });
+      },
+      siteOrigin: config.siteOrigin,
+    });
+    logger.info("Response sent", {
+      method,
+      path: pathname,
+      status: response.status,
+      durationMs: Date.now() - startMs,
+    });
+    return response;
+  }
+  if (
+    pathname === "/site/resource-requests/unsubscribe" &&
+    (method === "GET" || method === "POST")
+  ) {
+    const { response, email } = handleResourceUnsubscribe(req, {
+      store: resourceRequestStore(),
+      siteOrigin: config.siteOrigin,
+    });
+    if (email) {
+      logger.info("A site reader unsubscribed from email", {});
+    }
     logger.info("Response sent", {
       method,
       path: pathname,

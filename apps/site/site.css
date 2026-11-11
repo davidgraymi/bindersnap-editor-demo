@@ -290,6 +290,91 @@
   color: var(--bs-coral-text);
 }
 
+/* ── "Email it to me" ────────────────── */
+
+.site-send {
+  margin: 0 0 var(--brand-space-4);
+  padding: var(--brand-space-4) var(--brand-space-5);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+}
+
+.site-send-label {
+  display: block;
+  margin-bottom: var(--brand-space-2);
+  font-weight: var(--brand-weight-semibold);
+  color: var(--bs-text-primary);
+}
+
+.site-send-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--brand-space-2);
+}
+
+.site-send-row input {
+  flex: 1 1 14rem;
+  min-width: 0;
+  padding: var(--brand-space-2) var(--brand-space-3);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-page-bg);
+  color: var(--bs-text-primary);
+  font: inherit;
+}
+
+.site-send-row input:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 1px;
+}
+
+.site-send-row button {
+  padding: var(--brand-space-2) var(--brand-space-4);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-1);
+  color: var(--bs-text-primary);
+  font: inherit;
+  font-weight: var(--brand-weight-semibold);
+  cursor: pointer;
+}
+
+.site-send-row button:hover {
+  border-color: var(--brand-coral);
+}
+
+.site-article .site-send-hint {
+  margin: var(--brand-space-2) 0 0;
+  font-size: var(--brand-text-sm);
+  color: var(--bs-text-muted);
+}
+
+/* For bots only: people never see it, and a keyboard never reaches it. */
+.site-send-trap {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* The API sends the reader back to #sent or #send-again. */
+.site-article .site-send-note {
+  display: none;
+  margin: 0 0 var(--brand-space-4);
+  padding: var(--brand-space-3) var(--brand-space-4);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-2);
+  color: var(--bs-text-primary);
+  scroll-margin-top: var(--brand-space-20);
+}
+
+.site-article .site-send-note:target {
+  display: block;
+}
+
 /* ── A policy manual index ───────────── */
 
 .site-manual h3 {
