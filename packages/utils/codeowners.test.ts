@@ -837,3 +837,28 @@ describe("diffSignOffRules", () => {
     expect(diffSignOffRules(same, same)).toEqual([]);
   });
 });
+
+describe("diffSignOffRules, edge cases", () => {
+  test("a folder renamed only in case is a removed rule and an added one", () => {
+    const diff = diffSignOffRules(
+      [folder("Clinical", { teams: ["ic"] })],
+      [folder("clinical", { teams: ["ic"] })],
+    );
+    expect(diff.map((d) => `${d.status}:${d.target}`)).toEqual([
+      "added:clinical",
+      "removed:Clinical",
+    ]);
+  });
+
+  test("dropping one of two lines for one folder shows its owners removed", () => {
+    const diff = diffSignOffRules(
+      [
+        folder("clinical", { teams: ["ic"] }),
+        folder("clinical", { teams: ["pharmacy"] }),
+      ],
+      [folder("clinical", { teams: ["ic"] })],
+    );
+    expect(diff).toHaveLength(1);
+    expect(diff[0]!.teams.removed).toEqual(["pharmacy"]);
+  });
+});

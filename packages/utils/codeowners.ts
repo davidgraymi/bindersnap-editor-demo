@@ -840,8 +840,44 @@ export interface SignOffRuleDiff {
   users: OwnerDiff;
 }
 
-function ruleKey(rule: { scope: SignOffScope; target: string }): string {
-  return `${rule.scope}:${trimFolder(rule.target).toLowerCase()}`;
+/**
+ * One key per thing a rule covers, exact: Gitea compiles patterns case
+ * sensitively, so `Clinical` and `clinical` are two folders and a change from
+ * one to the other is a change.
+ */
+export function signOffRuleKey(rule: {
+  scope: SignOffScope;
+  target: string;
+}): string {
+  return `${rule.scope}:${rulePattern(rule)}`;
+}
+
+/**
+ * Rules grouped by what they cover, each group's owners unioned — which is
+ * what Gitea enforces when one thing has two lines, since every matching rule
+ * must be met. In first-seen order.
+ */
+function groupedRules(rules: readonly SignOffRule[]): Map<string, SignOffRule> {
+  const out = new Map<string, SignOffRule>();
+  for (const rule of rules) {
+    const key = signOffRuleKey(rule);
+    const seen = out.get(key);
+    if (!seen) {
+      out.set(key, { ...rule, teams: [...rule.teams], users: [...rule.users] });
+      continue;
+    }
+    for (const team of rule.teams) {
+      if (!seen.teams.some((t) => t.toLowerCase() === team.toLowerCase())) {
+        seen.teams.push(team);
+      }
+    }
+    for (const user of rule.users) {
+      if (!seen.users.some((u) => u.toLowerCase() === user.toLowerCase())) {
+        seen.users.push(user);
+      }
+    }
+  }
+  return out;
 }
 
 function diffOwners(before: readonly string[], after: readonly string[]) {
@@ -859,18 +895,21 @@ function diffOwners(before: readonly string[], after: readonly string[]) {
  * two versions of the file, in the order of the later one (with removed rules
  * after it). Rules that did not change are left out.
  *
- * Owners are compared without case, the way Gitea resolves them.
+ * Two lines for one thing are read as one rule with both lines' owners, as
+ * Gitea enforces them, so dropping one of a pair shows as owners removed.
+ * Targets are compared exactly; owners without case, the way Gitea resolves
+ * them.
  */
 export function diffSignOffRules(
   before: readonly SignOffRule[],
   after: readonly SignOffRule[],
 ): SignOffRuleDiff[] {
-  const previous = new Map(before.map((rule) => [ruleKey(rule), rule]));
-  const next = new Set(after.map(ruleKey));
+  const previous = groupedRules(before);
+  const next = groupedRules(after);
   const out: SignOffRuleDiff[] = [];
 
-  for (const rule of after) {
-    const old = previous.get(ruleKey(rule));
+  for (const [key, rule] of next) {
+    const old = previous.get(key);
     const teams = diffOwners(old?.teams ?? [], rule.teams);
     const users = diffOwners(old?.users ?? [], rule.users);
     if (old === undefined) {
@@ -900,8 +939,8 @@ export function diffSignOffRules(
     }
   }
 
-  for (const rule of before) {
-    if (next.has(ruleKey(rule))) continue;
+  for (const [key, rule] of previous) {
+    if (next.has(key)) continue;
     out.push({
       scope: rule.scope,
       target: rule.target,
