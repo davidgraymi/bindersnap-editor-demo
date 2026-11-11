@@ -207,6 +207,8 @@ services:
       - BINDERSNAP_MAIL_FROM=Bindersnap <notifications@bindersnap.local>
       # The API as the browser reaches it, for an email's one-click unsubscribe.
       - BINDERSNAP_API_ORIGIN=http://localhost:${API_PROXY_PORT:-8788}
+      # The public site, where "Email it to me" sends its reader back.
+      - BINDERSNAP_SITE_ORIGIN=http://localhost:${SITE_PORT:-5174}
     ports:
       - "${API_PORT:-8787}:${API_PORT:-8787}"
     volumes:

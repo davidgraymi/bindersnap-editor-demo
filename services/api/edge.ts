@@ -127,3 +127,10 @@ export class WindowLimiter {
  * this many.
  */
 export const stripeWebhookLimiter = new WindowLimiter(60, 1000);
+
+/**
+ * `POST /site/resource-requests`: 10 in ten minutes from one address. The
+ * route sends an email to whatever address the form names, so this is what
+ * keeps it from being used to send many.
+ */
+export const resourceRequestLimiter = new WindowLimiter(10, 10 * 60 * 1000);

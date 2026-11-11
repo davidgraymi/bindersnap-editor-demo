@@ -3423,6 +3423,63 @@
                 "organizations"
               ]
             }
+          },
+          "resourceRequests": {
+            "type": "object",
+            "properties": {
+              "people": {
+                "type": "number"
+              },
+              "byResource": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "resource": {
+                      "type": "string"
+                    },
+                    "requests": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "resource",
+                    "requests"
+                  ]
+                }
+              },
+              "recent": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "email": {
+                      "type": "string"
+                    },
+                    "resource": {
+                      "type": "string"
+                    },
+                    "requestedAt": {
+                      "type": "number"
+                    },
+                    "unsubscribed": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "email",
+                    "resource",
+                    "requestedAt",
+                    "unsubscribed"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "people",
+              "byResource",
+              "recent"
+            ]
           }
         },
         "required": [
@@ -3431,7 +3488,8 @@
           "byEntryPage",
           "bySite",
           "byCampaign",
-          "recent"
+          "recent",
+          "resourceRequests"
         ]
       },
       "AdminGrowthPayload": {
@@ -18711,6 +18769,63 @@
                           "organizations"
                         ]
                       }
+                    },
+                    "resourceRequests": {
+                      "type": "object",
+                      "properties": {
+                        "people": {
+                          "type": "number"
+                        },
+                        "byResource": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "resource": {
+                                "type": "string"
+                              },
+                              "requests": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "resource",
+                              "requests"
+                            ]
+                          }
+                        },
+                        "recent": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "email": {
+                                "type": "string"
+                              },
+                              "resource": {
+                                "type": "string"
+                              },
+                              "requestedAt": {
+                                "type": "number"
+                              },
+                              "unsubscribed": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "email",
+                              "resource",
+                              "requestedAt",
+                              "unsubscribed"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "people",
+                        "byResource",
+                        "recent"
+                      ]
                     }
                   },
                   "required": [
@@ -18719,7 +18834,8 @@
                     "byEntryPage",
                     "bySite",
                     "byCampaign",
-                    "recent"
+                    "recent",
+                    "resourceRequests"
                   ]
                 }
               }

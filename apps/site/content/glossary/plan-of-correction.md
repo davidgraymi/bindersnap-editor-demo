@@ -1,11 +1,11 @@
 ---
 title: "Plan of correction (POC): definition"
 description: A plan of correction is a facility's written response to each deficiency on a CMS-2567 — what it will fix, how, by when, and how it will monitor the fix.
-updated: 2026-10-07
+updated: 2026-11-10
 term: Plan of correction
 crumb: Plan of correction
 facilities: ambulatory-surgery-centers, home-health-agencies, hospices, rural-health-clinics
-related: /glossary/statement-of-deficiencies, /templates/policy-review-and-approval, /requirements/who-approves-policies
+related: /requirements/what-a-plan-of-correction-must-include, /glossary/statement-of-deficiencies, /templates/policy-review-and-approval
 ---
 
 A **plan of correction (POC)** is a healthcare facility's written response to the deficiencies on a [statement of deficiencies](/glossary/statement-of-deficiencies) (Form CMS-2567). For each deficiency, it says how the facility will correct the problem, prevent it from happening again, and check that the fix holds, with a completion date. The CMS-2567 instructions require the signed form with the corrective action to be returned within 10 days of receipt, unless your state agency's letter says otherwise.
@@ -20,7 +20,7 @@ For each deficiency:
 4. **Monitoring**: what will be audited, how often, by whom, and where the results are reported, usually to the QAPI program.
 5. **A completion date.**
 
-CMS model letters say "CORRECTED" alone is not an acceptable reply: say specifically how the practice was or will be corrected.
+CMS's own list of what an acceptable plan must contain is shorter and worded differently: see [what a plan of correction must include](/requirements/what-a-plan-of-correction-must-include). CMS model letters say "CORRECTED" alone is not an acceptable reply: say specifically how the practice was or will be corrected.
 
 ## The policy part of a plan of correction
 

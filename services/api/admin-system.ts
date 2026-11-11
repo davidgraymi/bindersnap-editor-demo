@@ -240,6 +240,7 @@ export const CONFIG_CLASSIFICATION: Record<keyof ApiConfig, Classification> = {
   defaultAppOrigin: { section: "Origins", label: "Default app origin" },
   appOrigin: { section: "Origins", label: "App origin" },
   apiOrigin: { section: "Origins", label: "API origin" },
+  siteOrigin: { section: "Origins", label: "Public site origin" },
   configuredAllowedOrigins: {
     section: "Origins",
     label: "Allowed browser origins",

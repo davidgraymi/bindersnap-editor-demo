@@ -1,10 +1,10 @@
 ---
 title: How often must healthcare policies be reviewed?
 description: There is no single federal interval. Here is every review cycle the federal rules do set — annual, biennial or before use — with the citation for each.
-updated: 2026-10-07
+updated: 2026-11-10
 crumb: Policy review frequency
 facilities: ambulatory-surgery-centers, home-health-agencies, hospices, behavioral-health, medical-practices, rural-health-clinics
-related: /templates/policy-review-and-approval, /requirements/how-long-to-keep-old-policies, /requirements/who-approves-policies
+related: /requirements/how-to-run-an-annual-policy-review, /templates/policy-review-and-approval, /requirements/how-long-to-keep-old-policies
 ---
 
 **Short answer:** no federal rule sets one review interval for every healthcare policy. A handful of rules set specific cycles, from "before use" to "at least every 2 years". Your state licensing rules and your accreditor often add more. Most small providers review every policy at least annually and follow a shorter cycle wherever one applies, because that rule is the easiest to keep and to prove.
@@ -14,6 +14,7 @@ related: /templates/policy-review-and-approval, /requirements/how-long-to-keep-o
 | What                                                                                      | Who it applies to                                                        | Cycle                                                                       | Rule                                                                                                                                                                                                                                                                      |
 | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Exposure control plan                                                                     | Any employer with occupational exposure to blood                         | At least annually, and when tasks or positions change                       | [29 CFR 1910.1030(c)(1)(iv)](https://www.ecfr.gov/current/title-29/section-1910.1030)                                                                                                                                                                                     |
+| Patient acceptance-to-service policy                                                      | Home health agencies                                                     | Maintained through an annual review                                         | [42 CFR 484.105(i)(1)](https://www.ecfr.gov/current/title-42/section-484.105)                                                                                                                                                                                             |
 | Program policies and procedures                                                           | Opioid treatment programs                                                | Annual review, as part of the quality assurance plan                        | [42 CFR 8.12(c)(1)](https://www.ecfr.gov/current/title-42/section-8.12)                                                                                                                                                                                                   |
 | Emergency plan, policies and procedures, communication plan, training and testing program | ASCs, home health, hospice, RHCs and FQHCs, and other Medicare providers | At least every 2 years                                                      | [42 CFR 416.54](https://www.ecfr.gov/current/title-42/section-416.54), [484.102](https://www.ecfr.gov/current/title-42/section-484.102), [418.113](https://www.ecfr.gov/current/title-42/section-418.113), [491.12](https://www.ecfr.gov/current/title-42/section-491.12) |
 | Patient care policies                                                                     | Rural health clinics and FQHCs                                           | At least biennially, by a group of professional personnel                   | [42 CFR 491.9(b)(4)](https://www.ecfr.gov/current/title-42/section-491.9)                                                                                                                                                                                                 |
@@ -52,6 +53,10 @@ In Bindersnap, a review is an approval. The reviewer approves the current versio
 
 Not as one rule for every policy. CMS sets specific cycles for some programs, such as at least every 2 years for emergency preparedness and for RHC/FQHC patient care policies. Your state and accreditor may require annual review of more.
 
+### Do home health agencies have to review any policy every year?
+
+Yes. The patient acceptance-to-service policy must be maintained "through an annual review" (42 CFR 484.105(i)(1)).
+
 ### Does OSHA require annual review of any policy?
 
 Yes. The bloodborne pathogens exposure control plan must be reviewed and updated at least annually (29 CFR 1910.1030(c)(1)(iv)).
@@ -64,4 +69,5 @@ Yes. An OTP's quality assurance and quality control plans must include annual re
 
 - [29 CFR 1910.1030 — Bloodborne pathogens](https://www.ecfr.gov/current/title-29/section-1910.1030) (eCFR)
 - [42 CFR 8.12 — Federal opioid use disorder treatment standards](https://www.ecfr.gov/current/title-42/section-8.12)
+- [42 CFR 484.105 — Organization and administration of services](https://www.ecfr.gov/current/title-42/section-484.105)
 - [42 CFR 491.9 — Provision of services](https://www.ecfr.gov/current/title-42/section-491.9)
