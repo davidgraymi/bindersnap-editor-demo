@@ -10,6 +10,8 @@ import {
 } from "../api";
 import { binderDocumentQuery } from "../data/queries";
 import { followInApp } from "../appLink";
+import { routeToPath } from "../routes";
+import { SignOffRail } from "./SignOffRail";
 
 import {
   buildDocumentCrumbs,
@@ -569,6 +571,18 @@ export function BinderDocumentPage({
             cards of their own shape: the only lists in the app drawn that
             way, and the loudest type on a page whose subject is a policy. */}
         <aside className="doc-rail" aria-label="Document summary">
+          {/* Who signs off first: it is what decides whether a new version
+              can be published, and it is usually all from above. */}
+          <SignOffRail
+            org={org}
+            binder={binder}
+            binderName={formatDocumentName(binder)}
+            place={{ kind: "document", path: document.path }}
+            onNavigate={(route) => {
+              window.history.pushState({}, "", routeToPath(route));
+              window.dispatchEvent(new PopStateEvent("popstate"));
+            }}
+          />
           <section className="bs-panel" aria-labelledby="doc-rail-open">
             <div className="bs-panel-bar">
               <h2 className="bs-panel-bar-title" id="doc-rail-open">

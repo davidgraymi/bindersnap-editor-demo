@@ -464,3 +464,18 @@ test("the binder at a ref, with no folder, is still the binder's top", () => {
     getRoute("/riverside-health/governance/-/tree/main"),
   ).not.toHaveProperty("folder");
 });
+
+test("a group has a page under its organization", () => {
+  const route = {
+    kind: "organization" as const,
+    org: "riverside-health",
+    tab: "people" as const,
+    group: "infection-control",
+  };
+  expect(routeToPath(route)).toBe(
+    "/riverside-health/-/groups/infection-control",
+  );
+  expect(getRoute("/riverside-health/-/groups/infection-control")).toEqual(
+    route,
+  );
+});

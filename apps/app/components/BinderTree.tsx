@@ -39,6 +39,13 @@ export interface BinderTreeViewProps {
    */
   isFolderOpen: (path: string) => boolean;
   onToggleFolder: (path: string) => void;
+  /**
+   * Open a folder's page. With it, a folder row is two controls, as in
+   * Explorer: the arrow opens and shuts it in place, the name opens its page.
+   */
+  onOpenFolder?: (path: string) => void;
+  /** A folder's address, so its name is a real link. */
+  folderHref?: (path: string) => string;
   onOpenDocument: (slugPath: string) => void;
   /**
    * A document's address, so its row is a link.
@@ -111,6 +118,8 @@ export function BinderTreeView({
   nodes,
   isFolderOpen,
   onToggleFolder,
+  onOpenFolder,
+  folderHref,
   onOpenDocument,
   documentHref,
   activeDocument = null,
@@ -128,6 +137,8 @@ export function BinderTreeView({
           depth={0}
           isFolderOpen={isFolderOpen}
           onToggleFolder={onToggleFolder}
+          onOpenFolder={onOpenFolder}
+          folderHref={folderHref}
           onOpenDocument={onOpenDocument}
           documentHref={documentHref}
           activeDocument={activeDocument}
@@ -159,6 +170,8 @@ function FolderRow({
   depth,
   isFolderOpen,
   onToggleFolder,
+  onOpenFolder,
+  folderHref,
   renderRowActions,
   renderRowLabel,
   rowProps,
@@ -191,6 +204,52 @@ function FolderRow({
             <span className="binder-tree-twisty" aria-hidden="true" />
             {icon}
             {instead}
+          </div>
+        ) : onOpenFolder ? (
+          <div className="binder-tree-main binder-tree-main--split">
+            <button
+              type="button"
+              className="binder-tree-twisty binder-tree-twistybtn"
+              onClick={() => onToggleFolder(folder.path)}
+              aria-expanded={isOpen}
+              aria-label={
+                isOpen
+                  ? `Shut ${formatDocumentName(folder.name)}`
+                  : `Open ${formatDocumentName(folder.name)} here`
+              }
+            >
+              {isOpen ? (
+                <AppIcon icon={ICON.chevronDown} size="sm" />
+              ) : (
+                <AppIcon icon={ICON.chevronRight} size="sm" />
+              )}
+            </button>
+            <a
+              className="binder-tree-folderlink"
+              href={folderHref?.(folder.path) ?? "#"}
+              onClick={(event) => {
+                if (
+                  event.button !== 0 ||
+                  event.metaKey ||
+                  event.ctrlKey ||
+                  event.shiftKey
+                ) {
+                  return;
+                }
+                event.preventDefault();
+                onOpenFolder(folder.path);
+              }}
+            >
+              {icon}
+              <span className="binder-tree-label">
+                {formatDocumentName(folder.name)}
+              </span>
+              <span className="binder-tree-count">
+                {folder.documentCount === 1
+                  ? "1 document"
+                  : `${folder.documentCount} documents`}
+              </span>
+            </a>
           </div>
         ) : (
           <button
@@ -244,6 +303,8 @@ function FolderRow({
               depth={depth + 1}
               isFolderOpen={isFolderOpen}
               onToggleFolder={onToggleFolder}
+              onOpenFolder={onOpenFolder}
+              folderHref={folderHref}
               renderRowActions={renderRowActions}
               renderRowLabel={renderRowLabel}
               rowProps={rowProps}

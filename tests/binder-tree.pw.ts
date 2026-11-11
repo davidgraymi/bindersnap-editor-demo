@@ -297,8 +297,10 @@ test("folders nest, and the tree says which is inside which", async ({
     "Staff Handbook",
   ]);
 
-  await tree.getByRole("button", { name: /^Nursing/ }).click();
-  await tree.getByRole("button", { name: /^Infection Control/ }).click();
+  await tree.getByRole("button", { name: /^(Open|Shut) Nursing/ }).click();
+  await tree
+    .getByRole("button", { name: /^(Open|Shut) Infection Control/ })
+    .click();
 
   // Folders before documents, each alphabetical, and `infection-control`
   // inside `nursing` rather than beside it. Folder names read like the
@@ -355,13 +357,15 @@ test("a folder opens, and stays open when you come back", async ({ page }) => {
   await signInBrowser(page, session);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
-  const nursing = page.getByRole("button", { name: /^Nursing/ });
+  const nursing = page.getByRole("button", { name: /^(Open|Shut) Nursing/ });
   await expect(nursing).toBeVisible({ timeout: 30_000 });
 
   // Shut to begin with, and saying what it is holding — a shut folder that
   // says nothing is a folder nobody opens. Counted all the way down.
   await expect(nursing).toHaveAttribute("aria-expanded", "false");
-  await expect(nursing).toContainText("2 documents");
+  await expect(
+    page.locator(".binder-tree-row--folder", { hasText: "Nursing" }),
+  ).toContainText("2 documents");
   await expect(
     page.locator(".binder-tree").getByText("Hand Hygiene", { exact: true }),
   ).toBeHidden();
@@ -374,11 +378,9 @@ test("a folder opens, and stays open when you come back", async ({ page }) => {
 
   // The preference is the person's, and it survives the page going away.
   await page.reload();
-  await expect(page.getByRole("button", { name: /^Nursing/ })).toHaveAttribute(
-    "aria-expanded",
-    "true",
-    { timeout: 30_000 },
-  );
+  await expect(
+    page.getByRole("button", { name: /^(Open|Shut) Nursing/ }),
+  ).toHaveAttribute("aria-expanded", "true", { timeout: 30_000 });
 });
 
 test("opening a folder in one binder does not open it in another", async ({
@@ -399,17 +401,15 @@ test("opening a folder in one binder does not open it in another", async ({
 
   await signInBrowser(page, session);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-  const nursing = page.getByRole("button", { name: /^Nursing/ });
+  const nursing = page.getByRole("button", { name: /^(Open|Shut) Nursing/ });
   await expect(nursing).toBeVisible({ timeout: 30_000 });
   await nursing.click();
   await expect(nursing).toHaveAttribute("aria-expanded", "true");
 
   await page.goto(`${APP_BASE_URL}/${org}/${second}`);
-  await expect(page.getByRole("button", { name: /^Nursing/ })).toHaveAttribute(
-    "aria-expanded",
-    "false",
-    { timeout: 30_000 },
-  );
+  await expect(
+    page.getByRole("button", { name: /^(Open|Shut) Nursing/ }),
+  ).toHaveAttribute("aria-expanded", "false", { timeout: 30_000 });
 });
 
 test("the folders holding the policy you are reading are open", async ({

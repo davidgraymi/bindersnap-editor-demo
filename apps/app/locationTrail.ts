@@ -65,12 +65,30 @@ function here(label: string): TrailStep {
   return { label, href: null };
 }
 
-/** "nursing/wards" → the folder names a reader sees in the tree. */
-function folderSteps(folder: string): TrailStep[] {
-  return folder
-    .split("/")
-    .filter(Boolean)
-    .map((segment) => ({ label: formatDocumentName(segment), href: null }));
+/**
+ * "nursing/wards" → the folder names a reader sees in the tree, each a link
+ * to its folder's page. With `last` the final step is the page itself.
+ */
+function folderSteps(
+  org: string,
+  binder: string,
+  folder: string,
+  { last = false, ref = null }: { last?: boolean; ref?: string | null } = {},
+): TrailStep[] {
+  const parts = folder.split("/").filter(Boolean);
+  return parts.map((segment, index) => {
+    const label = formatDocumentName(segment);
+    if (last && index === parts.length - 1) return here(label);
+    return {
+      label,
+      href: buildBinderUrl({
+        org,
+        binder,
+        folder: parts.slice(0, index + 1).join("/"),
+        ref,
+      }),
+    };
+  });
 }
 
 /**
@@ -107,6 +125,13 @@ function binderPath(
   // view of a branch, with no step back up to the binder the files are in. A
   // file lives on a branch; which branch is the file panel's version picker's
   // to say, and it says it with the way back to the change beside it.
+  if (address.folder && tab === "documents") {
+    return folderSteps(org, binder, address.folder, {
+      last: true,
+      ref: onBranch(address) ? address.ref : null,
+    });
+  }
+
   if (onBranch(address) && tab === "documents") {
     return [];
   }
@@ -189,7 +214,7 @@ function documentPath(
 
   return [
     ...changeSteps,
-    ...folderSteps(segments.join("/")),
+    ...folderSteps(org, binder, segments.join("/")),
     here(documentLabel(filename)),
   ];
 }
