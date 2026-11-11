@@ -19,7 +19,12 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { API_BASE_URL, APP_BASE_URL } from "./helpers";
+import {
+  API_BASE_URL,
+  APP_BASE_URL,
+  organizeBinder,
+  openAddDocument,
+} from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
 import { isCommitRef } from "../packages/utils/gitRef";
 import { LEGAL_VERSION } from "../packages/utils/legal";
@@ -539,7 +544,7 @@ test("Edit on a binder opens the editor, and its files are renamed and refiled t
 
   // And from the binder's own page, Organize is still the whole tree.
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-  await page.getByRole("button", { name: "Organize", exact: true }).click();
+  await organizeBinder(page);
   await expect(page.locator(".bs-draftbar")).toBeVisible();
   await expect(page).toHaveURL(/edit=1/);
 });
@@ -1088,7 +1093,7 @@ test("a new policy can be written here instead of uploaded", async ({
   await signInBrowser(page, session);
 
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-  await page.getByRole("button", { name: "Add a document" }).click();
+  await openAddDocument(page);
   await page.getByRole("radio", { name: /Write it here/ }).check();
   await page.getByLabel("What it is called").fill("Visitor Policy");
   await page.getByRole("button", { name: "Start writing" }).click();

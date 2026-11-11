@@ -22,7 +22,12 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { API_BASE_URL, APP_BASE_URL, openTreeFolder } from "./helpers";
+import {
+  API_BASE_URL,
+  APP_BASE_URL,
+  openTreeFolder,
+  organizeBinder,
+} from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
 import { LEGAL_VERSION } from "../packages/utils/legal";
 
@@ -363,7 +368,7 @@ test("Edit opens a draft, and the address says so", async ({ page }) => {
   // Nothing about drafts until somebody asks for one.
   await expect(page.locator(".bs-draftbar")).toBeHidden();
 
-  await page.getByRole("button", { name: "Organize", exact: true }).click();
+  await organizeBinder(page);
 
   const bar = page.locator(".bs-draftbar");
   await expect(bar).toBeVisible({ timeout: 30_000 });
@@ -392,7 +397,7 @@ test("a rename in the tree lands in the draft, and the row keeps it", async ({
   // `?edit=1` with no draft drops back out rather than conjuring one — so the
   // draft is opened through the button, the way a person would.
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Organize", exact: true }).click();
+  await organizeBinder(page);
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   // Hand Hygiene is filed in Nursing, and folders start shut.
@@ -427,7 +432,7 @@ test("Escape leaves the name alone", async ({ page }) => {
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Organize", exact: true }).click();
+  await organizeBinder(page);
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   await page.getByRole("button", { name: "Rename Staff Handbook" }).click();
@@ -449,7 +454,7 @@ test("Propose opens the change request, with the words the author wrote", async 
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Organize", exact: true }).click();
+  await organizeBinder(page);
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   // Hand Hygiene is filed in Nursing, and folders start shut.
@@ -502,7 +507,7 @@ test("Discard throws the draft away and leaves the binder as it was", async ({
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Organize", exact: true }).click();
+  await organizeBinder(page);
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   // Hand Hygiene is filed in Nursing, and folders start shut.
@@ -584,7 +589,7 @@ test("a policy dragged onto a folder is filed there", async ({ page }) => {
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Organize", exact: true }).click();
+  await organizeBinder(page);
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   const handbook = page
@@ -693,7 +698,7 @@ test("the Move button files something without a pointer", async ({ page }) => {
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Organize", exact: true }).click();
+  await organizeBinder(page);
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   await page.getByRole("button", { name: "Move Staff Handbook" }).click();
@@ -721,7 +726,7 @@ test("a policy dragged out of its folder lands at the top level", async ({
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Organize", exact: true }).click();
+  await organizeBinder(page);
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   await openTreeFolder(page, "Nursing");
@@ -828,7 +833,7 @@ test("clicking a renamed policy in the tree opens it, not an error", async ({
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Organize", exact: true }).click();
+  await organizeBinder(page);
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   // Hand Hygiene is filed in Nursing, and folders start shut.
@@ -1960,4 +1965,75 @@ test("the file panel opens and shuts folders, filters, and hides itself", async 
 
   await page.getByRole("button", { name: "Show the files" }).click();
   await expect(files).toHaveCount(2);
+});
+
+/**
+ * **One Edit button** (D8). The binder's and the document's headers offer
+ * Edit and nothing else; adding, uploading, renaming and a new version of a
+ * file are all in the editor.
+ */
+test("the binder and a document offer one button, Edit", async ({ page }) => {
+  const { session, org, binder } = await provisionBinder();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  const actions = page.locator(".bs-pagehead-actions");
+  await expect(actions.getByRole("button")).toHaveText(["Edit"], {
+    timeout: 30_000,
+  });
+
+  await page.goto(
+    `${APP_BASE_URL}/${org}/${binder}/-/blob/main/staff-handbook`,
+  );
+  await expect(actions.getByRole("button")).toHaveText(["Edit"], {
+    timeout: 30_000,
+  });
+});
+
+test("what left the headers is in the editor", async ({ page }) => {
+  const { session, org, binder } = await provisionBinder();
+  await signInBrowser(page, session);
+
+  // A Markdown file is shown on the desk as it is, with its own acts.
+  await page.goto(
+    `${APP_BASE_URL}/${org}/${binder}/-/blob/main/staff-handbook`,
+  );
+  await page
+    .locator(".bs-pagehead-actions")
+    .getByRole("button", { name: "Edit" })
+    .click();
+  const note = page.getByRole("complementary", { name: "About this file" });
+  await expect(note).toBeVisible({ timeout: 30_000 });
+  await expect(
+    note.getByRole("button", { name: "Upload new version" }),
+  ).toBeVisible();
+
+  // Upload new version opens the dialog, into the draft.
+  await note.getByRole("button", { name: "Upload new version" }).click();
+  await expect(
+    page.getByRole("dialog", { name: /New version of Staff Handbook/ }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page
+    .getByRole("dialog", { name: /New version/ })
+    .getByRole("button", { name: "Cancel" })
+    .click()
+    .catch(() => undefined);
+
+  // The file panel's head uploads, and a folder's menu uploads into it.
+  const files = page.locator(".doc-files");
+  await expect(
+    files.getByRole("button", { name: "Upload files" }),
+  ).toBeVisible();
+  await files
+    .getByRole("button", { name: "Nursing", exact: true })
+    .click({ button: "right" });
+  await expect(
+    page.getByRole("menuitem", { name: "Upload files here" }),
+  ).toBeVisible();
+  await page.getByRole("menuitem", { name: "Upload files here" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Add a document" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Where it goes")).toHaveValue("nursing");
 });

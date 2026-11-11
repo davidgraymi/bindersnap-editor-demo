@@ -49,6 +49,7 @@ import type { DragSubject } from "../binderMove";
 import { BinderDraftPicker } from "./BinderDraftPicker";
 import { InlineRename } from "./BinderPage";
 import { readDroppedFiles, type DroppedFiles } from "../bulkUpload";
+import { ReviseDocumentModal } from "./ReviseDocumentModal";
 import {
   DraftFiles,
   type ArchiveUndo,
@@ -142,6 +143,9 @@ interface DocumentEditorPageProps {
    * this policy when dropped on the page.
    */
   onUploadFiles?: (files: DroppedFiles, folder?: string) => void;
+  /** Open the add dialog to upload files into a folder. */
+  onUpload?: (folder: string) => void;
+
   /** Your drafts in this binder, for the picker in the title bar. */
   drafts: BinderDraftPayload | null;
   /** A draft is being started or renamed. */
@@ -288,6 +292,7 @@ export function DocumentEditorPage({
   onOpenDocument,
   onNewDocument,
   onUploadFiles,
+  onUpload,
   drafts,
   draftBusy = false,
   onSwitchDraft,
@@ -514,6 +519,17 @@ export function DocumentEditorPage({
   const listedPath =
     files?.documents.find((entry) => entry.slugPath === documentPath)?.path ??
     null;
+  /**
+   * Bumped after Upload new version on a file shown as it is. The file under
+   * the address changed but the address did not, so nothing else would read
+   * it again.
+   */
+  const [fileNonce, setFileNonce] = useState(0);
+  const [uploadingVersion, setUploadingVersion] = useState<{
+    slugPath: string;
+    name: string;
+    currentVersion: number | null;
+  } | null>(null);
   const coverStale =
     load.kind === "foreign" &&
     listedPath !== null &&
@@ -655,7 +671,7 @@ export function DocumentEditorPage({
     // `recountElsewhere` is stable; `isUnsaved` reads only its argument;
     // `readPolicy` changes only with the draft, which is in the list.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [org, binder, documentPath, draft, changeNumber, coverStale]);
+  }, [org, binder, documentPath, draft, changeNumber, coverStale, fileNonce]);
 
   // "Saved 3 minutes ago" has to keep counting while nobody types.
   useEffect(() => {
@@ -1212,6 +1228,7 @@ export function DocumentEditorPage({
             change ? undefined : (folder) => leave({ kind: "new", folder })
           }
           onNewFolder={change ? undefined : onNewFolder}
+          onUpload={change ? undefined : onUpload}
           onUploadDrop={
             change || !onUploadFiles
               ? undefined
@@ -1366,6 +1383,17 @@ export function DocumentEditorPage({
                   file={frame.file}
                   // Not on a change request: the conversion goes into a
                   // draft, and this is somebody's change, saved into in place.
+                  onUploadVersion={
+                    !change && draft
+                      ? () =>
+                          setUploadingVersion({
+                            slugPath: frame.detail.document.slugPath,
+                            name: frame.detail.document.name,
+                            currentVersion:
+                              frame.detail.latestVersion?.version ?? null,
+                          })
+                      : undefined
+                  }
                   onConvert={
                     !change &&
                     convertibleKind(frame.detail.document.path) !== null
@@ -1837,6 +1865,29 @@ export function DocumentEditorPage({
             </div>
           </div>
         </div>
+      ) : null}
+
+      {/* Upload new version, from the note over a Word file or PDF: into
+          this draft, like everything else done here. */}
+      {uploadingVersion && draft ? (
+        <ReviseDocumentModal
+          org={org}
+          binder={binder}
+          slugPath={uploadingVersion.slugPath}
+          name={uploadingVersion.name}
+          currentVersion={uploadingVersion.currentVersion}
+          draft={draft}
+          onClose={() => setUploadingVersion(null)}
+          onProposed={() => setUploadingVersion(null)}
+          onSaved={() => {
+            setUploadingVersion(null);
+            readAhead.current.clear();
+            void queryClient.invalidateQueries({
+              queryKey: queryKeys.binder(org, binder),
+            });
+            setFileNonce((n) => n + 1);
+          }}
+        />
       ) : null}
     </div>
   );

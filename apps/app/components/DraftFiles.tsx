@@ -121,6 +121,11 @@ interface DraftFilesProps {
    * row or anything in it, or `""` below the rows for the top level.
    */
   onUploadDrop?: (data: DataTransfer, folder: string) => void;
+  /**
+   * Upload files into a folder — the head's Upload and a folder's "Upload
+   * files here". Opens the add dialog; nothing is written until it is used.
+   */
+  onUpload?: (folder: string) => void;
   /** Take a policy off the record, in this draft. */
   onArchive?: (slugPath: string) => Promise<boolean>;
   /** Take a folder off the record — every policy in it — in this draft. */
@@ -309,6 +314,7 @@ export function DraftFiles({
   onRename,
   onMove,
   onUploadDrop,
+  onUpload,
   onArchive,
   onArchiveFolder,
   archivedCount = 0,
@@ -705,6 +711,17 @@ export function DraftFiles({
           run: () => {
             setFloating(false);
             onNew(node.path);
+          },
+        });
+      }
+      if (onUpload) {
+        items.push({
+          label: "Upload files here",
+          icon: ICON.upload,
+          disabled: busy,
+          run: () => {
+            setFloating(false);
+            onUpload(node.path);
           },
         });
       }
@@ -1237,6 +1254,21 @@ export function DraftFiles({
             onClick={startNew}
           >
             <AppIcon icon={ICON.newDocument} size="md" />
+          </button>
+        ) : null}
+        {onUpload && !onOutline ? (
+          <button
+            type="button"
+            className="app-explorer-toggle"
+            aria-label="Upload files"
+            title="Upload files"
+            disabled={busy}
+            onClick={() => {
+              setFloating(false);
+              onUpload(activeFolder ?? "");
+            }}
+          >
+            <AppIcon icon={ICON.upload} size="md" />
           </button>
         ) : null}
         {onNewFolder && !onOutline ? (

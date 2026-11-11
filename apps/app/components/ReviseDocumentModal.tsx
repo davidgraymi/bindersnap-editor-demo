@@ -38,6 +38,12 @@ interface ReviseDocumentModalProps {
   onClose: () => void;
   /** The change that would publish it. */
   onProposed: (changeNumber: number) => void;
+  /**
+   * Save it into this draft instead of proposing it: the editor's Upload new
+   * version, where the rest of the work is. `onSaved` follows.
+   */
+  draft?: string | null;
+  onSaved?: () => void;
 }
 
 export function ReviseDocumentModal({
@@ -48,6 +54,8 @@ export function ReviseDocumentModal({
   currentVersion,
   onClose,
   onProposed,
+  draft = null,
+  onSaved,
 }: ReviseDocumentModalProps) {
   const [file, setFile] = useState<File | null>(null);
   const [convert, setConvert] = useState(false);
@@ -90,9 +98,13 @@ export function ReviseDocumentModal({
         binder,
         converting ? (await convertToEditorFile(file)).file : file,
         slugPath,
-        changeNumber ? { changeNumber } : undefined,
+        changeNumber ? { changeNumber } : draft ? { draft } : undefined,
         converting ? "converted" : undefined,
       );
+      if (draft && !changeNumber) {
+        onSaved?.();
+        return;
+      }
       onProposed(proposed.pullRequestNumber ?? 0);
     } catch (err) {
       setError(
@@ -183,9 +195,11 @@ export function ReviseDocumentModal({
           {/* Nothing on this screen saves, and the button's word is "propose"
               for the same reason the sign-off page's is. */}
           <p className="add-policy-note">
-            {changeNumber === null
-              ? "This opens a change request. The version on record does not change until it is published."
-              : "This goes into that change request. The version on record does not change until the change is published."}
+            {draft && changeNumber === null
+              ? "This goes into your draft. Nobody is asked to look at it until you propose it."
+              : changeNumber === null
+                ? "This opens a change request. The version on record does not change until it is published."
+                : "This goes into that change request. The version on record does not change until the change is published."}
           </p>
 
           <div className="upload-modal-actions">
@@ -195,7 +209,13 @@ export function ReviseDocumentModal({
               onClick={() => void handleSubmit()}
               disabled={file === null || submitting}
             >
-              {submitting ? "Opening a change…" : "Propose this version"}
+              {draft && changeNumber === null
+                ? submitting
+                  ? "Saving…"
+                  : "Save to your draft"
+                : submitting
+                  ? "Opening a change…"
+                  : "Propose this version"}
             </button>
             <button
               type="button"

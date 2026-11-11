@@ -33,8 +33,6 @@ import {
 } from "../documentDisplay";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 import { DocumentPreview } from "./DocumentPreview";
-import { ReviseDocumentModal } from "./ReviseDocumentModal";
-import { RenameDocumentModal } from "./RenameDocumentModal";
 import { useIsReadOnly } from "../readOnlyContext";
 
 /**
@@ -100,19 +98,15 @@ interface BinderDocumentPageProps {
    */
   onRefsChange?: (view: DocumentRefView | null) => void;
   /**
-   * Open it in the editor, in your draft. Offered only for a document the
-   * editor wrote; absent where the page has nowhere to put an edit.
+   * Open it in the editor, in your draft. Absent where the page has nowhere
+   * to put an edit.
    */
   onEditDocument?: (slugPath: string) => void;
   /**
-   * Read a Word file or PDF into the editor's format, in your draft. Offered
-   * only for those two, on the record, as the file is now.
+   * Whether the reader may write in this binder. A reader or reviewer sees no
+   * Edit.
    */
-  onConvertDocument?: (target: {
-    slugPath: string;
-    path: string;
-    name: string;
-  }) => void;
+  canWriteBinder?: boolean;
   /** The draft is being opened for an edit. */
   editing?: boolean;
   onOpenBinder: () => void;
@@ -145,7 +139,7 @@ export function BinderDocumentPage({
   documentRef = null,
   onRefsChange,
   onEditDocument,
-  onConvertDocument,
+  canWriteBinder = true,
   editing = false,
   onOpenBinder,
   onOpenChange,
@@ -164,8 +158,6 @@ export function BinderDocumentPage({
   const [downloading, setDownloading] = useState(false);
   const [exportingAudit, setExportingAudit] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
-  const [revising, setRevising] = useState(false);
-  const [renaming, setRenaming] = useState(false);
   const isReadOnly = useIsReadOnly();
 
   // Back and forward are how a reader leaves an earlier version, so the page
@@ -341,19 +333,14 @@ export function BinderDocumentPage({
   // Written in the editor, read as it now stands — on the record or in your
   // draft — and not on somebody's change request, which is theirs to edit.
   const canRevise = !isReadOnly && isViewingRecord && state !== "proposed";
-  const canWrite =
+  // Edit opens the editor on this document, in your draft, whatever kind of
+  // file it is: the editor shows a Word file or a PDF read only, with its
+  // own Upload new version and Edit in Bindersnap. Never on somebody's change
+  // request or an older version, which are not yours to write over.
+  const canEdit =
     onEditDocument !== undefined &&
-    isEditorDocumentFile(document.path) &&
-    isViewingRecord &&
-    state !== "proposed" &&
-    documentRef === null &&
-    change === null;
-  // The other way to a document the editor writes: a Word file or PDF read
-  // into it. The same conditions as Edit, for the same reasons.
-  const canConvert =
-    onConvertDocument !== undefined &&
-    convertibleKind(document.path) !== null &&
     canRevise &&
+    canWriteBinder &&
     documentRef === null &&
     change === null;
 
@@ -414,107 +401,23 @@ export function BinderDocumentPage({
           </div>
         </div>
 
-        {/* **The act that was missing.** Revising a policy used to mean
-              filing a new one and getting the name character-for-character
-              right, or ending up with two policies instead of two versions.
-              Only offered on the record: revising an earlier version would
-              silently discard everything published since. */}
-        {canRevise || canWrite || canConvert ? (
+        {/* **One button: Edit** (D8). Renaming, moving, uploading a new
+            version and reading a Word file or PDF into Bindersnap are all in
+            the editor now — its file panel and the note over a file it shows
+            — so the page offers the one way in, to anyone who can write. */}
+        {canEdit ? (
           <div className="bs-pagehead-actions">
-            {canRevise ? (
-              <>
-                <button
-                  type="button"
-                  className="bs-btn bs-btn-secondary"
-                  onClick={() => setRenaming(true)}
-                >
-                  Rename or move
-                </button>
-                {/* Not for a policy written here: its next version is written
-                    in the editor, and there is no file to upload over it. */}
-                {canWrite ? null : (
-                  <button
-                    type="button"
-                    className="bs-btn bs-btn-primary"
-                    onClick={() => setRevising(true)}
-                  >
-                    {/* **What it asks of you.** "New version" read as though
-                        it made one; what it does is take a file and propose it. */}
-                    Upload new version
-                  </button>
-                )}
-              </>
-            ) : null}
-            {/* **A file the editor cannot open is not a dead end.** A Word
-                file or PDF can be read into a Bindersnap document in your
-                draft, and goes through review like any other change. Said as
-                what it does, and never done to a file without being asked. */}
-            {canConvert ? (
-              <button
-                type="button"
-                className="bs-btn bs-btn-secondary"
-                disabled={editing}
-                onClick={() =>
-                  onConvertDocument?.({
-                    slugPath: document.slugPath,
-                    path: document.path,
-                    name: formatDocumentName(document.name),
-                  })
-                }
-              >
-                Edit in Bindersnap
-              </button>
-            ) : null}
-            {/* **A policy written here is edited here.** Uploading a new
-                version of one meant exporting nothing, because there was
-                nothing to export it to — the editor was the only program
-                that had ever opened it. Edit is the page's one filled button
-                when there is something to type into, and it is drawn while
-                the organization is read-only so the paywall can say why. */}
-            {canWrite ? (
-              <button
-                type="button"
-                className="bs-btn bs-btn-primary"
-                disabled={editing}
-                onClick={() => onEditDocument?.(document.slugPath)}
-              >
-                {editing ? "Opening your draft…" : "Edit"}
-              </button>
-            ) : null}
+            <button
+              type="button"
+              className="bs-btn bs-btn-primary"
+              disabled={editing}
+              onClick={() => onEditDocument?.(document.slugPath)}
+            >
+              {editing ? "Opening your draft…" : "Edit"}
+            </button>
           </div>
         ) : null}
       </header>
-
-      {renaming ? (
-        <RenameDocumentModal
-          org={org}
-          binder={binder}
-          slugPath={document.slugPath}
-          name={document.name}
-          folder={document.folder}
-          folders={detail.folders}
-          onClose={() => setRenaming(false)}
-          onProposed={(changeNumber) => {
-            setRenaming(false);
-            onOpenChange(changeNumber);
-          }}
-        />
-      ) : null}
-
-      {revising ? (
-        <ReviseDocumentModal
-          org={org}
-          binder={binder}
-          slugPath={document.slugPath}
-          name={document.name}
-          currentVersion={latestVersion?.version ?? null}
-          onClose={() => setRevising(false)}
-          onProposed={(changeNumber) => {
-            setRevising(false);
-            onOpenChange(changeNumber);
-          }}
-        />
-      ) : null}
 
       {state === "proposed" ? (
         <p className="vault-pr-notice" role="status">
