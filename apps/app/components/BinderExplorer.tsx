@@ -149,32 +149,63 @@ export function BinderExplorer({ binder, onNavigate }: BinderExplorerProps) {
     // A filter that found something inside a shut folder has found nothing
     // anybody can see, so a filtered tree is open whatever was shut.
     const open = needle !== "" || isOpen(node.path);
+    const name = formatDocumentName(node.name);
+    const on = node.path === contents.activeFolder;
+    const to: AppRoute = {
+      kind: "binder",
+      org: binder.org,
+      binder: binder.binder,
+      folder: node.path,
+      ...(contents.ref ? { ref: contents.ref } : {}),
+    };
 
+    // **Explorer's left pane.** The arrow opens and shuts the folder in
+    // place; the name opens the folder's page, where its contents and who
+    // signs off on it are. Two controls, because they are two acts.
     return (
       <div className="app-explorer-group" key={`folder:${node.path}`}>
-        <button
-          type="button"
-          className="app-explorer-folder"
+        <div
+          className={`app-explorer-folder${on ? " app-explorer-folder--active" : ""}`}
           style={{ paddingLeft: `${8 + depth * 14}px` }}
-          aria-expanded={open}
-          onClick={() => toggleFolder(node.path)}
         >
-          {open ? (
-            <AppIcon icon={ICON.chevronDown} size="sm" />
-          ) : (
-            <AppIcon icon={ICON.chevronRight} size="sm" />
-          )}
-          {/* **A folder looks like a folder.** Every row carried a glyph
-              except this one, so a shut folder was a word with a triangle
-              beside it and a policy was a word with a page beside it — the
-              two kinds of row were told apart by a 13px triangle alone. The
-              same icon the binder's own tree draws, because they are the same
-              tree. */}
-          <AppIcon icon={ICON.folder} size="sm" />
-          <span className="app-explorer-name">
-            {formatDocumentName(node.name)}
-          </span>
-        </button>
+          <button
+            type="button"
+            className="app-explorer-chevron"
+            aria-expanded={open}
+            aria-label={open ? `Shut ${name}` : `Open ${name} here`}
+            title={open ? `Shut ${name}` : `Open ${name} here`}
+            onClick={() => toggleFolder(node.path)}
+          >
+            {open ? (
+              <AppIcon icon={ICON.chevronDown} size="sm" />
+            ) : (
+              <AppIcon icon={ICON.chevronRight} size="sm" />
+            )}
+          </button>
+          <a
+            className="app-explorer-folderlink"
+            href={routeToPath(to)}
+            aria-current={on ? "page" : undefined}
+            title={name}
+            onClick={(event) => followInApp(event, () => onNavigate(to))}
+            onKeyDown={(event) => {
+              // Right and Left open and shut, as in any tree; Enter follows
+              // the link to the folder's page.
+              if (event.key === "ArrowRight" && !open) {
+                event.preventDefault();
+                toggleFolder(node.path);
+              } else if (event.key === "ArrowLeft" && open) {
+                event.preventDefault();
+                toggleFolder(node.path);
+              }
+            }}
+          >
+            {/* **A folder looks like a folder.** The same icon the binder's
+                own tree draws, because they are the same tree. */}
+            <AppIcon icon={ICON.folder} size="sm" />
+            <span className="app-explorer-name">{name}</span>
+          </a>
+        </div>
         {open
           ? node.children.map((child) => renderNode(child, depth + 1))
           : null}
