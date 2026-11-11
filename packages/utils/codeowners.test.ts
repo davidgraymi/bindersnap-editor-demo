@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   CODEOWNERS_PATH,
+  diffSignOffRules,
+  signOffRulesFor,
   codeownersToken,
   escapeForTokenizer,
   escapeRegex,
@@ -692,5 +694,146 @@ test("owners are named once, however many rules name them", () => {
   expect(signOffOwnersForPaths(rules, ["nursing/a.01J8.md"])).toEqual({
     teams: ["compliance"],
     users: [],
+  });
+});
+
+describe("signOffRulesFor", () => {
+  const SEPSIS = "01J8XZ4K7MQ9V3B0RN7YHS2E2F";
+  const rules: SignOffRule[] = [
+    binder({ teams: ["policy-office"] }),
+    { scope: "rules", target: "", teams: ["policy-office"], users: [] },
+    folder("clinical-standards", { teams: ["infection-control"] }),
+    folder("clinical-standards/icu", { teams: ["critical-care"] }),
+    folder("clinical-standards-old", { teams: ["archivists"] }),
+    document(HAND_HYGIENE, { users: ["priya"] }),
+    folder("ward #3 (east)", { teams: ["ward-three"] }),
+  ];
+  const summary = (applying: ReturnType<typeof signOffRulesFor>) =>
+    applying.map((a) => `${a.origin}:${a.rule.scope}:${a.setAt}`);
+
+  test("the binder has the binder rule and the rules rule, set here", () => {
+    expect(summary(signOffRulesFor(rules, { kind: "binder" }))).toEqual([
+      "here:binder:",
+      "here:rules:",
+    ]);
+  });
+
+  test("a folder one deep has its own rule, then the binder's", () => {
+    expect(
+      summary(
+        signOffRulesFor(rules, { kind: "folder", path: "clinical-standards" }),
+      ),
+    ).toEqual(["here:folder:clinical-standards", "above:binder:"]);
+  });
+
+  test("a nested folder lists its parents nearest first, binder last", () => {
+    expect(
+      summary(
+        signOffRulesFor(rules, {
+          kind: "folder",
+          path: "clinical-standards/icu/night",
+        }),
+      ),
+    ).toEqual([
+      "above:folder:clinical-standards/icu",
+      "above:folder:clinical-standards",
+      "above:binder:",
+    ]);
+  });
+
+  test("a sibling whose name only starts the same is not a parent", () => {
+    const applying = signOffRulesFor(rules, {
+      kind: "folder",
+      path: "clinical-standards-old",
+    });
+    expect(summary(applying)).toEqual([
+      "here:folder:clinical-standards-old",
+      "above:binder:",
+    ]);
+  });
+
+  test("a document with its own rule has it set here, matched by identity", () => {
+    const path = `clinical-standards/hand-hygiene.${HAND_HYGIENE}.json`;
+    expect(summary(signOffRulesFor(rules, { kind: "document", path }))).toEqual(
+      [
+        `here:document:${path}`,
+        "above:folder:clinical-standards",
+        "above:binder:",
+      ],
+    );
+  });
+
+  test("a document that only inherits has nothing set here", () => {
+    const applying = signOffRulesFor(rules, {
+      kind: "document",
+      path: `clinical-standards/icu/sepsis.${SEPSIS}.json`,
+    });
+    expect(applying.every((a) => a.origin === "above")).toBe(true);
+    expect(summary(applying)).toEqual([
+      "above:folder:clinical-standards/icu",
+      "above:folder:clinical-standards",
+      "above:binder:",
+    ]);
+  });
+
+  test("a folder name with a space, # and brackets is matched literally", () => {
+    expect(
+      summary(
+        signOffRulesFor(rules, {
+          kind: "document",
+          path: `ward #3 (east)/notes.${SEPSIS}.md`,
+        }),
+      ),
+    ).toEqual(["above:folder:ward #3 (east)", "above:binder:"]);
+  });
+
+  test("the rules rule shows on no folder or document", () => {
+    const applying = signOffRulesFor(rules, {
+      kind: "folder",
+      path: "contracts",
+    });
+    expect(applying.map((a) => a.rule.scope)).toEqual(["binder"]);
+  });
+});
+
+describe("diffSignOffRules", () => {
+  test("names who was added, removed and kept on a rule", () => {
+    const before = [
+      folder("clinical", { teams: ["infection-control", "pharmacy"] }),
+    ];
+    const after = [
+      folder("clinical", { teams: ["Infection-Control", "quality"] }),
+    ];
+    expect(diffSignOffRules(before, after)).toEqual([
+      {
+        scope: "folder",
+        target: "clinical",
+        status: "changed",
+        teams: {
+          added: ["quality"],
+          removed: ["pharmacy"],
+          unchanged: ["Infection-Control"],
+        },
+        users: { added: [], removed: [], unchanged: [] },
+      },
+    ]);
+  });
+
+  test("a wholly new rule and a wholly removed one", () => {
+    const diff = diffSignOffRules(
+      [folder("old", { users: ["priya"] })],
+      [document(HAND_HYGIENE, { teams: ["ic"] })],
+    );
+    expect(diff.map((d) => `${d.status}:${d.scope}`)).toEqual([
+      "added:document",
+      "removed:folder",
+    ]);
+    expect(diff[0]!.teams.added).toEqual(["ic"]);
+    expect(diff[1]!.users.removed).toEqual(["priya"]);
+  });
+
+  test("leaves out the rules that did not change", () => {
+    const same = [binder({ teams: ["policy-office"] })];
+    expect(diffSignOffRules(same, same)).toEqual([]);
   });
 });

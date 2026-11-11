@@ -699,3 +699,217 @@ export function validateSignOffRules(params: {
 
   return { ok: problems.length === 0, problems };
 }
+
+/** A place in a binder that a sign-off panel can be about. */
+export type SignOffPlace =
+  | { kind: "binder" }
+  | { kind: "folder"; path: string }
+  | { kind: "document"; path: string };
+
+/** A rule that applies to a place, and where it is set. */
+export interface ApplyingRule {
+  rule: SignOffRule;
+  /** Where it is set: this exact place, or somewhere above it. */
+  origin: "here" | "above";
+  /**
+   * The place that sets it: `""` for the binder (and for the rules rule), a
+   * folder path for a folder rule, the document's path for a document rule.
+   */
+  setAt: string;
+}
+
+/** The parent folders of a path, nearest first: `a/b/c` → `a/b`, `a`. */
+function ancestorFolders(path: string): string[] {
+  const segments = trimFolder(path).split("/").filter(Boolean);
+  const out: string[] = [];
+  for (let end = segments.length - 1; end > 0; end -= 1) {
+    out.push(segments.slice(0, end).join("/"));
+  }
+  return out;
+}
+
+function compiledRule(rule: SignOffRule): RegExp | null {
+  try {
+    return new RegExp(`^${rulePattern(rule)}$`);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Which rules apply to one place, and where each is set — the answer to "who
+ * signs off here", split into what is set on this place and what it inherits.
+ *
+ * Ordered the way the panel reads: what is set here first, then what comes from
+ * above, nearest parent folder first and the binder last.
+ *
+ * The matching is Gitea's, the same anchored compile as
+ * {@link signOffOwnersForPaths}, so the panel cannot claim a rule Gitea would
+ * not apply. A rule that does not compile is skipped, as Gitea skips it.
+ *
+ * - A **binder** place has the binder rule and the rules rule, both set here.
+ * - A **folder** place has its own folder rule, every ancestor folder's rule
+ *   and the binder rule. Document rules inside it are not about the folder.
+ * - A **document** place has its own document rule (matched by identity, so
+ *   it follows the document through a rename), every ancestor folder's rule
+ *   and the binder rule.
+ *
+ * The rules rule governs only `.gitea/CODEOWNERS`, so no folder or document
+ * shows it.
+ */
+export function signOffRulesFor(
+  rules: readonly SignOffRule[],
+  place: SignOffPlace,
+): ApplyingRule[] {
+  const here: ApplyingRule[] = [];
+  const folders: Array<ApplyingRule & { depth: number }> = [];
+  const binder: ApplyingRule[] = [];
+
+  const placePath = place.kind === "binder" ? "" : trimFolder(place.path);
+  // Folders whose rule a place inherits, with the depth that orders them.
+  const above = new Map<string, number>();
+  const ancestors = place.kind === "binder" ? [] : ancestorFolders(placePath);
+  ancestors.forEach((folder, index) =>
+    above.set(folder, ancestors.length - index),
+  );
+
+  for (const rule of rules) {
+    const compiled = compiledRule(rule);
+    if (compiled === null) continue;
+
+    switch (rule.scope) {
+      case "binder":
+        (place.kind === "binder" ? here : binder).push({
+          rule,
+          origin: place.kind === "binder" ? "here" : "above",
+          setAt: "",
+        });
+        break;
+      case "rules":
+        if (place.kind === "binder") {
+          here.push({ rule, origin: "here", setAt: "" });
+        }
+        break;
+      case "folder": {
+        if (place.kind === "binder") break;
+        const target = trimFolder(rule.target);
+        if (target === "") break;
+        if (place.kind === "folder" && target === placePath) {
+          // Its own rule, confirmed by the same compile Gitea runs.
+          if (compiled.test(`${placePath}/x`)) {
+            here.push({ rule, origin: "here", setAt: target });
+          }
+          break;
+        }
+        const depth = above.get(target);
+        if (depth !== undefined && compiled.test(`${placePath}/x`)) {
+          folders.push({ rule, origin: "above", setAt: target, depth });
+        }
+        break;
+      }
+      case "document":
+        if (place.kind === "document" && compiled.test(placePath)) {
+          here.push({ rule, origin: "here", setAt: placePath });
+        }
+        break;
+    }
+  }
+
+  folders.sort((a, b) => b.depth - a.depth);
+  return [
+    ...here,
+    ...folders.map(({ depth: _depth, ...applying }) => applying),
+    ...binder,
+  ];
+}
+
+/** Who was added, who was removed and who stayed, for one kind of owner. */
+export interface OwnerDiff {
+  added: string[];
+  removed: string[];
+  unchanged: string[];
+}
+
+/** One rule a change edits: where it is and how its owners moved. */
+export interface SignOffRuleDiff {
+  scope: SignOffScope;
+  target: string;
+  /** `added` and `removed` mean the whole rule; `changed` means its owners. */
+  status: "added" | "removed" | "changed";
+  teams: OwnerDiff;
+  users: OwnerDiff;
+}
+
+function ruleKey(rule: { scope: SignOffScope; target: string }): string {
+  return `${rule.scope}:${trimFolder(rule.target).toLowerCase()}`;
+}
+
+function diffOwners(before: readonly string[], after: readonly string[]) {
+  const was = new Set(before.map((name) => name.toLowerCase()));
+  const now = new Set(after.map((name) => name.toLowerCase()));
+  return {
+    added: after.filter((name) => !was.has(name.toLowerCase())),
+    removed: before.filter((name) => !now.has(name.toLowerCase())),
+    unchanged: after.filter((name) => was.has(name.toLowerCase())),
+  };
+}
+
+/**
+ * What a change does to who signs off: every rule whose owners differ between
+ * two versions of the file, in the order of the later one (with removed rules
+ * after it). Rules that did not change are left out.
+ *
+ * Owners are compared without case, the way Gitea resolves them.
+ */
+export function diffSignOffRules(
+  before: readonly SignOffRule[],
+  after: readonly SignOffRule[],
+): SignOffRuleDiff[] {
+  const previous = new Map(before.map((rule) => [ruleKey(rule), rule]));
+  const next = new Set(after.map(ruleKey));
+  const out: SignOffRuleDiff[] = [];
+
+  for (const rule of after) {
+    const old = previous.get(ruleKey(rule));
+    const teams = diffOwners(old?.teams ?? [], rule.teams);
+    const users = diffOwners(old?.users ?? [], rule.users);
+    if (old === undefined) {
+      out.push({
+        scope: rule.scope,
+        target: rule.target,
+        status: "added",
+        teams,
+        users,
+      });
+      continue;
+    }
+    const changed =
+      teams.added.length +
+        teams.removed.length +
+        users.added.length +
+        users.removed.length >
+      0;
+    if (changed) {
+      out.push({
+        scope: rule.scope,
+        target: rule.target,
+        status: "changed",
+        teams,
+        users,
+      });
+    }
+  }
+
+  for (const rule of before) {
+    if (next.has(ruleKey(rule))) continue;
+    out.push({
+      scope: rule.scope,
+      target: rule.target,
+      status: "removed",
+      teams: diffOwners(rule.teams, []),
+      users: diffOwners(rule.users, []),
+    });
+  }
+
+  return out;
+}
