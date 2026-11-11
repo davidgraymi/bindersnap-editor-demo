@@ -99,6 +99,10 @@ import {
   OrganizationPeoplePayloadSchema,
   ProposedSignOffChangeSchema,
   SignOffRulesRequestSchema,
+  BinderSignOffPayloadSchema,
+  SetSignOffRuleRequestSchema,
+  SetSignOffRulePayloadSchema,
+  OrganizationGroupPagePayloadSchema,
   BinderShapeChangePayloadSchema,
   BinderArchivePayloadSchema,
   BinderDraftPayloadSchema,
@@ -1477,6 +1481,69 @@ registry.registerPath({
         "The change that would apply these rules. Nothing has taken effect yet",
       content: {
         "application/json": { schema: ProposedSignOffChangeSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/binders/{org}/{binder}/rules/sign-off",
+  operationId: "getBinderSignOff",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    query: z.object({
+      draft: z.string().optional(),
+      change: z.string().optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description:
+        "Who signs off in the binder, on main or at the caller's draft or a change",
+      content: {
+        "application/json": { schema: BinderSignOffPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "put",
+  path: "/api/app/binders/{org}/{binder}/rules/sign-off",
+  operationId: "setBinderSignOffRule",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: SetSignOffRuleRequestSchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "The rule, committed into the draft or change",
+      content: {
+        "application/json": { schema: SetSignOffRulePayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/orgs/{org}/groups/{group}",
+  operationId: "getOrganizationGroup",
+  tags: ["organizations"],
+  request: { params: z.object({ org: z.string(), group: z.string() }) },
+  responses: {
+    200: {
+      description: "A group: its people, its binders, and where it signs off",
+      content: {
+        "application/json": { schema: OrganizationGroupPagePayloadSchema },
       },
     },
   },

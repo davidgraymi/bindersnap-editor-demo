@@ -20,6 +20,7 @@ import type {
   DeleteOrganizationBody,
   GetInvitation200,
   GetOrganizationDeletion200,
+  GetOrganizationGroup200,
   GetOrganizationMembers200,
   GetOrganizationPeople200,
   GetOrganizationSettings200,
@@ -820,6 +821,40 @@ export const removeOrganizationGroupMember = async (org: string,
   {
     ...options,
     method: 'DELETE'
+
+
+  }
+);}
+
+
+export type getOrganizationGroupResponse200 = {
+  data: GetOrganizationGroup200
+  status: 200
+}
+
+export type getOrganizationGroupResponseSuccess = (getOrganizationGroupResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getOrganizationGroupResponse = (getOrganizationGroupResponseSuccess)
+
+export const getGetOrganizationGroupUrl = (org: string,
+    group: string,) => {
+
+
+
+
+  return `/api/app/orgs/${org}/groups/${group}`
+}
+
+export const getOrganizationGroup = async (org: string,
+    group: string, options?: Parameters<typeof customFetch>[1]): Promise<getOrganizationGroupResponse> => {
+
+  return customFetch<getOrganizationGroupResponse>(getGetOrganizationGroupUrl(org,group),
+  {
+    ...options,
+    method: 'GET'
 
 
   }

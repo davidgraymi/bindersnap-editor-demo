@@ -65,8 +65,13 @@ export interface ConflictingFile {
    * A document moved on one side and edited on the other has one: the edit,
    * at the new address. Null means the two sides changed the same thing in
    * different ways, which only a person can decide.
+   *
+   * `merged` is the sign-off rules file, merged rule by rule rather than as
+   * text (`mergeSignOffRules`): the result is in `mergedContent`.
    */
-  automatic: "ours" | "theirs" | null;
+  automatic: "ours" | "theirs" | "merged" | null;
+  /** Base64 of the merged file, when `automatic` is `merged`. */
+  mergedContent?: string;
 }
 
 /** path → blob sha, for every file in a tree. */
@@ -306,12 +311,17 @@ export async function resolveChangeConflicts(params: {
   // failed read changes nothing.
   const plans = await Promise.all(
     conflicts.map(async (conflict) => {
-      const decision: FileResolution["take"] =
+      const decision: FileResolution["take"] | "merged" =
         decided.get(conflict.key)?.take ?? conflict.automatic!;
       const choice = decided.get(conflict.key);
 
       let final: { path: string; base64Content: string } | null;
-      if (decision === "none") {
+      if (decision === "merged") {
+        final = {
+          path: conflict.path,
+          base64Content: conflict.mergedContent ?? "",
+        };
+      } else if (decision === "none") {
         final = null;
       } else if (decision === "content" && choice?.take === "content") {
         final = { path: conflict.path, base64Content: choice.base64Content };
@@ -419,8 +429,10 @@ export async function resolveChangeConflicts(params: {
   return { caughtUp };
 }
 
-function describeDecision(take: FileResolution["take"]): string {
+function describeDecision(take: FileResolution["take"] | "merged"): string {
   switch (take) {
+    case "merged":
+      return "merged both sides' sign-off rules";
     case "ours":
       return "kept this change's version";
     case "theirs":

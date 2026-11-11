@@ -7,6 +7,8 @@ import type {
   ConflictingFilePayload,
 } from "../../../packages/api-schema/schemas/workspaces";
 import { sanitizeHtml } from "../../../packages/utils/sanitizer";
+import { describeGroupName } from "../../../packages/utils/groupName";
+import { formatDocumentName } from "../documentDisplay";
 import { changeConflictsQuery } from "../data/queries";
 import { resolveBinderChangeConflicts, updateBinderChange } from "../api";
 import { followInApp } from "../appLink";
@@ -129,6 +131,7 @@ export function ChangeConflictsPage({
           file,
           merge,
           decisions[file.key] ?? emptyDecision(merge),
+          org,
         );
         return resolution ? [resolution] : [];
       });
@@ -417,12 +420,30 @@ function ConflictFile({
         ) : null}
       </div>
 
-      {merge.mode === "whole" && merge.reason === "automatic" ? (
+      {merge.mode === "whole" &&
+      merge.reason === "automatic" &&
+      file.kind === "rules" ? (
+        <p className="conflict-note">
+          Both versions changed who signs off, in different places, so both
+          changes are kept. Nothing to decide.
+        </p>
+      ) : merge.mode === "whole" && merge.reason === "automatic" ? (
         <p className="conflict-note">
           Moved in one version and edited in the other, so both hold: the edit
           is kept, at <code>{displayConflictPath(file.path)}</code>. Nothing to
           decide.
         </p>
+      ) : merge.mode === "rules" ? (
+        <RuleClashes
+          clashes={merge.clashes}
+          choices={decision.pieces}
+          disabled={disabled}
+          onChoose={(index, choice) => {
+            const pieces = [...decision.pieces];
+            pieces[index] = choice;
+            onDecide({ ...decision, pieces });
+          }}
+        />
       ) : whole || merge.mode === "whole" ? (
         <WholeChoice
           file={file}
@@ -444,6 +465,84 @@ function ConflictFile({
         />
       )}
     </section>
+  );
+}
+
+type RuleClash = Extract<FileMerge, { mode: "rules" }>["clashes"][number];
+
+/** "Clinical Standards: Infection Control and Quality Committee". */
+function describeClashSide(clash: RuleClash, side: RuleClash["ours"]): string {
+  const where =
+    clash.scope === "folder"
+      ? clash.target.split("/").map(formatDocumentName).join(" / ")
+      : clash.scope === "document"
+        ? "One document"
+        : clash.scope === "rules"
+          ? "Who signs off"
+          : "The whole binder";
+  if (side === null) return `${where}: no rule`;
+  const names = [...side.teams.map(describeGroupName), ...side.users];
+  const said =
+    names.length <= 1
+      ? (names[0] ?? "nobody")
+      : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return `${where}: ${said}`;
+}
+
+/**
+ * The sign-off rules both sides changed differently, said as rules. Everything
+ * else in the file merged on its own.
+ */
+function RuleClashes({
+  clashes,
+  choices,
+  disabled,
+  onChoose,
+}: {
+  clashes: RuleClash[];
+  choices: (ConflictChoice | null)[];
+  disabled: boolean;
+  onChoose: (index: number, choice: ConflictChoice) => void;
+}) {
+  return (
+    <div className="conflict-rules">
+      <p className="conflict-note">
+        Both versions changed who signs off on the same{" "}
+        {clashes.length === 1 ? "thing" : "things"}. Everything else merged on
+        its own. Choose who signs off on each.
+      </p>
+      {clashes.map((clash, index) => (
+        <fieldset
+          key={`${clash.scope}:${clash.target}`}
+          className="conflict-rule-clash"
+          disabled={disabled}
+        >
+          <legend className="bs-field-label">
+            {describeClashSide(clash, null).replace(": no rule", "")}
+          </legend>
+          {(
+            [
+              ["ours", `This change — ${describeClashSide(clash, clash.ours)}`],
+              [
+                "theirs",
+                `Published — ${describeClashSide(clash, clash.theirs)}`,
+              ],
+              ["both", "Keep everyone from both"],
+            ] as const
+          ).map(([value, label]) => (
+            <label key={value} className="conflict-rule-option">
+              <input
+                type="radio"
+                name={`rule-clash-${index}`}
+                checked={choices[index] === value}
+                onChange={() => onChoose(index, value)}
+              />
+              <span>{label}</span>
+            </label>
+          ))}
+        </fieldset>
+      ))}
+    </div>
   );
 }
 

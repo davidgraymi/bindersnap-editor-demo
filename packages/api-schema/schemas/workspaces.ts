@@ -605,8 +605,53 @@ export const WorkspaceChangeDetailPayloadSchema = z.object({
       required: z.number(),
       eligible: z.array(ChangeUserSchema),
       approvedBy: z.array(ChangeUserSchema),
+      /**
+       * Why the rule is on this change, for the table's third line: it is
+       * the rules rule, the binder rule, the binder's approvers, or a folder
+       * or document rule matching these changed documents.
+       */
+      reason: z.object({
+        kind: z.enum(["approvers", "rules", "binder", "folder", "document"]),
+        matched: z.array(z.string()),
+      }),
     }),
   ),
+  /**
+   * What this change does to who signs off, rule by rule, against where it
+   * started. Null when it leaves `.gitea/CODEOWNERS` alone. Each rule lists
+   * the documents it covers on the change, for "both of the documents in it
+   * today".
+   */
+  signOffChange: z
+    .object({
+      rules: z.array(
+        z.object({
+          scope: z.enum(["binder", "folder", "document", "rules"]),
+          target: z.string(),
+          status: z.enum(["added", "removed", "changed"]),
+          teams: z.object({
+            added: z.array(z.string()),
+            removed: z.array(z.string()),
+            unchanged: z.array(z.string()),
+          }),
+          users: z.object({
+            added: z.array(z.string()),
+            removed: z.array(z.string()),
+            unchanged: z.array(z.string()),
+          }),
+          /** The folder, or the document's path; "" for the binder and the rules. */
+          place: z.string(),
+          covers: z.array(
+            z.object({
+              path: z.string(),
+              uid: z.string().nullable(),
+              name: z.string(),
+            }),
+          ),
+        }),
+      ),
+    })
+    .nullable(),
   /** How a decided change ended; null while it is open. */
   outcome: z.enum(["published", "declined", "withdrawn"]).nullable(),
   /**
@@ -1094,6 +1139,122 @@ export type ProposedSignOffChangeView = z.infer<
   typeof ProposedSignOffChangeSchema
 >;
 
+/** A person a sign-off panel shows, with whether they can read the binder. */
+export const SignOffPersonSchema = z.object({
+  login: z.string(),
+  fullName: z.string(),
+  hasAccess: z.boolean(),
+});
+
+/**
+ * Who signs off in a binder, as the sign-off panel needs it: on the binder,
+ * folder and document pages (read on `main`) and in the editor (read at the
+ * draft). The panel works out what applies to the place it is on with
+ * `signOffRulesFor`, from `rules`.
+ */
+export const BinderSignOffPayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  /** The branch the rules were read at: `main`, a draft or a change. */
+  ref: z.string(),
+  rules: z.array(SignOffRuleSchema),
+  /** Lines Gitea would drop. Said rather than hidden. */
+  unreadable: z.array(z.object({ line: z.number(), text: z.string() })),
+  /** The binder's approvals count; null when it could not be read. */
+  requiredApprovals: z.number().nullable(),
+  approvers: z
+    .object({ groups: z.array(z.string()), people: z.array(z.string()) })
+    .nullable(),
+  /** Every group a rule or the approvers name, with its people. */
+  groups: z.array(
+    z.object({
+      name: z.string(),
+      description: z.string(),
+      members: z.array(SignOffPersonSchema),
+      /** Whether the group can read the binder. A rule naming one that cannot waits forever. */
+      hasAccess: z.boolean(),
+    }),
+  ),
+  /** Every person a rule or the approvers name directly. */
+  people: z.array(SignOffPersonSchema),
+  /** The documents at `ref`, so a document rule can be named and placed. */
+  documents: z.array(
+    z.object({
+      path: z.string(),
+      uid: z.string().nullable(),
+      name: z.string(),
+    }),
+  ),
+  /** Whether the reader may change the rules in a draft: write access. */
+  canEdit: z.boolean(),
+});
+export type BinderSignOffPayload = z.infer<typeof BinderSignOffPayloadSchema>;
+
+/**
+ * Set who signs off on one thing, in a draft — one act, like a rename. Empty
+ * `teams` and `users` take the rule away. The rest of the file is left as it
+ * is, and the whole file is rewritten in its one canonical form.
+ */
+export const SetSignOffRuleRequestSchema = z.object({
+  rule: SignOffRuleSchema,
+  /** The caller's draft branch, or `true` for the one they are working in. */
+  draft: z.union([z.string(), z.boolean()]).optional(),
+  /** An open change of theirs to add it to, instead of a draft. */
+  changeNumber: z.number().optional(),
+});
+export type SetSignOffRuleRequest = z.infer<typeof SetSignOffRuleRequestSchema>;
+
+/** Where the edit landed. The panel reads the rules again from the draft. */
+export const SetSignOffRulePayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  branch: z.string(),
+  changeNumber: z.number().nullable(),
+});
+export type SetSignOffRulePayload = z.infer<typeof SetSignOffRulePayloadSchema>;
+
+/**
+ * One group's page: who is in it, which binders it can use, and where it
+ * signs off — every rule naming it in every binder the reader can read,
+ * read live from each binder's `.gitea/CODEOWNERS` on `main`.
+ */
+export const OrganizationGroupPagePayloadSchema = z.object({
+  organization: z.string(),
+  group: z.object({
+    name: z.string(),
+    description: z.string(),
+    /** `owner`, `admin`, `write`, `read` or `none` on `repo.code`. */
+    access: z.string(),
+  }),
+  members: z.array(z.object({ login: z.string(), fullName: z.string() })),
+  /** Whether the reader may change who is in it: an organization owner. */
+  canManage: z.boolean(),
+  binders: z.array(
+    z.object({
+      name: z.string(),
+      /** Whether the group is on the binder's approvers. */
+      approver: z.boolean(),
+    }),
+  ),
+  signsOff: z.array(
+    z.object({
+      binder: z.string(),
+      scope: z.enum(["binder", "folder", "document", "rules"]),
+      place: z.string(),
+      covers: z.array(
+        z.object({
+          path: z.string(),
+          uid: z.string().nullable(),
+          name: z.string(),
+        }),
+      ),
+    }),
+  ),
+});
+export type OrganizationGroupPagePayload = z.infer<
+  typeof OrganizationGroupPagePayloadSchema
+>;
+
 export const OrganizationPersonSchema = z.object({
   login: z.string(),
   fullName: z.string(),
@@ -1528,12 +1689,35 @@ export const ConflictingFileSchema = z.object({
   /** Where the resolved file goes. */
   path: z.string(),
   /** How the page can show it: rendered, as text, or only as a choice. */
-  kind: z.enum(["editor", "text", "binary"]),
+  kind: z.enum(["editor", "text", "binary", "rules"]),
   /**
    * The answer when there is one without asking — a document moved on one
-   * side and edited on the other. Null: a person decides.
+   * side and edited on the other, or the sign-off rules when the two sides'
+   * edits merge rule by rule (`merged`). Null: a person decides.
    */
-  automatic: z.enum(["ours", "theirs"]).nullable(),
+  automatic: z.enum(["ours", "theirs", "merged"]).nullable(),
+  /**
+   * For the sign-off rules file (`kind: "rules"`): the rules merged, and the
+   * targets both sides changed differently, which the page asks about in
+   * words. Null for every other file, or when a side could not be read.
+   */
+  rules: z
+    .object({
+      rules: z.array(SignOffRuleSchema),
+      clashes: z.array(
+        z.object({
+          scope: z.enum(["binder", "folder", "document", "rules"]),
+          target: z.string(),
+          ours: z
+            .object({ teams: z.array(z.string()), users: z.array(z.string()) })
+            .nullable(),
+          theirs: z
+            .object({ teams: z.array(z.string()), users: z.array(z.string()) })
+            .nullable(),
+        }),
+      ),
+    })
+    .nullable(),
   /** Where the change began. Null: the file did not exist then. */
   base: ConflictSideSchema.nullable(),
   /** The change's version. Null: the change removed it. */

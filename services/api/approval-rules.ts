@@ -2,6 +2,7 @@ import type { ChangeUser } from "../../packages/api-schema/schemas/documents";
 import type { SignOffRule } from "../../packages/utils/codeowners";
 import { rulePattern } from "../../packages/utils/codeowners";
 import { latestReviewByUser, toChangeUser } from "./change-assignments";
+import { reasonFor, type ApprovalRuleReason } from "./sign-off-view";
 import type { components } from "./gitea-client/spec/gitea";
 
 type PullReview = components["schemas"]["PullReview"];
@@ -33,7 +34,22 @@ export interface ApprovalRuleView {
   eligible: ChangeUser[];
   /** Who has, with an approval that still stands. */
   approvedBy: ChangeUser[];
+  /** Why the rule is on this change, for the table's third line. */
+  reason: ApprovalRuleReason;
 }
+
+/**
+ * The order the table reads in: a change to who signs off first, because it
+ * is the one a reviewer must not miss, then the narrowest rule to the widest,
+ * then the binder's approvers.
+ */
+const ROW_ORDER: Record<ApprovalRuleReason["kind"], number> = {
+  rules: 0,
+  document: 1,
+  folder: 2,
+  binder: 3,
+  approvers: 4,
+};
 
 /** The sign-off rules a change is under: those matching a file it touches. */
 export function matchingSignOffRules(
@@ -90,6 +106,8 @@ export function buildApprovalRules(params: {
   members: (group: string) => ChangeUser[];
   /** A person by login, for someone named directly with no review to read. */
   person: (login: string) => ChangeUser;
+  /** Every path the change touches, `.gitea/CODEOWNERS` included. */
+  paths?: readonly string[];
 }): ApprovalRuleView[] {
   const { author, reviews, ignoresStale, members, person } = params;
   const standing = standingApprovals(reviews, ignoresStale);
@@ -139,6 +157,7 @@ export function buildApprovalRules(params: {
       required: params.requiredApprovals ?? 0,
       eligible,
       approvedBy: approvedFrom(eligible, true),
+      reason: reasonFor(null, params.paths ?? []),
     });
   }
 
@@ -153,8 +172,16 @@ export function buildApprovalRules(params: {
       required: 1,
       eligible,
       approvedBy: approvedFrom(eligible, false),
+      reason: reasonFor(rule, params.paths ?? []),
     });
   }
 
-  return rules;
+  return rules
+    .map((rule, index) => ({ rule, index }))
+    .sort(
+      (a, b) =>
+        ROW_ORDER[a.rule.reason.kind] - ROW_ORDER[b.rule.reason.kind] ||
+        a.index - b.index,
+    )
+    .map(({ rule }) => rule);
 }
