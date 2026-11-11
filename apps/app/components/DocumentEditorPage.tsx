@@ -50,6 +50,11 @@ import { BinderDraftPicker } from "./BinderDraftPicker";
 import { InlineRename } from "./BinderPage";
 import { readDroppedFiles, type DroppedFiles } from "../bulkUpload";
 import { ReviseDocumentModal } from "./ReviseDocumentModal";
+import { EditorFolderDesk } from "./EditorFolderDesk";
+import { EditorSignOffSide } from "./EditorSignOffSide";
+import type { SignOffPlace } from "../signOffPanel";
+import { routeToPath } from "../routes";
+import { buildBinderUrl } from "../binderShell";
 import {
   DraftFiles,
   type ArchiveUndo,
@@ -108,6 +113,13 @@ interface DocumentEditorPageProps {
   org: string;
   binder: string;
   documentPath: string;
+  /**
+   * A folder on the desk instead of a document (4.5): "" is the binder's top
+   * folder. While it is set, `documentPath` is ignored.
+   */
+  folder?: string | null;
+  /** Put a folder on the desk: a folder's name in the file panel, an origin. */
+  onOpenFolder?: (folder: string) => void;
   /** The draft to read from and save into. Null while the shell finds it. */
   draft: string | null;
   /** What the draft is called, to say where Save puts things. */
@@ -218,7 +230,9 @@ type LoadState =
    * bytes, already read, for the desk to show it as it is.
    */
   | { kind: "foreign"; detail: WorkspaceDocumentDetailPayload; file: Blob }
-  | { kind: "ready"; detail: WorkspaceDocumentDetailPayload; doc: JSONContent };
+  | { kind: "ready"; detail: WorkspaceDocumentDetailPayload; doc: JSONContent }
+  /** A folder on the desk, where a document's page goes. */
+  | { kind: "folder"; folder: string };
 
 type SaveState =
   | { kind: "idle" }
@@ -283,6 +297,8 @@ export function DocumentEditorPage({
   org,
   binder,
   documentPath,
+  folder = null,
+  onOpenFolder,
   draft,
   draftName,
   onClose,
@@ -561,6 +577,17 @@ export function DocumentEditorPage({
     setSave({ kind: "idle" });
     setRecovered(null);
 
+    // **A folder on the desk.** Nothing to read but its list, which the desk
+    // reads itself; the open documents keep their words for when one opens
+    // again.
+    if (folder !== null) {
+      shownKey.current = null;
+      setDirty(false);
+      setLoad({ kind: "folder", folder });
+      recountElsewhere();
+      return;
+    }
+
     // Open already: back at once, words and all, and its details read again
     // quietly — an act in the panel may have renamed or moved it since.
     const listed = filesRef.current?.documents.find(
@@ -671,7 +698,16 @@ export function DocumentEditorPage({
     // `recountElsewhere` is stable; `isUnsaved` reads only its argument;
     // `readPolicy` changes only with the draft, which is in the list.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [org, binder, documentPath, draft, changeNumber, coverStale, fileNonce]);
+  }, [
+    org,
+    binder,
+    documentPath,
+    folder,
+    draft,
+    changeNumber,
+    coverStale,
+    fileNonce,
+  ]);
 
   // "Saved 3 minutes ago" has to keep counting while nobody types.
   useEffect(() => {
@@ -1103,9 +1139,13 @@ export function DocumentEditorPage({
   // The name the address gives, until the document itself has been read, so
   // the title bar does not blink out between one policy and the next.
   const name =
-    load.kind === "ready" || load.kind === "foreign"
-      ? formatDocumentName(load.detail.document.name)
-      : formatDocumentName(documentPath.split("/").pop() ?? documentPath);
+    folder !== null
+      ? folder === ""
+        ? binderName
+        : formatDocumentName(folder.slice(folder.lastIndexOf("/") + 1))
+      : load.kind === "ready" || load.kind === "foreign"
+        ? formatDocumentName(load.detail.document.name)
+        : formatDocumentName(documentPath.split("/").pop() ?? documentPath);
 
   // The browser tab says which policy is open, and — as Word's title bar
   // does — when it has changes not saved yet.
@@ -1148,13 +1188,20 @@ export function DocumentEditorPage({
   // the next one in (`documentState.ts`). A Word file or a PDF is shown in
   // the same editor, on the desk in place of the page, so moving to one and
   // back never leaves it either.
-  type Shown = Extract<LoadState, { kind: "ready" } | { kind: "foreign" }>;
+  type Shown = Extract<
+    LoadState,
+    { kind: "ready" } | { kind: "foreign" } | { kind: "folder" }
+  >;
   const lastShown = useRef<Shown | null>(null);
-  if (load.kind === "ready" || load.kind === "foreign") {
+  if (
+    load.kind === "ready" ||
+    load.kind === "foreign" ||
+    load.kind === "folder"
+  ) {
     lastShown.current = load;
   } else if (load.kind !== "loading") lastShown.current = null;
   const frame: Shown | null =
-    load.kind === "ready" || load.kind === "foreign"
+    load.kind === "ready" || load.kind === "foreign" || load.kind === "folder"
       ? load
       : load.kind === "loading"
         ? lastShown.current
@@ -1223,6 +1270,8 @@ export function DocumentEditorPage({
           unsavedElsewhere={unsavedElsewhere}
           onReadAhead={readAheadOf}
           onOpen={(slugPath) => leave({ kind: "open", slugPath })}
+          {...(onOpenFolder ? { onOpenFolder } : {})}
+          activeFolder={folder}
           // A change request is revised, not added to or reshaped, here.
           onNew={
             change ? undefined : (folder) => leave({ kind: "new", folder })
@@ -1315,6 +1364,47 @@ export function DocumentEditorPage({
       )
     : undefined;
 
+  /**
+   * "Who signs off here", on the right (D16): for the folder on the desk, or
+   * the document open. Read at the draft and edited there. Not on a change
+   * request edited in place — rules are changed in a draft.
+   */
+  const signOffPlace: SignOffPlace | null =
+    frame?.kind === "folder"
+      ? frame.folder === ""
+        ? { kind: "binder" }
+        : { kind: "folder", path: frame.folder }
+      : frame
+        ? { kind: "document", path: frame.detail.document.path }
+        : null;
+  const signOffSide =
+    draft && signOffPlace ? (
+      <EditorSignOffSide
+        org={org}
+        binder={binder}
+        binderName={binderName}
+        draft={draft}
+        place={signOffPlace}
+        canEdit={!change}
+        onNavigate={(route) => {
+          window.history.pushState({}, "", routeToPath(route));
+          window.dispatchEvent(new PopStateEvent("popstate"));
+        }}
+        onOpenOrigin={(origin) =>
+          onOpenFolder?.(origin.kind === "folder" ? origin.path : "")
+        }
+        originHref={(origin) =>
+          buildBinderUrl({
+            org,
+            binder,
+            folder: origin.kind === "folder" ? origin.path : null,
+            edit: "writing",
+            draft,
+          })
+        }
+      />
+    ) : null;
+
   let body: ReactNode;
   /** Whether `body` is the editor, which then holds the file panel. */
   let inEditor = false;
@@ -1353,7 +1443,17 @@ export function DocumentEditorPage({
         >
           <DocumentEditor
             label={name}
-            aside={filesPanel}
+            aside={(outline: OutlineSlot) => (
+              <>
+                {filesPanel?.(outline)}
+                {signOffSide}
+              </>
+            )}
+            statusStart={
+              frame.kind === "folder" ? (
+                <span className="doc-editor-status-kind">Folder</span>
+              ) : undefined
+            }
             // A file from the computer dropped on the page is a document to
             // add, not something to open in the browser. Pictures still go
             // into the page, where they were dropped.
@@ -1375,7 +1475,36 @@ export function DocumentEditorPage({
             initialContent={frameDoc}
             editable={load.kind === "ready"}
             cover={
-              frame.kind === "foreign" ? (
+              frame.kind === "folder" ? (
+                <EditorFolderDesk
+                  key={`folder:${frame.folder}`}
+                  org={org}
+                  binder={binder}
+                  binderName={binderName}
+                  folder={frame.folder}
+                  draft={draft}
+                  documentCount={
+                    files
+                      ? files.documents.filter(
+                          (entry) =>
+                            frame.folder === "" ||
+                            entry.path.startsWith(`${frame.folder}/`),
+                        ).length
+                      : null
+                  }
+                  {...(change || !onUpload ? {} : { onUpload })}
+                  {...(change
+                    ? {}
+                    : {
+                        onNew: (into: string) =>
+                          leave({ kind: "new", folder: into }),
+                      })}
+                  onOpenDocument={(slugPath) =>
+                    leave({ kind: "open", slugPath })
+                  }
+                  onOpenFolder={(path) => onOpenFolder?.(path)}
+                />
+              ) : frame.kind === "foreign" ? (
                 <EditorFileCover
                   // A new file is a new preview, not the last one reread.
                   key={frame.detail.document.path}

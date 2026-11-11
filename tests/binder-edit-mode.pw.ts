@@ -2037,3 +2037,27 @@ test("what left the headers is in the editor", async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByLabel("Where it goes")).toHaveValue("nursing");
 });
+
+test("Edit on an empty binder opens the editor on its top folder", async ({
+  page,
+}) => {
+  // Nothing the editor writes is in it, so there is no policy to open; the
+  // editor opens anyway, with the binder's top folder on the desk.
+  const session = await signUp(buildCredentials());
+  const org = await createOrganization(session);
+  const binder = await createBinder(session, org);
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page
+    .locator(".bs-pagehead-actions")
+    .getByRole("button", { name: "Edit", exact: true })
+    .click();
+  await expect(page).toHaveURL(/edit=write/, { timeout: 60_000 });
+  await expect(page.locator(".doc-folder-desk")).toBeVisible({
+    timeout: 60_000,
+  });
+  await expect(
+    page.getByRole("button", { name: "New document here" }),
+  ).toBeVisible();
+});
