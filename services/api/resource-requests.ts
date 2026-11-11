@@ -1,7 +1,11 @@
 import { randomBytes } from "node:crypto";
 
-import { and, desc, eq, gte } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 
+import {
+  isSiteResource,
+  SITE_RESOURCES,
+} from "../../packages/utils/siteResources";
 import { config } from "./config";
 import { openSqliteDb, type SqliteDb } from "./db/client";
 import { resourceRequests } from "./db/schema";
@@ -14,27 +18,22 @@ import type { EmailContent } from "./mail";
  * A reader who isn't ready for a trial can ask for the page by email. That is
  * a plain HTML form posted to the API from bindersnap.com, with no script and
  * no account, so the route takes no session and trusts nothing in the body:
- * the page asked for must look like one of the site's, the address is sent
- * one fixed email whose only variable parts are that page's address and name,
- * and both the sender's address and the recipient's are rate limited.
+ * the page asked for must be on the site's own list (`SITE_RESOURCES`), the
+ * email's name and links come from that list and not from the request, an
+ * address that unsubscribed stays unsubscribed, and both the sender's address
+ * and the recipient's are rate limited.
  *
  * The rows are the list of people who asked, for the founder to write to.
  * Every email to them carries a link that stops all of it.
  */
-
-/** The site pages a person can ask for, and nothing else. */
-const RESOURCE = /^\/(templates|manuals|tools)\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /** How many pages one address can be sent in a day, whoever asks. */
 export const DAILY_LIMIT_PER_ADDRESS = 5;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export function isRequestableResource(value: unknown): value is string {
-  return (
-    typeof value === "string" && value.length <= 120 && RESOURCE.test(value)
-  );
-}
+/** Only a page on the site's own list (`SITE_RESOURCES`) can be asked for. */
+export const isRequestableResource = isSiteResource;
 
 export interface ResourceRequestRow {
   email: string;
@@ -52,9 +51,12 @@ export class ResourceRequestStore {
   }
 
   /**
-   * Keep the request, and say whether to send the email. Asking again for the
-   * same page updates the row; asking after unsubscribing starts the emails
-   * again, since the person has just asked for one.
+   * Keep the request, and say whether to send the email.
+   *
+   * **Nothing here undoes an unsubscribe.** The form is posted by anyone, so
+   * a request for an address that asked us to stop is recorded nowhere and
+   * sent nothing: only the address's owner could show they changed their
+   * mind, and this route cannot tell who is asking. They can write to us.
    */
   record(
     emailAddress: string,
@@ -62,23 +64,19 @@ export class ResourceRequestStore {
     now = Date.now(),
   ): { send: boolean; unsubscribeToken: string } {
     const email = emailAddress.trim().toLowerCase();
-    const recent = this.db
-      .select({ id: resourceRequests.id })
+    const existing = this.db
+      .select()
       .from(resourceRequests)
-      .where(
-        and(
-          eq(resourceRequests.email, email),
-          gte(resourceRequests.requestedAt, now - DAY_MS),
-        ),
-      )
-      .all().length;
-
+      .where(eq(resourceRequests.email, email))
+      .all();
     const token =
-      this.db
-        .select({ token: resourceRequests.unsubscribeToken })
-        .from(resourceRequests)
-        .where(eq(resourceRequests.email, email))
-        .get()?.token ?? randomBytes(24).toString("base64url");
+      existing[0]?.unsubscribeToken ?? randomBytes(24).toString("base64url");
+    if (existing.some((row) => row.unsubscribedAt !== null)) {
+      return { send: false, unsubscribeToken: token };
+    }
+    const recent = existing.filter(
+      (row) => row.requestedAt >= now - DAY_MS,
+    ).length;
 
     this.db
       .insert(resourceRequests)
@@ -94,12 +92,6 @@ export class ResourceRequestStore {
         target: [resourceRequests.email, resourceRequests.resource],
         set: { requestedAt: now },
       })
-      .run();
-    // They asked again: whatever they turned off before, this is a yes.
-    this.db
-      .update(resourceRequests)
-      .set({ unsubscribedAt: null })
-      .where(eq(resourceRequests.email, email))
       .run();
 
     return { send: recent < DAILY_LIMIT_PER_ADDRESS, unsubscribeToken: token };
@@ -180,10 +172,11 @@ export function resourceRequestStore(): ResourceRequestStore {
   return store;
 }
 
-/** `/templates/hand-hygiene-policy` → "Hand hygiene policy". */
+/** The page's own title, from the site's list. Never built from a request. */
 export function resourceName(resource: string): string {
-  const words = resource.split("/").at(-1)!.replace(/-/g, " ");
-  return words[0]!.toUpperCase() + words.slice(1);
+  const name = SITE_RESOURCES[resource];
+  if (!name) throw new Error(`Not a page that can be emailed: ${resource}`);
+  return name;
 }
 
 /** Templates and manual indexes are Word files; a tool is its page. */
@@ -269,7 +262,7 @@ export function unsubscribePage(
 <p>You asked for a page from bindersnap.com by email. Press the button and we won't write to this address again.</p>
 <form method="post" action="/site/resource-requests/unsubscribe?token=${escapeHtml(encodeURIComponent(token))}"><button type="submit">Unsubscribe</button></form>`
       : `<h1>You're unsubscribed.</h1>
-<p>We won't write to this address again. If you ask for another page by email, we'll send that one.</p>
+<p>We won't write to this address again. If you change your mind, write to david@bindersnap.com.</p>
 <p><a href="${escapeHtml(siteOrigin)}/">Back to bindersnap.com</a></p>`;
   return `<!doctype html>
 <html lang="en">

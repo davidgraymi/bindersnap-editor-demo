@@ -3,6 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { SITE_RESOURCES } from "../../packages/utils/siteResources";
 import { renderEmail } from "./mail/layout";
 import {
   DAILY_LIMIT_PER_ADDRESS,
@@ -62,6 +63,10 @@ test("only the site's templates, manual indexes and tools can be asked for", () 
     "//evil.example/templates/x",
     "/templates/x?next=https://evil.example",
     "/templates/Hand-Hygiene",
+    // The right shape, and not a page: nothing is built from a request.
+    "/templates/you-have-won-claim-your-prize-at-evil-example",
+    "/tools/constructor",
+    "/tools/__proto__",
     "https://evil.example/templates/x",
     "",
     undefined,
@@ -156,18 +161,17 @@ test("a filled honeypot looks like success and does nothing", async () => {
 
 test("one address is sent only so many pages a day, whoever asks", async () => {
   const { sent, post } = setup();
-  for (let index = 0; index < DAILY_LIMIT_PER_ADDRESS + 3; index += 1) {
-    const response = await post({
-      email: "target@example.org",
-      resource: `/templates/policy-${index}`,
-    });
+  const resources = Object.keys(SITE_RESOURCES);
+  expect(resources.length).toBeGreaterThan(DAILY_LIMIT_PER_ADDRESS);
+  for (const resource of resources) {
+    const response = await post({ email: "target@example.org", resource });
     // The sender is told the same thing either way.
     expect(response.headers.get("location")).toEndWith("#sent");
   }
   expect(sent).toHaveLength(DAILY_LIMIT_PER_ADDRESS);
 });
 
-test("unsubscribing stops every email to the address, and asking again starts them", async () => {
+test("unsubscribing stops every email to the address, and no form post undoes it", async () => {
   const { deps, sent, post } = setup();
   await post({ email: "don@riverside.example", resource: HAND_HYGIENE });
   await post({
@@ -203,19 +207,31 @@ test("unsubscribing stops every email to the address, and asking again starts th
   expect(nobody.email).toBeNull();
   expect(await nobody.response.text()).toContain("You're unsubscribed.");
 
-  await post({ email: "don@riverside.example", resource: HAND_HYGIENE });
-  expect(deps.store.list().every((row) => !row.unsubscribed)).toBe(true);
+  // Anyone can post the form with this address. It stays unsubscribed, gets
+  // nothing, and the sender sees what they would have seen anyway.
+  const before = sent.length;
+  const again = await post({
+    email: "Don@Riverside.example",
+    resource: "/templates/exposure-control-plan",
+  });
+  expect(again.headers.get("location")).toEndWith("#sent");
+  expect(sent).toHaveLength(before);
+  expect(deps.store.list()).toHaveLength(2);
+  expect(deps.store.list().every((row) => row.unsubscribed)).toBe(true);
 });
 
 test("the email names the page, links its Word file, and can be stopped without an account", () => {
   expect(resourceName("/manuals/hospice-policy-and-procedure-manual")).toBe(
-    "Hospice policy and procedure manual",
+    "Hospice policy and procedure manual index",
   );
+  expect(() => resourceName("/templates/not-a-page")).toThrow();
   const template = renderEmail(
     resourceRequestEmail(HAND_HYGIENE, "tok", SITE),
     "https://app.bindersnap.com",
   );
-  expect(template.subject).toBe("Hand hygiene policy, from Bindersnap");
+  expect(template.subject).toBe(
+    "Hand hygiene policy template for healthcare settings, from Bindersnap",
+  );
   expect(template.text).toContain(`${SITE}${HAND_HYGIENE}.docx`);
   expect(template.text).toContain("Unsubscribe: ");
   expect(template.text).not.toContain("Email settings");

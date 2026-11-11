@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { SITE_RESOURCES } from "../../packages/utils/siteResources";
 import { readLegalDocuments } from "../legal/legalDocuments";
 import { isRequestableResource } from "../../services/api/resource-requests";
 import { publicSiteFiles, publicSitePages } from "./publicSite";
@@ -28,6 +29,12 @@ describe('"Email it to me"', () => {
       if (offering.includes(page)) continue;
       expect(files.get(page.path)).not.toContain('class="site-send"');
     }
+  });
+
+  test("the list the API sends from is exactly these pages, by their titles", () => {
+    expect(SITE_RESOURCES).toEqual(
+      Object.fromEntries(offering.map((page) => [page.path, page.title])),
+    );
   });
 
   test("the form asks for a page the API will send, and is tracked", () => {

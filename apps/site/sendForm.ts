@@ -1,4 +1,5 @@
 import { publicEnv } from "../app/publicEnv";
+import { isSiteResource } from "../../packages/utils/siteResources";
 import { trackAttributes } from "./analytics";
 
 /**
@@ -27,11 +28,14 @@ export function apiOrigin(): string {
 export const SEND_FORM_PATH = "/site/resource-requests";
 
 /** The pages that offer it: the API accepts these and no others. */
-export function offersSendForm(path: string): boolean {
-  return /^\/(templates|manuals|tools)\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(path);
-}
+export const offersSendForm = isSiteResource;
 
 export function sendForm(resource: string, what: string): string {
+  if (!isSiteResource(resource)) {
+    throw new Error(
+      `${resource} offers "Email it to me" but is not in packages/utils/siteResources.ts`,
+    );
+  }
   return `<form class="site-send" id="send" method="post" action="${apiOrigin()}${SEND_FORM_PATH}">
 <input type="hidden" name="resource" value="${resource}">
 <label class="site-send-label" for="send-email">Or have ${what} emailed to you</label>
