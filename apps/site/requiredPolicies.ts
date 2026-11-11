@@ -9,6 +9,8 @@
  * appears only once the script has run.
  */
 
+import { sendForm } from "./sendForm";
+
 export interface Situation {
   key: string;
   label: string;
@@ -204,6 +206,16 @@ export const REQUIRED_POLICIES: readonly RequiredPolicy[] = [
     help: "/templates/emergency-preparedness-policy",
   },
   {
+    name: "Patient acceptance-to-service policy",
+    requirement:
+      "A policy applied consistently to each prospective patient referred for home health care, addressing the agency's capacity to provide care.",
+    cycle: "Maintained through an annual review",
+    citation: "42 CFR 484.105(i)(1)",
+    url: ecfr(42, "484.105"),
+    when: ["hha"],
+    help: "/manuals/home-health-policy-and-procedure-manual",
+  },
+  {
     name: "Controlled drugs in the patient's home",
     requirement:
       "Written policies on managing and disposing of controlled drugs in the home, given to and discussed with the family when first ordered.",
@@ -346,6 +358,7 @@ export function requiredPoliciesHtml(): string {
 <form id="rp-filter" class="site-tool-filter" hidden><fieldset><legend>Which describe your organization?</legend>${boxes}</fieldset><p id="rp-count" role="status"></p></form>
 <table id="rp-table"><thead><tr><th>Policy, plan or program</th><th>What the rule requires</th><th>Review or retention</th><th>Rule</th></tr></thead><tbody>${rows}</tbody></table>
 <script>${SCRIPT}</script>
+${sendForm("/tools/required-policies-checklist", "this checklist")}
 </section>`;
 }
 

@@ -325,6 +325,14 @@ new material:
   to anyone facing an incumbent renewal.
 - **`/pricing`**: send it when someone asks "what does it cost?" It answers
   the next five questions too.
+- **`/manuals/*`**: a policy manual index for each kind of provider, with a
+  Word worksheet. It is the handout for a consultant's clients, and the
+  opener for an administrator who inherited a template manual.
+- **`/survey-tags/*`**: send the page for their tags to anyone who mentions a
+  recent survey. Never look up or mention their own results.
+- **"Email it to me"** on templates, manual indexes and the checklist: whoever
+  asks is listed on `/-/admin/signups`. They asked for something specific, so
+  a first email to them is a reply and not a cold one.
 
 ### Not yet
 

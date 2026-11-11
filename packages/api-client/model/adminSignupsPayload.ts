@@ -8,6 +8,7 @@ import type { AdminSignupsPayloadByCampaignItem } from './adminSignupsPayloadByC
 import type { AdminSignupsPayloadByEntryPageItem } from './adminSignupsPayloadByEntryPageItem.ts';
 import type { AdminSignupsPayloadBySiteItem } from './adminSignupsPayloadBySiteItem.ts';
 import type { AdminSignupsPayloadRecentItem } from './adminSignupsPayloadRecentItem.ts';
+import type { AdminSignupsPayloadResourceRequests } from './adminSignupsPayloadResourceRequests.ts';
 
 export interface AdminSignupsPayload {
   recorded: number;
@@ -17,4 +18,5 @@ export interface AdminSignupsPayload {
   bySite: AdminSignupsPayloadBySiteItem[];
   byCampaign: AdminSignupsPayloadByCampaignItem[];
   recent: AdminSignupsPayloadRecentItem[];
+  resourceRequests: AdminSignupsPayloadResourceRequests;
 }

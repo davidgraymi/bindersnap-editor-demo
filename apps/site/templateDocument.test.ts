@@ -99,7 +99,9 @@ describe("the Word downloads", () => {
       );
     }
     expect(
-      [...binaries.keys()].filter((path) => path.endsWith(".docx")),
+      [...binaries.keys()].filter(
+        (path) => path.startsWith("/templates/") && path.endsWith(".docx"),
+      ),
     ).toHaveLength(templates.length);
   });
 });

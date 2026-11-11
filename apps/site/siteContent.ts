@@ -2,8 +2,9 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
- * The public site's pages: pricing, policy templates, regulatory requirements,
- * pages for each kind of provider, comparisons and the glossary.
+ * The public site's pages: pricing, policy templates, policy manual indexes,
+ * regulatory requirements, pages for each kind of provider, comparisons and
+ * the glossary.
  *
  * Every page is a Markdown file in `content/{collection}/{slug}.md`, so the
  * person who checks a template's clinical or regulatory claims reads and
@@ -67,6 +68,24 @@ export const SITE_COLLECTIONS: readonly SiteCollection[] = [
     minWords: 800,
     notice:
       "A starting point, not legal or clinical advice. Each template follows the federal rules cited on the page. Your state, your accreditor and your own services may require more, so have the people responsible for this policy review it before you adopt it.",
+  },
+  {
+    key: "manuals",
+    prefix: "manuals",
+    label: "Policy manual indexes",
+    intro:
+      "What a policy and procedure manual has to contain, by kind of provider: each policy the federal rules ask for, the rule behind it, and the survey tag it is cited under.",
+    minWords: 400,
+    notice: GUIDANCE_NOTICE,
+  },
+  {
+    key: "survey-tags",
+    prefix: "survey-tags",
+    label: "Survey tags",
+    intro:
+      "The tag numbers on a CMS-2567, by kind of provider: what each one stands for, the rule behind it, and the policy a surveyor reads under it.",
+    minWords: 350,
+    notice: GUIDANCE_NOTICE,
   },
   {
     key: "requirements",

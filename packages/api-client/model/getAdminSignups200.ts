@@ -8,6 +8,7 @@ import type { GetAdminSignups200ByCampaignItem } from './getAdminSignups200ByCam
 import type { GetAdminSignups200ByEntryPageItem } from './getAdminSignups200ByEntryPageItem.ts';
 import type { GetAdminSignups200BySiteItem } from './getAdminSignups200BySiteItem.ts';
 import type { GetAdminSignups200RecentItem } from './getAdminSignups200RecentItem.ts';
+import type { GetAdminSignups200ResourceRequests } from './getAdminSignups200ResourceRequests.ts';
 
 export type GetAdminSignups200 = {
   recorded: number;
@@ -17,4 +18,5 @@ export type GetAdminSignups200 = {
   bySite: GetAdminSignups200BySiteItem[];
   byCampaign: GetAdminSignups200ByCampaignItem[];
   recent: GetAdminSignups200RecentItem[];
+  resourceRequests: GetAdminSignups200ResourceRequests;
 };
