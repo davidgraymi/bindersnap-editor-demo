@@ -67,6 +67,12 @@ export type AppRoute =
       view?: DocumentChangeView;
       /** The branch the documents are read on: `/-/tree/{ref}`. */
       ref?: string;
+      /**
+       * A folder's page, `/-/tree/{ref}/{folder}`: the folder is a place, with
+       * its own list and its own "Who signs off here". Absent is the binder's
+       * top folder.
+       */
+      folder?: string;
     }
   /** One document inside it: `/{org}/{binder}/-/blob/{ref}/{path}`. */
   | {
@@ -285,6 +291,7 @@ export function getRoute(pathname: string): AppRoute {
       ...(address.change !== null ? { change: address.change } : {}),
       ...(address.view !== "discussion" ? { view: address.view } : {}),
       ...(address.ref ? { ref: address.ref } : {}),
+      ...(address.folder ? { folder: address.folder } : {}),
     };
   }
 
@@ -339,6 +346,7 @@ export function routeToPath(route: AppRoute): string {
         change: route.change,
         view: route.view,
         ref: route.ref ?? null,
+        folder: route.folder ?? null,
       });
     case "binderDocument":
       return buildDocumentUrl({
