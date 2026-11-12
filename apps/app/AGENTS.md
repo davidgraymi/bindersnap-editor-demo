@@ -254,6 +254,16 @@ actually keeps a policy manual in.
 Added text is green and removed text is coral, and both carry an underline or
 a strike as well as a colour, so the comparison still reads without one.
 
+**A reviewer comments on the words** (`components/PassageComments.tsx`,
+`textAnchor.ts`): select text in a document here, choose Comment, and the
+thread remembers the passage. `PassageComments` wraps whatever draws the
+document and works on the text of the `.doc-preview-prose` inside it, so the
+three renderers know nothing about it. The passages are painted with the CSS
+Custom Highlight API rather than wrapped in elements: the page is markup
+somebody approved, and it is not edited to show a comment. An anchor is the
+words and their neighbours, not an offset, so it survives the document
+changing above it and says so when the words themselves have gone.
+
 ## Resolving a change's conflicts
 
 A change that is behind `main` and would not merge — a document changed both

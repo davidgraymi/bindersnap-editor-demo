@@ -4,6 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { DiscussionSummaryThreadsItemAnchor } from './discussionSummaryThreadsItemAnchor.ts';
 import type { DiscussionSummaryThreadsItemCommentsItem } from './discussionSummaryThreadsItemCommentsItem.ts';
 import type { DiscussionSummaryThreadsItemEventsItem } from './discussionSummaryThreadsItemEventsItem.ts';
 import type { DiscussionSummaryThreadsItemOrigin } from './discussionSummaryThreadsItemOrigin.ts';
@@ -21,4 +22,6 @@ export type DiscussionSummaryThreadsItem = {
   resolvedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** @nullable */
+  anchor: DiscussionSummaryThreadsItemAnchor;
 };

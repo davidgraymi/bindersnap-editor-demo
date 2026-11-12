@@ -289,6 +289,7 @@ import {
   replyToDiscussion,
   setCommentReactionInThread,
   setDiscussionResolution,
+  readAnchor,
 } from "./gitea-client/discussions";
 import { isSupportedReaction } from "./gitea-client/reactions";
 import { buildAuditPacket } from "./export/auditPacket";
@@ -5670,6 +5671,13 @@ async function handleCreateDiscussionThread(
       repo,
       pullNumber: prNumber,
       body,
+      // The passage it is about, when it is about one. Read as untrusted:
+      // anything that is not a bounded anchor is left off.
+      anchor: readAnchor(
+        payload && typeof payload === "object"
+          ? (payload as Record<string, unknown>).anchor
+          : null,
+      ),
       viewerLogin: auth.session.username,
       withReactions: true,
     });

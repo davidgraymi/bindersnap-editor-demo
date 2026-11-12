@@ -213,6 +213,13 @@ export const HELP_GUIDES: HelpGuide[] = [
         ],
       },
       {
+        heading: "Commenting on the words",
+        paragraphs: [
+          "On the Changes tab, select the words you have a question about and choose Comment. Your comment is kept with those words: it is marked in the document, listed under it, and shown with the passage on the Overview, so nobody has to guess which sentence you meant.",
+          "If the passage is rewritten later, the comment stays and says the words have changed since.",
+        ],
+      },
+      {
         heading: "Discussions",
         paragraphs: [
           "A comment starts a discussion that others can reply to. When the question is settled, resolve it. Resolving never deletes anything: who raised a concern, who answered and who closed it all stay on the change. A binder can be set so that nothing is published while a discussion is still open.",
