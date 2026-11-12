@@ -856,7 +856,9 @@ test("clicking a renamed policy in the tree opens it, not an error", async ({
   await expect(
     page.locator(".app-main h1:not(.doc-preview-prose h1)"),
   ).toHaveText("Hand Hygiene and PPE", { timeout: 30_000 });
-  await expect(page.locator(".app-main")).not.toContainText("No such document");
+  await expect(page.locator(".app-main")).not.toContainText(
+    "Document not found",
+  );
   // Still editing, which is also the way back to what they were doing.
   expect(page.url()).toContain("edit=1");
 });

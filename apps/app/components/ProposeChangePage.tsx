@@ -1,3 +1,5 @@
+import { formatDocumentName } from "../documentDisplay";
+import { usePageTitle } from "../pageTitle";
 import { useState } from "react";
 
 import { proposeBinderDraft, updateChangeAssignments } from "../api";
@@ -105,6 +107,7 @@ export function ProposeChangePage({
   onCancel,
   onProposed,
 }: ProposeChangePageProps) {
+  usePageTitle(["Propose your changes", formatDocumentName(binder)]);
   const [reviewers, setReviewers] = useState<string[]>([]);
   const [title, setTitle] = useState(name);
   const [description, setDescription] = useState(() => describeActs(acts));
