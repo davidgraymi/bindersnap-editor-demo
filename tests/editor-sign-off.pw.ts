@@ -115,3 +115,38 @@ test("Edit on a folder puts it on the desk, and its rules are edited beside it",
   // Leave the seed as it was found.
   await discardAlicesDrafts(page);
 });
+
+test("New document and New folder in the editor's panel make them in the folder you are in", async ({
+  page,
+}) => {
+  await signInAsAlice(page);
+  await discardAlicesDrafts(page);
+  await page.goto(`${BINDER}/-/tree/main/clinical-standards`);
+  await page
+    .locator(".bs-pagehead-actions")
+    .getByRole("button", { name: "Edit", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/clinical-standards\?edit=write/, {
+    timeout: 60_000,
+  });
+  const files = page.getByRole("complementary", {
+    name: "Files in Governance",
+  });
+
+  // New folder starts inside Clinical Standards, not at the binder's top.
+  await files.getByRole("button", { name: "New folder", exact: true }).click();
+  await expect(page.getByLabel("What to call it")).toHaveValue(
+    /^clinical-standards\//,
+  );
+  await page.getByRole("button", { name: "Cancel" }).click();
+
+  // New document is made there too.
+  await files
+    .getByRole("button", { name: "New document", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/clinical-standards\/untitled\?edit=write/, {
+    timeout: 60_000,
+  });
+
+  await discardAlicesDrafts(page);
+});
