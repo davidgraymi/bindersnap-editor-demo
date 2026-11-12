@@ -293,21 +293,54 @@ export function BinderDocumentPage({
   };
 
   if (error) {
+    // **An address with no document behind it says what happened.** It was
+    // the address itself as the heading (`finance/expenses-policy`), a red
+    // "No such document." and "Back to corporate". A link to a document that
+    // was since renamed, moved or archived lands here, which is not an
+    // error of the reader's: say so, in names, and offer the way on.
+    const missing = error === "No such document.";
+    const binderName = formatDocumentName(binder);
     return (
       <div className="binder-pane">
-        <h1 className="bs-title">{documentPath}</h1>
-        <p className="bs-note bs-note--danger" role="alert">
-          {error}
-        </p>
-        <p>
-          <button
-            className="bs-btn bs-btn-secondary"
-            type="button"
-            onClick={onOpenBinder}
-          >
-            Back to {binder}
-          </button>
-        </p>
+        <h1 className="bs-title">
+          {missing
+            ? "Document not found"
+            : formatDocumentName(documentPath.split("/").pop() ?? documentPath)}
+        </h1>
+        {missing ? (
+          <div className="bs-empty">
+            <p className="bs-empty-lead">This document is not here.</p>
+            <p>
+              {binderName} has no document at this address. It may have been
+              renamed, moved or archived since the link was made. Its history is
+              kept: look for it in the binder, or search for its name.
+            </p>
+            <p>
+              <button
+                className="bs-btn bs-btn-secondary bs-btn--sm"
+                type="button"
+                onClick={onOpenBinder}
+              >
+                Back to {binderName}
+              </button>
+            </p>
+          </div>
+        ) : (
+          <>
+            <p className="bs-note bs-note--danger" role="alert">
+              {error}
+            </p>
+            <p>
+              <button
+                className="bs-btn bs-btn-secondary"
+                type="button"
+                onClick={onOpenBinder}
+              >
+                Back to {binderName}
+              </button>
+            </p>
+          </>
+        )}
       </div>
     );
   }
