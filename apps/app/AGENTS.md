@@ -4,6 +4,26 @@ Read with the root `AGENTS.md`. This file is the detail behind three of the
 app's screens — the editor, the change comparison and the conflict resolver —
 which the root guide only summarizes.
 
+## Tab titles and help
+
+**Every page names itself in the browser tab** (`pageTitle.ts`): the thing
+first, the place second, "Expenses Policy · Corporate · Bindersnap".
+`routeTitleParts` gives every `AppRoute` a title from its address alone, so a
+new route kind does not compile until it has one. A page that has read
+something better calls `usePageTitle` (a change request says its own title;
+the editor adds its unsaved mark). Never set `document.title` directly.
+
+**Help opens on the guide about the page on screen.** The guides are data
+(`helpGuides.ts`), served as pages on the public site (`apps/help`).
+`guideForRoute` in `helpLinks.ts` maps a route to its guide, and the
+sidebar's and the profile menu's Help use it; a page with no guide of its own
+opens the list. A new screen that raises its own questions gets a guide, or a
+section of one, and an entry there. `HelpLink` links to one guide or one
+section, by its heading: a heading's anchor is `helpSectionId(heading)`, and
+`helpLinks.test.ts` lists every section the app links to, so rewording a
+heading fails a test instead of breaking a link. A guide says only what the
+app does: when a screen changes, its guide changes in the same PR.
+
 ## The document editor
 
 `packages/editor/` is a word processor for policies, imported by the SPA and

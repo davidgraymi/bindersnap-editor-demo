@@ -201,5 +201,17 @@ Icons are Lucide, drawn only through `AppIcon` with a glyph from `ICON`
 - **Card hover:** `.bs-card` translates up 4px, elevates its shadow, drops its
   border, and scales a 3px coral top border in from the left. Never on
   non-interactive content.
+- **A note is read, so it is not muted.** `.bs-note` sets its text in
+  `--bs-text-secondary`: it sits on `--bs-surface-2`, where muted fails
+  contrast. Keep muted for metadata on white or paper.
+- **Help beside the thing it explains:** `HelpLink`
+  (`apps/app/components/HelpLink.tsx`) is the help mark and a few words
+  naming what the guide answers ("Who can approve"), opening that guide, or
+  one section of it, in a new tab. Use it where somebody stops and asks why,
+  not on every page: the sidebar's Help already opens the guide about the
+  page on screen. `iconOnly` is for a bar of buttons.
+- **A row shows all of a secondary column or none of it.** When a row is too
+  narrow for a column to say anything, the column steps aside whole (the
+  change subject in `.binder-tree-row`); it is never squeezed to a letter.
 - The landing page's own patterns — sign-up form, scroll rhythm, scroll reveal,
   dark sections — are in `apps/site/AGENTS.md`.

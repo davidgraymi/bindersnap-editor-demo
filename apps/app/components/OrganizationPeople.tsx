@@ -1,3 +1,4 @@
+import { HelpLink } from "./HelpLink";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
@@ -133,7 +134,10 @@ export function OrganizationPeople({ org }: OrganizationPeopleProps) {
           {seats.summary} Owners, and anyone in a group that edits or
           administers a binder, are paid seats
           {seats.unit ? ` at ${seats.unit}` : ""}, counted once. Reviewers and
-          readers are free.
+          readers are free.{" "}
+          <HelpLink guide="people" section="Who costs a seat">
+            Who costs a seat
+          </HelpLink>
         </p>
       ) : null}
 

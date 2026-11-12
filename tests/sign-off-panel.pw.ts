@@ -89,5 +89,16 @@ test("a document's rail leads with who signs off, mostly from above", async ({
 test("a folder that is not there says so", async ({ page }) => {
   await signInAsAlice(page);
   await page.goto(`${BINDER}/-/tree/main/no-such-folder`);
-  await expect(page.getByText("No such folder.")).toBeVisible();
+  await expect(page.getByText("This folder is not here.")).toBeVisible();
+  // And nothing is drawn as though it were: no list, no Edit, no rules.
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Folder not found" }),
+  ).toBeVisible();
+  await expect(page.getByText("Nothing filed here yet.")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Edit" })).toHaveCount(0);
+  await expect(
+    page.getByRole("region", { name: "Who signs off here" }),
+  ).toHaveCount(0);
+  await page.getByRole("link", { name: /^Back to / }).click();
+  await expect(page).toHaveURL(BINDER);
 });

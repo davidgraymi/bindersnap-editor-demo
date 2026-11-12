@@ -338,7 +338,7 @@ test("typing lists matching documents without a submit", async () => {
 
   expect(rows()).toHaveLength(2);
   expect(overlay()!.textContent).toContain("Vendor Agreement");
-  expect(overlay()!.textContent).toContain("Clinical · nursing");
+  expect(overlay()!.textContent).toContain("Clinical · Nursing");
   expect(searchCalls).toEqual([{ query: "ven", limit: 8 }]);
 
   await view.unmount();

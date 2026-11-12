@@ -70,12 +70,20 @@ export const QUICK_FIND_DEBOUNCE_MS = 180;
 /** A query shorter than this is not yet a question worth asking. */
 export const QUICK_FIND_MIN_QUERY = 2;
 
-/** "Clinical · nursing": which binder, then which folder. */
+/** "Clinical · Nursing / Wards": which binder, then which folder. */
 function describeResult(document: DocumentSearchHit): string {
-  // The binder as a person writes it, not the repository slug — the same name
-  // its own page and the sidebar show.
+  // The binder and the folder as a person writes them, not as the address
+  // does — "Nursing / Wards", the way the document's own page says its path.
   const parts = [formatDocumentName(document.binder)];
-  if (document.folder) parts.push(document.folder);
+  if (document.folder) {
+    parts.push(
+      document.folder
+        .split("/")
+        .filter(Boolean)
+        .map(formatDocumentName)
+        .join(" / "),
+    );
+  }
   return parts.join(" · ");
 }
 

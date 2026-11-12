@@ -1229,6 +1229,8 @@ export function BinderShell({
     openChange === null &&
     !archive &&
     editMode === "off";
+  /** The address names a folder the binder does not have. */
+  const missingFolder = onFolderPage && folderMissing;
   /**
    * A folder on the editor's desk: `/-/tree/{ref}/{folder}?edit=write`. ""
    * is the binder's top folder, which is where Edit on an empty binder lands.
@@ -1433,26 +1435,28 @@ export function BinderShell({
                           subtitle: page.description,
                         };
                       })()
-                    : onFolderPage
-                      ? {
-                          title: describeFolderName(folder!),
-                          subtitle: describeFolderMeta({
-                            binderName,
-                            folder: folder!,
-                            documents: listing?.documents ?? null,
-                          }),
-                        }
-                      : {
-                          title: binderName,
-                          ...(editMode === "editing"
-                            ? {
-                                subtitle:
-                                  "Rename in place, drag to refile, make a folder. Everything you do is saved to your draft, and nobody is asked to look until you propose it.",
-                              }
-                            : overview?.workspace.description
-                              ? { subtitle: overview.workspace.description }
-                              : {}),
-                        };
+                    : missingFolder
+                      ? { title: "Folder not found", subtitle: "" }
+                      : onFolderPage
+                        ? {
+                            title: describeFolderName(folder!),
+                            subtitle: describeFolderMeta({
+                              binderName,
+                              folder: folder!,
+                              documents: listing?.documents ?? null,
+                            }),
+                          }
+                        : {
+                            title: binderName,
+                            ...(editMode === "editing"
+                              ? {
+                                  subtitle:
+                                    "Rename in place, drag to refile, make a folder. Everything you do is saved to your draft, and nobody is asked to look until you propose it.",
+                                }
+                              : overview?.workspace.description
+                                ? { subtitle: overview.workspace.description }
+                                : {}),
+                          };
 
   // **A page, not a broken binder.** An address with no binder behind it drew
   // the whole binder — its name made up from the address, Add a document and
@@ -1588,7 +1592,9 @@ export function BinderShell({
               not "add a policy". */}
           {/* Not on somebody else's branch, which nobody here writes to —
               but on one of your drafts, Edit carries on in it. */}
-          {activeTab !== "documents" || (onBranch && !readingDraft) ? null : (
+          {activeTab !== "documents" ||
+          missingFolder ||
+          (onBranch && !readingDraft) ? null : (
             <div className="bs-pagehead-actions">
               {/* **The same buttons in the same slots.** Reading, the header
                   offers Add a policy and Edit; editing, it offers the way
@@ -1947,12 +1953,27 @@ export function BinderShell({
             editMode === "off" ? "doc-workspace binder-workspace" : undefined
           }
         >
-          <div className="binder-home">
-            {onFolderPage && folderMissing ? (
+          {/* **A folder that is not there says so, and nothing else.** The
+              page used to go on under the notice as though the folder
+              existed: its name as the heading, "0 documents", an empty
+              list, Edit, and who signs off there. A link to a folder that
+              was since renamed or moved lands here, so say what happened. */}
+          <div
+            className={`binder-home${
+              missingFolder ? " binder-home--missing" : ""
+            }`}
+          >
+            {missingFolder ? (
               <div className="bs-empty">
-                <p className="bs-empty-lead">No such folder.</p>
+                <p className="bs-empty-lead">This folder is not here.</p>
+                <p>
+                  {binderName} has no folder at this address
+                  {onBranch ? " in what you are reading" : ""}. It may have been
+                  renamed, moved or archived since the link was made.
+                </p>
                 <p>
                   <a
+                    className="bs-btn bs-btn-secondary bs-btn--sm"
                     href={buildBinderUrl({ org, binder })}
                     onClick={(event) =>
                       followInApp(event, () =>
@@ -2074,7 +2095,7 @@ export function BinderShell({
               }
             />
           </div>
-          {editMode === "off" ? (
+          {editMode === "off" && !missingFolder ? (
             <aside className="doc-rail" aria-label="Who signs off">
               {/* On a branch too: a draft or a change's branch has its own
                   rules, read where its documents are. */}

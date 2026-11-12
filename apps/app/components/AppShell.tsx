@@ -1,3 +1,4 @@
+import { guideForRoute, helpHref } from "../helpLinks";
 import {
   useCallback,
   useEffect,
@@ -40,7 +41,6 @@ import { NavSearch } from "./NavSearch";
 import { CreateMenu } from "./CreateMenu";
 import { AccountSettingsPage } from "./AccountSettingsPage";
 import { AvatarFace } from "./PersonAvatar";
-import { siteUrl } from "../siteLink";
 import { useCollapsedSidebar } from "../useCollapsedSidebar";
 import { formatDocumentName } from "../documentDisplay";
 import type {
@@ -528,7 +528,10 @@ export function AppShell({
                     <a
                       className="app-profile-menu-item"
                       role="menuitem"
-                      href={siteUrl("/help")}
+                      href={helpHref(
+                        guideForRoute(route, window.location.search) ??
+                          undefined,
+                      )}
                       target="_blank"
                       rel="noopener"
                       onClick={() => setProfileOpen(false)}

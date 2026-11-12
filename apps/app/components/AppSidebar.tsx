@@ -1,3 +1,4 @@
+import { guideForRoute, guideTitle, helpHref } from "../helpLinks";
 import { useQuery } from "@tanstack/react-query";
 import { AppIcon, ICON, type IconGlyph } from "./AppIcon";
 
@@ -12,7 +13,6 @@ import { organizationBindersQuery, organizationsQuery } from "../data/queries";
 import { routeToPath, type AppRoute, type OrganizationTab } from "../routes";
 import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
 import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
-import { siteUrl } from "../siteLink";
 
 /**
  * The map of the product, always on screen.
@@ -196,6 +196,13 @@ export function AppSidebar({
   onToggleCollapsed,
   onNavigate,
 }: AppSidebarProps) {
+  // Help opens the guide about the page on screen — "Reviewing a change"
+  // from a change request — and the list of every guide from anywhere else.
+  // Each guide's page lists the others beside it.
+  const helpGuide = guideForRoute(route, window.location.search);
+  const helpLabel = helpGuide
+    ? `Help: ${guideTitle(helpGuide)}`
+    : "Help and guides";
   // The org-scoped entries have nowhere to point until we know which
   // organization is on screen. Rendered muted and inert rather than hidden:
   // a map that changes shape as you walk around it is not a map.
@@ -590,11 +597,11 @@ export function AppSidebar({
               were doing it. */}
           <a
             className="app-sidebar-foot-item"
-            href={siteUrl("/help")}
+            href={helpHref(helpGuide ?? undefined)}
             target="_blank"
             rel="noopener"
-            aria-label="Help and guides (opens in a new tab)"
-            title={collapsed ? "Help and guides" : undefined}
+            aria-label={`${helpLabel} (opens in a new tab)`}
+            title={collapsed || helpGuide ? helpLabel : undefined}
           >
             <span className="app-sidebar-foot-icon" aria-hidden="true">
               <AppIcon icon={ICON.help} size="md" />
