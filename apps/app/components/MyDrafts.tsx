@@ -18,6 +18,15 @@ import { SkeletonPanel } from "./Skeleton";
  * plainly which are not proposed yet, and puts them first. Only your own —
  * a draft is private until it is proposed.
  */
+/**
+ * Has anything been done in it? A proposed draft always counts: it is a
+ * change request. Counted in acts, not documents, so a draft that only moves
+ * a folder or changes who signs off is work too.
+ */
+export function holdsWork(draft: MyDraft): boolean {
+  return draft.changeNumber !== null || draft.actCount > 0;
+}
+
 export function MyDrafts({
   org,
   binder,
@@ -45,7 +54,11 @@ export function MyDrafts({
     return <SkeletonPanel label="Gathering your drafts" rows={3} bar right />;
   }
 
-  const drafts = query.data.drafts;
+  // **A draft with nothing in it is not listed.** Pressing Edit opens a
+  // draft, so somebody who only looked had a row here reading "Nothing
+  // changed yet" for every binder they had opened. It is still their draft,
+  // and Edit carries on in it; it is listed once it holds something.
+  const drafts = query.data.drafts.filter(holdsWork);
   const waiting = drafts.filter((draft) => draft.changeNumber === null);
   const proposed = drafts.filter((draft) => draft.changeNumber !== null);
   // The binder is said on each row only where the list spans binders.
@@ -83,7 +96,8 @@ export function MyDrafts({
           });
     const changed =
       draft.documentCount === 0
-        ? "Nothing changed yet"
+        ? // Listed, so something was done: a folder moved, a rule changed.
+          "Folders or sign-off changed"
         : draft.documentCount === 1
           ? "1 document changed"
           : `${draft.documentCount} documents changed`;

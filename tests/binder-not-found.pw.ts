@@ -28,6 +28,11 @@ test("a binder that does not exist is a not-found page, not a crash", async ({
   ).toBeVisible();
   // No binder, so nothing to add to it or edit.
   await expect(page.getByRole("button", { name: "Edit" })).toHaveCount(0);
+  // The sidebar is the organization's, not a menu for a binder that is not
+  // there: no History or binder Settings leading back to this page.
+  const sidebar = page.locator(".app-sidebar");
+  await expect(sidebar.getByText("People & access")).toBeVisible();
+  await expect(sidebar.getByText("History")).toHaveCount(0);
   // And the top bar stops at the organization instead of naming it.
   const trail = page.getByRole("navigation", {
     name: "Organization and binder",
@@ -43,4 +48,16 @@ test("a binder that does not exist is a not-found page, not a crash", async ({
   await page.getByRole("link", { name: /^Back to / }).click();
   await expect(page).toHaveURL(/\/riverside-health$/);
   expect(errors).toEqual([]);
+});
+
+test("a document that is not there says so, in names", async ({ page }) => {
+  await signInAsAlice(page);
+  await page.goto("/riverside-health/corporate/-/blob/main/finance/no-such");
+
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Document not found" }),
+  ).toBeVisible();
+  await expect(page.getByText("This document is not here.")).toBeVisible();
+  await page.getByRole("button", { name: "Back to Corporate" }).click();
+  await expect(page).toHaveURL(/\/riverside-health\/corporate$/);
 });

@@ -111,7 +111,9 @@ export function buildHomeTasks(
   }
 
   for (const draft of drafts) {
-    if (draft.changeNumber !== null || draft.documentCount === 0) continue;
+    // Acts, not documents: moving a folder or changing who signs off is
+    // work to propose, though it touches no document's words.
+    if (draft.changeNumber !== null || draft.actCount === 0) continue;
     const edited = draft.updatedAt ? new Date(draft.updatedAt).getTime() : 0;
     const age = draft.updatedAt ? formatAge(draft.updatedAt, now) : "";
     tasks.push({
