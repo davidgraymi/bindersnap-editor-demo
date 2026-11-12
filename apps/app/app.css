@@ -1953,6 +1953,70 @@ input {
   max-width: 45%;
 }
 
+/* ── Help, beside the thing it explains ──────────────────────────
+   `HelpLink`: the help mark and a few words, quiet until wanted. It takes
+   the colour of the text around it, so it reads on a note of any tone. */
+.bs-help-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  border-radius: var(--brand-radius-sm);
+  color: inherit;
+  font-size: inherit;
+  font-weight: var(--brand-weight-medium);
+  text-decoration: underline;
+  text-decoration-color: var(--bs-rule-warm);
+  text-underline-offset: 0.2em;
+  vertical-align: baseline;
+  white-space: nowrap;
+  transition:
+    color var(--brand-transition-fast),
+    text-decoration-color var(--brand-transition-fast);
+}
+
+.bs-help-link svg {
+  flex: none;
+  align-self: center;
+}
+
+.bs-help-link:hover {
+  color: var(--bs-coral-text);
+  text-decoration-color: currentColor;
+}
+
+.bs-help-link:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 2px;
+}
+
+/* In a bar of buttons: the mark alone, the size of the buttons beside it. */
+.bs-help-link--icon {
+  justify-content: center;
+  width: var(--brand-space-8);
+  height: var(--brand-space-8);
+  border-radius: var(--brand-radius-md);
+  color: var(--bs-text-muted);
+  text-decoration: none;
+}
+
+.bs-help-link--icon:hover {
+  background: var(--bs-surface-2);
+  color: var(--bs-text-primary);
+}
+
+.signoff-help {
+  margin: 0;
+  padding: var(--brand-space-2);
+  border-top: 1px solid var(--bs-rule-warm);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.signoff-foot + .signoff-help {
+  padding-top: 0;
+  border-top: 0;
+}
+
 /* Named for a screen reader, invisible to everyone else. */
 .sr-only {
   position: absolute;
@@ -8216,6 +8280,16 @@ a.cmp-file-act {
   flex: 0 1 auto;
 }
 
+/* **All of the change's name, or none of it.** Beside the file panel and
+   the sign-off rail on a laptop the subject was squeezed to a letter or two
+   ("M", "Infection …"), which reads as a fault. Below 32rem of row it steps
+   aside whole and the name and the age have the row. The width is the row's
+   own, so this needs no breakpoint per layout: under 32rem the product is
+   negative and the maximum is zero, over it the maximum is out of reach. */
+.binder-tree-row > .binder-tree-subject {
+  max-width: max(0px, calc((100% - 32rem) * 999));
+}
+
 /* An uploaded file's format, after its name: "PDF", "DOCX". */
 .binder-tree-format {
   flex-shrink: 0;
@@ -9037,7 +9111,9 @@ a.bs-row:focus-visible {
   border-radius: var(--brand-radius-md);
   background: var(--bs-surface-2);
   box-sizing: border-box;
-  color: var(--bs-text-muted);
+  /* Secondary, not muted: a note is a sentence somebody reads, and muted on
+     this beige measures 4.23:1 (the design system's own rule). */
+  color: var(--bs-text-secondary);
   font-size: var(--brand-text-ui-md);
 }
 
@@ -9094,6 +9170,13 @@ a.bs-row:focus-visible {
 .bs-empty p {
   max-width: var(--brand-measure);
   margin: 0;
+}
+
+/* A folder's address with no folder behind it: the notice, and nothing
+   drawn as though the folder were there. The list stays mounted — it is
+   what reads the binder and finds the folder missing. */
+.binder-home--missing > :not(.bs-empty) {
+  display: none;
 }
 
 /* A page for an address with nothing behind it. */

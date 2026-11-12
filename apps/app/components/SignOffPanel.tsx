@@ -1,3 +1,4 @@
+import { HelpLink } from "./HelpLink";
 import type { ReactNode } from "react";
 import { AppIcon, ICON } from "./AppIcon";
 
@@ -101,6 +102,14 @@ export function SignOffPanel({
       ) : null}
 
       {view.foot ? <p className="signoff-foot">{view.foot}</p> : null}
+      <p className="signoff-help">
+        <HelpLink
+          guide="approvals"
+          section="Who signs off on a folder or a document"
+        >
+          How sign-off works
+        </HelpLink>
+      </p>
     </>
   );
 

@@ -1,3 +1,4 @@
+import { HelpLink } from "./HelpLink";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
@@ -833,7 +834,12 @@ export function DocumentChangeDetail({
                  Approving is not theirs to do in this binder, and a greyed
                  button invites "why can't I?" every visit. They comment in
                  the discussion; one line says why there is nothing here. */
-              <p className="rev-decision-locked">{reviewPerms.reason}</p>
+              <p className="rev-decision-locked">
+                {reviewPerms.reason}{" "}
+                <HelpLink guide="reviewing" section="If you cannot approve">
+                  Who can approve
+                </HelpLink>
+              </p>
             ) : reviewDecision === "review-locked" ? (
               <>
                 <button

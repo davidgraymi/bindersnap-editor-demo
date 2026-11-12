@@ -46,7 +46,7 @@ describe("building rows", () => {
       binder: "clinical",
       slugPath: "nursing/infection-control",
       name: "Infection Control Policy",
-      meta: "Clinical · nursing",
+      meta: "Clinical · Nursing",
     });
   });
 

@@ -32,6 +32,8 @@ import {
 } from "../data/queries";
 import { formatAge, formatDocumentName } from "../documentDisplay";
 import { parseEditorDocument } from "../editorDocumentHtml";
+import { usePageTitle } from "../pageTitle";
+import { HelpLink } from "./HelpLink";
 import {
   createDocumentState,
   showDocumentState,
@@ -1149,13 +1151,7 @@ export function DocumentEditorPage({
 
   // The browser tab says which policy is open, and — as Word's title bar
   // does — when it has changes not saved yet.
-  useEffect(() => {
-    const was = document.title;
-    document.title = `${dirty && !autosave ? "• " : ""}${name} · Bindersnap`;
-    return () => {
-      document.title = was;
-    };
-  }, [autosave, dirty, name]);
+  usePageTitle([name, binderName], dirty && !autosave ? "• " : "");
 
   // Saving on its own, words typed are words on their way: "Saving…" from
   // the first key, as a word processor online says it.
@@ -1724,6 +1720,11 @@ export function DocumentEditorPage({
           </span>
         </div>
         <div className="doc-editor-head-actions">
+          {/* The editor is full page, with no sidebar, so this is the way
+              to help from here. */}
+          <HelpLink guide="writing" iconOnly>
+            Help with writing and editing
+          </HelpLink>
           <button
             type="button"
             className="bs-btn bs-btn-secondary bs-btn--sm"
