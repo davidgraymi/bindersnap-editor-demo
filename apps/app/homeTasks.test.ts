@@ -37,7 +37,8 @@ function draft(overrides: Partial<MyDraft> = {}): MyDraft {
     updatedAt: "2026-11-12T10:00:00Z",
     changeNumber: null,
     documentCount: 2,
-    acts: [],
+    actCount: 2,
+    lastAct: null,
     ...overrides,
   } as MyDraft;
 }
@@ -95,7 +96,7 @@ test("a draft is listed while it has work in it and is not proposed", () => {
     [],
     [
       draft(),
-      draft({ branch: "draft/alice/2", documentCount: 0 }),
+      draft({ branch: "draft/alice/2", documentCount: 0, actCount: 0 }),
       draft({ branch: "draft/alice/3", changeNumber: 9 }),
     ],
     NOW,
@@ -108,6 +109,15 @@ test("a draft is listed while it has work in it and is not proposed", () => {
     action: "Continue",
   });
   expect(tasks[0]!.href).toContain("draft=");
+});
+
+test("a draft that only reorganizes or changes sign-off is still work", () => {
+  const tasks = buildHomeTasks(
+    [],
+    [draft({ documentCount: 0, actCount: 1 })],
+    NOW,
+  );
+  expect(tasks).toHaveLength(1);
 });
 
 test("reviews come first, then revising, publishing and drafts", () => {

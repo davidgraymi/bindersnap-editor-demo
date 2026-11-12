@@ -587,8 +587,16 @@ export function AppShell({
       <div className="app-body-wrap">
         {/* The map of the product. Hidden below 768px, where the top bar's own
             links take over — see AppSidebar. */}
+        {/* An address that names no binder gets the organization's map, not
+            a binder's: Documents, Change requests and Settings for a binder
+            that is not there all led to the same "not found". */}
         <AppSidebar
-          route={route}
+          route={
+            (route.kind === "binder" || route.kind === "binderDocument") &&
+            missingBinder === `${route.org}/${route.binder}`
+              ? { kind: "organization", org: route.org }
+              : route
+          }
           org={sidebarOrg}
           binder={sidebarBinder}
           onSendFeedback={canSendFeedback ? () => setFeedbackOpen(true) : null}
