@@ -10525,6 +10525,16 @@ async function handleOrganizationGroupPage(
     }
 
     const privileged = createPrivilegedGiteaClient() ?? client;
+    // **Members only, before any privileged read.** An organization can be
+    // visible to everyone, and the service token reads its teams and their
+    // people; someone outside it is told there is no such group, the same
+    // answer a group that does not exist gets.
+    const membership = await privileged.GET("/orgs/{org}/members/{username}", {
+      params: { path: { org: orgName, username: session.username } },
+    });
+    if (!membership.response.ok) {
+      return json(404, { error: "No such group." }, baseHeaders);
+    }
     const teams = await listOrganizationTeams({
       client: privileged,
       org: orgName,
