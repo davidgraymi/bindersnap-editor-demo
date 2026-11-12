@@ -93,7 +93,13 @@ the same way.
 Archiving from the panel offers Undo, and the panel's foot lists the archive
 with Restore, both into the same draft. The binder's own tree can still be
 rearranged at `?edit=1`, where the draft bar proposes or discards — reached
-from Drafts and from the editor's Close. **An open change request is edited in
+from Drafts and from the editor's Close. **Reading a draft is reading a
+branch**: the binder's version picker opens one of your drafts at
+`/-/tree/{draft}`, the same page as the record's, under the draft's name,
+with "Who signs off here" read there (`?ref=` on `GET …/rules/sign-off`).
+The explorer's links, a document's path and a folder's contents stay on the
+branch or draft being read, and Edit on your own draft's page carries on
+in it. **An open change request is edited in
 place by its author**: Edit on its Proposed version card opens the editor at
 `?edit=write&change=N`, which reads the change's branch and saves with
 `changeNumber` (the server's `resolveChangeToJoin`) — no draft, no Propose,

@@ -451,10 +451,11 @@ test("the draft is chosen, proposed and read from the editor, with no trip throu
   await page
     .getByRole("menuitemradio", { name: new RegExp(`^${firstName}`) })
     .click();
+  // Read as a branch: the binder's own page, under the draft's name.
   await expect(page).toHaveURL(
-    new RegExp(`edit=1&draft=${encodeURIComponent(first)}`),
+    new RegExp(`/-/tree/${encodeURIComponent(first)}$`),
   );
-  await expect(page.locator(".bs-draftpick")).toContainText(firstName);
+  await expect(binderPicker).toHaveText(firstName);
 });
 
 test("Edit on a binder opens the editor, and its files are renamed and refiled there", async ({
