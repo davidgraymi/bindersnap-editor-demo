@@ -60,7 +60,7 @@ export const HELP_GUIDES: HelpGuide[] = [
       {
         heading: "A whole folder at once",
         steps: [
-          "Open the binder and choose Add a document.",
+          "Open the binder and choose Edit. In the editor's file panel, choose Upload (or Upload files here on a folder).",
           "Drop the folder onto the box, or choose Add a whole folder.",
           "Check the list. Take out anything you did not mean to send. Word documents and PDFs go in; system files and anything else are left out, and the list says so.",
           "Choose who should review it, then Add documents.",
@@ -112,6 +112,14 @@ export const HELP_GUIDES: HelpGuide[] = [
           "Only a binder's approvers can approve its changes. Choose them in the binder's Settings, under Change requests, in the Every change row beside the number, or when you create the binder: groups, people, or both. The list shows everyone in your organization; only people and groups with access to the binder can be chosen. To choose someone else, give them access on the People & access tab first. Ask for 3 approvals from your Board, and nothing is published until three board members approve. Everyone else with access can still review and comment.",
           "A new binder has no approvers and needs no approvals, so you can publish while you move in. Choose approvers before you raise the number, or nothing can be published.",
           "The number is shared across everyone you choose. 3 from the Board and the medical staff means any 3 of them together, not 3 from each. To make sure one group always signs off, add a sign-off rule for it as well.",
+        ],
+      },
+      {
+        heading: "Who signs off on a folder or a document",
+        paragraphs: [
+          "Every binder, folder and document page shows Who signs off here: the rules set on that place, and the ones it inherits from the folders above it and the binder.",
+          "To change them, choose Edit. With a folder or document open in the editor, the panel on the right lists who signs off there; add a group or a person, or take one off. Each change goes into your draft, like a rename, and is reviewed like any change: whoever signs off on changes to who signs off has to approve it.",
+          "A new rule starts with the next change after it is published. The change that adds it is approved under the rules already in force.",
           "Every published version records the rule it met: how many approvals it needed, whose counted, and who gave them.",
         ],
       },
