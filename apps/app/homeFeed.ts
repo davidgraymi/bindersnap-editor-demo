@@ -140,3 +140,65 @@ export function feedTime(timestamp: string): string {
   if (Number.isNaN(at.getTime())) return "";
   return at.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
+
+/**
+ * One change's day, as one row.
+ *
+ * A change under discussion made a day of Home eight rows long — started a
+ * discussion, replied, replied, resolved — and the one event somebody opens
+ * Home to learn, that it was approved or published, was the ninth. A day now
+ * says each change once: the event that matters most, and how many others
+ * there were. The change's own page has every one of them, in order.
+ */
+export interface FeedGroup {
+  /** The event the row is written from. */
+  lead: FeedEvent;
+  /** How many other events the same change had that day. */
+  others: number;
+}
+
+/** What a day's row for a change leads with: a decision before talk. */
+const WEIGHT: Record<FeedEvent["kind"], number> = {
+  published: 5,
+  closed: 5,
+  reopened: 4,
+  approved: 4,
+  changes_requested: 4,
+  opened: 3,
+  binder_created: 3,
+  started_discussion: 1,
+  reopened_discussion: 1,
+  resolved: 1,
+  commented: 1,
+  replied: 1,
+};
+
+/** A day's events, one row per change, in the order each last moved. */
+export function foldFeedDay(events: readonly FeedEvent[]): FeedGroup[] {
+  const groups: FeedGroup[] = [];
+  const byChange = new Map<string, FeedGroup>();
+  for (const event of events) {
+    if (event.changeNumber === null) {
+      groups.push({ lead: event, others: 0 });
+      continue;
+    }
+    const key = `${event.org}/${event.binder}#${event.changeNumber}`;
+    const group = byChange.get(key);
+    if (!group) {
+      const made = { lead: event, others: 0 };
+      byChange.set(key, made);
+      groups.push(made);
+      continue;
+    }
+    group.others += 1;
+    // Events arrive newest first, so a tie keeps the later one.
+    if (WEIGHT[event.kind] > WEIGHT[group.lead.kind]) group.lead = event;
+  }
+  return groups;
+}
+
+/** "and 3 earlier updates" — what else a change did that day. */
+export function describeOthers(count: number): string {
+  if (count <= 0) return "";
+  return count === 1 ? "and 1 other update" : `and ${count} other updates`;
+}

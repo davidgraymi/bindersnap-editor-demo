@@ -74,6 +74,8 @@ export interface QueueRow {
    * third read as a change nobody had discussed.
    */
   commentCount: number;
+  /** The reader proposed it. Home lists only what is theirs to act on. */
+  mine: boolean;
   /** Sort key. Not rendered. */
   movedAt: number;
 }
@@ -194,6 +196,8 @@ export function buildQueueRows(
           now,
         ),
         status,
+        mine:
+          (change.user?.login ?? "").toLowerCase() === username.toLowerCase(),
         section: queueSection(status, isAwaitingReader(change, username)),
         ...describeChangeStandingWord({
           number: change.number,
