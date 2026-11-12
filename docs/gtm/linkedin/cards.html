@@ -1,0 +1,746 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <link
+      rel="stylesheet"
+      href="../../../packages/ui-tokens/css/bindersnap-tokens.css"
+    />
+    <style>
+      @font-face {
+        font-family: "Lora";
+        font-weight: 400 700;
+        src: url(../../../apps/app/public/fonts/lora-latin-wght-normal.woff2)
+          format("woff2");
+      }
+      @font-face {
+        font-family: "Lora";
+        font-style: italic;
+        font-weight: 400 700;
+        src: url(../../../apps/app/public/fonts/lora-latin-wght-italic.woff2)
+          format("woff2");
+      }
+      @font-face {
+        font-family: "Geist";
+        font-weight: 100 900;
+        src: url(../../../apps/app/public/fonts/geist-latin-wght-normal.woff2)
+          format("woff2");
+      }
+      @font-face {
+        font-family: "Geist Mono";
+        font-weight: 100 900;
+        src: url(../../../apps/app/public/fonts/geist-mono-latin-wght-normal.woff2)
+          format("woff2");
+      }
+      body::after {
+        display: none;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: var(--brand-font-sans);
+        color: var(--bs-text-secondary);
+        background: var(--bs-surface-3);
+      }
+      .card {
+        width: 540px;
+        height: 675px;
+        position: relative;
+        overflow: hidden;
+        background: var(--bs-page-bg);
+        display: flex;
+        flex-direction: column;
+        padding: 34px 38px 0;
+        margin-bottom: 20px;
+      }
+      .card::before {
+        content: "";
+        position: absolute;
+        top: -180px;
+        right: -140px;
+        width: 440px;
+        height: 440px;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle,
+          var(--brand-coral-wash-1) 0%,
+          var(--brand-coral-wash-2) 40%,
+          transparent 70%
+        );
+      }
+      .card > * {
+        position: relative;
+      }
+      .card.dark {
+        background: var(--brand-ink);
+        color: var(--brand-on-dark-primary);
+      }
+      .card.dark::before {
+        display: none;
+      }
+      .mast {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-family: var(--brand-font-serif);
+        font-weight: 700;
+        font-size: 19px;
+        color: var(--bs-text-primary);
+      }
+      .dark .logo {
+        color: var(--brand-on-dark-primary);
+      }
+      .mark {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--brand-radius-md);
+        background: var(--brand-ink);
+        color: var(--brand-on-dark-primary);
+        display: grid;
+        place-items: center;
+      }
+      .dark .mark {
+        background: var(--brand-on-dark-primary);
+        color: var(--brand-ink);
+      }
+      .url {
+        font-family: var(--brand-font-mono);
+        font-size: 10.5px;
+        letter-spacing: var(--brand-tracking-wide);
+        color: var(--bs-text-muted);
+      }
+      .dark .url {
+        color: var(--brand-on-dark-secondary);
+      }
+      .eyebrow {
+        margin-top: 30px;
+        font-family: var(--brand-font-mono);
+        font-size: 10.5px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: var(--brand-tracking-widest);
+        color: var(--bs-coral-text);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .dark .eyebrow {
+        color: var(--brand-coral);
+      }
+      .eyebrow::before {
+        content: "";
+        width: 18px;
+        height: 1px;
+        background: var(--brand-coral);
+      }
+      h1 {
+        font-family: var(--brand-font-serif);
+        font-weight: 700;
+        font-size: 37px;
+        line-height: 1.12;
+        letter-spacing: var(--brand-tracking-tight);
+        color: var(--bs-text-primary);
+        margin-top: 12px;
+      }
+      .dark h1 {
+        color: var(--brand-on-dark-primary);
+      }
+      h1 em {
+        font-style: italic;
+        color: var(--bs-coral-text);
+      }
+      .dark h1 em {
+        color: var(--brand-coral);
+      }
+      .chaos {
+        margin-top: 24px;
+        background: var(--brand-ink);
+        border-radius: var(--brand-radius-xl);
+        padding: 20px 22px 18px;
+        color: var(--brand-on-dark-primary);
+      }
+      .dark .chaos {
+        background: transparent;
+        padding: 0;
+      }
+      .tag {
+        font-family: var(--brand-font-mono);
+        font-size: 9.5px;
+        text-transform: uppercase;
+        letter-spacing: var(--brand-tracking-widest);
+        color: var(--brand-on-dark-secondary);
+        margin-bottom: 12px;
+      }
+      .file {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-family: var(--brand-font-mono);
+        font-size: 13px;
+        background: var(--brand-on-dark-wash);
+        border: 1px solid var(--brand-on-dark-wash-border);
+        border-radius: var(--brand-radius-sm);
+        padding: 8px 12px;
+        margin-bottom: 8px;
+        white-space: nowrap;
+        color: var(--brand-on-dark-primary);
+      }
+      .file svg {
+        flex: none;
+        color: var(--brand-on-dark-secondary);
+      }
+      .file.mail {
+        font-family: var(--brand-font-sans);
+        font-size: 13.5px;
+      }
+      .file:nth-child(3) {
+        transform: rotate(-1.3deg) translateX(8px);
+      }
+      .file:nth-child(4) {
+        transform: rotate(1deg) translateX(-3px);
+      }
+      .file:nth-child(5) {
+        transform: rotate(-0.6deg) translateX(12px);
+      }
+      .file:nth-child(6) {
+        transform: rotate(0.7deg) translateX(4px);
+      }
+      .q {
+        margin-top: 10px;
+        font-family: var(--brand-font-serif);
+        font-style: italic;
+        font-size: 17px;
+        color: var(--brand-on-dark-secondary);
+      }
+      .answer {
+        margin-top: 16px;
+        display: flex;
+        gap: 14px;
+        align-items: center;
+        background: var(--bs-surface-1);
+        border: 1px solid var(--bs-status-ok-border);
+        border-radius: var(--brand-radius-lg);
+        box-shadow: var(--bs-shadow-md);
+        padding: 15px 18px;
+      }
+      .answer .node {
+        width: 34px;
+        height: 34px;
+      }
+      .answer b {
+        display: block;
+        font-family: var(--brand-font-serif);
+        font-size: 17px;
+        color: var(--bs-text-primary);
+      }
+      .answer span {
+        font-size: 13px;
+        color: var(--bs-text-muted);
+      }
+      .node {
+        flex: none;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: var(--bs-surface-2);
+        color: var(--bs-text-muted);
+        border: 1px solid var(--bs-rule);
+      }
+      .node.ok {
+        background: var(--brand-green);
+        border-color: var(--brand-green);
+        color: var(--brand-on-brand);
+      }
+      .node.pub {
+        background: var(--brand-coral);
+        border-color: var(--brand-coral);
+        color: var(--brand-on-coral);
+      }
+      .record {
+        margin-top: 26px;
+        background: var(--bs-surface-1);
+        border: 1px solid var(--bs-rule);
+        border-radius: var(--brand-radius-xl);
+        box-shadow: var(--bs-shadow-md);
+        overflow: hidden;
+      }
+      .bar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 10px 14px;
+        background: var(--bs-surface-2);
+        border-bottom: 1px solid var(--bs-rule);
+      }
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+      }
+      .crumb {
+        margin-left: 8px;
+        font-family: var(--brand-font-mono);
+        font-size: 10.5px;
+        color: var(--bs-text-muted);
+      }
+      .rb {
+        padding: 20px 22px 18px;
+      }
+      .dh {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+      }
+      .dt {
+        font-family: var(--brand-font-serif);
+        font-weight: 700;
+        font-size: 21px;
+        color: var(--bs-text-primary);
+      }
+      .dm {
+        font-family: var(--brand-font-mono);
+        font-size: 10.5px;
+        color: var(--bs-text-muted);
+        margin-top: 3px;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--bs-status-ok-fg);
+        background: var(--bs-status-ok-bg);
+        border: 1px solid var(--bs-status-ok-border);
+        border-radius: 999px;
+        padding: 4px 11px;
+      }
+      ol {
+        list-style: none;
+        margin-top: 16px;
+        position: relative;
+      }
+      ol::before {
+        content: "";
+        position: absolute;
+        left: 12.5px;
+        top: 14px;
+        bottom: 14px;
+        width: 1px;
+        background: var(--bs-rule);
+      }
+      li {
+        display: grid;
+        grid-template-columns: 26px 1fr auto;
+        gap: 13px;
+        align-items: center;
+        padding: 7px 0;
+        position: relative;
+      }
+      .ev {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--bs-text-primary);
+        line-height: 1.25;
+      }
+      .ev span {
+        display: block;
+        font-weight: 400;
+        font-size: 12px;
+        color: var(--bs-text-muted);
+      }
+      .when {
+        font-family: var(--brand-font-mono);
+        font-size: 11px;
+        color: var(--bs-text-muted);
+      }
+      .foot {
+        margin-top: auto;
+        margin-left: -38px;
+        margin-right: -38px;
+        background: var(--brand-ink);
+        color: var(--brand-on-dark-primary);
+        padding: 18px 38px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .dark .foot {
+        background: var(--brand-coral);
+        color: var(--brand-on-coral);
+      }
+      .foot b {
+        font-family: var(--brand-font-serif);
+        font-size: 18px;
+      }
+      .foot span {
+        font-size: 12.5px;
+        color: var(--brand-on-dark-secondary);
+      }
+      .dark .foot span {
+        color: var(--brand-on-coral);
+      }
+      .cta {
+        background: var(--brand-coral);
+        color: var(--brand-on-coral);
+        font-weight: 600;
+        font-size: 13.5px;
+        padding: 10px 15px;
+        border-radius: var(--brand-radius-md);
+        white-space: nowrap;
+      }
+      .dark .cta {
+        background: var(--brand-ink);
+        color: var(--brand-on-dark-primary);
+      }
+      .sub {
+        margin-top: 14px;
+        font-size: 15.5px;
+        line-height: 1.5;
+        color: var(--bs-text-secondary);
+      }
+      .dark .sub {
+        color: var(--brand-on-dark-secondary);
+      }
+      .dark .sub strong {
+        color: var(--brand-on-dark-primary);
+        font-weight: 600;
+      }
+      #c1 {
+        padding-top: 28px;
+      }
+      #c1 .eyebrow {
+        margin-top: 22px;
+      }
+      #c1 h1 {
+        font-size: 34px;
+      }
+      #c1 .chaos {
+        margin-top: 18px;
+        padding: 16px 20px 10px;
+      }
+      #c1 .file {
+        padding: 6px 12px;
+        margin-bottom: 6px;
+      }
+      #c1 .answer {
+        margin-top: 14px;
+        padding: 12px 16px;
+      }
+      #c3 .file:nth-child(3) {
+        transform: rotate(-1.3deg) translateX(4px);
+      }
+      #c3 .file:nth-child(5) {
+        transform: rotate(-0.6deg) translateX(6px);
+      }
+      #c3 .chaos .file {
+        margin-right: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ICONS -->
+    <svg width="0" height="0" style="position: absolute">
+      <defs>
+        <symbol id="file" viewBox="0 0 24 24">
+          <path
+            d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8l6 6v12a2 2 0 0 1-2 2z"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          />
+          <path
+            d="M14 2v6h6"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          />
+        </symbol>
+        <symbol id="mail" viewBox="0 0 24 24">
+          <rect
+            x="2"
+            y="4"
+            width="20"
+            height="16"
+            rx="2"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          />
+          <path
+            d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          />
+        </symbol>
+        <symbol id="check" viewBox="0 0 24 24">
+          <path
+            d="M20 6 9 17l-5-5"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="3"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </symbol>
+        <symbol id="pen" viewBox="0 0 24 24">
+          <path
+            d="M12 20h9"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+          />
+          <path
+            d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+          />
+        </symbol>
+        <symbol id="lock" viewBox="0 0 24 24">
+          <rect
+            x="3"
+            y="11"
+            width="18"
+            height="11"
+            rx="2"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+          />
+          <path
+            d="M7 11V7a5 5 0 0 1 10 0v4"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+          />
+        </symbol>
+        <symbol id="logo" viewBox="0 0 18 18">
+          <rect
+            x="2"
+            y="1"
+            width="9"
+            height="13"
+            rx="1.5"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+          />
+          <rect
+            x="6"
+            y="4"
+            width="9"
+            height="13"
+            rx="1.5"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+          />
+        </symbol>
+      </defs>
+    </svg>
+
+    <!-- 1: the filename -->
+    <section class="card" id="c1">
+      <div class="mast">
+        <div class="logo">
+          <span class="mark"
+            ><svg width="17" height="17"><use href="#logo" /></svg></span
+          >Bindersnap
+        </div>
+        <div class="url">BINDERSNAP.COM</div>
+      </div>
+      <div class="eyebrow">Which one is current?</div>
+      <h1>Four files. One approved. <em>Nobody's sure which.</em></h1>
+      <div class="chaos">
+        <div class="tag">Shared drive · Infection control</div>
+        <div class="file">
+          <svg width="14" height="14"><use href="#file" /></svg
+          >IC_Policy_FINAL.docx
+        </div>
+        <div class="file">
+          <svg width="14" height="14"><use href="#file" /></svg
+          >IC_Policy_FINAL_APPROVED_Mar14.docx
+        </div>
+        <div class="file">
+          <svg width="14" height="14"><use href="#file" /></svg
+          >IC_Policy_rev3_FINAL(2).docx
+        </div>
+        <div class="file">
+          <svg width="14" height="14"><use href="#file" /></svg
+          >IC_Policy_v3_edits_USE_THIS.docx
+        </div>
+        <div class="file mail">
+          <svg width="14" height="14"><use href="#mail" /></svg>RE: RE: FW: is
+          this the approved one??
+        </div>
+      </div>
+      <div class="answer">
+        <span class="node ok"
+          ><svg width="16" height="16"><use href="#check" /></svg
+        ></span>
+        <div>
+          <b>Version 4 is the approved one.</b
+          ><span>Medical Director signed off on version 4 · Oct 14, 17:08</span>
+        </div>
+      </div>
+      <div class="foot">
+        <div>
+          <b>Show the surveyor in seconds.</b><br /><span
+            >14-day trial · no card</span
+          >
+        </div>
+        <div class="cta">bindersnap.com →</div>
+      </div>
+    </section>
+
+    <!-- 2: the record -->
+    <section class="card" id="c2">
+      <div class="mast">
+        <div class="logo">
+          <span class="mark"
+            ><svg width="17" height="17"><use href="#logo" /></svg></span
+          >Bindersnap
+        </div>
+        <div class="url">BINDERSNAP.COM</div>
+      </div>
+      <div class="eyebrow">During the survey</div>
+      <h1>"Which version did you approve?" <em>It's on the page.</em></h1>
+      <div class="record">
+        <div class="bar">
+          <span class="dot" style="background: var(--brand-coral)"></span
+          ><span
+            class="dot"
+            style="background: var(--brand-amber, var(--brand-coral-wash-1))"
+          ></span
+          ><span class="dot" style="background: var(--brand-green)"></span
+          ><span class="crumb">Clinical policies / Infection control</span>
+        </div>
+        <div class="rb">
+          <div class="dh">
+            <div>
+              <div class="dt">Infection Control Policy</div>
+              <div class="dm">VERSION 4 · CURRENT</div>
+            </div>
+            <span class="pill"
+              ><svg width="12" height="12"><use href="#check" /></svg
+              >Approved</span
+            >
+          </div>
+          <ol>
+            <li>
+              <span class="node"
+                ><svg width="12" height="12"><use href="#pen" /></svg
+              ></span>
+              <div class="ev">
+                Change proposed<span
+                  >Infection preventionist · isolation section rewritten</span
+                >
+              </div>
+              <span class="when">Oct 09</span>
+            </li>
+            <li>
+              <span class="node ok"
+                ><svg width="12" height="12"><use href="#check" /></svg
+              ></span>
+              <div class="ev">
+                Approved<span>Quality Director · read version 4</span>
+              </div>
+              <span class="when">Oct 14 · 16:41</span>
+            </li>
+            <li>
+              <span class="node ok"
+                ><svg width="12" height="12"><use href="#check" /></svg
+              ></span>
+              <div class="ev">
+                Approved<span>Medical Director · read version 4</span>
+              </div>
+              <span class="when">Oct 14 · 17:08</span>
+            </li>
+            <li>
+              <span class="node pub"
+                ><svg width="12" height="12"><use href="#lock" /></svg
+              ></span>
+              <div class="ev">
+                Published and locked<span
+                  >Any edit now needs a new, reviewed version</span
+                >
+              </div>
+              <span class="when">Oct 14 · 17:09</span>
+            </li>
+          </ol>
+        </div>
+      </div>
+      <div class="foot">
+        <div>
+          <b>Reviewers and readers are free.</b><br /><span
+            >$39 a month per writer · 14-day trial</span
+          >
+        </div>
+        <div class="cta">bindersnap.com →</div>
+      </div>
+    </section>
+
+    <!-- 3: consultants -->
+    <section class="card dark" id="c3">
+      <div class="mast">
+        <div class="logo">
+          <span class="mark"
+            ><svg width="17" height="17"><use href="#logo" /></svg></span
+          >Bindersnap
+        </div>
+        <div class="url">FOR ACCREDITATION CONSULTANTS</div>
+      </div>
+      <div class="eyebrow">Mock survey, week one</div>
+      <h1>Every client has <em>this folder.</em></h1>
+      <div class="chaos" style="margin-top: 22px">
+        <div class="file">
+          <svg width="14" height="14"><use href="#file" /></svg
+          >Hand_Hygiene_FINAL_v2.docx
+        </div>
+        <div class="file">
+          <svg width="14" height="14"><use href="#file" /></svg
+          >Fall_Prevention_APPROVED(1).docx
+        </div>
+        <div class="file">
+          <svg width="14" height="14"><use href="#file" /></svg
+          >Emergency_Prep_2024_USE_THIS.docx
+        </div>
+        <div class="file">
+          <svg width="14" height="14"><use href="#file" /></svg
+          >Med_Storage_rev4_FINAL_FINAL.pdf
+        </div>
+        <div class="file mail">
+          <svg width="14" height="14"><use href="#mail" /></svg>RE: did the
+          board sign the new one?
+        </div>
+      </div>
+      <p class="sub">
+        Bindersnap gives each policy
+        <strong>one current version and the record of who approved it.</strong>
+        Your client keeps their Word files. You stop hunting for signatures.
+      </p>
+      <div class="foot">
+        <div>
+          <b>Try it with one client.</b><br /><span
+            >Reviewers free · built for small providers</span
+          >
+        </div>
+        <div class="cta">bindersnap.com →</div>
+      </div>
+    </section>
+  </body>
+</html>
