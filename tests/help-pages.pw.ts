@@ -59,7 +59,10 @@ test("an agent can read the guides as text", async ({ request }) => {
 
   const page = await request.get(`${SITE_BASE_URL}/help/approvals`);
   // The words are in the page as served, with nothing to run first.
-  expect(await page.text()).toContain("<h2>How many approvals</h2>");
+  // A section has an address of its own, which the app links to.
+  expect(await page.text()).toContain(
+    '<h2 id="how-many-approvals">How many approvals</h2>',
+  );
 
   expect(
     (await request.get(`${SITE_BASE_URL}/help/no-such-guide`)).status(),
@@ -83,4 +86,38 @@ test("the app opens help in a new tab", async ({ page }) => {
   ).toBeVisible();
   // The app stays where it was.
   await expect(page).not.toHaveURL(/\/help/);
+});
+
+test("help opens the guide about the page you are on", async ({ page }) => {
+  await signInAsAlice(page);
+  await page.goto("/-/changes");
+  const help = page.getByRole("link", { name: /^Help: Reviewing a change/ });
+  await expect(help).toHaveAttribute("target", "_blank");
+
+  const [tab] = await Promise.all([
+    page.context().waitForEvent("page"),
+    help.click(),
+  ]);
+  await tab.waitForLoadState();
+  await expect(tab).toHaveURL(`${SITE_BASE_URL}/help/reviewing`);
+  await expect(
+    tab.getByRole("heading", { level: 1, name: "Reviewing a change" }),
+  ).toBeVisible();
+  // Every other guide is one click away from there.
+  await expect(
+    tab.getByRole("navigation", { name: "Guides" }).getByRole("link"),
+  ).not.toHaveCount(0);
+});
+
+test("the browser tab names the page", async ({ page }) => {
+  await signInAsAlice(page);
+  await expect(page).toHaveTitle("Home · Bindersnap");
+  await page.goto("/-/changes");
+  await expect(page).toHaveTitle("Change requests · Bindersnap");
+  await page.goto("/riverside-health/corporate/-/history");
+  await expect(page).toHaveTitle("History · Corporate · Bindersnap");
+  await page.goto(
+    "/riverside-health/corporate/-/blob/main/finance/expenses-policy",
+  );
+  await expect(page).toHaveTitle("Expenses Policy · Corporate · Bindersnap");
 });
