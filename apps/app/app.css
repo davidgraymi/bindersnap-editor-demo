@@ -2379,6 +2379,26 @@ input {
   color: var(--bs-text-secondary);
 }
 
+.rev-outcome p {
+  margin: 0;
+}
+
+/* Where a published change's documents now stand. */
+.rev-outcome-links {
+  margin: var(--brand-space-1) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rev-outcome-links a {
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.rev-outcome-links a:hover {
+  color: var(--bs-coral-text);
+}
+
 /* ── Proposed version ──────────────────────────────────────────────
    Fixed chrome in the same place on every change: the thing being approved,
    which update of it, and one button to go and read it. A reviewer should

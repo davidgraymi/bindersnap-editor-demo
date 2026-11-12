@@ -658,6 +658,7 @@ export async function waitForNoPendingReviews(
       .catch(() => false);
     if (canPublish) {
       await publishButton.click();
+      await page.getByRole("button", { name: "Publish now" }).click();
     }
 
     const publishingButton = page.getByRole("button", {

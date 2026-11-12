@@ -10,7 +10,7 @@ import {
   setBinderChangeOpen,
   updateBinderChange,
 } from "../api";
-import { followInApp } from "../appLink";
+import { followInApp, navigateToHref } from "../appLink";
 import {
   binderChangeDetailToRecord,
   describeChangedDocument,
@@ -42,6 +42,7 @@ import {
   ruleChangeRows,
   rulesWarning,
   startsNextNote,
+  describeWaiting,
 } from "../signOffChange";
 
 /**
@@ -393,36 +394,42 @@ export function BinderChangePage({
     }
   }
 
-  // Who publishing is waiting on: everyone eligible for an unmet rule.
-  const unmet = detail.approvalRules.filter(
-    (rule) => rule.approvedBy.length < rule.required,
-  );
-  const waitingOn = [
-    ...new Map(
-      unmet
-        .flatMap((rule) =>
-          rule.eligible.filter(
-            (user) =>
-              !rule.approvedBy.some((done) => done.login === user.login),
-          ),
-        )
-        .map((user) => [user.login, nameFor(names, user.login)]),
-    ).values(),
-  ];
-  const waitingLine =
-    isOpen && unmet.length > 0
-      ? `Publishing opens once every rule above is met.${
-          waitingOn.length === 0
-            ? " Nobody can meet them yet."
-            : ` Waiting on ${
-                waitingOn.length <= 1
-                  ? waitingOn[0]
-                  : waitingOn.length <= 3
-                    ? `${waitingOn.slice(0, -1).join(", ")} and ${waitingOn[waitingOn.length - 1]}`
-                    : `${waitingOn.slice(0, 3).join(", ")} and ${waitingOn.length - 3} ${waitingOn.length - 3 === 1 ? "other" : "others"}`
-              }.`
-        }`
-      : null;
+  // What publishing is still waiting for, said as what is needed rather
+  // than as a list of everybody who could give it.
+  const waitingLine = isOpen
+    ? describeWaiting(detail.approvalRules, (login) => nameFor(names, login))
+    : null;
+
+  // Where a published change's documents now stand: the way on from it.
+  const publishedLinks =
+    record.outcome === "published" && detail.documents.length > 0 ? (
+      <ul className="rev-outcome-links">
+        {detail.documents.map((document) => {
+          const href = buildDocumentUrl({
+            org,
+            binder,
+            documentPath: document.slugPath,
+            version: null,
+          });
+          return (
+            <li key={document.slugPath}>
+              <a
+                href={href}
+                onClick={(event) =>
+                  followInApp(event, () => navigateToHref(href))
+                }
+              >
+                {formatDocumentName(document.name)}
+              </a>
+              {document.currentVersion
+                ? ` is now version ${document.currentVersion.version}`
+                : " is on the record"}
+            </li>
+          );
+        })}
+      </ul>
+    ) : null;
+
   const tabs = (
     <ChangeTabs
       view={view}
@@ -647,7 +654,10 @@ export function BinderChangePage({
               </h2>
             </div>
             <dl className="change-about">
-              {branchName ? (
+              {/* Once a change is published its draft is gone, and what is
+                  left of the branch is Gitea's own name for it
+                  (`refs/pull/20/head`), which is nobody's to read. */}
+              {branchName && !branchName.startsWith("refs/") ? (
                 <>
                   <dt>From</dt>
                   <dd>
@@ -775,7 +785,7 @@ export function BinderChangePage({
         }
         onChanged={load}
         onViewChange={onViewChange}
-        onBackToList={onBackToChanges}
+        outcomeAfter={publishedLinks}
       />
     </div>
   );

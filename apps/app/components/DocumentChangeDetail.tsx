@@ -77,7 +77,11 @@ interface DocumentChangeDetailProps {
   documentName: string;
   onChanged: () => void | Promise<void>;
   onViewChange: (view: DocumentChangeView) => void;
-  onBackToList: () => void;
+  /**
+   * What follows the outcome line: where a published change's documents now
+   * stand, as links. The change is over; this is the way on from it.
+   */
+  outcomeAfter?: React.ReactNode;
   /** Who, what and from where: the line under the title, shared with Changes. */
   byline?: React.ReactNode;
   /**
@@ -145,6 +149,7 @@ interface PRActionState {
   changesComment: string;
   showChangesForm: boolean;
   showApproveConfirm: boolean;
+  showPublishConfirm: boolean;
 }
 
 const DEFAULT_PR_ACTION_STATE: PRActionState = {
@@ -153,6 +158,7 @@ const DEFAULT_PR_ACTION_STATE: PRActionState = {
   changesComment: "",
   showChangesForm: false,
   showApproveConfirm: false,
+  showPublishConfirm: false,
 };
 
 /** Beyond this many, a row of pips is a smear rather than a count. */
@@ -281,7 +287,7 @@ export function DocumentChangeDetail({
   documentName,
   onChanged,
   onViewChange,
-  onBackToList,
+  outcomeAfter = null,
   approvers = [],
   approvalPanel = null,
   aboutPanel = null,
@@ -381,10 +387,12 @@ export function DocumentChangeDetail({
     try {
       await publishDocument(scope, prNum, nextVersion);
       updateActionState({ status: "idle" });
+      // **Stay on the change, which now says what happened.** It used to go
+      // back to the list of open changes: the one moment the whole product
+      // is for — a version going on the record — ended on a page that did
+      // not mention it. The change's own page says "Published as v2", who
+      // by, and links to the document as it now stands.
       await onChanged();
-      // Publishing ends the review, so the page it happened on is finished
-      // too. The index confirms it: nothing is waiting on a decision.
-      onBackToList();
     } catch (err) {
       updateActionState({
         status: "error",
@@ -862,6 +870,44 @@ export function DocumentChangeDetail({
                   {reviewPerms.reason ?? "You cannot approve this change."}
                 </p>
               </>
+            ) : reviewDecision === "publish" &&
+              actionState.showPublishConfirm ? (
+              /* **Publishing is asked about, as approving is.** It is the
+                 one act here that cannot be taken back — the version is on
+                 the record for good — and it was the one button that acted
+                 on a single click. */
+              <div className="rev-decision-confirm">
+                <p className="rev-decision-confirm-line">
+                  {`Publish this change to ${
+                    subject || documentCount === 1
+                      ? documentName
+                      : `${documentCount} documents`
+                  }? It goes on the record, with who approved it, and cannot be taken back.`}
+                </p>
+                <div className="rev-decision-row">
+                  <button
+                    className="bs-btn bs-btn--sm bs-btn--quiet"
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() =>
+                      updateActionState({ showPublishConfirm: false })
+                    }
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="bs-btn bs-btn--sm bs-btn--approve"
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => {
+                      updateActionState({ showPublishConfirm: false });
+                      void handlePublish();
+                    }}
+                  >
+                    Publish now
+                  </button>
+                </div>
+              </div>
             ) : reviewDecision === "publish" ? (
               <button
                 className="bs-btn bs-btn--approve bs-btn--block"
@@ -872,7 +918,7 @@ export function DocumentChangeDetail({
                     ? "Resolve every discussion thread before publishing."
                     : undefined
                 }
-                onClick={() => void handlePublish()}
+                onClick={() => updateActionState({ showPublishConfirm: true })}
               >
                 {isSubmitting ? "Publishing…" : "Publish"}
               </button>
@@ -928,9 +974,10 @@ export function DocumentChangeDetail({
 
       <div className="change-main">
         {outcome ? (
-          <p className="rev-outcome" role="status">
-            {outcome}
-          </p>
+          <div className="rev-outcome" role="status">
+            <p>{outcome}</p>
+            {outcomeAfter}
+          </div>
         ) : null}
 
         {banner}
