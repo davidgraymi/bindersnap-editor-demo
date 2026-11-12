@@ -79,6 +79,18 @@ test("the Changes tab leads with the rule change", async ({ page }) => {
     "every document in Clinical Standards needs an approval from the Quality Committee as well",
   );
   await expect(rules).toContainText("starts with the next change");
+  // A group in a chip says who is in it when rested on, and leads to its page.
+  const quality = rules
+    .locator(".cmp-rules-chip--added")
+    .getByRole("link", { name: "Quality Committee" });
+  await quality.hover();
+  const card = rules.locator(".group-card");
+  await expect(card).toContainText("Quality Committee");
+  await expect(card).toContainText(/\d+ (person|people)|Nobody is in it/);
+  await expect(quality).toHaveAttribute(
+    "href",
+    `/${OWNER}/-/groups/quality-committee`,
+  );
   // First, above every document, and first in the tree.
   const stream = page.locator(".cmp-stream > *");
   await expect(stream.first()).toHaveClass(/cmp-rules/);

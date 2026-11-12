@@ -3,7 +3,10 @@ import { AppIcon, ICON } from "./AppIcon";
 import type { AppRoute } from "../routes";
 import { routeToPath } from "../routes";
 import { followInApp } from "../appLink";
-import type { RuleChangeRow } from "../signOffChange";
+import type { OwnerChip, RuleChangeRow } from "../signOffChange";
+import { nameFor, usePeopleNames } from "../usePeopleNames";
+import { GroupLink } from "./GroupLink";
+import { PersonAvatar } from "./PersonAvatar";
 
 /** The rule section's anchor, linked from the approvals table (4.9). */
 export const RULE_CHANGE_ANCHOR = "who-signs-off";
@@ -35,6 +38,31 @@ export function RuleChangeSection({
   startsNext: string | null;
   onNavigate: (route: AppRoute) => void;
 }) {
+  const names = usePeopleNames(org);
+
+  /**
+   * An owner's name in a chip. A group links to its page and, rested on,
+   * says who is in it; a person's face and name open their card. The chip
+   * names somebody, and "who is that?" should be answered where it is asked.
+   */
+  const ownerName = (owner: OwnerChip) => {
+    const text =
+      owner.kind === "person" ? nameFor(names, owner.name) : owner.label;
+    const shown = owner.change === "removed" ? <del>{text}</del> : text;
+    return owner.kind === "group" ? (
+      <GroupLink org={org} group={owner.name} onNavigate={onNavigate} card>
+        {shown}
+      </GroupLink>
+    ) : (
+      <PersonAvatar
+        person={{ login: owner.name, fullName: nameFor(names, owner.name) }}
+        size="xs"
+        card={true}
+        label={shown}
+      />
+    );
+  };
+
   return (
     <section
       className="bs-panel cmp-rules"
@@ -104,11 +132,7 @@ export function RuleChangeSection({
                       {owner.change === "added" ? (
                         <AppIcon icon={ICON.add} size="xs" />
                       ) : null}
-                      {owner.change === "removed" ? (
-                        <del>{owner.label}</del>
-                      ) : (
-                        owner.label
-                      )}
+                      {ownerName(owner)}
                       {owner.change === "unchanged" ? null : (
                         <span className="sr-only">
                           {owner.change === "added" ? ", added" : ", removed"}

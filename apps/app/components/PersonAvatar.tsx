@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import { avatarUrl } from "../avatar";
 import { getAvatarTone, getInitials } from "../documentDisplay";
@@ -11,7 +11,7 @@ interface Person {
 interface PersonAvatarProps {
   person: Person;
   /** 24px in a card header, 26px in the reviewers row, 32px in the nav. */
-  size?: "sm" | "md";
+  size?: "xs" | "sm" | "md";
   /**
    * A hover card: the face, full name, `@username`, and why this person is on
    * this screen ("Infection Control · signs off on this folder"). `true` for
@@ -19,12 +19,17 @@ interface PersonAvatarProps {
    * button or a picker's option, which cannot hold a second control.
    */
   card?: string | true;
+  /**
+   * Drawn after the face, inside what opens the card: a chip's name, so the
+   * whole chip is the thing to hover. Only with `card`.
+   */
+  label?: ReactNode;
 }
 
 /** How long a pointer rests on a face before its card opens. */
 const CARD_DELAY_MS = 300;
 
-const DRAWN_SIZE = { sm: 24, md: 26 } as const;
+const DRAWN_SIZE = { xs: 18, sm: 24, md: 26 } as const;
 
 /**
  * One person's face, wherever a person appears.
@@ -39,20 +44,26 @@ const DRAWN_SIZE = { sm: 24, md: 26 } as const;
  * The initials stay underneath, for the moment before the image arrives and
  * for an image that never does.
  */
-export function PersonAvatar({ person, size = "sm", card }: PersonAvatarProps) {
+export function PersonAvatar({
+  person,
+  size = "sm",
+  card,
+  label,
+}: PersonAvatarProps) {
   if (card !== undefined) {
     return (
       <PersonCardTrigger
         person={person}
         size={size}
         context={card === true ? null : card}
+        label={label}
       />
     );
   }
   return <Face person={person} size={size} />;
 }
 
-function Face({ person, size }: { person: Person; size: "sm" | "md" }) {
+function Face({ person, size }: { person: Person; size: "xs" | "sm" | "md" }) {
   const name = person.fullName.trim() || person.login;
 
   return (
@@ -84,10 +95,12 @@ function PersonCardTrigger({
   person,
   size,
   context,
+  label,
 }: {
   person: Person;
-  size: "sm" | "md";
+  size: "xs" | "sm" | "md";
   context: string | null;
+  label?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -110,10 +123,10 @@ function PersonCardTrigger({
 
   return (
     <span
-      className="person-card-anchor"
+      className={`person-card-anchor${label ? " person-card-anchor--label" : ""}`}
       tabIndex={0}
-      role="img"
-      aria-label={name}
+      role={label ? undefined : "img"}
+      aria-label={label ? undefined : name}
       aria-describedby={open ? id : undefined}
       onMouseEnter={() => {
         clear();
@@ -132,6 +145,7 @@ function PersonCardTrigger({
       }}
     >
       <Face person={person} size={size} />
+      {label}
       {open ? (
         <span className="person-card" role="tooltip" id={id}>
           <Face person={person} size="md" />
