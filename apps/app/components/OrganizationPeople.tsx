@@ -31,6 +31,8 @@ import {
   slugifyGroupName,
 } from "../../../packages/utils/groupName";
 import { PersonAvatar } from "./PersonAvatar";
+import { routeToPath } from "../routes";
+import { followInApp } from "../appLink";
 import { describePlanPrice } from "./PlanOffer";
 import { AppIcon, ICON } from "./AppIcon";
 
@@ -592,6 +594,36 @@ function OrganizationGroups({
                     </span>
                   </button>
 
+                  {expanded ? (
+                    <p className="org-group-page">
+                      <a
+                        href={routeToPath({
+                          kind: "organization",
+                          org,
+                          tab: "people",
+                          group: group.name,
+                        })}
+                        onClick={(event) =>
+                          followInApp(event, () => {
+                            window.history.pushState(
+                              {},
+                              "",
+                              routeToPath({
+                                kind: "organization",
+                                org,
+                                tab: "people",
+                                group: group.name,
+                              }),
+                            );
+                            window.dispatchEvent(new PopStateEvent("popstate"));
+                          })
+                        }
+                      >
+                        Where {describeGroupName(group.name)} signs off, and its
+                        page →
+                      </a>
+                    </p>
+                  ) : null}
                   {expanded ? (
                     <GroupDetail
                       group={group}

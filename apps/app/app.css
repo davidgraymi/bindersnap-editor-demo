@@ -13246,3 +13246,31 @@ html:has(.doc-files-resize--active) {
   font-size: var(--brand-text-ui-sm);
   cursor: pointer;
 }
+
+/* ── A group's page (4.8) ───────────────────────────────────────────────── */
+.group-page-title {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+}
+
+.group-page-title svg {
+  color: var(--bs-text-faint);
+}
+
+.group-page-body {
+  display: grid;
+  gap: var(--brand-space-4);
+  max-width: 820px;
+}
+
+.org-group-page {
+  margin: 0;
+  padding: var(--brand-space-1) var(--brand-space-2) var(--brand-space-2)
+    var(--brand-space-8);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.org-group-page a {
+  color: var(--bs-coral-text);
+}

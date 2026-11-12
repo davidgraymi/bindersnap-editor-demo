@@ -16,6 +16,7 @@ import { useOnboarding } from "../useOnboarding";
 import { routeToPath, type AppRoute } from "../routes";
 import { BinderShell } from "./BinderShell";
 import { MyDrafts } from "./MyDrafts";
+import { GroupPage } from "./GroupPage";
 import { OrganizationPage } from "./OrganizationPage";
 import { LocationTrail } from "./LocationTrail";
 import { useWriteAction } from "../paywallContext";
@@ -670,6 +671,12 @@ export function AppShell({
                   onOpenBinder={(org, binder) =>
                     onNavigate({ kind: "binder", org, binder })
                   }
+                />
+              ) : route.kind === "organization" && route.group ? (
+                <GroupPage
+                  org={route.org}
+                  group={route.group}
+                  onNavigate={onNavigate}
                 />
               ) : route.kind === "organization" ? (
                 <OrganizationPage

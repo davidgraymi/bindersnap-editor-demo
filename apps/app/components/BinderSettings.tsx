@@ -57,6 +57,8 @@ import { ApproverPicker } from "./ApproverPicker";
 import { FloatingResults } from "./FloatingResults";
 import { RemoveButton } from "./RemoveButton";
 import { formatDocumentName } from "../documentDisplay";
+import { GroupLink } from "./GroupLink";
+import { routeToPath } from "../routes";
 import { describeGroupName } from "../../../packages/utils/groupName";
 
 import { PersonAvatar } from "./PersonAvatar";
@@ -656,7 +658,16 @@ function AccessTab({
                     <AppIcon icon={ICON.people} size="md" />
                   </span>
                   <span className="bs-row-body">
-                    <span className="bs-row-name">{name}</span>
+                    <span className="bs-row-name">
+                      <GroupLink
+                        org={org}
+                        group={group.name}
+                        onNavigate={(route) => {
+                          window.history.pushState({}, "", routeToPath(route));
+                          window.dispatchEvent(new PopStateEvent("popstate"));
+                        }}
+                      />
+                    </span>
                     {/* A group with nobody in it grants nothing and, named by
                         a rule, waits for nobody. Said on its row. */}
                     <span
