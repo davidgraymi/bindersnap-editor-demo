@@ -1783,6 +1783,11 @@ input {
   min-width: 0;
 }
 
+/* As wide as a face, so a person and a group start their names together. */
+.signoff-row > .signoff-row-lead {
+  width: var(--brand-space-6);
+}
+
 .signoff-row .bs-row-name--wrap {
   display: flex;
   flex-wrap: wrap;

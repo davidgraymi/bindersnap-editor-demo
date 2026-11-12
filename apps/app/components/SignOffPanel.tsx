@@ -144,8 +144,14 @@ function SignOffRow({
 
   return (
     <div className="bs-row bs-row--tall signoff-row">
-      <span className="bs-row-icon" aria-hidden="true">
-        {row.kind === "person" ? null : (
+      {/* A person's face stands where a group's icon does, so every name
+          in the list starts at the same place. */}
+      {row.kind === "person" ? (
+        <span className="bs-row-icon signoff-row-lead">
+          <PersonAvatar person={row.people[0]!} size="sm" card={row.detail} />
+        </span>
+      ) : (
+        <span className="bs-row-icon signoff-row-lead" aria-hidden="true">
           <AppIcon
             icon={
               row.kind === "group" && !row.isRulesRule
@@ -154,11 +160,8 @@ function SignOffRow({
             }
             size="sm"
           />
-        )}
-      </span>
-      {row.kind === "person" ? (
-        <PersonAvatar person={row.people[0]!} size="sm" card={row.detail} />
-      ) : null}
+        </span>
+      )}
       <span className="bs-row-body">
         <span className="signoff-row-top">
           <span className="bs-row-name bs-row-name--wrap">
