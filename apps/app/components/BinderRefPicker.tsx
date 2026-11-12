@@ -40,7 +40,7 @@ interface BinderRefPickerProps {
   current: string | null;
   /** Read the tree at another ref — null for the record. */
   onPick: (ref: string | null) => void;
-  /** Open one of your drafts, which is edited rather than read. */
+  /** Read one of your drafts: a branch like the others, under its own name. */
   onPickDraft: (branch: string) => void;
 }
 
@@ -81,8 +81,11 @@ export function BinderRefPicker({
   // No drafts to offer is an ordinary answer; failing to list them is not
   // worth a message inside a menu about something else.
   const drafts: OwnDraft[] =
-    useQuery({ ...binderDraftQuery(org, binder), enabled: asked }).data
-      ?.drafts ?? [];
+    useQuery({
+      ...binderDraftQuery(org, binder),
+      // Also on a branch, which may be one of your drafts — see `label`.
+      enabled: asked || current !== null,
+    }).data?.drafts ?? [];
 
   /**
    * What the author called the branch, when a change sits on it.
@@ -101,7 +104,13 @@ export function BinderRefPicker({
     ...binderChangeQuery(org, binder, onCurrent?.number ?? 0),
     enabled: onCurrent !== undefined,
   });
+  /** One of your drafts, read as a branch: called what you called it. */
+  const ownDraft =
+    current === null
+      ? undefined
+      : drafts.find((draft) => draft.branch === current);
   const label =
+    ownDraft?.name ||
     (onCurrent && currentChange.data?.branchLabel) ||
     describeRef(current, nameOf);
   const branches = changes.filter((change) => change.branchName);

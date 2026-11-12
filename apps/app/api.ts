@@ -1337,7 +1337,11 @@ export async function fetchBinderSettings(
 export async function fetchBinderSignOff(
   org: string,
   binder: string,
-  at: { draft?: string | null; change?: number | null } = {},
+  at: {
+    draft?: string | null;
+    change?: number | null;
+    ref?: string | null;
+  } = {},
   request?: ReadRequest,
 ): Promise<BinderSignOffPayload> {
   const response = await BindersClient.getBinderSignOff(
@@ -1346,6 +1350,7 @@ export async function fetchBinderSignOff(
     {
       ...(at.draft ? { draft: at.draft } : {}),
       ...(at.change ? { change: String(at.change) } : {}),
+      ...(at.ref && at.ref !== "main" ? { ref: at.ref } : {}),
     },
     request,
   );

@@ -1496,12 +1496,14 @@ registry.registerPath({
     query: z.object({
       draft: z.string().optional(),
       change: z.string().optional(),
+      /** Any branch the caller can read: `/-/tree/{ref}`'s rules. */
+      ref: z.string().optional(),
     }),
   },
   responses: {
     200: {
       description:
-        "Who signs off in the binder, on main or at the caller's draft or a change",
+        "Who signs off in the binder, on main or at the caller's draft, a branch or a change",
       content: {
         "application/json": { schema: BinderSignOffPayloadSchema },
       },

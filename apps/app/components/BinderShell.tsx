@@ -464,6 +464,16 @@ export function BinderShell({
   }, [reloadKey, org, binder, queryClient]);
   /** Your drafts, whichever of the two reads has them. */
   const knownDrafts = draft ?? readingDrafts;
+  /**
+   * One of your drafts, when it is the branch being read
+   * (`/-/tree/{draft}`): Edit carries on in it rather than in the newest.
+   */
+  const readingDraft =
+    editMode === "off" && documentRefFromSearch
+      ? ((readingDrafts?.drafts ?? []).find(
+          (own) => own.branch === documentRefFromSearch,
+        )?.branch ?? null)
+      : null;
   const draftChoices = useMemo(
     () =>
       (knownDrafts?.drafts ?? []).map(({ branch, name }) => ({
@@ -668,8 +678,10 @@ export function BinderShell({
    * server for the newest, which might be a different one.
    */
   const writeDocument = async (slugPath: string) => {
-    const open = editMode !== "off" ? draft?.draft?.branch : undefined;
+    const open =
+      editMode !== "off" ? draft?.draft?.branch : (readingDraft ?? undefined);
     if (open) {
+      setDraftBranch(open);
       moveTo(
         buildDocumentEditUrl({
           org,
@@ -1231,10 +1243,20 @@ export function BinderShell({
       : null;
   const writing =
     editMode === "writing" && (Boolean(documentPath) || writingFolder !== null);
+  /**
+   * The branch a reading page is on: `/-/tree/{ref}`, `/-/blob/{ref}/…`. A
+   * folder's page and the explorer beside a document read the same branch
+   * the page does — a draft read as a branch is the draft, not the record.
+   */
+  const refForContents =
+    editMode === "off" && documentRefFromSearch !== "main"
+      ? documentRefFromSearch
+      : null;
   const contentsRead = useQuery({
     ...binderDocumentsQuery(org, binder, {
       draft: draftForContents,
       change: openChange,
+      ref: refForContents,
     }),
     enabled: Boolean(documentPath) || onFolderPage || writingFolder !== null,
   });
@@ -1272,9 +1294,18 @@ export function BinderShell({
       queryKey: queryKeys.binderDocuments(org, binder, {
         draft: draftForContents,
         change: openChange,
+        ref: refForContents,
       }),
     });
-  }, [queryClient, org, binder, documentPath, draftForContents, openChange]);
+  }, [
+    queryClient,
+    org,
+    binder,
+    documentPath,
+    draftForContents,
+    openChange,
+    refForContents,
+  ]);
 
   // The sidebar's binder section, kept in step with what is on screen.
   useEffect(() => {
@@ -1300,8 +1331,10 @@ export function BinderShell({
         ? {
             ...contents,
             active: documentPath ?? null,
-            // Clicking through the explorer stays on the branch being read.
-            ref: documentRefFromSearch,
+            // Clicking through the explorer stays on the branch being read —
+            // and on the draft: a draft is a branch, and its files and
+            // folders are read there like any other.
+            ref: documentRefFromSearch ?? draftForContents,
             reading,
           }
         : null,
@@ -1319,6 +1352,7 @@ export function BinderShell({
     reading,
     documentPath,
     documentRefFromSearch,
+    draftForContents,
     onBinderChange,
     onBinderMissing,
     missing,
@@ -1449,7 +1483,9 @@ export function BinderShell({
     window.addEventListener("popstate", take);
     return () => window.removeEventListener("popstate", take);
   }, [org, binder, addDocument]);
-  const editBinder = useWriteAction(() => void startWriting());
+  const editBinder = useWriteAction(
+    () => void startWriting(readingDraft ?? undefined),
+  );
   /** Edit while organizing: the editor, in the draft being organized. */
   const editThisDraft = useWriteAction(
     () => void startWriting(draft?.draft?.branch ?? draftBranch),
@@ -1550,7 +1586,9 @@ export function BinderShell({
               The contents only. This is the page's one filled button, and on
               the other three screens the answer to "what is this page for" is
               not "add a policy". */}
-          {activeTab !== "documents" || onBranch ? null : (
+          {/* Not on somebody else's branch, which nobody here writes to —
+              but on one of your drafts, Edit carries on in it. */}
+          {activeTab !== "documents" || (onBranch && !readingDraft) ? null : (
             <div className="bs-pagehead-actions">
               {/* **The same buttons in the same slots.** Reading, the header
                   offers Add a policy and Edit; editing, it offers the way
@@ -1905,9 +1943,8 @@ export function BinderShell({
       ) : (
         <div
           className={
-            editMode === "off" && !onBranch
-              ? "doc-workspace binder-workspace"
-              : undefined
+            // The rail beside the contents, on a branch as on the record.
+            editMode === "off" ? "doc-workspace binder-workspace" : undefined
           }
         >
           <div className="binder-home">
@@ -1982,7 +2019,11 @@ export function BinderShell({
                     onPick={(ref) =>
                       moveTo(buildBinderUrl({ org, binder, ref }))
                     }
-                    onPickDraft={(branch) => goToEdit("editing", branch)}
+                    /* A draft is a branch, read like the others: the same
+                       page, its own documents and its own rules. */
+                    onPickDraft={(branch) =>
+                      moveTo(buildBinderUrl({ org, binder, ref: branch }))
+                    }
                   />
                 ) : null
               }
@@ -2033,8 +2074,10 @@ export function BinderShell({
               }
             />
           </div>
-          {editMode === "off" && !onBranch ? (
+          {editMode === "off" ? (
             <aside className="doc-rail" aria-label="Who signs off">
+              {/* On a branch too: a draft or a change's branch has its own
+                  rules, read where its documents are. */}
               <SignOffRail
                 org={org}
                 binder={binder}
@@ -2044,6 +2087,7 @@ export function BinderShell({
                     ? { kind: "folder", path: folder! }
                     : { kind: "binder" }
                 }
+                at={{ ref: onBranch ? documentRefFromSearch : null }}
                 onNavigate={(route) => moveTo(routeToPath(route))}
               />
             </aside>

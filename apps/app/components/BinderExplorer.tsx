@@ -426,7 +426,8 @@ function VersionPicker({
  * product stops meaning anything.
  */
 function RefIcon({ refOn }: { refOn: ReadableRef }) {
-  return refOn.ref === null && refOn.change === null ? (
+  // A draft has no ref and no change either, and is not the record.
+  return refOn.ref === null && refOn.change === null && !refOn.draft ? (
     <AppIcon
       icon={ICON.onRecord}
       size="sm"

@@ -176,3 +176,20 @@ test("a folder's page names its parents as links and itself as the page", () => 
     { label: "Wards", href: null },
   ]);
 });
+
+test("a policy read in your draft, or on a branch, links its folders there too", () => {
+  const inDraft = trailFor(
+    "/riverside-health/clinical/-/blob/main/nursing/handover?edit=1&draft=draft%2Falice%2F1",
+  );
+  expect(inDraft.path[0]).toEqual({
+    label: "Nursing",
+    href: "/riverside-health/clinical/-/tree/draft%2Falice%2F1/nursing",
+  });
+
+  const onBranch = trailFor(
+    "/riverside-health/clinical/-/blob/draft%2Falice%2F1/nursing/handover",
+  );
+  expect(onBranch.path[0]?.href).toBe(
+    "/riverside-health/clinical/-/tree/draft%2Falice%2F1/nursing",
+  );
+});

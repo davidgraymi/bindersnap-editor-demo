@@ -481,6 +481,9 @@ export function BinderDocumentPage({
             binder={binder}
             binderName={formatDocumentName(binder)}
             place={{ kind: "document", path: document.path }}
+            /* Where this page reads the document: the rules beside it are
+               the ones in the same draft or branch. */
+            at={{ draft, ref: documentRef, change }}
             onNavigate={(route) => {
               window.history.pushState({}, "", routeToPath(route));
               window.dispatchEvent(new PopStateEvent("popstate"));
