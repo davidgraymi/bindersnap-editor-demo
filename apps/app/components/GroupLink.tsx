@@ -41,6 +41,44 @@ export function GroupLink({
   /** What the link says; the group's name by default. */
   children?: ReactNode;
 }) {
+  if (card) {
+    return (
+      <GroupCardLink
+        org={org}
+        group={group}
+        onNavigate={onNavigate}
+        className={className}
+      >
+        {children}
+      </GroupCardLink>
+    );
+  }
+  const to: AppRoute = { kind: "organization", org, tab: "people", group };
+  return (
+    <a
+      className={`group-link${className ? ` ${className}` : ""}`}
+      href={routeToPath(to)}
+      onClick={(event) => followInApp(event, () => onNavigate(to))}
+    >
+      {children ?? describeGroupName(group)}
+    </a>
+  );
+}
+
+/** The link with its card: the only form that reads anything. */
+function GroupCardLink({
+  org,
+  group,
+  onNavigate,
+  className,
+  children,
+}: {
+  org: string;
+  group: string;
+  onNavigate: (route: AppRoute) => void;
+  className?: string;
+  children?: ReactNode;
+}) {
   const to: AppRoute = { kind: "organization", org, tab: "people", group };
   const [open, setOpen] = useState(false);
   const [asked, setAsked] = useState(false);
@@ -48,7 +86,7 @@ export function GroupLink({
   const id = useId();
   const read = useQuery({
     ...organizationGroupQuery(org, group),
-    enabled: card && asked,
+    enabled: asked,
   });
 
   const clear = () => {
@@ -66,24 +104,6 @@ export function GroupLink({
     return () => document.removeEventListener("keydown", onKey);
   }, [open]);
 
-  const link = (
-    <a
-      className={`group-link${className ? ` ${className}` : ""}`}
-      href={routeToPath(to)}
-      aria-describedby={card && open ? id : undefined}
-      onClick={(event) => followInApp(event, () => onNavigate(to))}
-      {...(card
-        ? {
-            onFocus: () => setOpen(true),
-            onBlur: () => setOpen(false),
-          }
-        : {})}
-    >
-      {children ?? describeGroupName(group)}
-    </a>
-  );
-  if (!card) return link;
-
   const members = read.data?.members ?? [];
   const shown = members.slice(0, CARD_PEOPLE);
   return (
@@ -98,7 +118,16 @@ export function GroupLink({
         setOpen(false);
       }}
     >
-      {link}
+      <a
+        className={`group-link${className ? ` ${className}` : ""}`}
+        href={routeToPath(to)}
+        aria-describedby={open ? id : undefined}
+        onClick={(event) => followInApp(event, () => onNavigate(to))}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+      >
+        {children ?? describeGroupName(group)}
+      </a>
       {open ? (
         <span className="person-card group-card" role="tooltip" id={id}>
           <span className="person-card-text">
