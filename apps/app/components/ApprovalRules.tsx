@@ -5,6 +5,14 @@ import { describeGroupName } from "../../../packages/utils/groupName";
 import { formatDocumentName } from "../documentDisplay";
 
 import { PersonAvatar } from "./PersonAvatar";
+import { GroupLink } from "./GroupLink";
+import type { AppRoute } from "../routes";
+import {
+  approvalsHead,
+  reasonLine,
+  sharedApprovalNote,
+  type ApprovalRuleRow,
+} from "../signOffChange";
 
 /** One person, as the change payload carries them. */
 interface RuleUser {
@@ -23,6 +31,11 @@ export interface ApprovalRule {
   required: number;
   eligible: RuleUser[];
   approvedBy: RuleUser[];
+  /** Why the rule is on this change (4.9); absent from older payloads. */
+  reason?: {
+    kind: "approvers" | "rules" | "binder" | "folder" | "document";
+    matched: string[];
+  };
 }
 
 /** How many faces a row shows before it says "and N more". */
@@ -143,8 +156,30 @@ function Faces({
  *
  * Who was *asked* to review is the reviewers list in the rail, not this.
  */
-export function ApprovalRules({ rules }: { rules: readonly ApprovalRule[] }) {
+export function ApprovalRules({
+  rules,
+  org,
+  binderName = "this binder",
+  onNavigate,
+  ruleChangeHref,
+  onOpenRuleChange,
+  startsNext = null,
+}: {
+  rules: readonly ApprovalRule[];
+  /** For group links; without it a group is named, not linked. */
+  org?: string;
+  binderName?: string;
+  onNavigate?: (route: AppRoute) => void;
+  /** The rule section of the Changes tab, for the rules row's link. */
+  ruleChangeHref?: string;
+  onOpenRuleChange?: () => void;
+  /** "The Quality Committee is not asked: …" for a change that adds owners. */
+  startsNext?: string | null;
+}) {
+  // **Collapsed by default, every time** (D10): the one-line summary opens
+  // into the table, and nothing is remembered between changes.
   const [open, setOpen] = useState(false);
+  const shared = sharedApprovalNote(rules as ApprovalRuleRow[]);
   const met = rules.every(ruleMet);
   const approvedBy = [
     ...new Map(
@@ -168,7 +203,11 @@ export function ApprovalRules({ rules }: { rules: readonly ApprovalRule[] }) {
       >
         <AppIcon icon={met ? ICON.met : ICON.waiting} size="sm" />
         <span className="rev-rules-line">
-          <strong>{summarizeRules(rules)}</strong>
+          <strong>
+            {rules.some((rule) => rule.reason)
+              ? approvalsHead(rules as ApprovalRuleRow[])
+              : summarizeRules(rules)}
+          </strong>
           {approvedBy.length > 0 ? (
             <>
               {" "}
@@ -203,8 +242,46 @@ export function ApprovalRules({ rules }: { rules: readonly ApprovalRule[] }) {
                     {describeRuleTarget(rule)}
                   </span>
                   <span className="rev-rules-owners">
-                    {describeRuleOwners(rule)}
+                    {org && onNavigate && rule.groups.length > 0 ? (
+                      <>
+                        {rule.groups.map((group, index) => (
+                          <span key={group}>
+                            {index > 0 ? ", " : ""}
+                            <GroupLink
+                              org={org}
+                              group={group}
+                              onNavigate={onNavigate}
+                            />
+                          </span>
+                        ))}
+                        {rule.people.length > 0
+                          ? `, ${describeRuleOwners({ ...rule, groups: [] })}`
+                          : ""}
+                      </>
+                    ) : (
+                      describeRuleOwners(rule)
+                    )}
                   </span>
+                  {rule.reason ? (
+                    <span className="rev-rules-why">
+                      {reasonLine(rule as ApprovalRuleRow, binderName)}
+                      {rule.reason.kind === "rules" && ruleChangeHref ? (
+                        <>
+                          {" · "}
+                          <a
+                            href={ruleChangeHref}
+                            onClick={(event) => {
+                              if (!onOpenRuleChange) return;
+                              event.preventDefault();
+                              onOpenRuleChange();
+                            }}
+                          >
+                            See the rule change →
+                          </a>
+                        </>
+                      ) : null}
+                    </span>
+                  ) : null}
                 </th>
                 <td>
                   {rule.eligible.length > 0 ? (
@@ -232,6 +309,12 @@ export function ApprovalRules({ rules }: { rules: readonly ApprovalRule[] }) {
             ))}
           </tbody>
         </table>
+      ) : null}
+      {open && (shared || startsNext) ? (
+        <div className="rev-rules-notes">
+          {shared ? <p>{shared}</p> : null}
+          {startsNext ? <p>{startsNext}</p> : null}
+        </div>
       ) : null}
     </section>
   );

@@ -48,26 +48,24 @@ function comparisonUrl(binder: string, change: number): string {
   return `${APP_BASE_URL}/${OWNER}/${binder}/-/changes/${change}/diffs`;
 }
 
-test("a document in the change's list opens its own diff", async ({ page }) => {
+test("a change's documents are on its Changes tab, each a click away", async ({
+  page,
+}) => {
   await signInAsAlice(page);
   await page.goto(`${APP_BASE_URL}/${OWNER}/facilities?tab=changes&change=4`);
 
-  // A row is a way into the Changes screen, not a selector for the rail —
-  // the rail has no per-file panel, whatever the count.
-  const rows = page.locator(".change-does .bs-row");
-  await expect(rows).toHaveCount(2);
-  await expect(
-    page.locator(".bs-rail").getByRole("heading", { name: "Proposed version" }),
-  ).toHaveCount(0);
-
-  const second = rows.nth(1);
-  const name = await second.locator(".bs-row-name").innerText();
-  await second.click();
+  // The overview does not repeat the Changes tab (D9).
+  await expect(page.locator(".change-does")).toHaveCount(0);
+  await page.locator(".doc-tab", { hasText: "Changes" }).click();
 
   await expect(page).toHaveURL(/\/-\/changes\/\d+\/diffs/);
   // Both documents, on one screen, and the one clicked is the one marked.
   await expect(page.locator(".cmp-file")).toHaveCount(2);
-  await expect(page.locator(".bs-rail .bs-row")).toHaveCount(2);
+  const rows = page.locator(".bs-rail .bs-row");
+  await expect(rows).toHaveCount(2);
+  const second = rows.nth(1);
+  const name = await second.locator(".bs-row-name").innerText();
+  await second.click();
   await expect(
     page.locator('.bs-rail .bs-row[aria-current="true"]'),
   ).toContainText(name);
@@ -79,14 +77,11 @@ test("a change to one document reads the same as a change to several", async ({
   await signInAsAlice(page);
   await page.goto(`${APP_BASE_URL}/${OWNER}/clinical?tab=changes&change=7`);
 
-  // The same list, with its one row, and the same rail.
-  await expect(page.locator(".change-does .bs-row")).toHaveCount(1);
-  await expect(page.locator(".change-does")).toContainText("1 document");
   await expect(
     page.locator(".bs-rail").getByRole("heading", { name: "Proposed version" }),
   ).toHaveCount(0);
 
-  await page.locator(".change-does .bs-row").click();
+  await page.locator(".doc-tab", { hasText: "Changes" }).click();
   await expect(page).toHaveURL(/\/-\/changes\/\d+\/diffs/);
   await expect(page.locator(".cmp-file")).toHaveCount(1);
 });
@@ -147,15 +142,22 @@ test("a document going into the archive says so, and offers what is going", asyn
   ).toHaveCount(0);
 });
 
-test("a change that versions nothing says what it does instead", async ({
+test("a change that only edits who signs off shows the rule change", async ({
   page,
 }) => {
   await signInAsAlice(page);
   await page.goto(comparisonUrl("governance", 7));
 
-  // A sign-off rules change goes through the same review as a policy and
-  // publishes no version, so every word about versions would be false for it.
-  await expect(page.locator(".bs-note")).toContainText("versions no document");
+  // A sign-off rules change publishes no version: what it shows is what it
+  // does to who signs off, in plain words (4.11).
+  const rules = page.locator(".cmp-rules");
+  await expect(rules).toContainText("Who signs off");
+  await expect(rules).toContainText("Clinical Standards");
+  await expect(
+    rules.locator(".cmp-rules-chip--added", { hasText: "Quality Committee" }),
+  ).toBeVisible();
+  await expect(rules).toContainText("After this is published");
+  await expect(rules).toContainText("Counted under the rules in force today");
   await expect(page.locator(".cmp-file")).toHaveCount(0);
   // Nothing to size is not a size.
   await expect(page.locator(".cmp-scale")).toHaveCount(0);
