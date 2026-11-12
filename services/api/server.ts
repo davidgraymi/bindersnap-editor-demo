@@ -10200,6 +10200,7 @@ async function handleBinderSignOffView(
   workspaceName: string,
   draftRaw: string | null,
   changeRaw: string | null,
+  refRaw: string | null = null,
 ): Promise<Response> {
   const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
@@ -10225,9 +10226,25 @@ async function handleBinderSignOffView(
     if (draft && "error" in draft) {
       return json(409, { error: draft.error }, baseHeaders);
     }
+    // **A branch's rules, the way its tree is read** (`/-/tree/{ref}`): a
+    // draft read as a branch shows the rules in it, not the record's. The
+    // same rule as the documents list: somebody else's unproposed draft is
+    // refused.
+    const readable = draft
+      ? null
+      : await resolveReadableRef({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          username: session.username,
+          refRaw,
+        });
+    if (readable && "error" in readable) {
+      return json(409, { error: readable.error }, baseHeaders);
+    }
     const changeNumber = Number.parseInt(changeRaw ?? "", 10);
     const onChange =
-      !draft && Number.isFinite(changeNumber) && changeNumber > 0
+      !draft && !readable && Number.isFinite(changeNumber) && changeNumber > 0
         ? await getPullRequestHeadBranch({
             client,
             owner: orgName,
@@ -10237,7 +10254,7 @@ async function handleBinderSignOffView(
             .then((branch) => branch || null)
             .catch(() => null)
         : null;
-    const ref = draft ? draft.branch : (onChange ?? "main");
+    const ref = draft ? draft.branch : (readable?.ref ?? onChange ?? "main");
 
     const privileged = createPrivilegedGiteaClient() ?? client;
     const [signOff, protection, tree, orgTeams, repoTeams, owners] =
@@ -19102,6 +19119,7 @@ async function handleRequest(req: Request): Promise<Response> {
         workspaceSignOffMatch[2]!,
         url.searchParams.get("draft"),
         url.searchParams.get("change"),
+        url.searchParams.get("ref"),
       );
     } else if (workspaceSignOffMatch && method === "PUT") {
       return await handleBinderShapeChange(

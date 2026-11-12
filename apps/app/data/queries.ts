@@ -118,11 +118,7 @@ export const queryKeys = {
   binderSettings: (org: string, binder: string) =>
     ["binders", org, binder, "settings"] as const,
   /** Who signs off, on `main` or at a draft or a change. */
-  binderSignOff: (
-    org: string,
-    binder: string,
-    at: { draft?: string | null; change?: number | null } = {},
-  ) =>
+  binderSignOff: (org: string, binder: string, at: SignOffAt = {}) =>
     [
       "binders",
       org,
@@ -130,6 +126,7 @@ export const queryKeys = {
       "sign-off",
       at.draft ?? null,
       at.change ?? null,
+      at.ref ?? null,
     ] as const,
   organizationGroup: (org: string, group: string) =>
     ["organizations", org, "groups", group] as const,
@@ -407,10 +404,20 @@ export function binderDraftQuery(org: string, binder: string, branch?: string) {
 }
 
 /** A binder's rules and sign-off. */
+/**
+ * Where "Who signs off" is read: your draft, a change's branch, or any
+ * branch, as `/-/tree/{ref}` reads its documents. Nothing is `main`.
+ */
+export interface SignOffAt {
+  draft?: string | null;
+  change?: number | null;
+  ref?: string | null;
+}
+
 export function binderSignOffQuery(
   org: string,
   binder: string,
-  at: { draft?: string | null; change?: number | null } = {},
+  at: SignOffAt = {},
 ) {
   return queryOptions({
     queryKey: queryKeys.binderSignOff(org, binder, at),
