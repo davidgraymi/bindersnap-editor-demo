@@ -213,6 +213,7 @@ import {
   findCurrentDraft,
   startDraft,
   isDraftBranch,
+  normalizeReadableRef,
   listBinderDrafts,
   openDraft,
   readDraftActs,
@@ -13457,8 +13458,14 @@ async function resolveReadableRef(params: {
   username: string;
   refRaw: string | null;
 }): Promise<{ ref: string } | { error: string } | null> {
-  const asked = (params.refRaw ?? "").trim();
-  if (asked === "") return null;
+  const raw = (params.refRaw ?? "").trim();
+  if (raw === "") return null;
+  // Compared under the name Gitea reads it by: `refs/heads/draft/bob/1` is
+  // `draft/bob/1`, and must meet the same check.
+  const asked = normalizeReadableRef(raw);
+  if (asked === null) {
+    return { error: "That is not a branch or a version of this binder." };
+  }
 
   const unproposed = isDraftBranch(asked)
     ? await listBinderDrafts({
@@ -13467,6 +13474,31 @@ async function resolveReadableRef(params: {
         workspace: params.workspace,
       })
     : [];
+  // A bare commit id is a way to the same files: refused when it is the
+  // newest commit of somebody else's draft.
+  const looksLikeCommit = /^[0-9a-f]{7,64}$/i.test(asked);
+  const othersHead =
+    looksLikeCommit && unproposed.length === 0
+      ? await listBinderDrafts({
+          client: params.client,
+          org: params.org,
+          workspace: params.workspace,
+        })
+      : unproposed;
+  if (
+    looksLikeCommit &&
+    othersHead.some(
+      (entry) =>
+        entry.owner !== params.username &&
+        entry.changeNumber === null &&
+        (entry.head ?? "").toLowerCase().startsWith(asked.toLowerCase()),
+    )
+  ) {
+    return {
+      error:
+        "That draft is not yours. Other people's drafts are visible as existing and never as contents.",
+    };
+  }
   const stillADraft = unproposed.find((entry) => entry.branch === asked);
   if (stillADraft && stillADraft.owner !== params.username) {
     return {
