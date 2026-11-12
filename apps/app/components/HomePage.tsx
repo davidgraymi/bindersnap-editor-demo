@@ -1,18 +1,26 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { type ReactNode, useMemo } from "react";
 
-import { homeChangesQuery, homeFeedQuery } from "../data/queries";
+import {
+  homeChangesQuery,
+  homeFeedQuery,
+  myDraftsQuery,
+} from "../data/queries";
 import { getGreeting, getGreetingName } from "../homeChanges";
 import {
   describeFeedEvent,
+  describeOthers,
   feedTime,
+  foldFeedDay,
   groupFeedByDay,
-  type FeedEvent,
+  type FeedGroup,
 } from "../homeFeed";
-import { buildQueueRows, groupQueueRows } from "../reviewQueue";
-import { followInApp } from "../appLink";
+import { buildHomeTasks, describeHomeTasks, type HomeTask } from "../homeTasks";
+import { buildQueueRows } from "../reviewQueue";
+import { followInApp, navigateToHref } from "../appLink";
 import { buildBinderUrl } from "../binderShell";
 import { routeToPath } from "../routes";
+import { AppIcon, ICON } from "./AppIcon";
 import { PersonAvatar } from "./PersonAvatar";
 import { SkeletonPanel } from "./Skeleton";
 
@@ -23,7 +31,7 @@ interface HomePageProps {
   onOpenChange: (owner: string, repo: string, changeNumber: number) => void;
   /** Open a binder — where an event about making one leads. */
   onOpenBinder: (org: string, binder: string) => void;
-  /** The change requests page, where the work waiting on you is listed. */
+  /** The change requests page: every change in flight, yours or not. */
   onOpenChanges: () => void;
   /** The organization's binders, where a document is added. */
   onOpenBinders: (() => void) | null;
@@ -32,17 +40,19 @@ interface HomePageProps {
 }
 
 /**
- * Home is what has been happening in your binders.
+ * Home is what is waiting on you, and then what has been happening.
  *
- * It was a second list of change requests, beside the page that lists them —
- * the same rows, cut down. Now it is a feed, GitHub's dashboard for a policy
- * manual: who opened, approved, sent back, discussed, published or closed
- * what, a day at a time, newest first, as far back as you scroll. What is
- * waiting on your review is one line at the top that leads to the change
- * requests page, where every state has its place.
+ * **Your turn first** (`homeTasks.ts`): the changes you were asked to
+ * review, your own that were sent back or approved, and the drafts you have
+ * not proposed, each with the one thing to do. It was a count that led to
+ * the change requests page; the person this is for opens the app to find out
+ * what they owe, and should not have to click to be told. That page still
+ * lists every change in flight, by state, and is one link away.
  *
- * The feed is Gitea's own (`/api/app/home/feed`), read with your token, so it
- * holds what you can see and nothing else.
+ * **Then the feed**, as far back as you scroll: who opened, approved, sent
+ * back, discussed, published or closed what, a day at a time, each change
+ * once a day (`foldFeedDay`). It is Gitea's own (`/api/app/home/feed`), read
+ * with your token, so it holds what you can see and nothing else.
  */
 export function HomePage({
   currentUsername,
@@ -60,16 +70,19 @@ export function HomePage({
   );
   const days = useMemo(() => groupFeedByDay(events), [events]);
 
-  // How many changes wait on your review: the same rule, from the same
-  // payload, as the change requests page's first section.
+  // What is waiting on you: from the change requests page's own rows, so
+  // the two cannot disagree, and from your drafts.
   const home = useQuery(homeChangesQuery());
-  const waiting = useMemo(
+  const drafts = useQuery(myDraftsQuery());
+  const tasks = useMemo(
     () =>
       home.data
-        ? groupQueueRows(buildQueueRows(home.data.open, currentUsername))
-            .your_review.length
-        : 0,
-    [home.data, currentUsername],
+        ? buildHomeTasks(
+            buildQueueRows(home.data.open, currentUsername),
+            drafts.data?.drafts ?? [],
+          )
+        : null,
+    [home.data, drafts.data, currentUsername],
   );
 
   const changesHref = routeToPath({ kind: "changes" });
@@ -83,34 +96,60 @@ export function HomePage({
             {getGreetingName(currentUsername, currentUserFullName)}.
           </h1>
           <p className="bs-subtitle">
-            Here is what has been happening in your binders.
+            {tasks === null
+              ? home.error
+                ? "Here is what has been happening in your binders."
+                : "Checking what is waiting on you…"
+              : describeHomeTasks(tasks.length)}
           </p>
         </div>
       </div>
 
       {guide}
 
-      {/* The one thing on Home that is yours to do, as a way to it rather
-          than a second copy of the list it leads to. */}
-      {waiting > 0 ? (
-        <a
-          className="home-waiting"
-          href={changesHref}
-          onClick={(event) => followInApp(event, onOpenChanges)}
-        >
-          <span className="bs-section-count bs-section-count--attention">
-            {waiting}
-          </span>
-          <span className="home-waiting-text">
-            {waiting === 1
-              ? "change request is waiting on your review"
-              : "change requests are waiting on your review"}
-          </span>
-          <span className="home-waiting-go" aria-hidden="true">
-            →
-          </span>
-        </a>
-      ) : null}
+      {/* Your turn. Kept on the page when it is empty: "nothing is waiting
+          on you" is the answer most visits are for. */}
+      {tasks === null ? (
+        home.error ? null : (
+          <SkeletonPanel label="Checking what is waiting on you" rows={2} bar />
+        )
+      ) : (
+        <section className="bs-panel home-tasks" aria-labelledby="home-tasks">
+          <div className="bs-panel-bar">
+            <h2 className="bs-panel-bar-title" id="home-tasks">
+              Your turn
+            </h2>
+            <span
+              className={`bs-section-count${
+                tasks.length > 0 ? " bs-section-count--attention" : ""
+              }`}
+            >
+              {tasks.length}
+            </span>
+            <a
+              className="home-tasks-all"
+              href={changesHref}
+              onClick={(event) => followInApp(event, onOpenChanges)}
+            >
+              All change requests
+            </a>
+          </div>
+          {tasks.length === 0 ? (
+            <p className="home-tasks-empty">
+              You are up to date. When somebody asks for your review, or a
+              change of yours is sent back or approved, it is listed here.
+            </p>
+          ) : (
+            <ul className="bs-row-list">
+              {tasks.map((task) => (
+                <TaskRow key={task.key} task={task} />
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      <h2 className="home-section-title">Lately in your binders</h2>
 
       {feed.error ? (
         <section className="bs-panel">
@@ -155,12 +194,12 @@ export function HomePage({
               className="home-feed-day"
               aria-label={day.label}
             >
-              <h2 className="home-feed-day-label">{day.label}</h2>
+              <h3 className="home-feed-day-label">{day.label}</h3>
               <ol className="bs-panel home-feed-list">
-                {day.events.map((event) => (
+                {foldFeedDay(day.events).map((group) => (
                   <FeedItem
-                    key={event.id}
-                    event={event}
+                    key={group.lead.id}
+                    group={group}
                     onOpenChange={onOpenChange}
                     onOpenBinder={onOpenBinder}
                   />
@@ -188,20 +227,56 @@ export function HomePage({
 }
 
 /**
- * One event: who did what to which change, where, and when — with what they
- * wrote under it. The whole row is a link to the change, or to the binder for
- * a binder being made.
+ * One thing waiting on you: what it is, why it is yours, and what to do.
+ *
+ * The whole row is a link, as every list's is. The word on the right is the
+ * act, not a button: approving and publishing are decided on the change's
+ * own page, with what they do in front of you.
+ */
+function TaskRow({ task }: { task: HomeTask }) {
+  return (
+    <li className="bs-row home-task">
+      <a
+        className="home-task-link"
+        href={task.href}
+        onClick={(event) => followInApp(event, () => navigateToHref(task.href))}
+      >
+        <span className="bs-row-icon" aria-hidden="true">
+          <AppIcon
+            icon={task.kind === "draft" ? ICON.draft : ICON.changeRequest}
+            size="md"
+          />
+        </span>
+        <span className="home-task-body">
+          <span className="bs-row-name home-task-title">{task.title}</span>
+          <span className="bs-row-meta">{task.detail}</span>
+        </span>
+        <span className="home-task-action">
+          {task.action}
+          <AppIcon icon={ICON.forward} size="sm" />
+        </span>
+      </a>
+    </li>
+  );
+}
+
+/**
+ * One change's day: who did what to it, where, and when — with what they
+ * wrote under it, and how much else happened. The whole row is a link to the
+ * change, or to the binder for a binder being made.
  */
 function FeedItem({
-  event,
+  group,
   onOpenChange,
   onOpenBinder,
 }: {
-  event: FeedEvent;
+  group: FeedGroup;
   onOpenChange: (owner: string, repo: string, changeNumber: number) => void;
   onOpenBinder: (org: string, binder: string) => void;
 }) {
+  const event = group.lead;
   const line = describeFeedEvent(event);
+  const others = describeOthers(group.others);
   const change = event.changeNumber;
   const href =
     change === null
@@ -237,6 +312,9 @@ function FeedItem({
             <strong className="home-feed-subject">{line.subject}</strong>
             {line.binder ? (
               <span className="home-feed-where"> in {line.binder}</span>
+            ) : null}
+            {others ? (
+              <span className="home-feed-others"> · {others}</span>
             ) : null}
           </span>
           {event.excerpt ? (

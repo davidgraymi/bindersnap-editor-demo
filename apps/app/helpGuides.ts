@@ -193,7 +193,8 @@ export const HELP_GUIDES: HelpGuide[] = [
       {
         heading: "Where to start",
         paragraphs: [
-          "Change requests in the sidebar lists everything in flight, with what is waiting on your review at the top. The bell in the top bar tells you when something new arrives, and Home shows a count.",
+          "Home lists what is waiting on you under Your turn: the changes you were asked to review, your own changes that were sent back or approved, and drafts you have not proposed. Each says the one thing to do. The bell in the top bar tells you when something new arrives.",
+          "Change requests in the sidebar is the whole picture: every change in flight, yours or not, by where it stands.",
           "Open a change and read the Changes tab. Additions are marked in green and deletions are struck through, inside the document as it will read, so you never have to compare two files by eye.",
         ],
       },

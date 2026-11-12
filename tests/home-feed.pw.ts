@@ -54,18 +54,44 @@ test("an event opens the change it is about", async ({ page }) => {
   await expect(page).toHaveURL(/\/-\/changes\/\d+$/, { timeout: 30_000 });
 });
 
-test("what is waiting on your review is one line that leads to it", async ({
+test("Home lists what is waiting on you, each with its one act", async ({
   page,
 }) => {
   await signInAsAlice(page);
   await page.goto(APP_BASE_URL);
 
-  // The seed asks Alice to review one of Carol's changes.
-  const waiting = page.locator(".home-waiting");
-  await expect(waiting).toContainText("waiting on your review", {
-    timeout: 30_000,
-  });
-  await waiting.click();
+  const turn = page.getByRole("region", { name: "Your turn" });
+  await expect(turn).toBeVisible({ timeout: 30_000 });
+  // The seed asks Alice to review one of Carol's changes, sends two of her
+  // own back, and approves two more.
+  await expect(
+    turn.getByRole("link", { name: /Review$/ }).first(),
+  ).toBeVisible();
+  await expect(
+    turn.getByRole("link", { name: /Revise$/ }).first(),
+  ).toBeVisible();
+  await expect(
+    turn.getByRole("link", { name: /Publish$/ }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/things? (is|are) waiting on you\./),
+  ).toBeVisible();
+
+  // A row opens the change it is about.
+  await turn
+    .getByRole("link", { name: /Review$/ })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/\/-\/changes\/\d+$/, { timeout: 30_000 });
+});
+
+test("the whole picture is one link from Home", async ({ page }) => {
+  await signInAsAlice(page);
+  await page.goto(APP_BASE_URL);
+  await page
+    .getByRole("region", { name: "Your turn" })
+    .getByRole("link", { name: "All change requests" })
+    .click();
   await expect(page).toHaveURL(/\/-\/changes$/, { timeout: 30_000 });
   await expect(
     page.getByRole("region", { name: "Waiting on your review" }),
