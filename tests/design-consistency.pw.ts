@@ -282,36 +282,6 @@ test("every row of controls in the product is one size", async ({ page }) => {
     await settleOnRealShell(page);
     await expectOneSizePerRow(page, where);
   }
-
-  // **A row that only exists once somebody presses something.** A sign-off
-  // rule's own pickers are drawn only while it is being changed, so walking
-  // the page alone measures nothing — and a 49px select beside a 32px button
-  // once sat there unnoticed until somebody opened it by hand. A guard only
-  // sees what the page renders, which is worth remembering when adding
-  // screens to the list above.
-  await page.goto(`${APP_BASE_URL}/${org}/${binder}?tab=sign-off`);
-  await settleOnRealShell(page);
-  await page
-    .getByRole("button", { name: "Add a rule for a folder or document" })
-    .click();
-  const foot = page.locator("#sign-off .bs-panel-foot").first();
-  await foot
-    .getByRole("combobox", { name: "What has to be signed off" })
-    .selectOption("binder");
-  await foot
-    .getByRole("combobox", { name: "Which group signs it off" })
-    .selectOption({ index: 1 });
-  await page.getByRole("button", { name: "Add this rule" }).click();
-  await page
-    .getByRole("button", { name: /^Change the rule for / })
-    .first()
-    .click();
-  await expect(
-    page.locator("#sign-off .bs-settings-rules-edit").getByRole("combobox", {
-      name: "What has to be signed off",
-    }),
-  ).toBeVisible({ timeout: 30_000 });
-  await expectOneSizePerRow(page, "a sign-off rule being changed");
 });
 
 test("the fields in a form are one size, picker included", async ({ page }) => {

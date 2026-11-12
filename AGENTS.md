@@ -460,6 +460,20 @@ whose approvals count toward `required_approvals`**.
 - The list in force at a publish is stamped on the version's tag
   ("Approvals counted from").
 
+**Sign-off rules are changed in a draft, where they are shown.** Every
+binder, folder and document page has "Who signs off here" in its rail (Set
+here, then From above), and the editor has the same panel on its right, where
+Set here is edited: `PUT /api/app/binders/:org/:binder/rules/sign-off` sets
+one rule's owners as one act in the author's draft. Settings only lists the
+rules. The file is written in one canonical form (`canonicalSignOffRules`:
+binder, folders, documents, the rules rule; one line per target, owners
+sorted), so two drafts' rule edits merge rule by rule
+(`mergeSignOffRules`); a clean merge settles itself on Bring up to date and a
+real clash is a plain-words choice on the conflict page. Renaming a folder
+moves its rules; archiving one drops them. A change's detail carries
+`signOffChange` (what it does to each rule) and a `reason` on each approval
+rule. See `docs/design/sign-off-rules-in-place.md`.
+
 `.gitea/CODEOWNERS` patterns are anchored regexes, not gitignore globs — a
 folder rule is `policies/nursing/.*` — and the file is read from the base
 branch, so a CODEOWNERS change never governs its own change.

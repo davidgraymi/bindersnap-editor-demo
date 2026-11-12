@@ -21,12 +21,13 @@ writes — `*.json` — is opened in it. **A Word file or a PDF chosen in the
 editor is shown there, read only** (`EditorFileCover`, the editor's `cover`):
 the document page's own preview on the desk where the page goes, the ribbon
 locked, the file panel and status bar where they were, and a note at the top
-right — "Word document · View only", Edit in Bindersnap, Download — so moving
+right — "Word document · View only", Edit in Bindersnap, Upload new version
+(into the draft), Download — so moving
 to one never leaves the editor. Moving between documents replaces the address
 rather than adding to Back. A Word file or a PDF is edited in the
 program that made it and uploaded as a new version, **or converted on request**:
-"Edit in Bindersnap" (the document's page, the editor's file panel, and the
-note on a file shown in the editor) opens
+"Edit in Bindersnap" (the editor's file panel, and the note on a file shown
+in the editor) opens
 `ConvertDocumentModal`, which reads the file in the browser
 (`convertToEditor.ts`: mammoth for `.docx`, pdf.js for a PDF, then the
 editor's own schema) and says what the conversion loses _before_ anything is
@@ -63,14 +64,26 @@ step for that draft, returning to the policy on Back. Close lands on the
 document at `?edit=1&draft=`, with the draft bar (Propose, Discard) at the foot
 as on the binder's own page. It says "In <draft>" and lists your drafts
 in the file panel's "What you are reading". The binder's own page offers the
-same picker while reading, with "On the record" as a place. **Edit on a
-binder opens the editor** (`pickPolicyToWrite`: the policy last written in the
-draft, else the first) — only a binder with nothing the editor writes opens
-the tree. **The editor's file panel organizes the draft in place**: each row
+same picker while reading, with "On the record" as a place. **One button,
+Edit** (D8 of `docs/design/sign-off-rules-in-place.md`): the binder, folder
+and document pages offer nothing else, to anyone who can write. Edit on a
+document opens it in the editor; on a folder's page it puts the folder on the
+desk; on a binder it opens `pickPolicyToWrite`'s policy (the last written in
+the draft, else the first), or the binder's top folder when there is none.
+**A folder on the desk** (`EditorFolderDesk`, in the `cover` slot, at
+`/-/tree/{ref}/{folder}?edit=write`) is a head card — Upload files here, New
+document here — over the binder page's own list, read at the draft, with no
+Published picker. A folder's name in the file panel opens it there; its
+arrow opens and shuts it in place. **"Who signs off here"** is the editor's
+right-hand panel (`EditorSignOffSide`, in the `aside` slot beside the file
+panel): the rules for the folder or document open, read at the draft; Set
+here is edited there (`PUT …/rules/sign-off`, one act per edit), From above
+is read only. **The editor's file panel organizes the draft in place**: each row
 renames (pencil, double-click on the open one, or F2), moves (drag onto a
 folder, or Move), and a policy archives; New folder is in its head. A
 right-click, the menu key or Shift+F10 on a row opens the same acts as a
-menu, and a folder's adds "New document here" and "New folder here". Every act
+menu, and a folder's adds "New document here", "Upload files here" and "New
+folder here"; Upload is also in the panel's head. Every act
 goes into the same draft. When one moves the open policy — renaming it,
 refiling it, or renaming a folder above it — its unsaved words are saved first
 and the editor follows it by identity (`uid`) to its new address; archived, it
@@ -78,8 +91,9 @@ goes on to the next policy to write (`actInEditor` in `BinderShell.tsx`).
 The title in the editor's header is the open policy's name and renames it
 the same way.
 Archiving from the panel offers Undo, and the panel's foot lists the archive
-with Restore, both into the same draft. Organize on the binder's header is the
-same tree on the binder's own page. **An open change request is edited in
+with Restore, both into the same draft. The binder's own tree can still be
+rearranged at `?edit=1`, where the draft bar proposes or discards — reached
+from Drafts and from the editor's Close. **An open change request is edited in
 place by its author**: Edit on its Proposed version card opens the editor at
 `?edit=write&change=N`, which reads the change's branch and saves with
 `changeNumber` (the server's `resolveChangeToJoin`) — no draft, no Propose,
