@@ -5,6 +5,7 @@ import { RULE_CHANGE_ANCHOR } from "./RuleChangeSection";
 
 import { downloadDocument } from "../api";
 import { followInApp } from "../appLink";
+import { formatDocumentName } from "../documentDisplay";
 import type { ChangeScope } from "../changeScope";
 import {
   describeChangedBadge,
@@ -157,7 +158,13 @@ function KindIcon({ kind }: { kind: ChangedDocumentRow["kind"] }) {
 }
 
 /**
- * `+112 −8`, drawn the way every diff draws it, or nothing.
+ * How much a document changed, or nothing.
+ *
+ * **In words on the document's own bar** — "76 words added · 3 removed" —
+ * and as `+76 −3` only in the tree, where there is room for nothing longer.
+ * The bar said `+76 −0` in monospace, which is how a code review counts lines
+ * and reads as arithmetic to anyone who has not sat through one. A side with
+ * nothing in it is left out: "0 removed" is a word about nothing.
  *
  * Nothing until that document's comparison has been read, and nothing for one
  * whose words did not move: a rename says what it did in its path, and a
@@ -165,35 +172,67 @@ function KindIcon({ kind }: { kind: ChangedDocumentRow["kind"] }) {
  */
 function WordCounts({
   summary,
+  spelled = false,
 }: {
   summary: ComparisonSummary | null | undefined;
+  /** Said in words, for the document's own bar. */
+  spelled?: boolean;
 }) {
   if (!summary || summary.identical) return null;
   // Same words, different look: a count of +0 −0 would read as nothing.
   if (summary.restyled) {
     return <span className="cmp-counts cmp-counts-note">Formatting</span>;
   }
-  const words = summary.additions + summary.deletions > 0;
-  const pictures = (count: number) =>
-    `${count} ${count === 1 ? "picture" : "pictures"}`;
-  const said = [
-    words
-      ? `${summary.additions} words added, ${summary.deletions} removed`
-      : null,
-    summary.picturesAdded > 0
-      ? `${pictures(summary.picturesAdded)} added`
-      : null,
-    summary.picturesRemoved > 0
-      ? `${pictures(summary.picturesRemoved)} removed`
-      : null,
+  const count = (amount: number, one: string, many: string) =>
+    `${amount} ${amount === 1 ? one : many}`;
+  const pictures = (amount: number) => count(amount, "picture", "pictures");
+  const added = [
+    summary.additions > 0 ? count(summary.additions, "word", "words") : null,
+    summary.picturesAdded > 0 ? pictures(summary.picturesAdded) : null,
   ].filter(Boolean);
+  const removed = [
+    summary.deletions > 0 ? count(summary.deletions, "word", "words") : null,
+    summary.picturesRemoved > 0 ? pictures(summary.picturesRemoved) : null,
+  ].filter(Boolean);
+  if (added.length === 0 && removed.length === 0) return null;
+
+  const addedSaid = added.length > 0 ? `${added.join(" and ")} added` : "";
+  // "3 removed" after "76 words added"; "3 words removed" on its own.
+  const removedSaid =
+    removed.length === 0
+      ? ""
+      : added.length > 0 && summary.picturesRemoved === 0
+        ? `${summary.deletions} removed`
+        : `${removed.join(" and ")} removed`;
+  const said = [
+    addedSaid,
+    removed.length > 0 ? `${removed.join(" and ")} removed` : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  if (spelled) {
+    return (
+      <span className="cmp-counts cmp-counts--spelled" aria-label={said}>
+        {addedSaid ? <span className="cmp-counts-add">{addedSaid}</span> : null}
+        {addedSaid && removedSaid ? (
+          <span className="cmp-counts-sep" aria-hidden="true">
+            ·
+          </span>
+        ) : null}
+        {removedSaid ? (
+          <span className="cmp-counts-del">{removedSaid}</span>
+        ) : null}
+      </span>
+    );
+  }
   return (
-    <span className="cmp-counts" aria-label={said.join(", ")}>
-      {words ? (
-        <>
-          <span className="cmp-counts-add">+{summary.additions}</span>
-          <span className="cmp-counts-del">−{summary.deletions}</span>
-        </>
+    <span className="cmp-counts" aria-label={said}>
+      {summary.additions > 0 ? (
+        <span className="cmp-counts-add">+{summary.additions}</span>
+      ) : null}
+      {summary.deletions > 0 ? (
+        <span className="cmp-counts-del">−{summary.deletions}</span>
       ) : null}
       {summary.picturesAdded > 0 ? (
         <span className="cmp-counts-add">
@@ -792,25 +831,48 @@ interface ChangedDocumentSectionProps {
 }
 
 /**
- * The document's address, as the bar draws it — and, when the change moves
- * or renames it, both addresses: the old one struck out in red and the new
- * one in green, the way a diff draws any other line that changed. A sentence
+ * Where a document is and what it is called, as a person says it:
+ * "Finance / Expenses Policy" for `finance/expenses-policy`. The same words
+ * its own page's trail uses.
+ */
+export function describeDocumentPath(slugPath: string): string {
+  return slugPath
+    .split("/")
+    .filter(Boolean)
+    .map(formatDocumentName)
+    .join(" / ");
+}
+
+/**
+ * Where the document is, as the bar draws it — and, when the change moves
+ * or renames it, both places: the old one struck out in red and the new one
+ * in green, the way a diff draws any other line that changed. A sentence
  * saying "Moved from Nursing" under the bar was one more line to read to
  * learn what the path itself can show.
+ *
+ * **Names, not the address.** It read `finance/expenses-policy` in
+ * monospace, which is the file's address in the URL and nothing the person
+ * reviewing it ever typed or was shown anywhere else.
  */
 function FilePath({ row }: { row: ChangedDocumentRow }): ReactNode {
   if (!row.previousSlugPath) {
-    return <span className="cmp-file-path">{row.slugPath}</span>;
+    return (
+      <span className="cmp-file-path">
+        {describeDocumentPath(row.slugPath)}
+      </span>
+    );
   }
   return (
     <>
       <del className="cmp-file-path cmp-file-path--old">
-        {row.previousSlugPath}
+        {describeDocumentPath(row.previousSlugPath)}
       </del>
       <span className="cmp-file-path-arrow" aria-hidden="true">
         →
       </span>
-      <ins className="cmp-file-path cmp-file-path--new">{row.slugPath}</ins>
+      <ins className="cmp-file-path cmp-file-path--new">
+        {describeDocumentPath(row.slugPath)}
+      </ins>
       {/* A strike-through is invisible to a screen reader. */}
       {row.move ? <span className="sr-only">{row.move}</span> : null}
     </>
@@ -921,7 +983,7 @@ function ChangedDocumentSection({
           <FilePath row={row} />
         </h2>
 
-        <WordCounts summary={summary} />
+        <WordCounts summary={summary} spelled />
 
         <span className="bs-row-meta cmp-file-step">{row.versionStep}</span>
 
