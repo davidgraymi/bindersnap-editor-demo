@@ -5,6 +5,9 @@ import type { components } from "./spec/gitea";
 import {
   buildThreads,
   createDiscussionThread,
+  decodeAnchor,
+  encodeAnchor,
+  readAnchor,
   isValidThreadId,
   listDiscussions,
   parseMarker,
@@ -112,6 +115,7 @@ test("parseMarker reads kind and thread id", () => {
     kind: "thread",
     threadId: "abc-123",
     state: undefined,
+    anchor: null,
   });
 });
 
@@ -687,4 +691,103 @@ test("a reaction outside the vocabulary never reaches Gitea", async () => {
     }),
   ).rejects.toThrow(/not a reaction/i);
   expect(POST).not.toHaveBeenCalled();
+});
+
+const ANCHOR = {
+  document: "01J8XZ4K7MQ9V3B0RN7YHS2E1D",
+  label: "Expenses Policy",
+  quote: "cheaper than standard — on the day",
+  prefix: "only where it was ",
+  suffix: ", and the booking",
+};
+
+test("a thread about a passage carries the passage in its marker", () => {
+  const encoded = encodeAnchor(ANCHOR);
+  // One token: no space to split the marker on, and nothing that closes it.
+  expect(encoded).toMatch(/^[A-Za-z0-9_-]+$/);
+  expect(decodeAnchor(encoded)).toEqual(ANCHOR);
+
+  const [thread] = buildThreads([
+    comment(
+      1,
+      `Cheaper when?\n\n${marker("thread", "t1", `anchor=${encoded}`)}`,
+      "2026-11-12T10:00:00Z",
+    ),
+    comment(
+      2,
+      `At booking.\n\n${marker("reply", "t1")}`,
+      "2026-11-12T10:05:00Z",
+    ),
+  ]);
+  expect(thread?.anchor).toEqual(ANCHOR);
+  // The words the reader sees are the comment's, with no marker in them.
+  expect(thread?.comments[0]?.body).toBe("Cheaper when?");
+});
+
+test("a comment on the whole change has no passage", () => {
+  const [thread] = buildThreads([
+    comment(1, `Fine.\n\n${marker("thread", "t1")}`, "2026-11-12T10:00:00Z"),
+  ]);
+  expect(thread?.anchor).toBeNull();
+});
+
+test("only a thread's root says what it is about", () => {
+  const encoded = encodeAnchor(ANCHOR);
+  const [thread] = buildThreads([
+    comment(1, `Fine.\n\n${marker("thread", "t1")}`, "2026-11-12T10:00:00Z"),
+    comment(
+      2,
+      `Me too.\n\n${marker("reply", "t1", `anchor=${encoded}`)}`,
+      "2026-11-12T10:05:00Z",
+    ),
+  ]);
+  expect(thread?.anchor).toBeNull();
+});
+
+test("an anchor that is not a bounded passage is no anchor", () => {
+  expect(readAnchor(null)).toBeNull();
+  expect(readAnchor("words")).toBeNull();
+  expect(readAnchor({ document: "d", quote: "   " })).toBeNull();
+  expect(readAnchor({ document: "d", quote: "x".repeat(601) })).toBeNull();
+  expect(readAnchor({ quote: "words" })).toBeNull();
+  // Context is optional, and an overlong one is dropped rather than refused.
+  expect(
+    readAnchor({ document: "d", quote: "words", prefix: "y".repeat(500) }),
+  ).toEqual({
+    document: "d",
+    label: "",
+    quote: "words",
+    prefix: "",
+    suffix: "",
+  });
+  expect(decodeAnchor("not base64 json!")).toBeNull();
+  expect(decodeAnchor(Buffer.from("[1,2]").toString("base64url"))).toBeNull();
+});
+
+test("starting a thread on a passage writes it into the comment", async () => {
+  const posted: string[] = [];
+  const client = {
+    POST: mock(async (_path: string, init: { body: { body: string } }) => {
+      posted.push(init.body.body);
+      return { data: { id: 1 }, response: new Response(null, { status: 201 }) };
+    }),
+    GET: mock(async () => ({
+      data: [],
+      response: new Response(null, { status: 200 }),
+    })),
+  } as unknown as GiteaClient;
+
+  await createDiscussionThread({
+    client,
+    owner: "riverside-health",
+    repo: "corporate",
+    pullNumber: 16,
+    body: "Cheaper when?",
+    anchor: ANCHOR,
+  });
+
+  expect(posted).toHaveLength(1);
+  const stored = parseMarker(posted[0]!);
+  expect(stored?.kind).toBe("thread");
+  expect(stored?.anchor).toEqual(ANCHOR);
 });

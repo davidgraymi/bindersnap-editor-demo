@@ -88,6 +88,22 @@ export const DiscussionResolutionEventSchema = z.object({
   at: z.string(),
 });
 
+/**
+ * The passage a discussion is about: a reviewer selected these words in this
+ * document. `prefix` and `suffix` are what stood either side, to find the
+ * words again in a document that says them twice.
+ */
+export const DiscussionAnchorSchema = z.object({
+  /** The document's identity, or its path when it has none. */
+  document: z.string().max(300),
+  /** What the document was called when the comment was made. */
+  label: z.string().max(200),
+  quote: z.string().min(1).max(600),
+  prefix: z.string().max(80),
+  suffix: z.string().max(80),
+});
+export type DiscussionAnchor = z.infer<typeof DiscussionAnchorSchema>;
+
 export const DiscussionThreadSchema = z.object({
   id: z.string(),
   origin: z.enum(["bindersnap", "external"]),
@@ -98,6 +114,8 @@ export const DiscussionThreadSchema = z.object({
   resolvedAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  /** Null for a comment on the change as a whole. */
+  anchor: DiscussionAnchorSchema.nullable(),
 });
 export type DiscussionThread = z.infer<typeof DiscussionThreadSchema>;
 
@@ -110,6 +128,7 @@ export type DiscussionSummary = z.infer<typeof DiscussionSummarySchema>;
 
 export const CreateDiscussionBodySchema = z.object({
   body: z.string(),
+  anchor: DiscussionAnchorSchema.optional(),
 });
 export type CreateDiscussionBody = z.infer<typeof CreateDiscussionBodySchema>;
 

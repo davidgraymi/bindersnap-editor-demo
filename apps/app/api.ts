@@ -70,6 +70,7 @@ import type {
   ChangeUpdatesPayload,
   ClosedChangesPayload,
   CollaboratorListPayload,
+  DiscussionAnchor,
   DiscussionSummary,
   DocumentDetailPayload,
   DocumentHistoryPayload,
@@ -130,6 +131,7 @@ export type {
   CollaboratorListPayload,
   DiscussionComment,
   DiscussionSummary,
+  DiscussionAnchor,
   DiscussionThread,
   DocumentDetailPayload,
   DocumentHistoryPayload,
@@ -698,13 +700,15 @@ export async function createChangeDiscussion(
   scope: ChangeScope,
   pullNumber: number,
   body: string,
+  /** The passage the comment is about, when it is about one. */
+  anchor?: DiscussionAnchor | null,
 ): Promise<DiscussionSummary> {
   try {
     const response = await BindersClient.createBinderChangeDiscussion(
       scope.org,
       scope.binder,
       String(pullNumber),
-      { body },
+      anchor ? { body, anchor } : { body },
     );
     return response.data;
   } catch (error) {

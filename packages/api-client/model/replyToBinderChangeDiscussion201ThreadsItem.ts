@@ -4,6 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { ReplyToBinderChangeDiscussion201ThreadsItemAnchor } from './replyToBinderChangeDiscussion201ThreadsItemAnchor.ts';
 import type { ReplyToBinderChangeDiscussion201ThreadsItemCommentsItem } from './replyToBinderChangeDiscussion201ThreadsItemCommentsItem.ts';
 import type { ReplyToBinderChangeDiscussion201ThreadsItemEventsItem } from './replyToBinderChangeDiscussion201ThreadsItemEventsItem.ts';
 import type { ReplyToBinderChangeDiscussion201ThreadsItemOrigin } from './replyToBinderChangeDiscussion201ThreadsItemOrigin.ts';
@@ -21,4 +22,6 @@ export type ReplyToBinderChangeDiscussion201ThreadsItem = {
   resolvedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** @nullable */
+  anchor: ReplyToBinderChangeDiscussion201ThreadsItemAnchor;
 };
