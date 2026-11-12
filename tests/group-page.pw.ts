@@ -8,9 +8,18 @@
  * Requires the full Docker Compose stack — run via `bun run test:integration`.
  */
 
+import { randomUUID } from "node:crypto";
+
 import { expect, test } from "@playwright/test";
 
-import { APP_BASE_URL, OWNER, signInAsAlice, signInAsBob } from "./helpers";
+import {
+  API_BASE_URL,
+  APP_BASE_URL,
+  OWNER,
+  signInAsAlice,
+  signInAsBob,
+} from "./helpers";
+import { signUpAndConfirm } from "./mailpit";
 
 test.describe.configure({ mode: "parallel", timeout: 120_000 });
 
@@ -81,4 +90,37 @@ test("a group name in the sign-off panel opens the group's page", async ({
   await expect(
     page.getByRole("heading", { level: 1, name: "Infection Control" }),
   ).toBeVisible();
+});
+
+test("someone outside the organization is told there is no such group", async () => {
+  // The group's people are read with the service account, so membership of
+  // the organization is checked first; an outsider learns nothing, not even
+  // that the group exists.
+  const suffix = randomUUID().slice(0, 10);
+  const signup = await signUpAndConfirm(`${API_BASE_URL}/auth/signup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
+    body: JSON.stringify({
+      username: `outsider-${suffix}`,
+      email: `outsider-${suffix}@users.bindersnap.local`,
+      password: `Bindersnap-${suffix}!`,
+      firstName: "Out",
+      lastName: "Sider",
+    }),
+  });
+  expect(signup.status, await signup.clone().text()).toBe(200);
+  const session = (signup.headers.get("set-cookie") ?? "").match(
+    /bindersnap_session=([^;]+)/,
+  )![1];
+  const read = await fetch(
+    `${API_BASE_URL}/api/app/orgs/${OWNER}/groups/infection-control`,
+    {
+      headers: {
+        Cookie: `bindersnap_session=${session}`,
+        Origin: APP_BASE_URL,
+      },
+    },
+  );
+  expect(read.status).toBe(404);
+  expect(await read.text()).not.toContain("grace");
 });
