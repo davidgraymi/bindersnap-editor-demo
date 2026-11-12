@@ -12946,6 +12946,15 @@ html:has(.doc-files-resize--active) {
   min-width: 0;
 }
 
+.reviewer-chooser-need {
+  margin: 0;
+}
+
+.reviewer-chooser-can {
+  flex: none;
+  margin-left: auto;
+}
+
 .reviewer-chooser .bs-row {
   gap: var(--brand-space-1-5, var(--brand-space-1));
 }
