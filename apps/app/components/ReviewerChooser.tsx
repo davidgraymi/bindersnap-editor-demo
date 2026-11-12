@@ -1,7 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
 
-import { binderPeopleQuery } from "../data/queries";
+import { binderPeopleQuery, binderSignOffQuery } from "../data/queries";
+import {
+  approverLogins,
+  approversFirst,
+  describeApprovalNeed,
+} from "../proposeSignOff";
 import type { BinderPerson } from "../../../packages/api-schema/schemas/workspaces";
 
 /**
@@ -53,6 +58,9 @@ export function ReviewerChooser({
   // Not being able to list them costs the author a shortcut, not the change:
   // reviewers can still be asked from the change's own page.
   const read = useQuery(binderPeopleQuery(org, binder));
+  // The rules in force are the record's: one changed in this draft starts
+  // with the change after it.
+  const signOff = useQuery(binderSignOffQuery(org, binder));
   const people: BinderPerson[] | null = useMemo(
     () =>
       read.data
@@ -98,12 +106,34 @@ export function ReviewerChooser({
   }
 
   const chosen = new Set(selected);
+  // Whose approval counts, and how many the binder needs: said here, before
+  // the change exists, so nobody asks three people who cannot approve.
+  const approvers = approverLogins(signOff.data ?? null);
+  const canApprove = (login: string) => approvers.has(login.toLowerCase());
+  const everybodyCan = people.every((person) => canApprove(person.login));
+  const need = signOff.data
+    ? describeApprovalNeed(
+        signOff.data.requiredApprovals,
+        people.filter((person) => canApprove(person.login)).length,
+        everybodyCan,
+      )
+    : null;
+  const listed = approversFirst(people, approvers);
 
   return (
     <fieldset className="bs-field reviewer-chooser" disabled={disabled}>
       <legend className="bs-field-label">Who should review it</legend>
+      {need ? (
+        <p
+          className={`bs-note reviewer-chooser-need${
+            need.blocked ? " bs-note--warn" : ""
+          }`}
+        >
+          {need.line}
+        </p>
+      ) : null}
       <ul className="bs-row-list reviewer-chooser-list">
-        {people.map((person) => {
+        {listed.map((person) => {
           const id = `reviewer-${person.login}`;
           return (
             <li className="bs-row" key={person.login}>
@@ -128,10 +158,21 @@ export function ReviewerChooser({
                   <span className="bs-row-meta">@{person.login}</span>
                 ) : null}
               </label>
+              {need && !everybodyCan && canApprove(person.login) ? (
+                <span className="bs-status bs-status--sm reviewer-chooser-can">
+                  Can approve
+                </span>
+              ) : null}
             </li>
           );
         })}
       </ul>
+      {need && !need.blocked && signOff.data?.requiredApprovals ? (
+        <p className="bs-field-hint">
+          A folder or a document can ask for its own sign-off as well. The
+          change request lists every rule once it is open.
+        </p>
+      ) : null}
       <p className="bs-field-hint">
         {chosen.size === 0
           ? "Nobody is asked yet. You can ask people from the change request later."
