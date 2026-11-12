@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { AppIcon, ICON } from "./AppIcon";
+import { RULE_CHANGE_ANCHOR } from "./RuleChangeSection";
 
 import { downloadDocument } from "../api";
 import { followInApp } from "../appLink";
@@ -45,6 +46,14 @@ import { ChangeByline } from "./ChangeByline";
  */
 
 interface ChangeComparisonPageProps {
+  /**
+   * What the change does to who signs off, drawn first, above every
+   * document, with its own entry at the top of the tree (4.11). Null when it
+   * leaves the rules alone.
+   */
+  ruleSection?: ReactNode;
+  /** "1 rule", for the tree's entry. */
+  ruleCount?: string | null;
   org: string;
   binder: string;
   changeNumber: number;
@@ -217,6 +226,8 @@ function groupByFolder(rows: readonly ChangedDocumentRow[]) {
 }
 
 export function ChangeComparisonPage({
+  ruleSection = null,
+  ruleCount = null,
   org,
   binder,
   changeNumber,
@@ -543,6 +554,7 @@ export function ChangeComparisonPage({
               onOpenBranch={onOpenBranch}
               openedAt={openedAt}
               nameOf={nameOf}
+              changesRules={ruleSection !== null}
             />
           ) : null}
           {/* Nothing to size is not a size. The states below say what this
@@ -564,11 +576,9 @@ export function ChangeComparisonPage({
       <article className="change-compare">
         <div className="change-main">
           {header}
-          <p className="bs-note">
-            This change versions no document — it changes the binder's sign-off
-            rules, which publishes nothing. The change itself says what it would
-            do to them.
-          </p>
+          {ruleSection ?? (
+            <p className="bs-note">This change versions no document.</p>
+          )}
         </div>
       </article>
     );
@@ -593,12 +603,14 @@ export function ChangeComparisonPage({
       {header}
 
       <div
-        className={`cmp-layout${rows.length > 1 ? " cmp-layout--tree" : ""}`}
+        className={`cmp-layout${
+          rows.length > 1 || ruleSection ? " cmp-layout--tree" : ""
+        }`}
       >
         {/* The tree: only what changed, folder by folder, each one a click
             away. One document is not a list, and a tree pointing at a single
             entry is furniture — the same rule the grammar states for rails. */}
-        {rows.length > 1 ? (
+        {rows.length > 1 || ruleSection ? (
           <aside className="bs-rail cmp-tree">
             <nav className="bs-panel" aria-label="Documents in this change">
               <div className="bs-panel-bar">
@@ -624,6 +636,33 @@ export function ChangeComparisonPage({
               </div>
 
               <ol className="cmp-tree-list">
+                {ruleSection ? (
+                  <li>
+                    <ol className="bs-row-list">
+                      <li>
+                        <button
+                          className="bs-row"
+                          type="button"
+                          onClick={() =>
+                            document
+                              .getElementById(RULE_CHANGE_ANCHOR)
+                              ?.scrollIntoView({ block: "start" })
+                          }
+                        >
+                          <span className="bs-row-icon">
+                            <AppIcon icon={ICON.rules} size="sm" />
+                          </span>
+                          <span className="bs-row-body">
+                            <span className="bs-row-name">Who signs off</span>
+                          </span>
+                          {ruleCount ? (
+                            <span className="bs-row-meta">{ruleCount}</span>
+                          ) : null}
+                        </button>
+                      </li>
+                    </ol>
+                  </li>
+                ) : null}
                 {groups.map((group) => (
                   <li key={group.folder || "(top)"}>
                     {group.folder ? (
@@ -677,6 +716,7 @@ export function ChangeComparisonPage({
         ) : null}
 
         <div className="cmp-stream" ref={streamRef}>
+          {ruleSection}
           {rows.map((row) => (
             <ChangedDocumentSection
               key={row.anchor}

@@ -186,9 +186,12 @@ test("a member files a policy from the binder's own page", async ({ page }) => {
   // The change's own screen: the document it proposes, and the way back to
   // the list. Not "Publish", which a change with no approvals yet does not
   // offer.
+  // Its Changes tab names the document (the overview no longer repeats it).
+  await page.locator(".doc-tab", { hasText: "Changes" }).click();
   await expect(
-    page.locator(".change-does").getByText("Infection Control Policy"),
+    page.locator(".cmp-file").getByText("Infection Control Policy").first(),
   ).toBeVisible({ timeout: 30_000 });
+  await page.locator(".doc-tab", { hasText: "Overview" }).click();
   await expect(
     page.locator(".page-path").getByRole("link", { name: "Change requests" }),
   ).toBeVisible();
@@ -282,9 +285,13 @@ test("a whole folder goes in as one change request, keeping its shape", async ({
   await expect(
     page.getByRole("heading", { name: "Add 2 documents" }),
   ).toBeVisible({ timeout: 30_000 });
-  const does = page.locator(".change-does");
-  await expect(does.getByText("manual/fire-safety-plan")).toBeVisible();
-  await expect(does.getByText("manual/nursing/hand-hygiene")).toBeVisible();
+  await page.locator(".doc-tab", { hasText: "Changes" }).click();
+  const tree = page.locator(".cmp-tree");
+  await expect(tree.getByText("Fire Safety Plan")).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(tree.getByText("Hand Hygiene")).toBeVisible();
+  await page.locator(".doc-tab", { hasText: "Overview" }).click();
   // Opened once, whole — not opened and then updated file by file.
   await expect(page.getByText("updated the proposed version")).toHaveCount(0);
 });

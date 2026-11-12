@@ -901,6 +901,83 @@ test.describe("Gitea 28.0.0: block_on_codeowner_reviews", () => {
     );
   });
 
+  test("one approval meets two rules that name the same group (D11)", async () => {
+    // **What the approvals table says when one person is eligible twice.**
+    // The binder rule and a folder rule both name the same group, so a
+    // change in that folder is under both. If Gitea wanted two approvals
+    // from that group, "one approval meets both" would be a promise the
+    // merge breaks.
+    const workspace = await provisionWorkspace(admin, {
+      enableApprovalsWhitelist: true,
+      blockOnCodeownerReviews: true,
+      blockOnOfficialReviewRequests: false,
+      codeownerTeams: [{ suffix: "policy", members: [REVIEWER] }],
+      codeowners: (org, repo) =>
+        `.*  @${org}/${repo}-policy\n` +
+        `policies/nursing/.*  @${org}/${repo}-policy\n`,
+    });
+
+    const index = await openChange(
+      author,
+      workspace,
+      "policies/nursing/infection-control.md",
+      "Infection control policy, v1.\n",
+    );
+
+    // One approval from one member of the group, and nobody else.
+    await approve(reviewer, workspace, index);
+    await waitForCountedApprovals(admin, workspace, index, 1);
+
+    const merge = await tryMerge(author, workspace, index);
+    expect(
+      merge.ok,
+      `one approval did not meet both rules: ${merge.status} ${merge.message}`,
+    ).toBe(true);
+  });
+
+  test("a rule whose group lost its grant still enforces, and its members' approvals still count", async () => {
+    // **Section 7, item 5(a) of the sign-off guide**, recorded. The group
+    // still exists and the rule still names it, but the group is no longer
+    // granted on the binder. Gitea still parses the line and still holds the
+    // merge for it; a member who can read the binder some other way (here, the
+    // binder's reviewers) can still meet it. A member who cannot read the
+    // binder at all could not open the change — which is why removing access
+    // warns about the rules naming the group (4.13).
+    const workspace = await provisionWorkspace(admin, {
+      enableApprovalsWhitelist: true,
+      blockOnCodeownerReviews: true,
+      blockOnOfficialReviewRequests: false,
+      codeownerTeams: [{ suffix: "nursing", members: [REVIEWER] }],
+      codeowners: (org, repo) =>
+        `policies/nursing/.*  @${org}/${repo}-nursing\n`,
+    });
+    await del(
+      admin,
+      `/teams/${workspace.codeownerTeamIds.nursing}/repos/${workspace.org}/${workspace.repo}`,
+    );
+
+    const index = await openChange(
+      author,
+      workspace,
+      "policies/nursing/infection-control.md",
+      "Infection control policy, v1.\n",
+    );
+    await approve(secondReviewer, workspace, index);
+    await waitForCountedApprovals(admin, workspace, index, 1);
+
+    const blocked = await tryMerge(author, workspace, index);
+    expect(
+      blocked.ok,
+      "the rule stopped enforcing when its group lost the grant",
+    ).toBe(false);
+
+    await approve(reviewer, workspace, index);
+    const merge = await tryMerge(author, workspace, index);
+    expect(merge.ok, `merge refused: ${merge.status} ${merge.message}`).toBe(
+      true,
+    );
+  });
+
   test("the gate is per rule: one change over two folders needs both owners", async () => {
     // The claim that decides whether a sign-off rule means anything. ADR 0004
     // makes the change the unit of approval so a revision can span documents;

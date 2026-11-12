@@ -758,9 +758,13 @@ async function applyAct(
       );
       return;
     case "signOff":
-      throw new Error(
-        `${binder}: a sign-off change is proposed on its own — the product has no way to put one in a draft with other acts.`,
-      );
+      // Rules are edited in a draft, one rule per act, like a rename: each
+      // rule named here is set to these owners, and the rest of the file is
+      // left as it is.
+      for (const rule of await resolveRules(run, act.rules)) {
+        await Binders.setBinderSignOffRule(org, binder, { rule, draft }, as);
+      }
+      return;
   }
 }
 
@@ -1209,7 +1213,7 @@ async function applyBinder(
         act.kind === "signOff",
     );
     pullRequests[key(change)] = await applyChange(run, change, (author) =>
-      signOff
+      signOff && change.acts.length === 1
         ? proposeSignOffChange(
             run,
             author,
