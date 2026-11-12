@@ -3,8 +3,10 @@
  * folders and its documents, with the rules that are in it — and moving
  * around in it stays in it.
  *
- * Against the seeded Governance binder as alice. The draft this makes is
- * discarded at the end, so the seed is left as found.
+ * Against the seeded Governance binder as bob, who can write in it — not
+ * alice, whose Governance drafts `editor-sign-off.pw.ts` discards and resumes
+ * while it runs beside this file. bob's drafts are discarded at the end, so
+ * the seed is left as found.
  *
  * Requires the full Docker Compose stack — run via `bun run test:integration`.
  */
@@ -27,7 +29,8 @@ const API = `${API_BASE_URL}/api/app/binders/${OWNER}/governance`;
 const HEADERS = { Origin: APP_BASE_URL };
 const NAME = "Quality reads Clinical Standards";
 
-async function discardAlicesDrafts(page: Page) {
+/** Discard every draft the signed-in person has in Governance. */
+async function discardOwnDrafts(page: Page) {
   const listed = await page.request.get(`${API}/draft`, { headers: HEADERS });
   const body = (await listed.json()) as { drafts?: Array<{ branch: string }> };
   for (const draft of body.drafts ?? []) {
@@ -66,8 +69,8 @@ async function draftWithARule(page: Page): Promise<string> {
 test("a draft is read like the record: its page, folders, documents and rules", async ({
   page,
 }) => {
-  await signInAsAlice(page);
-  await discardAlicesDrafts(page);
+  await signInAsBob(page);
+  await discardOwnDrafts(page);
   const branch = await draftWithARule(page);
   const onDraft = encodeURIComponent(branch);
 
@@ -144,14 +147,14 @@ test("a draft is read like the record: its page, folders, documents and rules", 
   await expect(rail).toContainText("Infection Control", { timeout: 60_000 });
   await expect(rail).not.toContainText("Quality Committee");
 
-  await discardAlicesDrafts(page);
+  await discardOwnDrafts(page);
 });
 
 test("a document read in your draft keeps you in it as you move around", async ({
   page,
 }) => {
-  await signInAsAlice(page);
-  await discardAlicesDrafts(page);
+  await signInAsBob(page);
+  await discardOwnDrafts(page);
   const branch = await draftWithARule(page);
   const onDraft = encodeURIComponent(branch);
 
@@ -173,33 +176,33 @@ test("a document read in your draft keeps you in it as you move around", async (
   );
   await expect(rail).toContainText("Quality Committee", { timeout: 30_000 });
 
-  await discardAlicesDrafts(page);
+  await discardOwnDrafts(page);
 });
 
 test("somebody else's draft is not read, whichever way its branch is spelt", async ({
   browser,
 }) => {
-  const alice = await browser.newPage();
-  await signInAsAlice(alice);
-  await discardAlicesDrafts(alice);
-  const branch = await draftWithARule(alice);
-
   const bob = await browser.newPage();
   await signInAsBob(bob);
+  await discardOwnDrafts(bob);
+  const branch = await draftWithARule(bob);
+
+  const alice = await browser.newPage();
+  await signInAsAlice(alice);
   for (const ref of [branch, `refs/heads/${branch}`, `${branch}~0`]) {
-    const read = await bob.request.get(
+    const read = await alice.request.get(
       `${API}/rules/sign-off?ref=${encodeURIComponent(ref)}`,
       { headers: HEADERS },
     );
     expect(read.status(), ref).toBe(409);
   }
-  const other = await bob.request.get(
+  const other = await alice.request.get(
     `${API}/rules/sign-off?ref=${encodeURIComponent("refs/pull/1/head")}`,
     { headers: HEADERS },
   );
   expect(other.status()).toBe(409);
 
-  await discardAlicesDrafts(alice);
+  await discardOwnDrafts(bob);
   await alice.close();
   await bob.close();
 });
