@@ -11,7 +11,13 @@
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { API_BASE_URL, APP_BASE_URL, OWNER, signInAsAlice } from "./helpers";
+import {
+  API_BASE_URL,
+  APP_BASE_URL,
+  OWNER,
+  signInAsAlice,
+  signInAsBob,
+} from "./helpers";
 
 test.describe.configure({ mode: "serial", timeout: 180_000 });
 test.use({ viewport: { width: 1440, height: 900 } });
@@ -168,4 +174,32 @@ test("a document read in your draft keeps you in it as you move around", async (
   await expect(rail).toContainText("Quality Committee", { timeout: 30_000 });
 
   await discardAlicesDrafts(page);
+});
+
+test("somebody else's draft is not read, whichever way its branch is spelt", async ({
+  browser,
+}) => {
+  const alice = await browser.newPage();
+  await signInAsAlice(alice);
+  await discardAlicesDrafts(alice);
+  const branch = await draftWithARule(alice);
+
+  const bob = await browser.newPage();
+  await signInAsBob(bob);
+  for (const ref of [branch, `refs/heads/${branch}`, `${branch}~0`]) {
+    const read = await bob.request.get(
+      `${API}/rules/sign-off?ref=${encodeURIComponent(ref)}`,
+      { headers: HEADERS },
+    );
+    expect(read.status(), ref).toBe(409);
+  }
+  const other = await bob.request.get(
+    `${API}/rules/sign-off?ref=${encodeURIComponent("refs/pull/1/head")}`,
+    { headers: HEADERS },
+  );
+  expect(other.status()).toBe(409);
+
+  await discardAlicesDrafts(alice);
+  await alice.close();
+  await bob.close();
 });
