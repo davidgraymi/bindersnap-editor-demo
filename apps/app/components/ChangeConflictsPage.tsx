@@ -833,7 +833,7 @@ function Blocks({ blocks }: { blocks: unknown[] }) {
   if (html === null) return <SkeletonLine width="medium" />;
   return (
     <div
-      className="conflict-side-prose doc-preview-prose"
+      className="conflict-side-prose doc-preview-prose doc-preview-written"
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );
