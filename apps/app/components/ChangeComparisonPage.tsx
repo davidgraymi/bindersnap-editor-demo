@@ -97,6 +97,13 @@ interface ChangeComparisonPageProps {
   onReadFile: (slugPath: string) => void;
   onDownload: (row: ChangedDocumentRow, gitRef: string) => void;
   /**
+   * Back into the words, in this change: set for the documents its author can
+   * still edit in the editor. A reviewer's "please reword step 3" is answered
+   * here, where the author reads the diff, not in a second change. Returns
+   * null for a document that cannot be edited there.
+   */
+  editFor?: ((row: ChangedDocumentRow) => (() => void) | null) | null;
+  /**
    * Whether it is still open, or how it ended — the badge before the line
    * under the title.
    */
@@ -245,6 +252,7 @@ export function ChangeComparisonPage({
   fileHref,
   onReadFile,
   onDownload,
+  editFor = null,
   status = null,
   tabs = null,
 }: ChangeComparisonPageProps) {
@@ -749,6 +757,7 @@ export function ChangeComparisonPage({
               fileHref={fileHref(row.slugPath)}
               onReadFile={() => onReadFile(row.slugPath)}
               onDownload={(gitRef) => onDownload(row, gitRef)}
+              onEdit={editFor ? editFor(row) : null}
             />
           ))}
         </div>
@@ -778,6 +787,8 @@ interface ChangedDocumentSectionProps {
   fileHref: string;
   onReadFile: () => void;
   onDownload: (gitRef: string) => void;
+  /** Open it in the editor, in this change; null when it cannot be. */
+  onEdit: (() => void) | null;
 }
 
 /**
@@ -835,6 +846,7 @@ function ChangedDocumentSection({
   fileHref,
   onReadFile,
   onDownload,
+  onEdit,
 }: ChangedDocumentSectionProps) {
   /**
    * **The file path, which carries the identity — not the address.**
@@ -983,6 +995,18 @@ function ChangedDocumentSection({
           >
             <AppIcon icon={ICON.download} size="sm" />
             Download
+          </button>
+        )}
+
+        {onEdit === null || row.kind === "removed" ? null : (
+          <button
+            className="bs-btn bs-btn--sm bs-btn-secondary cmp-file-act"
+            type="button"
+            aria-label={`Edit ${row.name}`}
+            onClick={onEdit}
+          >
+            <AppIcon icon={ICON.edit} size="sm" />
+            Edit
           </button>
         )}
       </header>

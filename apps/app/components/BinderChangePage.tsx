@@ -522,6 +522,17 @@ export function BinderChangePage({
             }
           }}
           onDownload={(row, gitRef) => void handleRowDownload(row, gitRef)}
+          /* Only its author, only while it is open, and only a document the
+             editor writes: a Word file is revised in Word and uploaded. */
+          editFor={(row) =>
+            onEditInEditor &&
+            record.open &&
+            detail.change.branchName !== "" &&
+            record.submittedBy === currentUser &&
+            isEditorDocumentFile(row.path)
+              ? () => onEditInEditor(row.slugPath)
+              : null
+          }
           status={status}
           tabs={tabs}
         />

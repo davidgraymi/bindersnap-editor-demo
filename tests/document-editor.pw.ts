@@ -1903,7 +1903,9 @@ test("the author edits an open change request in the editor, and saves into it",
   await expect(page).toHaveURL(/\/-\/changes\/\d+/, { timeout: 30_000 });
   const change = page.url().match(/\/-\/changes\/(\d+)/)![1]!;
 
-  // A reviewer asks for more. The author goes back in from the change itself.
+  // A reviewer asks for more. The author goes back in from the change itself,
+  // where its diff is.
+  await page.locator(".doc-tab", { hasText: "Changes" }).click();
   await page.getByRole("button", { name: "Edit Hand Hygiene" }).click();
   await expect(page).toHaveURL(
     new RegExp(`/hand-hygiene\\?edit=write&change=${change}`),
