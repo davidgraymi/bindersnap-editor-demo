@@ -1772,6 +1772,20 @@ export function BinderShell({
           editing={startingEdit}
           onOpenBinder={onOpenBinder}
           onOpenChange={openChangeNumber}
+          currentUser={currentUser}
+          onEditInChange={(slugPath, number) => {
+            moveTo(
+              buildDocumentEditUrl({
+                org,
+                binder,
+                documentPath: slugPath,
+                draft: null,
+                change: number,
+              }),
+            );
+            setEditMode("writing");
+          }}
+          onCommentOnChange={(number) => openChangeNumber(number, "compare")}
         />
       ) : openChange !== null ? (
         <BinderChangePage

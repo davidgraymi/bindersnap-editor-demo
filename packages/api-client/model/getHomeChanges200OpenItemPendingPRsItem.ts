@@ -6,6 +6,7 @@
  */
 import type { GetHomeChanges200OpenItemPendingPRsItemApprovalState } from './getHomeChanges200OpenItemPendingPRsItemApprovalState.ts';
 import type { GetHomeChanges200OpenItemPendingPRsItemAssignee } from './getHomeChanges200OpenItemPendingPRsItemAssignee.ts';
+import type { GetHomeChanges200OpenItemPendingPRsItemCoEditorsItem } from './getHomeChanges200OpenItemPendingPRsItemCoEditorsItem.ts';
 import type { GetHomeChanges200OpenItemPendingPRsItemReviewersItem } from './getHomeChanges200OpenItemPendingPRsItemReviewersItem.ts';
 import type { GetHomeChanges200OpenItemPendingPRsItemReviewsItem } from './getHomeChanges200OpenItemPendingPRsItemReviewsItem.ts';
 import type { GetHomeChanges200OpenItemPendingPRsItemUser } from './getHomeChanges200OpenItemPendingPRsItemUser.ts';
@@ -27,6 +28,7 @@ export type GetHomeChanges200OpenItemPendingPRsItem = {
   reviewers: GetHomeChanges200OpenItemPendingPRsItemReviewersItem[];
   /** @nullable */
   assignee: GetHomeChanges200OpenItemPendingPRsItemAssignee;
+  coEditors?: GetHomeChanges200OpenItemPendingPRsItemCoEditorsItem[];
   body?: string;
   approvalState: GetHomeChanges200OpenItemPendingPRsItemApprovalState;
   /** @nullable */

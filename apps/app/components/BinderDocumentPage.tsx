@@ -12,6 +12,8 @@ import { binderDocumentQuery } from "../data/queries";
 import { followInApp } from "../appLink";
 import { routeToPath } from "../routes";
 import { SignOffRail } from "./SignOffRail";
+import { EditChoiceDialog } from "./EditChoiceDialog";
+import { editChoices } from "../editChoices";
 
 import {
   buildDocumentCrumbs,
@@ -112,6 +114,12 @@ interface BinderDocumentPageProps {
   onOpenBinder: () => void;
   /** Open one of this document's open changes, on the binder. */
   onOpenChange: (changeNumber: number) => void;
+  /** Who is reading: Edit asks them about changes already open on it. */
+  currentUser?: string;
+  /** Write this document in an open change: its author or a co-editor. */
+  onEditInChange?: (slugPath: string, changeNumber: number) => void;
+  /** Open a change's words, where a passage is commented on. */
+  onCommentOnChange?: (changeNumber: number) => void;
 }
 
 const NO_DRAFTS: readonly { branch: string; name: string }[] = [];
@@ -143,6 +151,9 @@ export function BinderDocumentPage({
   editing = false,
   onOpenBinder,
   onOpenChange,
+  currentUser = "",
+  onEditInChange,
+  onCommentOnChange,
 }: BinderDocumentPageProps) {
   const read = useQuery(
     binderDocumentQuery(org, binder, documentPath, {
@@ -156,6 +167,8 @@ export function BinderDocumentPage({
     ? read.error.message || "Unable to open this document."
     : null;
   const [downloading, setDownloading] = useState(false);
+  // Edit pressed on a document somebody is already changing: what to do.
+  const [askingEdit, setAskingEdit] = useState(false);
   const [exportingAudit, setExportingAudit] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const isReadOnly = useIsReadOnly();
@@ -376,6 +389,10 @@ export function BinderDocumentPage({
     canWriteBinder &&
     documentRef === null &&
     change === null;
+  // **Edit asks first when somebody is already changing it**
+  // (`editChoices.ts`): continue in that change if it is yours to write,
+  // comment on it if not, or start a separate one.
+  const editAsks = onEditInChange ? editChoices(openChanges, currentUser) : [];
 
   return (
     <div className="binder-pane">
@@ -446,11 +463,40 @@ export function BinderDocumentPage({
               type="button"
               className="bs-btn bs-btn-primary"
               disabled={editing}
-              onClick={() => onEditDocument?.(document.slugPath)}
+              onClick={() =>
+                editAsks.length > 0
+                  ? setAskingEdit(true)
+                  : onEditDocument?.(document.slugPath)
+              }
             >
               {editing ? "Opening your draft…" : "Edit"}
             </button>
           </div>
+        ) : null}
+
+        {askingEdit && canEdit ? (
+          <EditChoiceDialog
+            choices={editAsks}
+            onClose={() => setAskingEdit(false)}
+            onStartSeparate={() => {
+              setAskingEdit(false);
+              onEditDocument?.(document.slugPath);
+            }}
+            onContinue={(number) => {
+              setAskingEdit(false);
+              // The editor writes its own documents into a change; a Word
+              // file or a PDF is revised by a new upload, from the change.
+              if (isEditorDocumentFile(document.path)) {
+                onEditInChange?.(document.slugPath, number);
+              } else {
+                onOpenChange(number);
+              }
+            }}
+            onComment={(number) => {
+              setAskingEdit(false);
+              (onCommentOnChange ?? onOpenChange)(number);
+            }}
+          />
         ) : null}
       </header>
 

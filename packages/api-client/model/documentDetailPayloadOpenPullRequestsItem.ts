@@ -6,6 +6,7 @@
  */
 import type { DocumentDetailPayloadOpenPullRequestsItemApprovalState } from './documentDetailPayloadOpenPullRequestsItemApprovalState.ts';
 import type { DocumentDetailPayloadOpenPullRequestsItemAssignee } from './documentDetailPayloadOpenPullRequestsItemAssignee.ts';
+import type { DocumentDetailPayloadOpenPullRequestsItemCoEditorsItem } from './documentDetailPayloadOpenPullRequestsItemCoEditorsItem.ts';
 import type { DocumentDetailPayloadOpenPullRequestsItemReviewersItem } from './documentDetailPayloadOpenPullRequestsItemReviewersItem.ts';
 import type { DocumentDetailPayloadOpenPullRequestsItemReviewsItem } from './documentDetailPayloadOpenPullRequestsItemReviewsItem.ts';
 import type { DocumentDetailPayloadOpenPullRequestsItemUser } from './documentDetailPayloadOpenPullRequestsItemUser.ts';
@@ -27,6 +28,7 @@ export type DocumentDetailPayloadOpenPullRequestsItem = {
   reviewers: DocumentDetailPayloadOpenPullRequestsItemReviewersItem[];
   /** @nullable */
   assignee: DocumentDetailPayloadOpenPullRequestsItemAssignee;
+  coEditors?: DocumentDetailPayloadOpenPullRequestsItemCoEditorsItem[];
   body?: string;
   approvalState: DocumentDetailPayloadOpenPullRequestsItemApprovalState;
   /** @nullable */

@@ -130,6 +130,11 @@ named on the change; the server refuses anyone else's save): Edit on its Propose
 `?edit=write&change=N`, which reads the change's branch and saves with
 `changeNumber` (the server's `resolveChangeToJoin`) — no draft, no Propose,
 and Close returns to the change.
+**Edit on a document already in an open change asks first**
+(`EditChoiceDialog`, `editChoices.ts`): one row per change, with "Continue
+in it" for its author and co-editors (into the editor at `?change=N`, or the
+change itself for a Word file or a PDF) and "Comment on it" for everybody
+else (its Changes tab), and always "Start a separate change".
 **A proposed draft is still its owner's draft**, like a branch with a pull
 request open on it: `listBinderDrafts({ proposed: true })` keeps it, with its
 `changeNumber`, in the owner's picker and in `?draft=` reads; a save into it
