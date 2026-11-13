@@ -97,6 +97,17 @@ export const HELP_GUIDES: HelpGuide[] = [
         ],
       },
       {
+        heading: "When somebody is already changing it",
+        paragraphs: [
+          "If a document is already in an open change request, Edit asks what you want to do before it opens anything. Bindersnap lists each change and offers the one thing that is yours to do in it.",
+        ],
+        steps: [
+          "Continue in it: the change is yours, or its author named you a co-editor. Your saves go straight into that change, and its reviewers see them.",
+          "Comment on it: somebody else is writing it. Select the words on its Changes tab and comment, and the author decides whether to change them.",
+          "Start a separate change: your own draft, reviewed apart. If both change the same words, whichever is published second chooses between them first.",
+        ],
+      },
+      {
         heading: "Saving",
         paragraphs: [
           "While a draft has not been proposed, it saves on its own as you type. The editor says Saving… while it does, and then when it last saved.",

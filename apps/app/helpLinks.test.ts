@@ -94,6 +94,7 @@ describe("help from where the question comes up", () => {
       ["reviewing", "If you cannot approve"],
       ["out-of-date", "Resolve conflicts"],
       ["writing", "Saving"],
+      ["writing", "When somebody is already changing it"],
       ["people", "Who costs a seat"],
     ];
     for (const [guide, heading] of linked) {

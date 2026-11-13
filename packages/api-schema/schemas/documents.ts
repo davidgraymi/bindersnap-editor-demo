@@ -235,6 +235,11 @@ export const PullRequestWithApprovalStateSchema = z.object({
   reviewers: z.array(ChangeReviewerSchema),
   /** The one person answerable for the change, when someone is. */
   assignee: ChangeUserSchema.nullable(),
+  /**
+   * Who besides its author may change what it proposes — its Gitea
+   * assignees. Absent where a list was not built from the pull request.
+   */
+  coEditors: z.array(ChangeUserSchema).optional(),
   body: z.string().optional(),
   approvalState: ApprovalStateSchema,
   user: z

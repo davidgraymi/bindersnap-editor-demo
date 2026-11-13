@@ -359,6 +359,28 @@
                     "avatarUrl"
                   ]
                 },
+                "coEditors": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "login": {
+                        "type": "string"
+                      },
+                      "fullName": {
+                        "type": "string"
+                      },
+                      "avatarUrl": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "login",
+                      "fullName",
+                      "avatarUrl"
+                    ]
+                  }
+                },
                 "body": {
                   "type": "string"
                 },
@@ -675,6 +697,28 @@
                     "avatarUrl"
                   ]
                 },
+                "coEditors": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "login": {
+                        "type": "string"
+                      },
+                      "fullName": {
+                        "type": "string"
+                      },
+                      "avatarUrl": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "login",
+                      "fullName",
+                      "avatarUrl"
+                    ]
+                  }
+                },
                 "body": {
                   "type": "string"
                 },
@@ -886,6 +930,28 @@
                     "fullName",
                     "avatarUrl"
                   ]
+                },
+                "coEditors": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "login": {
+                        "type": "string"
+                      },
+                      "fullName": {
+                        "type": "string"
+                      },
+                      "avatarUrl": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "login",
+                      "fullName",
+                      "avatarUrl"
+                    ]
+                  }
                 },
                 "body": {
                   "type": "string"
@@ -5314,6 +5380,28 @@
                                     "fullName",
                                     "avatarUrl"
                                   ]
+                                },
+                                "coEditors": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "login": {
+                                        "type": "string"
+                                      },
+                                      "fullName": {
+                                        "type": "string"
+                                      },
+                                      "avatarUrl": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "login",
+                                      "fullName",
+                                      "avatarUrl"
+                                    ]
+                                  }
                                 },
                                 "body": {
                                   "type": "string"
@@ -12773,6 +12861,28 @@
                               "avatarUrl"
                             ]
                           },
+                          "coEditors": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                },
+                                "avatarUrl": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName",
+                                "avatarUrl"
+                              ]
+                            }
+                          },
                           "body": {
                             "type": "string"
                           },
@@ -14767,6 +14877,28 @@
                             "fullName",
                             "avatarUrl"
                           ]
+                        },
+                        "coEditors": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "login": {
+                                "type": "string"
+                              },
+                              "fullName": {
+                                "type": "string"
+                              },
+                              "avatarUrl": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "login",
+                              "fullName",
+                              "avatarUrl"
+                            ]
+                          }
                         },
                         "body": {
                           "type": "string"

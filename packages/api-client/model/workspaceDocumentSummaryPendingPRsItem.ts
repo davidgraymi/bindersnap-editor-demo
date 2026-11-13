@@ -6,6 +6,7 @@
  */
 import type { WorkspaceDocumentSummaryPendingPRsItemApprovalState } from './workspaceDocumentSummaryPendingPRsItemApprovalState.ts';
 import type { WorkspaceDocumentSummaryPendingPRsItemAssignee } from './workspaceDocumentSummaryPendingPRsItemAssignee.ts';
+import type { WorkspaceDocumentSummaryPendingPRsItemCoEditorsItem } from './workspaceDocumentSummaryPendingPRsItemCoEditorsItem.ts';
 import type { WorkspaceDocumentSummaryPendingPRsItemReviewersItem } from './workspaceDocumentSummaryPendingPRsItemReviewersItem.ts';
 import type { WorkspaceDocumentSummaryPendingPRsItemReviewsItem } from './workspaceDocumentSummaryPendingPRsItemReviewsItem.ts';
 import type { WorkspaceDocumentSummaryPendingPRsItemUser } from './workspaceDocumentSummaryPendingPRsItemUser.ts';
@@ -27,6 +28,7 @@ export type WorkspaceDocumentSummaryPendingPRsItem = {
   reviewers: WorkspaceDocumentSummaryPendingPRsItemReviewersItem[];
   /** @nullable */
   assignee: WorkspaceDocumentSummaryPendingPRsItemAssignee;
+  coEditors?: WorkspaceDocumentSummaryPendingPRsItemCoEditorsItem[];
   body?: string;
   approvalState: WorkspaceDocumentSummaryPendingPRsItemApprovalState;
   /** @nullable */
