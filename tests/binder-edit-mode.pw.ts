@@ -507,7 +507,16 @@ test("Discard throws the draft away and leaves the binder as it was", async ({
     },
   );
 
-  await page.getByRole("button", { name: "Discard" }).click();
+  // It holds work, so it asks first, and "Keep it" keeps it.
+  await page.getByRole("button", { name: "Discard", exact: true }).click();
+  await expect(page.getByText(/cannot be brought back/)).toBeVisible();
+  await page.getByRole("button", { name: "Keep it" }).click();
+  await expect(page.locator(".bs-draftbar")).toContainText(
+    "1 document changed",
+  );
+
+  await page.getByRole("button", { name: "Discard", exact: true }).click();
+  await page.getByRole("button", { name: "Discard draft" }).click();
 
   await expect(page.locator(".bs-draftbar")).toBeHidden({ timeout: 30_000 });
   await expect(page).toHaveURL(new RegExp(`/${org}/${binder}$`));
