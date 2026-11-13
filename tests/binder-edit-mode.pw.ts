@@ -26,7 +26,7 @@ import {
   API_BASE_URL,
   APP_BASE_URL,
   openTreeFolder,
-  organizeBinder,
+  openDraftPage,
 } from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
 import { LEGAL_VERSION } from "../packages/utils/legal";
@@ -357,9 +357,33 @@ test("a draft that is gone is refused rather than quietly answered", async () =>
   expect(stale.status).toBe(409);
 });
 
-// ── edit mode in the browser ───────────────────────────────────────
+// ── a draft's own page, in the browser ─────────────────────────────
+/** Rename Hand Hygiene in a draft, as the editor's file panel would. */
+async function renameHandHygiene(
+  session: string,
+  org: string,
+  binder: string,
+): Promise<string> {
+  const draft = await openDraft(session, org, binder);
+  const renamed = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-renames`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({
+        documentPath: "nursing/hand-hygiene",
+        name: "Hand Hygiene and PPE",
+        draft,
+      }),
+    },
+  );
+  expect(renamed.status, await renamed.text()).toBe(201);
+  return draft;
+}
 
-test("Edit opens a draft, and the address says so", async ({ page }) => {
+test("a draft has a page of its own, and the address says which draft", async ({
+  page,
+}) => {
   const { session, org, binder } = await provisionBinder();
   await signInBrowser(page, session);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
@@ -368,7 +392,7 @@ test("Edit opens a draft, and the address says so", async ({ page }) => {
   // Nothing about drafts until somebody asks for one.
   await expect(page.locator(".bs-draftbar")).toBeHidden();
 
-  await organizeBinder(page);
+  await openDraftPage(page);
 
   const bar = page.locator(".bs-draftbar");
   await expect(bar).toBeVisible({ timeout: 30_000 });
@@ -376,93 +400,56 @@ test("Edit opens a draft, and the address says so", async ({ page }) => {
   // Named from the moment it exists, so the bar, the picker and the propose
   // screen never invent one between them and disagree (D8).
   await expect(bar).toContainText("You are editing");
-  // In the address, and *which* draft — a person may have several, so a
-  // reload, a back button and a pasted link all have to land in the same work.
-  await expect(page).toHaveURL(/\?edit=1&draft=draft%2F/);
+  // The binder read at the draft: *which* draft is in the address, so a
+  // reload, a back button and a pasted link all land in the same work.
+  await expect(page).toHaveURL(/\/-\/tree\/draft(%2F|\/)/);
+  // One way to change it from here: Edit, which opens the editor in it.
+  await expect(page.getByRole("button", { name: "Done" })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Edit", exact: true }),
+  ).toBeVisible();
 
   // Propose is off with nothing to propose: a change request with no changes
   // in it is a request nobody can act on.
   await expect(page.getByRole("button", { name: "Propose" })).toBeDisabled();
 });
 
-test("a rename in the tree lands in the draft, and the row keeps it", async ({
+test("an address from the organizing view lands on the draft's page", async ({
   page,
 }) => {
-  // Continuous save, which is what the customer asked for: "That way we can
-  // save everything continuously and when they are ready open a CR."
+  // `?edit=1` was the binder's tree in edit mode. The editor's file panel
+  // does that work now; a link somebody kept still lands in the same draft.
   const { session, org, binder } = await provisionBinder();
+  const draft = await openDraft(session, org, binder);
   await signInBrowser(page, session);
+
+  await page.goto(
+    `${APP_BASE_URL}/${org}/${binder}?edit=1&draft=${encodeURIComponent(draft)}`,
+  );
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
+  await expect(page).not.toHaveURL(/edit=1/);
+  await expect(page).toHaveURL(/\/-\/tree\/draft(%2F|\/)/);
+
+  // With no draft named there is nothing to land in: the record.
   await page.goto(`${APP_BASE_URL}/${org}/${binder}?edit=1`);
-
-  // `?edit=1` with no draft drops back out rather than conjuring one — so the
-  // draft is opened through the button, the way a person would.
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await organizeBinder(page);
-  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
-
-  // Hand Hygiene is filed in Nursing, and folders start shut.
-  await openTreeFolder(page, "Nursing");
-  await page.getByRole("button", { name: "Rename Hand Hygiene" }).click();
-  const box = page.getByRole("textbox", { name: "New name" });
-  await expect(box).toBeFocused();
-  await box.fill("Hand Hygiene and PPE");
-  await box.press("Enter");
-
-  // The row says what was written — titled the way the tree titles every
-  // name, which is where the stray "And" comes from.
-  await expect(
-    page.locator(".binder-tree-label", { hasText: "Hand Hygiene and PPE" }),
-  ).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator(".bs-draftbar")).toContainText(
-    "1 document changed",
-  );
-
-  // And the record is untouched, which is the half a screenshot cannot show.
-  const onRecord = await listDocuments(session, org, binder);
-  expect(onRecord.documents.map((entry) => entry.name)).toContain(
-    "hand-hygiene",
-  );
-});
-
-test("Escape leaves the name alone", async ({ page }) => {
-  // Blur commits, so cancelling has to win the race against its own blur —
-  // otherwise Escape would commit the edit it just abandoned.
-  const { session, org, binder } = await provisionBinder();
-  await signInBrowser(page, session);
-  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-
-  await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await organizeBinder(page);
-  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
-
-  await page.getByRole("button", { name: "Rename Staff Handbook" }).click();
-  const box = page.getByRole("textbox", { name: "New name" });
-  await box.fill("Something Else Entirely");
-  await box.press("Escape");
-
-  await expect(
-    page.locator(".binder-tree-label", { hasText: "Staff Handbook" }),
-  ).toBeVisible();
-  await expect(page.locator(".bs-draftbar")).toContainText("Nothing in it yet");
+  await expect(page).not.toHaveURL(/edit=1/);
 });
 
 test("Propose opens the change request, with the words the author wrote", async ({
   page,
 }) => {
   const { session, org, binder } = await provisionBinder();
+  // The rename is made where renames are made now, the editor's file panel
+  // (tested in document-editor.pw.ts); here, through the same endpoint.
+  await renameHandHygiene(session, org, binder);
   await signInBrowser(page, session);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await organizeBinder(page);
+  await openDraftPage(page);
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
-  // Hand Hygiene is filed in Nursing, and folders start shut.
-  await openTreeFolder(page, "Nursing");
-  await page.getByRole("button", { name: "Rename Hand Hygiene" }).click();
-  const box = page.getByRole("textbox", { name: "New name" });
-  await box.fill("Hand Hygiene and PPE");
-  await box.press("Enter");
   await expect(page.locator(".bs-draftbar")).toContainText(
     "1 document changed",
     {
@@ -503,19 +490,16 @@ test("Discard throws the draft away and leaves the binder as it was", async ({
   page,
 }) => {
   const { session, org, binder } = await provisionBinder();
+  // The rename is made where renames are made now, the editor's file panel
+  // (tested in document-editor.pw.ts); here, through the same endpoint.
+  await renameHandHygiene(session, org, binder);
   await signInBrowser(page, session);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await organizeBinder(page);
+  await openDraftPage(page);
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
-  // Hand Hygiene is filed in Nursing, and folders start shut.
-  await openTreeFolder(page, "Nursing");
-  await page.getByRole("button", { name: "Rename Hand Hygiene" }).click();
-  const box = page.getByRole("textbox", { name: "New name" });
-  await box.fill("Hand Hygiene and PPE");
-  await box.press("Enter");
   await expect(page.locator(".bs-draftbar")).toContainText(
     "1 document changed",
     {
@@ -527,6 +511,8 @@ test("Discard throws the draft away and leaves the binder as it was", async ({
 
   await expect(page.locator(".bs-draftbar")).toBeHidden({ timeout: 30_000 });
   await expect(page).toHaveURL(new RegExp(`/${org}/${binder}$`));
+  // Back on the record, under its old name. Folders start shut.
+  await openTreeFolder(page, "Nursing");
   await expect(
     page.locator(".binder-tree-label", { hasText: "Hand Hygiene" }),
   ).toBeVisible();
@@ -580,181 +566,6 @@ async function draftActs(
   };
   return (body.draft?.acts ?? []).map((act) => act.summary);
 }
-
-test("a policy dragged onto a folder is filed there", async ({ page }) => {
-  // The customer's words: "Moving a document should be a simple drag and
-  // drop." This is that sentence, against a real binder.
-  const { session, org, binder } = await provisionBinder();
-  await signInBrowser(page, session);
-  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-
-  await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await organizeBinder(page);
-  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
-
-  const handbook = page
-    .locator(".binder-tree-row")
-    .filter({ hasText: "Staff Handbook" });
-  const nursing = page
-    .locator(".binder-tree-row--folder")
-    .filter({ hasText: "Nursing" });
-
-  await handbook.dragTo(nursing);
-
-  await expect(page.locator(".bs-draftbar")).toContainText(
-    "1 document changed",
-    {
-      timeout: 30_000,
-    },
-  );
-  expect(await draftActs(session, org, binder)).toEqual([
-    "Move Staff Handbook to Nursing",
-  ]);
-
-  // And it is where it says it is, on the draft and not on the record.
-  const draft = await openDraft(session, org, binder);
-  const onDraft = await listDocuments(session, org, binder, draft);
-  expect(onDraft.documents.map((entry) => entry.slugPath)).toContain(
-    "nursing/staff-handbook",
-  );
-  const onRecord = await listDocuments(session, org, binder);
-  expect(onRecord.documents.map((entry) => entry.slugPath)).toContain(
-    "staff-handbook",
-  );
-});
-
-test("a folder dragged onto another takes everything in it", async ({
-  page,
-}) => {
-  const { session, org, binder } = await provisionBinder();
-  const draft = await openDraft(session, org, binder);
-  await makeFolder(session, org, binder, "Clinical", draft);
-
-  await signInBrowser(page, session);
-  await page.goto(`${APP_BASE_URL}/${org}/${binder}?edit=1`);
-  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
-
-  await page
-    .locator(".binder-tree-row--folder")
-    .filter({ hasText: "Nursing" })
-    .dragTo(
-      page.locator(".binder-tree-row--folder").filter({ hasText: "Clinical" }),
-    );
-
-  await expect(page.locator(".bs-draftbar")).toContainText(
-    /\d+ documents? changed/,
-    {
-      timeout: 30_000,
-    },
-  );
-  expect(await draftActs(session, org, binder)).toEqual([
-    "Move the folder Nursing to Clinical / Nursing",
-    "Add the folder Clinical",
-  ]);
-
-  // The policy inside it moved with it, which is the half that would be a
-  // disaster to get wrong.
-  const onDraft = await listDocuments(session, org, binder, draft);
-  expect(onDraft.documents.map((entry) => entry.slugPath)).toContain(
-    "clinical/nursing/hand-hygiene",
-  );
-});
-
-test("a folder cannot be dropped inside itself", async ({ page }) => {
-  // Every file under it would land at a path that is about to stop existing.
-  // Refused in the browser as well as on the server, so the row never lights
-  // up — a drop that is going to fail should not look like one that will work.
-  const { session, org, binder } = await provisionBinder();
-  const draft = await openDraft(session, org, binder);
-  await makeFolder(session, org, binder, "Nursing/Infection Control", draft);
-
-  await signInBrowser(page, session);
-  await page.goto(`${APP_BASE_URL}/${org}/${binder}?edit=1`);
-  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
-
-  await openTreeFolder(page, "Nursing");
-  await page
-    .locator(".binder-tree-row--folder")
-    .filter({ hasText: "Nursing" })
-    .first()
-    .dragTo(
-      page
-        .locator(".binder-tree-row--folder")
-        .filter({ hasText: "Infection Control" }),
-    );
-
-  // Still one act — the folder that was made — and no second one.
-  expect(await draftActs(session, org, binder)).toEqual([
-    "Add the folder Nursing / Infection Control",
-  ]);
-});
-
-test("the Move button files something without a pointer", async ({ page }) => {
-  // Drag and drop needs both ends of the move on screen and is unreachable
-  // from a keyboard. A binder with forty folders and a scrollbar is the
-  // ordinary case, so there is a second way and it is not a fallback.
-  const { session, org, binder } = await provisionBinder();
-  await signInBrowser(page, session);
-  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-
-  await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await organizeBinder(page);
-  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
-
-  await page.getByRole("button", { name: "Move Staff Handbook" }).click();
-  await page
-    .getByRole("combobox", { name: "Where it goes" })
-    .selectOption("nursing");
-  await page.getByRole("button", { name: "Move", exact: true }).click();
-
-  await expect(page.locator(".bs-draftbar")).toContainText(
-    "1 document changed",
-    {
-      timeout: 30_000,
-    },
-  );
-  expect(await draftActs(session, org, binder)).toEqual([
-    "Move Staff Handbook to Nursing",
-  ]);
-});
-
-test("a policy dragged out of its folder lands at the top level", async ({
-  page,
-}) => {
-  const { session, org, binder } = await provisionBinder();
-  await signInBrowser(page, session);
-  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-
-  await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await organizeBinder(page);
-  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
-
-  await openTreeFolder(page, "Nursing");
-
-  // The root zone only exists while something is in the air, so the drag has
-  // to be driven by hand rather than by `dragTo`.
-  const hygiene = page
-    .locator(".binder-tree-row")
-    .filter({ hasText: "Hand Hygiene" });
-  await hygiene.hover();
-  await page.mouse.down();
-  await page.mouse.move(400, 600, { steps: 10 });
-
-  const zone = page.locator(".binder-tree-root-drop");
-  await expect(zone).toBeVisible();
-  await zone.hover();
-  await page.mouse.up();
-
-  await expect(page.locator(".bs-draftbar")).toContainText(
-    "1 document changed",
-    {
-      timeout: 30_000,
-    },
-  );
-  expect(await draftActs(session, org, binder)).toEqual([
-    "Move Hand Hygiene to the binder’s top level",
-  ]);
-});
 
 test("the binder's list carries each policy's identity", async () => {
   // Edit mode needs it to know which rows it may offer a pencil on: a file
@@ -829,20 +640,18 @@ test("clicking a renamed policy in the tree opens it, not an error", async ({
   page,
 }) => {
   const { session, org, binder } = await provisionBinder();
+  // The rename is made where renames are made now, the editor's file panel
+  // (tested in document-editor.pw.ts); here, through the same endpoint.
+  await renameHandHygiene(session, org, binder);
   await signInBrowser(page, session);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await organizeBinder(page);
+  await openDraftPage(page);
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   // Hand Hygiene is filed in Nursing, and folders start shut.
   await openTreeFolder(page, "Nursing");
-  await page.getByRole("button", { name: "Rename Hand Hygiene" }).click();
-  const box = page.getByRole("textbox", { name: "New name" });
-  await box.fill("Hand Hygiene and PPE");
-  await box.press("Enter");
-
   const row = page.locator(".binder-tree-label", {
     hasText: "Hand Hygiene and PPE",
   });
@@ -859,8 +668,9 @@ test("clicking a renamed policy in the tree opens it, not an error", async ({
   await expect(page.locator(".app-main")).not.toContainText(
     "Document not found",
   );
-  // Still editing, which is also the way back to what they were doing.
-  expect(page.url()).toContain("edit=1");
+  // Still in the draft, which is also the way back to what they were doing.
+  expect(decodeURIComponent(page.url())).toContain("/-/blob/draft/");
+  await expect(page.locator(".bs-draftbar")).toBeVisible();
 });
 
 /**
