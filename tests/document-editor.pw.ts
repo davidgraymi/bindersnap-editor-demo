@@ -515,14 +515,17 @@ test("Edit on a binder opens the editor, and its files are renamed and refiled t
   await expect(renamed).toContainText("Clean your hands");
   await expect(renamed).toContainText("Always.");
 
-  // Refiled from its row's menu, into the folder just made.
-  await files
-    .getByRole("button", { name: /^Hand Washing/ })
-    .click({ button: "right" });
-  await page
-    .getByRole("menu", { name: "Hand Washing: actions" })
-    .getByRole("menuitem", { name: "Move to…" })
-    .click();
+  // Refiled from its row's menu, into the folder just made. The panel is
+  // redrawn as the rename settles, and a right-click on the row it is
+  // replacing opens nothing, so press again until the menu is up.
+  const rowMenu = page.getByRole("menu", { name: "Hand Washing: actions" });
+  await expect(async () => {
+    await files
+      .getByRole("button", { name: /^Hand Washing/ })
+      .click({ button: "right" });
+    await expect(rowMenu).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 30_000 });
+  await rowMenu.getByRole("menuitem", { name: "Move to…" }).click();
   await page.getByLabel("Where it goes").selectOption({ label: "Nursing" });
   await page.getByRole("button", { name: "Move", exact: true }).click();
   await expect(page).toHaveURL(
