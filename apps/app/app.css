@@ -8739,6 +8739,20 @@ a.cmp-file-act {
 
 /* Quiet, and not beside the filled button by accident: discarding is the one
    irreversible thing on this bar. */
+.bs-draftbar-confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--brand-space-2);
+}
+
+.bs-draftbar-confirm-line {
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-medium);
+}
+
 .draft-bar-discard {
   color: var(--bs-text-secondary);
 }
