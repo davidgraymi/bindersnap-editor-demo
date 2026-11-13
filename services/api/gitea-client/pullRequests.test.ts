@@ -1067,3 +1067,23 @@ test("listChangeWriters names who committed to a change, merges aside, every pag
   });
   expect([...writers].sort()).toEqual(["alice", "grace"]);
 });
+
+test("listChangeWriters refuses to answer from part of a change's history", async () => {
+  const { listChangeWriters } = await import("./pullRequests");
+  const full = Array.from({ length: 50 }, () => ({
+    author: { login: "alice" },
+    parents: [{ sha: "p" }],
+  }));
+  const { client } = createMockClient({
+    GET: { "/repos/{owner}/{repo}/commits": () => full },
+  });
+  await expect(
+    listChangeWriters({
+      client,
+      owner: "acme",
+      repo: "clinical",
+      branch: "draft/alice/1",
+      base: "main",
+    }),
+  ).rejects.toThrow("too many to tell who wrote it");
+});
