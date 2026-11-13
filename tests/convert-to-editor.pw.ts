@@ -37,6 +37,12 @@ test("a Word file is converted into the draft and opens in the editor", async ({
     .locator(".bs-pagehead-actions")
     .getByRole("button", { name: "Edit", exact: true })
     .click();
+  // It is in Alice's open change too, so Edit asks first: a conversion is a
+  // change of its own, in her draft.
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Start a separate change" })
+    .click();
   await page
     .getByRole("complementary", { name: "About this file" })
     .getByRole("button", { name: "Edit in Bindersnap" })
