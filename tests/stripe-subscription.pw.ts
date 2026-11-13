@@ -347,6 +347,70 @@ async function fillVisibleInputAcrossFrames(
   return true;
 }
 
+/**
+ * Pick Card among Checkout's payment methods, where it offers several.
+ *
+ * In whichever frame draws the form: Checkout has moved its payment form
+ * into an iframe of its own, as it does the fields themselves.
+ */
+async function chooseCardIfOffered(page: Page): Promise<void> {
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    for (const frame of page.frames()) {
+      const choices = [
+        frame.locator('[data-testid="card-accordion-item-button"]'),
+        frame.getByRole("button", { name: "Card", exact: true }),
+        frame.getByRole("radio", { name: /^card$/i }),
+      ];
+      for (const choice of choices) {
+        const first = choice.first();
+        if (await first.isVisible().catch(() => false)) {
+          await first.click();
+          return;
+        }
+      }
+    }
+    // With cards alone there is no choice at all: the number field is up.
+    for (const frame of page.frames()) {
+      const number = frame.locator(
+        '#cardNumber, input[autocomplete="cc-number"], input[name="cardNumber"]',
+      );
+      if (
+        await number
+          .first()
+          .isVisible()
+          .catch(() => false)
+      )
+        return;
+    }
+    await page.waitForTimeout(500);
+  }
+}
+
+/** Untick "Save my information for faster checkout", in whichever frame. */
+async function declineStripeLink(page: Page): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    for (const frame of page.frames()) {
+      const box = frame
+        .locator("#enableStripePass")
+        .or(
+          frame.getByRole("checkbox", {
+            name: /save my information/i,
+          }),
+        )
+        .first();
+      if (await box.isVisible().catch(() => false)) {
+        if (await box.isChecked().catch(() => false)) {
+          await box.uncheck();
+        }
+        return;
+      }
+    }
+    await page.waitForTimeout(250);
+  }
+}
+
 async function completeHostedStripeCheckout(
   page: Page,
   email: string,
@@ -418,13 +482,15 @@ async function completeHostedStripeCheckout(
     )
     .catch(() => {});
 
-  // Stripe Link ("Save my information for faster checkout") is checked by
-  // default and shows a required phone number field that blocks submission.
-  // Uncheck it to keep the flow simple.
-  await page
-    .locator("#enableStripePass")
-    .uncheck({ timeout: 3_000 })
-    .catch(() => {});
+  // When the account offers more than one way to pay, Checkout lists them
+  // as choices (Card, Cash App Pay, Klarna…) and draws the card fields only
+  // once Card is chosen. With cards alone it draws them straight away, so
+  // there is nothing to choose and this finds nothing.
+  await chooseCardIfOffered(page);
+  // Stripe Link ("Save my information for faster checkout") is ticked by
+  // default and asks for a phone number that blocks submission. It is drawn
+  // only once Card is chosen, in Checkout's frame; untick it.
+  await declineStripeLink(page);
 
   // All card fields render in the main frame (no Stripe.js iframes on
   // checkout.stripe.com since Stripe owns the whole origin).
@@ -468,12 +534,22 @@ async function completeHostedStripeCheckout(
   // The Stripe Checkout page also has an accordion toggle button with
   // aria-label="Pay with card" which matches /pay/i but is hidden.
   // Use data-testid for the real submit button; fall back to the Subscribe text.
-  const submitButton = page
-    .locator('[data-testid="hosted-payment-submit-button"]')
-    .or(page.getByRole("button", { name: /subscribe|start[\s-]trial/i }))
-    .first();
-  await expect(submitButton).toBeVisible({ timeout: 15_000 });
-  await submitButton.click();
+  // In whichever frame draws the form, as the Card choice is.
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    for (const frame of page.frames()) {
+      const submitButton = frame
+        .locator('[data-testid="hosted-payment-submit-button"]')
+        .or(frame.getByRole("button", { name: /subscribe|start[\s-]trial/i }))
+        .first();
+      if (await submitButton.isVisible().catch(() => false)) {
+        await submitButton.click();
+        return;
+      }
+    }
+    await page.waitForTimeout(500);
+  }
+  throw new Error("Could not find Stripe Checkout's submit button.");
 }
 
 // ---------------------------------------------------------------------------
