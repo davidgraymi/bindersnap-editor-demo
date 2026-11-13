@@ -1033,3 +1033,37 @@ test("listPullRequestsWithoutReviews reads the changes and none of their reviews
   expect(withReviews[0]!.reviews).toHaveLength(1);
   expect(reviewReads).toEqual([1]);
 });
+
+test("listChangeWriters names who committed to a change, merges aside, every page", async () => {
+  const { listChangeWriters } = await import("./pullRequests");
+  const single = (login: string) => ({
+    author: { login },
+    parents: [{ sha: "p" }],
+  });
+  const pages: Record<number, unknown[]> = {
+    1: [
+      ...Array.from({ length: 49 }, () => single("alice")),
+      // Bring up to date, pressed by somebody who wrote nothing.
+      { author: { login: "carol" }, parents: [{ sha: "a" }, { sha: "b" }] },
+    ],
+    2: [single("grace")],
+  };
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/commits": (init) => {
+        const query = (init as { params: { query: { page: number } } }).params
+          .query;
+        return pages[query.page] ?? [];
+      },
+    },
+  });
+
+  const writers = await listChangeWriters({
+    client,
+    owner: "acme",
+    repo: "clinical",
+    branch: "draft/alice/1",
+    base: "main",
+  });
+  expect([...writers].sort()).toEqual(["alice", "grace"]);
+});

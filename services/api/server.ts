@@ -383,6 +383,7 @@ import {
   attachReviews,
   readMergeCommitSha,
   listBranchUpdates,
+  listChangeWriters,
   listPullRequests,
   findClosedChanges,
   listPullRequestsWithReviews,
@@ -8678,6 +8679,29 @@ async function handleWorkspaceChangeReview(
           },
           baseHeaders,
         );
+      }
+      // Taken off the co-editors after writing into it is still having
+      // written it: whoever made a commit on the branch does not sign off.
+      const head = reviewed.pullRequest.head?.ref ?? "";
+      const base = reviewed.pullRequest.base?.ref ?? "";
+      if (head && base) {
+        const writers = await listChangeWriters({
+          client,
+          owner: orgName,
+          repo: workspaceName,
+          branch: head,
+          base,
+        });
+        if (writers.has(auth.session.username)) {
+          return json(
+            403,
+            {
+              error:
+                "You wrote part of this change, so you cannot approve it or ask for changes on it. Somebody who did not write it has to.",
+            },
+            baseHeaders,
+          );
+        }
       }
     }
 
