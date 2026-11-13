@@ -1053,6 +1053,54 @@ export async function listBranchUpdates(
 }
 
 /**
+ * Everybody who wrote into a change's branch, by login: whoever made one of
+ * the commits it has that the base branch does not.
+ *
+ * **Merges are left out.** Bring up to date writes a merge commit as
+ * whoever pressed it, which any writer in the binder may, and it adds
+ * nothing the change proposes. Every other commit on the branch is words
+ * somebody wrote into it, and nobody approves what they wrote — even after
+ * they have been taken off the change's co-editors.
+ */
+export async function listChangeWriters(params: {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  branch: string;
+  base: string;
+}): Promise<Set<string>> {
+  const { client, owner, repo, branch, base } = params;
+  const writers = new Set<string>();
+  const limit = 50;
+  // A long review gathers many saves; read them all, to a sane bound.
+  for (let page = 1; page <= 40; page += 1) {
+    const commits = await unwrap(
+      client.GET("/repos/{owner}/{repo}/commits", {
+        params: {
+          path: { owner, repo },
+          query: {
+            sha: branch,
+            not: base,
+            page,
+            limit,
+            stat: false,
+            verification: false,
+            files: false,
+          },
+        },
+      }),
+    );
+    for (const commit of commits) {
+      if ((commit.parents?.length ?? 0) > 1) continue;
+      const login = commit.author?.login ?? commit.committer?.login;
+      if (login) writers.add(login);
+    }
+    if (commits.length < limit) break;
+  }
+  return writers;
+}
+
+/**
  * Set who is answerable for a change.
  *
  * Gitea models this as issue assignees, and the list it is given replaces the
