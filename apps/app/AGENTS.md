@@ -153,6 +153,15 @@ address. Limit 1.5 MB per picture after scaling. A picture's size is its
 the corner handles, and the Picture tab's presets); a height is never stored,
 so it cannot be saved squashed.
 
+**A save names the version it was written on** (`basedOn`, the file's git
+blob SHA: as the editor read it, then as each of its own saves left it, per
+policy). Into a draft or a change the server refuses a save whose file has
+moved on since (409, `code: "stale"`): two co-editors writing one file
+otherwise replaced each other's words without either knowing. Saves go one at
+a time (`saveQueue` in `DocumentEditorPage.tsx`), so the editor's own save in
+flight is never mistaken for somebody else's. There is no live sync: the
+editor reads a document once, when it is opened.
+
 **AutoRecover** (`apps/app/editorRecovery.ts`): unsaved words are kept in this
 browser's `localStorage`, per org/binder/draft/policy, 800ms after the last
 change, and offered back (Restore / Discard) the next time that policy opens

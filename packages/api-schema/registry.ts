@@ -1844,6 +1844,13 @@ registry.registerPath({
              * it cannot fold is an ordinary commit.
              */
             fold: z.enum(["true"]).optional(),
+            /**
+             * The git blob SHA of the file the editor started from. Into a
+             * draft or a change, a save is refused (409, `code: "stale"`)
+             * when the file there is no longer that one: somebody else saved
+             * it since, and this save would replace their words.
+             */
+            basedOn: z.string().optional(),
           }),
         },
       },

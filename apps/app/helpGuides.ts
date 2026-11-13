@@ -113,6 +113,7 @@ export const HELP_GUIDES: HelpGuide[] = [
           "While a draft has not been proposed, it saves on its own as you type. The editor says Saving… while it does, and then when it last saved.",
           "Once a draft has been proposed, reviewers are reading it, and a new version can clear approvals already given. So from then on you choose Save yourself, and the editor asks first.",
           "If your browser closes before a save, the editor offers the unsaved words back the next time you open that document on the same computer.",
+          "If a co-editor saved the same document after you opened it, your save is refused and nothing is written, so neither of you loses words without knowing. Copy what you wrote, reload to see theirs, then add yours back.",
         ],
       },
       {

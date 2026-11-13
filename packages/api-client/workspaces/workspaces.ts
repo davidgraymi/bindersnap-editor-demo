@@ -1341,6 +1341,9 @@ if(reviseBinderDocumentBody.source !== undefined) {
 if(reviseBinderDocumentBody.fold !== undefined) {
  formData.append(`fold`, reviseBinderDocumentBody.fold);
  }
+if(reviseBinderDocumentBody.basedOn !== undefined) {
+ formData.append(`basedOn`, reviseBinderDocumentBody.basedOn);
+ }
 
   return customFetch<reviseBinderDocumentResponse>(getReviseBinderDocumentUrl(org,binder),
   {

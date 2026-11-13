@@ -12566,6 +12566,9 @@
                     "pullRequestNumber": {
                       "type": "number",
                       "nullable": true
+                    },
+                    "sha": {
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -13231,6 +13234,9 @@
                     "enum": [
                       "true"
                     ]
+                  },
+                  "basedOn": {
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -13267,6 +13273,9 @@
                     "pullRequestNumber": {
                       "type": "number",
                       "nullable": true
+                    },
+                    "sha": {
+                      "type": "string"
                     }
                   },
                   "required": [
