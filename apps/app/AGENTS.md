@@ -81,8 +81,9 @@ counts the others, and Save all commits them, one act each. Only leaving
 the editor — Close, Propose, another draft — asks, and offers Save all. **The editor owns the draft**: "Saving to" is the `BinderDraftPicker`
 (switch or start a draft on the same policy) and Propose opens the propose
 step for that draft, returning to the policy on Back. Close lands on the
-document at `?edit=1&draft=`, with the draft bar (Propose, Discard) at the foot
-as on the binder's own page. It says "In <draft>" and lists your drafts
+document read at the draft, `/-/blob/{draft}/{path}` (a folder on the desk
+closes to `/-/tree/{draft}/{folder}`), with the draft bar (Propose, Discard)
+at the foot. It says "In <draft>" and lists your drafts
 in the file panel's "What you are reading". The binder's own page offers the
 same picker while reading, with "On the record" as a place. **One button,
 Edit** (D8 of `docs/design/sign-off-rules-in-place.md`): the binder, folder
@@ -111,9 +112,13 @@ goes on to the next policy to write (`actInEditor` in `BinderShell.tsx`).
 The title in the editor's header is the open policy's name and renames it
 the same way.
 Archiving from the panel offers Undo, and the panel's foot lists the archive
-with Restore, both into the same draft. The binder's own tree can still be
-rearranged at `?edit=1`, where the draft bar proposes or discards — reached
-from Drafts and from the editor's Close. **Reading a draft is reading a
+with Restore, both into the same draft. **There are two places, reading and the editor, and no third.** The
+binder's tree had an edit mode of its own at `?edit=1` (Done and Edit, rename
+and drag in place). It is retired: the editor's file panel organizes, and a
+draft's home is the binder read at the draft, where `BinderDraftBar`
+proposes or discards it (`homeDraftBranch` in `BinderShell.tsx`). An old
+`?edit=1` address is rewritten to that page. Do not add a mode between
+reading and the editor. **Reading a draft is reading a
 branch**: the binder's version picker opens one of your drafts at
 `/-/tree/{draft}`, the same page as the record's, under the draft's name,
 with "Who signs off here" read there (`?ref=` on `GET …/rules/sign-off`).

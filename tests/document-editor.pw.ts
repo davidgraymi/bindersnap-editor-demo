@@ -22,7 +22,7 @@ import { expect, test, type Page } from "@playwright/test";
 import {
   API_BASE_URL,
   APP_BASE_URL,
-  organizeBinder,
+  openDraftPage,
   openAddDocument,
 } from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
@@ -291,7 +291,7 @@ test("a policy written here opens in the editor, and saves itself into your draf
 
   // Close is the way back to the document, still in the draft.
   await page.getByRole("button", { name: "Close", exact: true }).click();
-  await expect(page).toHaveURL(/\/hand-hygiene\?edit=1&draft=/);
+  await expect(page).toHaveURL(/\/-\/blob\/draft[^?]*hand-hygiene$/);
   await expect(page.locator(".doc-preview-prose")).toContainText(
     "Alcohol rub is enough",
   );
@@ -435,7 +435,7 @@ test("the draft is chosen, proposed and read from the editor, with no trip throu
   // Close reads the policy in that draft, and says so.
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await expect(page).toHaveURL(
-    new RegExp(`/hand-hygiene\\?edit=1&draft=${encodeURIComponent(first)}`),
+    new RegExp(`/-/blob/${encodeURIComponent(first)}/[^?]*hand-hygiene$`),
   );
   await expect(page.locator(".doc-version-pill")).toHaveText(`In ${firstName}`);
   await expect(page.locator(".doc-preview-prose")).toContainText("Every time.");
@@ -543,14 +543,16 @@ test("Edit on a binder opens the editor, and its files are renamed and refiled t
   // Closing saves the words at the new address, and lands on the policy
   // there, in the draft.
   await page.getByRole("button", { name: "Close", exact: true }).click();
-  await expect(page).toHaveURL(/\/nursing\/hand-washing\?edit=1/i);
+  await expect(page).toHaveURL(
+    /\/-\/blob\/draft[^?]*\/nursing\/hand-washing$/i,
+  );
   await expect(page.locator(".doc-preview-prose")).toContainText("Always.");
 
-  // And from the binder's own page, Organize is still the whole tree.
+  // The draft's own page is the binder read at the draft, with its bar.
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-  await organizeBinder(page);
+  await openDraftPage(page);
   await expect(page.locator(".bs-draftbar")).toBeVisible();
-  await expect(page).toHaveURL(/edit=1/);
+  await expect(page).toHaveURL(/\/-\/tree\/draft/);
 });
 
 test("the policy is renamed from its title, and its unsaved words stay with it", async ({
@@ -1873,7 +1875,7 @@ test("closing the editor lands on the policy with the draft bar, and Propose is 
   await expect(page.locator(".bs-draftbar")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Close", exact: true }).click();
-  await expect(page).toHaveURL(/\/hand-hygiene\?edit=1&draft=/);
+  await expect(page).toHaveURL(/\/-\/blob\/draft[^?]*hand-hygiene$/);
   const bar = page.locator(".bs-draftbar");
   await expect(bar).toContainText("1 document changed", { timeout: 30_000 });
   await bar.getByRole("button", { name: "Propose" }).click();
@@ -1998,7 +2000,7 @@ test("a proposed draft keeps its name, and its change's chip goes back into it",
   await expect(chip).toHaveText("Say when to wash");
   await chip.click();
   await expect(page).toHaveURL(
-    new RegExp(`edit=1&draft=${encodeURIComponent(branch)}`),
+    new RegExp(`/-/tree/${encodeURIComponent(branch)}$`),
   );
   const bar = page.locator(".bs-draftbar");
   await expect(bar).toContainText(`Proposed as change ${change}`);

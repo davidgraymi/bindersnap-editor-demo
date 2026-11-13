@@ -40,12 +40,7 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import {
-  API_BASE_URL,
-  APP_BASE_URL,
-  organizeBinder,
-  openAddDocument,
-} from "./helpers";
+import { API_BASE_URL, APP_BASE_URL, openAddDocument } from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
 import { LEGAL_VERSION } from "../packages/utils/legal";
 
@@ -715,9 +710,10 @@ test("a popover is not clipped by the panel it opens from", async ({
   // **The same rule, on the other popover that lives inside a panel.** One
   // instance is a bug fixed; two is a rule, and the draft picker sits in the
   // tree's own bar — another `.bs-panel`, another squircle.
+  // It is in the editor's header now, over the desk: Edit opens it.
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
   await settleOnRealShell(page);
-  await organizeBinder(page);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
   const pick = page.locator(".bs-draftpick");
   await pick.waitFor({ timeout: 30_000 });
   await pick.click();

@@ -787,13 +787,14 @@ export async function acceptTermsForOrganization(page: Page): Promise<void> {
 }
 
 /**
- * Rearrange the binder in its tree, in your draft — the screen the binder's
- * Organize button used to open. The header offers only Edit now (one button,
- * D8), which opens the editor; the tree's edit mode is still where a draft is
- * proposed and discarded, reached from Drafts and from the editor's Close.
- * Opens (or resumes) the draft through the API and goes to `?edit=1`.
+ * Open the page of your draft in this binder: the binder read at the draft
+ * (`/-/tree/{draft}`), where its bar proposes or discards it and Edit opens
+ * the editor in it. Opens (or resumes) the draft through the API first.
+ *
+ * This was `organizeBinder`, which went to the tree's own edit mode at
+ * `?edit=1`. That mode is retired: the editor's file panel organizes.
  */
-export async function organizeBinder(page: Page): Promise<void> {
+export async function openDraftPage(page: Page): Promise<void> {
   const [, org, binder] =
     new URL(page.url()).pathname.match(/^\/([^/]+)\/([^/]+)/) ?? [];
   if (!org || !binder) throw new Error(`Not on a binder: ${page.url()}`);
@@ -804,11 +805,9 @@ export async function organizeBinder(page: Page): Promise<void> {
   expect(response.ok(), await response.text()).toBe(true);
   const { draft } = (await response.json()) as { draft: { branch: string } };
   await page.goto(
-    `${APP_BASE_URL}/${org}/${binder}?edit=1&draft=${encodeURIComponent(draft.branch)}`,
+    `${APP_BASE_URL}/${org}/${binder}/-/tree/${encodeURIComponent(draft.branch)}`,
   );
-  await expect(page.getByRole("button", { name: "Done" })).toBeVisible({
-    timeout: 30_000,
-  });
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 }
 
 /**
