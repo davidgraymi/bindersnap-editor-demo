@@ -7733,6 +7733,31 @@
                               "avatarUrl"
                             ]
                           },
+                          "coEditors": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                },
+                                "avatarUrl": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName",
+                                "avatarUrl"
+                              ]
+                            }
+                          },
+                          "viewerCanEdit": {
+                            "type": "boolean"
+                          },
                           "documents": {
                             "type": "array",
                             "items": {
@@ -7777,6 +7802,8 @@
                           "reviews",
                           "reviewers",
                           "assignee",
+                          "coEditors",
+                          "viewerCanEdit",
                           "documents"
                         ]
                       }
@@ -8107,6 +8134,31 @@
                               "avatarUrl"
                             ]
                           },
+                          "coEditors": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                },
+                                "avatarUrl": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName",
+                                "avatarUrl"
+                              ]
+                            }
+                          },
+                          "viewerCanEdit": {
+                            "type": "boolean"
+                          },
                           "documents": {
                             "type": "array",
                             "items": {
@@ -8154,6 +8206,8 @@
                           "reviews",
                           "reviewers",
                           "assignee",
+                          "coEditors",
+                          "viewerCanEdit",
                           "documents",
                           "binder"
                         ]
@@ -14819,6 +14873,28 @@
                         "approvalState"
                       ]
                     },
+                    "coEditors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "avatarUrl": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName",
+                          "avatarUrl"
+                        ]
+                      }
+                    },
                     "branchLabel": {
                       "type": "string",
                       "nullable": true
@@ -15038,12 +15114,20 @@
                         },
                         "canCloseOrReopen": {
                           "type": "boolean"
+                        },
+                        "canEdit": {
+                          "type": "boolean"
+                        },
+                        "canNameCoEditors": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
                         "canApprove",
                         "canPublish",
-                        "canCloseOrReopen"
+                        "canCloseOrReopen",
+                        "canEdit",
+                        "canNameCoEditors"
                       ]
                     },
                     "approvalRules": {
@@ -15324,6 +15408,7 @@
                     "organization",
                     "workspace",
                     "change",
+                    "coEditors",
                     "branchLabel",
                     "documents",
                     "removedDocuments",
@@ -17978,6 +18063,12 @@
                   "assignee": {
                     "type": "string",
                     "nullable": true
+                  },
+                  "coEditors": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   },
                   "reviewers": {
                     "type": "array",

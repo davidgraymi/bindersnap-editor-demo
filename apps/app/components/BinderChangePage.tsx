@@ -31,6 +31,7 @@ import { HelpLink } from "./HelpLink";
 import type { DocumentChangeView } from "../routes";
 import { nameFor, usePeopleNames } from "../usePeopleNames";
 import { ChangeByline } from "./ChangeByline";
+import { ChangeCoEditors } from "./ChangeCoEditors";
 import { ChangeComparisonPage } from "./ChangeComparisonPage";
 import { ChangeConflictsPage } from "./ChangeConflictsPage";
 import { ChangeStateBadge, ChangeTabs } from "./ChangeTabs";
@@ -575,13 +576,14 @@ export function BinderChangePage({
             }
           }}
           onDownload={(row, gitRef) => void handleRowDownload(row, gitRef)}
-          /* Only its author, only while it is open, and only a document the
-             editor writes: a Word file is revised in Word and uploaded. */
+          /* Its author or a co-editor, only while it is open, and only a
+             document the editor writes: a Word file is revised in Word and
+             uploaded. */
           editFor={(row) =>
             onEditInEditor &&
             record.open &&
             detail.change.branchName !== "" &&
-            record.submittedBy === currentUser &&
+            detail.viewer.canEdit &&
             isEditorDocumentFile(row.path)
               ? () => onEditInEditor(row.slugPath)
               : null
@@ -716,20 +718,19 @@ export function BinderChangePage({
                 {formatShortDate(record.submittedAt)} by{" "}
                 {nameOf(record.submittedBy)}
               </dd>
-              <dt>Assignee</dt>
+              {/* Who besides its author may change what it proposes. It was
+                  "Assignee", a name on the change that did nothing. */}
+              <dt>Co-editors</dt>
               <dd>
-                {detail.change.assignee ? (
-                  <span className="change-about-person">
-                    <PersonAvatar
-                      person={detail.change.assignee}
-                      size="sm"
-                      card="Assignee on this change"
-                    />
-                    {nameOf(detail.change.assignee.login)}
-                  </span>
-                ) : (
-                  "Nobody yet"
-                )}
+                <ChangeCoEditors
+                  org={org}
+                  binder={binder}
+                  changeNumber={changeNumber}
+                  author={record.submittedBy}
+                  coEditors={detail.coEditors}
+                  canName={detail.viewer.canNameCoEditors && !isReadOnly}
+                  nameOf={nameOf}
+                />
               </dd>
             </dl>
           </section>

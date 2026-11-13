@@ -608,10 +608,15 @@ reaction is deliberately not part of the approval record: it never counts
 toward `unresolvedCount`, never gates publishing, and never stands in for a
 review. See `services/api/gitea-client/reactions.ts`.
 
-**Change assignments** follow the rule too. A change's assignee is the pull
-request's Gitea assignee and its reviewers are Gitea review requests, so who a
-change is waiting on is part of the same record as the reviews themselves. The
-reviewer states the UI shows are derived from those two facts plus the reviews
+**Change assignments** follow the rule too. A change's co-editors are the
+pull request's Gitea assignees and its reviewers are Gitea review requests, so
+who may write a change and who it is waiting on are part of the same record as
+the reviews themselves. **Only a change's author and its co-editors change what
+it proposes** (`mayEditChange`): saving into it, and resolving its conflicts,
+are refused to anybody else, who comments or opens a change of their own. The
+author or a binder admin names co-editors; a co-editor cannot approve the
+change, and an approver whose approval stands cannot be named one. The
+reviewer states the UI shows are derived from those facts plus the reviews
 (`services/api/change-assignments.ts`) — nothing about an assignment is stored
 outside Gitea.
 

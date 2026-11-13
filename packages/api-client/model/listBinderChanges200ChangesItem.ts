@@ -5,6 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { ListBinderChanges200ChangesItemAssignee } from './listBinderChanges200ChangesItemAssignee.ts';
+import type { ListBinderChanges200ChangesItemCoEditorsItem } from './listBinderChanges200ChangesItemCoEditorsItem.ts';
 import type { ListBinderChanges200ChangesItemDocumentsItem } from './listBinderChanges200ChangesItemDocumentsItem.ts';
 import type { ListBinderChanges200ChangesItemOutcome } from './listBinderChanges200ChangesItemOutcome.ts';
 import type { ListBinderChanges200ChangesItemReviewersItem } from './listBinderChanges200ChangesItemReviewersItem.ts';
@@ -34,5 +35,7 @@ export type ListBinderChanges200ChangesItem = {
   reviewers: ListBinderChanges200ChangesItemReviewersItem[];
   /** @nullable */
   assignee: ListBinderChanges200ChangesItemAssignee;
+  coEditors: ListBinderChanges200ChangesItemCoEditorsItem[];
+  viewerCanEdit: boolean;
   documents: ListBinderChanges200ChangesItemDocumentsItem[];
 };

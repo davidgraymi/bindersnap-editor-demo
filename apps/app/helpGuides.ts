@@ -127,6 +127,7 @@ export const HELP_GUIDES: HelpGuide[] = [
         ],
         paragraphs: [
           "That opens a change request. You can keep editing: every save after this adds to the same change request.",
+          "Only you and the co-editors you name can change what it proposes. Name them on the change request, under Co-editors. Everybody else comments, or starts a change of their own. A co-editor helps write the change, so they cannot approve it.",
         ],
       },
       {
@@ -209,7 +210,7 @@ export const HELP_GUIDES: HelpGuide[] = [
       {
         heading: "If you cannot approve",
         paragraphs: [
-          "Only a binder's approvers see Approve and Ask for changes. If you see neither, you can still comment, and your comment is part of the record. The author of a change can never approve it. To become an approver, ask one of the binder's admins.",
+          "Only a binder's approvers see Approve and Ask for changes. If you see neither, you can still comment, and your comment is part of the record. The author of a change and its co-editors can never approve it. To become an approver, ask one of the binder's admins.",
         ],
       },
       {
@@ -267,7 +268,7 @@ export const HELP_GUIDES: HelpGuide[] = [
       {
         heading: "Who can do it",
         paragraphs: [
-          "Anyone who can edit in the binder can bring a change up to date or resolve its conflicts. It is usually the author, because they know what the change meant to say.",
+          "Anyone who can edit in the binder can bring a change up to date. Only its author and its co-editors can resolve its conflicts, because choosing wording changes what the change proposes.",
         ],
       },
     ],

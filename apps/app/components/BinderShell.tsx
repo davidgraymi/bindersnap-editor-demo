@@ -400,7 +400,9 @@ export function BinderShell({
   const writable =
     changeRead.data &&
     changeRead.data.change.state === "open" &&
-    changeRead.data.change.branchName !== "";
+    changeRead.data.change.branchName !== "" &&
+    // Its author and its co-editors; the server refuses anyone else's save.
+    changeRead.data.viewer.canEdit;
   const changeTarget =
     writingChange !== null && changeRead.data && writable
       ? {

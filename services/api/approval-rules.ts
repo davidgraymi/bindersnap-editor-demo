@@ -98,6 +98,11 @@ function standingApprovals(
  */
 export function buildApprovalRules(params: {
   author: string;
+  /**
+   * The change's co-editors. Like its author, they wrote some of it, so
+   * their approval is not somebody else's and they are never listed.
+   */
+  coEditors?: readonly string[];
   requiredApprovals: number | null;
   approvers: { groups: string[]; people: string[] } | null;
   signOff: readonly SignOffRule[];
@@ -112,6 +117,10 @@ export function buildApprovalRules(params: {
   const { author, reviews, ignoresStale, members, person } = params;
   const standing = standingApprovals(reviews, ignoresStale);
   const authorKey = author.toLowerCase();
+  const wroteIt = new Set([
+    authorKey,
+    ...(params.coEditors ?? []).map((login) => login.toLowerCase()),
+  ]);
 
   const eligibleFor = (groups: string[], people: string[]): ChangeUser[] => {
     const byLogin = new Map<string, ChangeUser>();
@@ -122,7 +131,7 @@ export function buildApprovalRules(params: {
       if (!byLogin.has(login)) byLogin.set(login, person(login));
     }
     return [...byLogin.values()]
-      .filter((user) => user.login.toLowerCase() !== authorKey)
+      .filter((user) => !wroteIt.has(user.login.toLowerCase()))
       .sort((left, right) =>
         (left.fullName || left.login).localeCompare(
           right.fullName || right.login,

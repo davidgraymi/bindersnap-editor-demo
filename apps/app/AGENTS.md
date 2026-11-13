@@ -125,7 +125,8 @@ with "Who signs off here" read there (`?ref=` on `GET …/rules/sign-off`).
 The explorer's links, a document's path and a folder's contents stay on the
 branch or draft being read, and Edit on your own draft's page carries on
 in it. **An open change request is edited in
-place by its author**: Edit on its Proposed version card opens the editor at
+place by its author and its co-editors** (the pull request's assignees,
+named on the change; the server refuses anyone else's save): Edit on its Proposed version card opens the editor at
 `?edit=write&change=N`, which reads the change's branch and saves with
 `changeNumber` (the server's `resolveChangeToJoin`) — no draft, no Propose,
 and Close returns to the change.

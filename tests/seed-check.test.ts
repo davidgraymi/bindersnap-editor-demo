@@ -15,6 +15,7 @@ function change(overrides: Partial<SeedChange> = {}): SeedChange {
     document: { title: "A", sections: [] },
     reviews: [],
     threads: [],
+    coEditors: [],
     reviewers: [],
     publish: false,
     closed: false,
