@@ -1072,8 +1072,11 @@ export async function listChangeWriters(params: {
   const { client, owner, repo, branch, base } = params;
   const writers = new Set<string>();
   const limit = 50;
-  // A long review gathers many saves; read them all, to a sane bound.
-  for (let page = 1; page <= 40; page += 1) {
+  const pages = 40;
+  // A long review gathers many saves; read them all, to a sane bound — and
+  // past it, refuse rather than answer from part of the history, because a
+  // writer missed is a writer who could approve their own words.
+  for (let page = 1; page <= pages; page += 1) {
     const commits = await unwrap(
       client.GET("/repos/{owner}/{repo}/commits", {
         params: {
@@ -1095,9 +1098,11 @@ export async function listChangeWriters(params: {
       const login = commit.author?.login ?? commit.committer?.login;
       if (login) writers.add(login);
     }
-    if (commits.length < limit) break;
+    if (commits.length < limit) return writers;
   }
-  return writers;
+  throw new Error(
+    `This change has more than ${limit * pages} saves, too many to tell who wrote it.`,
+  );
 }
 
 /**
