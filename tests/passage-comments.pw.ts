@@ -27,8 +27,26 @@ test("words selected in a document can be commented on, and the comment remember
     page.getByRole("button", { name: "Comment", exact: true }),
   ).toHaveCount(0);
 
-  // A double click selects a word, as it does anywhere.
-  await sheet.locator("p").first().dblclick();
+  // Select the first real word, as a person's drag would, and let go. A
+  // double click at a paragraph's middle can land between two words, which
+  // selects nothing.
+  await sheet.evaluate((root) => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const match = /[A-Za-z]{4,}/.exec(node.textContent ?? "");
+      if (!match) continue;
+      const range = document.createRange();
+      range.setStart(node, match.index);
+      range.setEnd(node, match.index + match[0].length);
+      const selection = window.getSelection()!;
+      selection.removeAllRanges();
+      selection.addRange(range);
+      node.parentElement!.dispatchEvent(
+        new MouseEvent("mouseup", { bubbles: true }),
+      );
+      return;
+    }
+  });
   const quoted = (
     await page.evaluate(() => window.getSelection()?.toString() ?? "")
   ).trim();
