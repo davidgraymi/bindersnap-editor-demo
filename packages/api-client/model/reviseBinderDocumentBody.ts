@@ -15,4 +15,5 @@ export type ReviseBinderDocumentBody = {
   draft?: string;
   source?: ReviseBinderDocumentBodySource;
   fold?: ReviseBinderDocumentBodyFold;
+  basedOn?: string;
 };

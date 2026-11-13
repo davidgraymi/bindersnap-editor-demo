@@ -1700,7 +1700,14 @@ export async function reviseBinderDocument(
    * The editor saved on its own: into a draft nobody has been shown, the
    * server may fold this into the last save of the same document.
    */
-  options: { fold?: boolean } = {},
+  options: {
+    fold?: boolean;
+    /**
+     * The git blob SHA of the file this was written on. The server refuses
+     * the save when somebody has saved over it since.
+     */
+    basedOn?: string;
+  } = {},
 ): Promise<CreatedWorkspaceDocumentPayload> {
   try {
     const response = await BindersClient.reviseBinderDocument(org, binder, {
@@ -1709,6 +1716,7 @@ export async function reviseBinderDocument(
       ...multipartTarget(target),
       ...(source ? { source } : {}),
       ...(options.fold ? { fold: "true" as const } : {}),
+      ...(options.basedOn ? { basedOn: options.basedOn } : {}),
     });
     return response.data;
   } catch (error) {

@@ -13,4 +13,5 @@ export type ReviseBinderDocument201 = {
   branch: string;
   /** @nullable */
   pullRequestNumber: number | null;
+  sha?: string;
 };
