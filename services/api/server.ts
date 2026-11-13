@@ -417,7 +417,10 @@ import {
   signatureOf,
   countApprovals,
   planReviewerChanges,
+  mayEditChange,
+  NOT_AN_EDITOR,
   readAssignee,
+  readCoEditors,
   readRequestedReviewers,
   toChangeUser,
 } from "./change-assignments";
@@ -5424,10 +5427,30 @@ async function handleUpdateChangeAssignments(
     );
   }
 
-  if (!assigneeGiven && !reviewersGiven) {
+  // Everybody besides the author who may edit the change, as a whole list.
+  const coEditorsGiven = payload !== null && "coEditors" in payload;
+  const coEditors = coEditorsGiven
+    ? readUsernameList(payload?.coEditors)
+    : null;
+  if (coEditorsGiven && coEditors === null) {
     return json(
       400,
-      { error: "Provide an assignee, a reviewer list, or both." },
+      { error: "coEditors must be an array of usernames." },
+      baseHeaders,
+    );
+  }
+  if (assigneeGiven && coEditorsGiven) {
+    return json(
+      400,
+      { error: "Send coEditors or assignee, not both: they are one list." },
+      baseHeaders,
+    );
+  }
+
+  if (!assigneeGiven && !reviewersGiven && !coEditorsGiven) {
+    return json(
+      400,
+      { error: "Provide co-editors, a reviewer list, or both." },
       baseHeaders,
     );
   }
@@ -5450,13 +5473,53 @@ async function handleUpdateChangeAssignments(
     });
     const submittedBy = before.pullRequest.user?.login ?? "";
 
-    if (assigneeGiven) {
+    if (assigneeGiven || coEditorsGiven) {
+      // **Naming a co-editor lets them change what the change proposes**, so
+      // it is its author's to do, or a binder admin's when the author cannot.
+      // It was open to anybody who could write in the binder.
+      const isAuthor =
+        submittedBy.toLowerCase() === auth.session.username.toLowerCase();
+      const access = isAuthor
+        ? null
+        : await readWorkspaceAccess({ client, org: owner, name: repo });
+      if (!isAuthor && !access?.admin) {
+        return json(
+          403,
+          {
+            error:
+              "Only the author or a binder admin can say who else edits this change.",
+          },
+          baseHeaders,
+        );
+      }
+      // Somebody whose approval is on the change cannot become one of its
+      // writers: the approval would be of their own work.
+      const naming = coEditors ?? (assignee ? [assignee] : []);
+      const approved = naming.find((login) =>
+        before.reviews.some(
+          (review) =>
+            (review.user?.login ?? "").toLowerCase() === login.toLowerCase() &&
+            (review.state ?? "").toUpperCase() === "APPROVED" &&
+            !review.dismissed,
+        ),
+      );
+      if (approved) {
+        return json(
+          409,
+          {
+            error: `${approved} has approved this change, and somebody who approved it cannot also edit it.`,
+          },
+          baseHeaders,
+        );
+      }
       await setPullRequestAssignees({
         client,
         owner,
         repo,
         pullNumber: prNumber,
-        assignees: assignee ? [assignee] : [],
+        assignees: naming.filter(
+          (login) => login.toLowerCase() !== submittedBy.toLowerCase(),
+        ),
       });
     }
 
@@ -7291,6 +7354,7 @@ async function readApprovalRules(params: {
   org: string;
   workspace: string;
   author: string;
+  coEditors: readonly string[];
   reviews: Parameters<typeof buildApprovalRules>[0]["reviews"];
   signOff: SignOffRule[];
   ignoresStale: boolean;
@@ -7333,6 +7397,7 @@ async function readApprovalRules(params: {
 
   return buildApprovalRules({
     author,
+    coEditors: params.coEditors,
     requiredApprovals: protection?.requiredApprovals ?? null,
     approvers: protection
       ? {
@@ -7636,6 +7701,7 @@ async function handleWorkspaceChangeDetail(
           : null,
         decidedBy: decided?.decidedBy ?? null,
         branchLabel,
+        coEditors: readCoEditors(entry.pullRequest),
         documents: withVersions,
         removedDocuments,
         // `main` has moved on if the change's merge base is no longer the base
@@ -7659,11 +7725,28 @@ async function handleWorkspaceChangeDetail(
             binder: workspaceName,
             username: auth.session.username,
             canWrite: access.push,
-          })),
+          }).then((rights) => ({
+            ...rights,
+            // Somebody who wrote part of it does not sign it off.
+            canApprove:
+              rights.canApprove &&
+              !mayEditChange(entry.pullRequest, auth.session.username),
+          }))),
           // Its author or a binder admin, as `handleSetWorkspaceChangeOpen`
           // decides it. Never on a published change: that is the record.
           canCloseOrReopen:
             decided?.outcome !== "published" &&
+            (access.admin ||
+              (entry.pullRequest.user?.login ?? "").toLowerCase() ===
+                auth.session.username.toLowerCase()),
+          // Its author and its co-editors change what it proposes; nobody
+          // else, whatever their access to the binder.
+          canEdit:
+            !decided &&
+            access.push &&
+            mayEditChange(entry.pullRequest, auth.session.username),
+          canNameCoEditors:
+            !decided &&
             (access.admin ||
               (entry.pullRequest.user?.login ?? "").toLowerCase() ===
                 auth.session.username.toLowerCase()),
@@ -7682,6 +7765,9 @@ async function handleWorkspaceChangeDetail(
           org: orgName,
           workspace: workspaceName,
           author: entry.pullRequest.user?.login ?? "",
+          coEditors: readCoEditors(entry.pullRequest).map(
+            (editor) => editor.login,
+          ),
           reviews: entry.reviews,
           signOff: gate?.codeownersBlock
             ? matchingSignOffRules(signOff.rules, gatedPaths)
@@ -8228,7 +8314,7 @@ async function handleWorkspaceChangeConflicts(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    const [heads, access] = await Promise.all([
+    const [heads, access, pull] = await Promise.all([
       readChangeHeads({
         client,
         org: orgName,
@@ -8236,6 +8322,12 @@ async function handleWorkspaceChangeConflicts(
         pullNumber,
       }),
       readWorkspaceAccess({ client, org: orgName, name: workspaceName }),
+      getPullRequestWithReviews({
+        client,
+        owner: orgName,
+        repo: workspaceName,
+        pullNumber,
+      }),
     ]);
     const conflicts = heads.open
       ? await readChangeConflicts({
@@ -8299,7 +8391,10 @@ async function handleWorkspaceChangeConflicts(
         upToDate: !heads.mergeBase || heads.mergeBase === heads.baseSha,
         headSha: heads.headSha,
         baseSha: heads.baseSha,
-        canResolve: access.push,
+        // Choosing between two wordings is changing what it proposes: its
+        // author's, or a co-editor's.
+        canResolve:
+          access.push && mayEditChange(pull.pullRequest, auth.session.username),
         files,
       },
       baseHeaders,
@@ -8369,18 +8464,29 @@ async function handleResolveWorkspaceChangeConflicts(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    const heads = await readChangeHeads({
-      client,
-      org: orgName,
-      workspace: workspaceName,
-      pullNumber,
-    });
+    const [heads, pull] = await Promise.all([
+      readChangeHeads({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+        pullNumber,
+      }),
+      getPullRequestWithReviews({
+        client,
+        owner: orgName,
+        repo: workspaceName,
+        pullNumber,
+      }),
+    ]);
     if (!heads.open) {
       return json(
         409,
         { error: "This change is no longer open." },
         baseHeaders,
       );
+    }
+    if (!mayEditChange(pull.pullRequest, session.username)) {
+      return json(403, { error: NOT_AN_EDITOR }, baseHeaders);
     }
     if (heads.headSha !== body.headSha || heads.baseSha !== body.baseSha) {
       return json(
@@ -8552,6 +8658,24 @@ async function handleWorkspaceChangeReview(
         return json(
           403,
           { error: "Only this binder's approvers can approve." },
+          baseHeaders,
+        );
+      }
+      // **Nobody signs off what they wrote.** Gitea refuses the author; a
+      // co-editor wrote part of it too, and Gitea would count theirs.
+      const reviewed = await getPullRequestWithReviews({
+        client,
+        owner: orgName,
+        repo: workspaceName,
+        pullNumber,
+      });
+      if (mayEditChange(reviewed.pullRequest, auth.session.username)) {
+        return json(
+          403,
+          {
+            error:
+              "You can edit this change, so you cannot approve it or ask for changes on it. Somebody who did not write it has to.",
+          },
           baseHeaders,
         );
       }
@@ -8741,6 +8865,7 @@ async function handleListWorkspaceChanges(
       orgName,
       workspaceName,
       state,
+      auth.session.username,
     );
 
     return json(
@@ -8787,7 +8912,13 @@ async function handleListOrganizationChanges(
     });
     const perBinder = await Promise.all(
       workspaces.map((workspace) =>
-        listWorkspaceChangeSummaries(client, orgName, workspace.name, state)
+        listWorkspaceChangeSummaries(
+          client,
+          orgName,
+          workspace.name,
+          state,
+          auth.session.username,
+        )
           .then((changes) =>
             changes.map((change) => ({ ...change, binder: workspace.name })),
           )
@@ -8820,6 +8951,8 @@ async function listWorkspaceChangeSummaries(
   orgName: string,
   workspaceName: string,
   state: "open" | "closed",
+  /** Who is reading, to say which changes they may edit. */
+  username: string,
 ) {
   const [entries, mergeRules, versionsByDocument] = await Promise.all([
     listPullRequestsWithReviews({
@@ -8918,6 +9051,8 @@ async function listWorkspaceChangeSummaries(
         reviews: toVersionReviews(reviews),
         reviewers: row.reviewers,
         assignee: row.assignee,
+        coEditors: readCoEditors(pullRequest),
+        viewerCanEdit: isOpen && mayEditChange(pullRequest, username),
         documents: describeChangeDocuments({
           branchName: row.branchName,
           mergeCommitSha,
@@ -14152,10 +14287,12 @@ async function resolveChangeToJoin(params: {
   org: string;
   workspace: string;
   raw: string | null;
+  /** Who is saving: only the change's author and co-editors may. */
+  username: string;
 }): Promise<
   { changeNumber: number; branch: string } | { error: string } | null
 > {
-  const { client, org, workspace, raw } = params;
+  const { client, org, workspace, raw, username } = params;
   if (raw === null || raw.trim() === "") return null;
 
   const changeNumber = Number(raw);
@@ -14175,6 +14312,12 @@ async function resolveChangeToJoin(params: {
     return {
       error: `Change ${changeNumber} is not open in this binder, so there is nothing to add to.`,
     };
+  }
+
+  // Somebody else's proposal is theirs to change. Being able to write in the
+  // binder is not being asked to write in this.
+  if (!mayEditChange(match, username)) {
+    return { error: NOT_AN_EDITOR };
   }
 
   // A sign-off change rewrites who has to approve things. Filing a policy into
@@ -14247,6 +14390,7 @@ async function resolveWorkTarget(params: {
     org,
     workspace,
     raw: changeRaw,
+    username,
   });
   if (change && "error" in change) return change;
   if (change) {

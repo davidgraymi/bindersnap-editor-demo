@@ -495,6 +495,11 @@ export const WorkspaceChangeDetailPayloadSchema = z.object({
   workspace: z.string(),
   change: PullRequestWithApprovalStateSchema,
   /**
+   * Who besides its author may change what it proposes: the pull request's
+   * assignees, named by the author.
+   */
+  coEditors: z.array(ChangeUserSchema),
+  /**
    * What its author called the draft this change was proposed from, or null
    * when the branch is not a named draft.
    *
@@ -588,6 +593,13 @@ export const WorkspaceChangeDetailPayloadSchema = z.object({
      * change, which is the record and stays as it was decided.
      */
     canCloseOrReopen: z.boolean(),
+    /** Whether they may change what it proposes: its author or a co-editor. */
+    canEdit: z.boolean(),
+    /**
+     * Whether they may say who its co-editors are: its author or a binder
+     * admin, while it is open.
+     */
+    canNameCoEditors: z.boolean(),
   }),
   /**
    * What has to be true before the change can be published, rule by rule:
@@ -766,6 +778,13 @@ export const WorkspaceChangeSummarySchema = z.object({
   reviews: z.array(VersionReviewSchema),
   reviewers: z.array(ChangeReviewerSchema),
   assignee: ChangeUserSchema.nullable(),
+  /**
+   * Who besides its author may change what it proposes: the pull request's
+   * assignees. The author names them; a save from anybody else is refused.
+   */
+  coEditors: z.array(ChangeUserSchema),
+  /** Whether the reader is its author or one of those co-editors. */
+  viewerCanEdit: z.boolean(),
   /**
    * The documents this change is about.
    *

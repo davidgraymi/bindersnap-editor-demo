@@ -539,6 +539,12 @@ export const UpdateChangeAssignmentsBodySchema = z.object({
   /** The person answerable for the change. `null` clears the assignment. */
   assignee: z.string().nullable().optional(),
   /**
+   * Everybody besides the author who may edit the change, as a whole list:
+   * anyone left out can no longer save into it. Its author or a binder admin
+   * sets it.
+   */
+  coEditors: z.array(z.string()).optional(),
+  /**
    * The whole reviewer list, not a delta — anyone left out has their review
    * request withdrawn. Omit the field to leave reviewers alone.
    */

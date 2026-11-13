@@ -8,5 +8,6 @@
 export type UpdateBinderChangeAssignmentsBody = {
   /** @nullable */
   assignee?: string | null;
+  coEditors?: string[];
   reviewers?: string[];
 };

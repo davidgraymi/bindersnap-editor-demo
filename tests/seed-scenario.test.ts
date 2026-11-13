@@ -1155,8 +1155,10 @@ describe("tests/seed-data/dev.yaml", () => {
       changes.filter((change) => change.reviewers.length >= 5),
     ).not.toHaveLength(0);
 
-    // Somebody expected to act on it.
-    expect(changes.filter((change) => change.assignee)).not.toHaveLength(0);
+    // Somebody besides its author who may edit it.
+    expect(
+      changes.filter((change) => change.coEditors.length > 0),
+    ).not.toHaveLength(0);
 
     const discussed = changes.filter((change) => change.threads.length >= 5);
     expect(discussed).not.toHaveLength(0);

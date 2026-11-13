@@ -184,8 +184,12 @@ export interface SeedThread {
  * people asked, one of whom has answered.
  */
 export interface SeedAssignment {
-  /** Who is expected to act on the change. One person, the way Gitea models it. */
-  assignee?: string;
+  /**
+   * Who besides its author may edit the change: the pull request's assignees.
+   * Never a reviewer of it — somebody who wrote part of a change cannot
+   * approve it, and the seed fails on one who is both.
+   */
+  coEditors: string[];
   /** Whose review has been asked for and not yet given. */
   reviewers: string[];
 }
@@ -641,13 +645,16 @@ function parseClosed(
   return closed;
 }
 
-/** Who the change is waiting on: one assignee, any number of reviewers. */
+/** Who else may edit the change, and whose review has been asked for. */
 function parseAssignment(
   raw: Record<string, unknown>,
   path: string,
 ): SeedAssignment {
   return {
-    assignee: optionalString(raw.assignee, `${path}.assignee`),
+    coEditors:
+      raw.coEditors === undefined
+        ? []
+        : asStringList(raw.coEditors, `${path}.coEditors`),
     reviewers: asStringList(raw.reviewers, `${path}.reviewers`),
   };
 }
@@ -905,7 +912,18 @@ function checkChangePeople(
   requireMember: RequireUser,
 ): void {
   if (change.author) requireMember(change.author, `${path}.author`);
-  if (change.assignee) requireMember(change.assignee, `${path}.assignee`);
+  change.coEditors.forEach((editor, index) => {
+    requireMember(editor, `${path}.coEditors[${index}]`);
+    // Somebody who wrote part of a change does not review it.
+    if (
+      change.reviewers.includes(editor) ||
+      change.reviews.some((review) => review.by === editor)
+    ) {
+      throw new Error(
+        `${path}.coEditors[${index}]: ${editor} reviews this change, and a co-editor cannot.`,
+      );
+    }
+  });
   change.reviewers.forEach((reviewer, index) =>
     requireMember(reviewer, `${path}.reviewers[${index}]`),
   );

@@ -52,7 +52,12 @@ interface DocumentChangeDetailProps {
    * access. Null where the page has no such answer, and the protection
    * whitelists decide as they always did.
    */
-  decisionRights?: { canApprove: boolean; canPublish: boolean } | null;
+  decisionRights?: {
+    canApprove: boolean;
+    canPublish: boolean;
+    /** Its author or a co-editor: they write it, so they do not approve it. */
+    canEdit?: boolean;
+  } | null;
   nextVersion: number;
   /**
    * How many documents this change touches, for the approve prompt — the
@@ -405,7 +410,10 @@ export function DocumentChangeDetail({
     decisionRights && !decisionRights.canApprove
       ? {
           allowed: false,
-          reason: "Only this binder's approvers can approve.",
+          reason:
+            decisionRights.canEdit && change.submittedBy !== currentUser
+              ? "You are a co-editor of this change, so you cannot approve it."
+              : "Only this binder's approvers can approve.",
         }
       : canUserReview(currentUser, change.submittedBy, branchProtection);
   const mergePerms =
