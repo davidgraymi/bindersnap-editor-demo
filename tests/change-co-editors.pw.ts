@@ -17,6 +17,10 @@ import {
   signInAsBob,
 } from "./helpers";
 
+// Several pages read in turn, on a CI runner shared with every other suite:
+// the suite default of ten seconds is for one page.
+test.describe.configure({ timeout: 120_000 });
+
 const BINDER = `${OWNER}/clinical`;
 const TITLE = "Tighten hand hygiene auditing and new-hire training";
 
