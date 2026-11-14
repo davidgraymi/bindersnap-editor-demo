@@ -9,6 +9,10 @@ import { expect, test } from "@playwright/test";
 
 import { APP_BASE_URL, OWNER, signInAsAlice } from "./helpers";
 
+// Several pages read in turn, on a CI runner shared with every other suite:
+// the suite default of ten seconds is for one page.
+test.describe.configure({ timeout: 120_000 });
+
 // The seed's one open change in Safety: "Add the bariatric equipment section".
 const CHANGE = `${APP_BASE_URL}/${OWNER}/safety/-/changes/3`;
 
