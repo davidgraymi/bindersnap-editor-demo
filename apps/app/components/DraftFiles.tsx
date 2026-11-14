@@ -93,6 +93,13 @@ interface DraftFilesProps {
   unsavedElsewhere?: ReadonlyMap<string, string>;
   onOpen: (slugPath: string) => void;
   /**
+   * Put a folder on the desk: what clicking its name does. Without it the
+   * name opens and shuts the folder, as the arrow does.
+   */
+  onOpenFolder?: (folder: string) => void;
+  /** The folder on the desk, so its row is marked. */
+  activeFolder?: string | null;
+  /**
    * A policy row was pointed at or focused: the click that opens it is likely
    * next, and reading it now makes that open immediate.
    */
@@ -295,6 +302,8 @@ export function DraftFiles({
   unsavedElsewhere,
   onReadAhead,
   onOpen,
+  onOpenFolder,
+  activeFolder = null,
   onNew,
   onNewFolder,
   onRename,
@@ -1058,37 +1067,64 @@ export function DraftFiles({
               />
             </span>
           ) : (
-            <button
-              type="button"
-              className="app-explorer-folder"
+            // **Explorer's left pane**: the arrow opens and shuts the folder
+            // in place, the name opens it on the desk. The arrow is out of the
+            // tab order — Right and Left do the same from the row.
+            <span
+              className={`doc-files-folderrow${
+                node.path === activeFolder ? " doc-files-folderrow--active" : ""
+              }`}
               style={indent}
-              aria-expanded={open}
-              data-folder={node.path}
-              data-parent={
-                node.path.includes("/")
-                  ? node.path.slice(0, node.path.lastIndexOf("/"))
-                  : ""
-              }
-              title={
-                isTouched(node) ? `${label} · changed in this draft` : undefined
-              }
-              onClick={(event) => {
-                if (event.button !== 0 || event.ctrlKey) return;
-                toggleFolder(node.path);
-              }}
-              onKeyDown={(event) => onRowKey(event, node)}
             >
-              {open ? (
-                <AppIcon icon={ICON.chevronDown} size="sm" />
-              ) : (
-                <AppIcon icon={ICON.chevronRight} size="sm" />
-              )}
-              <AppIcon icon={ICON.folder} size="sm" />
-              <span className="app-explorer-name">{label}</span>
-              {isTouched(node) ? (
-                <span className="doc-files-changed" aria-hidden="true" />
-              ) : null}
-            </button>
+              <button
+                type="button"
+                className="app-explorer-chevron"
+                tabIndex={-1}
+                aria-label={open ? `Shut ${label}` : `Open ${label} here`}
+                title={open ? `Shut ${label}` : `Open ${label} here`}
+                onClick={() => toggleFolder(node.path)}
+              >
+                {open ? (
+                  <AppIcon icon={ICON.chevronDown} size="sm" />
+                ) : (
+                  <AppIcon icon={ICON.chevronRight} size="sm" />
+                )}
+              </button>
+              <button
+                type="button"
+                className="app-explorer-folder"
+                aria-expanded={open}
+                aria-current={node.path === activeFolder ? "page" : undefined}
+                data-folder={node.path}
+                data-parent={
+                  node.path.includes("/")
+                    ? node.path.slice(0, node.path.lastIndexOf("/"))
+                    : ""
+                }
+                title={
+                  isTouched(node)
+                    ? `${label} · changed in this draft`
+                    : undefined
+                }
+                onClick={(event) => {
+                  if (event.button !== 0 || event.ctrlKey) return;
+                  if (onOpenFolder) {
+                    setFloating(false);
+                    if (!open) toggleFolder(node.path);
+                    onOpenFolder(node.path);
+                  } else {
+                    toggleFolder(node.path);
+                  }
+                }}
+                onKeyDown={(event) => onRowKey(event, node)}
+              >
+                <AppIcon icon={ICON.folder} size="sm" />
+                <span className="app-explorer-name">{label}</span>
+                {isTouched(node) ? (
+                  <span className="doc-files-changed" aria-hidden="true" />
+                ) : null}
+              </button>
+            </span>
           )}
           {rowActions(node)}
         </div>

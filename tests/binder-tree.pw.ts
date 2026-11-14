@@ -429,10 +429,10 @@ test("the folders holding the policy you are reading are open", async ({
   await expect(explorer).toBeVisible({ timeout: 30_000 });
 
   await expect(
-    explorer.getByRole("button", { name: /^Nursing/ }),
+    explorer.getByRole("button", { name: /^(Open|Shut) Nursing/ }),
   ).toHaveAttribute("aria-expanded", "true");
   await expect(
-    explorer.getByRole("button", { name: /^Infection Control/ }),
+    explorer.getByRole("button", { name: /^(Open|Shut) Infection Control/ }),
   ).toHaveAttribute("aria-expanded", "true");
   await expect(explorer.locator(".app-explorer-item--active")).toHaveText(
     "Handover",
@@ -440,7 +440,7 @@ test("the folders holding the policy you are reading are open", async ({
 
   // Pharmacy is not on the way to anything being read, so it stayed shut.
   await expect(
-    explorer.getByRole("button", { name: /^Pharmacy/ }),
+    explorer.getByRole("button", { name: /^(Open|Shut) Pharmacy/ }),
   ).toHaveAttribute("aria-expanded", "false");
 
   // And the map of the product is down to its icons while you read: three

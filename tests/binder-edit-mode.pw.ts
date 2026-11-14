@@ -1927,9 +1927,15 @@ test("the file panel opens and shuts folders, filters, and hides itself", async 
 
   // **Folders shut.** Without that a long binder is a wall rather than
   // something you navigate.
-  await page.locator(".app-explorer-folder", { hasText: "Nursing" }).click();
+  await page
+    .locator(".app-explorer")
+    .getByRole("button", { name: /^(Open|Shut) Nursing/ })
+    .click();
   await expect(files).toHaveCount(1);
-  await page.locator(".app-explorer-folder", { hasText: "Nursing" }).click();
+  await page
+    .locator(".app-explorer")
+    .getByRole("button", { name: /^(Open|Shut) Nursing/ })
+    .click();
   await expect(files).toHaveCount(2);
 
   // **A filter**, because past a certain size finding a policy by eye is

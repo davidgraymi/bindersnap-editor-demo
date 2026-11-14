@@ -119,6 +119,8 @@ export interface SidebarBinderContents {
   folders: readonly string[];
   /** The one being read, so its row is marked. */
   active: string | null;
+  /** The folder whose page is open, so its row is marked. */
+  activeFolder?: string | null;
   /**
    * The ref these contents were read at, so a row leads somewhere that exists.
    *
