@@ -249,7 +249,7 @@ test("a document going into the archive says so in its bar, and draws nothing be
   expect(section?.querySelector(".cmp-kind--removed")?.textContent).toContain(
     "Archiving",
   );
-  expect(section?.textContent).toContain("visitor-policy");
+  expect(section?.textContent).toContain("Visitor Policy");
   // A status, not a paragraph in the frame where documents are drawn.
   expect(section?.querySelector(".cmp-file-body")).toBeNull();
 
@@ -409,7 +409,10 @@ test("every control on a document is in its one bar, and View is a link", async 
   // Nothing below the document: no foot of acts to hunt for.
   expect(container.querySelector(".bs-panel-foot")).toBeNull();
   // The counts are in the bar, drawn as a diff draws them.
-  expect(bar?.querySelector(".cmp-counts")?.textContent).toBe("+1−1");
+  // In words on the bar; a code review's "+1 −1" is for the tree.
+  expect(bar?.querySelector(".cmp-counts")?.textContent).toBe(
+    "1 word added·1 removed",
+  );
   // A revision is what the counts already show, so it wears no badge.
   expect(bar?.querySelector(".bs-status")).toBeNull();
 
@@ -429,9 +432,11 @@ test("a moved policy shows its old path struck out beside the new one", async ()
   );
 
   const title = container.querySelector(".cmp-file-title");
-  expect(title?.querySelector("del")?.textContent).toBe("nursing/hand-hygiene");
+  expect(title?.querySelector("del")?.textContent).toBe(
+    "Nursing / Hand Hygiene",
+  );
   expect(title?.querySelector("ins")?.textContent).toBe(
-    "clinical/hand-hygiene",
+    "Clinical / Hand Hygiene",
   );
   // Not a sentence under the bar — only a screen reader, which cannot see a
   // strike-through, is told in words. And nothing announcing that the words
@@ -461,7 +466,10 @@ test("a policy coming out of the archive says so in its bar, and is still diffed
   expect(bar?.querySelector(".cmp-kind--restored")?.textContent).toBe(
     "Restoring",
   );
-  expect(bar?.querySelector(".cmp-counts")?.textContent).toBe("+1−1");
+  // In words on the bar; a code review's "+1 −1" is for the tree.
+  expect(bar?.querySelector(".cmp-counts")?.textContent).toBe(
+    "1 word added·1 removed",
+  );
   expect(container.querySelector(".cmp-file")?.getAttribute("aria-label")).toBe(
     "Hand Hygiene — Coming out of the archive",
   );

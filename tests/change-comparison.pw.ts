@@ -94,8 +94,9 @@ test("a renamed policy is read by identity, not by address", async ({
 
   // The rename itself, drawn in the file's bar as a diff draws a changed
   // line: the old path struck out, the new one beside it.
+  // In names, as the document's own page says them, not the address.
   await expect(page.locator(".cmp-file-title del").first()).toContainText(
-    "patient-grievance-policy",
+    "Patient Grievance Policy",
   );
   await expect(page.locator(".cmp-file-title ins").first()).toBeVisible();
 

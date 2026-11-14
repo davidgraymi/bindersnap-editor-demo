@@ -1,3 +1,4 @@
+import { usePageTitle } from "../pageTitle";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { AppIcon, ICON } from "./AppIcon";
@@ -80,6 +81,7 @@ export function NewBinderPage({
   onCreated,
 }: NewBinderPageProps) {
   const queryClient = useQueryClient();
+  usePageTitle(["New binder", orgDisplayName]);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   // Open, because the common case is a policy manual everybody must be able

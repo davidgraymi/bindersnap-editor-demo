@@ -7771,6 +7771,17 @@ a.cmp-branch:focus-visible {
   color: var(--bs-coral-text);
 }
 
+/* On a document's own bar the count is a sentence, so it is set as one. */
+.cmp-counts--spelled {
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-medium);
+}
+
+.cmp-counts-sep {
+  color: var(--bs-text-faint);
+}
+
 .cmp-counts-note {
   font-family: inherit;
   font-weight: var(--brand-weight-medium);
@@ -7860,9 +7871,10 @@ a.cmp-branch:focus-visible {
   min-width: 0;
   margin: 0;
   color: var(--bs-text-primary);
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-ui-md);
-  font-weight: var(--brand-weight-medium);
+  /* The document's name, as its own page says it — not its address. */
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-lg);
+  font-weight: var(--brand-weight-semibold);
 }
 
 /* Everything after the path keeps its size; only the path gives way. */
@@ -12574,6 +12586,135 @@ html:has(.doc-files-resize--active) {
 
 .add-policy-mode .bs-choice + .bs-choice {
   margin-top: 0;
+}
+
+/* ── A document written in Bindersnap, read as it was written ─────
+   The editor sets a page the way Word does: 11pt, single spaced, 8pt after a
+   paragraph. The reader set the same document at 16px with half as much
+   again between the lines and larger gaps, so the page somebody approved did
+   not look like the page somebody wrote, or like the PDF it downloads as.
+   These are the editor's own measures (`.bs-doc-content` in
+   packages/editor/assets/document-editor.css), and
+   `writtenDocumentStyle.test.ts` fails when the two drift. Colours stay the
+   reader's, which follow the theme; the editor's page is always paper. A
+   Word file or Markdown keeps `.doc-preview-prose` alone: it has no page of
+   ours to match. */
+.doc-preview-prose.doc-preview-written {
+  color: var(--bs-text-primary);
+  font-family: var(--brand-font-sans);
+  font-size: 11pt;
+  line-height: 1.15;
+  overflow-wrap: break-word;
+}
+
+.doc-preview-prose.doc-preview-written p {
+  margin: 0 0 8pt;
+}
+
+.doc-preview-prose.doc-preview-written p.bs-title {
+  margin: 0 0 4pt;
+  font-size: 26pt;
+  font-weight: var(--brand-weight-semibold);
+  line-height: 1.15;
+}
+
+.doc-preview-prose.doc-preview-written p.bs-subtitle {
+  margin: 0 0 12pt;
+  color: var(--bs-text-secondary);
+  font-size: 15pt;
+  line-height: 1.2;
+}
+
+.doc-preview-prose.doc-preview-written h1,
+.doc-preview-prose.doc-preview-written h2,
+.doc-preview-prose.doc-preview-written h3,
+.doc-preview-prose.doc-preview-written h4,
+.doc-preview-prose.doc-preview-written h5,
+.doc-preview-prose.doc-preview-written h6 {
+  margin: 12pt 0 6pt;
+  font-weight: var(--brand-weight-semibold);
+  line-height: 1.2;
+}
+
+.doc-preview-prose.doc-preview-written > :first-child {
+  margin-top: 0;
+}
+
+.doc-preview-prose.doc-preview-written h1 {
+  font-size: 20pt;
+}
+
+.doc-preview-prose.doc-preview-written h2 {
+  font-size: 16pt;
+}
+
+.doc-preview-prose.doc-preview-written h3 {
+  font-size: 13pt;
+}
+
+.doc-preview-prose.doc-preview-written h4,
+.doc-preview-prose.doc-preview-written h5,
+.doc-preview-prose.doc-preview-written h6 {
+  font-family: var(--brand-font-sans);
+  font-size: 11pt;
+}
+
+.doc-preview-prose.doc-preview-written ul,
+.doc-preview-prose.doc-preview-written ol {
+  margin: 0 0 8pt;
+  padding-left: 0.35in;
+}
+
+.doc-preview-prose.doc-preview-written li {
+  margin-bottom: 0;
+}
+
+.doc-preview-prose.doc-preview-written li > p {
+  margin-bottom: 2pt;
+}
+
+.doc-preview-prose.doc-preview-written blockquote {
+  margin: 0 0 8pt;
+  padding-left: 0.2in;
+  font-style: italic;
+}
+
+.doc-preview-prose.doc-preview-written pre {
+  margin: 0 0 8pt;
+  padding: 0.12in 0.16in;
+  white-space: pre-wrap;
+}
+
+.doc-preview-prose.doc-preview-written code {
+  font-size: 0.92em;
+}
+
+.doc-preview-prose.doc-preview-written hr {
+  margin: 12pt 0;
+}
+
+.doc-preview-prose.doc-preview-written table {
+  margin: 0 0 8pt;
+  font-size: inherit;
+  table-layout: fixed;
+}
+
+.doc-preview-prose.doc-preview-written th,
+.doc-preview-prose.doc-preview-written td {
+  padding: 4pt 6pt;
+  vertical-align: top;
+}
+
+.doc-preview-prose.doc-preview-written th {
+  font-size: inherit;
+  font-weight: var(--brand-weight-semibold);
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.doc-preview-prose.doc-preview-written td > p,
+.doc-preview-prose.doc-preview-written th > p {
+  margin: 0;
 }
 
 /* Numbered sections: 1. Purpose, 2.1 Wards. Drawn, never typed, so they
