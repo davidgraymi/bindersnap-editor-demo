@@ -241,8 +241,9 @@ export function ChangeConflictsPage({
                 : `${clashes} ${clashes === 1 ? "conflict still needs" : "conflicts still need"} a decision.`}
             </strong>{" "}
             <span className="conflicts-bar-why">
-              This brings the change up to date. Approvals already given are
-              dismissed, because they were for different content.
+              {payload.clearsApprovalsOnEdit
+                ? "This brings the change up to date and changes what it proposes, so approvals already given are cleared and asked for again."
+                : "This brings the change up to date. This binder keeps approvals already given through later edits."}
             </span>
           </div>
           {submitError ? (
@@ -318,7 +319,7 @@ function NothingToResolve({
     <div className="bs-empty">
       <p>
         Nothing in this change clashes with the binder. It can be brought up to
-        date as it is.
+        date as it is, and approvals already given stand.
       </p>
       {error ? (
         <p className="bs-note bs-note--danger" role="alert">

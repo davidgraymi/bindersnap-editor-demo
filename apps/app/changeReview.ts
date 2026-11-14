@@ -166,7 +166,10 @@ export interface TimelineEntry {
  */
 export interface TimelineEvent {
   actor: string | null;
-  /** "opened this change request", "approved", "updated the proposed version". */
+  /**
+   * "opened this change request", "approved", "updated the proposed version",
+   * "brought this change up to date with the binder".
+   */
   verb: string;
   /** Rendered in the green the approval rows own. */
   emphasiseVerb: boolean;
@@ -264,6 +267,11 @@ function closingEvent(
  * change being opened, which the first row already says — numbering it twice
  * would make every change look like it had been corrected once before anyone
  * touched it.
+ *
+ * Bringing the change up to date is an event of its own, not an update: it
+ * pulls in what the binder published since and leaves what the change
+ * proposes as it was, so it has no number and nothing new to view, and the
+ * approvals stand.
  */
 export function buildReviewTimeline(params: {
   change: ChangeRecord;
@@ -297,8 +305,26 @@ export function buildReviewTimeline(params: {
     },
   };
 
+  const catchUpEntries: TimelineEntry[] = updates
+    .filter((update) => update.catchUp)
+    .map((update) => ({
+      key: `catch-up-${update.sha}`,
+      kind: "update" as const,
+      at: timeOf(update.at),
+      thread: null,
+      event: {
+        actor: update.author ? nameOf(update.author) : "Someone",
+        verb: "brought this change up to date with the binder",
+        emphasiseVerb: false,
+        tag: null,
+        when: formatEventDate(update.at),
+        note: "what it proposes did not change",
+        updateSha: null,
+      },
+    }));
+
   const updateEntries: TimelineEntry[] = updates
-    .filter((update) => update.index > 1)
+    .filter((update) => !update.catchUp && update.index > 1)
     .map((update) => ({
       key: `update-${update.sha}`,
       kind: "update" as const,
@@ -375,6 +401,7 @@ export function buildReviewTimeline(params: {
   return [
     opened,
     ...updateEntries,
+    ...catchUpEntries,
     ...reviewEntries,
     ...threadEntries,
     ...closed,

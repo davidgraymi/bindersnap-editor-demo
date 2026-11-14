@@ -494,6 +494,13 @@ export const ChangeUpdateSchema = z.object({
   /** Who uploaded it, as Gitea recorded the commit author. */
   author: z.string(),
   at: z.string(),
+  /**
+   * The change was brought up to date with the binder: a merge of `main` into
+   * its branch. It changes nothing the change proposes, so it takes no update
+   * number of its own — `index` is the update it sits on — and Gitea keeps the
+   * approvals already given.
+   */
+  catchUp: z.boolean(),
 });
 export type ChangeUpdate = z.infer<typeof ChangeUpdateSchema>;
 

@@ -119,6 +119,7 @@ export const HELP_GUIDES: HelpGuide[] = [
         heading: "If the document changes after it was approved",
         paragraphs: [
           "By default, a new version clears the approvals already given — people approved what they read, not what came after. You can turn that off in the binder's Settings: under Change requests, it is in Before publishing. The change is recorded.",
+          "Bringing a change up to date is not a new version. It pulls in what the binder published since and leaves what the change proposes as it was, so its approvals stand. Resolving a conflict is different: you choose new words, so the approvals are cleared.",
         ],
       },
     ],

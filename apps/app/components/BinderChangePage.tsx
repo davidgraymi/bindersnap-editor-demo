@@ -463,8 +463,9 @@ export function BinderChangePage({
         ) : (
           <p>
             <strong>The binder has moved on since this change was made.</strong>{" "}
-            Updating it pulls in everything published since. What this change
-            proposes stays the same, so approvals already given stay too.
+            Bringing it up to date pulls in everything published since. What
+            this change proposes stays the same, so approvals already given
+            stand.
           </p>
         )}
         {detail.hasConflicts ? (

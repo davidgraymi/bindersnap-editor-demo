@@ -1500,9 +1500,9 @@ export async function reviewBinderChange(
 /**
  * Bring a change's branch up to date with the binder's `main`.
  *
- * It moves the branch, so a binder that dismisses stale approvals will drop
- * the ones already collected — which is why this is its own act rather than
- * something publish does quietly.
+ * It pulls in what was published since and leaves what the change proposes as
+ * it was, so the approvals already given stand, whatever the binder's rule
+ * about edits.
  */
 export async function updateBinderChange(
   org: string,

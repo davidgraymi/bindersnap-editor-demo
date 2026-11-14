@@ -1927,13 +1927,17 @@
                 },
                 "at": {
                   "type": "string"
+                },
+                "catchUp": {
+                  "type": "boolean"
                 }
               },
               "required": [
                 "index",
                 "sha",
                 "author",
-                "at"
+                "at",
+                "catchUp"
               ]
             }
           },
@@ -15011,6 +15015,9 @@
                     "canResolve": {
                       "type": "boolean"
                     },
+                    "clearsApprovalsOnEdit": {
+                      "type": "boolean"
+                    },
                     "files": {
                       "type": "array",
                       "items": {
@@ -15124,6 +15131,7 @@
                     "headSha",
                     "baseSha",
                     "canResolve",
+                    "clearsApprovalsOnEdit",
                     "files"
                   ]
                 }
@@ -16819,13 +16827,17 @@
                           },
                           "at": {
                             "type": "string"
+                          },
+                          "catchUp": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
                           "index",
                           "sha",
                           "author",
-                          "at"
+                          "at",
+                          "catchUp"
                         ]
                       }
                     },

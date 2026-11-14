@@ -81,11 +81,13 @@ const update = (
   sha: string,
   at: string,
   name = "Maya Khan",
+  catchUp = false,
 ) => ({
   index,
   sha,
   author: name,
   at,
+  catchUp,
 });
 
 // --- the header ------------------------------------------------------------
@@ -512,4 +514,32 @@ test("an update on a change nobody had approved says nothing about approvals", (
   expect(
     entries.find((entry) => entry.kind === "update")?.event?.note,
   ).toBeNull();
+});
+
+/**
+ * Bringing a change up to date is its own event, never "updated the proposed
+ * version": what the change proposes did not move, so there is no update
+ * number, nothing new to view, and no claim that approvals were cleared.
+ */
+test("a catch-up says it brought the change up to date, not that it updated it", () => {
+  const entries = buildReviewTimeline({
+    change: change(),
+    threads: [],
+    updates: [
+      update(1, "aaa", "2026-08-20T09:14:00Z"),
+      update(1, "bbb", "2026-08-21T15:00:00Z", "Alice Nguyen", true),
+    ],
+    resetsApprovals: true,
+  });
+
+  const events = entries
+    .filter((entry) => entry.kind === "update")
+    .map((entry) => entry.event);
+  expect(events).toHaveLength(1);
+  expect(events[0]?.verb).toBe(
+    "brought this change up to date with the binder",
+  );
+  expect(events[0]?.tag).toBeNull();
+  expect(events[0]?.note).toBe("what it proposes did not change");
+  expect(events[0]?.updateSha).toBeNull();
 });

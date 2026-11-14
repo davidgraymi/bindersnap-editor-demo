@@ -688,10 +688,13 @@ export function describeMergeRefusal(giteaMessage: string): string {
  * fails with "your local changes would be overwritten by merge". A merge
  * commit keeps both sides and always applies.
  *
- * It moves the branch, so a binder with `dismiss_stale_approvals` will drop
- * the approvals collected so far. That is correct — the approvals were for
- * different content — and it is why this is an explicit act rather than
- * something publish does quietly on the caller's behalf.
+ * **It keeps the approvals already given**, even in a binder with
+ * `dismiss_stale_approvals`. Gitea dismisses approvals only when a push changes
+ * what the pull request changes, measured from the merge base, and merging the
+ * base in leaves that exactly as it was. That is the rule we want: approvers
+ * approved what the change proposes, and it still proposes the same thing.
+ * Resolving a conflict is different — its commits do change the proposal, and
+ * Gitea clears approvals for them.
  */
 export async function updateChangeBranch(params: {
   client: GiteaClient;
@@ -1022,7 +1025,9 @@ export interface ListBranchUpdatesParams {
  */
 export async function listBranchUpdates(
   params: ListBranchUpdatesParams,
-): Promise<{ sha: string; author: string; timestamp: string }[]> {
+): Promise<
+  { sha: string; author: string; timestamp: string; merge: boolean }[]
+> {
   const { client, owner, repo, branch, base, limit } = params;
 
   const commits = await unwrap(
@@ -1049,6 +1054,8 @@ export async function listBranchUpdates(
       commit.commit?.author?.name ||
       "Someone",
     timestamp: commit.commit?.author?.date ?? commit.created ?? "",
+    // Bringing the change up to date merges the binder in: two parents.
+    merge: (commit.parents?.length ?? 0) > 1,
   }));
 }
 

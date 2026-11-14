@@ -7870,9 +7870,10 @@ async function handleSetWorkspaceChangeOpen(
 /**
  * Bring a change's branch up to date with the binder's `main`.
  *
- * A mutation, and a deliberate one: it moves the branch, so the approvals
- * collected so far are dismissed as stale. The page says that before the
- * button is pressed rather than after.
+ * A mutation, and a deliberate one: it moves the branch. It does not clear
+ * approvals, even in a binder with `dismiss_stale_approvals` — Gitea dismisses
+ * only when a push changes what the pull request changes, and merging `main`
+ * in does not. The page says so before the button is pressed.
  */
 async function handleWorkspaceChangeUpdate(
   req: Request,
@@ -8051,7 +8052,7 @@ async function handleWorkspaceChangeConflicts(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    const [heads, access] = await Promise.all([
+    const [heads, access, mergeRules] = await Promise.all([
       readChangeHeads({
         client,
         org: orgName,
@@ -8059,6 +8060,7 @@ async function handleWorkspaceChangeConflicts(
         pullNumber,
       }),
       readWorkspaceAccess({ client, org: orgName, name: workspaceName }),
+      readMergeRules(orgName, workspaceName),
     ]);
     const conflicts = heads.open
       ? await readChangeConflicts({
@@ -8109,6 +8111,10 @@ async function handleWorkspaceChangeConflicts(
         headSha: heads.headSha,
         baseSha: heads.baseSha,
         canResolve: access.push,
+        // Resolving commits the chosen words onto the change, which changes
+        // what it proposes — so, unlike a plain catch-up, it clears approvals
+        // in a binder that asks approvers again after an edit.
+        clearsApprovalsOnEdit: mergeRules?.ignoresStale ?? true,
         files,
       },
       baseHeaders,

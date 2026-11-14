@@ -2,10 +2,16 @@ import { expect, test } from "bun:test";
 
 import { buildChangeUpdates } from "./change-updates";
 
-const commit = (sha: string, timestamp: string, author = "maya") => ({
+const commit = (
+  sha: string,
+  timestamp: string,
+  author = "maya",
+  merge = false,
+) => ({
   sha,
   author,
   timestamp,
+  merge,
 });
 
 test("numbers updates oldest first", () => {
@@ -39,6 +45,7 @@ test("carries the author and timestamp through", () => {
     sha: "aaa",
     author: "Maya Khan",
     at: "2026-08-19T10:00:00Z",
+    catchUp: false,
   });
 });
 
@@ -49,7 +56,13 @@ test("drops a commit with no sha rather than numbering it", () => {
   ]);
 
   expect(updates).toEqual([
-    { index: 1, sha: "bbb", author: "maya", at: "2026-08-20T10:00:00Z" },
+    {
+      index: 1,
+      sha: "bbb",
+      author: "maya",
+      at: "2026-08-20T10:00:00Z",
+      catchUp: false,
+    },
   ]);
 });
 
@@ -89,7 +102,13 @@ test("everything on the branch when it opened is the submission", () => {
 
   // One update, under the branch head as it stood when reviewers were asked.
   expect(updates).toEqual([
-    { index: 1, sha: "ccc", author: "maya", at: "2026-08-19T10:09:00Z" },
+    {
+      index: 1,
+      sha: "ccc",
+      author: "maya",
+      at: "2026-08-19T10:09:00Z",
+      catchUp: false,
+    },
   ]);
 });
 
@@ -155,4 +174,39 @@ test("without an opening date every commit still counts", () => {
   ]);
 
   expect(updates).toHaveLength(2);
+});
+
+/**
+ * Bringing a change up to date is listed, and takes no number.
+ *
+ * It merges the binder in and leaves what the change proposes as it was, so
+ * calling it "update 2" would tell reviewers there is something new to read.
+ * The revision after it is still update 2.
+ */
+test("a catch-up is listed under the update it sits on", () => {
+  const updates = buildChangeUpdates(
+    [
+      commit("aaa", "2026-08-19T10:00:00Z"),
+      commit("bbb", "2026-08-20T10:00:00Z", "alice", true),
+      commit("ccc", "2026-08-21T10:00:00Z"),
+    ],
+    "2026-08-19T10:10:00Z",
+  );
+
+  expect(
+    updates.map((update) => [update.index, update.sha, update.catchUp]),
+  ).toEqual([
+    [1, "aaa", false],
+    [1, "bbb", true],
+    [2, "ccc", false],
+  ]);
+});
+
+test("a catch-up without an opening date takes no number either", () => {
+  const updates = buildChangeUpdates([
+    commit("aaa", "2026-08-19T10:00:00Z"),
+    commit("bbb", "2026-08-20T10:00:00Z", "alice", true),
+  ]);
+
+  expect(updates.map((update) => update.index)).toEqual([1, 1]);
 });

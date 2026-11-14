@@ -152,16 +152,21 @@ was in exactly that state. So:
   git cannot do for the binary files most policies are, and it fails with
   "your local changes would be overwritten by merge". Verified against the
   live Gitea — the rebase style errors on a `.docx`, the merge style does not.
-- It moves the branch, so `dismiss_stale_approvals` drops the approvals
-  collected so far. That is correct, and it is why this is an explicit act
-  with the cost stated rather than something publish does quietly.
+- It moves the branch, but it does **not** drop the approvals collected so
+  far, even under `dismiss_stale_approvals`: Gitea dismisses only when a push
+  changes what the pull request changes, measured from the merge base, and
+  merging `main` in does not (verified against Gitea 28.0.0, 2026-11-08). That
+  is the rule we keep — approvers approved what the change proposes, and it
+  still proposes the same thing. Resolving a conflict does change it, and
+  clears them. The page says which before the button is pressed, and the
+  change's history lists a catch-up as its own event, not an update.
 - Gitea recomputes the merge base **after** accepting the push, so the
   endpoint polls until Gitea agrees before answering. Returning on the 200
   made the page redraw the very state it had just fixed.
 
-Being behind outranks the approval count in the wording, because bringing a
-change up to date dismisses approvals — telling somebody to go collect them
-first sends them to do wasted work.
+Being behind outranks the approval count in the wording: it is the one thing
+the author has to do, and approvals collected before or after bringing the
+change up to date count the same.
 
 **`isApproved` and `isRejected` were in the response contract from the
 beginning and nothing ever set them.** `isRejected` therefore read `undefined`,

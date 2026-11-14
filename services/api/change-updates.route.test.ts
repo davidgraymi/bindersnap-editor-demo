@@ -31,7 +31,12 @@ const originalSessionsDbPath = config.sessionsDbPath;
 let giteaUsersByLogin = new Map<string, { login: string; email: string }>();
 let giteaLoginsByToken = new Map<string, string>();
 let headRef: string | null = null;
-let commits: { sha: string; date: string; author: string }[] = [];
+let commits: {
+  sha: string;
+  date: string;
+  author: string;
+  parents?: string[];
+}[] = [];
 let commitQuery: {
   sha: string | null;
   not: string | null;
@@ -128,6 +133,7 @@ beforeEach(() => {
       return json(
         commits.map((entry) => ({
           sha: entry.sha,
+          parents: (entry.parents ?? ["parent"]).map((sha) => ({ sha })),
           commit: {
             message: "Upload",
             author: { name: entry.author, date: entry.date },
@@ -224,13 +230,41 @@ describe("change updates route", () => {
         sha: "sha-a",
         author: "Maya Khan",
         at: "2026-08-20T09:00:00Z",
+        catchUp: false,
       },
       {
         index: 2,
         sha: "sha-b",
         author: "Maya Khan",
         at: "2026-08-21T09:00:00Z",
+        catchUp: false,
       },
+    ]);
+  });
+
+  test("a merge of the binder into the change is a catch-up, not an update", async () => {
+    commits = [
+      {
+        sha: "sha-c",
+        date: "2026-08-22T09:00:00Z",
+        author: "Alice Nguyen",
+        parents: ["sha-b", "sha-main"],
+      },
+      ...commits,
+    ];
+    const server = createApiServer();
+    const session = await seedSession(OWNER);
+
+    const payload = (await (
+      await server.fetch(request(session))
+    ).json()) as any;
+
+    expect(
+      payload.updates.map((update: any) => [update.index, update.catchUp]),
+    ).toEqual([
+      [1, false],
+      [2, false],
+      [2, true],
     ]);
   });
 
