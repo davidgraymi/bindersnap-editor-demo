@@ -1,32 +1,21 @@
 /**
- * The sign-off rules on a binder's Change requests settings, when there are
- * none.
+ * The sign-off rules on a binder's Change requests settings: a read-only list
+ * of every rule in the binder (4.12), each linking to where it is set. Rules
+ * are changed on each folder, in the editor, in a draft — Settings no longer
+ * edits them, so the tab has one save model.
  *
- * They are rows of the one approval table, under the binder's own "Every
- * change" rule, so a binder with none shows that row and an offer to add one —
- * not an essay. The page used to open its sign-off section on four sentences
- * explaining what a rule is, above the binder's actual approval rule, which
- * was the most-missed setting in the product.
- *
- * The second thing here is an action-hierarchy bug: "Propose these rules" was
- * pressable with nothing drafted, so pressing it opened a change request that
- * changed nothing. It appears only once the rules on screen differ from the
- * ones published.
+ * Requires the full Docker Compose stack — run via `bun run test:integration`.
  */
 
 import { expect, test } from "@playwright/test";
 
 import { APP_BASE_URL, signInAsAlice } from "./helpers";
-import { seedDevStack } from "./seed";
 
-test.describe.configure({ mode: "serial", timeout: 120_000 });
+test.describe.configure({ mode: "parallel", timeout: 120_000 });
 
-test.beforeAll(async () => {
-  test.setTimeout(90_000);
-  await seedDevStack();
-});
-
-test("with no rules, the table offers to add one", async ({ page }) => {
+test("with no rules, the table has the binder's own row and says where rules are set", async ({
+  page,
+}) => {
   await signInAsAlice(page);
   // The address the sign-off rules had before they joined the approval table
   // still lands on it.
@@ -35,67 +24,36 @@ test("with no rules, the table offers to add one", async ({ page }) => {
   await expect(page.locator("h1.bs-title")).toHaveText("Change requests", {
     timeout: 30_000,
   });
+  const table = page.locator("#sign-off");
   await expect(
-    page.locator("#sign-off .rev-rules-name", { hasText: "Every change" }),
+    table.locator(".rev-rules-name", { hasText: "Every change" }),
   ).toBeVisible();
+  await expect(table).toContainText(
+    "Who signs off is changed on each folder, in the editor.",
+  );
   await expect(
     page.getByRole("button", { name: "Add a rule for a folder or document" }),
-  ).toBeVisible();
-});
-
-test("nothing to propose means nothing to press", async ({ page }) => {
-  await signInAsAlice(page);
-  await page.goto(
-    `${APP_BASE_URL}/riverside-health/clinical/-/settings/change-requests`,
-  );
-
-  await page
-    .getByRole("button", { name: "Add a rule for a folder or document" })
-    .click({ timeout: 30_000 });
-
-  // Nothing drafted, so nothing to send — and a rule with no subject and
-  // nobody to sign it off is not a rule, so Add waits for both.
+  ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Propose these rules" }),
   ).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Add this rule" }),
-  ).toBeDisabled();
 });
 
-test("drafting a rule makes Propose pressable", async ({ page }) => {
+test("every rule is listed, and each opens where it is set", async ({
+  page,
+}) => {
   await signInAsAlice(page);
   await page.goto(
-    `${APP_BASE_URL}/riverside-health/clinical/-/settings/change-requests`,
+    `${APP_BASE_URL}/riverside-health/governance/-/settings/change-requests`,
   );
-
-  await page
-    .getByRole("button", { name: "Add a rule for a folder or document" })
-    .click({ timeout: 30_000 });
-  const foot = page.locator("#sign-off .bs-panel-foot").first();
-  await foot
-    .getByRole("combobox", { name: "What has to be signed off" })
-    .selectOption("binder");
-  await foot
-    .getByRole("combobox", { name: "Which group signs it off" })
-    .selectOption({ index: 1 });
-
-  const addRule = page.getByRole("button", { name: "Add this rule" });
-  await expect(addRule).toBeEnabled();
-  await addRule.click();
-
-  // On screen as a row, and not yet anything more than that.
+  const table = page.locator("#sign-off");
+  const folder = table.getByRole("link", { name: /Clinical Standards/ });
+  await expect(folder).toBeVisible({ timeout: 30_000 });
   await expect(
-    page.locator("#sign-off .rev-rules-name", {
-      hasText: "Everything in this binder",
-    }),
-  ).toBeVisible();
-
-  const propose = page.getByRole("button", { name: "Propose these rules" });
-  await expect(propose).toBeEnabled({ timeout: 30_000 });
-  await expect(propose).toHaveClass(/bs-btn-primary/);
-
-  // And taking it back out leaves nothing to propose again.
-  await page.getByRole("button", { name: "Undo" }).click();
-  await expect(propose).toHaveCount(0);
+    table.getByRole("button", { name: /^Change the rule/ }),
+  ).toHaveCount(0);
+  await folder.click();
+  await expect(page).toHaveURL(
+    `${APP_BASE_URL}/riverside-health/governance/-/tree/main/clinical-standards`,
+  );
 });

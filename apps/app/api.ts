@@ -1013,31 +1013,6 @@ export async function setBinderRules(
 }
 
 /**
- * Propose new per-folder sign-off rules.
- *
- * **Returns a change, not a success.** `main` is protected, so the rules that
- * decide who approves are themselves approved — and a caller holding a change
- * number cannot report otherwise. The whole set is sent rather than a patch:
- * the file is regenerated from what arrives, so omitting a rule would delete
- * it, and sending everything makes that impossible to do by accident.
- */
-export async function proposeBinderSignOff(
-  org: string,
-  binder: string,
-  rules: Array<{
-    scope: SignOffRuleView["scope"];
-    target: string;
-    teams: string[];
-    users: string[];
-  }>,
-): Promise<{ changeNumber: number; branch: string }> {
-  const response = await BindersClient.proposeBinderSignOffRules(org, binder, {
-    rules,
-  });
-  return response.data;
-}
-
-/**
  * Who is in this organization, by name and whether they own it — not its
  * groups. Cheaper for the server than `fetchOrganizationPeople` by two Gitea
  * reads per group, so a screen that only names people asks for this.

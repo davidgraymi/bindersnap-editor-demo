@@ -13274,3 +13274,15 @@ html:has(.doc-files-resize--active) {
 .org-group-page a {
   color: var(--bs-coral-text);
 }
+
+/* Settings' rule list: each rule links to where it is set (4.12). */
+.bs-settings-rules-target a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.bs-settings-rules-target a:hover,
+.bs-settings-rules-target a:focus-visible {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+}
