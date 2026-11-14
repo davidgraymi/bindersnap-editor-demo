@@ -335,10 +335,33 @@ export function DocumentEditorPage({
    * Save, then let every read of this binder know: the document page, the
    * tree and the contents beside the editor were all read before these words.
    */
-  const saveRevision = async (
+  /**
+   * **What each open policy was written on**, by identity: the file's blob
+   * SHA as it was read, then as each save of ours left it. Sent with every
+   * save, so one made on top of a co-editor's save we never saw is refused
+   * instead of quietly replacing their words.
+   */
+  const writtenOn = useRef(new Map<string, string>());
+  /**
+   * One save at a time, each after the last: a second save sent while the
+   * first is in flight would name the version the first replaces, and be
+   * refused as if somebody else had saved.
+   */
+  const saveQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const saveRevision = (
+    detail: WorkspaceDocumentDetailPayload,
+    ...args: Parameters<typeof reviseBinderDocument>
+  ): ReturnType<typeof reviseBinderDocument> => {
+    const run = saveQueue.current.then(() => sendSave(detail, ...args));
+    saveQueue.current = run.catch(() => undefined);
+    return run;
+  };
+  const sendSave = async (
+    detail: WorkspaceDocumentDetailPayload,
     ...args: Parameters<typeof reviseBinderDocument>
   ): ReturnType<typeof reviseBinderDocument> => {
     const [org_, binder_, file, path, target, source] = args;
+    const key = openKey(detail);
     const saved = await reviseBinderDocument(
       org_,
       binder_,
@@ -346,11 +369,15 @@ export function DocumentEditorPage({
       path,
       target,
       source,
-      // Saved on its own into an unproposed draft: the server may fold it
-      // into the last save of the same policy, so the draft lists "Edit
-      // Hand Hygiene" once rather than once per pause in the typing.
-      { fold: autosaveRef.current },
+      {
+        // Saved on its own into an unproposed draft: the server may fold it
+        // into the last save of the same policy, so the draft lists "Edit
+        // Hand Hygiene" once rather than once per pause in the typing.
+        fold: autosaveRef.current,
+        basedOn: writtenOn.current.get(key) ?? detail.document.sha,
+      },
     );
+    if (saved.sha) writtenOn.current.set(key, saved.sha);
     void queryClient.invalidateQueries({
       queryKey: queryKeys.binder(org, binder),
     });
@@ -797,6 +824,7 @@ export function DocumentEditorPage({
         ? opened.current.get(shownKey.current)
         : undefined;
       await saveRevision(
+        shown?.detail ?? load.detail,
         org,
         binder,
         file,
@@ -858,6 +886,7 @@ export function DocumentEditorPage({
       const json = JSON.stringify(policy.doc);
       try {
         await saveRevision(
+          policy.detail,
           org,
           binder,
           new File([JSON.stringify(policy.doc, null, 2)], "document.json", {
@@ -913,6 +942,7 @@ export function DocumentEditorPage({
     if (!policy || !isUnsaved(policy) || !draft) return true;
     try {
       await saveRevision(
+        policy.detail,
         org,
         binder,
         new File([JSON.stringify(policy.doc, null, 2)], "document.json", {

@@ -15488,6 +15488,21 @@ function buildShapeBranchName(
  * Like every other write to a binder, it proposes rather than changes: `main`
  * is protected, so this opens a change request and answers with its number.
  */
+const STALE_SAVE =
+  "Somebody else saved this document after you opened it, so saving would replace their words. Nothing was saved. Copy what you wrote, then reload to see theirs.";
+
+/**
+ * Git's own name for a file's contents: SHA-1 of `blob <size>\0` and the
+ * bytes. It is what a tree lists for the file, so the next save can say
+ * which version it was written on.
+ */
+export function gitBlobSha(bytes: ArrayBuffer): string {
+  const hasher = new Bun.CryptoHasher("sha1");
+  hasher.update(`blob ${bytes.byteLength}\0`);
+  hasher.update(new Uint8Array(bytes));
+  return hasher.digest("hex");
+}
+
 async function handleReviseWorkspaceDocument(
   req: Request,
   baseHeaders: Headers,
@@ -15515,6 +15530,9 @@ async function handleReviseWorkspaceDocument(
   const fromEditor = source === "editor";
   const converted = source === "converted";
   const fold = parseOptionalString(form.get("fold")) === "true";
+  // The blob the editor started from: a save onto a file somebody else has
+  // saved since is refused rather than written over theirs.
+  const basedOn = parseOptionalString(form.get("basedOn"));
 
   if (!file || !documentPath) {
     return json(
@@ -15590,6 +15608,15 @@ async function handleReviseWorkspaceDocument(
         },
         baseHeaders,
       );
+    }
+
+    // **Two people in one change, one file.** Co-editors write the same
+    // branch, and a save is a whole file: the later one replaced the earlier
+    // without either knowing. Git answers this with a hash of what you
+    // started from, and so does this: if the file on the branch is no longer
+    // the one the editor loaded, nothing is written.
+    if (target && basedOn && existing.sha && basedOn !== existing.sha) {
+      return json(409, { error: STALE_SAVE, code: "stale" }, baseHeaders);
     }
 
     const buffer = await file.arrayBuffer();
@@ -15729,6 +15756,8 @@ async function handleReviseWorkspaceDocument(
         slugPath: existing.slugPath,
         branch: proposed.branch,
         pullRequestNumber: proposed.changeNumber,
+        // What the editor saves on top of next time.
+        sha: gitBlobSha(buffer),
       },
       baseHeaders,
     );

@@ -110,6 +110,12 @@ export const CreatedWorkspaceDocumentPayloadSchema = z.object({
   slugPath: z.string(),
   branch: z.string(),
   pullRequestNumber: z.number().nullable(),
+  /**
+   * The saved file's git blob SHA, on a new version: what the editor names
+   * as `basedOn` with its next save, so a co-editor's save in between is
+   * noticed rather than written over.
+   */
+  sha: z.string().optional(),
 });
 export type CreatedWorkspaceDocumentPayload = z.infer<
   typeof CreatedWorkspaceDocumentPayloadSchema
