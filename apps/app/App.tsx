@@ -67,6 +67,7 @@ import {
   routeToPath,
   type AppRoute,
 } from "./routes";
+import { setRouteTitle } from "./pageTitle";
 import { resolveSignupPrefill } from "./authIntent";
 import { rememberedSignupSource, rememberSignupSource } from "./signupSource";
 import { validateFullName } from "../../packages/utils/personName";
@@ -733,6 +734,12 @@ export function App() {
     // No bounce away from /billing for a paying customer either. It is where
     // they manage the subscription, and the sidebar links to it.
   }, [accessSource, isCheckingSession, route, subscriptionStatus, user]);
+
+  // The tab names the page: the address gives a title at once, and a page
+  // that has read something better (a change's own title) replaces it.
+  useEffect(() => {
+    setRouteTitle(route);
+  }, [route]);
 
   useEffect(() => {
     if (route.kind !== "callback") {

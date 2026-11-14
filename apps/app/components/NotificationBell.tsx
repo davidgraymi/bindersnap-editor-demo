@@ -5,7 +5,7 @@ import { AppIcon, ICON } from "./AppIcon";
 import { type AppNotification } from "../api";
 import { useMarkNotificationsRead } from "../data/notifications";
 import { notificationCountQuery, notificationListQuery } from "../data/queries";
-import { formatAge } from "../documentDisplay";
+import { formatAge, formatDocumentName } from "../documentDisplay";
 import { describeNotification } from "../notificationText";
 
 /**
@@ -214,7 +214,8 @@ export function NotificationBell({ onOpen }: NotificationBellProps) {
                       <span className="notif-body">
                         <span className="notif-name">{note.title}</span>
                         <span className="notif-meta">
-                          {describeNotification(note)} · {note.binder} ·{" "}
+                          {describeNotification(note)} ·{" "}
+                          {formatDocumentName(note.binder)} ·{" "}
                           {formatAge(note.updatedAt)}
                         </span>
                       </span>

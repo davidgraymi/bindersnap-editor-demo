@@ -20,6 +20,8 @@ import { buildBinderUrl } from "../binderShell";
 import { buildChangedDocumentRows } from "../changedDocuments";
 import type { ChangeScope } from "../changeScope";
 import { formatDocumentName } from "../documentDisplay";
+import { usePageTitle } from "../pageTitle";
+import { HelpLink } from "./HelpLink";
 import type { DocumentChangeView } from "../routes";
 import { nameFor, usePeopleNames } from "../usePeopleNames";
 import { ChangeByline } from "./ChangeByline";
@@ -196,6 +198,13 @@ export function BinderChangePage({
   const record = useMemo(
     () => (detail ? binderChangeDetailToRecord(detail) : null),
     [detail],
+  );
+
+  // The tab says what the change is called, not only its number.
+  usePageTitle(
+    record
+      ? [record.summary, `Change ${changeNumber}`, formatDocumentName(binder)]
+      : null,
   );
 
   /**
@@ -574,13 +583,17 @@ export function BinderChangePage({
             Choose what each clash should say to bring this change up to date.
             {detail.clearsApprovalsOnEdit
               ? " That changes what it proposes, so approvals already given are cleared and asked for again."
-              : " This binder keeps approvals already given through later edits."}
+              : " This binder keeps approvals already given through later edits."}{" "}
+            <HelpLink guide="out-of-date" section="Resolve conflicts">
+              How resolving works
+            </HelpLink>
           </p>
         ) : (
           <p>
             <strong>The binder has moved on since this change was made.</strong>{" "}
             Updating it pulls in everything published since. What this change
-            proposes stays the same, so approvals already given stay too.
+            proposes stays the same, so approvals already given stay too.{" "}
+            <HelpLink guide="out-of-date">Why this happens</HelpLink>
           </p>
         )}
         {detail.hasConflicts ? (
