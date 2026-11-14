@@ -451,10 +451,18 @@ export function DraftFiles({
     setFloating(false);
     onOpen(slugPath);
   };
+  /**
+   * The folder you are in: the one on the desk, else the open document's.
+   * New document and New folder at the top of the panel make things there,
+   * not at the binder's top.
+   */
+  const here =
+    activeFolder ??
+    (active.includes("/") ? active.slice(0, active.lastIndexOf("/")) : "");
   const startNew = onNew
     ? () => {
         setFloating(false);
-        onNew();
+        onNew(here || undefined);
       }
     : undefined;
   const {
@@ -1265,7 +1273,7 @@ export function DraftFiles({
             disabled={busy}
             onClick={() => {
               setFloating(false);
-              onUpload(activeFolder ?? "");
+              onUpload(here);
             }}
           >
             <AppIcon icon={ICON.upload} size="md" />
@@ -1280,7 +1288,7 @@ export function DraftFiles({
             disabled={busy}
             onClick={() => {
               setFloating(false);
-              onNewFolder();
+              onNewFolder(here || undefined);
             }}
           >
             <AppIcon icon={ICON.newFolder} size="md" />

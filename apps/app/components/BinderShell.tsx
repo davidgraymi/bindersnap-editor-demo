@@ -558,6 +558,31 @@ export function BinderShell({
    * page, the binder is open in a particular draft — not always your newest —
    * and Edit there carries on in that one rather than switching to another.
    */
+  /**
+   * Put a folder on the editor's desk, in the draft: a folder's name in the
+   * file panel, an origin in the sign-off panel, Edit on a folder's page.
+   * "" is the binder's top folder. Moving between things on the desk is one
+   * sitting, so it replaces the address rather than adding to Back.
+   */
+  const openFolderInEditor = (
+    path: string,
+    branch: string | null = draft?.draft?.branch ?? draftBranch,
+    { replace = editMode === "writing" }: { replace?: boolean } = {},
+  ) => {
+    setDraftBranch(branch);
+    moveTo(
+      buildBinderUrl({
+        org,
+        binder,
+        folder: path === "" ? null : path,
+        edit: "writing",
+        draft: branch,
+      }),
+      { replace },
+    );
+    setEditMode("writing");
+  };
+
   const startWriting = async (inDraft?: string | null) => {
     setStartingEdit(true);
     setDraftError(null);
@@ -572,11 +597,20 @@ export function BinderShell({
             binderDocumentsQuery(org, binder, { draft: branch }),
           )
         : null;
+      // **Edit opens the editor on the page's place.** A folder's page puts
+      // the folder on the desk; the binder opens the policy last written in
+      // the draft, and a binder with nothing the editor writes opens on its
+      // top folder rather than leaving the editor out of reach.
+      const onAFolder = currentBinderAddress().folder;
+      if (onAFolder) {
+        openFolderInEditor(onAFolder, branch, { replace: false });
+        return;
+      }
       const target = listing
         ? pickPolicyToWrite(listing.documents, payload.draft?.acts ?? [])
         : null;
       if (!target) {
-        goToEdit("editing", branch);
+        openFolderInEditor("", branch, { replace: false });
         return;
       }
       setDraftBranch(branch);
@@ -679,8 +713,14 @@ export function BinderShell({
 
   /** Out of the editor, back to the document — still in the draft. */
   const closeEditor = () => {
-    if (!documentPath) return;
     const branch = draft?.draft?.branch ?? draftBranch;
+    if (!documentPath) {
+      // From a folder on the desk: the binder, still in the draft, where
+      // its bar proposes or discards it.
+      moveTo(buildBinderUrl({ org, binder, edit: "editing", draft: branch }));
+      setEditMode("editing");
+      return;
+    }
     const query = new URLSearchParams({ edit: "1" });
     if (branch) query.set("draft", branch);
     moveTo(
@@ -1177,12 +1217,26 @@ export function BinderShell({
     openChange === null &&
     !archive &&
     editMode === "off";
+  /**
+   * A folder on the editor's desk: `/-/tree/{ref}/{folder}?edit=write`. ""
+   * is the binder's top folder, which is where Edit on an empty binder lands.
+   */
+  const writingFolder =
+    !documentPath &&
+    editMode === "writing" &&
+    activeTab === "documents" &&
+    openChange === null &&
+    !archive
+      ? (folder ?? "")
+      : null;
+  const writing =
+    editMode === "writing" && (Boolean(documentPath) || writingFolder !== null);
   const contentsRead = useQuery({
     ...binderDocumentsQuery(org, binder, {
       draft: draftForContents,
       change: openChange,
     }),
-    enabled: Boolean(documentPath) || onFolderPage,
+    enabled: Boolean(documentPath) || onFolderPage || writingFolder !== null,
   });
   // **Memoized, not rebuilt each render.** It is handed up to the sidebar by
   // an effect, and a new object every render re-ran that effect, re-rendered
@@ -1191,7 +1245,7 @@ export function BinderShell({
   const listing = contentsRead.data;
   const contents: SidebarBinder["contents"] | null = useMemo(
     () =>
-      (documentPath || onFolderPage) && listing
+      (documentPath || onFolderPage || writingFolder !== null) && listing
         ? {
             documents: listing.documents,
             folders: listing.folders,
@@ -1200,7 +1254,7 @@ export function BinderShell({
             change: openChange,
           }
         : null,
-    [documentPath, onFolderPage, folder, listing, openChange],
+    [documentPath, onFolderPage, writingFolder, folder, listing, openChange],
   );
   /** How many policies the binder has archived, read with the contents. */
   const archivedCount = contentsRead.data?.archivedCount ?? 0;
@@ -1303,64 +1357,68 @@ export function BinderShell({
    * named in the sidebar, the page's `h1` belongs to whatever the page is
    * about, and there is exactly one of them.
    */
-  const head: { title: string; subtitle?: string } | null = documentPath
-    ? null
-    : openChange !== null
+  const head: { title: string; subtitle?: string } | null =
+    documentPath || writing
       ? null
-      : archive
+      : openChange !== null
         ? null
-        : editMode === "proposing"
+        : archive
           ? null
-          : activeTab === "changes"
-            ? {
-                title: "Change requests",
-                subtitle:
-                  "Nothing joins this binder except a change that has been published.",
-              }
-            : activeTab === "drafts"
+          : editMode === "proposing"
+            ? null
+            : activeTab === "changes"
               ? {
-                  title: "Drafts",
+                  title: "Change requests",
                   subtitle:
-                    "Your saved work in this binder, and whether it has been proposed.",
+                    "Nothing joins this binder except a change that has been published.",
                 }
-              : activeTab === "history"
+              : activeTab === "drafts"
                 ? {
-                    title: "History",
+                    title: "Drafts",
                     subtitle:
-                      "Every change this binder has published, and what each one did.",
+                      "Your saved work in this binder, and whether it has been proposed.",
                   }
-                : activeTab === "settings"
-                  ? // The page is named for the settings page it is, as the
-                    // sidebar entry that opened it is, with the one sentence
-                    // that says what that page decides.
-                    (() => {
-                      const page =
-                        BINDER_SETTINGS_PAGES.find(
-                          (entry) =>
-                            entry.section === binderSettingsSection(tab),
-                        ) ?? BINDER_SETTINGS_PAGES[0]!;
-                      return { title: page.label, subtitle: page.description };
-                    })()
-                  : onFolderPage
-                    ? {
-                        title: describeFolderName(folder!),
-                        subtitle: describeFolderMeta({
-                          binderName,
-                          folder: folder!,
-                          documents: listing?.documents ?? null,
-                        }),
-                      }
-                    : {
-                        title: binderName,
-                        ...(editMode === "editing"
-                          ? {
-                              subtitle:
-                                "Rename in place, drag to refile, make a folder. Everything you do is saved to your draft, and nobody is asked to look until you propose it.",
-                            }
-                          : overview?.workspace.description
-                            ? { subtitle: overview.workspace.description }
-                            : {}),
-                      };
+                : activeTab === "history"
+                  ? {
+                      title: "History",
+                      subtitle:
+                        "Every change this binder has published, and what each one did.",
+                    }
+                  : activeTab === "settings"
+                    ? // The page is named for the settings page it is, as the
+                      // sidebar entry that opened it is, with the one sentence
+                      // that says what that page decides.
+                      (() => {
+                        const page =
+                          BINDER_SETTINGS_PAGES.find(
+                            (entry) =>
+                              entry.section === binderSettingsSection(tab),
+                          ) ?? BINDER_SETTINGS_PAGES[0]!;
+                        return {
+                          title: page.label,
+                          subtitle: page.description,
+                        };
+                      })()
+                    : onFolderPage
+                      ? {
+                          title: describeFolderName(folder!),
+                          subtitle: describeFolderMeta({
+                            binderName,
+                            folder: folder!,
+                            documents: listing?.documents ?? null,
+                          }),
+                        }
+                      : {
+                          title: binderName,
+                          ...(editMode === "editing"
+                            ? {
+                                subtitle:
+                                  "Rename in place, drag to refile, make a folder. Everything you do is saved to your draft, and nobody is asked to look until you propose it.",
+                              }
+                            : overview?.workspace.description
+                              ? { subtitle: overview.workspace.description }
+                              : {}),
+                        };
 
   // **A page, not a broken binder.** An address with no binder behind it drew
   // the whole binder — its name made up from the address, Add a document and
@@ -1436,7 +1494,7 @@ export function BinderShell({
   return (
     <section
       className={`docw-page${documentPath ? " docw-page--document" : ""}${
-        documentPath && editMode === "writing" ? " docw-page--writing" : ""
+        writing ? " docw-page--writing" : ""
       }`}
     >
       {/* A phone has no sidebar, so the binder's screens are a strip — the
@@ -1554,7 +1612,7 @@ export function BinderShell({
           draw one, so on a wide screen it is always straight above a title. */}
       {/* Not over the editor: its title bar names the policy and its file
           panel shows where it is filed. */}
-      {documentPath && editMode === "writing" ? null : (
+      {writing ? null : (
         <PagePath
           route={
             documentPath
@@ -1584,11 +1642,13 @@ export function BinderShell({
           document; `?change=` says which ref to read it at, the way `?draft=`
           and `?version=` do. The other way round, `/{org}/{binder}/{path}
           ?change=7` rendered the change's page and the path was ignored. */}
-      {documentPath && editMode === "writing" ? (
+      {writing ? (
         <DocumentEditorPage
           org={org}
           binder={binder}
-          documentPath={documentPath}
+          documentPath={documentPath ?? ""}
+          folder={writingFolder}
+          onOpenFolder={(path) => openFolderInEditor(path)}
           draft={
             writingChange !== null
               ? (changeTarget?.branch ?? null)

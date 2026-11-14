@@ -11625,6 +11625,138 @@ html.bs-writing .app-main {
   outline-offset: 2px;
 }
 
+/* ── Who signs off here, on the editor's right (D16) ──────────────────────
+   The file panel's mirror: floating over the desk under the ribbon, shut to
+   a small button at the top right. It is positioned against the editor's
+   body, so the anchor takes no room of its own. */
+.doc-signoff-anchor {
+  z-index: var(--brand-z-raised);
+  flex: none;
+  width: 0;
+}
+
+.doc-signoff-launcher {
+  left: auto;
+  right: var(--brand-space-3);
+  z-index: var(--brand-z-raised);
+}
+
+.doc-signoff-float {
+  position: absolute;
+  top: var(--brand-space-3);
+  right: var(--brand-space-3);
+  bottom: var(--brand-space-3);
+  z-index: var(--brand-z-raised);
+  display: flex;
+  flex-direction: column;
+  width: 300px;
+  max-width: calc(100vw - var(--brand-space-12));
+  border: 1px solid var(--bs-rule-warm);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  box-shadow: var(--bs-shadow-sm);
+  overflow: hidden;
+}
+
+.doc-signoff-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--brand-space-2);
+  padding: var(--brand-space-2) var(--brand-space-2) 0 var(--brand-space-3);
+}
+
+.doc-signoff-title {
+  margin: 0;
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.doc-signoff-where {
+  margin: 0;
+  padding: var(--brand-space-1) var(--brand-space-3) var(--brand-space-2);
+  border-bottom: 1px solid var(--bs-rule-warm);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.doc-signoff-where strong {
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.doc-signoff-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.doc-signoff-body .signoff-section:first-of-type {
+  border-top: none;
+}
+
+.signoff-picker-field {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  color: var(--bs-text-muted);
+}
+
+.signoff-picker-field .rev-picker-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── A folder on the editor's desk (4.5) ─────────────────────────────────
+   A head card, then the folder's list, between the two panels: the inline
+   padding is set from their measured widths. */
+.doc-folder-desk {
+  display: grid;
+  align-content: start;
+  gap: var(--brand-space-3);
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.doc-folder-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-3) var(--brand-space-4);
+}
+
+.doc-folder-icon {
+  display: grid;
+  place-items: center;
+  color: var(--bs-text-faint);
+}
+
+.doc-folder-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.doc-folder-name {
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-ui-lg);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.doc-folder-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--brand-space-2);
+}
+
+.doc-editor-status-kind {
+  color: var(--bs-text-muted);
+}
+
 /* Open: a card about as tall as the desk, inset from the ribbon above and
    the status bar below, as wide as its edge was last dragged. */
 .doc-files-float {
@@ -11740,9 +11872,17 @@ html:has(.doc-files-resize--active) {
 
 /* Files | Outline: the binder's files, or the open document's headings. Two
    sides of one panel, switched in its head where its title was. */
+/* Four acts in the head now — New, Upload, New folder, Hide — so they sit
+   close, and the tabs give way before any of them is cut. */
+.doc-files .app-explorer-head {
+  gap: var(--brand-space-0-5);
+  padding-left: var(--brand-space-2);
+}
+
 .doc-files-tabs {
   display: inline-flex;
   flex: 1;
+  min-width: 0;
   align-self: stretch;
   gap: var(--brand-space-1);
   /* The ribbon's tabs: an underline on the head's own rule. */
