@@ -65,6 +65,7 @@ test("a Word file is converted into the draft and opens in the editor", async ({
   // Leave the seed as it was found.
   await page.getByRole("button", { name: "Close" }).click();
   await page.getByRole("button", { name: "Discard", exact: true }).click();
+  await page.getByRole("button", { name: "Discard draft" }).click();
   await expect(page.locator(".draft-bar-discard")).toHaveCount(0, {
     timeout: 30_000,
   });

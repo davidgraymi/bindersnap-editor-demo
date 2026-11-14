@@ -64,6 +64,10 @@ export function BinderDraftBar({
   onOpenChange,
 }: BinderDraftBarProps) {
   const [showAll, setShowAll] = useState(false);
+  // **Discarding is asked about.** It threw the draft away on one click,
+  // and there is no way to bring one back. A draft with nothing in it has
+  // nothing to lose, so that one still goes without a question.
+  const [confirming, setConfirming] = useState(false);
 
   return (
     <div className="bs-draftbar" role="status" aria-live="polite">
@@ -101,7 +105,7 @@ export function BinderDraftBar({
               ? `Proposed as change ${changeNumber} — its reviewers see every change you make here.`
               : acts.length > 0
                 ? acts.map((act) => act.summary).join(" · ")
-                : "Rename something, make a folder, or add a document. Nobody is asked to look until you propose it."}
+                : "Choose Edit to write, add a document or reorganize. Nobody is asked to look until you propose it."}
           </p>
 
           {/* Other people's drafts: that they exist, and nothing more. Knowing
@@ -140,12 +144,43 @@ export function BinderDraftBar({
           >
             View change {changeNumber}
           </button>
+        ) : confirming ? (
+          <span
+            className="bs-draftbar-confirm"
+            role="alertdialog"
+            aria-label="Discard this draft?"
+          >
+            <span className="bs-draftbar-confirm-line">
+              Discard this draft? What is in it cannot be brought back.
+            </span>
+            <button
+              type="button"
+              className="bs-btn bs-btn--sm bs-btn--quiet"
+              autoFocus
+              onClick={() => setConfirming(false)}
+            >
+              Keep it
+            </button>
+            <button
+              type="button"
+              className="bs-btn bs-btn--sm bs-btn-secondary bs-btn--danger"
+              disabled={busy}
+              onClick={() => {
+                setConfirming(false);
+                onDiscard();
+              }}
+            >
+              Discard draft
+            </button>
+          </span>
         ) : (
           <>
             <button
               type="button"
               className="bs-btn bs-btn--sm bs-btn--quiet draft-bar-discard"
-              onClick={onDiscard}
+              onClick={() =>
+                acts.length === 0 ? onDiscard() : setConfirming(true)
+              }
               disabled={busy}
             >
               Discard
