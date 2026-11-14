@@ -213,6 +213,7 @@ import {
   findCurrentDraft,
   startDraft,
   isDraftBranch,
+  normalizeReadableRef,
   listBinderDrafts,
   openDraft,
   readDraftActs,
@@ -10200,6 +10201,7 @@ async function handleBinderSignOffView(
   workspaceName: string,
   draftRaw: string | null,
   changeRaw: string | null,
+  refRaw: string | null = null,
 ): Promise<Response> {
   const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
@@ -10225,9 +10227,25 @@ async function handleBinderSignOffView(
     if (draft && "error" in draft) {
       return json(409, { error: draft.error }, baseHeaders);
     }
+    // **A branch's rules, the way its tree is read** (`/-/tree/{ref}`): a
+    // draft read as a branch shows the rules in it, not the record's. The
+    // same rule as the documents list: somebody else's unproposed draft is
+    // refused.
+    const readable = draft
+      ? null
+      : await resolveReadableRef({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          username: session.username,
+          refRaw,
+        });
+    if (readable && "error" in readable) {
+      return json(409, { error: readable.error }, baseHeaders);
+    }
     const changeNumber = Number.parseInt(changeRaw ?? "", 10);
     const onChange =
-      !draft && Number.isFinite(changeNumber) && changeNumber > 0
+      !draft && !readable && Number.isFinite(changeNumber) && changeNumber > 0
         ? await getPullRequestHeadBranch({
             client,
             owner: orgName,
@@ -10237,7 +10255,7 @@ async function handleBinderSignOffView(
             .then((branch) => branch || null)
             .catch(() => null)
         : null;
-    const ref = draft ? draft.branch : (onChange ?? "main");
+    const ref = draft ? draft.branch : (readable?.ref ?? onChange ?? "main");
 
     const privileged = createPrivilegedGiteaClient() ?? client;
     const [signOff, protection, tree, orgTeams, repoTeams, owners] =
@@ -13440,8 +13458,14 @@ async function resolveReadableRef(params: {
   username: string;
   refRaw: string | null;
 }): Promise<{ ref: string } | { error: string } | null> {
-  const asked = (params.refRaw ?? "").trim();
-  if (asked === "") return null;
+  const raw = (params.refRaw ?? "").trim();
+  if (raw === "") return null;
+  // Compared under the name Gitea reads it by: `refs/heads/draft/bob/1` is
+  // `draft/bob/1`, and must meet the same check.
+  const asked = normalizeReadableRef(raw);
+  if (asked === null) {
+    return { error: "That is not a branch or a version of this binder." };
+  }
 
   const unproposed = isDraftBranch(asked)
     ? await listBinderDrafts({
@@ -13450,6 +13474,31 @@ async function resolveReadableRef(params: {
         workspace: params.workspace,
       })
     : [];
+  // A bare commit id is a way to the same files: refused when it is the
+  // newest commit of somebody else's draft.
+  const looksLikeCommit = /^[0-9a-f]{7,64}$/i.test(asked);
+  const othersHead =
+    looksLikeCommit && unproposed.length === 0
+      ? await listBinderDrafts({
+          client: params.client,
+          org: params.org,
+          workspace: params.workspace,
+        })
+      : unproposed;
+  if (
+    looksLikeCommit &&
+    othersHead.some(
+      (entry) =>
+        entry.owner !== params.username &&
+        entry.changeNumber === null &&
+        (entry.head ?? "").toLowerCase().startsWith(asked.toLowerCase()),
+    )
+  ) {
+    return {
+      error:
+        "That draft is not yours. Other people's drafts are visible as existing and never as contents.",
+    };
+  }
   const stillADraft = unproposed.find((entry) => entry.branch === asked);
   if (stillADraft && stillADraft.owner !== params.username) {
     return {
@@ -19102,6 +19151,7 @@ async function handleRequest(req: Request): Promise<Response> {
         workspaceSignOffMatch[2]!,
         url.searchParams.get("draft"),
         url.searchParams.get("change"),
+        url.searchParams.get("ref"),
       );
     } else if (workspaceSignOffMatch && method === "PUT") {
       return await handleBinderShapeChange(

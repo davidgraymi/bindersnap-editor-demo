@@ -73,6 +73,11 @@ export interface BinderDraft {
   owner: string;
   /** When it was last worked on — its newest commit. */
   updatedAt: string | null;
+  /**
+   * Its newest commit's id. Server-side only — never sent: it is how a read
+   * at a bare commit is told apart from a read of somebody else's draft.
+   */
+  head?: string | null;
   /** The last thing done to it, so a list of drafts reads as a list of work. */
   lastAct: string | null;
   /**
@@ -112,6 +117,33 @@ export function buildDraftBranchName(
     .replace(/[^0-9]/g, "")
     .slice(0, 17);
   return `${DRAFT_BRANCH_PREFIX}${username}/${stamp}`;
+}
+
+/**
+ * The ref a reader asked for, in the one spelling the draft check can see —
+ * or null for a spelling that is refused.
+ *
+ * Gitea reads `refs/heads/draft/bob/1` as the branch `draft/bob/1`, so a
+ * check that compares names must compare it under that name, or somebody
+ * else's unproposed draft is one prefix away. `refs/heads/` is taken off;
+ * `refs/tags/` (a version) is kept; any other `refs/` — a pull request's
+ * head, a remote's — names nothing a reader of a binder is offered, and is
+ * refused rather than guessed at.
+ */
+export function normalizeReadableRef(ref: string): string | null {
+  const asked = ref.trim();
+  // Revision syntax — `draft/bob/1~0`, `draft/bob/1^{}`, `main..x`, `@{1}` —
+  // reaches a commit by way of a name the check never sees. No branch or tag
+  // may contain any of it (git check-ref-format), so refusing it costs a
+  // reader nothing.
+  if (asked === "" || /[\s~^:?*[\\]|\.\.|@\{/.test(asked)) return null;
+  if (asked.startsWith("refs/heads/")) {
+    const branch = asked.slice("refs/heads/".length);
+    return branch === "" ? null : branch;
+  }
+  if (asked.startsWith("refs/tags/")) return asked;
+  if (asked.startsWith("refs/")) return null;
+  return asked;
 }
 
 export function isDraftBranch(branch: string): boolean {
@@ -225,6 +257,7 @@ export async function listBinderDrafts(params: {
           branch: name,
           owner: branchOwner,
           updatedAt: branch.commit?.timestamp ?? null,
+          head: branch.commit?.id ?? null,
           lastAct: firstLine(branch.commit?.message ?? "") || null,
           changeNumber,
         },

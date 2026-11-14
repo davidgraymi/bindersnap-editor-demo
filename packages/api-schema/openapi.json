@@ -11497,11 +11497,19 @@
             "required": false,
             "name": "change",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "ref",
+            "in": "query"
           }
         ],
         "responses": {
           "200": {
-            "description": "Who signs off in the binder, on main or at the caller's draft or a change",
+            "description": "Who signs off in the binder, on main or at the caller's draft, a branch or a change",
             "content": {
               "application/json": {
                 "schema": {

@@ -189,6 +189,8 @@ function documentPath(
   address: string,
   change: number | null,
   atBranch: boolean,
+  /** The branch it is read on — a ref, or your draft — so its folders are too. */
+  branch: string | null = null,
 ): TrailStep[] {
   const segments = address.split("/").filter(Boolean);
   const filename = segments.pop() ?? address;
@@ -214,7 +216,7 @@ function documentPath(
 
   return [
     ...changeSteps,
-    ...folderSteps(org, binder, segments.join("/")),
+    ...folderSteps(org, binder, segments.join("/"), { ref: branch }),
     here(documentLabel(filename)),
   ];
 }
@@ -250,6 +252,9 @@ export function buildLocationTrail(
             route.documentPath,
             address.change,
             onBranch(address),
+            onBranch(address)
+              ? address.ref
+              : new URLSearchParams(search).get("draft"),
           );
     const label = formatDocumentName(route.binder);
     // At its root on a branch is not at its root on the record: the binder's

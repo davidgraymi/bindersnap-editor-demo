@@ -7,6 +7,7 @@ import {
   findCurrentDraft,
   isDraftBranch,
   listBinderDrafts,
+  normalizeReadableRef,
   openDraft,
   readDraftActs,
 } from "./drafts";
@@ -120,6 +121,8 @@ test("a draft with a change request open on it is left out unless asked for", as
       // The subject alone: a list of drafts reads as a list of work.
       lastAct: "Make the folder nursing",
       changeNumber: null,
+      // Its newest commit, kept server-side for the ref check.
+      head: null,
     },
   ]);
 
@@ -314,4 +317,37 @@ test("a draft made a second ago with nothing on it is empty, not broken", async 
       branch: "draft/alice/20260912143522000",
     }),
   ).toEqual([]);
+});
+
+test("a ref is checked under the name Gitea reads it by", () => {
+  // `refs/heads/` is the branch itself: somebody else's draft spelt that
+  // way must meet the same check as its plain name.
+  expect(normalizeReadableRef("refs/heads/draft/bob/20261111")).toBe(
+    "draft/bob/20261111",
+  );
+  expect(normalizeReadableRef("  draft/bob/20261111 ")).toBe(
+    "draft/bob/20261111",
+  );
+  // A version is a tag, and stays one.
+  expect(normalizeReadableRef("refs/tags/01J8XZ/v4")).toBe(
+    "refs/tags/01J8XZ/v4",
+  );
+  expect(normalizeReadableRef("main")).toBe("main");
+  // Nothing else under refs/ is a place a reader is offered.
+  expect(normalizeReadableRef("refs/pull/3/head")).toBeNull();
+  expect(normalizeReadableRef("refs/heads/")).toBeNull();
+  // Revision syntax reaches a commit by a name the check never sees.
+  for (const sneaky of [
+    "draft/bob/20261111~0",
+    "draft/bob/20261111^{}",
+    "draft/bob/20261111^",
+    "main..draft/bob/20261111",
+    "draft/bob/20261111@{0}",
+    "draft/bob/20261111:policy.md",
+    "draft/bob/2026 1111",
+  ]) {
+    expect(normalizeReadableRef(sneaky), sneaky).toBeNull();
+  }
+  // A version tag's name, with a slash, is still fine.
+  expect(normalizeReadableRef("01J8XZ4K7M/v4")).toBe("01J8XZ4K7M/v4");
 });

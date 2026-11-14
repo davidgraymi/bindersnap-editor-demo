@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { binderSignOffQuery } from "../data/queries";
+import { binderSignOffQuery, type SignOffAt } from "../data/queries";
 import { routeToPath, type AppRoute } from "../routes";
 import {
   buildSignOffPanel,
@@ -11,35 +11,45 @@ import { SignOffPanel } from "./SignOffPanel";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 /**
- * "Who signs off here" for a page in the binder view: read on `main`, where
- * the rules in force are, and drawn for the place the page is about. An
- * origin link goes to the folder or the binder page that sets the rule.
+ * "Who signs off here" for a page in the binder view, drawn for the place the
+ * page is about and read where the page is: `main` for the record, or the
+ * branch on screen — a draft read at `/-/tree/{draft}` shows the rules in
+ * that draft, the way it shows its documents. An origin link goes to the
+ * folder or the binder page that sets the rule, on the same branch.
  */
 export function SignOffRail({
   org,
   binder,
   binderName,
   place,
+  at = {},
   onNavigate,
 }: {
   org: string;
   binder: string;
   binderName: string;
   place: SignOffPlace;
+  /** Where the page is read; nothing is `main`. */
+  at?: SignOffAt;
   onNavigate: (route: AppRoute) => void;
 }) {
-  const read = useQuery(binderSignOffQuery(org, binder));
+  const read = useQuery(binderSignOffQuery(org, binder, at));
 
+  // Following a rule to where it is set stays on the branch being read.
+  const branch = at.ref ? { ref: at.ref } : {};
   const originRoute = (origin: PanelOrigin): AppRoute =>
     origin.kind === "binder"
-      ? { kind: "binder", org, binder }
+      ? { kind: "binder", org, binder, ...branch }
       : origin.kind === "folder"
-        ? { kind: "binder", org, binder, folder: origin.path }
+        ? { kind: "binder", org, binder, folder: origin.path, ...branch }
         : {
             kind: "binderDocument",
             org,
             binder,
             documentPath: origin.path,
+            ...branch,
+            ...(at.draft ? { draft: at.draft } : {}),
+            ...(at.change ? { change: at.change } : {}),
           };
 
   if (read.error) {
