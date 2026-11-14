@@ -4118,6 +4118,9 @@ function buildPendingChangeRow(
     ...entry.pullRequest,
     reviewers,
     assignee: readAssignee(entry.pullRequest),
+    // Who besides its author may write it: a document's Edit asks whether to
+    // carry on in it or start apart, and only these people may carry on.
+    coEditors: readCoEditors(entry.pullRequest),
     approvalCount,
     requiredApprovals,
     isRejected,
@@ -13950,7 +13953,11 @@ async function handleWorkspaceDocumentDetail(
         versions,
         latestVersion: versions[0] ?? null,
         folders: tree.folders,
-        openChanges: touching.map((entry) => entry.pullRequest),
+        // With who may write each, which Edit asks about.
+        openChanges: touching.map((entry) => ({
+          ...entry.pullRequest,
+          coEditors: readCoEditors(entry.pullRequest),
+        })),
       },
       baseHeaders,
     );

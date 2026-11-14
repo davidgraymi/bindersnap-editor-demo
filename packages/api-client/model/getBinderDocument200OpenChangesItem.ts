@@ -6,6 +6,7 @@
  */
 import type { GetBinderDocument200OpenChangesItemApprovalState } from './getBinderDocument200OpenChangesItemApprovalState.ts';
 import type { GetBinderDocument200OpenChangesItemAssignee } from './getBinderDocument200OpenChangesItemAssignee.ts';
+import type { GetBinderDocument200OpenChangesItemCoEditorsItem } from './getBinderDocument200OpenChangesItemCoEditorsItem.ts';
 import type { GetBinderDocument200OpenChangesItemReviewersItem } from './getBinderDocument200OpenChangesItemReviewersItem.ts';
 import type { GetBinderDocument200OpenChangesItemReviewsItem } from './getBinderDocument200OpenChangesItemReviewsItem.ts';
 import type { GetBinderDocument200OpenChangesItemUser } from './getBinderDocument200OpenChangesItemUser.ts';
@@ -27,6 +28,7 @@ export type GetBinderDocument200OpenChangesItem = {
   reviewers: GetBinderDocument200OpenChangesItemReviewersItem[];
   /** @nullable */
   assignee: GetBinderDocument200OpenChangesItemAssignee;
+  coEditors?: GetBinderDocument200OpenChangesItemCoEditorsItem[];
   body?: string;
   approvalState: GetBinderDocument200OpenChangesItemApprovalState;
   /** @nullable */

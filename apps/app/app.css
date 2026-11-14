@@ -4717,6 +4717,29 @@ a.bs-knot {
   width: min(100%, 620px);
 }
 
+/* Edit, on a document somebody is already changing (EditChoiceDialog): one
+   row per open change, the act that is yours on its right. */
+.edit-choice-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-bottom: 1px solid var(--bs-rule-warm);
+}
+
+.edit-choice-row {
+  gap: var(--brand-space-3);
+  padding-block: var(--brand-space-2);
+}
+
+.edit-choice-row .bs-row-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.edit-choice-row .bs-btn {
+  flex-shrink: 0;
+}
+
 /* Send feedback (FeedbackDialog). Long enough to write a real report in, and
    scrolls inside itself on a short screen rather than off the page. */
 .feedback-dialog {
