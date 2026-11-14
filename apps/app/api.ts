@@ -630,7 +630,12 @@ export async function submitDocumentReview(
 export async function updateChangeAssignments(
   scope: ChangeScope,
   pullNumber: number,
-  updates: { assignee?: string | null; reviewers?: string[] },
+  updates: {
+    assignee?: string | null;
+    reviewers?: string[];
+    /** Everybody besides the author who may edit the change. */
+    coEditors?: string[];
+  },
 ): Promise<ChangeAssignments> {
   try {
     const response = await BindersClient.updateBinderChangeAssignments(

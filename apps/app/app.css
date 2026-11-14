@@ -2323,6 +2323,55 @@ input {
   color: var(--bs-text-primary);
 }
 
+/* Who else may edit the change, in "About this change". */
+.change-coeditors {
+  display: grid;
+  gap: var(--brand-space-1);
+  justify-items: start;
+}
+
+.change-coeditors-list {
+  display: grid;
+  gap: var(--brand-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.change-coeditors-none {
+  color: var(--bs-text-muted);
+}
+
+.change-coeditors-add {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--bs-text-muted);
+  font: inherit;
+  font-size: var(--brand-text-ui-sm);
+  font-weight: var(--brand-weight-medium);
+  cursor: pointer;
+}
+
+.change-coeditors-add:hover {
+  color: var(--bs-coral-text);
+}
+
+.change-coeditors-add:focus-visible,
+.change-coeditors-remove:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 2px;
+  border-radius: var(--brand-radius-sm);
+}
+
+.change-coeditors-pick {
+  display: block;
+  width: 100%;
+}
+
 .change-about-person {
   display: inline-flex;
   align-items: center;

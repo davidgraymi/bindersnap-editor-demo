@@ -6,6 +6,7 @@
  */
 import type { GetBinderChange200ApprovalRulesItem } from './getBinderChange200ApprovalRulesItem.ts';
 import type { GetBinderChange200Change } from './getBinderChange200Change.ts';
+import type { GetBinderChange200CoEditorsItem } from './getBinderChange200CoEditorsItem.ts';
 import type { GetBinderChange200DocumentsItem } from './getBinderChange200DocumentsItem.ts';
 import type { GetBinderChange200Outcome } from './getBinderChange200Outcome.ts';
 import type { GetBinderChange200RemovedDocumentsItem } from './getBinderChange200RemovedDocumentsItem.ts';
@@ -17,6 +18,7 @@ export type GetBinderChange200 = {
   organization: string;
   workspace: string;
   change: GetBinderChange200Change;
+  coEditors: GetBinderChange200CoEditorsItem[];
   /** @nullable */
   branchLabel: string | null;
   documents: GetBinderChange200DocumentsItem[];

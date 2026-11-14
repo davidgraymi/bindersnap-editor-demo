@@ -924,19 +924,22 @@ async function ensureAssignments(
     (name) => name !== author && !spoken.has(name),
   );
 
-  const assigneeMatches =
-    (assignment.assignee ?? null) === (change.assignee?.login ?? null);
+  const editing = new Set(
+    (change.coEditors ?? []).map((editor: { login: string }) => editor.login),
+  );
+  const coEditorsMatch =
+    assignment.coEditors.length === editing.size &&
+    assignment.coEditors.every((name) => editing.has(name));
   const reviewersMatch = reviewers.every((name) => requested.has(name));
-  if (assigneeMatches && reviewersMatch) return;
+  if (coEditorsMatch && reviewersMatch) return;
 
   await Binders.updateBinderChangeAssignments(
     run.org,
     run.binder.name,
     String(number),
     {
-      ...(assignment.assignee !== undefined
-        ? { assignee: assignment.assignee }
-        : {}),
+      // The author's to say, which is whose session this is.
+      ...(coEditorsMatch ? {} : { coEditors: assignment.coEditors }),
       reviewers: [...new Set([...requested, ...reviewers])],
     },
     await run.sessions.options(author),
@@ -1152,6 +1155,7 @@ async function ensureStartingSignOff(run: BinderRun): Promise<number | null> {
         body: "Approved.",
       })),
       threads: [],
+      coEditors: [],
       reviewers: [],
       publish: true,
       closed: false,

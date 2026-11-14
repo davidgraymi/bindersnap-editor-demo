@@ -219,8 +219,8 @@ export function ChangeConflictsPage({
 
       {payload.canResolve ? null : (
         <p className="bs-note" role="status">
-          Only people who can edit this binder can resolve a change. You can
-          read what conflicts here.
+          Only this change request&rsquo;s author and its co-editors can choose
+          between the wordings. You can read what conflicts here.
         </p>
       )}
 

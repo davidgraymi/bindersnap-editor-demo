@@ -78,6 +78,8 @@
 #     closed with work still asked for       clinical/nursing/infection-control-policy
 #     closed with nobody having asked        clinical/code-of-conduct
 #     changes who signs things off           governance, the open sign-off change
+#     co-edited: two people may change it    clinical/nursing/infection-control-policy,
+#                                            the open hand hygiene change
 #
 #   file types
 #     the editor's own JSON                  most
@@ -462,6 +464,10 @@ binders:
             title: Tighten hand hygiene auditing and new-hire training
             summary: Monthly audits, fourteen-day training, and point-of-care rub placement.
             author: alice
+            # Grace wrote the audit paragraph with her: she may edit this change,
+            # and so may not approve it.
+            coEditors:
+              - grace
             publish: false
             document:
               title: Infection Control Policy
@@ -884,7 +890,6 @@ binders:
           complaints folder with the rest of them, and the response window is
           rewritten to say working days.
         author: carol
-        assignee: bob
         reviewers:
           - bob
           - dan
@@ -1301,7 +1306,6 @@ binders:
               were designed for twenty-four. Sent to everybody who was in the
               room for the review.
             author: alice
-            assignee: carol
             reviewers:
               - bob
               - carol
@@ -1367,7 +1371,6 @@ binders:
               Every question raised at the finance meeting has been answered and
               the wording agreed. It only needs a decision now.
             author: carol
-            assignee: alice
             reviewers:
               - alice
             publish: false
@@ -1477,7 +1480,6 @@ binders:
             title: Overseas travel, insurance and the countries we will not send anybody to
             summary: Three questions on this are still open.
             author: omar
-            assignee: bob
             reviewers:
               - bob
               - dan
@@ -1823,7 +1825,6 @@ binders:
           Pharmacy should be on anything in the clinical standards, and the
           contracts folder should not need the whole Policy Office for a typo.
         author: alice
-        assignee: priya
         reviewers:
           - priya
           - bob
@@ -1974,7 +1975,6 @@ binders:
             title: Car park policy — first issue
             summary: Permits, visitor bays and what happens to a car parked in one.
             author: omar
-            assignee: carol
             reviewers:
               - carol
             publish: false
@@ -2080,7 +2080,6 @@ binders:
             title: Add the bariatric equipment section
             summary: Approved and waiting for somebody to press publish.
             author: ines
-            assignee: grace
             publish: false
             document:
               title: Manual Handling
