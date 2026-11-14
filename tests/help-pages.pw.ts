@@ -110,6 +110,9 @@ test("help opens the guide about the page you are on", async ({ page }) => {
 });
 
 test("the browser tab names the page", async ({ page }) => {
+  // A sign-in and four pages, on a CI runner shared with every other suite:
+  // the suite default of ten seconds is for one page.
+  test.setTimeout(60_000);
   await signInAsAlice(page);
   await expect(page).toHaveTitle("Home · Bindersnap");
   await page.goto("/-/changes");
