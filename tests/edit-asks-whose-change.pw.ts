@@ -9,6 +9,10 @@ import { expect, test } from "@playwright/test";
 
 import { APP_BASE_URL, OWNER, signInAsAlice, signInAsBob } from "./helpers";
 
+// Several pages read in turn, on a CI runner shared with every other suite:
+// the suite default of ten seconds is for one page.
+test.describe.configure({ timeout: 120_000 });
+
 const DOCUMENT = `${APP_BASE_URL}/${OWNER}/clinical/-/blob/main/nursing/infection-control-policy`;
 const TITLE = "Tighten hand hygiene auditing and new-hire training";
 
