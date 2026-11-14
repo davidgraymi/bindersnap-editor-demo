@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   approvalCountsToward,
   approvalsHead,
+  describeWaiting,
   reasonLine,
   ruleChangeRows,
   rulesWarning,
@@ -158,5 +159,73 @@ describe("the approvals table", () => {
       "The whole binder · Policy Office",
       "Binder approvers · 2 of 2",
     ]);
+  });
+});
+
+describe("what publishing is still waiting for", () => {
+  const person = (login: string) => ({ login, fullName: login });
+  const rule = (overrides: Record<string, unknown>) =>
+    ({
+      required: 1,
+      eligible: [person("alice"), person("carol"), person("dan")],
+      approvedBy: [],
+      ...overrides,
+    }) as unknown as Parameters<typeof describeWaiting>[0][number];
+  const name = (login: string) => login[0]!.toUpperCase() + login.slice(1);
+
+  test("one approval from several people is any one of them, not all", () => {
+    expect(describeWaiting([rule({})], name)).toBe(
+      "Needs 1 more approval. Any one of these can give it: Alice, Carol and Dan.",
+    );
+  });
+
+  test("a long list names three and counts the rest", () => {
+    const many = ["a", "b", "c", "d", "e", "f"].map(person);
+    expect(describeWaiting([rule({ eligible: many })], name)).toBe(
+      "Needs 1 more approval. Any one of these can give it: A, B, C and 3 others.",
+    );
+  });
+
+  test("when everybody left has to approve, it is waiting on them", () => {
+    expect(
+      describeWaiting(
+        [rule({ required: 2, eligible: [person("alice"), person("carol")] })],
+        name,
+      ),
+    ).toBe("Needs 2 more approvals. Waiting on Alice and Carol.");
+  });
+
+  test("somebody who has approved is not asked again", () => {
+    expect(
+      describeWaiting(
+        [rule({ required: 2, approvedBy: [person("alice")] })],
+        name,
+      ),
+    ).toBe(
+      "Needs 1 more approval. Any one of these can give it: Carol and Dan.",
+    );
+  });
+
+  test("a rule nobody can meet says so", () => {
+    expect(describeWaiting([rule({ eligible: [] })], name)).toBe(
+      "Needs 1 more approval. Nobody who can give it has access yet.",
+    );
+    expect(
+      describeWaiting([rule({ required: 3, eligible: [person("dan")] })], name),
+    ).toBe(
+      "Needs 3 more approvals. Only Dan can approve, which is not enough.",
+    );
+  });
+
+  test("several unmet rules point at the list of them", () => {
+    expect(describeWaiting([rule({}), rule({})], name)).toBe(
+      "2 sign-off rules are not met yet. The list above says who can approve under each.",
+    );
+  });
+
+  test("nothing is said once every rule is met", () => {
+    expect(
+      describeWaiting([rule({ approvedBy: [person("alice")] })], name),
+    ).toBeNull();
   });
 });

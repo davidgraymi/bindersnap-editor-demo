@@ -364,6 +364,7 @@ test("done in the app, each step emails the next person, and each link opens the
     ready.links.find((href) => href.includes("/-/changes/"))!,
   );
   await ownerPage.getByRole("button", { name: "Publish", exact: true }).click();
+  await ownerPage.getByRole("button", { name: "Publish now" }).click();
   const published = await waitForEmail(reviewer.email, /^Published: /);
   expect(published.html).toContain("Olivia Owens published");
 });

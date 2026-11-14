@@ -131,7 +131,9 @@ export function buildHomeTasks(
       href: buildBinderUrl({
         org: draft.organization,
         binder: draft.workspace,
-        edit: "editing",
+        // The editor, where the work was being done — not the
+        // organizing view, where carrying on meant pressing Edit again.
+        edit: "writing",
         draft: draft.branch,
       }),
       movedAt: Number.isNaN(edited) ? 0 : edited,

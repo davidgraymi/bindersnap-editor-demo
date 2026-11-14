@@ -275,3 +275,50 @@ export function rulesWarning(
     ? `Once it is published, ${first}`
     : `Once it is published, ${rows.length} sign-off rules change.`;
 }
+
+/**
+ * What publishing is still waiting for, under the decision buttons.
+ *
+ * It read "Waiting on Alice Nguyen, Carol Mendes, Dan Whitfield and 4
+ * others" on a change that needed one approval from any one of them — which
+ * says seven people have to act. It names what is needed first, and only
+ * then who can give it: "Needs 1 more approval. Any one of these can give
+ * it: …". With several rules unmet the table above is the answer, so the
+ * line counts them and points there.
+ *
+ * Null when every rule is met.
+ */
+export function describeWaiting(
+  rules: readonly ApprovalRuleRow[],
+  nameOf: (login: string) => string,
+): string | null {
+  const unmet = rules.filter((rule) => rule.approvedBy.length < rule.required);
+  if (unmet.length === 0) return null;
+
+  if (unmet.length > 1) {
+    return `${unmet.length} sign-off rules are not met yet. The list above says who can approve under each.`;
+  }
+
+  const rule = unmet[0]!;
+  const missing = rule.required - rule.approvedBy.length;
+  const need = `Needs ${missing} more ${missing === 1 ? "approval" : "approvals"}.`;
+  const can = rule.eligible
+    .filter(
+      (user) => !rule.approvedBy.some((done) => done.login === user.login),
+    )
+    .map((user) => nameOf(user.login));
+  if (can.length === 0) {
+    return `${need} Nobody who can give it has access yet.`;
+  }
+  if (can.length < missing) {
+    return `${need} Only ${listSentence(can)} can approve, which is not enough.`;
+  }
+  const shown =
+    can.length <= 4
+      ? listSentence(can)
+      : `${can.slice(0, 3).join(", ")} and ${can.length - 3} others`;
+  if (can.length === missing) {
+    return `${need} Waiting on ${shown}.`;
+  }
+  return `${need} ${missing === 1 ? "Any one" : `Any ${missing}`} of these can give ${missing === 1 ? "it" : "them"}: ${shown}.`;
+}
