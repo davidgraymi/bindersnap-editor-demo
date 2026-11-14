@@ -1396,7 +1396,6 @@ export function BinderShell({
   const editThisDraft = useWriteAction(
     () => void startWriting(draft?.draft?.branch ?? draftBranch),
   );
-  const organizeBinder = useWriteAction(() => void startEditing());
   const editDocument = useWriteAction(
     (slugPath: string) => void writeDocument(slugPath),
   );
@@ -1508,24 +1507,10 @@ export function BinderShell({
                   them in the wrong place, and the wrong one is the one that
                   is not beside the thing it adds to. */}
               {editMode === "off" ? (
-                <>
-                  <button
-                    className="bs-btn bs-btn-secondary"
-                    type="button"
-                    onClick={addDocument}
-                  >
-                    Add a document
-                  </button>
-                  {/* Rename, refile and make folders: the tree, in your
-                      draft. Edit is for the words. */}
-                  <button
-                    className="bs-btn bs-btn-secondary"
-                    type="button"
-                    onClick={organizeBinder}
-                    disabled={startingEdit}
-                  >
-                    Organize
-                  </button>
+                // **One button: Edit** (D8). Adding documents, uploading and
+                // organizing are all in the editor's file panel now; Edit
+                // opens it on this page's place. Not offered to a reader.
+                overview?.workspace.access?.push === false ? null : (
                   <button
                     className="bs-btn bs-btn-primary"
                     type="button"
@@ -1534,7 +1519,7 @@ export function BinderShell({
                   >
                     {startingEdit ? "Opening your draft…" : "Edit"}
                   </button>
-                </>
+                )
               ) : editMode === "editing" ? (
                 <>
                   <button
@@ -1636,6 +1621,11 @@ export function BinderShell({
           }
           onOpenDocument={(slugPath) => void writeDocument(slugPath)}
           onNewDocument={newInEditor}
+          onUpload={(folder) => {
+            setAddingIn(folder);
+            setDropped(null);
+            setAdding(true);
+          }}
           onUploadFiles={(files, folder) => {
             // Where it was dropped in the file panel; on the page, beside
             // the policy that is open, where a sibling most likely goes.
@@ -1687,7 +1677,7 @@ export function BinderShell({
           draftName={editMode === "off" ? null : (draft?.draft?.name ?? null)}
           drafts={draftChoices}
           onEditDocument={editDocument}
-          onConvertDocument={convertDocument}
+          canWriteBinder={overview?.workspace.access?.push ?? true}
           editing={startingEdit}
           onOpenBinder={onOpenBinder}
           onOpenChange={openChangeNumber}
@@ -2065,7 +2055,8 @@ export function BinderShell({
           binder={binder}
           currentUser={currentUser}
           draft={draft?.draft?.branch}
-          {...(dropped ? { dropped, initialFolder: addingIn ?? "" } : {})}
+          {...(dropped ? { dropped } : {})}
+          {...(addingIn !== null ? { initialFolder: addingIn } : {})}
           onClose={() => {
             setDropped(null);
             setAdding(false);

@@ -27,7 +27,12 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { API_BASE_URL, APP_BASE_URL, openTreeFolder } from "./helpers";
+import {
+  API_BASE_URL,
+  APP_BASE_URL,
+  openTreeFolder,
+  organizeBinder,
+} from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
 import { LEGAL_VERSION } from "../packages/utils/legal";
 
@@ -475,7 +480,7 @@ test("Archive is an act of edit mode, and the draft is the undo", async ({
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Organize", exact: true }).click();
+  await organizeBinder(page);
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   // Folders start shut, so the policy is reached the way a person reaches it.
@@ -510,7 +515,7 @@ test("a folder cannot be archived, because that is a different act", async ({
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: "Organize", exact: true }).click();
+  await organizeBinder(page);
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   await expect(
@@ -592,7 +597,7 @@ test("the archive opens in the tree, and Restore goes into the draft", async ({
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
 
-  await page.getByRole("button", { name: "Organize", exact: true }).click();
+  await organizeBinder(page);
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   // Editing offers the archive in place; the link to the page of its own is

@@ -784,3 +784,43 @@ export async function agreeToTerms(page: Page): Promise<void> {
 export async function acceptTermsForOrganization(page: Page): Promise<void> {
   await page.getByRole("checkbox", { name: /I accept the Terms/ }).check();
 }
+
+/**
+ * Rearrange the binder in its tree, in your draft — the screen the binder's
+ * Organize button used to open. The header offers only Edit now (one button,
+ * D8), which opens the editor; the tree's edit mode is still where a draft is
+ * proposed and discarded, reached from Drafts and from the editor's Close.
+ * Opens (or resumes) the draft through the API and goes to `?edit=1`.
+ */
+export async function organizeBinder(page: Page): Promise<void> {
+  const [, org, binder] =
+    new URL(page.url()).pathname.match(/^\/([^/]+)\/([^/]+)/) ?? [];
+  if (!org || !binder) throw new Error(`Not on a binder: ${page.url()}`);
+  const response = await page.request.post(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/draft`,
+    { headers: { Origin: APP_BASE_URL }, data: {} },
+  );
+  expect(response.ok(), await response.text()).toBe(true);
+  const { draft } = (await response.json()) as { draft: { branch: string } };
+  await page.goto(
+    `${APP_BASE_URL}/${org}/${binder}?edit=1&draft=${encodeURIComponent(draft.branch)}`,
+  );
+  await expect(page.getByRole("button", { name: "Done" })).toBeVisible({
+    timeout: 30_000,
+  });
+}
+
+/**
+ * Open Add a document on the binder's page — the dialog the header's button
+ * used to open. The getting-started guide's `?add=1` opens the same dialog.
+ */
+export async function openAddDocument(page: Page): Promise<void> {
+  const url = new URL(page.url());
+  url.search = "?add=1";
+  await page.goto(url.toString());
+  await expect(
+    page.getByRole("heading", { name: "Add a document" }),
+  ).toBeVisible({
+    timeout: 30_000,
+  });
+}

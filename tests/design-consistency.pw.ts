@@ -40,7 +40,12 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { API_BASE_URL, APP_BASE_URL } from "./helpers";
+import {
+  API_BASE_URL,
+  APP_BASE_URL,
+  organizeBinder,
+  openAddDocument,
+} from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
 import { LEGAL_VERSION } from "../packages/utils/legal";
 
@@ -324,7 +329,7 @@ test("the fields in a form are one size, picker included", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
 
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-  await page.getByRole("button", { name: "Add a document" }).click();
+  await openAddDocument(page);
   // **Wait for the picker that loads, not for the first one drawn.** "Put it
   // in" only exists once the binder has an open change and is filled from a
   // read; the folder picker is drawn immediately. Waiting for the wrong one
@@ -569,7 +574,7 @@ test("the marketing eyebrow never labels a field in the app", async ({
   // And the modal that carries the product's primary act, which is where the
   // loudest of them was.
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-  await page.getByRole("button", { name: "Add a document" }).click();
+  await openAddDocument(page);
   await expect(page.locator(".create-document-modal")).toBeVisible({
     timeout: 30_000,
   });
@@ -742,7 +747,7 @@ test("a popover is not clipped by the panel it opens from", async ({
   // tree's own bar — another `.bs-panel`, another squircle.
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
   await settleOnRealShell(page);
-  await page.getByRole("button", { name: "Organize", exact: true }).click();
+  await organizeBinder(page);
   const pick = page.locator(".bs-draftpick");
   await pick.waitFor({ timeout: 30_000 });
   await pick.click();
