@@ -1741,6 +1741,109 @@ input {
   height: auto;
 }
 
+/* ── Who signs off here ────────────────────────────────────────────────────
+   The rail panel on the binder, folder and document pages, and the editor's
+   right-hand panel. Set here, then From above; each a list of rows. */
+.signoff-lead {
+  margin: 0;
+  padding: var(--brand-space-2) var(--brand-space-2) var(--brand-space-1);
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-md);
+  line-height: var(--brand-leading-normal);
+}
+
+.signoff-section {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--brand-space-2);
+  margin: 0;
+  padding: var(--brand-space-2) var(--brand-space-2) var(--brand-space-1);
+  border-top: 1px solid var(--bs-rule-warm);
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-sm);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.signoff-section-note {
+  color: var(--bs-text-faint);
+  font-weight: var(--brand-weight-regular);
+}
+
+/* The name and the faces share the first line; the detail runs under both,
+   so the faces never squeeze it into a column. */
+.signoff-row-top {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+}
+
+.signoff-row-top > .bs-row-name {
+  flex: 1;
+  min-width: 0;
+}
+
+/* As wide as a face, so a person and a group start their names together. */
+.signoff-row > .signoff-row-lead {
+  width: var(--brand-space-6);
+}
+
+.signoff-row .bs-row-name--wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  font-size: var(--brand-text-ui-md);
+}
+
+.signoff-origin {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  color: var(--bs-coral-text);
+  text-decoration: none;
+}
+
+.signoff-origin:hover {
+  text-decoration: underline;
+}
+
+.signoff-faces {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--brand-space-0-5);
+}
+
+.signoff-more {
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.signoff-add {
+  padding: var(--brand-space-1) var(--brand-space-2) var(--brand-space-2);
+}
+
+.signoff-foot {
+  margin: 0;
+  padding: var(--brand-space-2);
+  border-top: 1px solid var(--bs-rule-warm);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+  line-height: var(--brand-leading-normal);
+}
+
+.group-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.group-link:hover,
+.group-link:focus-visible {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+}
+
 /* Summary rail — what somebody still has to decide, then what is already on
    the record. Each is a panel of the shared grammar. */
 .doc-rail {
@@ -2268,6 +2371,57 @@ input {
    tints, keyed off the login, so the same person is the same colour on every
    screen — a reviewer list you recognise beats one you have to read.
    ------------------------------------------------------------------ */
+
+/* A face that opens a card: full name, @username, why they are here. */
+.person-card-anchor {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  border-radius: var(--brand-radius-full);
+  cursor: default;
+}
+
+.person-card-anchor:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 2px;
+}
+
+.person-card {
+  position: absolute;
+  top: calc(100% + var(--brand-space-1-5));
+  left: 50%;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2-5);
+  width: max-content;
+  max-width: 280px;
+  padding: var(--brand-space-2-5) var(--brand-space-3);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  box-shadow: var(--bs-elevation-menu);
+  transform: translateX(-50%);
+  text-align: left;
+}
+
+.person-card-text {
+  display: grid;
+  gap: var(--brand-space-0-5);
+  min-width: 0;
+}
+
+.person-card-name {
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.person-card-login,
+.person-card-context {
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
 
 .rev-avatar {
   display: inline-flex;
@@ -7797,6 +7951,44 @@ a.cmp-file-act {
 
 /* The triangle, and the same width of nothing on a document — a ragged left
    edge is what makes a tree read as a list of unrelated things. */
+/* A folder row on a page that opens folders: the arrow, then the name as a
+   link to the folder's page. */
+.binder-tree-main--split {
+  cursor: default;
+}
+
+.binder-tree-twistybtn {
+  padding: 0;
+  border: none;
+  border-radius: var(--brand-radius-sm);
+  background: transparent;
+  cursor: pointer;
+}
+
+.binder-tree-twistybtn:hover {
+  background: var(--bs-surface-3);
+}
+
+.binder-tree-folderlink {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  flex: 1;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.binder-tree-folderlink:hover .binder-tree-label {
+  text-decoration: underline;
+}
+
+.binder-tree-twistybtn:focus-visible,
+.binder-tree-folderlink:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 1px;
+}
+
 .binder-tree-twisty {
   width: 18px;
   height: 18px;
@@ -7829,6 +8021,13 @@ a.cmp-file-act {
 
 .binder-tree-row--folder .binder-tree-label {
   font-weight: var(--brand-weight-semibold);
+}
+
+/* **A document's name is never cut before its last change is.** The name
+   takes its own width; the change subject beside it is what shortens. */
+.binder-tree-row:not(.binder-tree-row--folder)
+  > .binder-tree-main:has(+ .binder-tree-subject) {
+  flex: 0 1 auto;
 }
 
 /* An uploaded file's format, after its name: "PDF", "DOCX". */

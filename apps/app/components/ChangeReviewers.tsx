@@ -324,7 +324,15 @@ export function ChangeReviewers({
 
             return (
               <li className="bs-row rev-reviewer" key={reviewer.login}>
-                <PersonAvatar person={reviewer} size="sm" />
+                <PersonAvatar
+                  person={reviewer}
+                  size="sm"
+                  card={
+                    approverSet.has(reviewer.login.toLowerCase())
+                      ? "Reviewer · an approver for this binder"
+                      : "Reviewer on this change"
+                  }
+                />
                 <span className="bs-row-body">
                   <span className="bs-row-name">{name}</span>
                   {approverSet.has(reviewer.login.toLowerCase()) ? (

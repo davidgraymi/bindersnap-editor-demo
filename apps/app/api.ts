@@ -41,6 +41,8 @@ import type {
   ProposedDraftPayload,
   PublishedWorkspaceChangePayload,
   SignOffRuleView,
+  BinderSignOffPayload,
+  OrganizationGroupPagePayload,
   WorkspaceChangeDetailPayload,
   WorkspaceChangeListPayload,
   WorkspaceDocumentDetailPayload,
@@ -1350,6 +1352,66 @@ export async function fetchBinderSettings(
   request?: ReadRequest,
 ): Promise<WorkspaceSettingsPayload> {
   const response = await BindersClient.getBinderSettings(org, binder, request);
+  return response.data;
+}
+
+/**
+ * Who signs off in a binder: on `main`, or as your own draft (or a change)
+ * has it. The sign-off panel works out what applies to the place it is on.
+ */
+export async function fetchBinderSignOff(
+  org: string,
+  binder: string,
+  at: { draft?: string | null; change?: number | null } = {},
+  request?: ReadRequest,
+): Promise<BinderSignOffPayload> {
+  const response = await BindersClient.getBinderSignOff(
+    org,
+    binder,
+    {
+      ...(at.draft ? { draft: at.draft } : {}),
+      ...(at.change ? { change: String(at.change) } : {}),
+    },
+    request,
+  );
+  return response.data;
+}
+
+/**
+ * Set who signs off on one thing, in a draft: one act, like a rename. Empty
+ * owners take the rule away.
+ */
+export async function setBinderSignOffRule(
+  org: string,
+  binder: string,
+  rule: SignOffRuleView,
+  target: ActTarget,
+): Promise<BinderShapeChangePayload> {
+  try {
+    const response = await BindersClient.setBinderSignOffRule(org, binder, {
+      rule,
+      ...jsonTarget(target),
+    });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/rules/sign-off`,
+      error,
+    );
+  }
+}
+
+/** One group's page: its people, its binders, and where it signs off. */
+export async function fetchOrganizationGroup(
+  org: string,
+  group: string,
+  request?: ReadRequest,
+): Promise<OrganizationGroupPagePayload> {
+  const response = await OrganizationsClient.getOrganizationGroup(
+    org,
+    group,
+    request,
+  );
   return response.data;
 }
 

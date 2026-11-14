@@ -105,15 +105,25 @@ export function summarizeRules(rules: readonly ApprovalRule[]): string {
   return `Requires ${listSentence(parts)}.`;
 }
 
-function Faces({ users }: { users: readonly RuleUser[] }) {
+function Faces({
+  users,
+  context,
+}: {
+  users: readonly RuleUser[];
+  /** Why these people are here, for each face's card. */
+  context?: string;
+}) {
   if (users.length === 0) return null;
   const shown = users.slice(0, FACES);
   return (
     <span className="rev-rules-faces">
       {shown.map((user) => (
-        <span key={user.login} title={nameOf(user)}>
-          <PersonAvatar person={user} size="sm" />
-        </span>
+        <PersonAvatar
+          key={user.login}
+          person={user}
+          size="sm"
+          card={context ?? true}
+        />
       ))}
       {users.length > FACES ? (
         <span className="rev-rules-more">{users.length - FACES} more</span>
@@ -166,7 +176,7 @@ export function ApprovalRules({ rules }: { rules: readonly ApprovalRule[] }) {
             </>
           ) : null}
         </span>
-        <Faces users={approvedBy} />
+        <Faces users={approvedBy} context="Approved this change" />
         {rules.length > 0 ? (
           <AppIcon icon={open ? ICON.chevronUp : ICON.chevronDown} size="sm" />
         ) : null}
@@ -198,7 +208,10 @@ export function ApprovalRules({ rules }: { rules: readonly ApprovalRule[] }) {
                 </th>
                 <td>
                   {rule.eligible.length > 0 ? (
-                    <Faces users={rule.eligible} />
+                    <Faces
+                      users={rule.eligible}
+                      context="Can approve under this rule"
+                    />
                   ) : (
                     <span className="rev-rules-empty">
                       Nobody can approve this yet
@@ -210,7 +223,10 @@ export function ApprovalRules({ rules }: { rules: readonly ApprovalRule[] }) {
                   {rule.required}
                 </td>
                 <td>
-                  <Faces users={rule.approvedBy} />
+                  <Faces
+                    users={rule.approvedBy}
+                    context="Approved under this rule"
+                  />
                 </td>
               </tr>
             ))}

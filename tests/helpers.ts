@@ -611,9 +611,13 @@ export async function openBinderSection(
  * screen open themselves.
  */
 export async function openTreeFolder(page: Page, name: string): Promise<void> {
+  // The arrow is its own button where the name opens the folder's page —
+  // "Open Nursing here" — and the whole row is the button where it does not.
   const folder = page
     .locator(".binder-tree")
-    .getByRole("button", { name: new RegExp(`^${name}`) })
+    .getByRole("button", {
+      name: new RegExp(`^((Open|Shut) )?${name}( here)?`),
+    })
     .first();
   await expect(folder).toBeVisible({ timeout: 30_000 });
   if ((await folder.getAttribute("aria-expanded")) === "false") {

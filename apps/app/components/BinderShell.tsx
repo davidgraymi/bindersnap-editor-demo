@@ -87,6 +87,8 @@ import type { SidebarBinder } from "./AppSidebar";
 import type { DocumentRefView } from "../documentRefs";
 import { SkeletonLine } from "./Skeleton";
 import { PagePath } from "./LocationTrail";
+import { SignOffRail } from "./SignOffRail";
+import { describeFolder } from "../signOffPanel";
 import { useWriteAction } from "../paywallContext";
 
 /**
@@ -120,6 +122,32 @@ import { useWriteAction } from "../paywallContext";
  * `/-/blob/main/…`, and treating that as "a branch" would draw the chrome of
  * reading somewhere else around the thing everybody reads.
  */
+/** The folder's own name: "ICU", for `clinical-standards/icu`. */
+function describeFolderName(folder: string): string {
+  return formatDocumentName(folder.slice(folder.lastIndexOf("/") + 1));
+}
+
+/** "A folder in Governance · 2 documents", or "in Clinical Standards". */
+function describeFolderMeta(params: {
+  binderName: string;
+  folder: string;
+  documents: readonly { path: string }[] | null;
+}): string {
+  const { binderName, folder, documents } = params;
+  const parent = folder.includes("/")
+    ? describeFolder(folder.slice(0, folder.lastIndexOf("/")))
+    : binderName;
+  const count =
+    documents?.filter((document) => document.path.startsWith(`${folder}/`))
+      .length ?? null;
+  return [
+    `A folder in ${parent}`,
+    count === null ? null : count === 1 ? "1 document" : `${count} documents`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 function readRef(): string | null {
   const { ref } = currentBinderAddress();
   return ref === DEFAULT_REF ? null : ref;
@@ -232,6 +260,11 @@ export function BinderShell({
     editModeFromSearch(window.location.search),
   );
   const [archive, setArchive] = useState(() => currentBinderAddress().archive);
+  /** A folder's page, `/-/tree/{ref}/{folder}`; null is the binder's top. */
+  const [folder, setFolder] = useState<string | null>(
+    () => currentBinderAddress().folder,
+  );
+  const [folderMissing, setFolderMissing] = useState(false);
   /**
    * Which of your drafts is being edited, from the address.
    *
@@ -272,6 +305,7 @@ export function BinderShell({
       setDraftBranch(draftFromSearch(window.location.search));
       setDocumentRef(readRef());
       setArchive(address.archive);
+      setFolder(address.folder);
     };
     window.addEventListener("popstate", handler);
     return () => window.removeEventListener("popstate", handler);
@@ -1136,12 +1170,19 @@ export function BinderShell({
    * the page, not the page: a binder whose contents cannot be read still shows
    * the policy somebody opened.
    */
+  const onFolderPage =
+    folder !== null &&
+    !documentPath &&
+    activeTab === "documents" &&
+    openChange === null &&
+    !archive &&
+    editMode === "off";
   const contentsRead = useQuery({
     ...binderDocumentsQuery(org, binder, {
       draft: draftForContents,
       change: openChange,
     }),
-    enabled: Boolean(documentPath),
+    enabled: Boolean(documentPath) || onFolderPage,
   });
   // **Memoized, not rebuilt each render.** It is handed up to the sidebar by
   // an effect, and a new object every render re-ran that effect, re-rendered
@@ -1150,15 +1191,16 @@ export function BinderShell({
   const listing = contentsRead.data;
   const contents: SidebarBinder["contents"] | null = useMemo(
     () =>
-      documentPath && listing
+      (documentPath || onFolderPage) && listing
         ? {
             documents: listing.documents,
             folders: listing.folders,
             active: null,
+            activeFolder: onFolderPage ? folder : null,
             change: openChange,
           }
         : null,
-    [documentPath, listing, openChange],
+    [documentPath, onFolderPage, folder, listing, openChange],
   );
   /** How many policies the binder has archived, read with the contents. */
   const archivedCount = contentsRead.data?.archivedCount ?? 0;
@@ -1299,17 +1341,26 @@ export function BinderShell({
                         ) ?? BINDER_SETTINGS_PAGES[0]!;
                       return { title: page.label, subtitle: page.description };
                     })()
-                  : {
-                      title: binderName,
-                      ...(editMode === "editing"
-                        ? {
-                            subtitle:
-                              "Rename in place, drag to refile, make a folder. Everything you do is saved to your draft, and nobody is asked to look until you propose it.",
-                          }
-                        : overview?.workspace.description
-                          ? { subtitle: overview.workspace.description }
-                          : {}),
-                    };
+                  : onFolderPage
+                    ? {
+                        title: describeFolderName(folder!),
+                        subtitle: describeFolderMeta({
+                          binderName,
+                          folder: folder!,
+                          documents: listing?.documents ?? null,
+                        }),
+                      }
+                    : {
+                        title: binderName,
+                        ...(editMode === "editing"
+                          ? {
+                              subtitle:
+                                "Rename in place, drag to refile, make a folder. Everything you do is saved to your draft, and nobody is asked to look until you propose it.",
+                            }
+                          : overview?.workspace.description
+                            ? { subtitle: overview.workspace.description }
+                            : {}),
+                      };
 
   // **A page, not a broken binder.** An address with no binder behind it drew
   // the whole binder — its name made up from the address, Add a document and
@@ -1523,7 +1574,12 @@ export function BinderShell({
           route={
             documentPath
               ? { kind: "binderDocument", org, binder, documentPath }
-              : { kind: "binder", org, binder }
+              : {
+                  kind: "binder",
+                  org,
+                  binder,
+                  ...(onFolderPage ? { folder: folder! } : {}),
+                }
           }
         />
       )}
@@ -1797,88 +1853,151 @@ export function BinderShell({
           }}
         />
       ) : (
-        <div className="binder-home">
-          {/* What happened last, above what is in it — GitLab's newest commit
+        <div
+          className={
+            editMode === "off" && !onBranch
+              ? "doc-workspace binder-workspace"
+              : undefined
+          }
+        >
+          <div className="binder-home">
+            {onFolderPage && folderMissing ? (
+              <div className="bs-empty">
+                <p className="bs-empty-lead">No such folder.</p>
+                <p>
+                  <a
+                    href={buildBinderUrl({ org, binder })}
+                    onClick={(event) =>
+                      followInApp(event, () =>
+                        moveTo(buildBinderUrl({ org, binder })),
+                      )
+                    }
+                  >
+                    Back to {binderName}
+                  </a>
+                </p>
+              </div>
+            ) : null}
+            {/* What happened last, above what is in it — GitLab's newest commit
               over the files. Not while editing: the draft bar is the news
-              then, and the record has not moved. */}
-          {onBranch ? (
-            <BinderBranchSummary
+              then, and the record has not moved. A folder's page is about the
+              folder, so it goes there. */}
+            {onFolderPage ? null : onBranch ? (
+              <BinderBranchSummary
+                org={org}
+                binder={binder}
+                branch={documentRefFromSearch!}
+                changeHref={(change, compare) =>
+                  buildBinderUrl({
+                    org,
+                    binder,
+                    tab: "changes",
+                    change,
+                    view: compare ? "compare" : "discussion",
+                  })
+                }
+                onOpenChange={(change, compare) =>
+                  openChangeNumber(change, compare ? "compare" : "discussion")
+                }
+              />
+            ) : editMode === "off" ? (
+              <BinderLatestChange
+                key={reloadKey}
+                org={org}
+                binder={binder}
+                changeHref={(change) =>
+                  buildBinderUrl({ org, binder, tab: "changes", change })
+                }
+                historyHref={buildBinderUrl({ org, binder, tab: "history" })}
+                onOpenChange={openChangeNumber}
+                onOpenHistory={() => goTo("history")}
+              />
+            ) : null}
+            <BinderDocuments
               org={org}
               binder={binder}
-              branch={documentRefFromSearch!}
-              changeHref={(change, compare) =>
+              onOpenDocument={(slugPath) =>
+                onBranch
+                  ? moveTo(branchDocumentHref(slugPath))
+                  : openDocument(slugPath)
+              }
+              documentHref={onBranch ? branchDocumentHref : documentHref}
+              atRef={onBranch ? documentRefFromSearch : null}
+              refPicker={
+                editMode === "off" ? (
+                  <BinderRefPicker
+                    org={org}
+                    binder={binder}
+                    current={onBranch ? documentRefFromSearch : null}
+                    onPick={(ref) =>
+                      moveTo(buildBinderUrl({ org, binder, ref }))
+                    }
+                    onPickDraft={(branch) => goToEdit("editing", branch)}
+                  />
+                ) : null
+              }
+              activeDocument={documentPath ?? null}
+              draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
+              draftPicker={
+                draft?.draft && editMode === "editing" ? (
+                  <BinderDraftPicker
+                    org={org}
+                    drafts={draft.drafts}
+                    others={draft.others}
+                    current={draft.draft.branch}
+                    busy={startingEdit}
+                    onSwitch={switchDraft}
+                    onStart={startAnother}
+                    onRename={renameDraft}
+                    onRecord={leaveEditMode}
+                  />
+                ) : null
+              }
+              draftActs={draft?.draft?.acts ?? []}
+              reloadKey={reloadKey}
+              onEdited={refreshDraft}
+              onDraftLost={leaveEditMode}
+              onOpenArchive={() => goToArchive(true)}
+              onOpenChange={openChangeNumber}
+              onAddPolicy={() => setAdding(true)}
+              onNewFolder={() => setAddingFolder(true)}
+              folder={onFolderPage ? folder : null}
+              onFolderMissing={setFolderMissing}
+              onOpenFolder={(path) =>
+                moveTo(
+                  buildBinderUrl({
+                    org,
+                    binder,
+                    folder: path,
+                    ref: onBranch ? documentRefFromSearch : null,
+                  }),
+                )
+              }
+              folderHref={(path) =>
                 buildBinderUrl({
                   org,
                   binder,
-                  tab: "changes",
-                  change,
-                  view: compare ? "compare" : "discussion",
+                  folder: path,
+                  ref: onBranch ? documentRefFromSearch : null,
                 })
               }
-              onOpenChange={(change, compare) =>
-                openChangeNumber(change, compare ? "compare" : "discussion")
-              }
             />
-          ) : editMode === "off" ? (
-            <BinderLatestChange
-              key={reloadKey}
-              org={org}
-              binder={binder}
-              changeHref={(change) =>
-                buildBinderUrl({ org, binder, tab: "changes", change })
-              }
-              historyHref={buildBinderUrl({ org, binder, tab: "history" })}
-              onOpenChange={openChangeNumber}
-              onOpenHistory={() => goTo("history")}
-            />
+          </div>
+          {editMode === "off" && !onBranch ? (
+            <aside className="doc-rail" aria-label="Who signs off">
+              <SignOffRail
+                org={org}
+                binder={binder}
+                binderName={binderName}
+                place={
+                  onFolderPage
+                    ? { kind: "folder", path: folder! }
+                    : { kind: "binder" }
+                }
+                onNavigate={(route) => moveTo(routeToPath(route))}
+              />
+            </aside>
           ) : null}
-          <BinderDocuments
-            org={org}
-            binder={binder}
-            onOpenDocument={(slugPath) =>
-              onBranch
-                ? moveTo(branchDocumentHref(slugPath))
-                : openDocument(slugPath)
-            }
-            documentHref={onBranch ? branchDocumentHref : documentHref}
-            atRef={onBranch ? documentRefFromSearch : null}
-            refPicker={
-              editMode === "off" ? (
-                <BinderRefPicker
-                  org={org}
-                  binder={binder}
-                  current={onBranch ? documentRefFromSearch : null}
-                  onPick={(ref) => moveTo(buildBinderUrl({ org, binder, ref }))}
-                  onPickDraft={(branch) => goToEdit("editing", branch)}
-                />
-              ) : null
-            }
-            activeDocument={documentPath ?? null}
-            draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
-            draftPicker={
-              draft?.draft && editMode === "editing" ? (
-                <BinderDraftPicker
-                  org={org}
-                  drafts={draft.drafts}
-                  others={draft.others}
-                  current={draft.draft.branch}
-                  busy={startingEdit}
-                  onSwitch={switchDraft}
-                  onStart={startAnother}
-                  onRename={renameDraft}
-                  onRecord={leaveEditMode}
-                />
-              ) : null
-            }
-            draftActs={draft?.draft?.acts ?? []}
-            reloadKey={reloadKey}
-            onEdited={refreshDraft}
-            onDraftLost={leaveEditMode}
-            onOpenArchive={() => goToArchive(true)}
-            onOpenChange={openChangeNumber}
-            onAddPolicy={() => setAdding(true)}
-            onNewFolder={() => setAddingFolder(true)}
-          />
         </div>
       )}
 

@@ -50,7 +50,16 @@ export type AppRoute =
    * An organization: what it owns, and who is in it. `/{org}`, and
    * `/{org}/-/people` for who.
    */
-  | { kind: "organization"; org: string; tab?: OrganizationTab }
+  | {
+      kind: "organization";
+      org: string;
+      tab?: OrganizationTab;
+      /**
+       * One group's page, `/{org}/-/groups/{group}`: who is in it, which
+       * binders it can use, and where it signs off. Under People.
+       */
+      group?: string;
+    }
   /** A binder's documents: `/{org}/{binder}`. */
   | {
       kind: "binder";
@@ -241,6 +250,16 @@ export function getRoute(pathname: string): AppRoute {
     const org = orgScreenMatch[1]!;
     const screen = orgScreenMatch[2]!;
     if (screen === "billing") return { kind: "billing", org };
+    const group = screen.match(/^groups\/([^/]+)$/);
+    if (group) {
+      let name = group[1]!;
+      try {
+        name = decodeURIComponent(name);
+      } catch {
+        // A malformed escape is read as it was typed.
+      }
+      return { kind: "organization", org, tab: "people", group: name };
+    }
     return {
       kind: "organization",
       org,
@@ -335,6 +354,9 @@ export function routeToPath(route: AppRoute): string {
     case "createOrganization":
       return "/-/organizations/new";
     case "organization":
+      if (route.group) {
+        return `/${route.org}/-/groups/${encodeURIComponent(route.group)}`;
+      }
       return route.tab && route.tab !== "binders"
         ? `/${route.org}/-/${route.tab}`
         : `/${route.org}`;
