@@ -6,8 +6,7 @@
  * so the top bar says the same thing on every screen of a binder and never
  * grows with the page.
  *
- * **The path, in the page:** `Change requests / Change 4 / Compare`, or
- * `Nursing / Wards / Handover Standard`, just above the page's title. It is
+ * **The path, in the page:** `Nursing / Wards / Handover Standard`, just above the page's title. It is
  * about the content, so it sits inside the content's own boundary, beside the
  * thing it names.
  *
@@ -96,11 +95,7 @@ function binderPath(
   search: string,
 ): TrailStep[] {
   const params = new URLSearchParams(search);
-  const { change, tab, view } = address;
-  const changesStep: TrailStep = {
-    label: "Change requests",
-    href: buildBinderUrl({ org, binder, tab: "changes" }),
-  };
+  const { change, tab } = address;
 
   // **The binder at a branch is the binder**, at its root, and the trail says
   // so. It said "Change requests / Change 22 / Proposed files" — the change's
@@ -111,23 +106,13 @@ function binderPath(
     return [];
   }
 
+  // **A change's screens have no path.** The sidebar's Change requests is the
+  // way back to the list and the change's own tabs — Overview, Changes — are
+  // the way between its pages, so a trail would name a third way to get to the
+  // same places. Nor does it name the change by number: that is a code host's
+  // way of finding it, and the title says what it is about.
   if (change !== null) {
-    const changeLabel = `Change ${change}`;
-    // Named for the tab that opens it — Overview · Changes, the way a code
-    // host names a merge request's — so the trail and the tab agree.
-    const subpage =
-      view === "compare" ? "Changes" : view === "preview" ? "Preview" : null;
-
-    return [
-      changesStep,
-      subpage === null
-        ? here(changeLabel)
-        : {
-            label: changeLabel,
-            href: buildBinderUrl({ org, binder, tab: "changes", change }),
-          },
-      ...(subpage === null ? [] : [here(subpage)]),
-    ];
+    return [];
   }
 
   if (address.archive) {
@@ -228,10 +213,11 @@ export function buildLocationTrail(
           );
     const label = formatDocumentName(route.binder);
     // At its root on a branch is not at its root on the record: the binder's
-    // name is the way back to the record.
+    // name is the way back to the record. Nor is a change, which has no path
+    // but is not the binder's contents either.
     return {
       binder:
-        path.length === 0 && !onBranch(address)
+        path.length === 0 && !onBranch(address) && address.change === null
           ? here(label)
           : {
               label,

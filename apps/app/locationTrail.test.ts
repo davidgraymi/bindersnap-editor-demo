@@ -42,11 +42,7 @@ test("a policy's path is its folders, then itself", () => {
 });
 
 test("the current addresses read the same as the ones they replaced", () => {
-  expect(path("/riverside-health/clinical/-/changes/4/diffs")).toEqual([
-    "Change requests",
-    "Change 4",
-    "Changes",
-  ]);
+  expect(path("/riverside-health/clinical/-/changes/4/diffs")).toEqual([]);
   expect(
     path("/riverside-health/clinical/-/blob/main/nursing/wards/handover"),
   ).toEqual(["Nursing", "Wards", "Handover"]);
@@ -66,31 +62,17 @@ test("a policy's name loses its extension and its identity segment", () => {
   ).toEqual(["Code of Conduct"]);
 });
 
-test("a change request is under its binder's change requests, and links back up", () => {
-  const trail = trailFor("/riverside-health/clinical?tab=changes&change=4");
+test("a change's screens have no path: the sidebar and its tabs are the way around", () => {
+  for (const search of [
+    "?tab=changes&change=4",
+    "?tab=changes&change=4&view=compare",
+    "?tab=changes&change=4&view=preview",
+  ]) {
+    const trail = trailFor(`/riverside-health/clinical${search}`);
 
-  expect(trail.binder?.href).toBe("/riverside-health/clinical");
-  expect(trail.path).toEqual([
-    {
-      label: "Change requests",
-      href: "/riverside-health/clinical/-/changes",
-    },
-    { label: "Change 4", href: null },
-  ]);
-});
-
-test("a change's comparison is one step under the change, which becomes a link", () => {
-  const trail = trailFor(
-    "/riverside-health/clinical?tab=changes&change=4&view=compare",
-  );
-
-  expect(trail.path.map((step) => step.label)).toEqual([
-    "Change requests",
-    "Change 4",
-    "Changes",
-  ]);
-  expect(trail.path[1]!.href).toBe("/riverside-health/clinical/-/changes/4");
-  expect(trail.path[2]!.href).toBeNull();
+    expect(trail.binder?.href).toBe("/riverside-health/clinical");
+    expect(trail.path).toEqual([]);
+  }
 });
 
 test("a policy read on a change's branch is filed in its folders, not under the change", () => {
