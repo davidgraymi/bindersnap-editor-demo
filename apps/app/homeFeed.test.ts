@@ -2,7 +2,9 @@ import { expect, test } from "bun:test";
 
 import {
   describeFeedEvent,
+  describeOthers,
   feedDayLabel,
+  foldFeedDay,
   groupFeedByDay,
   type FeedEvent,
 } from "./homeFeed";
@@ -79,4 +81,39 @@ test("the feed is a day at a time, in the order it came", () => {
     ["Today", [1, 2]],
     ["Yesterday", [3]],
   ]);
+});
+
+test("a day says each change once, leading with the decision", () => {
+  const groups = foldFeedDay([
+    event({ id: 5, kind: "replied", changeNumber: 20 }),
+    event({ id: 4, kind: "published", changeNumber: 20 }),
+    event({ id: 3, kind: "opened", changeNumber: 7, binder: "clinical" }),
+    event({ id: 2, kind: "approved", changeNumber: 20 }),
+    event({ id: 1, kind: "binder_created", changeNumber: null }),
+  ]);
+  expect(groups.map((group) => [group.lead.id, group.others])).toEqual([
+    // Published outranks the reply after it and the approval before it.
+    [4, 2],
+    [3, 0],
+    [1, 0],
+  ]);
+});
+
+test("the same number in two binders is two changes", () => {
+  const groups = foldFeedDay([
+    event({ id: 2, changeNumber: 3, binder: "corporate" }),
+    event({ id: 1, changeNumber: 3, binder: "clinical" }),
+  ]);
+  expect(groups).toHaveLength(2);
+});
+
+test("of two events that matter as much, the later one leads", () => {
+  const [group] = foldFeedDay([
+    event({ id: 2, kind: "changes_requested" }),
+    event({ id: 1, kind: "approved" }),
+  ]);
+  expect(group!.lead.id).toBe(2);
+  expect(describeOthers(group!.others)).toBe("and 1 other update");
+  expect(describeOthers(0)).toBe("");
+  expect(describeOthers(4)).toBe("and 4 other updates");
 });
