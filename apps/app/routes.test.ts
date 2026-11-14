@@ -401,3 +401,66 @@ test("the files the app's host serves are never a route in it", () => {
   expect(getRoute("/favicon.ico").kind).not.toBe("organization");
   expect(getRoute("/fonts/fonts.css").kind).not.toBe("binder");
 });
+
+test("a folder has an address, and it round-trips", () => {
+  const folder = {
+    kind: "binder" as const,
+    org: "riverside-health",
+    binder: "governance",
+    folder: "clinical-standards",
+  };
+  const path = routeToPath(folder);
+  expect(path).toBe(
+    "/riverside-health/governance/-/tree/main/clinical-standards",
+  );
+  expect(getRoute(path)).toEqual({ ...folder, ref: "main" });
+});
+
+test("a nested folder keeps its slashes", () => {
+  const path = routeToPath({
+    kind: "binder",
+    org: "riverside-health",
+    binder: "governance",
+    folder: "clinical-standards/icu",
+  });
+  expect(path).toBe(
+    "/riverside-health/governance/-/tree/main/clinical-standards/icu",
+  );
+  expect(getRoute(path)).toMatchObject({ folder: "clinical-standards/icu" });
+});
+
+test("a folder name with spaces and a # is encoded, and read back", () => {
+  const path = routeToPath({
+    kind: "binder",
+    org: "riverside-health",
+    binder: "governance",
+    folder: "Ward #3 (east)",
+  });
+  expect(path).toBe(
+    "/riverside-health/governance/-/tree/main/Ward%20%233%20(east)",
+  );
+  expect(getRoute(path)).toMatchObject({ folder: "Ward #3 (east)" });
+});
+
+test("a folder at a ref other than main", () => {
+  const path = routeToPath({
+    kind: "binder",
+    org: "riverside-health",
+    binder: "governance",
+    ref: "draft/alice/20260923",
+    folder: "contracts",
+  });
+  expect(path).toBe(
+    "/riverside-health/governance/-/tree/draft%2Falice%2F20260923/contracts",
+  );
+  expect(getRoute(path)).toMatchObject({
+    ref: "draft/alice/20260923",
+    folder: "contracts",
+  });
+});
+
+test("the binder at a ref, with no folder, is still the binder's top", () => {
+  expect(
+    getRoute("/riverside-health/governance/-/tree/main"),
+  ).not.toHaveProperty("folder");
+});
