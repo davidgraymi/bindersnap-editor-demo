@@ -386,7 +386,9 @@ export function BinderDocumentPage({
             {/* **In a draft, the page says so.** It said "Version 1 on
                 record" over the words the editor had just saved into a draft,
                 so a saved edit read as a lost one. */}
-            {draft !== null && change === null && documentRef === null ? (
+            {change === null &&
+            ((draft !== null && documentRef === null) ||
+              (documentRef !== null && draftName !== null)) ? (
               <span
                 className="doc-version-pill doc-version-pill--draft"
                 title="Your words as saved in this draft. Nothing on record changes until it is proposed and approved."
