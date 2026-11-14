@@ -29,6 +29,18 @@ import { ChangeStateBadge, ChangeTabs } from "./ChangeTabs";
 import { ApprovalRules } from "./ApprovalRules";
 import { DocumentChangeDetail } from "./DocumentChangeDetail";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
+import { RuleChangeSection, RULE_CHANGE_ANCHOR } from "./RuleChangeSection";
+import { PersonAvatar } from "./PersonAvatar";
+import { routeToPath, type AppRoute } from "../routes";
+import { formatShortDate } from "../documentDisplay";
+import { describeGroupName } from "../../../packages/utils/groupName";
+import {
+  approvalCountsToward,
+  ruleChangeCount,
+  ruleChangeRows,
+  rulesWarning,
+  startsNextNote,
+} from "../signOffChange";
 
 /**
  * One change in a binder, at `/{org}/{binder}/-/changes/3`.
@@ -311,6 +323,97 @@ export function BinderChangePage({
     change: changeNumber,
     view: "compare",
   });
+
+  // **What this change does to who signs off** (4.9–4.11), from the
+  // server's rule diff: drawn first on the Changes tab, named in the byline,
+  // and said at the moment of approval.
+  const binderName = formatDocumentName(binder);
+  const navigate = (route: AppRoute) => {
+    window.history.pushState({}, "", routeToPath(route));
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
+  const ruleChanges = detail.signOffChange?.rules ?? [];
+  const changesRules = detail.signOffChange !== null && ruleChanges.length > 0;
+  const ruleHref = `${changesHref}#${RULE_CHANGE_ANCHOR}`;
+  const openRuleChange = () => {
+    onViewChange("compare");
+    window.setTimeout(
+      () =>
+        document
+          .getElementById(RULE_CHANGE_ANCHOR)
+          ?.scrollIntoView({ block: "start" }),
+      300,
+    );
+  };
+  const rulesOwnerNames = detail.approvalRules
+    .filter((rule) => rule.reason.kind === "rules")
+    .flatMap((rule) =>
+      rule.groups.map((group) => `the ${describeGroupName(group)}`),
+    );
+  const startsNext = changesRules ? startsNextNote(ruleChanges) : null;
+  const ruleSection = changesRules ? (
+    <RuleChangeSection
+      org={org}
+      binder={binder}
+      rows={ruleChangeRows(ruleChanges, binderName)}
+      rulesOwners={
+        rulesOwnerNames.length === 0
+          ? null
+          : rulesOwnerNames.length === 1
+            ? rulesOwnerNames[0]!
+            : `${rulesOwnerNames.slice(0, -1).join(", ")} and ${rulesOwnerNames[rulesOwnerNames.length - 1]}`
+      }
+      startsNext={startsNext}
+      onNavigate={navigate}
+    />
+  ) : null;
+
+  // Who each approver approves for, for "Approver · Policy Office": the
+  // groups of the sign-off rules they can meet, at most two. The binder's
+  // approvers list can name every group, and saying all of them says nothing.
+  const approverGroups = new Map<string, string[]>();
+  for (const rule of detail.approvalRules) {
+    if (rule.kind !== "sign-off") continue;
+    for (const user of rule.eligible) {
+      const key = user.login.toLowerCase();
+      const known = approverGroups.get(key) ?? [];
+      for (const group of rule.groups) {
+        if (!known.includes(group) && known.length < 2) known.push(group);
+      }
+      approverGroups.set(key, known);
+    }
+  }
+
+  // Who publishing is waiting on: everyone eligible for an unmet rule.
+  const unmet = detail.approvalRules.filter(
+    (rule) => rule.approvedBy.length < rule.required,
+  );
+  const waitingOn = [
+    ...new Map(
+      unmet
+        .flatMap((rule) =>
+          rule.eligible.filter(
+            (user) =>
+              !rule.approvedBy.some((done) => done.login === user.login),
+          ),
+        )
+        .map((user) => [user.login, nameFor(names, user.login)]),
+    ).values(),
+  ];
+  const waitingLine =
+    isOpen && unmet.length > 0
+      ? `Publishing opens once every rule above is met.${
+          waitingOn.length === 0
+            ? " Nobody can meet them yet."
+            : ` Waiting on ${
+                waitingOn.length <= 1
+                  ? waitingOn[0]
+                  : waitingOn.length <= 3
+                    ? `${waitingOn.slice(0, -1).join(", ")} and ${waitingOn[waitingOn.length - 1]}`
+                    : `${waitingOn.slice(0, 3).join(", ")} and ${waitingOn.length - 3} ${waitingOn.length - 3 === 1 ? "other" : "others"}`
+              }.`
+        }`
+      : null;
   const tabs = (
     <ChangeTabs
       view={view}
@@ -382,6 +485,8 @@ export function BinderChangePage({
       <div className="binder-pane">
         <ChangeComparisonPage
           key={changeNumber}
+          ruleSection={ruleSection}
+          ruleCount={changesRules ? ruleChangeCount(ruleChanges) : null}
           org={org}
           binder={binder}
           changeNumber={changeNumber}
@@ -417,6 +522,17 @@ export function BinderChangePage({
             }
           }}
           onDownload={(row, gitRef) => void handleRowDownload(row, gitRef)}
+          /* Only its author, only while it is open, and only a document the
+             editor writes: a Word file is revised in Word and uploaded. */
+          editFor={(row) =>
+            onEditInEditor &&
+            record.open &&
+            detail.change.branchName !== "" &&
+            record.submittedBy === currentUser &&
+            isEditorDocumentFile(row.path)
+              ? () => onEditInEditor(row.slugPath)
+              : null
+          }
           status={status}
           tabs={tabs}
         />
@@ -506,97 +622,76 @@ export function BinderChangePage({
             onOpenBranch={openBranch}
             openedAt={record.submittedAt}
             nameOf={nameOf}
+            changesRules={changesRules}
+            showFrom={false}
           />
         }
-        banner={behind}
-        documentPicker={
-          documents.length > 0 ? (
-            /* **What this change does, document by document.** A change is the
-               unit of approval and routinely touches several, and this panel
-               was a picker rather than an answer: it showed the raw filename,
-               identity segment and all, and left the one thing a reviewer
-               wants — what happens to each — to a version string in the
-               header that changed as you clicked. */
-            <div className="bs-panel change-does">
-              <div className="bs-panel-bar">
-                <h2 className="bs-panel-bar-title">What this change does</h2>
-                <span className="bs-panel-bar-spacer" />
-                <span className="binder-count">
-                  {documents.length === 1
-                    ? "1 document"
-                    : `${documents.length} documents`}
-                </span>
-              </div>
-              <ul className="bs-row-list">
-                {documents.map((document) => {
-                  const facts = describeChangedDocument(document, !isOpen);
-                  const anchor = comparisonRows.find(
-                    (row) => row.slugPath === document.slugPath,
-                  )?.anchor;
-
-                  /* **Back into the words, in this change.** A reviewer's
-                     "please reword step 3" meant a new draft, the edit, and a
-                     second change for the same policy. Only its author, only
-                     while it is open, and only a policy the editor writes — a
-                     Word file is revised in Word and uploaded. */
-                  const editable =
-                    onEditInEditor &&
-                    record.open &&
-                    detail.change.branchName !== "" &&
-                    record.submittedBy === currentUser &&
-                    isEditorDocumentFile(document.path);
-
-                  return (
-                    <li key={document.slugPath} className="change-does-item">
-                      {/* **A way into its diff, not a selector.** Picking a
-                          row used to repoint the rail at that document, so
-                          seeing what changed was pick, then Compare — when
-                          what a reviewer does is open Changes and scroll.
-                          Each row now goes straight to its own place on
-                          that screen. */}
-                      <a
-                        className="bs-row"
-                        href={`${changesHref}${anchor ? `#${anchor}` : ""}`}
-                        onClick={(event) =>
-                          followInApp(event, () => {
-                            setViewing(document.slugPath);
-                            onViewChange("compare");
-                          })
-                        }
-                      >
-                        <span className="bs-row-body">
-                          <span className="bs-row-name">{facts.title}</span>
-                          {/* The address, not the file path: the identity
-                              segment is a thing the server mints and nobody
-                              reads. */}
-                          <span className="bs-row-meta">{facts.address}</span>
-                        </span>
-                        <span className="bs-row-right">
-                          {facts.move ? (
-                            <span className="bs-status bs-status--working">
-                              {facts.move}
-                            </span>
-                          ) : null}
-                          <span className="bs-ver">{facts.effect}</span>
-                        </span>
-                      </a>
-                      {editable ? (
-                        <button
-                          className="bs-btn bs-btn--sm bs-btn-secondary"
-                          type="button"
-                          aria-label={`Edit ${facts.title}`}
-                          onClick={() => onEditInEditor?.(document.slugPath)}
-                        >
-                          Edit
-                        </button>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
+        aboutPanel={
+          <section className="bs-panel" aria-labelledby="change-about">
+            <div className="bs-panel-bar">
+              <h2 className="bs-panel-bar-title" id="change-about">
+                About this change
+              </h2>
             </div>
-          ) : null
+            <dl className="change-about">
+              {branchName ? (
+                <>
+                  <dt>From</dt>
+                  <dd>
+                    <a
+                      className="cmp-branch"
+                      href={branchHref}
+                      title={branchName}
+                      onClick={(event) => followInApp(event, openBranch)}
+                    >
+                      <span className="cmp-branch-label">
+                        {branchLabel ?? branchName}
+                      </span>
+                    </a>
+                  </dd>
+                </>
+              ) : null}
+              <dt>Opened</dt>
+              <dd>
+                {formatShortDate(record.submittedAt)} by{" "}
+                {nameOf(record.submittedBy)}
+              </dd>
+              <dt>Assignee</dt>
+              <dd>
+                {detail.change.assignee ? (
+                  <span className="change-about-person">
+                    <PersonAvatar
+                      person={detail.change.assignee}
+                      size="sm"
+                      card="Assignee on this change"
+                    />
+                    {nameOf(detail.change.assignee.login)}
+                  </span>
+                ) : (
+                  "Nobody yet"
+                )}
+              </dd>
+            </dl>
+          </section>
         }
+        waitingLine={waitingLine}
+        approverGroups={approverGroups}
+        approveNotes={
+          changesRules
+            ? {
+                warning: rulesWarning(ruleChanges, binderName),
+                countsToward: approvalCountsToward(
+                  detail.approvalRules,
+                  currentUser,
+                ),
+                ruleHref,
+                onOpenRule: openRuleChange,
+              }
+            : null
+        }
+        banner={behind}
+        /* No "What this change does" (D9): it repeated the Changes tab. */
+        documentPicker={null}
         approvers={[
           ...new Set(
             detail.approvalRules.flatMap((rule) =>
@@ -604,7 +699,17 @@ export function BinderChangePage({
             ),
           ),
         ]}
-        approvalPanel={<ApprovalRules rules={detail.approvalRules} />}
+        approvalPanel={
+          <ApprovalRules
+            rules={detail.approvalRules}
+            org={org}
+            binderName={binderName}
+            onNavigate={navigate}
+            ruleChangeHref={ruleHref}
+            onOpenRuleChange={openRuleChange}
+            startsNext={startsNext}
+          />
+        }
         onOpenSignOffRules={onOpenSignOffRules}
         onEditSubject={async (subject) => {
           await editBinderChange(org, binder, changeNumber, subject);
@@ -640,7 +745,7 @@ export function BinderChangePage({
         // nothing. Saying so replaces the version wording and the file panel,
         // both of which would otherwise be false.
         subject={
-          shown
+          shown || changesRules
             ? null
             : {
                 title: "Who signs off on each folder",
@@ -649,7 +754,11 @@ export function BinderChangePage({
               }
         }
         documentName={
-          shown ? formatDocumentName(shown.name) : `this binder's rules`
+          shown
+            ? formatDocumentName(shown.name)
+            : changesRules
+              ? "who signs off"
+              : `this binder's rules`
         }
         onChanged={load}
         onViewChange={onViewChange}

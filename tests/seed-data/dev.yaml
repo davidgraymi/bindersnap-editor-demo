@@ -1864,6 +1864,41 @@ binders:
                 body: It means two groups, not four people — one approval from each is enough. But you are right that it is slower, and I would rather hear from Priya before this lands.
             resolved: false
 
+      # A mixed change: a revision of Hand Hygiene and a change to who signs
+      # off on its folder, in one draft. The rules rule governs it as well as
+      # the folder's own, and the Quality Committee's rule starts only with
+      # the next change (Gitea reads the rules from the base).
+      - branch: upload/clinical-standards/hand-hygiene/20261105/101500Z-ines-5b2c90aa
+        title: Hand hygiene — gel at every bedside, and Quality signs off
+        summary: >-
+          Gel at the point of care, and the Quality Committee on the clinical
+          standards from now on.
+        author: ines
+        reviewers:
+          - alice
+          - grace
+        publish: false
+        acts:
+          - revise:
+              document: clinical-standards/hand-hygiene
+              title: Hand Hygiene and PPE
+              sections:
+                - paragraphs:
+                    - Hands are decontaminated at the five moments of hand hygiene, without exception and regardless of whether gloves were worn.
+                - heading: Dress
+                  paragraphs:
+                    - Anybody giving direct care is bare below the elbows. No wrist watch, no stoned rings, no long sleeves.
+                - heading: When a sink is out of reach
+                  paragraphs:
+                    - Alcohol gel is kept at every bedside. Where hands are visibly soiled, or the patient has a spore-forming infection, soap and water is the only acceptable answer.
+          - signOff:
+              - scope: folder
+                target: clinical-standards
+                teams:
+                  - infection-control
+                  - quality-committee
+                users: []
+
   # ===========================================================================
   # facilities — an admin team and authors, and **no reviewers at all**. A
   # perfectly ordinary binder for a small department, and a membership shape

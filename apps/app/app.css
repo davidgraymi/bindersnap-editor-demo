@@ -2138,6 +2138,155 @@ input {
   font-weight: var(--brand-weight-medium);
 }
 
+/* Why a rule is on this change: the table's third line (4.9). */
+.rev-rules-why {
+  display: block;
+  margin-top: var(--brand-space-0-5);
+  color: var(--bs-text-faint);
+  font-size: var(--brand-text-ui-sm);
+  font-weight: var(--brand-weight-regular);
+}
+
+.rev-rules-why a {
+  color: var(--bs-coral-text);
+}
+
+.rev-rules-notes {
+  padding: var(--brand-space-2) var(--brand-space-3);
+  border-top: 1px solid var(--bs-rule-warm);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.rev-rules-notes p {
+  margin: 0;
+}
+
+.rev-rules-notes p + p {
+  margin-top: var(--brand-space-1);
+}
+
+/* The rule section on the Changes tab (4.11): owners as chips. Added is
+   green with a plus, removed red and struck through; neither is colour
+   alone. */
+.cmp-rules {
+  margin-bottom: var(--brand-space-4);
+}
+
+/* A group's or a person's card opens below its chip and may reach past the
+   panel's foot; the bar rounds its own corners instead. Two classes, to win
+   over `.bs-panel`'s overflow. */
+.bs-panel.cmp-rules {
+  overflow: visible;
+}
+
+.cmp-rules > .bs-panel-bar {
+  border-radius: var(--brand-radius-lg) var(--brand-radius-lg) 0 0;
+}
+
+.cmp-rules .bs-row-name a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.cmp-rules .bs-row-name a:hover {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+}
+
+.cmp-rules-owners {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--brand-space-1);
+  margin: var(--brand-space-1) 0;
+}
+
+.cmp-rules-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-0-5);
+  padding: 1px var(--brand-space-2);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-surface-2);
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-sm);
+}
+
+/* A name in a chip is a link or a card; it keeps the chip's colour. */
+.cmp-rules-chip .group-link {
+  color: inherit;
+}
+
+.cmp-rules-chip--removed .group-link,
+.cmp-rules-chip--removed del {
+  text-decoration: line-through;
+}
+
+.cmp-rules-chip--added {
+  border-color: var(--bs-status-ok-border);
+  background: var(--bs-status-ok-bg);
+  color: var(--bs-status-ok-fg);
+}
+
+.cmp-rules-chip--removed {
+  border-color: var(--bs-status-danger-border);
+  background: var(--bs-status-danger-bg);
+  color: var(--bs-status-danger-fg);
+}
+
+.cmp-rules-effect {
+  white-space: normal;
+}
+
+/* About this change, in the rail (D12). */
+.change-about {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--brand-space-1-5) var(--brand-space-3);
+  margin: 0;
+  padding: var(--brand-space-2-5) var(--brand-space-3);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.change-about dt {
+  color: var(--bs-text-muted);
+}
+
+.change-about dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--bs-text-primary);
+}
+
+.change-about-person {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+}
+
+/* The approve step, for a change that edits who signs off (4.10). */
+.rev-decision-confirm-rules,
+.rev-decision-confirm-counts {
+  margin: 0;
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-sm);
+  line-height: var(--brand-leading-normal);
+}
+
+.rev-decision-confirm-rules a {
+  color: var(--bs-coral-text);
+}
+
+.rev-decision-confirm-counts p {
+  margin: 0;
+}
+
+.rev-decision-confirm-counts ul {
+  margin: var(--brand-space-0-5) 0 0;
+  padding-left: var(--brand-space-4);
+}
+
 .rev-rules-owners {
   display: block;
   color: var(--bs-text-muted);
@@ -2381,6 +2530,37 @@ input {
   cursor: default;
 }
 
+/* A face and a name together, as in a chip: the pair opens the card. */
+.person-card-anchor--label {
+  align-items: center;
+  gap: var(--brand-space-1);
+  border-radius: var(--brand-radius-sm);
+}
+
+/* A group's name that opens a card about who is in it (GroupLink). */
+.group-card-anchor {
+  position: relative;
+  display: inline-flex;
+}
+
+.group-card {
+  align-items: flex-start;
+}
+
+.group-card-people {
+  display: grid;
+  gap: var(--brand-space-1);
+  margin-top: var(--brand-space-1);
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.group-card-person {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+}
+
 .person-card-anchor:focus-visible {
   outline: 2px solid var(--brand-coral);
   outline-offset: 2px;
@@ -2433,6 +2613,12 @@ input {
   font-weight: var(--brand-weight-semibold);
   background: var(--bs-surface-2);
   color: var(--bs-text-muted);
+}
+
+.rev-avatar--xs {
+  width: 18px;
+  height: 18px;
+  font-size: 8px;
 }
 
 .rev-avatar--sm {

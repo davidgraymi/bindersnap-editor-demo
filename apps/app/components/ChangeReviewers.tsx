@@ -1,3 +1,4 @@
+import { describeGroupName } from "../../../packages/utils/groupName";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
@@ -47,6 +48,11 @@ interface ChangeReviewersProps {
    * who was asked, and the approval panel at the top is who counts.
    */
   approvers?: readonly string[];
+  /**
+   * The groups each approver approves for, by login, so the tag can say
+   * "Approver · Policy Office" rather than "Approver".
+   */
+  approverGroups?: ReadonlyMap<string, readonly string[]>;
   /**
    * Open the binder's sign-off rules.
    *
@@ -104,6 +110,7 @@ export function ChangeReviewers({
   currentUser,
   openThreadAuthors,
   approvers = [],
+  approverGroups,
   onOpenSignOffRules: _onOpenSignOffRules = null,
   canManage: canManageProp,
   onChanged,
@@ -336,7 +343,16 @@ export function ChangeReviewers({
                 <span className="bs-row-body">
                   <span className="bs-row-name">{name}</span>
                   {approverSet.has(reviewer.login.toLowerCase()) ? (
-                    <span className="bs-required">Approver</span>
+                    <span className="bs-required">
+                      Approver
+                      {(approverGroups?.get(reviewer.login.toLowerCase()) ?? [])
+                        .length > 0
+                        ? ` · ${approverGroups!
+                            .get(reviewer.login.toLowerCase())!
+                            .map(describeGroupName)
+                            .join(", ")}`
+                        : ""}
+                    </span>
                   ) : null}
                 </span>
                 <span

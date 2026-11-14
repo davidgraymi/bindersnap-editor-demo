@@ -1368,7 +1368,12 @@ export function parseSeedScenario(source: string): SeedScenario {
       );
 
       const touched = new Set<string>();
-      const changesRules = change.acts.some((act) => act.kind === "signOff");
+      // A change that only edits who signs off goes on a `sign-off/` branch;
+      // one that does that alongside a document is a draft like any other,
+      // and is named for what else it touches.
+      const changesRules =
+        change.acts.length > 0 &&
+        change.acts.every((act) => act.kind === "signOff");
 
       // A change that is not published has not happened, so it is checked
       // against the binder as it stands and leaves it as it stands. Letting an

@@ -117,6 +117,25 @@ interface DocumentChangeDetailProps {
   status?: React.ReactNode;
   /** Overview and Changes: the change's two screens, as tabs under its header. */
   tabs?: React.ReactNode;
+  /** "About this change" in the rail: From, Opened, Assignee (D12). */
+  aboutPanel?: React.ReactNode;
+  /**
+   * Under Publish while the rules are not met: "Publishing opens once every
+   * rule above is met. Waiting on …". Replaces "You submitted this change".
+   */
+  waitingLine?: string | null;
+  /** The groups each approver approves for, for the Reviewers' tags. */
+  approverGroups?: ReadonlyMap<string, readonly string[]>;
+  /**
+   * At the approve step, for a change that edits who signs off (D13): what
+   * publishing it would change, and which rules this approval counts toward.
+   */
+  approveNotes?: {
+    warning: string | null;
+    countsToward: readonly string[];
+    ruleHref: string;
+    onOpenRule: () => void;
+  } | null;
 }
 
 interface PRActionState {
@@ -264,6 +283,10 @@ export function DocumentChangeDetail({
   onBackToList,
   approvers = [],
   approvalPanel = null,
+  aboutPanel = null,
+  waitingLine = null,
+  approverGroups,
+  approveNotes = null,
   onEditSubject = null,
   onSetOpen = null,
   onOpenSignOffRules = null,
@@ -493,9 +516,11 @@ export function DocumentChangeDetail({
         ? "One discussion is still open, and this binder holds the publish until every one is resolved."
         : `${unresolvedCount} discussions are still open, and this binder holds the publish until every one is resolved.`
       : null,
-    change.open && ownSubmission && !mergeReady
-      ? "You submitted this change — it is waiting on its reviewers."
-      : null,
+    change.open && !mergeReady && waitingLine
+      ? waitingLine
+      : change.open && ownSubmission && !mergeReady
+        ? "You submitted this change — it is waiting on its reviewers."
+        : null,
     // The reasons a dimmed button gives are said under the button itself.
   ].filter((line): line is string => Boolean(line));
 
@@ -656,6 +681,7 @@ export function DocumentChangeDetail({
             currentUser={currentUser}
             openThreadAuthors={openThreadAuthors}
             approvers={approvers}
+            {...(approverGroups ? { approverGroups } : {})}
             /* The button and the caveat share one foot, the way the mockup
                draws them — so the list owns both rather than having a second
                foot stacked under its own. */
@@ -665,6 +691,8 @@ export function DocumentChangeDetail({
             onChanged={onChanged}
           />
         </div>
+
+        {aboutPanel}
 
         {blockers.length > 0 ? (
           <div className="bs-note bs-note--warn">
@@ -694,6 +722,31 @@ export function DocumentChangeDetail({
                       : `${documentCount} documents`
                   }? Your name and the time go on the record.`}
                 </p>
+                {approveNotes?.warning ? (
+                  <p className="rev-decision-confirm-rules">
+                    <strong>This also changes who signs off.</strong>{" "}
+                    {approveNotes.warning}{" "}
+                    <a
+                      href={approveNotes.ruleHref}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        approveNotes.onOpenRule();
+                      }}
+                    >
+                      See the rule change →
+                    </a>
+                  </p>
+                ) : null}
+                {approveNotes && approveNotes.countsToward.length > 0 ? (
+                  <div className="rev-decision-confirm-counts">
+                    <p>Your approval counts toward:</p>
+                    <ul>
+                      {approveNotes.countsToward.map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
                 <div className="rev-decision-row">
                   <button
                     className="bs-btn bs-btn--sm bs-btn--quiet"

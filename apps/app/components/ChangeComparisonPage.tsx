@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { AppIcon, ICON } from "./AppIcon";
+import { RULE_CHANGE_ANCHOR } from "./RuleChangeSection";
 
 import { downloadDocument } from "../api";
 import { followInApp } from "../appLink";
@@ -45,6 +46,14 @@ import { ChangeByline } from "./ChangeByline";
  */
 
 interface ChangeComparisonPageProps {
+  /**
+   * What the change does to who signs off, drawn first, above every
+   * document, with its own entry at the top of the tree (4.11). Null when it
+   * leaves the rules alone.
+   */
+  ruleSection?: ReactNode;
+  /** "1 rule", for the tree's entry. */
+  ruleCount?: string | null;
   org: string;
   binder: string;
   changeNumber: number;
@@ -87,6 +96,13 @@ interface ChangeComparisonPageProps {
   /** Open one document's proposed file on its own screen. */
   onReadFile: (slugPath: string) => void;
   onDownload: (row: ChangedDocumentRow, gitRef: string) => void;
+  /**
+   * Back into the words, in this change: set for the documents its author can
+   * still edit in the editor. A reviewer's "please reword step 3" is answered
+   * here, where the author reads the diff, not in a second change. Returns
+   * null for a document that cannot be edited there.
+   */
+  editFor?: ((row: ChangedDocumentRow) => (() => void) | null) | null;
   /**
    * Whether it is still open, or how it ended — the badge before the line
    * under the title.
@@ -217,6 +233,8 @@ function groupByFolder(rows: readonly ChangedDocumentRow[]) {
 }
 
 export function ChangeComparisonPage({
+  ruleSection = null,
+  ruleCount = null,
   org,
   binder,
   changeNumber,
@@ -234,6 +252,7 @@ export function ChangeComparisonPage({
   fileHref,
   onReadFile,
   onDownload,
+  editFor = null,
   status = null,
   tabs = null,
 }: ChangeComparisonPageProps) {
@@ -543,6 +562,7 @@ export function ChangeComparisonPage({
               onOpenBranch={onOpenBranch}
               openedAt={openedAt}
               nameOf={nameOf}
+              changesRules={ruleSection !== null}
             />
           ) : null}
           {/* Nothing to size is not a size. The states below say what this
@@ -564,11 +584,9 @@ export function ChangeComparisonPage({
       <article className="change-compare">
         <div className="change-main">
           {header}
-          <p className="bs-note">
-            This change versions no document — it changes the binder's sign-off
-            rules, which publishes nothing. The change itself says what it would
-            do to them.
-          </p>
+          {ruleSection ?? (
+            <p className="bs-note">This change versions no document.</p>
+          )}
         </div>
       </article>
     );
@@ -593,12 +611,14 @@ export function ChangeComparisonPage({
       {header}
 
       <div
-        className={`cmp-layout${rows.length > 1 ? " cmp-layout--tree" : ""}`}
+        className={`cmp-layout${
+          rows.length > 1 || ruleSection ? " cmp-layout--tree" : ""
+        }`}
       >
         {/* The tree: only what changed, folder by folder, each one a click
             away. One document is not a list, and a tree pointing at a single
             entry is furniture — the same rule the grammar states for rails. */}
-        {rows.length > 1 ? (
+        {rows.length > 1 || ruleSection ? (
           <aside className="bs-rail cmp-tree">
             <nav className="bs-panel" aria-label="Documents in this change">
               <div className="bs-panel-bar">
@@ -624,6 +644,33 @@ export function ChangeComparisonPage({
               </div>
 
               <ol className="cmp-tree-list">
+                {ruleSection ? (
+                  <li>
+                    <ol className="bs-row-list">
+                      <li>
+                        <button
+                          className="bs-row"
+                          type="button"
+                          onClick={() =>
+                            document
+                              .getElementById(RULE_CHANGE_ANCHOR)
+                              ?.scrollIntoView({ block: "start" })
+                          }
+                        >
+                          <span className="bs-row-icon">
+                            <AppIcon icon={ICON.rules} size="sm" />
+                          </span>
+                          <span className="bs-row-body">
+                            <span className="bs-row-name">Who signs off</span>
+                          </span>
+                          {ruleCount ? (
+                            <span className="bs-row-meta">{ruleCount}</span>
+                          ) : null}
+                        </button>
+                      </li>
+                    </ol>
+                  </li>
+                ) : null}
                 {groups.map((group) => (
                   <li key={group.folder || "(top)"}>
                     {group.folder ? (
@@ -677,6 +724,7 @@ export function ChangeComparisonPage({
         ) : null}
 
         <div className="cmp-stream" ref={streamRef}>
+          {ruleSection}
           {rows.map((row) => (
             <ChangedDocumentSection
               key={row.anchor}
@@ -709,6 +757,7 @@ export function ChangeComparisonPage({
               fileHref={fileHref(row.slugPath)}
               onReadFile={() => onReadFile(row.slugPath)}
               onDownload={(gitRef) => onDownload(row, gitRef)}
+              onEdit={editFor ? editFor(row) : null}
             />
           ))}
         </div>
@@ -738,6 +787,8 @@ interface ChangedDocumentSectionProps {
   fileHref: string;
   onReadFile: () => void;
   onDownload: (gitRef: string) => void;
+  /** Open it in the editor, in this change; null when it cannot be. */
+  onEdit: (() => void) | null;
 }
 
 /**
@@ -795,6 +846,7 @@ function ChangedDocumentSection({
   fileHref,
   onReadFile,
   onDownload,
+  onEdit,
 }: ChangedDocumentSectionProps) {
   /**
    * **The file path, which carries the identity — not the address.**
@@ -943,6 +995,18 @@ function ChangedDocumentSection({
           >
             <AppIcon icon={ICON.download} size="sm" />
             Download
+          </button>
+        )}
+
+        {onEdit === null || row.kind === "removed" ? null : (
+          <button
+            className="bs-btn bs-btn--sm bs-btn-secondary cmp-file-act"
+            type="button"
+            aria-label={`Edit ${row.name}`}
+            onClick={onEdit}
+          >
+            <AppIcon icon={ICON.edit} size="sm" />
+            Edit
           </button>
         )}
       </header>
