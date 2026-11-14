@@ -8,6 +8,7 @@ import type { GetBinderChangeConflicts200FilesItemAutomatic } from './getBinderC
 import type { GetBinderChangeConflicts200FilesItemBase } from './getBinderChangeConflicts200FilesItemBase.ts';
 import type { GetBinderChangeConflicts200FilesItemKind } from './getBinderChangeConflicts200FilesItemKind.ts';
 import type { GetBinderChangeConflicts200FilesItemOurs } from './getBinderChangeConflicts200FilesItemOurs.ts';
+import type { GetBinderChangeConflicts200FilesItemRules } from './getBinderChangeConflicts200FilesItemRules.ts';
 import type { GetBinderChangeConflicts200FilesItemTheirs } from './getBinderChangeConflicts200FilesItemTheirs.ts';
 
 export type GetBinderChangeConflicts200FilesItem = {
@@ -16,6 +17,8 @@ export type GetBinderChangeConflicts200FilesItem = {
   kind: GetBinderChangeConflicts200FilesItemKind;
   /** @nullable */
   automatic: GetBinderChangeConflicts200FilesItemAutomatic;
+  /** @nullable */
+  rules: GetBinderChangeConflicts200FilesItemRules;
   /** @nullable */
   base: GetBinderChangeConflicts200FilesItemBase;
   /** @nullable */

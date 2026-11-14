@@ -12,4 +12,5 @@ export const GetBinderChangeConflicts200FilesItemKind = {
   editor: 'editor',
   text: 'text',
   binary: 'binary',
+  rules: 'rules',
 } as const;

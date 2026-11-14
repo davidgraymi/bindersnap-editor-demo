@@ -10,6 +10,7 @@ import type { GetBinderChange200DocumentsItem } from './getBinderChange200Docume
 import type { GetBinderChange200Outcome } from './getBinderChange200Outcome.ts';
 import type { GetBinderChange200RemovedDocumentsItem } from './getBinderChange200RemovedDocumentsItem.ts';
 import type { GetBinderChange200RequiredReviewers } from './getBinderChange200RequiredReviewers.ts';
+import type { GetBinderChange200SignOffChange } from './getBinderChange200SignOffChange.ts';
 import type { GetBinderChange200Viewer } from './getBinderChange200Viewer.ts';
 
 export type GetBinderChange200 = {
@@ -28,6 +29,8 @@ export type GetBinderChange200 = {
   requiredReviewers: GetBinderChange200RequiredReviewers;
   viewer: GetBinderChange200Viewer;
   approvalRules: GetBinderChange200ApprovalRulesItem[];
+  /** @nullable */
+  signOffChange: GetBinderChange200SignOffChange;
   /** @nullable */
   outcome: GetBinderChange200Outcome;
   /** @nullable */

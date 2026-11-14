@@ -411,12 +411,13 @@ export function tokenizeCodeownersLine(line: string): string[] {
 /**
  * The generated file, exactly as it is committed.
  *
- * Rules are emitted in the order given, because **Gitea's gate is per rule**
- * and every matching rule must be satisfied — so unlike a `.gitignore`, order
- * carries no precedence and there is nothing to sort for correctness. Emitting
- * them in the caller's order keeps a diff between two generations readable,
- * which matters because changing these rules is a change somebody has to
- * review.
+ * **One canonical form**, so the same rules always produce the same bytes and
+ * two drafts' rule edits merge rule by rule rather than clashing as text: the
+ * binder rule first, then folder rules and document rules each sorted by
+ * target, then the rules rule; one line per target, owners sorted. Order
+ * carries no precedence for Gitea — its gate is per rule and every matching
+ * rule must be met — so sorting changes nothing about what is enforced.
+ * See {@link canonicalSignOffRules}.
  */
 export function renderCodeowners(
   org: string,
@@ -433,11 +434,11 @@ export function renderCodeowners(
     "#",
     "# Patterns are anchored regular expressions, not shell globs, and",
     "# backslashes are consumed twice — once by Gitea's tokenizer and once by",
-    "# its regex. Change these rules from the binder's Settings tab.",
+    "# its regex. Change these rules in Bindersnap's editor, in a draft.",
     "",
   ];
 
-  for (const rule of rules) {
+  for (const rule of canonicalSignOffRules(rules)) {
     const owners = [
       ...rule.teams.map((team) => teamOwner(org, team)),
       ...rule.users.map((user) => `@${user}`),
@@ -951,4 +952,249 @@ export function diffSignOffRules(
   }
 
   return out;
+}
+
+const SCOPE_ORDER: Record<SignOffScope, number> = {
+  binder: 0,
+  folder: 1,
+  document: 2,
+  rules: 3,
+};
+
+function sortedOwners(owners: readonly string[]): string[] {
+  const seen = new Map<string, string>();
+  for (const owner of owners) {
+    const key = owner.toLowerCase();
+    if (!seen.has(key)) seen.set(key, owner);
+  }
+  return [...seen.values()].sort((a, b) =>
+    a.toLowerCase().localeCompare(b.toLowerCase()),
+  );
+}
+
+/**
+ * The rules in the one order the file is written in: binder, folders sorted
+ * by target, documents sorted by target, the rules rule. Two lines for one
+ * target become one line with both lines' owners (what Gitea enforces for two
+ * lines anyway), owners are deduplicated without case and sorted, and a rule
+ * with nobody on it is dropped, as {@link renderCodeowners} drops it.
+ */
+export function canonicalSignOffRules(
+  rules: readonly SignOffRule[],
+): SignOffRule[] {
+  return [...groupedRules(rules).values()]
+    .map((rule) => ({
+      scope: rule.scope,
+      target: rule.scope === "folder" ? trimFolder(rule.target) : rule.target,
+      teams: sortedOwners(rule.teams),
+      users: sortedOwners(rule.users),
+    }))
+    .filter((rule) => rule.teams.length + rule.users.length > 0)
+    .sort(
+      (a, b) =>
+        SCOPE_ORDER[a.scope] - SCOPE_ORDER[b.scope] ||
+        (a.target < b.target ? -1 : a.target > b.target ? 1 : 0),
+    );
+}
+
+/**
+ * Set one target's owners, leaving every other rule as it is. Empty owners
+ * remove the rule. What one edit in the editor's sign-off panel does.
+ */
+export function withSignOffRule(
+  rules: readonly SignOffRule[],
+  next: SignOffRule,
+): SignOffRule[] {
+  const key = signOffRuleKey(next);
+  return canonicalSignOffRules([
+    ...rules.filter((rule) => signOffRuleKey(rule) !== key),
+    next,
+  ]);
+}
+
+/**
+ * The rules after a folder is renamed or moved: every folder rule on it or
+ * under it follows it. Without this a renamed folder silently loses its rule,
+ * because the rule's pattern still names the old path.
+ */
+export function moveFolderRules(
+  rules: readonly SignOffRule[],
+  from: string,
+  to: string,
+): SignOffRule[] {
+  const source = trimFolder(from);
+  const destination = trimFolder(to);
+  return canonicalSignOffRules(
+    rules.map((rule) => {
+      if (rule.scope !== "folder") return rule;
+      const target = trimFolder(rule.target);
+      if (target === source) return { ...rule, target: destination };
+      if (target.startsWith(`${source}/`)) {
+        return {
+          ...rule,
+          target: `${destination}${target.slice(source.length)}`,
+        };
+      }
+      return rule;
+    }),
+  );
+}
+
+/**
+ * The rules after a folder is archived: its rule and every rule under it go
+ * with it. A rule over a folder that is not there protects nothing and reads
+ * on screen as a rule about nothing.
+ */
+export function dropFolderRules(
+  rules: readonly SignOffRule[],
+  folder: string,
+): SignOffRule[] {
+  const gone = trimFolder(folder);
+  return canonicalSignOffRules(
+    rules.filter((rule) => {
+      if (rule.scope !== "folder") return true;
+      const target = trimFolder(rule.target);
+      return target !== gone && !target.startsWith(`${gone}/`);
+    }),
+  );
+}
+
+/** Two versions of one rule that a merge cannot choose between. */
+export interface SignOffClash {
+  scope: SignOffScope;
+  target: string;
+  /** The rule's owners on each side; null where that side removed the rule. */
+  ours: { teams: string[]; users: string[] } | null;
+  theirs: { teams: string[]; users: string[] } | null;
+}
+
+export interface SignOffMerge {
+  /** Every rule merged, clashes resolved by keeping both sides' owners. */
+  rules: SignOffRule[];
+  /** The targets a person has to decide. Empty when the merge is clean. */
+  clashes: SignOffClash[];
+}
+
+function ownerMerge(
+  base: readonly string[],
+  ours: readonly string[],
+  theirs: readonly string[],
+): string[] {
+  const lower = (list: readonly string[]) =>
+    new Set(list.map((name) => name.toLowerCase()));
+  const b = lower(base);
+  const o = lower(ours);
+  const t = lower(theirs);
+  const names = new Map<string, string>();
+  for (const name of [...base, ...ours, ...theirs]) {
+    const key = name.toLowerCase();
+    if (!names.has(key)) names.set(key, name);
+  }
+  return [...names].flatMap(([key, name]) => {
+    const inOurs = o.has(key);
+    const inTheirs = t.has(key);
+    // Kept or dropped the same way on both sides; else whichever side moved.
+    if (inOurs === inTheirs) return inOurs ? [name] : [];
+    return (inOurs === b.has(key) ? inTheirs : inOurs) ? [name] : [];
+  });
+}
+
+function sameOwners(
+  a: { teams: readonly string[]; users: readonly string[] } | undefined,
+  b: { teams: readonly string[]; users: readonly string[] } | undefined,
+): boolean {
+  if (!a || !b) return a === b;
+  const flat = (rule: { teams: readonly string[]; users: readonly string[] }) =>
+    [
+      ...sortedOwners(rule.teams).map((t) => `t:${t.toLowerCase()}`),
+      ...sortedOwners(rule.users).map((u) => `u:${u.toLowerCase()}`),
+    ].join(",");
+  return flat(a) === flat(b);
+}
+
+/**
+ * Merge two versions of the rules against the version both started from,
+ * rule by rule — never as text.
+ *
+ * A target changed on one side only takes that side. Changed on both, owners
+ * merge one by one: one added on either side is kept, one removed on a side
+ * and left alone on the other is removed. That is clean when both sides only
+ * added; when both changed the same target and either removed someone (or
+ * removed the rule), the two sides disagree about who should be there and a
+ * person decides — the target is a clash, and `rules` holds it with both
+ * sides' owners until they do.
+ */
+export function mergeSignOffRules(
+  base: readonly SignOffRule[],
+  ours: readonly SignOffRule[],
+  theirs: readonly SignOffRule[],
+): SignOffMerge {
+  const b = groupedRules(base);
+  const o = groupedRules(ours);
+  const t = groupedRules(theirs);
+  const keys = new Set([...b.keys(), ...o.keys(), ...t.keys()]);
+  const rules: SignOffRule[] = [];
+  const clashes: SignOffClash[] = [];
+
+  for (const key of keys) {
+    const was = b.get(key);
+    const mine = o.get(key);
+    const other = t.get(key);
+    const shape = (mine ?? other ?? was)!;
+
+    if (sameOwners(mine, was)) {
+      if (other) rules.push(other);
+      continue;
+    }
+    if (sameOwners(other, was) || sameOwners(mine, other)) {
+      if (mine) rules.push(mine);
+      continue;
+    }
+
+    const empty = { teams: [] as string[], users: [] as string[] };
+    const merged: SignOffRule = {
+      scope: shape.scope,
+      target: shape.target,
+      teams: ownerMerge(
+        (was ?? empty).teams,
+        (mine ?? empty).teams,
+        (other ?? empty).teams,
+      ),
+      users: ownerMerge(
+        (was ?? empty).users,
+        (mine ?? empty).users,
+        (other ?? empty).users,
+      ),
+    };
+
+    const removedOn = (side: SignOffRule | undefined) =>
+      side === undefined ||
+      (was !== undefined &&
+        [...was.teams, ...was.users].some(
+          (name) =>
+            ![...side.teams, ...side.users].some(
+              (kept) => kept.toLowerCase() === name.toLowerCase(),
+            ),
+        ));
+
+    if (!removedOn(mine) && !removedOn(other)) {
+      rules.push(merged);
+      continue;
+    }
+
+    clashes.push({
+      scope: shape.scope,
+      target: shape.target,
+      ours: mine ? { teams: mine.teams, users: mine.users } : null,
+      theirs: other ? { teams: other.teams, users: other.users } : null,
+    });
+    rules.push({
+      scope: shape.scope,
+      target: shape.target,
+      teams: [...(mine?.teams ?? []), ...(other?.teams ?? [])],
+      users: [...(mine?.users ?? []), ...(other?.users ?? [])],
+    });
+  }
+
+  return { rules: canonicalSignOffRules(rules), clashes };
 }

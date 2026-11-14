@@ -11459,6 +11459,538 @@
             }
           }
         }
+      },
+      "get": {
+        "operationId": "getBinderSignOff",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "draft",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "change",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Who signs off in the binder, on main or at the caller's draft or a change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "ref": {
+                      "type": "string"
+                    },
+                    "rules": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "scope": {
+                            "type": "string",
+                            "enum": [
+                              "binder",
+                              "folder",
+                              "document",
+                              "rules"
+                            ]
+                          },
+                          "target": {
+                            "type": "string"
+                          },
+                          "teams": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "users": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "scope",
+                          "target",
+                          "teams",
+                          "users"
+                        ]
+                      }
+                    },
+                    "unreadable": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "line": {
+                            "type": "number"
+                          },
+                          "text": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "line",
+                          "text"
+                        ]
+                      }
+                    },
+                    "requiredApprovals": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "approvers": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "groups": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "people": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "groups",
+                        "people"
+                      ]
+                    },
+                    "groups": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "members": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                },
+                                "hasAccess": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName",
+                                "hasAccess"
+                              ]
+                            }
+                          },
+                          "hasAccess": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "description",
+                          "members",
+                          "hasAccess"
+                        ]
+                      }
+                    },
+                    "people": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "hasAccess": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName",
+                          "hasAccess"
+                        ]
+                      }
+                    },
+                    "documents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "uid": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "uid",
+                          "name"
+                        ]
+                      }
+                    },
+                    "canEdit": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "ref",
+                    "rules",
+                    "unreadable",
+                    "requiredApprovals",
+                    "approvers",
+                    "groups",
+                    "people",
+                    "documents",
+                    "canEdit"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "setBinderSignOffRule",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rule": {
+                    "type": "object",
+                    "properties": {
+                      "scope": {
+                        "type": "string",
+                        "enum": [
+                          "binder",
+                          "folder",
+                          "document",
+                          "rules"
+                        ]
+                      },
+                      "target": {
+                        "type": "string"
+                      },
+                      "teams": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "users": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "scope",
+                      "target",
+                      "teams",
+                      "users"
+                    ]
+                  },
+                  "draft": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "boolean"
+                      }
+                    ]
+                  },
+                  "changeNumber": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "rule"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The rule, committed into the draft or change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "branch": {
+                      "type": "string"
+                    },
+                    "changeNumber": {
+                      "type": "number",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "branch",
+                    "changeNumber"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/orgs/{org}/groups/{group}": {
+      "get": {
+        "operationId": "getOrganizationGroup",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "group",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A group: its people, its binders, and where it signs off",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "group": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "access": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "description",
+                        "access"
+                      ]
+                    },
+                    "members": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName"
+                        ]
+                      }
+                    },
+                    "canManage": {
+                      "type": "boolean"
+                    },
+                    "binders": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "approver": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "approver"
+                        ]
+                      }
+                    },
+                    "signsOff": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "binder": {
+                            "type": "string"
+                          },
+                          "scope": {
+                            "type": "string",
+                            "enum": [
+                              "binder",
+                              "folder",
+                              "document",
+                              "rules"
+                            ]
+                          },
+                          "place": {
+                            "type": "string"
+                          },
+                          "covers": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "path": {
+                                  "type": "string"
+                                },
+                                "uid": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "path",
+                                "uid",
+                                "name"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "binder",
+                          "scope",
+                          "place",
+                          "covers"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "group",
+                    "members",
+                    "canManage",
+                    "binders",
+                    "signsOff"
+                  ]
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/app/binders/{org}/{binder}/history": {
@@ -14555,6 +15087,31 @@
                                 "avatarUrl"
                               ]
                             }
+                          },
+                          "reason": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "approvers",
+                                  "rules",
+                                  "binder",
+                                  "folder",
+                                  "document"
+                                ]
+                              },
+                              "matched": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "matched"
+                            ]
                           }
                         },
                         "required": [
@@ -14565,9 +15122,138 @@
                           "people",
                           "required",
                           "eligible",
-                          "approvedBy"
+                          "approvedBy",
+                          "reason"
                         ]
                       }
+                    },
+                    "signOffChange": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "rules": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "scope": {
+                                "type": "string",
+                                "enum": [
+                                  "binder",
+                                  "folder",
+                                  "document",
+                                  "rules"
+                                ]
+                              },
+                              "target": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "added",
+                                  "removed",
+                                  "changed"
+                                ]
+                              },
+                              "teams": {
+                                "type": "object",
+                                "properties": {
+                                  "added": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "removed": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "unchanged": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "added",
+                                  "removed",
+                                  "unchanged"
+                                ]
+                              },
+                              "users": {
+                                "type": "object",
+                                "properties": {
+                                  "added": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "removed": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "unchanged": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "added",
+                                  "removed",
+                                  "unchanged"
+                                ]
+                              },
+                              "place": {
+                                "type": "string"
+                              },
+                              "covers": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "path": {
+                                      "type": "string"
+                                    },
+                                    "uid": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "path",
+                                    "uid",
+                                    "name"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "scope",
+                              "target",
+                              "status",
+                              "teams",
+                              "users",
+                              "place",
+                              "covers"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "rules"
+                      ]
                     },
                     "outcome": {
                       "type": "string",
@@ -14606,6 +15292,7 @@
                     "requiredReviewers",
                     "viewer",
                     "approvalRules",
+                    "signOffChange",
                     "outcome",
                     "closedAt",
                     "decidedBy",
@@ -15027,7 +15714,8 @@
                             "enum": [
                               "editor",
                               "text",
-                              "binary"
+                              "binary",
+                              "rules"
                             ]
                           },
                           "automatic": {
@@ -15036,7 +15724,126 @@
                             "enum": [
                               "ours",
                               "theirs",
+                              "merged",
                               null
+                            ]
+                          },
+                          "rules": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "rules": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "scope": {
+                                      "type": "string",
+                                      "enum": [
+                                        "binder",
+                                        "folder",
+                                        "document",
+                                        "rules"
+                                      ]
+                                    },
+                                    "target": {
+                                      "type": "string"
+                                    },
+                                    "teams": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "users": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "scope",
+                                    "target",
+                                    "teams",
+                                    "users"
+                                  ]
+                                }
+                              },
+                              "clashes": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "scope": {
+                                      "type": "string",
+                                      "enum": [
+                                        "binder",
+                                        "folder",
+                                        "document",
+                                        "rules"
+                                      ]
+                                    },
+                                    "target": {
+                                      "type": "string"
+                                    },
+                                    "ours": {
+                                      "type": "object",
+                                      "nullable": true,
+                                      "properties": {
+                                        "teams": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "users": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
+                                        }
+                                      },
+                                      "required": [
+                                        "teams",
+                                        "users"
+                                      ]
+                                    },
+                                    "theirs": {
+                                      "type": "object",
+                                      "nullable": true,
+                                      "properties": {
+                                        "teams": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "users": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
+                                        }
+                                      },
+                                      "required": [
+                                        "teams",
+                                        "users"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "scope",
+                                    "target",
+                                    "ours",
+                                    "theirs"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "rules",
+                              "clashes"
                             ]
                           },
                           "base": {
@@ -15108,6 +15915,7 @@
                           "path",
                           "kind",
                           "automatic",
+                          "rules",
                           "base",
                           "ours",
                           "theirs"

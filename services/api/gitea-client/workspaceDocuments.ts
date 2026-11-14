@@ -499,6 +499,30 @@ export async function listChangedDocuments(params: {
 }
 
 /**
+ * Every path a change touches, furniture included — `.gitea/CODEOWNERS` most
+ * of all, which no document list carries and which decides whether the rules
+ * rule applies and whether the change edits who signs off.
+ */
+export async function listChangedPaths(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  pullNumber: number;
+}): Promise<string[]> {
+  const { client, org, workspace, pullNumber } = params;
+  const files = (await unwrap(
+    client.GET("/repos/{owner}/{repo}/pulls/{index}/files", {
+      params: { path: { owner: org, repo: workspace, index: pullNumber } },
+    }),
+  )) as ChangedFile[];
+  return [
+    ...new Set(
+      (files ?? []).map((file) => file.filename ?? "").filter(Boolean),
+    ),
+  ].sort();
+}
+
+/**
  * Every document a change touches — revised, added or taken off the record —
  * once each, from one read of its files.
  *

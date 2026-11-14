@@ -41,6 +41,8 @@ import type {
   GetBinderHistory200,
   GetBinderPeople200,
   GetBinderSettings200,
+  GetBinderSignOff200,
+  GetBinderSignOffParams,
   GrantBinderGroup200,
   GrantBinderGroupBody,
   ListBinderChangeDiscussions200,
@@ -93,6 +95,8 @@ import type {
   SetBinderPersonLevelBody,
   SetBinderRules200,
   SetBinderRulesBody,
+  SetBinderSignOffRule201,
+  SetBinderSignOffRuleBody,
   SetBinderVisibility200,
   SetBinderVisibilityBody,
   UpdateBinderChange200,
@@ -907,6 +911,98 @@ return customFetch<proposeBinderSignOffRulesResponse>(getProposeBinderSignOffRul
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(proposeBinderSignOffRulesBody)
+  }
+);}
+
+
+export type getBinderSignOffResponse200 = {
+  data: GetBinderSignOff200
+  status: 200
+}
+
+export type getBinderSignOffResponseSuccess = (getBinderSignOffResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getBinderSignOffResponse = (getBinderSignOffResponseSuccess)
+
+export const getGetBinderSignOffUrl = (org: string,
+    binder: string,
+    params?: GetBinderSignOffParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/app/binders/${org}/${binder}/rules/sign-off?${stringifiedParams}` : `/api/app/binders/${org}/${binder}/rules/sign-off`
+}
+
+export const getBinderSignOff = async (org: string,
+    binder: string,
+    params?: GetBinderSignOffParams, options?: Parameters<typeof customFetch>[1]): Promise<getBinderSignOffResponse> => {
+
+  return customFetch<getBinderSignOffResponse>(getGetBinderSignOffUrl(org,binder,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type setBinderSignOffRuleResponse201 = {
+  data: SetBinderSignOffRule201
+  status: 201
+}
+
+export type setBinderSignOffRuleResponseSuccess = (setBinderSignOffRuleResponse201) & {
+  headers: Headers;
+};
+;
+
+export type setBinderSignOffRuleResponse = (setBinderSignOffRuleResponseSuccess)
+
+export const getSetBinderSignOffRuleUrl = (org: string,
+    binder: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/rules/sign-off`
+}
+
+export const setBinderSignOffRule = async (org: string,
+    binder: string,
+    setBinderSignOffRuleBody: SetBinderSignOffRuleBody, options?: Parameters<typeof customFetch>[1]): Promise<setBinderSignOffRuleResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<setBinderSignOffRuleResponse>(getSetBinderSignOffRuleUrl(org,binder),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setBinderSignOffRuleBody)
   }
 );}
 
