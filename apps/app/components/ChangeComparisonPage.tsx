@@ -18,6 +18,12 @@ import type { ComparisonSummary } from "../documentComparison";
 import { classifyDocumentFile } from "../documentFile";
 import { DocumentComparison, type ImageMode } from "./DocumentComparison";
 import { DocumentPreview } from "./DocumentPreview";
+import { PassageComments } from "./PassageComments";
+import { parseDocumentFilename } from "../../../packages/utils/documentPath";
+import type {
+  DiscussionAnchor,
+  DiscussionThread,
+} from "../../../packages/api-schema/schemas/documents";
 import { ChangeByline } from "./ChangeByline";
 
 /**
@@ -96,6 +102,8 @@ interface ChangeComparisonPageProps {
   fileHref: (slugPath: string) => string;
   /** Open one document's proposed file on its own screen. */
   onReadFile: (slugPath: string) => void;
+  /** Comments on passages of the documents; absent, there are none. */
+  passages?: PassageCommenting | null;
   onDownload: (row: ChangedDocumentRow, gitRef: string) => void;
   /**
    * Back into the words, in this change: set for the documents its author can
@@ -291,6 +299,7 @@ export function ChangeComparisonPage({
   fileHref,
   onReadFile,
   onDownload,
+  passages = null,
   editFor = null,
   status = null,
   tabs = null,
@@ -769,6 +778,7 @@ export function ChangeComparisonPage({
               key={row.anchor}
               org={org}
               binder={binder}
+              passages={passages}
               row={row}
               headRef={headRef}
               open={open}
@@ -808,6 +818,7 @@ export function ChangeComparisonPage({
 interface ChangedDocumentSectionProps {
   org: string;
   binder: string;
+  passages: PassageCommenting | null;
   row: ChangedDocumentRow;
   headRef: string;
   open: boolean;
@@ -889,9 +900,34 @@ function FilePath({ row }: { row: ChangedDocumentRow }): ReactNode {
  * file on the branch at all; what it has is a last version on record, and the
  * honest thing to show is what is coming off.
  */
+/**
+ * Commenting on a passage of a document, for the screen that draws them.
+ * Absent, the documents are read without it (a test, or a page with no
+ * discussion to add to).
+ */
+export interface PassageCommenting {
+  threads: readonly DiscussionThread[];
+  canComment: boolean;
+  onComment: (anchor: DiscussionAnchor, body: string) => Promise<void>;
+  threadHref: (threadId: string) => string;
+}
+
+/**
+ * What a comment calls the document it is on: its identity, which a rename
+ * or a move does not change (ADR 0005), or its address when it has none.
+ */
+export function passageDocumentKey(row: {
+  path: string;
+  slugPath: string;
+}): string {
+  const file = (row.path || row.slugPath).split("/").pop() ?? "";
+  return parseDocumentFilename(file).uid ?? row.slugPath;
+}
+
 function ChangedDocumentSection({
   org,
   binder,
+  passages,
   row,
   headRef,
   open,
@@ -925,6 +961,23 @@ function ChangedDocumentSection({
     () => ({ org, binder, documentPath: row.path || row.slugPath }),
     [org, binder, row.path, row.slugPath],
   );
+
+  // Select words in the document to comment on them: `PassageComments`.
+  const commentable = (page: ReactNode) =>
+    passages ? (
+      <PassageComments
+        documentKey={passageDocumentKey(row)}
+        documentLabel={formatDocumentName(row.name)}
+        threads={passages.threads}
+        canComment={passages.canComment}
+        onComment={passages.onComment}
+        threadHref={passages.threadHref}
+      >
+        {page}
+      </PassageComments>
+    ) : (
+      page
+    );
 
   // Stable per document, so the preview loads its file once rather than once
   // per render — the note on `DocumentPreview.loadFile` says what it costs.
@@ -1088,28 +1141,32 @@ function ChangedDocumentSection({
             // A placeholder with the section's own height, so collapsing and
             // scrolling do not make the page jump under the reader.
             <p className="cmp-file-waiting">Ready when you scroll to it.</p>
-          ) : row.base === null ? (
-            // New: nothing to read it against, so it is read whole. The badge
-            // in the bar already says why there is no diff.
-            <DocumentPreview
-              loadFile={loadFile}
-              gitRef={headRef}
-              fileName={row.fileName}
-              downloading={false}
-              onDownload={() => onDownload(headRef)}
-              bare
-            />
           ) : (
-            <DocumentComparison
-              scope={scope}
-              base={row.base}
-              headRef={headRef}
-              headLabel={open ? "This change" : "What it published"}
-              fileName={row.fileName}
-              imageMode={imageMode}
-              onDownload={onDownload}
-              onSummary={onSummary}
-            />
+            commentable(
+              row.base === null ? (
+                // New: nothing to read it against, so it is read whole. The
+                // badge in the bar already says why there is no diff.
+                <DocumentPreview
+                  loadFile={loadFile}
+                  gitRef={headRef}
+                  fileName={row.fileName}
+                  downloading={false}
+                  onDownload={() => onDownload(headRef)}
+                  bare
+                />
+              ) : (
+                <DocumentComparison
+                  scope={scope}
+                  base={row.base}
+                  headRef={headRef}
+                  headLabel={open ? "This change" : "What it published"}
+                  fileName={row.fileName}
+                  imageMode={imageMode}
+                  onDownload={onDownload}
+                  onSummary={onSummary}
+                />
+              ),
+            )
           )}
         </div>
       )}

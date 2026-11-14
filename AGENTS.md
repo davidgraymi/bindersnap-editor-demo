@@ -595,7 +595,11 @@ a binary .docx), so threads are modelled as pull-request issue comments
 carrying a trailing `<!-- bindersnap:v1 ... -->` marker. Resolution is an
 **append-only event log** — resolving posts a new comment rather than editing
 the root — because an audit product must never lose the history of who
-reopened a concern. See `services/api/gitea-client/discussions.ts`.
+reopened a concern. See `services/api/gitea-client/discussions.ts`. A thread
+may be about a passage: a reviewer selects words on the change's Changes tab
+and comments on them, and the root's marker carries a text-quote anchor (the
+document's identity, the words, and a few either side). It is still one
+discussion in Gitea, never a second store.
 
 **Reactions** on review comments are Gitea comment reactions, nothing more.
 The vocabulary is five keys — `+1`, `-1`, `confused`, `eyes`, `heart` — all

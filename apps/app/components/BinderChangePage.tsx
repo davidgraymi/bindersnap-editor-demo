@@ -3,8 +3,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { WorkspaceChangeDetailPayload } from "../../../packages/api-schema/schemas/workspaces";
 import { useMarkNotificationsRead } from "../data/notifications";
-import { binderChangeQuery, queryKeys } from "../data/queries";
 import {
+  binderChangeQuery,
+  changeDiscussionsQuery,
+  queryKeys,
+} from "../data/queries";
+import { useIsReadOnly } from "../readOnlyContext";
+import {
+  createChangeDiscussion,
   downloadBinderDocument,
   editBinderChange,
   setBinderChangeOpen,
@@ -122,6 +128,13 @@ export function BinderChangePage({
   const names = usePeopleNames(org);
   const queryClient = useQueryClient();
   const read = useQuery(binderChangeQuery(org, binder, changeNumber));
+  // The change's discussions, for the comments made on passages of its
+  // documents. Read only on the Changes tab, which is where they are drawn.
+  const discussions = useQuery({
+    ...changeDiscussionsQuery(org, binder, changeNumber),
+    enabled: view === "compare",
+  });
+  const isReadOnly = useIsReadOnly();
   const detail: WorkspaceChangeDetailPayload | null = read.data ?? null;
   const error = read.error
     ? read.error.message || "Unable to open this change."
@@ -501,6 +514,30 @@ export function BinderChangePage({
       <div className="binder-pane">
         <ChangeComparisonPage
           key={changeNumber}
+          passages={{
+            threads: discussions.data?.threads ?? [],
+            // A decided change is the record: nothing is added to it.
+            canComment: isOpen && !isReadOnly,
+            onComment: async (anchor, body) => {
+              const next = await createChangeDiscussion(
+                { org, binder, documentPath: "" },
+                changeNumber,
+                body,
+                anchor,
+              );
+              queryClient.setQueryData(
+                queryKeys.changeDiscussions(org, binder, changeNumber),
+                next,
+              );
+            },
+            threadHref: (threadId) =>
+              `${buildBinderUrl({
+                org,
+                binder,
+                tab: "changes",
+                change: changeNumber,
+              })}#thread-${threadId}`,
+          }}
           ruleSection={ruleSection}
           ruleCount={changesRules ? ruleChangeCount(ruleChanges) : null}
           org={org}

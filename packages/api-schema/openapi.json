@@ -1880,6 +1880,40 @@
                 },
                 "updatedAt": {
                   "type": "string"
+                },
+                "anchor": {
+                  "type": "object",
+                  "nullable": true,
+                  "properties": {
+                    "document": {
+                      "type": "string",
+                      "maxLength": 300
+                    },
+                    "label": {
+                      "type": "string",
+                      "maxLength": 200
+                    },
+                    "quote": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 600
+                    },
+                    "prefix": {
+                      "type": "string",
+                      "maxLength": 80
+                    },
+                    "suffix": {
+                      "type": "string",
+                      "maxLength": 80
+                    }
+                  },
+                  "required": [
+                    "document",
+                    "label",
+                    "quote",
+                    "prefix",
+                    "suffix"
+                  ]
                 }
               },
               "required": [
@@ -1891,7 +1925,8 @@
                 "resolvedBy",
                 "resolvedAt",
                 "createdAt",
-                "updatedAt"
+                "updatedAt",
+                "anchor"
               ]
             }
           },
@@ -16368,6 +16403,40 @@
                           },
                           "updatedAt": {
                             "type": "string"
+                          },
+                          "anchor": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "document": {
+                                "type": "string",
+                                "maxLength": 300
+                              },
+                              "label": {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "quote": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 600
+                              },
+                              "prefix": {
+                                "type": "string",
+                                "maxLength": 80
+                              },
+                              "suffix": {
+                                "type": "string",
+                                "maxLength": 80
+                              }
+                            },
+                            "required": [
+                              "document",
+                              "label",
+                              "quote",
+                              "prefix",
+                              "suffix"
+                            ]
                           }
                         },
                         "required": [
@@ -16379,7 +16448,8 @@
                           "resolvedBy",
                           "resolvedAt",
                           "createdAt",
-                          "updatedAt"
+                          "updatedAt",
+                          "anchor"
                         ]
                       }
                     },
@@ -16441,6 +16511,39 @@
                 "properties": {
                   "body": {
                     "type": "string"
+                  },
+                  "anchor": {
+                    "type": "object",
+                    "properties": {
+                      "document": {
+                        "type": "string",
+                        "maxLength": 300
+                      },
+                      "label": {
+                        "type": "string",
+                        "maxLength": 200
+                      },
+                      "quote": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 600
+                      },
+                      "prefix": {
+                        "type": "string",
+                        "maxLength": 80
+                      },
+                      "suffix": {
+                        "type": "string",
+                        "maxLength": 80
+                      }
+                    },
+                    "required": [
+                      "document",
+                      "label",
+                      "quote",
+                      "prefix",
+                      "suffix"
+                    ]
                   }
                 },
                 "required": [
@@ -16650,6 +16753,40 @@
                           },
                           "updatedAt": {
                             "type": "string"
+                          },
+                          "anchor": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "document": {
+                                "type": "string",
+                                "maxLength": 300
+                              },
+                              "label": {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "quote": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 600
+                              },
+                              "prefix": {
+                                "type": "string",
+                                "maxLength": 80
+                              },
+                              "suffix": {
+                                "type": "string",
+                                "maxLength": 80
+                              }
+                            },
+                            "required": [
+                              "document",
+                              "label",
+                              "quote",
+                              "prefix",
+                              "suffix"
+                            ]
                           }
                         },
                         "required": [
@@ -16661,7 +16798,8 @@
                           "resolvedBy",
                           "resolvedAt",
                           "createdAt",
-                          "updatedAt"
+                          "updatedAt",
+                          "anchor"
                         ]
                       }
                     },
@@ -16733,6 +16871,39 @@
                 "properties": {
                   "body": {
                     "type": "string"
+                  },
+                  "anchor": {
+                    "type": "object",
+                    "properties": {
+                      "document": {
+                        "type": "string",
+                        "maxLength": 300
+                      },
+                      "label": {
+                        "type": "string",
+                        "maxLength": 200
+                      },
+                      "quote": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 600
+                      },
+                      "prefix": {
+                        "type": "string",
+                        "maxLength": 80
+                      },
+                      "suffix": {
+                        "type": "string",
+                        "maxLength": 80
+                      }
+                    },
+                    "required": [
+                      "document",
+                      "label",
+                      "quote",
+                      "prefix",
+                      "suffix"
+                    ]
                   }
                 },
                 "required": [
@@ -16942,6 +17113,40 @@
                           },
                           "updatedAt": {
                             "type": "string"
+                          },
+                          "anchor": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "document": {
+                                "type": "string",
+                                "maxLength": 300
+                              },
+                              "label": {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "quote": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 600
+                              },
+                              "prefix": {
+                                "type": "string",
+                                "maxLength": 80
+                              },
+                              "suffix": {
+                                "type": "string",
+                                "maxLength": 80
+                              }
+                            },
+                            "required": [
+                              "document",
+                              "label",
+                              "quote",
+                              "prefix",
+                              "suffix"
+                            ]
                           }
                         },
                         "required": [
@@ -16953,7 +17158,8 @@
                           "resolvedBy",
                           "resolvedAt",
                           "createdAt",
-                          "updatedAt"
+                          "updatedAt",
+                          "anchor"
                         ]
                       }
                     },
@@ -17234,6 +17440,40 @@
                           },
                           "updatedAt": {
                             "type": "string"
+                          },
+                          "anchor": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "document": {
+                                "type": "string",
+                                "maxLength": 300
+                              },
+                              "label": {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "quote": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 600
+                              },
+                              "prefix": {
+                                "type": "string",
+                                "maxLength": 80
+                              },
+                              "suffix": {
+                                "type": "string",
+                                "maxLength": 80
+                              }
+                            },
+                            "required": [
+                              "document",
+                              "label",
+                              "quote",
+                              "prefix",
+                              "suffix"
+                            ]
                           }
                         },
                         "required": [
@@ -17245,7 +17485,8 @@
                           "resolvedBy",
                           "resolvedAt",
                           "createdAt",
-                          "updatedAt"
+                          "updatedAt",
+                          "anchor"
                         ]
                       }
                     },
@@ -17545,6 +17786,40 @@
                           },
                           "updatedAt": {
                             "type": "string"
+                          },
+                          "anchor": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "document": {
+                                "type": "string",
+                                "maxLength": 300
+                              },
+                              "label": {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "quote": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 600
+                              },
+                              "prefix": {
+                                "type": "string",
+                                "maxLength": 80
+                              },
+                              "suffix": {
+                                "type": "string",
+                                "maxLength": 80
+                              }
+                            },
+                            "required": [
+                              "document",
+                              "label",
+                              "quote",
+                              "prefix",
+                              "suffix"
+                            ]
                           }
                         },
                         "required": [
@@ -17556,7 +17831,8 @@
                           "resolvedBy",
                           "resolvedAt",
                           "createdAt",
-                          "updatedAt"
+                          "updatedAt",
+                          "anchor"
                         ]
                       }
                     },
