@@ -376,6 +376,13 @@ export function DocumentEditorPage({
   const [save, setSave] = useState<SaveState>({ kind: "idle" });
   const savingRef = useRef(false);
   savingRef.current = save.kind === "saving";
+  /**
+   * An act in the file panel is committing to the draft. A save and an act
+   * both move the draft's branch, and Gitea refuses whichever lands second
+   * ("cannot lock ref"), so they take turns: an act waits for a save in
+   * flight, and a save that comes due during an act waits for it.
+   */
+  const actingRef = useRef(false);
   const [dirty, setDirty] = useState(false);
   const [leaving, setLeaving] = useState<Leaving | null>(null);
   const editorRef = useRef<Editor | null>(null);
@@ -928,6 +935,9 @@ export function DocumentEditorPage({
       return false;
     }
   };
+  /** The latest render's {@link saveOne}, for an act that waited on a save. */
+  const saveOneRef = useRef(saveOne);
+  saveOneRef.current = saveOne;
 
   /**
    * Saving on its own: after the words have rested, and never later than
@@ -945,7 +955,7 @@ export function DocumentEditorPage({
   const runAutosave = useCallback(() => {
     window.clearTimeout(autosaveTimer.current);
     if (!autosaveRef.current) return;
-    if (savingRef.current) {
+    if (savingRef.current || actingRef.current) {
       autosaveTimer.current = window.setTimeout(runAutosave, 500);
       return;
     }
@@ -1095,17 +1105,25 @@ export function DocumentEditorPage({
     act: () => Promise<void>,
     failed: string,
   ): Promise<boolean> => {
-    if (filesBusy) return false;
+    if (filesBusy || actingRef.current) return false;
     setFilesError(null);
-    if (savesFirst !== null && !(await saveOne(savesFirst))) return false;
+    actingRef.current = true;
     setFilesBusy(true);
     try {
+      // A save already on its way moves the draft first; the act goes after.
+      while (savingRef.current) {
+        await new Promise((resolve) => window.setTimeout(resolve, 150));
+      }
+      if (savesFirst !== null && !(await saveOneRef.current(savesFirst))) {
+        return false;
+      }
       await act();
       return true;
     } catch (err) {
       setFilesError(errorMessage(err, failed));
       return false;
     } finally {
+      actingRef.current = false;
       setFilesBusy(false);
     }
   };
