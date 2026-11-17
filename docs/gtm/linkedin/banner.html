@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <link
+      rel="stylesheet"
+      href="../../../packages/ui-tokens/css/bindersnap-tokens.css"
+    />
+    <style>
+      @font-face {
+        font-family: "Lora";
+        font-weight: 400 700;
+        src: url(../../../apps/app/public/fonts/lora-latin-wght-normal.woff2)
+          format("woff2");
+      }
+      @font-face {
+        font-family: "Lora";
+        font-style: italic;
+        font-weight: 400 700;
+        src: url(../../../apps/app/public/fonts/lora-latin-wght-italic.woff2)
+          format("woff2");
+      }
+      @font-face {
+        font-family: "Geist";
+        font-weight: 100 900;
+        src: url(../../../apps/app/public/fonts/geist-latin-wght-normal.woff2)
+          format("woff2");
+      }
+      @font-face {
+        font-family: "Geist Mono";
+        font-weight: 100 900;
+        src: url(../../../apps/app/public/fonts/geist-mono-latin-wght-normal.woff2)
+          format("woff2");
+      }
+      body::after {
+        display: none;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: var(--brand-font-sans);
+        background: var(--bs-surface-3);
+      }
+      /* 792×198, rendered at 2x: LinkedIn's 1584×396 profile banner. The
+         profile photo covers the lower left, so the words sit right of it. */
+      .banner {
+        width: 792px;
+        height: 198px;
+        position: relative;
+        overflow: hidden;
+        background: var(--bs-page-bg);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 0 44px 0 236px;
+      }
+      .banner::before {
+        content: "";
+        position: absolute;
+        top: -230px;
+        right: -120px;
+        width: 560px;
+        height: 560px;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle,
+          var(--brand-coral-wash-1) 0%,
+          var(--brand-coral-wash-2) 40%,
+          transparent 70%
+        );
+      }
+      .banner > * {
+        position: relative;
+      }
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-family: var(--brand-font-serif);
+        font-weight: 700;
+        font-size: 17px;
+        color: var(--bs-text-primary);
+      }
+      .mark {
+        width: 26px;
+        height: 26px;
+        border-radius: var(--brand-radius-md);
+        background: var(--brand-ink);
+        color: var(--brand-on-dark-primary);
+        display: grid;
+        place-items: center;
+      }
+      .url {
+        margin-left: 10px;
+        padding-left: 12px;
+        border-left: 1px solid var(--bs-border);
+        font-family: var(--brand-font-mono);
+        font-size: 10px;
+        font-weight: 400;
+        letter-spacing: var(--brand-tracking-wide);
+        color: var(--bs-text-muted);
+      }
+      h1 {
+        margin-top: 16px;
+        font-family: var(--brand-font-serif);
+        font-weight: 700;
+        font-size: 30px;
+        line-height: 1.15;
+        letter-spacing: var(--brand-tracking-tight);
+        color: var(--bs-text-primary);
+      }
+      h1 em {
+        font-style: italic;
+        color: var(--bs-coral-text);
+      }
+      .sub {
+        margin-top: 12px;
+        font-size: 12.5px;
+        color: var(--bs-text-secondary);
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <symbol id="logo" viewBox="0 0 18 18">
+          <rect
+            x="2"
+            y="1"
+            width="9"
+            height="13"
+            rx="1.5"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+          />
+          <rect
+            x="6"
+            y="4"
+            width="9"
+            height="13"
+            rx="1.5"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+          />
+        </symbol>
+      </defs>
+    </svg>
+    <section class="banner" id="banner">
+      <div class="logo">
+        <span class="mark"
+          ><svg width="16" height="16"><use href="#logo" /></svg></span
+        >Bindersnap<span class="url">BINDERSNAP.COM</span>
+      </div>
+      <h1>The surveyor asks which version you approved. <em>Show them.</em></h1>
+      <p class="sub">
+        Policy and procedure management for small healthcare providers.
+      </p>
+    </section>
+  </body>
+</html>
