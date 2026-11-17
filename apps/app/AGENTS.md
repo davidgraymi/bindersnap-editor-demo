@@ -123,8 +123,15 @@ branch**: the binder's version picker opens one of your drafts at
 `/-/tree/{draft}`, the same page as the record's, under the draft's name,
 with "Who signs off here" read there (`?ref=` on `GET …/rules/sign-off`).
 The explorer's links, a document's path and a folder's contents stay on the
-branch or draft being read, and Edit on your own draft's page carries on
-in it. **An open change request is edited in
+branch or draft being read. **Edit is on every version's binder, folder
+and document page** (`branchEdit.ts`): on the record it opens your draft;
+on one of your drafts, proposed or not, it carries on in it; on a change you
+write it opens the editor at `?change=N` (from the binder or a folder, on a
+policy the change touches there); on anybody else's branch it reads "Edit in
+your draft" and opens yours at the same place. **One branch, one name**: the
+picker lists a proposed draft once, under Change requests as "Your draft",
+and its button, the card over the tree and the draft bar all call it by its
+change's title. **An open change request is edited in
 place by its author and its co-editors** (the pull request's assignees,
 named on the change; the server refuses anyone else's save): Edit on its Proposed version card opens the editor at
 `?edit=write&change=N`, which reads the change's branch and saves with

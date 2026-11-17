@@ -25,6 +25,7 @@ import {
 } from "../api";
 import {
   binderChangeQuery,
+  binderChangesQuery,
   binderDocumentsQuery,
   binderDraftQuery,
   binderQuery,
@@ -89,6 +90,11 @@ import { PagePath } from "./LocationTrail";
 import { SignOffRail } from "./SignOffRail";
 import { describeFolder } from "../signOffPanel";
 import { useWriteAction } from "../paywallContext";
+import {
+  branchEditTarget,
+  ownsDraftBranch,
+  policyToWriteInChange,
+} from "../branchEdit";
 
 /**
  * The binder, laid out the way a repository is.
@@ -150,18 +156,6 @@ function describeFolderMeta(params: {
 function readRef(): string | null {
   const { ref } = currentBinderAddress();
   return ref === DEFAULT_REF ? null : ref;
-}
-
-/**
- * Whether a branch is one of this person's drafts — read from its name,
- * which says whose it is (`draft/<login>/<stamp>`), so the answer does not
- * wait on a list of drafts still being fetched. The server checks it again.
- */
-function ownsDraftBranch(branch: string, user: string): boolean {
-  const [kind, owner, stamp, ...rest] = branch.split("/");
-  return (
-    kind === "draft" && owner === user && Boolean(stamp) && rest.length === 0
-  );
 }
 
 /**
@@ -528,16 +522,6 @@ export function BinderShell({
   }, [reloadKey, org, binder, queryClient]);
   /** Your drafts, whichever of the two reads has them. */
   const knownDrafts = draft ?? readingDrafts;
-  /**
-   * One of your drafts, when it is the branch being read
-   * (`/-/tree/{draft}`): Edit carries on in it rather than in the newest.
-   */
-  const readingDraft =
-    editMode === "off" && documentRefFromSearch
-      ? ((readingDrafts?.drafts ?? []).find(
-          (own) => own.branch === documentRefFromSearch,
-        )?.branch ?? null)
-      : null;
   const draftChoices = useMemo(
     () =>
       (knownDrafts?.drafts ?? []).map(({ branch, name }) => ({
@@ -553,6 +537,24 @@ export function BinderShell({
    * list of drafts still being fetched. The server checks it again.
    */
   const isOwnDraft = (branch: string) => ownsDraftBranch(branch, currentUser);
+
+  /**
+   * What Edit does on the version being read (`branchEdit.ts`): the record
+   * and your drafts are yours to write; a change request is its author's and
+   * co-editors'; anybody else's branch sends Edit to your own draft. The open
+   * changes are the list the picker and the branch's card read already;
+   * the draft bar names a proposed draft by its change from the same list.
+   */
+  const readingRef = editMode === "off" ? documentRefFromSearch : null;
+  const openChangesOnBranch = useQuery({
+    ...binderChangesQuery(org, binder, "open"),
+    enabled: readingRef !== null,
+  }).data?.changes;
+  const branchEdit = branchEditTarget(
+    readingRef,
+    currentUser,
+    openChangesOnBranch ?? null,
+  );
 
   const goToEdit = (
     next: BinderEditMode,
@@ -689,7 +691,11 @@ export function BinderShell({
    */
   const writeDocument = async (slugPath: string) => {
     const open =
-      editMode !== "off" ? draft?.draft?.branch : (readingDraft ?? undefined);
+      editMode !== "off"
+        ? draft?.draft?.branch
+        : branchEdit.kind === "draft"
+          ? branchEdit.branch
+          : undefined;
     if (open) {
       setDraftBranch(open);
       moveTo(
@@ -727,6 +733,54 @@ export function BinderShell({
         err instanceof Error && err.message.trim() !== ""
           ? err.message
           : "Unable to open your draft to edit this document.",
+      );
+    } finally {
+      setStartingEdit(false);
+    }
+  };
+
+  /**
+   * Edit on a change request's branch you may write — its author's or a
+   * co-editor's — from the binder's page or a folder's: the editor in that
+   * change, on a policy it touches there, else the first the editor writes.
+   * A folder of nothing but Word files and PDFs opens the change, where
+   * those are revised by uploading a new version.
+   */
+  const writeInChangeAtPlace = async (number: number, branch: string) => {
+    setStartingEdit(true);
+    setDraftError(null);
+    try {
+      const listing = await queryClient.fetchQuery(
+        binderDocumentsQuery(org, binder, { ref: branch }),
+      );
+      const touched =
+        openChangesOnBranch
+          ?.find((entry) => entry.number === number)
+          ?.documents.map((entry) => entry.slugPath) ?? [];
+      const target = policyToWriteInChange(
+        listing.documents,
+        touched,
+        currentBinderAddress().folder,
+      );
+      if (!target) {
+        openChangeNumber(number);
+        return;
+      }
+      moveTo(
+        buildDocumentEditUrl({
+          org,
+          binder,
+          documentPath: target,
+          draft: null,
+          change: number,
+        }),
+      );
+      setEditMode("writing");
+    } catch (err) {
+      setDraftError(
+        err instanceof Error && err.message.trim() !== ""
+          ? err.message
+          : "Unable to open this change to edit it.",
       );
     } finally {
       setStartingEdit(false);
@@ -1491,9 +1545,17 @@ export function BinderShell({
     window.addEventListener("popstate", take);
     return () => window.removeEventListener("popstate", take);
   }, [org, binder, addDocument]);
-  const editBinder = useWriteAction(
-    () => void startWriting(readingDraft ?? undefined),
-  );
+  /**
+   * Edit on the binder's page or a folder's, in the version on screen
+   * (`branchEdit.ts`): your draft, the change you are writing, or — on
+   * somebody else's branch — your own draft at the same place.
+   */
+  const editBinder = useWriteAction(() => {
+    if (branchEdit.kind === "draft") void startWriting(branchEdit.branch);
+    else if (branchEdit.kind === "change") {
+      void writeInChangeAtPlace(branchEdit.number, branchEdit.branch);
+    } else void startWriting();
+  });
   const editDocument = useWriteAction(
     (slugPath: string) => void writeDocument(slugPath),
   );
@@ -1590,11 +1652,10 @@ export function BinderShell({
               The contents only. This is the page's one filled button, and on
               the other three screens the answer to "what is this page for" is
               not "add a policy". */}
-          {/* Not on somebody else's branch, which nobody here writes to —
-              but on one of your drafts, Edit carries on in it. */}
-          {activeTab !== "documents" ||
-          missingFolder ||
-          (onBranch && !readingDraft) ? null : (
+          {/* On every version of the binder: on one of your drafts Edit
+              carries on in it, on a change you write it writes the change,
+              and on anybody else's it says it opens your own draft. */}
+          {activeTab !== "documents" || missingFolder ? null : (
             <div className="bs-pagehead-actions">
               {/* **The same buttons in the same slots.** Reading, the header
                   offers Add a policy and Edit; editing, it offers the way
@@ -1617,9 +1678,13 @@ export function BinderShell({
                     className="bs-btn bs-btn-primary"
                     type="button"
                     onClick={editBinder}
-                    disabled={startingEdit}
+                    disabled={startingEdit || branchEdit.kind === "unknown"}
                   >
-                    {startingEdit ? "Opening your draft…" : "Edit"}
+                    {startingEdit
+                      ? "Opening…"
+                      : branchEdit.kind === "theirs"
+                        ? "Edit in your draft"
+                        : "Edit"}
                   </button>
                 )
               ) : null}
@@ -1768,6 +1833,7 @@ export function BinderShell({
           }
           drafts={draftChoices}
           onEditDocument={editDocument}
+          branchEdit={branchEdit}
           canWriteBinder={overview?.workspace.access?.push ?? true}
           editing={startingEdit}
           onOpenBinder={onOpenBinder}
@@ -2114,7 +2180,13 @@ export function BinderShell({
       openChange === null &&
       activeTab === "documents" ? (
         <BinderDraftBar
-          name={draft.draft.name}
+          /* Proposed, it is called what the picker and the card call it:
+             its change's title, not the name it had before. */
+          name={
+            openChangesOnBranch
+              ?.find((entry) => entry.number === draft.draft!.changeNumber)
+              ?.title.trim() || draft.draft.name
+          }
           acts={draft.draft.acts}
           others={draft.others.map((other) => other.owner)}
           busy={startingEdit}

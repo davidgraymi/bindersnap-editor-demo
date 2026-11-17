@@ -206,3 +206,79 @@ test("somebody else's draft is not read, whichever way its branch is spelt", asy
   await alice.close();
   await bob.close();
 });
+
+test("Edit on a document read in your draft opens it in that draft", async ({
+  page,
+}) => {
+  await signInAsBob(page);
+  await discardOwnDrafts(page);
+  const branch = await draftWithARule(page);
+  const onDraft = encodeURIComponent(branch);
+
+  await page.goto(
+    `${BINDER}/-/blob/${onDraft}/clinical-standards/sepsis-pathway`,
+  );
+  await page
+    .locator(".bs-pagehead-actions")
+    .getByRole("button", { name: "Edit", exact: true })
+    .click({ timeout: 60_000 });
+  await expect(page).toHaveURL(
+    new RegExp(`sepsis-pathway[^?]*\\?edit=write&draft=${onDraft}`),
+    { timeout: 60_000 },
+  );
+
+  await discardOwnDrafts(page);
+});
+
+test("a proposed draft is one row and one name, and Edit carries on in it", async ({
+  page,
+}) => {
+  await signInAsBob(page);
+  await discardOwnDrafts(page);
+  const branch = await draftWithARule(page);
+  const onDraft = encodeURIComponent(branch);
+  const title = "Quality Committee signs off Clinical Standards";
+  const proposed = await page.request.post(`${API}/changes`, {
+    headers: HEADERS,
+    data: { title, draft: branch },
+  });
+  expect(proposed.ok(), await proposed.text()).toBe(true);
+  const { changeNumber } = (await proposed.json()) as { changeNumber: number };
+
+  try {
+    await page.goto(`${BINDER}/-/tree/${onDraft}`);
+    // The button says what the card over the tree says: the change.
+    const picker = page.getByRole("button", { name: /^Version:/ });
+    await expect(picker).toHaveText(title, { timeout: 60_000 });
+    await expect(page.locator(".binder-latest--branch")).toContainText(
+      `Your draft · change ${changeNumber}`,
+    );
+    await expect(page.locator(".bs-draftbar-title")).toContainText(title);
+
+    // Listed once, with the change requests, as yours.
+    await picker.click();
+    const rows = page.getByRole("menuitemradio", { name: new RegExp(title) });
+    await expect(rows).toHaveCount(1);
+    await expect(rows).toContainText(`Change ${changeNumber} · Your draft`);
+    await expect(page.getByRole("menuitemradio", { name: NAME })).toHaveCount(
+      0,
+    );
+    await page.keyboard.press("Escape");
+
+    // Edit on its folder carries on in the draft, where saves reach the change.
+    await page.goto(`${BINDER}/-/tree/${onDraft}/clinical-standards`);
+    await page
+      .locator(".bs-pagehead-actions")
+      .getByRole("button", { name: "Edit", exact: true })
+      .click({ timeout: 60_000 });
+    await expect(page).toHaveURL(
+      new RegExp(`clinical-standards\\?edit=write&draft=${onDraft}`),
+      { timeout: 60_000 },
+    );
+  } finally {
+    await page.request.post(`${API}/changes/${changeNumber}/close`, {
+      headers: HEADERS,
+    });
+    await discardOwnDrafts(page);
+  }
+});

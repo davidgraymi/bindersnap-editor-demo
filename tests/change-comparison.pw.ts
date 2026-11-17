@@ -248,16 +248,30 @@ test("the branch opens the binder at its root, and View opens the file", async (
   // the branch, and the card saying which change sits on it — not a button
   // back to where the reader clicked from.
   await expect(page.locator("h1.bs-title")).toHaveText("Clinical");
-  await expect(page.locator(".bs-refpick")).toHaveText(branchName);
   await expect(page.locator(".binder-latest--branch")).toContainText(
     "change 19",
+  );
+  // The picker says what its ticked row says: the change on the branch.
+  await expect(page.locator(".bs-refpick")).toHaveText(
+    (await page
+      .locator(".binder-latest--branch .binder-latest-title")
+      .textContent())!.trim(),
+  );
+  await expect(page.locator(".binder-latest--branch")).toContainText(
+    branchName,
   );
   await expect(page.locator(".binder-tree-row").first()).toBeVisible();
   await expect(
     page.getByRole("button", { name: /Back to change/ }),
   ).toHaveCount(0);
-  // Nothing that writes to the record is offered on somebody's branch.
-  await expect(page.getByRole("button", { name: "Edit" })).toHaveCount(0);
+  // Somebody else's branch is not Alice's to write: Edit says it opens her
+  // own draft instead.
+  await expect(
+    page.getByRole("button", { name: "Edit", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Edit in your draft" }),
+  ).toBeVisible();
 
   // A policy opened from there is still read on the branch.
   await page

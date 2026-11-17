@@ -105,3 +105,29 @@ test("somebody who is neither the author nor a co-editor reads, and cannot edit"
   );
   expect(named.status).toBe(403);
 });
+
+test("Edit on the change's branch writes the change", async ({ page }) => {
+  await signInAsAlice(page);
+  const number = await openTheChange(page);
+  const read = await page.request.get(
+    `${API_BASE_URL}/api/app/binders/${BINDER}/changes/${number}`,
+    { headers: { Origin: APP_BASE_URL } },
+  );
+  expect(read.ok(), await read.text()).toBe(true);
+  const { change } = (await read.json()) as {
+    change: { branchName: string };
+  };
+  const onBranch = encodeURIComponent(change.branchName);
+
+  await page.goto(`${APP_BASE_URL}/${BINDER}/-/tree/${onBranch}`);
+  await page
+    .locator(".bs-pagehead-actions")
+    .getByRole("button", { name: "Edit", exact: true })
+    .click({ timeout: 60_000 });
+  // Alice wrote it: the editor opens in the change (or in her own draft,
+  // when the change was proposed from one — saves there reach the change).
+  await expect(page).toHaveURL(
+    new RegExp(`edit=write&(change=${number}|draft=${onBranch})`),
+    { timeout: 60_000 },
+  );
+});

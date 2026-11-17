@@ -94,6 +94,7 @@ export const HELP_GUIDES: HelpGuide[] = [
         paragraphs: [
           "Choose Edit on a binder, a folder or a document. Bindersnap opens the editor in a draft that is yours alone. The version on record does not move, and nobody is asked to look at anything, however long you take.",
           "The draft's name is at the top of the editor. Choose it to switch to another of your drafts or to start a new one. You can change as many documents as you like in one draft: they are proposed, reviewed and published together.",
+          "Edit works on whatever version you are reading. Reading one of your drafts, Edit carries on in it. Reading a change request you wrote or co-edit, Edit writes in that change. Reading somebody else's, the button says Edit in your draft, and opens yours at the same folder or document.",
         ],
       },
       {

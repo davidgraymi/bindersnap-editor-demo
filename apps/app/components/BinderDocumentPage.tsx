@@ -14,6 +14,7 @@ import { routeToPath } from "../routes";
 import { SignOffRail } from "./SignOffRail";
 import { EditChoiceDialog } from "./EditChoiceDialog";
 import { editChoices } from "../editChoices";
+import type { BranchEdit } from "../branchEdit";
 
 import {
   buildDocumentCrumbs,
@@ -105,6 +106,11 @@ interface BinderDocumentPageProps {
    */
   onEditDocument?: (slugPath: string) => void;
   /**
+   * What Edit does on the version being read (`branchEdit.ts`). Without it,
+   * Edit is offered on the record only.
+   */
+  branchEdit?: BranchEdit;
+  /**
    * Whether the reader may write in this binder. A reader or reviewer sees no
    * Edit.
    */
@@ -147,6 +153,7 @@ export function BinderDocumentPage({
   documentRef = null,
   onRefsChange,
   onEditDocument,
+  branchEdit = { kind: "record" },
   canWriteBinder = true,
   editing = false,
   onOpenBinder,
@@ -376,23 +383,44 @@ export function BinderDocumentPage({
   // the one in the change. Showing the "nothing published" panel over it would
   // hide the very thing somebody came to look at.
   const nothingToShow = latestVersion === null && state === "published";
-  // Written in the editor, read as it now stands — on the record or in your
-  // draft — and not on somebody's change request, which is theirs to edit.
-  const canRevise = !isReadOnly && isViewingRecord && state !== "proposed";
-  // Edit opens the editor on this document, in your draft, whatever kind of
-  // file it is: the editor shows a Word file or a PDF read only, with its
-  // own Upload new version and Edit in Bindersnap. Never on somebody's change
-  // request or an older version, which are not yours to write over.
+  // Edit opens the editor on this document, in the version being read,
+  // whatever kind of file it is: the editor shows a Word file or a PDF read
+  // only, with its own Upload new version and Edit in Bindersnap. On the
+  // record and in your drafts that is your draft; on a change you write, the
+  // change; on anybody else's branch, your own draft (`branchEdit.ts`). Never
+  // on an older version, which is not yours to write over. A document new on
+  // a branch reads as "proposed", and is still the branch's to write.
+  const onBranch = documentRef !== null;
   const canEdit =
     onEditDocument !== undefined &&
-    canRevise &&
+    !isReadOnly &&
+    isViewingRecord &&
     canWriteBinder &&
-    documentRef === null &&
-    change === null;
+    change === null &&
+    (onBranch ? branchEdit.kind !== "record" : state !== "proposed");
   // **Edit asks first when somebody is already changing it**
   // (`editChoices.ts`): continue in that change if it is yours to write,
-  // comment on it if not, or start a separate one.
-  const editAsks = onEditInChange ? editChoices(openChanges, currentUser) : [];
+  // comment on it if not, or start a separate one. Not in your own draft or
+  // a change you are writing, where you are already in the work.
+  const editAsks =
+    onEditInChange &&
+    (branchEdit.kind === "record" || branchEdit.kind === "theirs")
+      ? editChoices(openChanges, currentUser)
+      : [];
+  const editHere = () => {
+    if (branchEdit.kind === "change") {
+      // The editor writes its own documents into a change; a Word file or a
+      // PDF is revised by a new upload, from the change.
+      if (isEditorDocumentFile(document.path)) {
+        onEditInChange?.(document.slugPath, branchEdit.number);
+      } else {
+        onOpenChange(branchEdit.number);
+      }
+      return;
+    }
+    if (editAsks.length > 0) setAskingEdit(true);
+    else onEditDocument?.(document.slugPath);
+  };
 
   return (
     <div className="binder-pane">
@@ -462,14 +490,14 @@ export function BinderDocumentPage({
             <button
               type="button"
               className="bs-btn bs-btn-primary"
-              disabled={editing}
-              onClick={() =>
-                editAsks.length > 0
-                  ? setAskingEdit(true)
-                  : onEditDocument?.(document.slugPath)
-              }
+              disabled={editing || branchEdit.kind === "unknown"}
+              onClick={editHere}
             >
-              {editing ? "Opening your draft…" : "Edit"}
+              {editing
+                ? "Opening…"
+                : branchEdit.kind === "theirs"
+                  ? "Edit in your draft"
+                  : "Edit"}
             </button>
           </div>
         ) : null}
