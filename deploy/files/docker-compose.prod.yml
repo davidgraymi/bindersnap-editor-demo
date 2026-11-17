@@ -211,7 +211,7 @@ services:
     # (scripts/restore.test.ts fails if they differ). An older Litestream
     # restoring from a newer one's replica does not fail: it restores only the
     # backups it can read, which can be days old.
-    image: litestream/litestream:0.5.17@sha256:4b02b9859a6b6b4087d8b8944e15f7e984bd7957cba322bbeee38b0e27b9656a
+    image: litestream/litestream:0.5.18@sha256:513bff62a88fc0c86c73d27333c41c54c89fe890a7c32a551600adff9309b11b
     container_name: bindersnap-litestream-prod
     restart: unless-stopped
     depends_on:
