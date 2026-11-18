@@ -56,7 +56,16 @@ type PreviewState =
   | { status: "loading" }
   | { status: "text"; text: string; markdown: boolean; size: number }
   /** A Word file, read into the semantic HTML that was inside it all along. */
-  | { status: "richText"; html: string; size: number }
+  | {
+      status: "richText";
+      html: string;
+      size: number;
+      /**
+       * Written in Bindersnap's editor, so it is set here as it is there:
+       * `doc-preview-written`. A Word file's HTML has no page of ours to match.
+       */
+      written?: boolean;
+    }
   | { status: "object"; url: string; kind: "pdf" | "image"; size: number }
   | { status: "unsupported"; size: number | null }
   | { status: "error"; message: string };
@@ -168,6 +177,7 @@ export function DocumentPreview({
               status: "richText",
               html: sanitizeHtml(editorHtml),
               size: blob.size,
+              written: true,
             });
             return;
           }
@@ -325,7 +335,9 @@ export function DocumentPreview({
         ) : state.status === "richText" ? (
           <article
             ref={proseRef}
-            className="doc-preview-sheet doc-preview-prose"
+            className={`doc-preview-sheet doc-preview-prose${
+              state.written ? " doc-preview-written" : ""
+            }`}
             // Mammoth emits a small semantic subset of HTML, and the result is
             // sanitized before it lands here.
             dangerouslySetInnerHTML={{ __html: state.html }}

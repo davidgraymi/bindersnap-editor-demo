@@ -88,6 +88,22 @@ export const DiscussionResolutionEventSchema = z.object({
   at: z.string(),
 });
 
+/**
+ * The passage a discussion is about: a reviewer selected these words in this
+ * document. `prefix` and `suffix` are what stood either side, to find the
+ * words again in a document that says them twice.
+ */
+export const DiscussionAnchorSchema = z.object({
+  /** The document's identity, or its path when it has none. */
+  document: z.string().max(300),
+  /** What the document was called when the comment was made. */
+  label: z.string().max(200),
+  quote: z.string().min(1).max(600),
+  prefix: z.string().max(80),
+  suffix: z.string().max(80),
+});
+export type DiscussionAnchor = z.infer<typeof DiscussionAnchorSchema>;
+
 export const DiscussionThreadSchema = z.object({
   id: z.string(),
   origin: z.enum(["bindersnap", "external"]),
@@ -98,6 +114,8 @@ export const DiscussionThreadSchema = z.object({
   resolvedAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  /** Null for a comment on the change as a whole. */
+  anchor: DiscussionAnchorSchema.nullable(),
 });
 export type DiscussionThread = z.infer<typeof DiscussionThreadSchema>;
 
@@ -110,6 +128,7 @@ export type DiscussionSummary = z.infer<typeof DiscussionSummarySchema>;
 
 export const CreateDiscussionBodySchema = z.object({
   body: z.string(),
+  anchor: DiscussionAnchorSchema.optional(),
 });
 export type CreateDiscussionBody = z.infer<typeof CreateDiscussionBodySchema>;
 
@@ -216,6 +235,11 @@ export const PullRequestWithApprovalStateSchema = z.object({
   reviewers: z.array(ChangeReviewerSchema),
   /** The one person answerable for the change, when someone is. */
   assignee: ChangeUserSchema.nullable(),
+  /**
+   * Who besides its author may change what it proposes — its Gitea
+   * assignees. Absent where a list was not built from the pull request.
+   */
+  coEditors: z.array(ChangeUserSchema).optional(),
   body: z.string().optional(),
   approvalState: ApprovalStateSchema,
   user: z
@@ -519,6 +543,12 @@ export type ChangeUpdatesPayload = z.infer<typeof ChangeUpdatesPayloadSchema>;
 export const UpdateChangeAssignmentsBodySchema = z.object({
   /** The person answerable for the change. `null` clears the assignment. */
   assignee: z.string().nullable().optional(),
+  /**
+   * Everybody besides the author who may edit the change, as a whole list:
+   * anyone left out can no longer save into it. Its author or a binder admin
+   * sets it.
+   */
+  coEditors: z.array(z.string()).optional(),
   /**
    * The whole reviewer list, not a delta — anyone left out has their review
    * request withdrawn. Omit the field to leave reviewers alone.

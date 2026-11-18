@@ -31,8 +31,22 @@ test("a Word file is converted into the draft and opens in the editor", async ({
   await signInAsAlice(page);
   await page.goto(DOCUMENT);
 
-  // The page offers the editor's door beside the file's own acts.
-  await page.getByRole("button", { name: "Edit in Bindersnap" }).click();
+  // Edit opens the editor on it, shown as it is, and its note offers the
+  // conversion.
+  await page
+    .locator(".bs-pagehead-actions")
+    .getByRole("button", { name: "Edit", exact: true })
+    .click();
+  // It is in Alice's open change too, so Edit asks first: a conversion is a
+  // change of its own, in her draft.
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Start a separate change" })
+    .click();
+  await page
+    .getByRole("complementary", { name: "About this file" })
+    .getByRole("button", { name: "Edit in Bindersnap" })
+    .click({ timeout: 60_000 });
 
   // Read first, written second: the dialog says what is lost before it costs
   // anything, and Convert is not available until the file has been read.
@@ -57,6 +71,7 @@ test("a Word file is converted into the draft and opens in the editor", async ({
   // Leave the seed as it was found.
   await page.getByRole("button", { name: "Close" }).click();
   await page.getByRole("button", { name: "Discard", exact: true }).click();
+  await page.getByRole("button", { name: "Discard draft" }).click();
   await expect(page.locator(".draft-bar-discard")).toHaveCount(0, {
     timeout: 30_000,
   });

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import type { HelpGuide } from "../app/helpGuides";
+import { helpSectionId, type HelpGuide } from "../app/helpGuides";
 import { analyticsTag } from "../site/analytics";
 import { SIGNUP_SOURCE_SCRIPT } from "../site/signupSource";
 import {
@@ -146,8 +146,38 @@ function sectionHtml(section: HelpGuide["sections"][number]): string {
   const paragraphs = (section.paragraphs ?? [])
     .map((paragraph) => `<p>${escape(paragraph)}</p>`)
     .join("");
-  return `<section><h2>${escape(section.heading)}</h2>${steps}${paragraphs}</section>`;
+  // The id is what a link from the app, or from one colleague to another,
+  // lands on: `/help/approvals#how-many-approvals`.
+  return `<section><h2 id="${helpSectionId(section.heading)}">${escape(section.heading)}</h2>${steps}${paragraphs}</section>`;
 }
+
+/**
+ * The guide's sections, as links, above it.
+ *
+ * A guide is read by somebody stuck on one step. The list lets them see
+ * whether their question is on the page, and jump to it, before reading
+ * anything. A guide with one or two sections is short enough to need none.
+ */
+function onThisPage(guide: HelpGuide): string {
+  if (guide.sections.length < 3) return "";
+  const links = guide.sections
+    .map(
+      (section) =>
+        `<li><a href="#${helpSectionId(section.heading)}">${escape(section.heading)}</a></li>`,
+    )
+    .join("");
+  return `<nav class="help-toc" aria-label="On this page"><p class="help-toc-title">On this page</p><ul>${links}</ul></nav>\n`;
+}
+
+/**
+ * Where a guide that did not answer the question leads: to us. Send feedback
+ * is in the app's sidebar on every page, and takes a question as readily as
+ * a bug.
+ */
+const STILL_STUCK = `<aside class="help-stuck" aria-label="Still stuck?">
+<h2>Still stuck?</h2>
+<p>Ask us. In Bindersnap, choose <strong>Send feedback</strong> at the foot of the sidebar and write your question. It reaches the people who build Bindersnap, along with the page you were on, so you do not have to explain where you were.</p>
+</aside>`;
 
 export function renderHelpIndex(guides: readonly HelpGuide[]): string {
   const cards = guides
@@ -238,9 +268,10 @@ export function renderHelpGuide(
         publisher: { "@id": ORGANIZATION_LD["@id"] },
       },
     ],
-    body: `<article>
+    body: `${onThisPage(guide)}<article>
 ${guide.sections.map(sectionHtml).join("\n")}
 </article>
+${STILL_STUCK}
 <nav class="help-pager" aria-label="More guides">${pager}</nav>`,
   });
 }
@@ -387,6 +418,47 @@ a { color: inherit; }
   letter-spacing: var(--brand-tracking-snug);
   color: var(--bs-text-primary);
 }
+/* A section linked to by its anchor stops below the bar, not under it. */
+.help-main h2[id] {
+  scroll-margin-top: calc(var(--brand-nav-height) + var(--brand-space-6));
+}
+.help-toc {
+  margin: 0 0 var(--brand-space-10);
+  padding: var(--brand-space-4) var(--brand-space-5);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  font-size: var(--brand-text-sm);
+}
+.help-toc-title {
+  margin: 0 0 var(--brand-space-2);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-label);
+  letter-spacing: var(--brand-tracking-wide);
+  text-transform: uppercase;
+  color: var(--bs-text-muted);
+}
+.help-toc ul { list-style: none; margin: 0; padding: 0; }
+.help-toc li { margin: 0; }
+.help-toc a {
+  display: block;
+  padding: var(--brand-space-1) 0;
+  color: var(--bs-text-secondary);
+  text-decoration: none;
+}
+.help-toc a:hover { color: var(--bs-coral-text); text-decoration: underline; }
+.help-stuck {
+  margin-top: var(--brand-space-12);
+  padding: var(--brand-space-5) var(--brand-space-6);
+  border-radius: var(--brand-radius-xl);
+  background: var(--bs-surface-2);
+  color: var(--bs-text-secondary);
+}
+.help-main .help-stuck h2 {
+  margin: 0 0 var(--brand-space-2);
+  font-size: var(--brand-text-body-lg);
+}
+.help-stuck p { margin: 0; }
 .help-main article > :first-child h2,
 .help-main article > h2:first-child { margin-top: 0; }
 .help-main p { margin: 0 0 var(--brand-space-4); }

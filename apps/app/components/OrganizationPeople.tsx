@@ -1,3 +1,4 @@
+import { HelpLink } from "./HelpLink";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
@@ -31,6 +32,8 @@ import {
   slugifyGroupName,
 } from "../../../packages/utils/groupName";
 import { PersonAvatar } from "./PersonAvatar";
+import { routeToPath } from "../routes";
+import { followInApp } from "../appLink";
 import { describePlanPrice } from "./PlanOffer";
 import { AppIcon, ICON } from "./AppIcon";
 
@@ -131,7 +134,10 @@ export function OrganizationPeople({ org }: OrganizationPeopleProps) {
           {seats.summary} Owners, and anyone in a group that edits or
           administers a binder, are paid seats
           {seats.unit ? ` at ${seats.unit}` : ""}, counted once. Reviewers and
-          readers are free.
+          readers are free.{" "}
+          <HelpLink guide="people" section="Who costs a seat">
+            Who costs a seat
+          </HelpLink>
         </p>
       ) : null}
 
@@ -592,6 +598,36 @@ function OrganizationGroups({
                     </span>
                   </button>
 
+                  {expanded ? (
+                    <p className="org-group-page">
+                      <a
+                        href={routeToPath({
+                          kind: "organization",
+                          org,
+                          tab: "people",
+                          group: group.name,
+                        })}
+                        onClick={(event) =>
+                          followInApp(event, () => {
+                            window.history.pushState(
+                              {},
+                              "",
+                              routeToPath({
+                                kind: "organization",
+                                org,
+                                tab: "people",
+                                group: group.name,
+                              }),
+                            );
+                            window.dispatchEvent(new PopStateEvent("popstate"));
+                          })
+                        }
+                      >
+                        Where {describeGroupName(group.name)} signs off, and its
+                        page →
+                      </a>
+                    </p>
+                  ) : null}
                   {expanded ? (
                     <GroupDetail
                       group={group}

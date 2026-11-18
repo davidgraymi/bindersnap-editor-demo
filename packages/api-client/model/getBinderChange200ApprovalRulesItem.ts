@@ -7,6 +7,7 @@
 import type { GetBinderChange200ApprovalRulesItemApprovedByItem } from './getBinderChange200ApprovalRulesItemApprovedByItem.ts';
 import type { GetBinderChange200ApprovalRulesItemEligibleItem } from './getBinderChange200ApprovalRulesItemEligibleItem.ts';
 import type { GetBinderChange200ApprovalRulesItemKind } from './getBinderChange200ApprovalRulesItemKind.ts';
+import type { GetBinderChange200ApprovalRulesItemReason } from './getBinderChange200ApprovalRulesItemReason.ts';
 import type { GetBinderChange200ApprovalRulesItemScope } from './getBinderChange200ApprovalRulesItemScope.ts';
 
 export type GetBinderChange200ApprovalRulesItem = {
@@ -19,4 +20,5 @@ export type GetBinderChange200ApprovalRulesItem = {
   required: number;
   eligible: GetBinderChange200ApprovalRulesItemEligibleItem[];
   approvedBy: GetBinderChange200ApprovalRulesItemApprovedByItem[];
+  reason: GetBinderChange200ApprovalRulesItemReason;
 };

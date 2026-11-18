@@ -308,3 +308,57 @@ export function readAssignee(pullRequest: PullRequest): ChangeUser | null {
     null
   );
 }
+
+/**
+ * Who may change what an open change request proposes.
+ *
+ * **Its author, and the co-editors its author names. Nobody else.** Anybody
+ * who could write in the binder could save into any open change by its
+ * number — add a document to it, revise one in it, settle its conflicts — so
+ * a proposal could come out of review holding words its author never wrote.
+ * Everybody else has two honest ways to take part: comment on the words, or
+ * open a change of their own.
+ *
+ * Co-editors are the pull request's **assignees**: Gitea's own list of the
+ * people working on it, so it is on the change's record beside its reviews
+ * and nothing about it is kept anywhere else (ADR 0004, question 1).
+ */
+export function readCoEditors(pullRequest: PullRequest): ChangeUser[] {
+  const candidate = pullRequest as {
+    assignee?: User | null;
+    assignees?: User[] | null;
+  };
+  const author = (pullRequest.user?.login ?? "").toLowerCase();
+  const seen = new Set<string>();
+  const editors: ChangeUser[] = [];
+  for (const user of [
+    ...(candidate.assignees ?? []),
+    ...(candidate.assignee ? [candidate.assignee] : []),
+  ]) {
+    const person = toChangeUser(user);
+    if (!person) continue;
+    const key = person.login.toLowerCase();
+    // The author edits it anyway: naming them a co-editor says nothing.
+    if (key === author || seen.has(key)) continue;
+    seen.add(key);
+    editors.push(person);
+  }
+  return editors;
+}
+
+/** Is this person the change's author or one of its co-editors? */
+export function mayEditChange(
+  pullRequest: PullRequest,
+  username: string,
+): boolean {
+  const login = username.trim().toLowerCase();
+  if (login === "") return false;
+  if ((pullRequest.user?.login ?? "").toLowerCase() === login) return true;
+  return readCoEditors(pullRequest).some(
+    (editor) => editor.login.toLowerCase() === login,
+  );
+}
+
+/** What somebody who is neither is told. */
+export const NOT_AN_EDITOR =
+  "Only this change request's author and its co-editors can change what it proposes. You can comment on it, or open a change of your own.";

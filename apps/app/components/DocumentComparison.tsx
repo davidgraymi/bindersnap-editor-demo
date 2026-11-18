@@ -83,6 +83,8 @@ type ComparisonState =
       empty: boolean;
       /** Both sides as rendered, and their diff, for what words miss. */
       markup: { before: string; after: string; diffed: string };
+      /** Both sides were written in the editor: set as the editor sets them. */
+      written: boolean;
     }
   | { status: "text"; segments: DiffSegment[]; truncated: boolean }
   | { status: "image"; beforeUrl: string; afterUrl: string }
@@ -101,6 +103,7 @@ function renderedComparison(
   after: string,
   segments: DiffSegment[],
   empty = false,
+  written = false,
 ): ComparisonState {
   const diffed = diffRenderedHtml(before, after);
   return {
@@ -109,6 +112,7 @@ function renderedComparison(
     segments,
     empty,
     markup: { before, after, diffed },
+    written,
   };
 }
 
@@ -252,6 +256,8 @@ export function DocumentComparison({
                 leftHtml,
                 rightHtml,
                 diffWords(htmlToText(leftHtml), htmlToText(rightHtml)),
+                false,
+                true,
               ),
             );
             return;
@@ -435,7 +441,9 @@ export function DocumentComparison({
              where it read as a paragraph the change had added. The file's bar
              already says "Formatting", which is where a status belongs. */
           <article
-            className="doc-preview-sheet doc-preview-prose doc-compare-prose"
+            className={`doc-preview-sheet doc-preview-prose doc-compare-prose${
+              state.written ? " doc-preview-written" : ""
+            }`}
             // Every side of this went through a renderer of ours that escapes
             // its input — our Markdown renderer, the block renderer, or
             // mammoth's own subset — and the whole result went through the

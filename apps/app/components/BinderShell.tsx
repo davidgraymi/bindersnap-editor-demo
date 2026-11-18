@@ -25,6 +25,7 @@ import {
 } from "../api";
 import {
   binderChangeQuery,
+  binderChangesQuery,
   binderDocumentsQuery,
   binderDraftQuery,
   binderQuery,
@@ -66,7 +67,6 @@ import { AddPolicyModal } from "./AddPolicyModal";
 import { NewFolderModal } from "./NewFolderModal";
 import { BinderArchive } from "./BinderArchive";
 import { BinderDraftBar } from "./BinderDraftBar";
-import { BinderDraftPicker } from "./BinderDraftPicker";
 import { ProposeChangePage } from "./ProposeChangePage";
 import { BinderChangePage } from "./BinderChangePage";
 import { BinderChanges } from "./BinderChanges";
@@ -87,7 +87,14 @@ import type { SidebarBinder } from "./AppSidebar";
 import type { DocumentRefView } from "../documentRefs";
 import { SkeletonLine } from "./Skeleton";
 import { PagePath } from "./LocationTrail";
+import { SignOffRail } from "./SignOffRail";
+import { describeFolder } from "../signOffPanel";
 import { useWriteAction } from "../paywallContext";
+import {
+  branchEditTarget,
+  ownsDraftBranch,
+  policyToWriteInChange,
+} from "../branchEdit";
 
 /**
  * The binder, laid out the way a repository is.
@@ -120,6 +127,32 @@ import { useWriteAction } from "../paywallContext";
  * `/-/blob/main/…`, and treating that as "a branch" would draw the chrome of
  * reading somewhere else around the thing everybody reads.
  */
+/** The folder's own name: "ICU", for `clinical-standards/icu`. */
+function describeFolderName(folder: string): string {
+  return formatDocumentName(folder.slice(folder.lastIndexOf("/") + 1));
+}
+
+/** "A folder in Governance · 2 documents", or "in Clinical Standards". */
+function describeFolderMeta(params: {
+  binderName: string;
+  folder: string;
+  documents: readonly { path: string }[] | null;
+}): string {
+  const { binderName, folder, documents } = params;
+  const parent = folder.includes("/")
+    ? describeFolder(folder.slice(0, folder.lastIndexOf("/")))
+    : binderName;
+  const count =
+    documents?.filter((document) => document.path.startsWith(`${folder}/`))
+      .length ?? null;
+  return [
+    `A folder in ${parent}`,
+    count === null ? null : count === 1 ? "1 document" : `${count} documents`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 function readRef(): string | null {
   const { ref } = currentBinderAddress();
   return ref === DEFAULT_REF ? null : ref;
@@ -232,6 +265,11 @@ export function BinderShell({
     editModeFromSearch(window.location.search),
   );
   const [archive, setArchive] = useState(() => currentBinderAddress().archive);
+  /** A folder's page, `/-/tree/{ref}/{folder}`; null is the binder's top. */
+  const [folder, setFolder] = useState<string | null>(
+    () => currentBinderAddress().folder,
+  );
+  const [folderMissing, setFolderMissing] = useState(false);
   /**
    * Which of your drafts is being edited, from the address.
    *
@@ -272,6 +310,7 @@ export function BinderShell({
       setDraftBranch(draftFromSearch(window.location.search));
       setDocumentRef(readRef());
       setArchive(address.archive);
+      setFolder(address.folder);
     };
     window.addEventListener("popstate", handler);
     return () => window.removeEventListener("popstate", handler);
@@ -355,7 +394,9 @@ export function BinderShell({
   const writable =
     changeRead.data &&
     changeRead.data.change.state === "open" &&
-    changeRead.data.change.branchName !== "";
+    changeRead.data.change.branchName !== "" &&
+    // Its author and its co-editors; the server refuses anyone else's save.
+    changeRead.data.viewer.canEdit;
   const changeTarget =
     writingChange !== null && changeRead.data && writable
       ? {
@@ -383,23 +424,52 @@ export function BinderShell({
     writable,
   ]);
 
+  /**
+   * **A draft's home is the binder read at the draft**: `/-/tree/{draft}`
+   * and a document at `/-/blob/{draft}/…`. That page reads what the draft
+   * holds, and its bar proposes or discards it; Edit opens the editor in it.
+   *
+   * There used to be a mode between reading and the editor for this — the
+   * binder at `?edit=1`, with Done and Edit, where the tree was renamed and
+   * refiled in place. The editor's file panel does all of that, so the mode
+   * was a third place to learn that did nothing the other two could not.
+   */
+  const homeDraftBranch =
+    editMode === "off" &&
+    documentRefFromSearch !== null &&
+    ownsDraftBranch(documentRefFromSearch, currentUser)
+      ? documentRefFromSearch
+      : null;
+
   useEffect(() => {
     // Writing on a change request is not being in a draft: asking for one
     // would find none on that branch and leave edit mode.
-    if (editMode === "off" || writingChange !== null) {
+    if (
+      writingChange !== null ||
+      (editMode === "off" && homeDraftBranch === null)
+    ) {
       setDraft(null);
       return;
     }
 
     let cancelled = false;
-    fetchBinderDraft(org, binder, draftBranch ?? undefined)
+    const asked = editMode === "off" ? homeDraftBranch : draftBranch;
+    fetchBinderDraft(org, binder, asked ?? undefined)
       .then((payload) => {
         if (cancelled) return;
+        if (editMode === "off") {
+          // Reading: the bar is for the draft on the page and no other. The
+          // server answers a draft it cannot find with the newest instead.
+          setDraft(payload.draft?.branch === asked ? payload : null);
+          return;
+        }
         if (payload.draft) setDraft(payload);
         else leaveEditMode();
       })
       .catch(() => {
-        if (!cancelled) leaveEditMode();
+        if (cancelled) return;
+        if (editMode === "off") setDraft(null);
+        else leaveEditMode();
       });
 
     return () => {
@@ -408,7 +478,29 @@ export function BinderShell({
     // `leaveEditMode` is stable for the life of a binder: it closes over org,
     // binder and the setters, all of which are in this list already.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [org, binder, editMode, draftBranch, writingChange]);
+  }, [org, binder, editMode, draftBranch, writingChange, homeDraftBranch]);
+
+  /**
+   * An address from before the organizing view was retired: `?edit=1`. It
+   * goes where that view's work went — the draft's own page — so a link
+   * somebody kept still lands in the same draft.
+   */
+  useEffect(() => {
+    if (editMode !== "editing") return;
+    const branch = draftBranch;
+    moveTo(
+      documentPath
+        ? buildDocumentUrl({
+            org,
+            binder,
+            documentPath,
+            version: null,
+            ref: branch,
+          })
+        : buildBinderUrl({ org, binder, ref: branch, folder }),
+      { replace: true },
+    );
+  }, [org, binder, editMode, draftBranch, documentPath, folder]);
 
   /**
    * Your drafts while reading, so the binder's page and a document's can offer
@@ -444,15 +536,25 @@ export function BinderShell({
    * whose it is (`draft/<login>/<stamp>`), so the answer does not wait on a
    * list of drafts still being fetched. The server checks it again.
    */
-  const isOwnDraft = (branch: string) => {
-    const [kind, owner, stamp, ...rest] = branch.split("/");
-    return (
-      kind === "draft" &&
-      owner === currentUser &&
-      Boolean(stamp) &&
-      rest.length === 0
-    );
-  };
+  const isOwnDraft = (branch: string) => ownsDraftBranch(branch, currentUser);
+
+  /**
+   * What Edit does on the version being read (`branchEdit.ts`): the record
+   * and your drafts are yours to write; a change request is its author's and
+   * co-editors'; anybody else's branch sends Edit to your own draft. The open
+   * changes are the list the picker and the branch's card read already;
+   * the draft bar names a proposed draft by its change from the same list.
+   */
+  const readingRef = editMode === "off" ? documentRefFromSearch : null;
+  const openChangesOnBranch = useQuery({
+    ...binderChangesQuery(org, binder, "open"),
+    enabled: readingRef !== null,
+  }).data?.changes;
+  const branchEdit = branchEditTarget(
+    readingRef,
+    currentUser,
+    openChangesOnBranch ?? null,
+  );
 
   const goToEdit = (
     next: BinderEditMode,
@@ -478,35 +580,14 @@ export function BinderShell({
     setEditMode("off");
   };
 
+  /** The binder, or a folder of it, read at one of your drafts. */
+  const draftHomeHref = (branch: string | null, at: string | null = null) =>
+    buildBinderUrl({ org, binder, ref: branch, folder: at });
+
   const leaveEditMode = () => {
     setDraft(null);
     setDraftError(null);
     goToEdit("off");
-  };
-
-  /**
-   * Start editing, or carry on where you were.
-   *
-   * Idempotent on the server, which is what lets this be an ordinary button:
-   * the second press resumes rather than forks, so nothing here has to ask
-   * first whether a draft already exists.
-   */
-  const startEditing = async () => {
-    setStartingEdit(true);
-    setDraftError(null);
-    try {
-      const payload = await openBinderDraft(org, binder);
-      setDraft(payload);
-      goToEdit("editing", payload.draft?.branch ?? null);
-    } catch (err) {
-      setDraftError(
-        err instanceof Error && err.message.trim() !== ""
-          ? err.message
-          : "Unable to start editing this binder.",
-      );
-    } finally {
-      setStartingEdit(false);
-    }
   };
 
   /**
@@ -524,6 +605,31 @@ export function BinderShell({
    * page, the binder is open in a particular draft — not always your newest —
    * and Edit there carries on in that one rather than switching to another.
    */
+  /**
+   * Put a folder on the editor's desk, in the draft: a folder's name in the
+   * file panel, an origin in the sign-off panel, Edit on a folder's page.
+   * "" is the binder's top folder. Moving between things on the desk is one
+   * sitting, so it replaces the address rather than adding to Back.
+   */
+  const openFolderInEditor = (
+    path: string,
+    branch: string | null = draft?.draft?.branch ?? draftBranch,
+    { replace = editMode === "writing" }: { replace?: boolean } = {},
+  ) => {
+    setDraftBranch(branch);
+    moveTo(
+      buildBinderUrl({
+        org,
+        binder,
+        folder: path === "" ? null : path,
+        edit: "writing",
+        draft: branch,
+      }),
+      { replace },
+    );
+    setEditMode("writing");
+  };
+
   const startWriting = async (inDraft?: string | null) => {
     setStartingEdit(true);
     setDraftError(null);
@@ -538,11 +644,20 @@ export function BinderShell({
             binderDocumentsQuery(org, binder, { draft: branch }),
           )
         : null;
+      // **Edit opens the editor on the page's place.** A folder's page puts
+      // the folder on the desk; the binder opens the policy last written in
+      // the draft, and a binder with nothing the editor writes opens on its
+      // top folder rather than leaving the editor out of reach.
+      const onAFolder = currentBinderAddress().folder;
+      if (onAFolder) {
+        openFolderInEditor(onAFolder, branch, { replace: false });
+        return;
+      }
       const target = listing
         ? pickPolicyToWrite(listing.documents, payload.draft?.acts ?? [])
         : null;
       if (!target) {
-        goToEdit("editing", branch);
+        openFolderInEditor("", branch, { replace: false });
         return;
       }
       setDraftBranch(branch);
@@ -567,31 +682,6 @@ export function BinderShell({
   };
 
   /**
-   * Start another draft, called something.
-   *
-   * A deliberate fork, and the name is what makes it one: a second draft with
-   * no name is the state this whole change exists to avoid, because "resume
-   * the one from Tuesday" has no answer when both are dates.
-   */
-  const startAnother = async (name: string) => {
-    setStartingEdit(true);
-    setDraftError(null);
-    try {
-      const payload = await openBinderDraft(org, binder, name);
-      setDraft(payload);
-      goToEdit("editing", payload.draft?.branch ?? null);
-    } catch (err) {
-      setDraftError(
-        err instanceof Error && err.message.trim() !== ""
-          ? err.message
-          : "Unable to start another draft.",
-      );
-    } finally {
-      setStartingEdit(false);
-    }
-  };
-
-  /**
    * Open a document in the editor, in your draft.
    *
    * **Edit is the same act on a policy as on the binder**: it opens your draft
@@ -600,8 +690,14 @@ export function BinderShell({
    * server for the newest, which might be a different one.
    */
   const writeDocument = async (slugPath: string) => {
-    const open = editMode !== "off" ? draft?.draft?.branch : undefined;
+    const open =
+      editMode !== "off"
+        ? draft?.draft?.branch
+        : branchEdit.kind === "draft"
+          ? branchEdit.branch
+          : undefined;
     if (open) {
+      setDraftBranch(open);
       moveTo(
         buildDocumentEditUrl({
           org,
@@ -643,16 +739,73 @@ export function BinderShell({
     }
   };
 
+  /**
+   * Edit on a change request's branch you may write — its author's or a
+   * co-editor's — from the binder's page or a folder's: the editor in that
+   * change, on a policy it touches there, else the first the editor writes.
+   * A folder of nothing but Word files and PDFs opens the change, where
+   * those are revised by uploading a new version.
+   */
+  const writeInChangeAtPlace = async (number: number, branch: string) => {
+    setStartingEdit(true);
+    setDraftError(null);
+    try {
+      const listing = await queryClient.fetchQuery(
+        binderDocumentsQuery(org, binder, { ref: branch }),
+      );
+      const touched =
+        openChangesOnBranch
+          ?.find((entry) => entry.number === number)
+          ?.documents.map((entry) => entry.slugPath) ?? [];
+      const target = policyToWriteInChange(
+        listing.documents,
+        touched,
+        currentBinderAddress().folder,
+      );
+      if (!target) {
+        openChangeNumber(number);
+        return;
+      }
+      moveTo(
+        buildDocumentEditUrl({
+          org,
+          binder,
+          documentPath: target,
+          draft: null,
+          change: number,
+        }),
+      );
+      setEditMode("writing");
+    } catch (err) {
+      setDraftError(
+        err instanceof Error && err.message.trim() !== ""
+          ? err.message
+          : "Unable to open this change to edit it.",
+      );
+    } finally {
+      setStartingEdit(false);
+    }
+  };
+
   /** Out of the editor, back to the document — still in the draft. */
   const closeEditor = () => {
-    if (!documentPath) return;
     const branch = draft?.draft?.branch ?? draftBranch;
-    const query = new URLSearchParams({ edit: "1" });
-    if (branch) query.set("draft", branch);
+    if (!documentPath) {
+      // From a folder on the desk: that folder, read at the draft, where
+      // the bar proposes or discards it.
+      moveTo(draftHomeHref(branch, writingFolder || null));
+      return;
+    }
+    // The document, read at the draft: what was just written, as it reads.
     moveTo(
-      `${buildDocumentUrl({ org, binder, documentPath, version: null })}?${query.toString()}`,
+      buildDocumentUrl({
+        org,
+        binder,
+        documentPath,
+        version: null,
+        ref: branch,
+      }),
     );
-    setEditMode("editing");
   };
 
   /**
@@ -733,7 +886,8 @@ export function BinderShell({
       pickPolicyToWrite(listing.documents, draft?.draft?.acts ?? []);
     if (next === documentPath) return;
     if (!next) {
-      goToEdit("editing", branch);
+      // Nothing left to write: the binder's top folder, still in the editor.
+      openFolderInEditor("", branch);
       return;
     }
     window.history.replaceState(
@@ -1002,12 +1156,6 @@ export function BinderShell({
     [draft],
   );
 
-  /** Move to another of your drafts. The address is what carries it. */
-  const switchDraft = (branch: string) => {
-    setDraft(null);
-    goToEdit("editing", branch);
-  };
-
   const renameDraft = async (branch: string, name: string) => {
     setStartingEdit(true);
     setDraftError(null);
@@ -1036,11 +1184,12 @@ export function BinderShell({
     try {
       const gone = draft?.draft?.branch;
       await discardBinderDraft(org, binder, gone);
-      const left = (draft?.drafts ?? []).filter(
-        (entry) => entry.branch !== gone,
-      );
-      if (left.length > 0) switchDraft(left[0]!.branch);
-      else leaveEditMode();
+      // Back to the record. The page was the draft's own, and it is gone;
+      // another of your drafts is in the picker, not somewhere to be put.
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.binder(org, binder),
+      });
+      leaveEditMode();
     } catch (err) {
       setDraftError(
         err instanceof Error && err.message.trim() !== ""
@@ -1063,7 +1212,7 @@ export function BinderShell({
     fetchBinderDraft(org, binder, draft?.draft?.branch ?? undefined)
       .then((payload) => {
         if (payload.draft) setDraft(payload);
-        else leaveEditMode();
+        else if (editMode !== "off") leaveEditMode();
       })
       // The act itself succeeded; failing to recount it is not worth throwing
       // somebody out of the edit they are in the middle of.
@@ -1136,12 +1285,45 @@ export function BinderShell({
    * the page, not the page: a binder whose contents cannot be read still shows
    * the policy somebody opened.
    */
+  const onFolderPage =
+    folder !== null &&
+    !documentPath &&
+    activeTab === "documents" &&
+    openChange === null &&
+    !archive &&
+    editMode === "off";
+  /** The address names a folder the binder does not have. */
+  const missingFolder = onFolderPage && folderMissing;
+  /**
+   * A folder on the editor's desk: `/-/tree/{ref}/{folder}?edit=write`. ""
+   * is the binder's top folder, which is where Edit on an empty binder lands.
+   */
+  const writingFolder =
+    !documentPath &&
+    editMode === "writing" &&
+    activeTab === "documents" &&
+    openChange === null &&
+    !archive
+      ? (folder ?? "")
+      : null;
+  const writing =
+    editMode === "writing" && (Boolean(documentPath) || writingFolder !== null);
+  /**
+   * The branch a reading page is on: `/-/tree/{ref}`, `/-/blob/{ref}/…`. A
+   * folder's page and the explorer beside a document read the same branch
+   * the page does — a draft read as a branch is the draft, not the record.
+   */
+  const refForContents =
+    editMode === "off" && documentRefFromSearch !== "main"
+      ? documentRefFromSearch
+      : null;
   const contentsRead = useQuery({
     ...binderDocumentsQuery(org, binder, {
       draft: draftForContents,
       change: openChange,
+      ref: refForContents,
     }),
-    enabled: Boolean(documentPath),
+    enabled: Boolean(documentPath) || onFolderPage || writingFolder !== null,
   });
   // **Memoized, not rebuilt each render.** It is handed up to the sidebar by
   // an effect, and a new object every render re-ran that effect, re-rendered
@@ -1150,15 +1332,16 @@ export function BinderShell({
   const listing = contentsRead.data;
   const contents: SidebarBinder["contents"] | null = useMemo(
     () =>
-      documentPath && listing
+      (documentPath || onFolderPage || writingFolder !== null) && listing
         ? {
             documents: listing.documents,
             folders: listing.folders,
             active: null,
+            activeFolder: onFolderPage ? folder : null,
             change: openChange,
           }
         : null,
-    [documentPath, listing, openChange],
+    [documentPath, onFolderPage, writingFolder, folder, listing, openChange],
   );
   /** How many policies the binder has archived, read with the contents. */
   const archivedCount = contentsRead.data?.archivedCount ?? 0;
@@ -1176,9 +1359,18 @@ export function BinderShell({
       queryKey: queryKeys.binderDocuments(org, binder, {
         draft: draftForContents,
         change: openChange,
+        ref: refForContents,
       }),
     });
-  }, [queryClient, org, binder, documentPath, draftForContents, openChange]);
+  }, [
+    queryClient,
+    org,
+    binder,
+    documentPath,
+    draftForContents,
+    openChange,
+    refForContents,
+  ]);
 
   // The sidebar's binder section, kept in step with what is on screen.
   useEffect(() => {
@@ -1204,8 +1396,10 @@ export function BinderShell({
         ? {
             ...contents,
             active: documentPath ?? null,
-            // Clicking through the explorer stays on the branch being read.
-            ref: documentRefFromSearch,
+            // Clicking through the explorer stays on the branch being read —
+            // and on the draft: a draft is a branch, and its files and
+            // folders are read there like any other.
+            ref: documentRefFromSearch ?? draftForContents,
             reading,
           }
         : null,
@@ -1223,6 +1417,7 @@ export function BinderShell({
     reading,
     documentPath,
     documentRefFromSearch,
+    draftForContents,
     onBinderChange,
     onBinderMissing,
     missing,
@@ -1261,55 +1456,65 @@ export function BinderShell({
    * named in the sidebar, the page's `h1` belongs to whatever the page is
    * about, and there is exactly one of them.
    */
-  const head: { title: string; subtitle?: string } | null = documentPath
-    ? null
-    : openChange !== null
+  const head: { title: string; subtitle?: string } | null =
+    documentPath || writing
       ? null
-      : archive
+      : openChange !== null
         ? null
-        : editMode === "proposing"
+        : archive
           ? null
-          : activeTab === "changes"
-            ? {
-                title: "Change requests",
-                subtitle:
-                  "Nothing joins this binder except a change that has been published.",
-              }
-            : activeTab === "drafts"
+          : editMode === "proposing"
+            ? null
+            : activeTab === "changes"
               ? {
-                  title: "Drafts",
+                  title: "Change requests",
                   subtitle:
-                    "Your saved work in this binder, and whether it has been proposed.",
+                    "Nothing joins this binder except a change that has been published.",
                 }
-              : activeTab === "history"
+              : activeTab === "drafts"
                 ? {
-                    title: "History",
+                    title: "Drafts",
                     subtitle:
-                      "Every change this binder has published, and what each one did.",
+                      "Your saved work in this binder, and whether it has been proposed.",
                   }
-                : activeTab === "settings"
-                  ? // The page is named for the settings page it is, as the
-                    // sidebar entry that opened it is, with the one sentence
-                    // that says what that page decides.
-                    (() => {
-                      const page =
-                        BINDER_SETTINGS_PAGES.find(
-                          (entry) =>
-                            entry.section === binderSettingsSection(tab),
-                        ) ?? BINDER_SETTINGS_PAGES[0]!;
-                      return { title: page.label, subtitle: page.description };
-                    })()
-                  : {
-                      title: binderName,
-                      ...(editMode === "editing"
+                : activeTab === "history"
+                  ? {
+                      title: "History",
+                      subtitle:
+                        "Every change this binder has published, and what each one did.",
+                    }
+                  : activeTab === "settings"
+                    ? // The page is named for the settings page it is, as the
+                      // sidebar entry that opened it is, with the one sentence
+                      // that says what that page decides.
+                      (() => {
+                        const page =
+                          BINDER_SETTINGS_PAGES.find(
+                            (entry) =>
+                              entry.section === binderSettingsSection(tab),
+                          ) ?? BINDER_SETTINGS_PAGES[0]!;
+                        return {
+                          title: page.label,
+                          subtitle: page.description,
+                        };
+                      })()
+                    : missingFolder
+                      ? { title: "Folder not found", subtitle: "" }
+                      : onFolderPage
                         ? {
-                            subtitle:
-                              "Rename in place, drag to refile, make a folder. Everything you do is saved to your draft, and nobody is asked to look until you propose it.",
+                            title: describeFolderName(folder!),
+                            subtitle: describeFolderMeta({
+                              binderName,
+                              folder: folder!,
+                              documents: listing?.documents ?? null,
+                            }),
                           }
-                        : overview?.workspace.description
-                          ? { subtitle: overview.workspace.description }
-                          : {}),
-                    };
+                        : {
+                            title: binderName,
+                            ...(overview?.workspace.description
+                              ? { subtitle: overview.workspace.description }
+                              : {}),
+                          };
 
   // **A page, not a broken binder.** An address with no binder behind it drew
   // the whole binder — its name made up from the address, Add a document and
@@ -1340,12 +1545,17 @@ export function BinderShell({
     window.addEventListener("popstate", take);
     return () => window.removeEventListener("popstate", take);
   }, [org, binder, addDocument]);
-  const editBinder = useWriteAction(() => void startWriting());
-  /** Edit while organizing: the editor, in the draft being organized. */
-  const editThisDraft = useWriteAction(
-    () => void startWriting(draft?.draft?.branch ?? draftBranch),
-  );
-  const organizeBinder = useWriteAction(() => void startEditing());
+  /**
+   * Edit on the binder's page or a folder's, in the version on screen
+   * (`branchEdit.ts`): your draft, the change you are writing, or — on
+   * somebody else's branch — your own draft at the same place.
+   */
+  const editBinder = useWriteAction(() => {
+    if (branchEdit.kind === "draft") void startWriting(branchEdit.branch);
+    else if (branchEdit.kind === "change") {
+      void writeInChangeAtPlace(branchEdit.number, branchEdit.branch);
+    } else void startWriting();
+  });
   const editDocument = useWriteAction(
     (slugPath: string) => void writeDocument(slugPath),
   );
@@ -1386,7 +1596,7 @@ export function BinderShell({
   return (
     <section
       className={`docw-page${documentPath ? " docw-page--document" : ""}${
-        documentPath && editMode === "writing" ? " docw-page--writing" : ""
+        writing ? " docw-page--writing" : ""
       }`}
     >
       {/* A phone has no sidebar, so the binder's screens are a strip — the
@@ -1442,7 +1652,10 @@ export function BinderShell({
               The contents only. This is the page's one filled button, and on
               the other three screens the answer to "what is this page for" is
               not "add a policy". */}
-          {activeTab !== "documents" || onBranch ? null : (
+          {/* On every version of the binder: on one of your drafts Edit
+              carries on in it, on a change you write it writes the change,
+              and on anybody else's it says it opens your own draft. */}
+          {activeTab !== "documents" || missingFolder ? null : (
             <div className="bs-pagehead-actions">
               {/* **The same buttons in the same slots.** Reading, the header
                   offers Add a policy and Edit; editing, it offers the way
@@ -1457,54 +1670,23 @@ export function BinderShell({
                   them in the wrong place, and the wrong one is the one that
                   is not beside the thing it adds to. */}
               {editMode === "off" ? (
-                <>
-                  <button
-                    className="bs-btn bs-btn-secondary"
-                    type="button"
-                    onClick={addDocument}
-                  >
-                    Add a document
-                  </button>
-                  {/* Rename, refile and make folders: the tree, in your
-                      draft. Edit is for the words. */}
-                  <button
-                    className="bs-btn bs-btn-secondary"
-                    type="button"
-                    onClick={organizeBinder}
-                    disabled={startingEdit}
-                  >
-                    Organize
-                  </button>
+                // **One button: Edit** (D8). Adding documents, uploading and
+                // organizing are all in the editor's file panel now; Edit
+                // opens it on this page's place. Not offered to a reader.
+                overview?.workspace.access?.push === false ? null : (
                   <button
                     className="bs-btn bs-btn-primary"
                     type="button"
                     onClick={editBinder}
-                    disabled={startingEdit}
+                    disabled={startingEdit || branchEdit.kind === "unknown"}
                   >
-                    {startingEdit ? "Opening your draft…" : "Edit"}
+                    {startingEdit
+                      ? "Opening…"
+                      : branchEdit.kind === "theirs"
+                        ? "Edit in your draft"
+                        : "Edit"}
                   </button>
-                </>
-              ) : editMode === "editing" ? (
-                <>
-                  <button
-                    className="bs-btn bs-btn-secondary"
-                    type="button"
-                    onClick={leaveEditMode}
-                  >
-                    Done
-                  </button>
-                  {/* The words, in this draft: organizing is the tree, and
-                      a draft opened from the Drafts page had no way into the
-                      editor from here. */}
-                  <button
-                    className="bs-btn bs-btn-primary"
-                    type="button"
-                    onClick={editThisDraft}
-                    disabled={startingEdit}
-                  >
-                    {startingEdit ? "Opening the editor…" : "Edit"}
-                  </button>
-                </>
+                )
               ) : null}
             </div>
           )}
@@ -1518,12 +1700,17 @@ export function BinderShell({
           draw one, so on a wide screen it is always straight above a title. */}
       {/* Not over the editor: its title bar names the policy and its file
           panel shows where it is filed. */}
-      {documentPath && editMode === "writing" ? null : (
+      {writing ? null : (
         <PagePath
           route={
             documentPath
               ? { kind: "binderDocument", org, binder, documentPath }
-              : { kind: "binder", org, binder }
+              : {
+                  kind: "binder",
+                  org,
+                  binder,
+                  ...(onFolderPage ? { folder: folder! } : {}),
+                }
           }
         />
       )}
@@ -1543,11 +1730,13 @@ export function BinderShell({
           document; `?change=` says which ref to read it at, the way `?draft=`
           and `?version=` do. The other way round, `/{org}/{binder}/{path}
           ?change=7` rendered the change's page and the path was ignored. */}
-      {documentPath && editMode === "writing" ? (
+      {writing ? (
         <DocumentEditorPage
           org={org}
           binder={binder}
-          documentPath={documentPath}
+          documentPath={documentPath ?? ""}
+          folder={writingFolder}
+          onOpenFolder={(path) => openFolderInEditor(path)}
           draft={
             writingChange !== null
               ? (changeTarget?.branch ?? null)
@@ -1580,6 +1769,11 @@ export function BinderShell({
           }
           onOpenDocument={(slugPath) => void writeDocument(slugPath)}
           onNewDocument={newInEditor}
+          onUpload={(folder) => {
+            setAddingIn(folder);
+            setDropped(null);
+            setAdding(true);
+          }}
           onUploadFiles={(files, folder) => {
             // Where it was dropped in the file panel; on the page, beside
             // the policy that is open, where a sibling most likely goes.
@@ -1628,13 +1822,36 @@ export function BinderShell({
           /* Opened from the tree while editing, so it is read where the name
              it was clicked under actually exists. */
           draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
-          draftName={editMode === "off" ? null : (draft?.draft?.name ?? null)}
+          /* Read at one of your drafts, the page says which, as it did
+             when it was opened from the organizing view. */
+          draftName={
+            editMode !== "off" ||
+            (homeDraftBranch !== null &&
+              draft?.draft?.branch === homeDraftBranch)
+              ? (draft?.draft?.name ?? null)
+              : null
+          }
           drafts={draftChoices}
           onEditDocument={editDocument}
-          onConvertDocument={convertDocument}
+          branchEdit={branchEdit}
+          canWriteBinder={overview?.workspace.access?.push ?? true}
           editing={startingEdit}
           onOpenBinder={onOpenBinder}
           onOpenChange={openChangeNumber}
+          currentUser={currentUser}
+          onEditInChange={(slugPath, number) => {
+            moveTo(
+              buildDocumentEditUrl({
+                org,
+                binder,
+                documentPath: slugPath,
+                draft: null,
+                change: number,
+              }),
+            );
+            setEditMode("writing");
+          }}
+          onCommentOnChange={(number) => openChangeNumber(number, "compare")}
         />
       ) : openChange !== null ? (
         <BinderChangePage
@@ -1681,15 +1898,11 @@ export function BinderShell({
              keep working and every save lands in the change. Somebody else's
              branch is still read under the change. */
           ownDraftHref={(branch) =>
-            isOwnDraft(branch)
-              ? buildBinderUrl({ org, binder, edit: "editing", draft: branch })
-              : null
+            isOwnDraft(branch) ? draftHomeHref(branch) : null
           }
           onOpenBranch={(branch) => {
-            if (isOwnDraft(branch)) {
-              goToEdit("editing", branch);
-              return;
-            }
+            // Yours or not, a branch is read at its own address. Yours has
+            // the draft's bar on it.
             moveTo(buildBinderUrl({ org, binder, ref: branch }));
           }}
           onChanged={loadOverview}
@@ -1781,7 +1994,8 @@ export function BinderShell({
               );
               setEditMode("writing");
             } else {
-              goToEdit("editing");
+              // Proposed from the draft's own page: back to it.
+              moveTo(draftHomeHref(draft.draft!.branch));
             }
           }}
           onProposed={(changeNumber) => {
@@ -1797,88 +2011,157 @@ export function BinderShell({
           }}
         />
       ) : (
-        <div className="binder-home">
-          {/* What happened last, above what is in it — GitLab's newest commit
+        <div
+          className={
+            // The rail beside the contents, on a branch as on the record.
+            editMode === "off" ? "doc-workspace binder-workspace" : undefined
+          }
+        >
+          {/* **A folder that is not there says so, and nothing else.** The
+              page used to go on under the notice as though the folder
+              existed: its name as the heading, "0 documents", an empty
+              list, Edit, and who signs off there. A link to a folder that
+              was since renamed or moved lands here, so say what happened. */}
+          <div
+            className={`binder-home${
+              missingFolder ? " binder-home--missing" : ""
+            }`}
+          >
+            {missingFolder ? (
+              <div className="bs-empty">
+                <p className="bs-empty-lead">This folder is not here.</p>
+                <p>
+                  {binderName} has no folder at this address
+                  {onBranch ? " in what you are reading" : ""}. It may have been
+                  renamed, moved or archived since the link was made.
+                </p>
+                <p>
+                  <a
+                    className="bs-btn bs-btn-secondary bs-btn--sm"
+                    href={buildBinderUrl({ org, binder })}
+                    onClick={(event) =>
+                      followInApp(event, () =>
+                        moveTo(buildBinderUrl({ org, binder })),
+                      )
+                    }
+                  >
+                    Back to {binderName}
+                  </a>
+                </p>
+              </div>
+            ) : null}
+            {/* What happened last, above what is in it — GitLab's newest commit
               over the files. Not while editing: the draft bar is the news
-              then, and the record has not moved. */}
-          {onBranch ? (
-            <BinderBranchSummary
+              then, and the record has not moved. A folder's page is about the
+              folder, so it goes there. */}
+            {onFolderPage ? null : onBranch ? (
+              <BinderBranchSummary
+                org={org}
+                binder={binder}
+                branch={documentRefFromSearch!}
+                changeHref={(change, compare) =>
+                  buildBinderUrl({
+                    org,
+                    binder,
+                    tab: "changes",
+                    change,
+                    view: compare ? "compare" : "discussion",
+                  })
+                }
+                onOpenChange={(change, compare) =>
+                  openChangeNumber(change, compare ? "compare" : "discussion")
+                }
+              />
+            ) : editMode === "off" ? (
+              <BinderLatestChange
+                key={reloadKey}
+                org={org}
+                binder={binder}
+                changeHref={(change) =>
+                  buildBinderUrl({ org, binder, tab: "changes", change })
+                }
+                historyHref={buildBinderUrl({ org, binder, tab: "history" })}
+                onOpenChange={openChangeNumber}
+                onOpenHistory={() => goTo("history")}
+              />
+            ) : null}
+            <BinderDocuments
               org={org}
               binder={binder}
-              branch={documentRefFromSearch!}
-              changeHref={(change, compare) =>
+              onOpenDocument={(slugPath) =>
+                onBranch
+                  ? moveTo(branchDocumentHref(slugPath))
+                  : openDocument(slugPath)
+              }
+              documentHref={onBranch ? branchDocumentHref : documentHref}
+              atRef={onBranch ? documentRefFromSearch : null}
+              refPicker={
+                editMode === "off" ? (
+                  <BinderRefPicker
+                    org={org}
+                    binder={binder}
+                    current={onBranch ? documentRefFromSearch : null}
+                    onPick={(ref) =>
+                      moveTo(buildBinderUrl({ org, binder, ref }))
+                    }
+                    /* A draft is a branch, read like the others: the same
+                       page, its own documents and its own rules. */
+                    onPickDraft={(branch) =>
+                      moveTo(buildBinderUrl({ org, binder, ref: branch }))
+                    }
+                  />
+                ) : null
+              }
+              activeDocument={documentPath ?? null}
+              draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
+              draftActs={draft?.draft?.acts ?? []}
+              reloadKey={reloadKey}
+              onEdited={refreshDraft}
+              onDraftLost={leaveEditMode}
+              onOpenArchive={() => goToArchive(true)}
+              onOpenChange={openChangeNumber}
+              onAddPolicy={() => setAdding(true)}
+              onNewFolder={() => setAddingFolder(true)}
+              folder={onFolderPage ? folder : null}
+              onFolderMissing={setFolderMissing}
+              onOpenFolder={(path) =>
+                moveTo(
+                  buildBinderUrl({
+                    org,
+                    binder,
+                    folder: path,
+                    ref: onBranch ? documentRefFromSearch : null,
+                  }),
+                )
+              }
+              folderHref={(path) =>
                 buildBinderUrl({
                   org,
                   binder,
-                  tab: "changes",
-                  change,
-                  view: compare ? "compare" : "discussion",
+                  folder: path,
+                  ref: onBranch ? documentRefFromSearch : null,
                 })
               }
-              onOpenChange={(change, compare) =>
-                openChangeNumber(change, compare ? "compare" : "discussion")
-              }
             />
-          ) : editMode === "off" ? (
-            <BinderLatestChange
-              key={reloadKey}
-              org={org}
-              binder={binder}
-              changeHref={(change) =>
-                buildBinderUrl({ org, binder, tab: "changes", change })
-              }
-              historyHref={buildBinderUrl({ org, binder, tab: "history" })}
-              onOpenChange={openChangeNumber}
-              onOpenHistory={() => goTo("history")}
-            />
+          </div>
+          {editMode === "off" && !missingFolder ? (
+            <aside className="doc-rail" aria-label="Who signs off">
+              {/* On a branch too: a draft or a change's branch has its own
+                  rules, read where its documents are. */}
+              <SignOffRail
+                org={org}
+                binder={binder}
+                binderName={binderName}
+                place={
+                  onFolderPage
+                    ? { kind: "folder", path: folder! }
+                    : { kind: "binder" }
+                }
+                at={{ ref: onBranch ? documentRefFromSearch : null }}
+                onNavigate={(route) => moveTo(routeToPath(route))}
+              />
+            </aside>
           ) : null}
-          <BinderDocuments
-            org={org}
-            binder={binder}
-            onOpenDocument={(slugPath) =>
-              onBranch
-                ? moveTo(branchDocumentHref(slugPath))
-                : openDocument(slugPath)
-            }
-            documentHref={onBranch ? branchDocumentHref : documentHref}
-            atRef={onBranch ? documentRefFromSearch : null}
-            refPicker={
-              editMode === "off" ? (
-                <BinderRefPicker
-                  org={org}
-                  binder={binder}
-                  current={onBranch ? documentRefFromSearch : null}
-                  onPick={(ref) => moveTo(buildBinderUrl({ org, binder, ref }))}
-                  onPickDraft={(branch) => goToEdit("editing", branch)}
-                />
-              ) : null
-            }
-            activeDocument={documentPath ?? null}
-            draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
-            draftPicker={
-              draft?.draft && editMode === "editing" ? (
-                <BinderDraftPicker
-                  org={org}
-                  drafts={draft.drafts}
-                  others={draft.others}
-                  current={draft.draft.branch}
-                  busy={startingEdit}
-                  onSwitch={switchDraft}
-                  onStart={startAnother}
-                  onRename={renameDraft}
-                  onRecord={leaveEditMode}
-                />
-              ) : null
-            }
-            draftActs={draft?.draft?.acts ?? []}
-            reloadKey={reloadKey}
-            onEdited={refreshDraft}
-            onDraftLost={leaveEditMode}
-            onOpenArchive={() => goToArchive(true)}
-            onOpenChange={openChangeNumber}
-            onAddPolicy={() => setAdding(true)}
-            onNewFolder={() => setAddingFolder(true)}
-          />
         </div>
       )}
 
@@ -1890,14 +2173,25 @@ export function BinderShell({
           in the editor lands there, and proposing what was just saved meant
           finding the binder's own page first. Not in the editor, which has
           its own Propose. */}
-      {draft?.draft && editMode === "editing" && !archive ? (
+      {draft?.draft &&
+      !archive &&
+      homeDraftBranch !== null &&
+      draft.draft.branch === homeDraftBranch &&
+      openChange === null &&
+      activeTab === "documents" ? (
         <BinderDraftBar
-          name={draft.draft.name}
+          /* Proposed, it is called what the picker and the card call it:
+             its change's title, not the name it had before. */
+          name={
+            openChangesOnBranch
+              ?.find((entry) => entry.number === draft.draft!.changeNumber)
+              ?.title.trim() || draft.draft.name
+          }
           acts={draft.draft.acts}
           others={draft.others.map((other) => other.owner)}
           busy={startingEdit}
           changeNumber={draft.draft.changeNumber}
-          onPropose={() => goToEdit("proposing")}
+          onPropose={() => goToEdit("proposing", draft.draft!.branch)}
           onDiscard={() => void discard()}
           onOpenChange={(changeNumber) => openChangeNumber(changeNumber)}
         />
@@ -1946,7 +2240,8 @@ export function BinderShell({
           binder={binder}
           currentUser={currentUser}
           draft={draft?.draft?.branch}
-          {...(dropped ? { dropped, initialFolder: addingIn ?? "" } : {})}
+          {...(dropped ? { dropped } : {})}
+          {...(addingIn !== null ? { initialFolder: addingIn } : {})}
           onClose={() => {
             setDropped(null);
             setAdding(false);

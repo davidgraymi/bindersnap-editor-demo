@@ -93,6 +93,13 @@ interface DraftFilesProps {
   unsavedElsewhere?: ReadonlyMap<string, string>;
   onOpen: (slugPath: string) => void;
   /**
+   * Put a folder on the desk: what clicking its name does. Without it the
+   * name opens and shuts the folder, as the arrow does.
+   */
+  onOpenFolder?: (folder: string) => void;
+  /** The folder on the desk, so its row is marked. */
+  activeFolder?: string | null;
+  /**
    * A policy row was pointed at or focused: the click that opens it is likely
    * next, and reading it now makes that open immediate.
    */
@@ -114,6 +121,11 @@ interface DraftFilesProps {
    * row or anything in it, or `""` below the rows for the top level.
    */
   onUploadDrop?: (data: DataTransfer, folder: string) => void;
+  /**
+   * Upload files into a folder — the head's Upload and a folder's "Upload
+   * files here". Opens the add dialog; nothing is written until it is used.
+   */
+  onUpload?: (folder: string) => void;
   /** Take a policy off the record, in this draft. */
   onArchive?: (slugPath: string) => Promise<boolean>;
   /** Take a folder off the record — every policy in it — in this draft. */
@@ -295,11 +307,14 @@ export function DraftFiles({
   unsavedElsewhere,
   onReadAhead,
   onOpen,
+  onOpenFolder,
+  activeFolder = null,
   onNew,
   onNewFolder,
   onRename,
   onMove,
   onUploadDrop,
+  onUpload,
   onArchive,
   onArchiveFolder,
   archivedCount = 0,
@@ -436,10 +451,18 @@ export function DraftFiles({
     setFloating(false);
     onOpen(slugPath);
   };
+  /**
+   * The folder you are in: the one on the desk, else the open document's.
+   * New document and New folder at the top of the panel make things there,
+   * not at the binder's top.
+   */
+  const here =
+    activeFolder ??
+    (active.includes("/") ? active.slice(0, active.lastIndexOf("/")) : "");
   const startNew = onNew
     ? () => {
         setFloating(false);
-        onNew();
+        onNew(here || undefined);
       }
     : undefined;
   const {
@@ -696,6 +719,17 @@ export function DraftFiles({
           run: () => {
             setFloating(false);
             onNew(node.path);
+          },
+        });
+      }
+      if (onUpload) {
+        items.push({
+          label: "Upload files here",
+          icon: ICON.upload,
+          disabled: busy,
+          run: () => {
+            setFloating(false);
+            onUpload(node.path);
           },
         });
       }
@@ -1058,37 +1092,64 @@ export function DraftFiles({
               />
             </span>
           ) : (
-            <button
-              type="button"
-              className="app-explorer-folder"
+            // **Explorer's left pane**: the arrow opens and shuts the folder
+            // in place, the name opens it on the desk. The arrow is out of the
+            // tab order — Right and Left do the same from the row.
+            <span
+              className={`doc-files-folderrow${
+                node.path === activeFolder ? " doc-files-folderrow--active" : ""
+              }`}
               style={indent}
-              aria-expanded={open}
-              data-folder={node.path}
-              data-parent={
-                node.path.includes("/")
-                  ? node.path.slice(0, node.path.lastIndexOf("/"))
-                  : ""
-              }
-              title={
-                isTouched(node) ? `${label} · changed in this draft` : undefined
-              }
-              onClick={(event) => {
-                if (event.button !== 0 || event.ctrlKey) return;
-                toggleFolder(node.path);
-              }}
-              onKeyDown={(event) => onRowKey(event, node)}
             >
-              {open ? (
-                <AppIcon icon={ICON.chevronDown} size="sm" />
-              ) : (
-                <AppIcon icon={ICON.chevronRight} size="sm" />
-              )}
-              <AppIcon icon={ICON.folder} size="sm" />
-              <span className="app-explorer-name">{label}</span>
-              {isTouched(node) ? (
-                <span className="doc-files-changed" aria-hidden="true" />
-              ) : null}
-            </button>
+              <button
+                type="button"
+                className="app-explorer-chevron"
+                tabIndex={-1}
+                aria-label={open ? `Shut ${label}` : `Open ${label} here`}
+                title={open ? `Shut ${label}` : `Open ${label} here`}
+                onClick={() => toggleFolder(node.path)}
+              >
+                {open ? (
+                  <AppIcon icon={ICON.chevronDown} size="sm" />
+                ) : (
+                  <AppIcon icon={ICON.chevronRight} size="sm" />
+                )}
+              </button>
+              <button
+                type="button"
+                className="app-explorer-folder"
+                aria-expanded={open}
+                aria-current={node.path === activeFolder ? "page" : undefined}
+                data-folder={node.path}
+                data-parent={
+                  node.path.includes("/")
+                    ? node.path.slice(0, node.path.lastIndexOf("/"))
+                    : ""
+                }
+                title={
+                  isTouched(node)
+                    ? `${label} · changed in this draft`
+                    : undefined
+                }
+                onClick={(event) => {
+                  if (event.button !== 0 || event.ctrlKey) return;
+                  if (onOpenFolder) {
+                    setFloating(false);
+                    if (!open) toggleFolder(node.path);
+                    onOpenFolder(node.path);
+                  } else {
+                    toggleFolder(node.path);
+                  }
+                }}
+                onKeyDown={(event) => onRowKey(event, node)}
+              >
+                <AppIcon icon={ICON.folder} size="sm" />
+                <span className="app-explorer-name">{label}</span>
+                {isTouched(node) ? (
+                  <span className="doc-files-changed" aria-hidden="true" />
+                ) : null}
+              </button>
+            </span>
           )}
           {rowActions(node)}
         </div>
@@ -1203,6 +1264,21 @@ export function DraftFiles({
             <AppIcon icon={ICON.newDocument} size="md" />
           </button>
         ) : null}
+        {onUpload && !onOutline ? (
+          <button
+            type="button"
+            className="app-explorer-toggle"
+            aria-label="Upload files"
+            title="Upload files"
+            disabled={busy}
+            onClick={() => {
+              setFloating(false);
+              onUpload(here);
+            }}
+          >
+            <AppIcon icon={ICON.upload} size="md" />
+          </button>
+        ) : null}
         {onNewFolder && !onOutline ? (
           <button
             type="button"
@@ -1212,7 +1288,7 @@ export function DraftFiles({
             disabled={busy}
             onClick={() => {
               setFloating(false);
-              onNewFolder();
+              onNewFolder(here || undefined);
             }}
           >
             <AppIcon icon={ICON.newFolder} size="md" />

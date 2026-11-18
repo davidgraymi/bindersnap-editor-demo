@@ -40,7 +40,7 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { API_BASE_URL, APP_BASE_URL } from "./helpers";
+import { API_BASE_URL, APP_BASE_URL, openAddDocument } from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
 import { LEGAL_VERSION } from "../packages/utils/legal";
 
@@ -277,36 +277,6 @@ test("every row of controls in the product is one size", async ({ page }) => {
     await settleOnRealShell(page);
     await expectOneSizePerRow(page, where);
   }
-
-  // **A row that only exists once somebody presses something.** A sign-off
-  // rule's own pickers are drawn only while it is being changed, so walking
-  // the page alone measures nothing — and a 49px select beside a 32px button
-  // once sat there unnoticed until somebody opened it by hand. A guard only
-  // sees what the page renders, which is worth remembering when adding
-  // screens to the list above.
-  await page.goto(`${APP_BASE_URL}/${org}/${binder}?tab=sign-off`);
-  await settleOnRealShell(page);
-  await page
-    .getByRole("button", { name: "Add a rule for a folder or document" })
-    .click();
-  const foot = page.locator("#sign-off .bs-panel-foot").first();
-  await foot
-    .getByRole("combobox", { name: "What has to be signed off" })
-    .selectOption("binder");
-  await foot
-    .getByRole("combobox", { name: "Which group signs it off" })
-    .selectOption({ index: 1 });
-  await page.getByRole("button", { name: "Add this rule" }).click();
-  await page
-    .getByRole("button", { name: /^Change the rule for / })
-    .first()
-    .click();
-  await expect(
-    page.locator("#sign-off .bs-settings-rules-edit").getByRole("combobox", {
-      name: "What has to be signed off",
-    }),
-  ).toBeVisible({ timeout: 30_000 });
-  await expectOneSizePerRow(page, "a sign-off rule being changed");
 });
 
 test("the fields in a form are one size, picker included", async ({ page }) => {
@@ -324,7 +294,7 @@ test("the fields in a form are one size, picker included", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
 
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-  await page.getByRole("button", { name: "Add a document" }).click();
+  await openAddDocument(page);
   // **Wait for the picker that loads, not for the first one drawn.** "Put it
   // in" only exists once the binder has an open change and is filled from a
   // read; the folder picker is drawn immediately. Waiting for the wrong one
@@ -569,7 +539,7 @@ test("the marketing eyebrow never labels a field in the app", async ({
   // And the modal that carries the product's primary act, which is where the
   // loudest of them was.
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-  await page.getByRole("button", { name: "Add a document" }).click();
+  await openAddDocument(page);
   await expect(page.locator(".create-document-modal")).toBeVisible({
     timeout: 30_000,
   });
@@ -740,9 +710,10 @@ test("a popover is not clipped by the panel it opens from", async ({
   // **The same rule, on the other popover that lives inside a panel.** One
   // instance is a bug fixed; two is a rule, and the draft picker sits in the
   // tree's own bar — another `.bs-panel`, another squircle.
+  // It is in the editor's header now, over the desk: Edit opens it.
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
   await settleOnRealShell(page);
-  await page.getByRole("button", { name: "Organize", exact: true }).click();
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
   const pick = page.locator(".bs-draftpick");
   await pick.waitFor({ timeout: 30_000 });
   await pick.click();

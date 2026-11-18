@@ -32,9 +32,15 @@ test("a policy's path is its folders, then itself", () => {
   });
   // The page names where in it: never the binder again.
   expect(trail.path).toEqual([
-    // A folder has no page of its own, so it is named and not linked.
-    { label: "Nursing", href: null },
-    { label: "Wards", href: null },
+    // A folder is a place with a page, so each folder is a link to it.
+    {
+      label: "Nursing",
+      href: "/riverside-health/clinical/-/tree/main/nursing",
+    },
+    {
+      label: "Wards",
+      href: "/riverside-health/clinical/-/tree/main/nursing/wards",
+    },
     // The page you are on is never a link to itself.
     { label: "Handover Standard", href: null },
   ]);
@@ -156,4 +162,34 @@ test("pages across the organization have no path: their title names them", () =>
       organizationIsCurrent: false,
     });
   }
+});
+
+test("a folder's page names its parents as links and itself as the page", () => {
+  const trail = trailFor(
+    "/riverside-health/clinical/-/tree/main/nursing/wards",
+  );
+  expect(trail.path).toEqual([
+    {
+      label: "Nursing",
+      href: "/riverside-health/clinical/-/tree/main/nursing",
+    },
+    { label: "Wards", href: null },
+  ]);
+});
+
+test("a policy read in your draft, or on a branch, links its folders there too", () => {
+  const inDraft = trailFor(
+    "/riverside-health/clinical/-/blob/main/nursing/handover?edit=1&draft=draft%2Falice%2F1",
+  );
+  expect(inDraft.path[0]).toEqual({
+    label: "Nursing",
+    href: "/riverside-health/clinical/-/tree/draft%2Falice%2F1/nursing",
+  });
+
+  const onBranch = trailFor(
+    "/riverside-health/clinical/-/blob/draft%2Falice%2F1/nursing/handover",
+  );
+  expect(onBranch.path[0]?.href).toBe(
+    "/riverside-health/clinical/-/tree/draft%2Falice%2F1/nursing",
+  );
 });

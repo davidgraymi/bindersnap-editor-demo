@@ -101,13 +101,32 @@ describe("sign-off rules", () => {
   test("need one owner's approval, official or not", () => {
     // Gitea's code-owner gate ignores officialness: an owner's standing
     // approval meets the rule whether or not they are a binder approver.
-    const [, rule] = build({
+    const rule = build({
       signOff: [rules[0]!],
       reviews: [review("treasurer", "APPROVED", { official: false })],
-    });
+    }).find((row) => row.kind === "sign-off");
     expect(rule).toMatchObject({ kind: "sign-off", required: 1 });
     expect(rule!.approvedBy.map((person) => person.login)).toEqual([
       "treasurer",
     ]);
+  });
+
+  test("a change to who signs off comes first, the binder's approvers last", () => {
+    const rows = build({
+      signOff: [
+        { scope: "binder", target: "", teams: ["board"], users: [] },
+        rules[0]!,
+        { scope: "rules", target: "", teams: ["board"], users: [] },
+      ],
+      reviews: [],
+      paths: ["clinical/hand-hygiene.01J8.md", ".gitea/CODEOWNERS"],
+    });
+    expect(rows.map((row) => row.reason.kind)).toEqual([
+      "rules",
+      "folder",
+      "binder",
+      "approvers",
+    ]);
+    expect(rows[1]!.reason.matched).toEqual(["clinical/hand-hygiene.01J8.md"]);
   });
 });

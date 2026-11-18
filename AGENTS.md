@@ -460,6 +460,20 @@ whose approvals count toward `required_approvals`**.
 - The list in force at a publish is stamped on the version's tag
   ("Approvals counted from").
 
+**Sign-off rules are changed in a draft, where they are shown.** Every
+binder, folder and document page has "Who signs off here" in its rail (Set
+here, then From above), and the editor has the same panel on its right, where
+Set here is edited: `PUT /api/app/binders/:org/:binder/rules/sign-off` sets
+one rule's owners as one act in the author's draft. Settings only lists the
+rules. The file is written in one canonical form (`canonicalSignOffRules`:
+binder, folders, documents, the rules rule; one line per target, owners
+sorted), so two drafts' rule edits merge rule by rule
+(`mergeSignOffRules`); a clean merge settles itself on Bring up to date and a
+real clash is a plain-words choice on the conflict page. Renaming a folder
+moves its rules; archiving one drops them. A change's detail carries
+`signOffChange` (what it does to each rule) and a `reason` on each approval
+rule. See `docs/design/sign-off-rules-in-place.md`.
+
 `.gitea/CODEOWNERS` patterns are anchored regexes, not gitignore globs — a
 folder rule is `policies/nursing/.*` — and the file is read from the base
 branch, so a CODEOWNERS change never governs its own change.
@@ -581,7 +595,11 @@ a binary .docx), so threads are modelled as pull-request issue comments
 carrying a trailing `<!-- bindersnap:v1 ... -->` marker. Resolution is an
 **append-only event log** — resolving posts a new comment rather than editing
 the root — because an audit product must never lose the history of who
-reopened a concern. See `services/api/gitea-client/discussions.ts`.
+reopened a concern. See `services/api/gitea-client/discussions.ts`. A thread
+may be about a passage: a reviewer selects words on the change's Changes tab
+and comments on them, and the root's marker carries a text-quote anchor (the
+document's identity, the words, and a few either side). It is still one
+discussion in Gitea, never a second store.
 
 **Reactions** on review comments are Gitea comment reactions, nothing more.
 The vocabulary is five keys — `+1`, `-1`, `confused`, `eyes`, `heart` — all
@@ -590,10 +608,15 @@ reaction is deliberately not part of the approval record: it never counts
 toward `unresolvedCount`, never gates publishing, and never stands in for a
 review. See `services/api/gitea-client/reactions.ts`.
 
-**Change assignments** follow the rule too. A change's assignee is the pull
-request's Gitea assignee and its reviewers are Gitea review requests, so who a
-change is waiting on is part of the same record as the reviews themselves. The
-reviewer states the UI shows are derived from those two facts plus the reviews
+**Change assignments** follow the rule too. A change's co-editors are the
+pull request's Gitea assignees and its reviewers are Gitea review requests, so
+who may write a change and who it is waiting on are part of the same record as
+the reviews themselves. **Only a change's author and its co-editors change what
+it proposes** (`mayEditChange`): saving into it, and resolving its conflicts,
+are refused to anybody else, who comments or opens a change of their own. The
+author or a binder admin names co-editors; a co-editor cannot approve the
+change, and an approver whose approval stands cannot be named one. The
+reviewer states the UI shows are derived from those facts plus the reviews
 (`services/api/change-assignments.ts`) — nothing about an assignment is stored
 outside Gitea.
 

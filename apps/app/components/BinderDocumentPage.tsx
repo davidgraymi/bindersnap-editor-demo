@@ -10,6 +10,11 @@ import {
 } from "../api";
 import { binderDocumentQuery } from "../data/queries";
 import { followInApp } from "../appLink";
+import { routeToPath } from "../routes";
+import { SignOffRail } from "./SignOffRail";
+import { EditChoiceDialog } from "./EditChoiceDialog";
+import { editChoices } from "../editChoices";
+import type { BranchEdit } from "../branchEdit";
 
 import {
   buildDocumentCrumbs,
@@ -31,8 +36,6 @@ import {
 } from "../documentDisplay";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 import { DocumentPreview } from "./DocumentPreview";
-import { ReviseDocumentModal } from "./ReviseDocumentModal";
-import { RenameDocumentModal } from "./RenameDocumentModal";
 import { useIsReadOnly } from "../readOnlyContext";
 
 /**
@@ -98,24 +101,31 @@ interface BinderDocumentPageProps {
    */
   onRefsChange?: (view: DocumentRefView | null) => void;
   /**
-   * Open it in the editor, in your draft. Offered only for a document the
-   * editor wrote; absent where the page has nowhere to put an edit.
+   * Open it in the editor, in your draft. Absent where the page has nowhere
+   * to put an edit.
    */
   onEditDocument?: (slugPath: string) => void;
   /**
-   * Read a Word file or PDF into the editor's format, in your draft. Offered
-   * only for those two, on the record, as the file is now.
+   * What Edit does on the version being read (`branchEdit.ts`). Without it,
+   * Edit is offered on the record only.
    */
-  onConvertDocument?: (target: {
-    slugPath: string;
-    path: string;
-    name: string;
-  }) => void;
+  branchEdit?: BranchEdit;
+  /**
+   * Whether the reader may write in this binder. A reader or reviewer sees no
+   * Edit.
+   */
+  canWriteBinder?: boolean;
   /** The draft is being opened for an edit. */
   editing?: boolean;
   onOpenBinder: () => void;
   /** Open one of this document's open changes, on the binder. */
   onOpenChange: (changeNumber: number) => void;
+  /** Who is reading: Edit asks them about changes already open on it. */
+  currentUser?: string;
+  /** Write this document in an open change: its author or a co-editor. */
+  onEditInChange?: (slugPath: string, changeNumber: number) => void;
+  /** Open a change's words, where a passage is commented on. */
+  onCommentOnChange?: (changeNumber: number) => void;
 }
 
 const NO_DRAFTS: readonly { branch: string; name: string }[] = [];
@@ -143,10 +153,14 @@ export function BinderDocumentPage({
   documentRef = null,
   onRefsChange,
   onEditDocument,
-  onConvertDocument,
+  branchEdit = { kind: "record" },
+  canWriteBinder = true,
   editing = false,
   onOpenBinder,
   onOpenChange,
+  currentUser = "",
+  onEditInChange,
+  onCommentOnChange,
 }: BinderDocumentPageProps) {
   const read = useQuery(
     binderDocumentQuery(org, binder, documentPath, {
@@ -160,10 +174,10 @@ export function BinderDocumentPage({
     ? read.error.message || "Unable to open this document."
     : null;
   const [downloading, setDownloading] = useState(false);
+  // Edit pressed on a document somebody is already changing: what to do.
+  const [askingEdit, setAskingEdit] = useState(false);
   const [exportingAudit, setExportingAudit] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
-  const [revising, setRevising] = useState(false);
-  const [renaming, setRenaming] = useState(false);
   const isReadOnly = useIsReadOnly();
 
   // Back and forward are how a reader leaves an earlier version, so the page
@@ -299,21 +313,54 @@ export function BinderDocumentPage({
   };
 
   if (error) {
+    // **An address with no document behind it says what happened.** It was
+    // the address itself as the heading (`finance/expenses-policy`), a red
+    // "No such document." and "Back to corporate". A link to a document that
+    // was since renamed, moved or archived lands here, which is not an
+    // error of the reader's: say so, in names, and offer the way on.
+    const missing = error === "No such document.";
+    const binderName = formatDocumentName(binder);
     return (
       <div className="binder-pane">
-        <h1 className="bs-title">{documentPath}</h1>
-        <p className="bs-note bs-note--danger" role="alert">
-          {error}
-        </p>
-        <p>
-          <button
-            className="bs-btn bs-btn-secondary"
-            type="button"
-            onClick={onOpenBinder}
-          >
-            Back to {binder}
-          </button>
-        </p>
+        <h1 className="bs-title">
+          {missing
+            ? "Document not found"
+            : formatDocumentName(documentPath.split("/").pop() ?? documentPath)}
+        </h1>
+        {missing ? (
+          <div className="bs-empty">
+            <p className="bs-empty-lead">This document is not here.</p>
+            <p>
+              {binderName} has no document at this address. It may have been
+              renamed, moved or archived since the link was made. Its history is
+              kept: look for it in the binder, or search for its name.
+            </p>
+            <p>
+              <button
+                className="bs-btn bs-btn-secondary bs-btn--sm"
+                type="button"
+                onClick={onOpenBinder}
+              >
+                Back to {binderName}
+              </button>
+            </p>
+          </div>
+        ) : (
+          <>
+            <p className="bs-note bs-note--danger" role="alert">
+              {error}
+            </p>
+            <p>
+              <button
+                className="bs-btn bs-btn-secondary"
+                type="button"
+                onClick={onOpenBinder}
+              >
+                Back to {binderName}
+              </button>
+            </p>
+          </>
+        )}
       </div>
     );
   }
@@ -336,24 +383,44 @@ export function BinderDocumentPage({
   // the one in the change. Showing the "nothing published" panel over it would
   // hide the very thing somebody came to look at.
   const nothingToShow = latestVersion === null && state === "published";
-  // Written in the editor, read as it now stands — on the record or in your
-  // draft — and not on somebody's change request, which is theirs to edit.
-  const canRevise = !isReadOnly && isViewingRecord && state !== "proposed";
-  const canWrite =
+  // Edit opens the editor on this document, in the version being read,
+  // whatever kind of file it is: the editor shows a Word file or a PDF read
+  // only, with its own Upload new version and Edit in Bindersnap. On the
+  // record and in your drafts that is your draft; on a change you write, the
+  // change; on anybody else's branch, your own draft (`branchEdit.ts`). Never
+  // on an older version, which is not yours to write over. A document new on
+  // a branch reads as "proposed", and is still the branch's to write.
+  const onBranch = documentRef !== null;
+  const canEdit =
     onEditDocument !== undefined &&
-    isEditorDocumentFile(document.path) &&
+    !isReadOnly &&
     isViewingRecord &&
-    state !== "proposed" &&
-    documentRef === null &&
-    change === null;
-  // The other way to a document the editor writes: a Word file or PDF read
-  // into it. The same conditions as Edit, for the same reasons.
-  const canConvert =
-    onConvertDocument !== undefined &&
-    convertibleKind(document.path) !== null &&
-    canRevise &&
-    documentRef === null &&
-    change === null;
+    canWriteBinder &&
+    change === null &&
+    (onBranch ? branchEdit.kind !== "record" : state !== "proposed");
+  // **Edit asks first when somebody is already changing it**
+  // (`editChoices.ts`): continue in that change if it is yours to write,
+  // comment on it if not, or start a separate one. Not in your own draft or
+  // a change you are writing, where you are already in the work.
+  const editAsks =
+    onEditInChange &&
+    (branchEdit.kind === "record" || branchEdit.kind === "theirs")
+      ? editChoices(openChanges, currentUser)
+      : [];
+  const editHere = () => {
+    if (branchEdit.kind === "change") {
+      // The editor writes its own documents into a change; a Word file or a
+      // PDF is revised by a new upload, from the change.
+      if (isEditorDocumentFile(document.path)) {
+        onEditInChange?.(document.slugPath, branchEdit.number);
+      } else {
+        onOpenChange(branchEdit.number);
+      }
+      return;
+    }
+    if (editAsks.length > 0) setAskingEdit(true);
+    else onEditDocument?.(document.slugPath);
+  };
 
   return (
     <div className="binder-pane">
@@ -364,7 +431,9 @@ export function BinderDocumentPage({
             {/* **In a draft, the page says so.** It said "Version 1 on
                 record" over the words the editor had just saved into a draft,
                 so a saved edit read as a lost one. */}
-            {draft !== null && change === null && documentRef === null ? (
+            {change === null &&
+            ((draft !== null && documentRef === null) ||
+              (documentRef !== null && draftName !== null)) ? (
               <span
                 className="doc-version-pill doc-version-pill--draft"
                 title="Your words as saved in this draft. Nothing on record changes until it is proposed and approved."
@@ -412,107 +481,52 @@ export function BinderDocumentPage({
           </div>
         </div>
 
-        {/* **The act that was missing.** Revising a policy used to mean
-              filing a new one and getting the name character-for-character
-              right, or ending up with two policies instead of two versions.
-              Only offered on the record: revising an earlier version would
-              silently discard everything published since. */}
-        {canRevise || canWrite || canConvert ? (
+        {/* **One button: Edit** (D8). Renaming, moving, uploading a new
+            version and reading a Word file or PDF into Bindersnap are all in
+            the editor now — its file panel and the note over a file it shows
+            — so the page offers the one way in, to anyone who can write. */}
+        {canEdit ? (
           <div className="bs-pagehead-actions">
-            {canRevise ? (
-              <>
-                <button
-                  type="button"
-                  className="bs-btn bs-btn-secondary"
-                  onClick={() => setRenaming(true)}
-                >
-                  Rename or move
-                </button>
-                {/* Not for a policy written here: its next version is written
-                    in the editor, and there is no file to upload over it. */}
-                {canWrite ? null : (
-                  <button
-                    type="button"
-                    className="bs-btn bs-btn-primary"
-                    onClick={() => setRevising(true)}
-                  >
-                    {/* **What it asks of you.** "New version" read as though
-                        it made one; what it does is take a file and propose it. */}
-                    Upload new version
-                  </button>
-                )}
-              </>
-            ) : null}
-            {/* **A file the editor cannot open is not a dead end.** A Word
-                file or PDF can be read into a Bindersnap document in your
-                draft, and goes through review like any other change. Said as
-                what it does, and never done to a file without being asked. */}
-            {canConvert ? (
-              <button
-                type="button"
-                className="bs-btn bs-btn-secondary"
-                disabled={editing}
-                onClick={() =>
-                  onConvertDocument?.({
-                    slugPath: document.slugPath,
-                    path: document.path,
-                    name: formatDocumentName(document.name),
-                  })
-                }
-              >
-                Edit in Bindersnap
-              </button>
-            ) : null}
-            {/* **A policy written here is edited here.** Uploading a new
-                version of one meant exporting nothing, because there was
-                nothing to export it to — the editor was the only program
-                that had ever opened it. Edit is the page's one filled button
-                when there is something to type into, and it is drawn while
-                the organization is read-only so the paywall can say why. */}
-            {canWrite ? (
-              <button
-                type="button"
-                className="bs-btn bs-btn-primary"
-                disabled={editing}
-                onClick={() => onEditDocument?.(document.slugPath)}
-              >
-                {editing ? "Opening your draft…" : "Edit"}
-              </button>
-            ) : null}
+            <button
+              type="button"
+              className="bs-btn bs-btn-primary"
+              disabled={editing || branchEdit.kind === "unknown"}
+              onClick={editHere}
+            >
+              {editing
+                ? "Opening…"
+                : branchEdit.kind === "theirs"
+                  ? "Edit in your draft"
+                  : "Edit"}
+            </button>
           </div>
         ) : null}
+
+        {askingEdit && canEdit ? (
+          <EditChoiceDialog
+            choices={editAsks}
+            onClose={() => setAskingEdit(false)}
+            onStartSeparate={() => {
+              setAskingEdit(false);
+              onEditDocument?.(document.slugPath);
+            }}
+            onContinue={(number) => {
+              setAskingEdit(false);
+              // The editor writes its own documents into a change; a Word
+              // file or a PDF is revised by a new upload, from the change.
+              if (isEditorDocumentFile(document.path)) {
+                onEditInChange?.(document.slugPath, number);
+              } else {
+                onOpenChange(number);
+              }
+            }}
+            onComment={(number) => {
+              setAskingEdit(false);
+              (onCommentOnChange ?? onOpenChange)(number);
+            }}
+          />
+        ) : null}
       </header>
-
-      {renaming ? (
-        <RenameDocumentModal
-          org={org}
-          binder={binder}
-          slugPath={document.slugPath}
-          name={document.name}
-          folder={document.folder}
-          folders={detail.folders}
-          onClose={() => setRenaming(false)}
-          onProposed={(changeNumber) => {
-            setRenaming(false);
-            onOpenChange(changeNumber);
-          }}
-        />
-      ) : null}
-
-      {revising ? (
-        <ReviseDocumentModal
-          org={org}
-          binder={binder}
-          slugPath={document.slugPath}
-          name={document.name}
-          currentVersion={latestVersion?.version ?? null}
-          onClose={() => setRevising(false)}
-          onProposed={(changeNumber) => {
-            setRevising(false);
-            onOpenChange(changeNumber);
-          }}
-        />
-      ) : null}
 
       {state === "proposed" ? (
         <p className="vault-pr-notice" role="status">
@@ -569,6 +583,21 @@ export function BinderDocumentPage({
             cards of their own shape: the only lists in the app drawn that
             way, and the loudest type on a page whose subject is a policy. */}
         <aside className="doc-rail" aria-label="Document summary">
+          {/* Who signs off first: it is what decides whether a new version
+              can be published, and it is usually all from above. */}
+          <SignOffRail
+            org={org}
+            binder={binder}
+            binderName={formatDocumentName(binder)}
+            place={{ kind: "document", path: document.path }}
+            /* Where this page reads the document: the rules beside it are
+               the ones in the same draft or branch. */
+            at={{ draft, ref: documentRef, change }}
+            onNavigate={(route) => {
+              window.history.pushState({}, "", routeToPath(route));
+              window.dispatchEvent(new PopStateEvent("popstate"));
+            }}
+          />
           <section className="bs-panel" aria-labelledby="doc-rail-open">
             <div className="bs-panel-bar">
               <h2 className="bs-panel-bar-title" id="doc-rail-open">

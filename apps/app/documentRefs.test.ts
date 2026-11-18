@@ -84,6 +84,19 @@ describe("buildReadableRefs", () => {
     expect(currentRef(refs).label).toBe("Change #9");
   });
 
+  test("one of your drafts, read at its branch, is that draft", () => {
+    const refs = buildReadableRefs({
+      openChanges: CHANGES,
+      ref: "draft/carol/20260923",
+      change: null,
+      drafts: [{ branch: "draft/carol/20260923", name: "Try sign-offs" }],
+    });
+
+    expect(currentRef(refs).label).toBe("Try sign-offs");
+    expect(currentRef(refs).draft).toBe("draft/carol/20260923");
+    expect(refs.filter((entry) => entry.current)).toHaveLength(1);
+  });
+
   test("a draft nobody has proposed is somewhere you can be", () => {
     // Edit mode reads on a branch belonging to no change. Without this the
     // control would say "On the record" over a page that is not the record.

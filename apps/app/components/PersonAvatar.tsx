@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import { avatarUrl } from "../avatar";
 import { getAvatarTone, getInitials } from "../documentDisplay";
@@ -11,10 +11,25 @@ interface Person {
 interface PersonAvatarProps {
   person: Person;
   /** 24px in a card header, 26px in the reviewers row, 32px in the nav. */
-  size?: "sm" | "md";
+  size?: "xs" | "sm" | "md";
+  /**
+   * A hover card: the face, full name, `@username`, and why this person is on
+   * this screen ("Infection Control · signs off on this folder"). `true` for
+   * the card with no context line. Left off where the face sits inside a
+   * button or a picker's option, which cannot hold a second control.
+   */
+  card?: string | true;
+  /**
+   * Drawn after the face, inside what opens the card: a chip's name, so the
+   * whole chip is the thing to hover. Only with `card`.
+   */
+  label?: ReactNode;
 }
 
-const DRAWN_SIZE = { sm: 24, md: 26 } as const;
+/** How long a pointer rests on a face before its card opens. */
+const CARD_DELAY_MS = 300;
+
+const DRAWN_SIZE = { xs: 18, sm: 24, md: 26 } as const;
 
 /**
  * One person's face, wherever a person appears.
@@ -29,7 +44,26 @@ const DRAWN_SIZE = { sm: 24, md: 26 } as const;
  * The initials stay underneath, for the moment before the image arrives and
  * for an image that never does.
  */
-export function PersonAvatar({ person, size = "sm" }: PersonAvatarProps) {
+export function PersonAvatar({
+  person,
+  size = "sm",
+  card,
+  label,
+}: PersonAvatarProps) {
+  if (card !== undefined) {
+    return (
+      <PersonCardTrigger
+        person={person}
+        size={size}
+        context={card === true ? null : card}
+        label={label}
+      />
+    );
+  }
+  return <Face person={person} size={size} />;
+}
+
+function Face({ person, size }: { person: Person; size: "xs" | "sm" | "md" }) {
   const name = person.fullName.trim() || person.login;
 
   return (
@@ -44,6 +78,86 @@ export function PersonAvatar({ person, size = "sm" }: PersonAvatarProps) {
         initials={getInitials(name)}
         drawnSize={DRAWN_SIZE[size]}
       />
+    </span>
+  );
+}
+
+/**
+ * A face that opens a card about the person.
+ *
+ * **Accessibility is the point of it.** The face is focusable and named; the
+ * card opens on hover (after a moment), on keyboard focus and on tap, closes
+ * on Escape and on blur, and is tied to the face with `aria-describedby`. It
+ * never holds the only copy of something a person must do: everything on it
+ * is already on the screen it describes, or is the person's name.
+ */
+function PersonCardTrigger({
+  person,
+  size,
+  context,
+  label,
+}: {
+  person: Person;
+  size: "xs" | "sm" | "md";
+  context: string | null;
+  label?: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const id = useId();
+  const name = person.fullName.trim() || person.login;
+
+  const clear = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+  };
+  useEffect(() => clear, []);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  return (
+    <span
+      className={`person-card-anchor${label ? " person-card-anchor--label" : ""}`}
+      tabIndex={0}
+      role={label ? undefined : "img"}
+      aria-label={label ? undefined : name}
+      aria-describedby={open ? id : undefined}
+      onMouseEnter={() => {
+        clear();
+        timer.current = setTimeout(() => setOpen(true), CARD_DELAY_MS);
+      }}
+      onMouseLeave={() => {
+        clear();
+        setOpen(false);
+      }}
+      onFocus={() => setOpen(true)}
+      onBlur={() => setOpen(false)}
+      onClick={(event) => {
+        // A tap: there is no hover on a touch screen.
+        event.stopPropagation();
+        setOpen((was) => !was);
+      }}
+    >
+      <Face person={person} size={size} />
+      {label}
+      {open ? (
+        <span className="person-card" role="tooltip" id={id}>
+          <Face person={person} size="md" />
+          <span className="person-card-text">
+            <span className="person-card-name">{name}</span>
+            <span className="person-card-login">@{person.login}</span>
+            {context ? (
+              <span className="person-card-context">{context}</span>
+            ) : null}
+          </span>
+        </span>
+      ) : null}
     </span>
   );
 }

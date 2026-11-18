@@ -1,3 +1,4 @@
+import { HelpLink } from "./HelpLink";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
@@ -51,7 +52,12 @@ interface DocumentChangeDetailProps {
    * access. Null where the page has no such answer, and the protection
    * whitelists decide as they always did.
    */
-  decisionRights?: { canApprove: boolean; canPublish: boolean } | null;
+  decisionRights?: {
+    canApprove: boolean;
+    canPublish: boolean;
+    /** Its author or a co-editor: they write it, so they do not approve it. */
+    canEdit?: boolean;
+  } | null;
   nextVersion: number;
   /**
    * How many documents this change touches, for the approve prompt — the
@@ -76,7 +82,11 @@ interface DocumentChangeDetailProps {
   documentName: string;
   onChanged: () => void | Promise<void>;
   onViewChange: (view: DocumentChangeView) => void;
-  onBackToList: () => void;
+  /**
+   * What follows the outcome line: where a published change's documents now
+   * stand, as links. The change is over; this is the way on from it.
+   */
+  outcomeAfter?: React.ReactNode;
   /** Who, what and from where: the line under the title, shared with Changes. */
   byline?: React.ReactNode;
   /**
@@ -117,6 +127,25 @@ interface DocumentChangeDetailProps {
   status?: React.ReactNode;
   /** Overview and Changes: the change's two screens, as tabs under its header. */
   tabs?: React.ReactNode;
+  /** "About this change" in the rail: From, Opened, Assignee (D12). */
+  aboutPanel?: React.ReactNode;
+  /**
+   * Under Publish while the rules are not met: "Publishing opens once every
+   * rule above is met. Waiting on …". Replaces "You submitted this change".
+   */
+  waitingLine?: string | null;
+  /** The groups each approver approves for, for the Reviewers' tags. */
+  approverGroups?: ReadonlyMap<string, readonly string[]>;
+  /**
+   * At the approve step, for a change that edits who signs off (D13): what
+   * publishing it would change, and which rules this approval counts toward.
+   */
+  approveNotes?: {
+    warning: string | null;
+    countsToward: readonly string[];
+    ruleHref: string;
+    onOpenRule: () => void;
+  } | null;
 }
 
 interface PRActionState {
@@ -125,6 +154,7 @@ interface PRActionState {
   changesComment: string;
   showChangesForm: boolean;
   showApproveConfirm: boolean;
+  showPublishConfirm: boolean;
 }
 
 const DEFAULT_PR_ACTION_STATE: PRActionState = {
@@ -133,6 +163,7 @@ const DEFAULT_PR_ACTION_STATE: PRActionState = {
   changesComment: "",
   showChangesForm: false,
   showApproveConfirm: false,
+  showPublishConfirm: false,
 };
 
 /** Beyond this many, a row of pips is a smear rather than a count. */
@@ -261,9 +292,13 @@ export function DocumentChangeDetail({
   documentName,
   onChanged,
   onViewChange,
-  onBackToList,
+  outcomeAfter = null,
   approvers = [],
   approvalPanel = null,
+  aboutPanel = null,
+  waitingLine = null,
+  approverGroups,
+  approveNotes = null,
   onEditSubject = null,
   onSetOpen = null,
   onOpenSignOffRules = null,
@@ -357,10 +392,12 @@ export function DocumentChangeDetail({
     try {
       await publishDocument(scope, prNum, nextVersion);
       updateActionState({ status: "idle" });
+      // **Stay on the change, which now says what happened.** It used to go
+      // back to the list of open changes: the one moment the whole product
+      // is for — a version going on the record — ended on a page that did
+      // not mention it. The change's own page says "Published as v2", who
+      // by, and links to the document as it now stands.
       await onChanged();
-      // Publishing ends the review, so the page it happened on is finished
-      // too. The index confirms it: nothing is waiting on a decision.
-      onBackToList();
     } catch (err) {
       updateActionState({
         status: "error",
@@ -373,7 +410,10 @@ export function DocumentChangeDetail({
     decisionRights && !decisionRights.canApprove
       ? {
           allowed: false,
-          reason: "Only this binder's approvers can approve.",
+          reason:
+            decisionRights.canEdit && change.submittedBy !== currentUser
+              ? "You are a co-editor of this change, so you cannot approve it."
+              : "Only this binder's approvers can approve.",
         }
       : canUserReview(currentUser, change.submittedBy, branchProtection);
   const mergePerms =
@@ -493,9 +533,11 @@ export function DocumentChangeDetail({
         ? "One discussion is still open, and this binder holds the publish until every one is resolved."
         : `${unresolvedCount} discussions are still open, and this binder holds the publish until every one is resolved.`
       : null,
-    change.open && ownSubmission && !mergeReady
-      ? "You submitted this change — it is waiting on its reviewers."
-      : null,
+    change.open && !mergeReady && waitingLine
+      ? waitingLine
+      : change.open && ownSubmission && !mergeReady
+        ? "You submitted this change — it is waiting on its reviewers."
+        : null,
     // The reasons a dimmed button gives are said under the button itself.
   ].filter((line): line is string => Boolean(line));
 
@@ -656,6 +698,7 @@ export function DocumentChangeDetail({
             currentUser={currentUser}
             openThreadAuthors={openThreadAuthors}
             approvers={approvers}
+            {...(approverGroups ? { approverGroups } : {})}
             /* The button and the caveat share one foot, the way the mockup
                draws them — so the list owns both rather than having a second
                foot stacked under its own. */
@@ -665,6 +708,8 @@ export function DocumentChangeDetail({
             onChanged={onChanged}
           />
         </div>
+
+        {aboutPanel}
 
         {blockers.length > 0 ? (
           <div className="bs-note bs-note--warn">
@@ -694,6 +739,31 @@ export function DocumentChangeDetail({
                       : `${documentCount} documents`
                   }? Your name and the time go on the record.`}
                 </p>
+                {approveNotes?.warning ? (
+                  <p className="rev-decision-confirm-rules">
+                    <strong>This also changes who signs off.</strong>{" "}
+                    {approveNotes.warning}{" "}
+                    <a
+                      href={approveNotes.ruleHref}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        approveNotes.onOpenRule();
+                      }}
+                    >
+                      See the rule change →
+                    </a>
+                  </p>
+                ) : null}
+                {approveNotes && approveNotes.countsToward.length > 0 ? (
+                  <div className="rev-decision-confirm-counts">
+                    <p>Your approval counts toward:</p>
+                    <ul>
+                      {approveNotes.countsToward.map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
                 <div className="rev-decision-row">
                   <button
                     className="bs-btn bs-btn--sm bs-btn--quiet"
@@ -780,7 +850,12 @@ export function DocumentChangeDetail({
                  Approving is not theirs to do in this binder, and a greyed
                  button invites "why can't I?" every visit. They comment in
                  the discussion; one line says why there is nothing here. */
-              <p className="rev-decision-locked">{reviewPerms.reason}</p>
+              <p className="rev-decision-locked">
+                {reviewPerms.reason}{" "}
+                <HelpLink guide="reviewing" section="If you cannot approve">
+                  Who can approve
+                </HelpLink>
+              </p>
             ) : reviewDecision === "review-locked" ? (
               <>
                 <button
@@ -803,6 +878,44 @@ export function DocumentChangeDetail({
                   {reviewPerms.reason ?? "You cannot approve this change."}
                 </p>
               </>
+            ) : reviewDecision === "publish" &&
+              actionState.showPublishConfirm ? (
+              /* **Publishing is asked about, as approving is.** It is the
+                 one act here that cannot be taken back — the version is on
+                 the record for good — and it was the one button that acted
+                 on a single click. */
+              <div className="rev-decision-confirm">
+                <p className="rev-decision-confirm-line">
+                  {`Publish this change to ${
+                    subject || documentCount === 1
+                      ? documentName
+                      : `${documentCount} documents`
+                  }? It goes on the record, with who approved it, and cannot be taken back.`}
+                </p>
+                <div className="rev-decision-row">
+                  <button
+                    className="bs-btn bs-btn--sm bs-btn--quiet"
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() =>
+                      updateActionState({ showPublishConfirm: false })
+                    }
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="bs-btn bs-btn--sm bs-btn--approve"
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => {
+                      updateActionState({ showPublishConfirm: false });
+                      void handlePublish();
+                    }}
+                  >
+                    Publish now
+                  </button>
+                </div>
+              </div>
             ) : reviewDecision === "publish" ? (
               <button
                 className="bs-btn bs-btn--approve bs-btn--block"
@@ -813,7 +926,7 @@ export function DocumentChangeDetail({
                     ? "Resolve every discussion thread before publishing."
                     : undefined
                 }
-                onClick={() => void handlePublish()}
+                onClick={() => updateActionState({ showPublishConfirm: true })}
               >
                 {isSubmitting ? "Publishing…" : "Publish"}
               </button>
@@ -869,9 +982,10 @@ export function DocumentChangeDetail({
 
       <div className="change-main">
         {outcome ? (
-          <p className="rev-outcome" role="status">
-            {outcome}
-          </p>
+          <div className="rev-outcome" role="status">
+            <p>{outcome}</p>
+            {outcomeAfter}
+          </div>
         ) : null}
 
         {banner}

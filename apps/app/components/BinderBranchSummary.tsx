@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { AppIcon, ICON } from "./AppIcon";
 
-import { binderChangesQuery } from "../data/queries";
+import { binderChangesQuery, binderDraftQuery } from "../data/queries";
 import type { WorkspaceChangeSummary } from "../../../packages/api-schema/schemas/workspaces";
 import { followInApp } from "../appLink";
 import { describeBranch } from "../branchLabel";
@@ -63,7 +63,16 @@ export function BinderBranchSummary({
         ? (onClosed ?? null)
         : undefined;
 
-  const name = describeBranch(branch, nameOf);
+  // One of your drafts is called what you called it, as the picker over the
+  // tree calls it; with a change on it, it is "Your draft" beside the change.
+  const ownDraft = useQuery(binderDraftQuery(org, binder)).data?.drafts.find(
+    (draft) => draft.branch === branch,
+  );
+  const name = change
+    ? ownDraft
+      ? "Your draft"
+      : describeBranch(branch, nameOf)
+    : (ownDraft?.name ?? describeBranch(branch, nameOf));
 
   if (change === undefined) {
     return (

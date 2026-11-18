@@ -5,6 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { ListOrganizationChanges200ChangesItemAssignee } from './listOrganizationChanges200ChangesItemAssignee.ts';
+import type { ListOrganizationChanges200ChangesItemCoEditorsItem } from './listOrganizationChanges200ChangesItemCoEditorsItem.ts';
 import type { ListOrganizationChanges200ChangesItemDocumentsItem } from './listOrganizationChanges200ChangesItemDocumentsItem.ts';
 import type { ListOrganizationChanges200ChangesItemOutcome } from './listOrganizationChanges200ChangesItemOutcome.ts';
 import type { ListOrganizationChanges200ChangesItemReviewersItem } from './listOrganizationChanges200ChangesItemReviewersItem.ts';
@@ -34,6 +35,8 @@ export type ListOrganizationChanges200ChangesItem = {
   reviewers: ListOrganizationChanges200ChangesItemReviewersItem[];
   /** @nullable */
   assignee: ListOrganizationChanges200ChangesItemAssignee;
+  coEditors: ListOrganizationChanges200ChangesItemCoEditorsItem[];
+  viewerCanEdit: boolean;
   documents: ListOrganizationChanges200ChangesItemDocumentsItem[];
   binder: string;
 };

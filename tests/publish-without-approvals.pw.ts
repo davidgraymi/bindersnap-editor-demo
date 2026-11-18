@@ -130,8 +130,16 @@ test("a change with no reviewers publishes in a binder that needs no approvals",
     ),
   ).toHaveCount(0);
   await page.getByRole("button", { name: "Publish", exact: true }).click();
-  // Published, it leaves the open list for the published one.
-  await expect(page).toHaveURL(new RegExp(`/${binder}/-/changes(?:[?#]|$)`));
+  // Publishing cannot be taken back, so it is asked about, as approving is.
+  await expect(page.getByText(/cannot be taken back/)).toBeVisible();
+  await page.getByRole("button", { name: "Publish now" }).click();
+  // The change's own page says what happened and where the document stands.
+  const outcome = page.locator(".rev-outcome");
+  await expect(outcome).toContainText("Published", { timeout: 30_000 });
+  await expect(outcome.getByRole("link")).toHaveCount(1);
+  await expect(outcome).toContainText("is now version 1");
+  // It has left the open list for the published one.
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/-/changes`);
   await page.getByRole("button", { name: /^Published/ }).click();
   await expect(page.getByText("Add Hand Hygiene")).toBeVisible();
 

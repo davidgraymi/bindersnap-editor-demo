@@ -3,6 +3,10 @@ import { parseDocumentFilename } from "../../packages/utils/documentPath";
 import { formatDocumentName } from "../../packages/utils/documentTitle";
 import type { ConflictResolution } from "./api";
 import {
+  renderCodeowners,
+  type SignOffRule,
+} from "../../packages/utils/codeowners";
+import {
   applyChoices,
   base64ToText,
   countConflicts,
@@ -89,6 +93,16 @@ export type FileMerge =
       theirsText: string;
       oursText: string;
     }
+  /**
+   * The sign-off rules, merged rule by rule by the server. Only the rules both
+   * sides changed differently are asked about, in words; `pieces` holds one
+   * choice per clash, in order.
+   */
+  | {
+      mode: "rules";
+      rules: SignOffRule[];
+      clashes: NonNullable<ConflictingFilePayload["rules"]>["clashes"];
+    }
   /** Only one version or the other, whole. */
   | { mode: "whole"; reason: WholeReason };
 
@@ -98,6 +112,13 @@ export type WholeReason =
 /** How this file can be merged, worked out from the bytes the server sent. */
 export function planFileMerge(file: ConflictingFilePayload): FileMerge {
   if (file.automatic) return { mode: "whole", reason: "automatic" };
+  if (file.kind === "rules" && file.rules) {
+    return {
+      mode: "rules",
+      rules: file.rules.rules,
+      clashes: file.rules.clashes,
+    };
+  }
   if (file.ours === null || file.theirs === null) {
     return { mode: "whole", reason: "removed" };
   }
@@ -162,12 +183,17 @@ export function emptyDecision(merge: FileMerge): FileDecision {
         ? new Array<ConflictChoice | null>(countConflicts(merge.chunks)).fill(
             null,
           )
-        : [],
+        : merge.mode === "rules"
+          ? new Array<ConflictChoice | null>(merge.clashes.length).fill(null)
+          : [],
   };
 }
 
 /** Whether a file still needs somebody to decide something. */
 export function isDecided(merge: FileMerge, decision: FileDecision): boolean {
+  if (merge.mode === "rules") {
+    return decision.pieces.every((choice) => choice !== null);
+  }
   if (decision.whole !== null) return true;
   if (merge.mode === "whole") return merge.reason === "automatic";
   return decision.pieces.every((choice) => choice !== null);
@@ -185,9 +211,20 @@ export function toResolution(
   file: ConflictingFilePayload,
   merge: FileMerge,
   decision: FileDecision,
+  /** The organization, for the rules file: its groups are written `@org/group`. */
+  org = "",
 ): ConflictResolution | null {
   if (decision.whole) return { key: file.key, take: decision.whole };
   if (merge.mode === "whole") return null;
+  if (merge.mode === "rules") {
+    const rules = resolveRuleClashes(merge, decision.pieces);
+    if (rules === null) return null;
+    return {
+      key: file.key,
+      take: "content",
+      base64Content: textToBase64(renderCodeowners(org, rules)),
+    };
+  }
 
   const merged = applyChoices<unknown>(
     merge.chunks as MergeChunk<unknown>[],
@@ -217,4 +254,51 @@ function sameContent(a: string, b: string, format: "editor" | "text"): boolean {
   } catch {
     return a === b;
   }
+}
+
+/**
+ * The rules with each clash settled as chosen: this change's owners, the
+ * published owners, both, or neither (the rule goes). Null while any clash is
+ * undecided.
+ */
+export function resolveRuleClashes(
+  merge: Extract<FileMerge, { mode: "rules" }>,
+  choices: readonly (ConflictChoice | null)[],
+): SignOffRule[] | null {
+  if (
+    choices.length < merge.clashes.length ||
+    choices.some((c) => c === null)
+  ) {
+    return null;
+  }
+  const key = (rule: { scope: string; target: string }) =>
+    `${rule.scope}:${rule.target}`;
+  const settled = new Map<string, SignOffRule>();
+  merge.clashes.forEach((clash, index) => {
+    const choice = choices[index]!;
+    const empty = { teams: [] as string[], users: [] as string[] };
+    const ours = clash.ours ?? empty;
+    const theirs = clash.theirs ?? empty;
+    const owners =
+      choice === "ours"
+        ? ours
+        : choice === "theirs"
+          ? theirs
+          : choice === "both"
+            ? {
+                teams: [...ours.teams, ...theirs.teams],
+                users: [...ours.users, ...theirs.users],
+              }
+            : empty;
+    settled.set(key(clash), {
+      scope: clash.scope,
+      target: clash.target,
+      teams: [...new Set(owners.teams)],
+      users: [...new Set(owners.users)],
+    });
+  });
+  return [
+    ...merge.rules.filter((rule) => !settled.has(key(rule))),
+    ...settled.values(),
+  ].filter((rule) => rule.teams.length + rule.users.length > 0);
 }

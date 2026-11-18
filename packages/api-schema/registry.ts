@@ -99,6 +99,10 @@ import {
   OrganizationPeoplePayloadSchema,
   ProposedSignOffChangeSchema,
   SignOffRulesRequestSchema,
+  BinderSignOffPayloadSchema,
+  SetSignOffRuleRequestSchema,
+  SetSignOffRulePayloadSchema,
+  OrganizationGroupPagePayloadSchema,
   BinderShapeChangePayloadSchema,
   BinderArchivePayloadSchema,
   BinderDraftPayloadSchema,
@@ -1484,6 +1488,71 @@ registry.registerPath({
 
 registry.registerPath({
   method: "get",
+  path: "/api/app/binders/{org}/{binder}/rules/sign-off",
+  operationId: "getBinderSignOff",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    query: z.object({
+      draft: z.string().optional(),
+      change: z.string().optional(),
+      /** Any branch the caller can read: `/-/tree/{ref}`'s rules. */
+      ref: z.string().optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description:
+        "Who signs off in the binder, on main or at the caller's draft, a branch or a change",
+      content: {
+        "application/json": { schema: BinderSignOffPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "put",
+  path: "/api/app/binders/{org}/{binder}/rules/sign-off",
+  operationId: "setBinderSignOffRule",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: SetSignOffRuleRequestSchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "The rule, committed into the draft or change",
+      content: {
+        "application/json": { schema: SetSignOffRulePayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/orgs/{org}/groups/{group}",
+  operationId: "getOrganizationGroup",
+  tags: ["organizations"],
+  request: { params: z.object({ org: z.string(), group: z.string() }) },
+  responses: {
+    200: {
+      description: "A group: its people, its binders, and where it signs off",
+      content: {
+        "application/json": { schema: OrganizationGroupPagePayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
   path: "/api/app/binders/{org}/{binder}/history",
   operationId: "getBinderHistory",
   tags: ["workspaces"],
@@ -1775,6 +1844,13 @@ registry.registerPath({
              * it cannot fold is an ordinary commit.
              */
             fold: z.enum(["true"]).optional(),
+            /**
+             * The git blob SHA of the file the editor started from. Into a
+             * draft or a change, a save is refused (409, `code: "stale"`)
+             * when the file there is no longer that one: somebody else saved
+             * it since, and this save would replace their words.
+             */
+            basedOn: z.string().optional(),
           }),
         },
       },

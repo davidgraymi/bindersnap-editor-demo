@@ -50,7 +50,16 @@ export type AppRoute =
    * An organization: what it owns, and who is in it. `/{org}`, and
    * `/{org}/-/people` for who.
    */
-  | { kind: "organization"; org: string; tab?: OrganizationTab }
+  | {
+      kind: "organization";
+      org: string;
+      tab?: OrganizationTab;
+      /**
+       * One group's page, `/{org}/-/groups/{group}`: who is in it, which
+       * binders it can use, and where it signs off. Under People.
+       */
+      group?: string;
+    }
   /** A binder's documents: `/{org}/{binder}`. */
   | {
       kind: "binder";
@@ -67,6 +76,12 @@ export type AppRoute =
       view?: DocumentChangeView;
       /** The branch the documents are read on: `/-/tree/{ref}`. */
       ref?: string;
+      /**
+       * A folder's page, `/-/tree/{ref}/{folder}`: the folder is a place, with
+       * its own list and its own "Who signs off here". Absent is the binder's
+       * top folder.
+       */
+      folder?: string;
     }
   /** One document inside it: `/{org}/{binder}/-/blob/{ref}/{path}`. */
   | {
@@ -235,6 +250,16 @@ export function getRoute(pathname: string): AppRoute {
     const org = orgScreenMatch[1]!;
     const screen = orgScreenMatch[2]!;
     if (screen === "billing") return { kind: "billing", org };
+    const group = screen.match(/^groups\/([^/]+)$/);
+    if (group) {
+      let name = group[1]!;
+      try {
+        name = decodeURIComponent(name);
+      } catch {
+        // A malformed escape is read as it was typed.
+      }
+      return { kind: "organization", org, tab: "people", group: name };
+    }
     return {
       kind: "organization",
       org,
@@ -285,6 +310,7 @@ export function getRoute(pathname: string): AppRoute {
       ...(address.change !== null ? { change: address.change } : {}),
       ...(address.view !== "discussion" ? { view: address.view } : {}),
       ...(address.ref ? { ref: address.ref } : {}),
+      ...(address.folder ? { folder: address.folder } : {}),
     };
   }
 
@@ -328,6 +354,9 @@ export function routeToPath(route: AppRoute): string {
     case "createOrganization":
       return "/-/organizations/new";
     case "organization":
+      if (route.group) {
+        return `/${route.org}/-/groups/${encodeURIComponent(route.group)}`;
+      }
       return route.tab && route.tab !== "binders"
         ? `/${route.org}/-/${route.tab}`
         : `/${route.org}`;
@@ -339,6 +368,7 @@ export function routeToPath(route: AppRoute): string {
         change: route.change,
         view: route.view,
         ref: route.ref ?? null,
+        folder: route.folder ?? null,
       });
     case "binderDocument":
       return buildDocumentUrl({

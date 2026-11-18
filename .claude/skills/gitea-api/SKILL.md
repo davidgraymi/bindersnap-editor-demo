@@ -44,7 +44,7 @@ Gitea is where the evidence lives (non-negotiable 2). Read `AGENTS.md`
 | Folder, document               | Directory, file in that repository                           |
 | Version on record              | Commit on `main` plus a version tag (ADR 0005)               |
 | Draft                          | Branch                                                       |
-| Change                         | Pull request; assignee and review requests are Gitea's own   |
+| Change                         | Pull request; co-editors (assignees) and review requests are Gitea's own |
 | Approval, request for changes  | PR review                                                    |
 | Rules, per-folder reviewers    | Branch protection, `.gitea/CODEOWNERS`                       |
 | Roles                          | Org teams                                                    |

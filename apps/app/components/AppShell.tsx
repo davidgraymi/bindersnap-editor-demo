@@ -1,3 +1,4 @@
+import { guideForRoute, helpHref } from "../helpLinks";
 import {
   useCallback,
   useEffect,
@@ -16,6 +17,7 @@ import { useOnboarding } from "../useOnboarding";
 import { routeToPath, type AppRoute } from "../routes";
 import { BinderShell } from "./BinderShell";
 import { MyDrafts } from "./MyDrafts";
+import { GroupPage } from "./GroupPage";
 import { OrganizationPage } from "./OrganizationPage";
 import { LocationTrail } from "./LocationTrail";
 import { useWriteAction } from "../paywallContext";
@@ -39,7 +41,6 @@ import { NavSearch } from "./NavSearch";
 import { CreateMenu } from "./CreateMenu";
 import { AccountSettingsPage } from "./AccountSettingsPage";
 import { AvatarFace } from "./PersonAvatar";
-import { siteUrl } from "../siteLink";
 import { useCollapsedSidebar } from "../useCollapsedSidebar";
 import { formatDocumentName } from "../documentDisplay";
 import type {
@@ -527,7 +528,10 @@ export function AppShell({
                     <a
                       className="app-profile-menu-item"
                       role="menuitem"
-                      href={siteUrl("/help")}
+                      href={helpHref(
+                        guideForRoute(route, window.location.search) ??
+                          undefined,
+                      )}
                       target="_blank"
                       rel="noopener"
                       onClick={() => setProfileOpen(false)}
@@ -583,8 +587,16 @@ export function AppShell({
       <div className="app-body-wrap">
         {/* The map of the product. Hidden below 768px, where the top bar's own
             links take over — see AppSidebar. */}
+        {/* An address that names no binder gets the organization's map, not
+            a binder's: Documents, Change requests and Settings for a binder
+            that is not there all led to the same "not found". */}
         <AppSidebar
-          route={route}
+          route={
+            (route.kind === "binder" || route.kind === "binderDocument") &&
+            missingBinder === `${route.org}/${route.binder}`
+              ? { kind: "organization", org: route.org }
+              : route
+          }
           org={sidebarOrg}
           binder={sidebarBinder}
           onSendFeedback={canSendFeedback ? () => setFeedbackOpen(true) : null}
@@ -670,6 +682,12 @@ export function AppShell({
                   onOpenBinder={(org, binder) =>
                     onNavigate({ kind: "binder", org, binder })
                   }
+                />
+              ) : route.kind === "organization" && route.group ? (
+                <GroupPage
+                  org={route.org}
+                  group={route.group}
+                  onNavigate={onNavigate}
                 />
               ) : route.kind === "organization" ? (
                 <OrganizationPage

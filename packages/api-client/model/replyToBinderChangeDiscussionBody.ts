@@ -4,7 +4,9 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { ReplyToBinderChangeDiscussionBodyAnchor } from './replyToBinderChangeDiscussionBodyAnchor.ts';
 
 export type ReplyToBinderChangeDiscussionBody = {
   body: string;
+  anchor?: ReplyToBinderChangeDiscussionBodyAnchor;
 };

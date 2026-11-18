@@ -15,6 +15,8 @@ interface EditorFileCoverProps {
   file: Blob;
   /** Turn it into a Bindersnap document in the draft; absent, it cannot be. */
   onConvert?: () => void;
+  /** Upload a new version of it into the draft; absent, it cannot be here. */
+  onUploadVersion?: () => void;
 }
 
 /**
@@ -32,6 +34,7 @@ export function EditorFileCover({
   fileName,
   file,
   onConvert,
+  onUploadVersion,
 }: EditorFileCoverProps) {
   const loadFile = useCallback(() => Promise.resolve(file), [file]);
   const [downloading, setDownloading] = useState(false);
@@ -72,6 +75,18 @@ export function EditorFileCover({
             >
               <AppIcon icon={ICON.edit} size="sm" />
               Edit in Bindersnap
+            </button>
+          ) : null}
+          {onUploadVersion ? (
+            <button
+              type="button"
+              className={`bs-btn bs-btn--sm ${
+                onConvert ? "bs-btn-secondary" : "bs-btn-primary"
+              }`}
+              onClick={onUploadVersion}
+            >
+              <AppIcon icon={ICON.upload} size="sm" />
+              Upload new version
             </button>
           ) : null}
           <button

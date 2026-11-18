@@ -15,6 +15,10 @@ import {
   signInAsAlice,
 } from "./helpers";
 
+// Signing in and reading a version twice, on a CI runner shared with every
+// other suite: the suite default of ten seconds is for one page.
+test.describe.configure({ timeout: 60_000 });
+
 // Seeded with five published versions (tests/seed-data/dev.yaml).
 const DOCUMENT =
   "/riverside-health/clinical/-/blob/main/training/hipaa-training-policy";
